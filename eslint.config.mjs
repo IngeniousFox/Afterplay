@@ -28,5 +28,13 @@ export default defineConfig(
       ...eslintPluginReactRefresh.configs.vite.rules,
     },
   },
+  {
+    // shadcn/ui generates these files; they're vendored, not hand-written.
+    files: ['src/renderer/src/components/ui/**/*.{ts,tsx}', 'src/renderer/src/lib/utils.ts'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      'react-refresh/only-export-components': 'off',
+    },
+  },
   eslintConfigPrettier,
 );

@@ -1,34 +1,47 @@
-import electronLogo from './assets/electron.svg';
-import Versions from './components/Versions';
+import { Button } from './components/ui/button';
+import { Card } from './components/ui/card';
+import { tintVariants } from './lib/tint';
 
 function App(): React.JSX.Element {
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping');
-
   return (
-    <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
-        &nbsp;and <span className="ts">TypeScript</span>
-      </div>
-      <p className="tip text-red-950+">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <div className="actions">
-        <div className="action">
-          <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">
-            Documentation
-          </a>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-10">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6">
+        <h1 className="text-lg font-bold text-foreground">Afterplay palette check</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Dark theme applied by default (SPEC 10.1). This screen is throwaway.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button className={tintVariants({ tone: 'primary', intensity: 'strong' })}>
+            Stop (strong)
+          </Button>
+          <Button
+            variant="secondary"
+            className={tintVariants({ tone: 'secondary', intensity: 'strong' })}
+          >
+            Secondary tint
+          </Button>
+          <Button variant="outline">Outline</Button>
+          <Button
+            variant="destructive"
+            className={tintVariants({ tone: 'destructive', intensity: 'strong' })}
+          >
+            Destructive
+          </Button>
+          <div
+            className={`${tintVariants({ tone: 'primary', intensity: 'soft' })} flex items-center gap-2 rounded-xl px-4 py-3 text-sm tabular-nums`}
+          >
+            00:44:26
+          </div>
+          <Card>
+            <p className="mr-4 ml-4">
+              Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptates sed facilis quidem
+              nobis fuga reprehenderit id enim illum, incidunt quo aliquam, veritatis ipsa non sint
+              culpa pariatur voluptatem voluptatum dicta.
+            </p>
+          </Card>
         </div>
-        <div className="action">
-          <a target="_blank" rel="noreferrer" onClick={ipcHandle}>
-            Send IPC
-          </a>
-        </div>
       </div>
-      <Versions></Versions>
-    </>
+    </div>
   );
 }
 
