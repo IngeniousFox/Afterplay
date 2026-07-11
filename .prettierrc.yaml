@@ -4,4 +4,4 @@ printWidth: 100
 trailingComma: all
 tabWidth: 2
 arrowParens: always
-endOfLine: lf
+endOfLine: crlf

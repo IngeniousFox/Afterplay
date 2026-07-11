@@ -4,16 +4,15 @@ import { tintVariants } from './lib/tint';
 
 function App(): React.JSX.Element {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-10">
+    <div className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto p-10">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6">
         <h1 className="text-lg font-bold text-foreground">Afterplay palette check</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Dark theme applied by default (SPEC 10.1). This screen is throwaway.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Dark theme applied by default.</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button className={tintVariants({ tone: 'primary', intensity: 'strong' })}>
             Stop (strong)
           </Button>
+          <Button>Play</Button>
           <Button
             variant="secondary"
             className={tintVariants({ tone: 'secondary', intensity: 'strong' })}

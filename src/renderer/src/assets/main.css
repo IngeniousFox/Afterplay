@@ -126,10 +126,27 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body {
+    @apply h-full overflow-hidden;
+  }
   body {
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
+  }
+  /*
+   * Reserves space for the fixed TitleBar (1.5.F, h-8 = 32px) by shrinking
+   * #root's own box (not adding on top of it) — otherwise a child using
+   * min-h-screen/100vh always overflows by exactly the bar's height and a
+   * scrollbar appears. The app shell itself never scrolls; individual views
+   * built later manage their own internal scroll regions.
+   */
+  #root {
+    height: 100vh;
+    padding-top: 2rem;
+    box-sizing: border-box;
+    overflow: hidden;
   }
 }
