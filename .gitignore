@@ -6,3 +6,5 @@ out
 *.log*
 .vscode
 .env
+.db
+.db-wal

@@ -1,7 +1,16 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
+import { runMigrations } from './db';
+// [SEED] Borrar este import junto con src/main/db/seed.ts cuando ya no haga falta.
+import { seedDatabase } from './db/seed';
+
+// Overrides the userData folder name (would otherwise be "afterplay", lowercase,
+// taken from package.json's "name"). Must run before any app.getPath('userData')
+// call — including the lazy one inside getDb() — so it's the very first thing
+// this module does, before app.whenReady() or anything async.
+app.setName('Afterplay');
 
 function createWindow(): void {
   // Create the browser window.
@@ -50,7 +59,7 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
 
@@ -60,6 +69,32 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
+
+  // Apply pending DB migrations before anything else touches the database.
+  // A failed migration means the app can't run correctly, so it quits
+  // instead of continuing into a broken state.
+  try {
+    await runMigrations();
+  } catch (error) {
+    console.error('Database migration failed:', error);
+    dialog.showErrorBox(
+      'Afterplay',
+      'No se pudo preparar la base de datos. La app se va a cerrar.',
+    );
+    app.quit();
+    return;
+  }
+
+  // [SEED] Datos de prueba, solo en desarrollo. Para quitar el seed: borra este
+  // bloque, el import de seedDatabase de arriba y el archivo src/main/db/seed.ts.
+  // Si falla no pasa nada grave (la app sigue), solo se loguea.
+  if (is.dev) {
+    try {
+      await seedDatabase();
+    } catch (error) {
+      console.error('[seed] Falló el seed de desarrollo:', error);
+    }
+  }
 
   // Custom title bar window controls
   ipcMain.on('window:minimize', (event) => {
