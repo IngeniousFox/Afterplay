@@ -18,6 +18,7 @@ export const gamesTable = sqliteTable('games', {
   hltbMain: real(),
   hltbMainExtras: real(),
   hltbCompletionist: real(),
+  notes: text(),
   endless: int({ mode: 'boolean' }).notNull().default(false),
   addedAt: int({ mode: 'timestamp_ms' })
     .notNull()

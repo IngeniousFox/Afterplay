@@ -246,6 +246,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 51.5,
       hltbMainExtras: 103,
       hltbCompletionist: 172,
+      notes:
+        'Review antiguo (PS4) + notas de la rejugada actual.\n\n## Partida original (PS4, 2019)\n**Una de mis RPGs favoritas de siempre.** La historia principal tarda en arrancar pero en cuanto llegas a *Novigrad* engancha del todo.\n\n- *Blood and Wine* es la mejor expansión que he jugado en mi vida\n- Gwent se comió un número vergonzoso de horas\n- Rating: **9.5/10**\n\n## NG+ Death March (en curso)\nRejugando en Death March directamente. Esta vez sí voy a aceitar las espadas desde el minuto uno.',
       endless: false,
       addedAt: d(2025, 9, 2),
     },
@@ -320,6 +322,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 22.5,
       hltbMainExtras: 40,
       hltbCompletionist: 96,
+      notes:
+        '**El mejor rogue-like que he tocado**, sin discusión. Que la historia avance *a través* de la muerte en vez de a pesar de ella es una genialidad.\n\n- Créditos en el intento 34\n- Sigo jugando después de los créditos, claro\n- Build favorito: escudo con el *Aspect of Zeus*\n\nRating: **9/10**',
       endless: false,
       addedAt: d(2026, 1, 9),
     },
@@ -365,6 +369,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 52.5,
       hltbMainExtras: 95,
       hltbCompletionist: 156,
+      notes:
+        'Mi juego de manta. **Endless** por diseño — entro cada temporada un rato y ya.\n\n- Terminé el invierno del año 3 y lo dejé reposar\n- Volveré cuando salga la 1.7\n- Rating: `cozy/10`',
       endless: true,
       addedAt: d(2025, 9, 1),
     },
@@ -410,6 +416,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 22,
       hltbMainExtras: 40,
       hltbCompletionist: 160,
+      notes:
+        '**La fábrica debe crecer.** Endless por naturaleza — me digo "una línea de producción más" y se me van tres horas.\n\n- Objetivo actual: megabase a 1k SPM\n- Los trenes lo cambiaron todo\n- Sesiones sobre todo de madrugada, para qué mentir',
       endless: true,
       addedAt: d(2026, 3, 28),
     },
@@ -449,6 +457,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: null,
       hltbMainExtras: null,
       hltbCompletionist: null,
+      notes:
+        'Le di una oportunidad de verdad en 2015. Demasiada libertad, cero objetivos — no es un problema del juego, es mío.\n\n*Puede que algún día vuelva con algún modpack con más estructura.*',
       endless: true,
       addedAt: d(2025, 9, 2),
     },
@@ -490,6 +500,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 59,
       hltbMainExtras: 103,
       hltbCompletionist: 138,
+      notes:
+        '## Impresiones\nEl mundo abierto tiene justo ese *misterio* que los Souls siempre insinuaban. Rating: **9/10** mientras duró.\n\n## Por qué lo dejé\nMalenia me rompió. 47 intentos y me di cuenta de que no lo estaba disfrutando, solo sufriendo.\n\n- Build: bleed/katana\n- Puede que vuelva cuando salga *Shadow of the Erdtree* en oferta',
       endless: false,
       addedAt: d(2026, 1, 30),
     },
@@ -535,6 +547,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 68,
       hltbMainExtras: 106,
       hltbCompletionist: 174,
+      notes:
+        'Mi ranger semielfa, parada a mitad del acto 2. La reactividad es una locura — sigo descubriendo cosas que no sabía que eran posibles.\n\n- Esperando los parches gordos antes de la recta final\n- Guardo partida obsesivamente\n- Rating (hasta ahora): **8/10**',
       endless: false,
       addedAt: d(2026, 2, 27),
     },
@@ -580,6 +594,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 25.5,
       hltbMainExtras: 62,
       hltbCompletionist: 107,
+      notes:
+        '## Lanzamiento (2021)\nTerminado entre bugs y crasheos. El potencial estaba ahí pero costaba verlo.\n\n## Phantom Liberty\nVolví solo por el DLC y **es lo que el juego base debió ser desde el principio.** Redimido.\n\nRating final: **8/10** (el DLC solo se lleva un 9)',
       endless: false,
       addedAt: d(2025, 9, 3),
     },
@@ -661,6 +677,7 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 27.5,
       hltbMainExtras: 41.5,
       hltbCompletionist: 63.5,
+      notes: 'Caído en rebajas de Steam. Directo al backlog, todavía sin abrir.',
       endless: false,
       addedAt: d(2025, 12, 19),
     },
@@ -686,6 +703,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 97,
       hltbMainExtras: 116,
       hltbCompletionist: 143,
+      notes:
+        'Joya emulada en RPCS3. **97 horas** y ni una se sintió de más.\n\n- OST de 10, sin discusión\n- Perdón, Atlus, algún día lo compro en condiciones',
       endless: false,
       addedAt: d(2025, 9, 3),
     },
@@ -739,6 +758,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 19.5,
       hltbMainExtras: 38,
       hltbCompletionist: 105,
+      notes:
+        'Vía Game Pass. Divertido en dosis cortas pero el grind de coches acabó por cansarme.\n\n*Quizá vuelva con la próxima expansión.*',
       endless: false,
       addedAt: d(2025, 11, 1),
     },
@@ -784,6 +805,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 29.5,
       hltbMainExtras: 71,
       hltbCompletionist: 344,
+      notes:
+        '«Solo una run rápida antes de dormir», dije. Van 26 sesiones y sigo diciendo lo mismo.\n\n- Steam Deck, sobre todo de madrugada\n- Endless por diseño, no hay "terminarlo"',
       endless: true,
       addedAt: d(2026, 5, 30),
     },
@@ -828,6 +851,8 @@ const SEED_GAMES: SeedGameDef[] = [
       hltbMain: 58.5,
       hltbMainExtras: 121,
       hltbCompletionist: 240,
+      notes:
+        '## Lágrimas del Reino\nLas mazmorras vuelven a ser mazmorras de verdad. **Vicio absoluto** de principio a fin.\n\n- 95 horas, edición física\n- Día de lanzamiento, sin arrepentimientos\n- Rating: **10/10**',
       endless: false,
       addedAt: d(2025, 9, 4),
     },
