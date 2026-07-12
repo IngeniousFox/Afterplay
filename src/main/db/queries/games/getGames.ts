@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { getDb } from '../..';
+import type { GameListItem, StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
-import type { Game, StateEvent } from '../../../../shared/types';
 
 // Forma de una fila candidata a "evento de estado más reciente de este
 // juego". La nombro explícitamente en vez de inferirla del array para no
@@ -13,10 +13,12 @@ type StateEventCandidate = {
   id: number;
 };
 
-export const getGames = async (): Promise<Game[]> => {
+export const getGames = async (): Promise<GameListItem[]> => {
   const db = getDb();
 
-  const games = await db.select().from(gamesTable);
+  const games = await db
+    .select({ id: gamesTable.id, title: gamesTable.title, coverUrl: gamesTable.coverUrl })
+    .from(gamesTable);
 
   // Horas manuales por juego (ya vienen en horas, se suman directas). Agrupo
   // solo sobre iterations sin tocar sessions todavía — si mezclo las dos
@@ -29,23 +31,36 @@ export const getGames = async (): Promise<Game[]> => {
     .from(iterationsTable)
     .groupBy(iterationsTable.gameId);
 
-  // Segundos trackeados por juego, sumando todas las sesiones de todas sus
-  // iteraciones. Va en consulta aparte por el mismo motivo de arriba.
-  const trackedSecondsByGame = await db
-    .select({
-      gameId: iterationsTable.gameId,
-      totalSeconds: sql<number>`coalesce(sum(${sessionsTable.durationSec}), 0)`,
-    })
-    .from(sessionsTable)
-    .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id))
-    .groupBy(iterationsTable.gameId);
-
   const manualHoursMap = new Map(
     manualHoursByGame.map((row) => [row.gameId, row.totalManualHours]),
   );
-  const trackedSecondsMap = new Map(
-    trackedSecondsByGame.map((row) => [row.gameId, row.totalSeconds]),
-  );
+
+  // Todas las sesiones del juego (vía sus iteraciones), sin agregar. De aquí
+  // salen TRES cosas a la vez en el mismo bucle de abajo: horas trackeadas,
+  // nº de sesiones, y si hay alguna sesión abierta ahora mismo (LIVE).
+  const sessionRows = await db
+    .select({
+      gameId: iterationsTable.gameId,
+      durationSec: sessionsTable.durationSec,
+      endedAt: sessionsTable.endedAt,
+    })
+    .from(sessionsTable)
+    .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id));
+
+  const trackedSecondsByGame = new Map<number, number>();
+  const sessionCountByGame = new Map<number, number>();
+  const liveGameIds = new Set<number>();
+
+  for (const row of sessionRows) {
+    trackedSecondsByGame.set(
+      row.gameId,
+      (trackedSecondsByGame.get(row.gameId) ?? 0) + (row.durationSec ?? 0),
+    );
+    sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
+    if (row.endedAt === null) {
+      liveGameIds.add(row.gameId);
+    }
+  }
 
   // Todos los stateEvents del juego (vía sus iteraciones), sin agregar
   // todavía. El "estado actual" es otro caso de 1-fila-por-grupo (la más
@@ -90,15 +105,19 @@ export const getGames = async (): Promise<Game[]> => {
 
   return games.map((game) => {
     const manualHours = manualHoursMap.get(game.id) ?? 0;
-    const trackedSeconds = trackedSecondsMap.get(game.id) ?? 0;
+    const trackedSeconds = trackedSecondsByGame.get(game.id) ?? 0;
     const trackedHours = trackedSeconds / 3600;
 
     const latestStateEvent = latestStateEventByGame.get(game.id);
 
     return {
-      ...game,
+      id: game.id,
+      title: game.title,
+      coverUrl: game.coverUrl,
       totalHours: manualHours + trackedHours,
       currentState: latestStateEvent?.type ?? null,
+      isLive: liveGameIds.has(game.id),
+      sessionCount: sessionCountByGame.get(game.id) ?? 0,
     };
   });
 };

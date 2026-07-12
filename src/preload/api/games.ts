@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron';
-import type { Game } from '../../shared/types';
+import type { GameListItem } from '../../shared/types';
 
 export const gamesApi = {
-  getAll: (): Promise<Game[]> => ipcRenderer.invoke('games:getAll'),
+  getAll: (): Promise<GameListItem[]> => ipcRenderer.invoke('games:getAll'),
 };

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { Game } from '../../shared/types';
+import type { GameListItem } from '../../shared/types';
 import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
 import { tintVariants } from './lib/tint';
 
 function App(): React.JSX.Element {
-  const [games, setGames] = useState<Game[]>([]);
+  const [games, setGames] = useState<GameListItem[]>([]);
 
   useEffect(() => {
     window.api.games.getAll().then(setGames);
@@ -52,7 +52,8 @@ function App(): React.JSX.Element {
         <ul className="mt-2 space-y-1 text-sm text-foreground">
           {games.map((game) => (
             <li key={game.id}>
-              {game.title} — {game.totalHours.toFixed(1)}h — {game.currentState ?? 'sin empezar'}
+              {game.title} — {game.totalHours.toFixed(1)}h — {game.sessionCount} sesiones —{' '}
+              {game.currentState ?? 'sin empezar'} {game.isLive ? '🔴 LIVE' : ''}
             </li>
           ))}
         </ul>
