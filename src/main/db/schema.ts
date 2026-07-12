@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, int, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-export type Game = typeof gamesTable.$inferSelect;
+export type GameRow = typeof gamesTable.$inferSelect;
 export type Session = typeof sessionsTable.$inferSelect;
 export type Iteration = typeof iterationsTable.$inferSelect;
 export type StateEvent = typeof stateEventsTable.$inferSelect;

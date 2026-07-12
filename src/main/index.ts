@@ -1,10 +1,11 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 import { runMigrations } from './db';
-// [SEED] Borrar este import junto con src/main/db/seed.ts cuando ya no haga falta.
+// [SEED] cuando quite el seed: este import + borrar src/main/db/seed.ts.
 import { seedDatabase } from './db/seed';
+import { registerIpcHandlers } from './ipc';
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
@@ -85,9 +86,9 @@ app.whenReady().then(async () => {
     return;
   }
 
-  // [SEED] Datos de prueba, solo en desarrollo. Para quitar el seed: borra este
-  // bloque, el import de seedDatabase de arriba y el archivo src/main/db/seed.ts.
-  // Si falla no pasa nada grave (la app sigue), solo se loguea.
+  // [SEED] Datos de prueba, solo en dev. Para quitarlo: este bloque + el
+  // import de seedDatabase de arriba + borrar src/main/db/seed.ts.
+  // Si peta no pasa nada, se loguea y la app sigue tirando igual.
   if (is.dev) {
     try {
       await seedDatabase();
@@ -96,24 +97,7 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Custom title bar window controls
-  ipcMain.on('window:minimize', (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.minimize();
-  });
-
-  ipcMain.on('window:maximize', (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return;
-    if (window.isMaximized()) {
-      window.unmaximize();
-    } else {
-      window.maximize();
-    }
-  });
-
-  ipcMain.on('window:close', (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.close();
-  });
+  registerIpcHandlers();
 
   createWindow();
 

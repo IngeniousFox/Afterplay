@@ -185,7 +185,7 @@ function daysAfter(date: Date, days: number): Date {
 }
 
 // ---------------------------------------------------------------------------
-// Sesiones generadas (seed fijo = igdbId → deterministas y reproducibles)
+// Sesiones generadas con seed fijo (= igdbId), así que siempre salen igual
 // ---------------------------------------------------------------------------
 
 // The Witcher 3 — NG+ en curso: 9 sesiones las últimas ~2 semanas + una ABIERTA.
@@ -898,9 +898,9 @@ async function insertSeedGame(def: SeedGameDef): Promise<'inserted' | 'skipped'>
         .values({ ...iterationValues, gameId: game.id })
         .returning({ id: iterationsTable.id });
 
-      // Las sesiones referencian a la iteración y la iteración (start/end) a las
-      // sesiones — la dependencia circular se resuelve insertando las sesiones
-      // primero con la iteración ya creada, y anclando start/end en un UPDATE.
+      // Sessions apunta a la iteración, y la iteración (start/end) apunta de
+      // vuelta a sessions — para la circular: creo la iteración, meto las
+      // sesiones, y las anclo (start/end) con un UPDATE al final.
       const sessionIds: number[] = [];
       for (const session of sessions) {
         const [inserted] = await tx

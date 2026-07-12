@@ -1,8 +1,17 @@
+import { useEffect, useState } from 'react';
+import type { Game } from '../../shared/types';
 import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
 import { tintVariants } from './lib/tint';
 
 function App(): React.JSX.Element {
+  const [games, setGames] = useState<Game[]>([]);
+
+  useEffect(() => {
+    window.api.games.getAll().then(setGames);
+  }, []);
+  console.log({ games });
+
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto p-10">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6">
@@ -39,6 +48,14 @@ function App(): React.JSX.Element {
             </p>
           </Card>
         </div>
+        <p className="mt-4 text-sm text-muted-foreground">{games.length} juegos en la biblioteca</p>
+        <ul className="mt-2 space-y-1 text-sm text-foreground">
+          {games.map((game) => (
+            <li key={game.id}>
+              {game.title} — {game.totalHours.toFixed(1)}h — {game.currentState ?? 'sin empezar'}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
