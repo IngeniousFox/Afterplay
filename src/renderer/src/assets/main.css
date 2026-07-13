@@ -173,4 +173,51 @@
   *::-webkit-scrollbar-button {
     display: none;
   }
+
+  /* Las flechas nativas de los <input type="number"> no siguen el tema de
+     la app (siempre claras/grises del sistema) y no hay forma de teñirlas
+     bien vía CSS — se ocultan, igual que se hizo con los botones del
+     scrollbar. Solo webkit hace falta: Electron siempre es Chromium. */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+  }
+}
+
+/* SPEC 10.5 — animaciones exactas. Prefijo afterplay- para no chocar con
+   ningún nombre de animación que shadcn/tw-animate-css ya traigan de fábrica. */
+@keyframes afterplay-pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes afterplay-pulse-badge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(47, 220, 126, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px rgba(47, 220, 126, 0);
+  }
+}
+
+@keyframes afterplay-glow-card {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1.5px rgba(47, 220, 126, 0.85),
+      0 0 24px rgba(47, 220, 126, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1.5px rgba(47, 220, 126, 0.65),
+      0 0 40px rgba(47, 220, 126, 0.42);
+  }
 }

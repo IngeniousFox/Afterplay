@@ -1,3 +1,4 @@
+import { dialogApi } from './dialog';
 import { gamesApi } from './games';
 import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
@@ -11,6 +12,7 @@ import { windowApi } from './window';
 
 export const api = {
   window: windowApi,
+  dialog: dialogApi,
   games: gamesApi,
   iterations: iterationsApi,
   sessions: sessionsApi,

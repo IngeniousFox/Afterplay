@@ -1,3 +1,5 @@
+import type { GetSgdbImagesInput } from '../../../shared/types';
+
 // TanStack Query invalida por PREFIJO: invalidar ['games'] invalida también
 // ['games', 5], ['games', 5, 'spend']... cualquier key que empiece igual.
 // Por eso casi ninguna mutation necesita saber la key exacta de lo que
@@ -10,8 +12,12 @@ export const queryKeys = {
   },
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
+    details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,
   },
   hltb: {
     times: (title: string, releaseYear: number | null) => ['hltb', title, releaseYear] as const,
+  },
+  sgdb: {
+    images: (input: GetSgdbImagesInput) => ['sgdb', 'images', input] as const,
   },
 };

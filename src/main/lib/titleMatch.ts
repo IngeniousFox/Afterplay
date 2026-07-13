@@ -7,7 +7,11 @@
 // resto de puntuación se quita y los espacios se colapsan. Los números
 // (romanos o no) se dejan tal cual — las fuentes suelen coincidir ahí, y
 // tocarlos daría más falsos positivos que otra cosa.
-const normalizeTitle = (title: string): string =>
+//
+// Exportada: también la usa igdb/rank.ts para puntuar resultados de
+// búsqueda — mismo problema de fondo (comparar títulos de forma tolerante),
+// no tiene sentido reimplementarlo ahí.
+export const normalizeTitle = (title: string): string =>
   title
     .toLowerCase()
     .replace(/['’`]/g, '')
@@ -28,7 +32,7 @@ const bigrams = (value: string): Map<string, number> => {
 
 // Similitud de Dice (0..1) sobre bigramas: robusta a palabras extra y a
 // pequeñas variaciones, mejor que "igual o no" para títulos con sufijos.
-const diceCoefficient = (a: string, b: string): number => {
+export const diceCoefficient = (a: string, b: string): number => {
   if (a === b) return 1;
   if (a.length < 2 || b.length < 2) return 0;
 

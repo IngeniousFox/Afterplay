@@ -1,6 +1,12 @@
 import { ipcMain } from 'electron';
-import type { CreateGameInput, GameRow, UpdateGamePatch } from '../../shared/types';
+import type {
+  CreateGameInput,
+  CreateGameWithDetailsInput,
+  GameRow,
+  UpdateGamePatch,
+} from '../../shared/types';
 import { createGame } from '../db/queries/games/createGame';
+import { createGameWithDetails } from '../db/queries/games/createGameWithDetails';
 import { deleteGame } from '../db/queries/games/deleteGame';
 import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
@@ -35,6 +41,12 @@ export const registerGamesHandlers = (): void => {
 
   ipcMain.handle('games:create', async (_event, input: CreateGameInput) => {
     const game = await createGame(input);
+    warmImageCache(game);
+    return game;
+  });
+
+  ipcMain.handle('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
+    const game = await createGameWithDetails(input);
     warmImageCache(game);
     return game;
   });

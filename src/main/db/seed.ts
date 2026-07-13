@@ -231,7 +231,7 @@ const SEED_GAMES: SeedGameDef[] = [
       title: 'The Witcher 3: Wild Hunt',
       igdbId: 1942,
       steamGridDbId: 5254,
-      coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co1wyy.webp',
+      coverUrl: 'https://cdn2.steamgriddb.com/grid/81d7c3d7086dd2365d06792a2f732ba6.png',
       heroUrl: 'https://images.igdb.com/igdb/image/upload/t_1080p/ar5jb.webp',
       officialPlatforms: ['PC', 'PS4', 'PS5', 'Xbox One', 'Xbox Series X|S', 'Switch'],
       hltbMain: 51.5,

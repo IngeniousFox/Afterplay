@@ -36,11 +36,14 @@ export const getGames = async (): Promise<GameListItem[]> => {
   );
 
   // Todas las sesiones del juego (vía sus iteraciones), sin agregar. De aquí
-  // salen TRES cosas a la vez en el mismo bucle de abajo: horas trackeadas,
-  // nº de sesiones, y si hay alguna sesión abierta ahora mismo (LIVE).
+  // salen CUATRO cosas a la vez en el mismo bucle de abajo: horas trackeadas,
+  // nº de sesiones, si hay alguna sesión abierta ahora mismo (LIVE), y desde
+  // cuándo (para el contador en vivo de la card — SPEC 10.7 lo pide junto al
+  // badge PLAYING, no basta con saber que está en marcha).
   const sessionRows = await db
     .select({
       gameId: iterationsTable.gameId,
+      startedAt: sessionsTable.startedAt,
       durationSec: sessionsTable.durationSec,
       endedAt: sessionsTable.endedAt,
     })
@@ -49,7 +52,9 @@ export const getGames = async (): Promise<GameListItem[]> => {
 
   const trackedSecondsByGame = new Map<number, number>();
   const sessionCountByGame = new Map<number, number>();
-  const liveGameIds = new Set<number>();
+  // startedAt de la sesión abierta del juego (SPEC 4.5: como mucho un
+  // playthrough activo por juego, así que como mucho una sesión abierta).
+  const liveSinceByGame = new Map<number, Date>();
 
   for (const row of sessionRows) {
     trackedSecondsByGame.set(
@@ -58,7 +63,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
     );
     sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
     if (row.endedAt === null) {
-      liveGameIds.add(row.gameId);
+      liveSinceByGame.set(row.gameId, row.startedAt);
     }
   }
 
@@ -110,13 +115,16 @@ export const getGames = async (): Promise<GameListItem[]> => {
 
     const latestStateEvent = latestStateEventByGame.get(game.id);
 
+    const liveSince = liveSinceByGame.get(game.id) ?? null;
+
     return {
       id: game.id,
       title: game.title,
       coverUrl: game.coverUrl,
       totalHours: manualHours + trackedHours,
       currentState: latestStateEvent?.type ?? null,
-      isLive: liveGameIds.has(game.id),
+      isLive: liveSince !== null,
+      liveSince,
       sessionCount: sessionCountByGame.get(game.id) ?? 0,
     };
   });

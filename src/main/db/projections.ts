@@ -28,6 +28,7 @@ export const gameColumns = {
   hltbMainExtras: gamesTable.hltbMainExtras,
   hltbCompletionist: gamesTable.hltbCompletionist,
   notes: gamesTable.notes,
+  executablePath: gamesTable.executablePath,
   endless: gamesTable.endless,
   addedAt: gamesTable.addedAt,
 };

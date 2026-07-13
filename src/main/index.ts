@@ -9,12 +9,17 @@ import { runMigrations } from './db';
 // [SEED] cuando quite el seed: este import + borrar src/main/db/seed.ts.
 import { seedDatabase } from './db/seed';
 import { registerIpcHandlers } from './ipc';
+import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
 // call — including the lazy one inside getDb() — so it's the very first thing
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
+
+// También tiene que ir antes de whenReady() — Electron lo exige para poder
+// registrar esquemas con privilegios (ver images/protocol.ts).
+registerImageProtocolScheme();
 
 function createWindow(): void {
   // Create the browser window.
@@ -101,6 +106,7 @@ app.whenReady().then(async () => {
   }
 
   registerIpcHandlers();
+  registerImageProtocolHandler();
 
   createWindow();
 

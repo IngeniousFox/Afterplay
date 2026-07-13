@@ -15,10 +15,10 @@ const TitleBar = (): React.JSX.Element => {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex h-7 items-center justify-between border-b border-border bg-card pl-3 text-foreground select-none"
+      className="fixed inset-x-0 top-0 z-60 flex h-7 items-center justify-between border-b border-border bg-card pl-3 text-foreground select-none"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      <span className="text-[14px] font-semibold">Afterplay</span>
+      <span className="text-sm font-semibold">Afterplay</span>
       <div className="flex h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <button
           type="button"

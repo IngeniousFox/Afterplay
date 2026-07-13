@@ -11,7 +11,7 @@ export const sgdbSearch = async (
   title: string,
   releaseYear: number | null,
 ): Promise<number | null> => {
-  const client = getSgdbClient();
+  const client = await getSgdbClient();
   const raw = await client.searchGame(title);
   const candidates = sgdbSearchResponseSchema.parse(raw);
   const match = findBestMatch(candidates, title, releaseYear);
@@ -45,13 +45,13 @@ const safeImageCall = async (call: () => Promise<unknown>): Promise<SgdbImageCan
 };
 
 export const sgdbGetGrids = async (id: number): Promise<SgdbImageCandidate[]> =>
-  safeImageCall(() => getSgdbClient().getGridsById(id));
+  safeImageCall(async () => (await getSgdbClient()).getGridsById(id));
 
 export const sgdbGetHeroes = async (id: number): Promise<SgdbImageCandidate[]> =>
-  safeImageCall(() => getSgdbClient().getHeroesById(id));
+  safeImageCall(async () => (await getSgdbClient()).getHeroesById(id));
 
 export const sgdbGetLogos = async (id: number): Promise<SgdbImageCandidate[]> =>
-  safeImageCall(() => getSgdbClient().getLogosById(id));
+  safeImageCall(async () => (await getSgdbClient()).getLogosById(id));
 
 export const getSgdbImages = async (input: GetSgdbImagesInput): Promise<SgdbImages> => {
   const id = 'sgdbId' in input ? input.sgdbId : await sgdbSearch(input.title, input.releaseYear);

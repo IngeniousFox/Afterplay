@@ -12,6 +12,15 @@ export const igdbSearchGameSchema = z.object({
   platforms: z.array(namedSchema).optional(),
   genres: z.array(namedSchema).optional(),
   summary: z.string().optional(),
+  // Campos solo para filtrar/puntuar el buscador (rank.ts) — no viajan al
+  // renderer, se quedan aquí en cuanto se resuelve el ranking.
+  category: z.number().optional(),
+  version_parent: z.number().optional(),
+  parent_game: z.number().optional(),
+  collection: z.number().optional(),
+  total_rating_count: z.number().optional(),
+  follows: z.number().optional(),
+  hypes: z.number().optional(),
 });
 
 export const igdbSearchResponseSchema = z.array(igdbSearchGameSchema);

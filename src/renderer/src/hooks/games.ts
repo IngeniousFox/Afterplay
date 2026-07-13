@@ -2,6 +2,7 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateGameInput,
+  CreateGameWithDetailsInput,
   GameDetail,
   GameListItem,
   GameRow,
@@ -40,6 +41,21 @@ export const useCreateGame = (): UseMutationResult<GameRow, Error, CreateGameInp
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateGameInput) => window.api.games.create(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};
+
+export const useCreateGameWithDetails = (): UseMutationResult<
+  GameRow,
+  Error,
+  CreateGameWithDetailsInput,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateGameWithDetailsInput) => window.api.games.createWithDetails(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
     },

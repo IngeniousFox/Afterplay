@@ -28,6 +28,7 @@ export const gamesTable = sqliteTable('games', {
   hltbMainExtras: real(),
   hltbCompletionist: real(),
   notes: text(),
+  executablePath: text(),
   endless: int({ mode: 'boolean' }).notNull().default(false),
   addedAt: int({ mode: 'timestamp_ms' })
     .notNull()
@@ -92,7 +93,7 @@ export const stateEventsTable = sqliteTable(
     iterationId: int()
       .notNull()
       .references(() => iterationsTable.id, { onDelete: 'cascade' }),
-    type: text({ enum: ['started', 'completed', 'dropped', 'on_hold'] }).notNull(),
+    type: text({ enum: ['started', 'completed', 'dropped', 'on_hold', 'resting'] }).notNull(),
     occurredAt: int({ mode: 'timestamp_ms' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -102,7 +103,7 @@ export const stateEventsTable = sqliteTable(
   (table) => [
     check(
       'state_events_type_check',
-      sql`${table.type} in ('started', 'completed', 'dropped', 'on_hold')`,
+      sql`${table.type} in ('started', 'completed', 'dropped', 'on_hold', 'resting')`,
     ),
     check(
       'state_events_date_precision_check',

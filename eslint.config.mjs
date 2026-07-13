@@ -34,6 +34,7 @@ export default defineConfig(
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',
       'react-refresh/only-export-components': 'off',
+      'react/prop-types': 'off',
     },
   },
   eslintConfigPrettier,
