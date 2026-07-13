@@ -1,7 +1,9 @@
 import { gamesApi } from './games';
+import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
 import { iterationsApi } from './iterations';
 import { sessionsApi } from './sessions';
+import { sgdbApi } from './sgdb';
 import { spendApi } from './spend';
 import { stateEventsApi } from './stateEvents';
 import { windowApi } from './window';
@@ -14,6 +16,8 @@ export const api = {
   stateEvents: stateEventsApi,
   spend: spendApi,
   igdb: igdbApi,
+  hltb: hltbApi,
+  sgdb: sgdbApi,
 };
 
 export type Api = typeof api;

@@ -46,6 +46,11 @@ export type AddSpendEventInput = Omit<NewSpendEvent, 'id'>;
 
 export type { IgdbGameDetail, IgdbSearchResult } from '../main/igdb/types';
 
+export type { HltbTimes } from '../main/hltb/types';
+
+// SteamGridDB (Bloque 2C-ter) — igual, la fuente es main/sgdb/types.ts.
+export type { GetSgdbImagesInput, SgdbImageCandidate, SgdbImages } from '../main/sgdb/types';
+
 export type GameListItem = {
   id: number;
   title: string;
