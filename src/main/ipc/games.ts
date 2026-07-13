@@ -6,7 +6,7 @@ import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
 import { updateGame } from '../db/queries/games/updateGame';
 
-export function registerGamesHandlers(): void {
+export const registerGamesHandlers = (): void => {
   ipcMain.handle('games:getAll', async () => {
     return getGames();
   });
@@ -26,4 +26,4 @@ export function registerGamesHandlers(): void {
   ipcMain.handle('games:delete', async (_event, id: number) => {
     return deleteGame(id);
   });
-}
+};

@@ -44,6 +44,8 @@ export type AddStateEventInput = Omit<NewStateEvent, 'id'>;
 
 export type AddSpendEventInput = Omit<NewSpendEvent, 'id'>;
 
+export type { IgdbGameDetail, IgdbSearchResult } from '../main/igdb/types';
+
 export type GameListItem = {
   id: number;
   title: string;

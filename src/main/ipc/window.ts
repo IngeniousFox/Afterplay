@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron';
 
-export function registerWindowHandlers(): void {
+export const registerWindowHandlers = (): void => {
   ipcMain.on('window:minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize();
   });
@@ -18,4 +18,4 @@ export function registerWindowHandlers(): void {
   ipcMain.on('window:close', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
-}
+};

@@ -1,3 +1,6 @@
+// Primer import a propósito: carga el .env (credenciales de Twitch/IGDB, y
+// las de Turso cuando toque) en process.env antes de que nada las lea.
+import 'dotenv/config';
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import { app, BrowserWindow, dialog, shell } from 'electron';
 import { join } from 'path';

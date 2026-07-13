@@ -3,7 +3,7 @@ import type { AddStateEventInput } from '../../shared/types';
 import { addStateEvent } from '../db/queries/stateEvents/addStateEvent';
 import { getStateEventsByIteration } from '../db/queries/stateEvents/getStateEventsByIteration';
 
-export function registerStateEventsHandlers(): void {
+export const registerStateEventsHandlers = (): void => {
   ipcMain.handle('stateEvents:add', async (_event, input: AddStateEventInput) => {
     return addStateEvent(input);
   });
@@ -11,4 +11,4 @@ export function registerStateEventsHandlers(): void {
   ipcMain.handle('stateEvents:getByIteration', async (_event, iterationId: number) => {
     return getStateEventsByIteration(iterationId);
   });
-}
+};

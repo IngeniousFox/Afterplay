@@ -72,7 +72,7 @@ interface SeedGameDef {
 // ---------------------------------------------------------------------------
 
 /** PRNG determinista (mulberry32): mismos datos en cada máquina/ejecución. */
-function mulberry32(seed: number): () => number {
+const mulberry32 = (seed: number): (() => number) => {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) | 0;
@@ -80,19 +80,18 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
+};
 
 /** Fecha con mes 1-based para poder leerla como humano: d(2019, 6, 20) = 20 jun 2019. */
-function d(year: number, month: number, day: number, hour = 12, minute = 0): Date {
-  return new Date(year, month - 1, day, hour, minute);
-}
+const d = (year: number, month: number, day: number, hour = 12, minute = 0): Date =>
+  new Date(year, month - 1, day, hour, minute);
 
-function daysAgo(days: number, hour = 20, minute = 0): Date {
+const daysAgo = (days: number, hour = 20, minute = 0): Date => {
   const date = new Date();
   date.setDate(date.getDate() - days);
   date.setHours(hour, minute, 0, 0);
   return date;
-}
+};
 
 /**
  * Sesiones del watcher (isManual=false, precision datetime): `count` sesiones
@@ -100,7 +99,7 @@ function daysAgo(days: number, hour = 20, minute = 0): Date {
  * si nightOwl), con duración entre minMinutes y maxMinutes. durationSec cuadra
  * exacto con endedAt - startedAt, como haría el watcher real.
  */
-function trackedSessions(
+const trackedSessions = (
   seed: number,
   from: Date,
   to: Date,
@@ -108,7 +107,7 @@ function trackedSessions(
   minMinutes: number,
   maxMinutes: number,
   nightOwl = false,
-): SeedSession[] {
+): SeedSession[] => {
   const rand = mulberry32(seed);
   const step = (to.getTime() - from.getTime()) / count;
   const sessions: SeedSession[] = [];
@@ -128,61 +127,53 @@ function trackedSessions(
     });
   }
   return sessions.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
-}
+};
 
 /**
  * Sesión manual "de borde" del pasado (SPEC 4): marca una fecha (imprecisa),
  * no aporta horas — endedAt = startedAt y durationSec null. Las horas de esas
  * iteraciones viven en manualTotalPlayed.
  */
-function borderSession(
+const borderSession = (
   startedAt: Date,
   datePrecision: 'year' | 'month' | 'day',
   milestone: 'started' | 'completed' | 'dropped',
-): SeedSession {
-  return {
-    isManual: true,
-    startedAt,
-    endedAt: startedAt,
-    durationSec: null,
-    datePrecision,
-    milestone,
-  };
-}
+): SeedSession => ({
+  isManual: true,
+  startedAt,
+  endedAt: startedAt,
+  durationSec: null,
+  datePrecision,
+  milestone,
+});
 
 /** Sesión EN CURSO ahora mismo (endedAt null): la card debe mostrar PLAYING + contador. */
-function openSessionStartedMinutesAgo(minutes: number): SeedSession {
-  return {
-    isManual: false,
-    startedAt: new Date(Date.now() - minutes * 60_000),
-    endedAt: null,
-    durationSec: null,
-    datePrecision: 'datetime',
-    milestone: null,
-  };
-}
+const openSessionStartedMinutesAgo = (minutes: number): SeedSession => ({
+  isManual: false,
+  startedAt: new Date(Date.now() - minutes * 60_000),
+  endedAt: null,
+  durationSec: null,
+  datePrecision: 'datetime',
+  milestone: null,
+});
 
-function markMilestone(
+const markMilestone = (
   sessions: SeedSession[],
   index: number,
   milestone: 'completed' | 'dropped',
-): SeedSession[] {
+): SeedSession[] => {
   sessions[index].milestone = milestone;
   return sessions;
-}
+};
 
-function ev(
+const ev = (
   type: 'started' | 'completed' | 'dropped' | 'on_hold',
   occurredAt: Date,
   datePrecision: 'year' | 'month' | 'day' | 'datetime',
   note: string | null = null,
-): NewStateEvent {
-  return { type, occurredAt, datePrecision, note };
-}
+): NewStateEvent => ({ type, occurredAt, datePrecision, note });
 
-function daysAfter(date: Date, days: number): Date {
-  return new Date(date.getTime() + days * 86_400_000);
-}
+const daysAfter = (date: Date, days: number): Date => new Date(date.getTime() + days * 86_400_000);
 
 // ---------------------------------------------------------------------------
 // Sesiones generadas con seed fijo (= igdbId), así que siempre salen igual
@@ -897,7 +888,7 @@ const SEED_GAMES: SeedGameDef[] = [
 // Inserción
 // ---------------------------------------------------------------------------
 
-async function insertSeedGame(def: SeedGameDef): Promise<'inserted' | 'skipped'> {
+const insertSeedGame = async (def: SeedGameDef): Promise<'inserted' | 'skipped'> => {
   const db = getDb();
 
   const existing = await db
@@ -954,9 +945,9 @@ async function insertSeedGame(def: SeedGameDef): Promise<'inserted' | 'skipped'>
   });
 
   return 'inserted';
-}
+};
 
-export async function seedDatabase(): Promise<void> {
+export const seedDatabase = async (): Promise<void> => {
   let inserted = 0;
   let skipped = 0;
 
@@ -969,4 +960,4 @@ export async function seedDatabase(): Promise<void> {
   }
 
   console.log(`[seed] ${inserted} juegos insertados, ${skipped} ya existían (saltados).`);
-}
+};

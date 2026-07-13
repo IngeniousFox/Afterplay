@@ -8,7 +8,7 @@ const controlButtonClass = cn(
   'hover:bg-muted focus-visible:bg-muted',
 );
 
-function TitleBar(): React.JSX.Element {
+const TitleBar = (): React.JSX.Element => {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => window.api.window.onMaximizedChange(setIsMaximized), []);
@@ -54,6 +54,6 @@ function TitleBar(): React.JSX.Element {
       </div>
     </div>
   );
-}
+};
 
 export default TitleBar;
