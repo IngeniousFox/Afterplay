@@ -51,6 +51,9 @@ export type { HltbTimes } from '../main/hltb/types';
 // SteamGridDB (Bloque 2C-ter) — igual, la fuente es main/sgdb/types.ts.
 export type { GetSgdbImagesInput, SgdbImageCandidate, SgdbImages } from '../main/sgdb/types';
 
+// Caché local de imágenes (Bloque 2C-quater) — la fuente es main/images/cache.ts.
+export type { ImageCacheType } from '../main/images/cache';
+
 export type GameListItem = {
   id: number;
   title: string;

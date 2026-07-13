@@ -1,6 +1,7 @@
 import { registerGamesHandlers } from './games';
 import { registerHltbHandlers } from './hltb';
 import { registerIgdbHandlers } from './igdb';
+import { registerImagesHandlers } from './images';
 import { registerIterationsHandlers } from './iterations';
 import { registerSessionsHandlers } from './sessions';
 import { registerSgdbHandlers } from './sgdb';
@@ -21,4 +22,5 @@ export const registerIpcHandlers = (): void => {
   registerIgdbHandlers();
   registerHltbHandlers();
   registerSgdbHandlers();
+  registerImagesHandlers();
 };

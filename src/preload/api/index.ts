@@ -1,6 +1,7 @@
 import { gamesApi } from './games';
 import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
+import { imagesApi } from './images';
 import { iterationsApi } from './iterations';
 import { sessionsApi } from './sessions';
 import { sgdbApi } from './sgdb';
@@ -18,6 +19,7 @@ export const api = {
   igdb: igdbApi,
   hltb: hltbApi,
   sgdb: sgdbApi,
+  images: imagesApi,
 };
 
 export type Api = typeof api;
