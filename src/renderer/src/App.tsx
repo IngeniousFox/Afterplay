@@ -49,9 +49,18 @@ function App(): React.JSX.Element {
           </Card>
         </div>
         <p className="mt-4 text-sm text-muted-foreground">{games.length} juegos en la biblioteca</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Click en un juego para pedir su detalle (games:getById) y verlo en la consola.
+        </p>
         <ul className="mt-2 space-y-1 text-sm text-foreground">
           {games.map((game) => (
-            <li key={game.id}>
+            <li
+              key={game.id}
+              className="cursor-pointer underline decoration-dotted"
+              onClick={() =>
+                window.api.games.getById(game.id).then((detail) => console.log(detail))
+              }
+            >
               {game.title} — {game.totalHours.toFixed(1)}h — {game.sessionCount} sesiones —{' '}
               {game.currentState ?? 'sin empezar'} {game.isLive ? '🔴 LIVE' : ''}
             </li>

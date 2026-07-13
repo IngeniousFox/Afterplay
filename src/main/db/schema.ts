@@ -7,6 +7,15 @@ export type Iteration = typeof iterationsTable.$inferSelect;
 export type StateEvent = typeof stateEventsTable.$inferSelect;
 export type SpendEvent = typeof spendEventsTable.$inferSelect;
 
+// Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
+// columnas con default son opcionales. Son la base de los inputs de los
+// handlers de crear/editar que expone shared/types.ts.
+export type NewGame = typeof gamesTable.$inferInsert;
+export type NewSession = typeof sessionsTable.$inferInsert;
+export type NewIteration = typeof iterationsTable.$inferInsert;
+export type NewStateEvent = typeof stateEventsTable.$inferInsert;
+export type NewSpendEvent = typeof spendEventsTable.$inferInsert;
+
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
   title: text().notNull(),

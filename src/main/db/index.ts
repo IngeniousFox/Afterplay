@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/tursodatabase/database';
 import { migrate } from 'drizzle-orm/tursodatabase/migrator';
 import { join } from 'path';
@@ -21,5 +22,12 @@ export function getDb(): ReturnType<typeof drizzle> {
 // in the packaged app (electron-builder includes the folder by default; it's
 // plain text read via fs, so it doesn't need asarUnpack).
 export async function runMigrations(): Promise<void> {
-  await migrate(getDb(), { migrationsFolder: join(__dirname, '../../drizzle') });
+  const db = getDb();
+  // SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
+  // conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
+  // borrar un juego dejaría huérfanas sus iterations/sessions/events.
+  // Se activa aquí porque las migraciones son lo primero que corre en el
+  // arranque y la conexión es un singleton — todo lo demás la hereda ya ON.
+  await db.run(sql`PRAGMA foreign_keys = ON`);
+  await migrate(db, { migrationsFolder: join(__dirname, '../../drizzle') });
 }
