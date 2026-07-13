@@ -1,16 +1,11 @@
-import { useEffect, useState } from 'react';
-import type { GameListItem } from '../../shared/types';
 import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
+import { useGames } from './hooks/games';
 import { tintVariants } from './lib/tint';
 
 function App(): React.JSX.Element {
-  const [games, setGames] = useState<GameListItem[]>([]);
-
-  useEffect(() => {
-    window.api.games.getAll().then(setGames);
-  }, []);
-  console.log({ games });
+  const { data: games = [], isLoading, isError, error } = useGames();
+  console.log({ games, isLoading, isError, error });
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto p-10">
