@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron';
+import { withDbAccess } from '../db';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
 import { closeSession } from '../db/queries/sessions/closeSession';
 import { getOpenSessions } from '../db/queries/sessions/getOpenSessions';
@@ -66,54 +67,62 @@ export class ProcessWatcher {
     this.polling = true;
 
     try {
-      const targets = await getWatchTargets();
+      // Los dos tramos que tocan la DB van dentro de withDbAccess() para no
+      // pisarse con un swap de conexión en caliente (ver attemptSyncUpgrade
+      // en db/index.ts). El scan() de procesos queda fuera a propósito: puede
+      // tardar segundos y no toca la DB — no debe retener el candado.
+      const targets = await withDbAccess(() => getWatchTargets());
       const running = await this.scan(targets);
 
-      let changed = false;
+      const changed = await withDbAccess(async () => {
+        let changed = false;
 
-      // La primera vuelta reconcilia las sesiones que quedaron abiertas de una
-      // ejecución anterior o de un Play manual colgado.
-      if (!this.reconciled) {
-        this.reconciled = true;
-        changed = (await this.reconcileOpenSessions(running)) || changed;
-      }
+        // La primera vuelta reconcilia las sesiones que quedaron abiertas de una
+        // ejecución anterior o de un Play manual colgado.
+        if (!this.reconciled) {
+          this.reconciled = true;
+          changed = (await this.reconcileOpenSessions(running)) || changed;
+        }
 
-      // Arranques: corriendo ahora y sin sesión que el watcher siga todavía.
-      for (const [gameId, info] of running) {
-        if (this.active.has(gameId)) continue;
+        // Arranques: corriendo ahora y sin sesión que el watcher siga todavía.
+        for (const [gameId, info] of running) {
+          if (this.active.has(gameId)) continue;
 
-        // Deja el juego en "Playing" (creando/reanudando playthrough) y cuelga
-        // la sesión. null = ya había una sesión abierta (no se duplica).
-        const session = await startGameSession(gameId);
-        if (session) {
-          this.active.set(gameId, { pid: info.pid, sessionId: session.id, title: info.title });
+          // Deja el juego en "Playing" (creando/reanudando playthrough) y cuelga
+          // la sesión. null = ya había una sesión abierta (no se duplica).
+          const session = await startGameSession(gameId);
+          if (session) {
+            this.active.set(gameId, { pid: info.pid, sessionId: session.id, title: info.title });
+            console.log(
+              `[watcher] [start] "${info.title}" (pid ${info.pid}) -> sesion ${session.id}`,
+            );
+            changed = true;
+          }
+        }
+
+        // Cierres: seguíamos una sesión y el juego ya no corre. Se cierra a la
+        // hora actual (la detección es de ~5s, así que la duración es fiable).
+        for (const [gameId, activeSession] of this.active) {
+          if (running.has(gameId)) continue;
+
+          await closeSession(activeSession.sessionId, new Date());
+          this.active.delete(gameId);
           console.log(
-            `[watcher] [start] "${info.title}" (pid ${info.pid}) -> sesion ${session.id}`,
+            `[watcher] [stop] juego ${gameId} cerrado -> sesion ${activeSession.sessionId} cerrada`,
           );
           changed = true;
         }
-      }
 
-      // Cierres: seguíamos una sesión y el juego ya no corre. Se cierra a la
-      // hora actual (la detección es de ~5s, así que la duración es fiable).
-      for (const [gameId, activeSession] of this.active) {
-        if (running.has(gameId)) continue;
-
-        await closeSession(activeSession.sessionId, new Date());
-        this.active.delete(gameId);
-        console.log(
-          `[watcher] [stop] juego ${gameId} cerrado -> sesion ${activeSession.sessionId} cerrada`,
+        // Latido de las sesiones que siguen vivas: deja constancia en la DB de
+        // que llegaron hasta aquí, para poder cerrarlas en este punto si la app
+        // muere de golpe antes del próximo ciclo (corte de luz, cuelgue).
+        await heartbeatSessions(
+          Array.from(this.active.values(), (session) => session.sessionId),
+          new Date(),
         );
-        changed = true;
-      }
 
-      // Latido de las sesiones que siguen vivas: deja constancia en la DB de
-      // que llegaron hasta aquí, para poder cerrarlas en este punto si la app
-      // muere de golpe antes del próximo ciclo (corte de luz, cuelgue).
-      await heartbeatSessions(
-        Array.from(this.active.values(), (session) => session.sessionId),
-        new Date(),
-      );
+        return changed;
+      });
 
       if (changed) this.notifyRenderer();
       // Barato — solo lee el Map en memoria — así que se llama siempre, no

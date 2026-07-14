@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, net } from 'electron';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/tursodatabase-sync';
 import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
@@ -41,9 +41,36 @@ export const getDb = (): Db => {
 
 export const isDbSyncCapable = (): boolean => syncCapable;
 
+// Una conexión sin url no registra sus escrituras en la cola de CDC (el
+// mecanismo del que push() saca qué subir): el modo de captura es POR
+// CONEXIÓN y solo las conexiones con sync lo activan solas. Sin esto, todo
+// lo escrito en una sesión offline quedaría en local para siempre, aunque
+// después se reconectara con Turso (probado: cdcOperations se queda a 0 y
+// push() no sube nada). Activarlo a mano con el mismo modo que usa el motor
+// ('full' sobre turso_cdc) deja esas escrituras en cola, listas para el
+// próximo push. Solo se hace si el fichero ya sincronizó alguna vez
+// (existe turso_sync_last_change_id): en un fichero que nunca tuvo sync no
+// hay línea base contra la que subir, y encolar ahí solo acumularía basura.
+const enableOfflineChangeCapture = async (db: Db): Promise<void> => {
+  if (!hasRemoteConfigured()) return;
+
+  try {
+    const syncMarker = await db.all<{ name: string }>(
+      sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'turso_sync_last_change_id'`,
+    );
+    if (syncMarker.length === 0) return;
+
+    await db.run(sql`PRAGMA unstable_capture_data_changes_conn('full')`);
+    console.log('[db] modo local con captura de cambios - lo que escribas se subira al reconectar');
+  } catch (error) {
+    console.warn('[db] no se pudo activar la captura de cambios offline:', error);
+  }
+};
+
 const connectLocalOnly = async (): Promise<Db> => {
   const db = drizzle({ connection: { path: getDbPath(), clientName: 'afterplay' } });
   await db.$client.connect();
+  await enableOfflineChangeCapture(db);
   return db;
 };
 
@@ -95,26 +122,23 @@ const clearOrphanedSyncSidecars = (): void => {
   }
 };
 
-// Decide sync sí/no UNA SOLA VEZ, al arrancar — nada de "subir de categoría"
-// en caliente durante la sesión. Dos bugs reales llevaron a este diseño más
-// simple:
+// La conexión con sync se decide al arrancar; si no hay red, la sesión
+// empieza en local y attemptSyncUpgrade() reintenta el ascenso en caliente
+// más adelante — pero SIEMPRE a través del candado de withDbAccess(). Dos
+// bugs reales obligan a ese cuidado:
 //  1. Reconectar el MISMO fichero con url mientras la conexión local anterior
 //     seguía abierta corrompió el fichero real (games/iterations/etc.
 //     desaparecieron, solo quedaron las tablas internas de sync) — este
 //     motor, todavía en early preview, no soporta bien dos conexiones vivas
-//     a la vez sobre el mismo path.
+//     a la vez sobre el mismo path. Por eso el swap SIEMPRE cierra antes de
+//     abrir.
 //  2. Cerrar la anterior y abrir la nueva evitaba la corrupción, pero dejaba
 //     una ventana real: cualquier query en vuelo en ese instante (el watcher
 //     sondea cada 5s, sin relación con este ciclo) podía intentar usar la
 //     conexión justo cuando se cerraba, y fallar con "connection is not
-//     open". Con TODAS las queries de la app corriendo sobre un único
-//     getDb() compartido, no hay forma barata de serializar ese swap sin
-//     meter un lock por-query en todo el proyecto.
-// La solución: decidir una vez, sin swap. Si arranca sin red, esa sesión
-// entera se queda en local — para sincronizar hace falta reiniciar la app
-// (tray → Open/Quit y volver a abrir), momento en el que se reintenta desde
-// cero, ya sin nada más corriendo todavía. Un timeout acotado evita que un
-// arranque sin red (o con el servicio caído) se quede colgado esperando.
+//     open". Por eso todo acceso a la DB entra por withDbAccess(): el swap
+//     espera a que las queries en vuelo terminen y retiene las nuevas hasta
+//     tener la conexión nueva lista.
 const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> => {
   if (!hasRemoteConfigured()) return { db: await connectLocalOnly(), capable: false };
 
@@ -163,19 +187,126 @@ export const runMigrations = async (): Promise<void> => {
   await migrate(db, { migrationsFolder: join(__dirname, '../../drizzle') });
 };
 
-// Ciclo de sync periódico (SPEC Bloque 4): solo pull+push sobre la conexión
-// ya establecida al arrancar — sin reconectar nada, sin tocar dbInstance.
-// Si esta sesión no tiene sync (arrancó sin red), no hace nada; se
-// reintentará en el próximo reinicio de la app, no en caliente. Nunca
-// lanza — un fallo de red aquí no debe tumbar nada.
-export const runSyncCycle = async (): Promise<void> => {
-  if (!syncCapable) return;
+// ---- Candado de acceso a la DB (para el swap de conexión en caliente) ----
+// Mientras no hay swap en curso (el 99.9% del tiempo) esto es un contador y
+// nada más: coste cero. Durante un swap, las queries nuevas esperan en la
+// puerta y el swap espera a que las que estaban en vuelo terminen.
+let swapGate: Promise<void> | null = null;
+let releaseSwapGate: (() => void) | null = null;
+let queriesInFlight = 0;
+const idleWaiters: Array<() => void> = [];
 
-  const db = getDb();
+// Todo acceso a la DB desde fuera del arranque (handlers IPC de dominios con
+// DB, ciclo del watcher) entra por aquí. El seed y las migraciones corren en
+// el arranque, antes de que exista el timer de sync, así que no lo necesitan.
+export const withDbAccess = async <T>(fn: () => Promise<T>): Promise<T> => {
+  while (swapGate) await swapGate;
+  queriesInFlight++;
   try {
+    return await fn();
+  } finally {
+    queriesInFlight--;
+    if (queriesInFlight === 0) {
+      for (const resolve of idleWaiters.splice(0)) resolve();
+    }
+  }
+};
+
+const waitForDbIdle = (): Promise<void> => {
+  if (queriesInFlight === 0) return Promise.resolve();
+  return new Promise((resolve) => idleWaiters.push(resolve));
+};
+
+// Sondeo barato de alcanzabilidad ANTES de tocar el candado: si Turso no va
+// a responder, no tiene sentido pagar el swap (drenar queries + cerrar +
+// timeout de 4s + reabrir en local) cada 60s — eso congelaría la UI un rato
+// cada minuto mientras se está offline. Cualquier respuesta HTTP vale (un
+// 404 también demuestra que el host contesta); solo un error de red cuenta
+// como inalcanzable.
+const isTursoReachable = async (): Promise<boolean> => {
+  if (!net.isOnline()) return false;
+
+  try {
+    const url = new URL(process.env.DATABASE_URL as string);
+    url.protocol = 'https:';
+    url.pathname = '/health';
+    await net.fetch(url.toString(), { signal: AbortSignal.timeout(2000) });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const IDLE_TIMEOUT_MS = 8000;
+
+// Ascenso en caliente local -> sync cuando vuelve la conexión, sin reiniciar
+// la app. El orden importa (ver el comentario sobre attemptInitialConnect):
+// retener queries nuevas -> drenar las en vuelo -> cerrar la conexión local
+// -> abrir la de sync. Si algo falla, se vuelve a una conexión local (que
+// sigue capturando cambios para el siguiente intento) y se reintenta en un
+// ciclo posterior.
+const attemptSyncUpgrade = async (): Promise<void> => {
+  if (syncCapable || !hasRemoteConfigured() || !dbInstance) return;
+  if (!(await isTursoReachable())) return;
+
+  swapGate = new Promise((resolve) => {
+    releaseSwapGate = resolve;
+  });
+  try {
+    try {
+      await withTimeout(waitForDbIdle(), IDLE_TIMEOUT_MS);
+    } catch {
+      console.warn('[db] queries en vuelo sin terminar, pospongo el reintento de sync');
+      return;
+    }
+
+    try {
+      await dbInstance.$client.close();
+    } catch {
+      // Ya estaba cerrada (p.ej. un intento anterior falló a medias) — el
+      // objetivo es solo que no queden dos conexiones vivas al mismo path.
+    }
+
+    try {
+      const db = await connectWithSync();
+      await db.run(sql`PRAGMA foreign_keys = ON`);
+      dbInstance = db;
+      syncCapable = true;
+      console.log('[db] conexion con Turso restablecida - sync activado');
+    } catch (error) {
+      console.warn('[db] reintento de conexion con Turso fallido, sigo en local:', error);
+      const db = await connectLocalOnly();
+      await db.run(sql`PRAGMA foreign_keys = ON`);
+      dbInstance = db;
+    }
+  } finally {
+    releaseSwapGate?.();
+    releaseSwapGate = null;
+    swapGate = null;
+  }
+};
+
+// Ciclo de sync periódico (SPEC Bloque 4). Si la sesión arrancó sin red,
+// cada ciclo intenta primero el ascenso en caliente; con sync ya activo,
+// solo pull+push sobre la conexión estable. Nunca lanza — un fallo de red
+// aquí no debe tumbar nada. El guard evita ciclos solapados si uno se
+// alarga (el intervalo es de 60s, pero un swap + pull puede tardar).
+let syncCycleRunning = false;
+
+export const runSyncCycle = async (): Promise<void> => {
+  if (syncCycleRunning) return;
+  syncCycleRunning = true;
+
+  try {
+    if (!syncCapable) await attemptSyncUpgrade();
+    if (!syncCapable) return;
+
+    const db = getDb();
     await db.$client.pull();
     await db.$client.push();
   } catch (error) {
     console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
+  } finally {
+    syncCycleRunning = false;
   }
 };

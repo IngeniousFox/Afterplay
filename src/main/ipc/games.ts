@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { handleDb } from './dbHandle';
 import type {
   CreateGameInput,
   CreateGameWithDetailsInput,
@@ -31,33 +31,33 @@ const warmImageCache = (game: Pick<GameRow, 'coverUrl' | 'heroUrl'>): void => {
 };
 
 export const registerGamesHandlers = (): void => {
-  ipcMain.handle('games:getAll', async () => {
+  handleDb('games:getAll', async () => {
     return getGames();
   });
 
-  ipcMain.handle('games:getById', async (_event, id: number) => {
+  handleDb('games:getById', async (_event, id: number) => {
     return getGameById(id);
   });
 
-  ipcMain.handle('games:create', async (_event, input: CreateGameInput) => {
+  handleDb('games:create', async (_event, input: CreateGameInput) => {
     const game = await createGame(input);
     warmImageCache(game);
     return game;
   });
 
-  ipcMain.handle('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
+  handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
     const game = await createGameWithDetails(input);
     warmImageCache(game);
     return game;
   });
 
-  ipcMain.handle('games:update', async (_event, id: number, patch: UpdateGamePatch) => {
+  handleDb('games:update', async (_event, id: number, patch: UpdateGamePatch) => {
     const game = await updateGame(id, patch);
     if (game) warmImageCache(game);
     return game;
   });
 
-  ipcMain.handle('games:delete', async (_event, id: number) => {
+  handleDb('games:delete', async (_event, id: number) => {
     return deleteGame(id);
   });
 };

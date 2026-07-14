@@ -183,11 +183,12 @@ app.whenReady().then(async () => {
   );
   watcher.start();
 
-  // Sync con Turso (Bloque 4): la conexión ya decidió si tiene sync o no al
-  // arrancar (dentro de runMigrations(), sin swaps en caliente después — ver
-  // db/index.ts). Este ciclo solo sube/baja cambios sobre esa conexión ya
-  // estable. El primer ciclo se lanza ya mismo (sin esperar el intervalo) —
-  // "sync manual al arrancar" — sin bloquear el resto del arranque.
+  // Sync con Turso (Bloque 4): la conexión decidió si tiene sync o no al
+  // arrancar (dentro de runMigrations()). Si arrancó sin red, cada ciclo
+  // reintenta el ascenso en caliente (con el candado de withDbAccess — ver
+  // db/index.ts); con sync activo, solo sube/baja cambios. El primer ciclo
+  // se lanza ya mismo (sin esperar el intervalo) — "sync manual al
+  // arrancar" — sin bloquear el resto del arranque.
   void runSyncCycle();
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
 
