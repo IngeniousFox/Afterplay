@@ -1,15 +1,31 @@
 // Primer import a propósito: carga el .env (credenciales de Twitch/IGDB, y
 // las de Turso cuando toque) en process.env antes de que nada las lea.
-import 'dotenv/config';
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
+import 'dotenv/config';
 import { app, BrowserWindow, dialog, shell } from 'electron';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
-import { runMigrations } from './db';
+import { runMigrations, runSyncCycle } from './db';
 // [SEED] cuando quite el seed: este import + borrar src/main/db/seed.ts.
-import { seedDatabase } from './db/seed';
-import { registerIpcHandlers } from './ipc';
+import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
+import { registerIpcHandlers } from './ipc';
+import { createAppTray, setTrayActiveGames } from './tray/tray';
+import { ProcessWatcher } from './watcher/watcher';
+
+// La ventana principal a nivel de módulo para que el watcher pueda avisarle
+// (webContents.send) sin acoplarse a createWindow. Null mientras no exista.
+let mainWindow: BrowserWindow | null = null;
+let watcher: ProcessWatcher | null = null;
+let tray: Tray | null = null;
+let syncTimer: ReturnType<typeof setInterval> | null = null;
+// Más espaciado que el watcher de procesos (5s) a propósito — sincronizar
+// con Turso es una llamada de red de verdad, no un sondeo local barato.
+const SYNC_INTERVAL_MS = 60_000;
+// SPEC 3E — el botón X de la ventana oculta, no cierra: solo "Quit" del tray
+// (o antes de la propia app.quit(), en before-quit) marca esto para dejar
+// pasar el cierre real. Sin esto, la app no podría cerrarse nunca de verdad.
+let isQuitting = false;
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
@@ -22,13 +38,20 @@ app.setName('Afterplay');
 registerImageProtocolScheme();
 
 function createWindow(): void {
+  // Si Windows arrancó la app sola por el login item, no se enseña la
+  // ventana — arranca directa a la bandeja (SPEC 3E). wasOpenedAtLogin es
+  // solo de Windows; en otras plataformas createWindow() se llama siempre
+  // manualmente (activate/primera vez), así que da igual.
+  const wasOpenedAtLogin =
+    process.platform === 'win32' && app.getLoginItemSettings().wasOpenedAtLogin;
+
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 768,
     minWidth: 1000,
     minHeight: 700,
-    show: true,
+    show: false,
     frame: false,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' } : {}),
@@ -39,19 +62,37 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show();
+  const window = mainWindow;
+
+  window.on('ready-to-show', () => {
+    if (!wasOpenedAtLogin) window.show();
   });
 
-  mainWindow.on('maximize', () => {
-    mainWindow.webContents.send('window:maximized-change', true);
+  window.on('maximize', () => {
+    window.webContents.send('window:maximized-change', true);
   });
 
-  mainWindow.on('unmaximize', () => {
-    mainWindow.webContents.send('window:maximized-change', false);
+  window.on('unmaximize', () => {
+    window.webContents.send('window:maximized-change', false);
   });
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  // SPEC 3E — la X minimiza a la bandeja, no cierra la app (que sigue viva
+  // vigilando procesos). isQuitting se marca en before-quit (cualquier vía de
+  // cierre real: menú "Quit" del tray, apagado del sistema...) para dejar
+  // pasar el cierre de verdad en ese caso, o esto bloquearía la app para
+  // siempre.
+  window.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+
+  window.on('closed', () => {
+    mainWindow = null;
+  });
+
+  window.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: 'deny' };
   });
@@ -59,9 +100,9 @@ function createWindow(): void {
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+    window.loadURL(process.env['ELECTRON_RENDERER_URL']);
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    window.loadFile(join(__dirname, '../renderer/index.html'));
   }
 }
 
@@ -99,9 +140,9 @@ app.whenReady().then(async () => {
   // Si peta no pasa nada, se loguea y la app sigue tirando igual.
   if (is.dev) {
     try {
-      await seedDatabase();
+      // await seedDatabase();
     } catch (error) {
-      console.error('[seed] Falló el seed de desarrollo:', error);
+      console.error('[seed] Error en el seed de desarrollo:', error);
     }
   }
 
@@ -109,6 +150,46 @@ app.whenReady().then(async () => {
   registerImageProtocolHandler();
 
   createWindow();
+
+  // Bandeja del sistema (SPEC 3E): icono persistente con "Open"/"Quit" — la
+  // app sigue vigilando procesos aunque la ventana esté oculta, y solo se
+  // cierra de verdad desde aquí.
+  tray = createAppTray({
+    onOpen: () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      } else {
+        createWindow();
+      }
+    },
+    onQuit: () => {
+      isQuitting = true;
+      app.quit();
+    },
+  });
+
+  // Watcher de procesos (Bloque 3): vigila los juegos armados (con
+  // executablePath y playthrough activo) y registra sesiones automáticas.
+  // Recibe un getter de la ventana en vez de la ventana directa porque esta
+  // se recrea (macOS 'activate') y se destruye ('closed'). El segundo
+  // parámetro (opcional, SPEC 3E) mantiene el tooltip del tray al día con lo
+  // que esté en marcha ahora mismo, sin tener que abrir la ventana.
+  watcher = new ProcessWatcher(
+    () => mainWindow,
+    (titles) => {
+      if (tray) setTrayActiveGames(tray, titles);
+    },
+  );
+  watcher.start();
+
+  // Sync con Turso (Bloque 4): la conexión ya decidió si tiene sync o no al
+  // arrancar (dentro de runMigrations(), sin swaps en caliente después — ver
+  // db/index.ts). Este ciclo solo sube/baja cambios sobre esa conexión ya
+  // estable. El primer ciclo se lanza ya mismo (sin esperar el intervalo) —
+  // "sync manual al arrancar" — sin bloquear el resto del arranque.
+  void runSyncCycle();
+  syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
@@ -124,6 +205,16 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Se dispara para CUALQUIER cierre real (menú "Quit" del tray, Cmd+Q en
+// macOS, apagado del sistema...) antes de que las ventanas reciban su propio
+// evento 'close' — marcarlo aquí, y no solo en el click del tray, asegura que
+// ninguna vía de cierre real se quede bloqueada por el interceptor de la X.
+app.on('before-quit', () => {
+  isQuitting = true;
+  watcher?.stop();
+  if (syncTimer) clearInterval(syncTimer);
 });
 
 // In this file you can include the rest of your app's specific main process

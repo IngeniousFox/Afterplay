@@ -11,19 +11,16 @@ import type {
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
-// Infinity y no un número arbitrario: la única forma en que cambian estos
-// datos AHORA MISMO es a través de las mutations de este mismo archivo
-// (create/update/delete/addStateEvent/addSpend/addSession), y todas
-// invalidan queryKeys.games.all al terminar. Nada más escribe en `games`
-// por detrás, así que no hay ningún "después de X minutos podría estar
-// desactualizado" real — solo "después de una mutation, que ya se avisa".
-//
-// OJO: esto deja de ser cierto en cuanto exista el watcher del Bloque 3 —
-// ese proceso escribirá sesiones directo desde el main, sin pasar por
-// ninguna mutation de aquí, así que el caché SÍ podrá quedarse desactualizado
-// sin que nadie lo invalide (isLive, totalHours...). Cuando llegue ese
-// bloque, esto necesita o un staleTime finito de verdad, o que el main
-// empuje un evento al renderer para invalidar cuando el watcher detecte algo.
+// Infinity y no un número arbitrario: estos datos solo cambian por dos vías,
+// y las dos invalidan queryKeys.games.all al terminar:
+//   1. Las mutations de este archivo (create/update/delete/addStateEvent/
+//      addSpend/addSession).
+//   2. El watcher del main (Bloque 3), que escribe sesiones directo desde el
+//      main sin pasar por ninguna mutation de aquí — pero avisa con el evento
+//      IPC 'games:changed', al que useWatcherSync() se suscribe para invalidar
+//      esta misma key.
+// Así no hay ningún "después de X minutos podría estar desactualizado" real:
+// siempre hay un aviso explícito detrás de cada cambio.
 export const useGames = (): UseQueryResult<GameListItem[], Error> =>
   useQuery({
     queryKey: queryKeys.games.all,

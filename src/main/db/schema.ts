@@ -60,6 +60,12 @@ export const sessionsTable = sqliteTable(
       .$defaultFn(() => new Date()),
     endedAt: int({ mode: 'timestamp_ms' }),
     durationSec: int(),
+    // "Latido" del watcher: se refresca cada ciclo (~5s) mientras la sesión
+    // está en marcha. Si la app muere de golpe (corte de luz, cuelgue), al
+    // recuperar la sesión se cierra en este último latido en vez de quedar
+    // abierta hasta el siguiente arranque — así no se pierde el tiempo jugado
+    // ni se infla con el hueco de la app apagada. Null en sesiones manuales.
+    lastHeartbeatAt: int({ mode: 'timestamp_ms' }),
     datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
     milestone: text({ enum: ['started', 'completed', 'dropped', 'on_hold'] }),
   },

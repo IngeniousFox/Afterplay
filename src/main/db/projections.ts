@@ -60,6 +60,7 @@ export const sessionColumns = {
   startedAt: sessionsTable.startedAt,
   endedAt: sessionsTable.endedAt,
   durationSec: sessionsTable.durationSec,
+  lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
   datePrecision: sessionsTable.datePrecision,
   milestone: sessionsTable.milestone,
 };

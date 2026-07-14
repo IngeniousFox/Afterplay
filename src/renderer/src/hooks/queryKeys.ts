@@ -20,4 +20,7 @@ export const queryKeys = {
   sgdb: {
     images: (input: GetSgdbImagesInput) => ['sgdb', 'images', input] as const,
   },
+  settings: {
+    openAtLogin: ['settings', 'openAtLogin'] as const,
+  },
 };

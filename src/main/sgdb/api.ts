@@ -39,7 +39,7 @@ const safeImageCall = async (call: () => Promise<unknown>): Promise<SgdbImageCan
     const raw = await call();
     return sgdbImageResponseSchema.parse(raw).map(toCandidate);
   } catch (error) {
-    console.error('[sgdb] fallo pidiendo imágenes, devuelvo lista vacía:', error);
+    console.error('[sgdb] fallo pidiendo imagenes, devuelvo lista vacia:', error);
     return [];
   }
 };

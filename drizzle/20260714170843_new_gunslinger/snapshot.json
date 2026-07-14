@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "c167c89e-d090-4411-806f-2271410db317",
-  "prevIds": ["d3554f17-1aef-4c4b-af02-73e71677f25f"],
+  "id": "ac0fa5b1-2145-4fcc-b1e2-2eae483c1f27",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
       "name": "games",
@@ -95,6 +95,16 @@
       "table": "games"
     },
     {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "releaseYear",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
       "type": "real",
       "notNull": false,
       "autoincrement": false,
@@ -131,6 +141,66 @@
       "default": null,
       "generated": null,
       "name": "notes",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "executablePath",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "developer",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "publisher",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "installDirectory",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "installSizeBytes",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "genres",
       "entityType": "columns",
       "table": "games"
     },
@@ -321,6 +391,16 @@
       "default": null,
       "generated": null,
       "name": "durationSec",
+      "entityType": "columns",
+      "table": "sessions"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lastHeartbeatAt",
       "entityType": "columns",
       "table": "sessions"
     },
@@ -626,7 +706,7 @@
       "table": "spend_events"
     },
     {
-      "value": "\"type\" in ('started', 'completed', 'dropped', 'on_hold')",
+      "value": "\"type\" in ('started', 'completed', 'dropped', 'on_hold', 'resting')",
       "name": "state_events_type_check",
       "entityType": "checks",
       "table": "state_events"

@@ -6,9 +6,17 @@ CREATE TABLE `games` (
 	`igdbId` integer NOT NULL UNIQUE,
 	`steamGridDbId` integer UNIQUE,
 	`officialPlatforms` text,
+	`releaseYear` integer,
 	`hltbMain` real,
 	`hltbMainExtras` real,
 	`hltbCompletionist` real,
+	`notes` text,
+	`executablePath` text,
+	`developer` text,
+	`publisher` text,
+	`installDirectory` text,
+	`installSizeBytes` integer,
+	`genres` text,
 	`endless` integer DEFAULT false NOT NULL,
 	`addedAt` integer NOT NULL
 );
@@ -39,6 +47,7 @@ CREATE TABLE `sessions` (
 	`startedAt` integer NOT NULL,
 	`endedAt` integer,
 	`durationSec` integer,
+	`lastHeartbeatAt` integer,
 	`datePrecision` text NOT NULL,
 	`milestone` text,
 	CONSTRAINT `fk_sessions_iterationId_iterations_id_fk` FOREIGN KEY (`iterationId`) REFERENCES `iterations`(`id`) ON DELETE CASCADE,
@@ -67,6 +76,6 @@ CREATE TABLE `state_events` (
 	`datePrecision` text NOT NULL,
 	`note` text,
 	CONSTRAINT `fk_state_events_iterationId_iterations_id_fk` FOREIGN KEY (`iterationId`) REFERENCES `iterations`(`id`) ON DELETE CASCADE,
-	CONSTRAINT "state_events_type_check" CHECK("type" in ('started', 'completed', 'dropped', 'on_hold')),
+	CONSTRAINT "state_events_type_check" CHECK("type" in ('started', 'completed', 'dropped', 'on_hold', 'resting')),
 	CONSTRAINT "state_events_date_precision_check" CHECK("datePrecision" in ('year', 'month', 'day', 'datetime'))
 );

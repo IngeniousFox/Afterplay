@@ -16,9 +16,15 @@ type StateEventCandidate = {
 export const getGames = async (): Promise<GameListItem[]> => {
   const db = getDb();
 
+  // Alfabético, insensible a mayúsculas — sin esto SQLite ordena ASCII puro
+  // (mayúsculas antes que minúsculas) y además devolvería el orden de
+  // inserción si no se pide nada. Un único sitio para el orden: tanto la
+  // biblioteca como el rail lateral (MiddleColumn) leen de este mismo query
+  // vía useGames(), así que se ordenan igual en los dos sin más esfuerzo.
   const games = await db
     .select({ id: gamesTable.id, title: gamesTable.title, coverUrl: gamesTable.coverUrl })
-    .from(gamesTable);
+    .from(gamesTable)
+    .orderBy(sql`${gamesTable.title} collate nocase`);
 
   // Horas manuales por juego (ya vienen en horas, se suman directas). Agrupo
   // solo sobre iterations sin tocar sessions todavía — si mezclo las dos

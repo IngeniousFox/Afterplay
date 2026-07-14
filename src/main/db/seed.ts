@@ -959,5 +959,5 @@ export const seedDatabase = async (): Promise<void> => {
     }
   }
 
-  console.log(`[seed] ${inserted} juegos insertados, ${skipped} ya existían (saltados).`);
+  console.log(`[seed] ${inserted} juegos insertados, ${skipped} ya existian (saltados).`);
 };

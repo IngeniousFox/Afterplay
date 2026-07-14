@@ -84,10 +84,20 @@ const RatingRow = ({
 // de extra content + valoración (editable) + campos de solo lectura.
 export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Element | null => {
   const updateIteration = useUpdateIteration();
-  const activeId = game.iterations.find((it) => it.currentState === 'started')?.id;
-  const [selectedId, setSelectedId] = useState(
-    String(activeId ?? game.iterations[game.iterations.length - 1]?.id ?? ''),
-  );
+  // La más reciente = la última creada (getGameById ordena las iteraciones por
+  // id ascendente).
+  const newestId = game.iterations[game.iterations.length - 1]?.id;
+  const [selectedId, setSelectedId] = useState(() => String(newestId ?? ''));
+  // Al entrar se muestra la más reciente, y si aparece una nueva (p.ej. el
+  // watcher creó un playthrough con el detalle abierto) la selección salta a
+  // ella. Patrón de "ajustar estado durante el render" (compatible con React
+  // Compiler, sin useEffect). Elegir a mano una anterior en el dropdown se
+  // respeta: eso no cambia `newestId`, así que no se reajusta.
+  const [seenNewestId, setSeenNewestId] = useState(newestId);
+  if (newestId !== seenNewestId) {
+    setSeenNewestId(newestId);
+    setSelectedId(String(newestId ?? ''));
+  }
 
   if (game.iterations.length === 0) return null;
 
@@ -120,7 +130,12 @@ export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Ele
 
       {game.iterations.length > 1 && (
         <Dropdown
-          value={selectedId}
+          // La iteración mostrada (`iteration`) puede caer en el fallback al
+          // último cuando `selectedId` quedó obsoleto (p.ej. el watcher creó
+          // una nueva mientras el detalle estaba abierto). El dropdown refleja
+          // esa iteración real, no el `selectedId` crudo, para no quedar en
+          // blanco al no encontrar su etiqueta.
+          value={String(iteration.id)}
           options={game.iterations.map((it) => String(it.id))}
           onChange={setSelectedId}
           renderOption={(id) => labelsById.get(id)}

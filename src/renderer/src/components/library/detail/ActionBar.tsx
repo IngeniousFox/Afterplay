@@ -45,8 +45,11 @@ export const ActionBar = ({
       return;
     }
 
-    let iterationId = game.iterations.find((it) => it.currentState === 'started')?.id;
-    let isNewIteration = false;
+    const activeIteration = game.iterations.find((it) => it.currentState === 'started');
+    let iterationId = activeIteration?.id;
+    // Anclar "Started" si la iteración destino aún no tiene sesión de inicio;
+    // si ya la tiene (on_hold/resting reanudado), su fecha original no se pisa.
+    let needsStartAnchor = activeIteration != null && activeIteration.startSessionId == null;
     if (!iterationId) {
       const lastIteration = game.iterations[game.iterations.length - 1];
       // SPEC 4 — retomar el juego (Play) después de un final (Beaten/
@@ -65,9 +68,12 @@ export const ActionBar = ({
           format: 'digital',
         });
         iterationId = iteration.id;
-        isNewIteration = true;
+        needsStartAnchor = true;
       } else {
         iterationId = lastIteration.id;
+        // Un Playthrough recién creado por Add Game (Unplayed) que nunca se
+        // tocó no tiene sesión de inicio → esta la ancla.
+        needsStartAnchor = lastIteration.startSessionId == null;
       }
       await addStateEvent.mutateAsync({
         iterationId,
@@ -85,10 +91,10 @@ export const ActionBar = ({
       durationSec: null,
       datePrecision: 'datetime',
       milestone: null,
-      // Ancla "Started" al momento exacto en que se pulsa Play, solo para un
-      // playthrough recién creado — si se reanuda uno existente (on_hold/
-      // resting), su fecha de inicio original no debe pisarse.
-      ...(isNewIteration ? { anchorAs: 'start' as const } : {}),
+      // Ancla "Started" al momento del Play cuando la iteración no tenía inicio
+      // (nueva, o un Playthrough sin tocar); si se reanuda un on_hold/resting
+      // ya iniciado, su fecha original no debe pisarse.
+      ...(needsStartAnchor ? { anchorAs: 'start' as const } : {}),
     });
   };
 
