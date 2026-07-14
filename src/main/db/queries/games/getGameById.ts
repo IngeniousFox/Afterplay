@@ -15,7 +15,11 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   const [game] = await db.select().from(gamesTable).where(eq(gamesTable.id, id)).limit(1);
   if (!game) return null;
 
-  const iterations = await db.select().from(iterationsTable).where(eq(iterationsTable.gameId, id));
+  const iterations = await db
+    .select()
+    .from(iterationsTable)
+    .where(eq(iterationsTable.gameId, id))
+    .orderBy(asc(iterationsTable.id));
   const iterationIds = iterations.map((iteration) => iteration.id);
 
   // Si el juego no tiene iteraciones todavía (comprado pero sin tocar, como
@@ -55,6 +59,41 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     stateEventsByIteration.set(event.iterationId, list);
   }
 
+  // Reparto de gasto entre playthroughs — spendEvents no llevan iterationId
+  // (SPEC 4, el gasto es del juego, no de un playthrough concreto), así que
+  // se infiere por fecha: cada gasto cae en el primer playthrough que
+  // seguía "abierto" (sin terminar en completed/dropped) en su fecha. Un
+  // playthrough ya terminado no puede reclamar gasto posterior a su cierre
+  // — eso pasa al siguiente playthrough (o al último si no hay más). Un
+  // gasto muy anterior al primer playthrough (el juego comprado semanas
+  // antes de arrancarlo) cae en ese primer playthrough. on_hold/resting no
+  // cierran la ventana (mismo criterio que crear una iteración nueva al
+  // volver a "Playing", ver StatusCard.tsx/ActionBar.tsx).
+  const terminalAtByIteration = new Map<number, Date | null>();
+  for (const iteration of iterations) {
+    const events = stateEventsByIteration.get(iteration.id) ?? [];
+    const latest = events[events.length - 1];
+    terminalAtByIteration.set(
+      iteration.id,
+      latest && (latest.type === 'completed' || latest.type === 'dropped')
+        ? latest.occurredAt
+        : null,
+    );
+  }
+
+  const spendByIteration = new Map<number, number>();
+  for (const spend of spendEvents) {
+    let chosen = iterations[0];
+    for (const iteration of iterations) {
+      chosen = iteration;
+      const terminalAt = terminalAtByIteration.get(iteration.id) ?? null;
+      if (terminalAt === null || spend.occurredAt < terminalAt) break;
+    }
+    if (chosen) {
+      spendByIteration.set(chosen.id, (spendByIteration.get(chosen.id) ?? 0) + spend.amount);
+    }
+  }
+
   const iterationDetails: IterationDetail[] = iterations.map((iteration) => {
     const iterationSessions = sessionsByIteration.get(iteration.id) ?? [];
     const trackedSeconds = iterationSessions.reduce(
@@ -79,6 +118,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
       endedAt: endSession ? (endSession.endedAt ?? endSession.startedAt) : null,
       currentState: latestEvent?.type ?? null,
       sessions: iterationSessions,
+      spend: spendByIteration.get(iteration.id) ?? 0,
     };
   });
 

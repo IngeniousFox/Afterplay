@@ -36,6 +36,19 @@ export type CreateIterationInput = Omit<
   'id' | 'label' | 'startSessionId' | 'endSessionId'
 > & { label?: string | null };
 
+export type UpdateIterationPatch = Partial<
+  Pick<
+    NewIteration,
+    | 'label'
+    | 'playedPlatform'
+    | 'origin'
+    | 'format'
+    | 'manualTotalPlayed'
+    | 'extraContent'
+    | 'rating'
+  >
+>;
+
 export type AddManualSessionInput = Omit<NewSession, 'id' | 'isManual'> & {
   anchorAs?: 'start' | 'end';
 };
@@ -69,6 +82,10 @@ export type CreateGameWithDetailsInput = {
   // sin estado inicial (juego normal que se añade como Unplayed).
   initialStatus: StateEvent['type'] | null;
   note: string | null;
+  // Notas generales del juego — independientes del note de arriba (que
+  // cuelga del stateEvent inicial). Un desplegable propio en el modal, no
+  // atado a si se marcó "jugado antes" ni a si hay estado inicial.
+  gameNotes: string | null;
   moneySpent: number | null;
   executablePath: string | null;
   // Elegidos a mano en el CoverPicker (SPEC 4.6) — null significa "sin
@@ -77,7 +94,15 @@ export type CreateGameWithDetailsInput = {
   // existiera el picker.
   coverUrl: string | null;
   heroUrl: string | null;
+  // Carpeta de instalación + su tamaño ya calculado (ver dialog:pickDirectory)
+  // — null si no se eligió ninguna al añadir el juego.
+  installDirectory: string | null;
+  installSizeBytes: number | null;
 };
+
+// Resultado del picker de carpeta (Install directory, Add/Edit game) — el
+// tamaño ya viene calculado desde el main, no hace falta un segundo viaje.
+export type DirectoryPickResult = { path: string; sizeBytes: number };
 
 export type { IgdbGameDetail, IgdbSearchResult } from '../main/igdb/types';
 
@@ -108,6 +133,9 @@ export type IterationDetail = Iteration & {
   endedAt: Date | null;
   currentState: StateEvent['type'] | null;
   sessions: Session[];
+  // Gasto atribuido a ESTE playthrough (no el total del juego) — ver
+  // getGameById.ts para el algoritmo de reparto entre iteraciones.
+  spend: number;
 };
 
 export type GameDetail = GameRow & {

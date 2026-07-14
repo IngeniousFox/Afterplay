@@ -5,12 +5,14 @@ import type { IgdbSearchResult } from '../../../../shared/types';
 import { useCreateGameWithDetails } from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
 import { Dialog, DialogContent } from '../ui/dialog';
+import { AddGameImagesField } from './add-game/AddGameImagesField';
 import { CheckboxRow } from './add-game/CheckboxRow';
 import type { CoverPickerTarget } from './add-game/CoverPicker';
 import { CoverPicker } from './add-game/CoverPicker';
 import { Dropdown } from './add-game/Dropdown';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
-import { ImagesField } from './add-game/ImagesField';
+import { GameNotesPanel } from './add-game/GameNotesPanel';
+import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
 import { SearchStep } from './add-game/SearchStep';
 import { SegmentedButtonGroup } from './add-game/SegmentedButtonGroup';
@@ -49,6 +51,7 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<IgdbSearchResult | null>(null);
   const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const methods = useForm<AddGameFormValues>({ defaultValues: DEFAULT_FORM_VALUES });
   const { control, setValue, getValues, reset: resetForm } = methods;
@@ -63,6 +66,7 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
     setQuery('');
     setSelected(null);
     setPickerTarget(null);
+    setNotesOpen(false);
     resetForm(DEFAULT_FORM_VALUES);
     createGame.reset();
   };
@@ -107,8 +111,11 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
       finished: values.playedBefore && !values.endless ? toBackendDate(values.finished) : null,
       initialStatus,
       note: values.note.trim() || null,
+      gameNotes: values.gameNotes.trim() || null,
       moneySpent: values.origin === 'Purchased' ? parseOptionalNumber(values.moneySpent) : null,
       executablePath: values.executablePath.trim() || null,
+      installDirectory: values.installDirectory.trim() || null,
+      installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
       coverUrl: values.coverUrl,
       heroUrl: values.heroUrl,
     });
@@ -179,7 +186,7 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
               />
 
               <div className="mt-4.5 flex flex-col gap-4">
-                <ImagesField selected={selected} onPick={setPickerTarget} />
+                <AddGameImagesField selected={selected} onPick={setPickerTarget} />
                 <div>
                   <div className={fieldLabelClass}>PLATFORM YOU PLAY ON</div>
                   <Controller
@@ -280,6 +287,25 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
                 {playedBefore && <PlayedBeforePanel />}
 
                 <ExecutablePathField />
+
+                <InstallDirectoryField />
+
+                <div>
+                  <CheckboxRow
+                    checked={notesOpen}
+                    onToggle={() => setNotesOpen(!notesOpen)}
+                    title="Add notes"
+                    description="Personal notes about this game — markdown supported."
+                    borderColorChecked="rgba(133,163,214,.6)"
+                    fillColorChecked="#85a3d6"
+                    checkIconColor="#0a0b0a"
+                  />
+                  {notesOpen && (
+                    <div className="mt-2.75">
+                      <GameNotesPanel />
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <div className={fieldLabelClass}>

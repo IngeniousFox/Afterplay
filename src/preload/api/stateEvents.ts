@@ -6,4 +6,6 @@ export const stateEventsApi = {
     ipcRenderer.invoke('stateEvents:add', input),
   getByIteration: (iterationId: number): Promise<StateEvent[]> =>
     ipcRenderer.invoke('stateEvents:getByIteration', iterationId),
+  update: (id: number, note: string | null): Promise<StateEvent | null> =>
+    ipcRenderer.invoke('stateEvents:update', id, note),
 };

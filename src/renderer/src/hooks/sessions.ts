@@ -18,3 +18,19 @@ export const useAddSession = (): UseMutationResult<
     },
   });
 };
+
+export const useCloseSession = (): UseMutationResult<
+  Session | null,
+  Error,
+  { id: number; endedAt: Date },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, endedAt }: { id: number; endedAt: Date }) =>
+      window.api.sessions.close(id, endedAt),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};

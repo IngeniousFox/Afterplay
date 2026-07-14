@@ -41,7 +41,7 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
             src={coverSrc}
             loading="lazy"
             alt={game.title}
-            className="block h-full w-full scale-100 object-cover brightness-80 transition-[scale] duration-250 ease-[cubic-bezier(.2,.7,.3,1)] will-change-transform group-hover:scale-105"
+            className="block h-full w-full scale-100 object-cover brightness-90 transition-[scale] duration-250 ease-[cubic-bezier(.2,.7,.3,1)] will-change-transform group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-muted">

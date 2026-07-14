@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { getDirectorySize } from '../lib/directorySize';
 
 export const registerDialogHandlers = (): void => {
   // Bloque 2F — botón "Browse" del campo Executable path. Filtro solo en
@@ -19,5 +20,21 @@ export const registerDialogHandlers = (): void => {
       : await dialog.showOpenDialog(options);
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
+  });
+
+  // Campo "Install directory" (Add/Edit game) — al elegir la carpeta se
+  // calcula su tamaño en el sitio, para no tener que recorrerla de nuevo
+  // cada vez que se abre el detalle del juego.
+  ipcMain.handle('dialog:pickDirectory', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = { properties: ['openDirectory'] };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const path = result.filePaths[0];
+    const sizeBytes = await getDirectorySize(path);
+    return { path, sizeBytes };
   });
 };

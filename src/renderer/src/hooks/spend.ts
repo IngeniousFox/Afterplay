@@ -25,3 +25,29 @@ export const useAddSpend = (): UseMutationResult<
     },
   });
 };
+
+export const useDeleteSpendEvent = (): UseMutationResult<boolean, Error, number, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => window.api.spend.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};
+
+export const useUpdateSpendEvent = (): UseMutationResult<
+  SpendEvent | null,
+  Error,
+  { id: number; note: string | null },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string | null }) =>
+      window.api.spend.update(id, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};

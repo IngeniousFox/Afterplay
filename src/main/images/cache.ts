@@ -5,9 +5,10 @@ import { app } from 'electron';
 import axios from 'axios';
 import { extname, join } from 'path';
 
-// Solo estos dos tipos por ahora (SPEC 4.6) — el nombre coincide con el de
-// la carpeta dentro de userData, así no hace falta mapear uno a otro.
-export type ImageCacheType = 'covers' | 'heroes';
+// El nombre coincide con el de la carpeta dentro de userData, así no hace
+// falta mapear uno a otro. 'screenshots' se añade en el Bloque 2H para el
+// carrusel del detalle.
+export type ImageCacheType = 'covers' | 'heroes' | 'screenshots';
 
 // Sin cachear el resultado (a diferencia de getDb()): app.getPath() es
 // barato de llamar cada vez, y así no hay que preocuparse de invalidar nada.

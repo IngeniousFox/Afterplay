@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+@plugin '@tailwindcss/typography';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -172,6 +173,14 @@
 
   *::-webkit-scrollbar-button {
     display: none;
+  }
+
+  /* Sin esto, el hueco donde se cruzan una barra vertical y otra
+     horizontal (un contenedor con overflow en los dos ejes a la vez, ej.
+     el History del detalle) lo pinta el sistema en blanco por defecto —
+     ni -track ni -thumb lo cubren, es una pieza aparte. */
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   /* Las flechas nativas de los <input type="number"> no siguen el tema de

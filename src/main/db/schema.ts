@@ -24,11 +24,23 @@ export const gamesTable = sqliteTable('games', {
   igdbId: int().notNull().unique(),
   steamGridDbId: int().unique(),
   officialPlatforms: text({ mode: 'json' }).$type<string[]>(),
+  releaseYear: int(),
   hltbMain: real(),
   hltbMainExtras: real(),
   hltbCompletionist: real(),
   notes: text(),
   executablePath: text(),
+  // Bloque 2G — editables a mano en el modal de editar, ninguno viene de
+  // IGDB de forma fiable salvo developer/publisher/genres (que sí se
+  // rellenan solos al crear el juego, ver createGameWithDetails.ts).
+  developer: text(),
+  publisher: text(),
+  installDirectory: text(),
+  // Calculado una vez al elegir la carpeta (recorrido recursivo, ver
+  // main/lib/directorySize.ts), no en cada carga del detalle — reelegir la
+  // carpeta vuelve a calcularlo.
+  installSizeBytes: int(),
+  genres: text({ mode: 'json' }).$type<string[]>(),
   endless: int({ mode: 'boolean' }).notNull().default(false),
   addedAt: int({ mode: 'timestamp_ms' })
     .notNull()

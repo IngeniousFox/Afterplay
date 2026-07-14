@@ -1,9 +1,12 @@
 import { ipcRenderer } from 'electron';
-import type { CreateIterationInput, Iteration } from '../../shared/types';
+import type { CreateIterationInput, Iteration, UpdateIterationPatch } from '../../shared/types';
 
 export const iterationsApi = {
   create: (input: CreateIterationInput): Promise<Iteration> =>
     ipcRenderer.invoke('iterations:create', input),
   getByGame: (gameId: number): Promise<Iteration[]> =>
     ipcRenderer.invoke('iterations:getByGame', gameId),
+  update: (id: number, patch: UpdateIterationPatch): Promise<Iteration | null> =>
+    ipcRenderer.invoke('iterations:update', id, patch),
+  delete: (id: number): Promise<boolean> => ipcRenderer.invoke('iterations:delete', id),
 };

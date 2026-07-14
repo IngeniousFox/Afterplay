@@ -32,7 +32,7 @@ export const STATUS_META: Record<StatusKey, GameStatusMeta> = {
 // currentState ('started'/'completed'/...) es el vocabulario de la DB; la UI
 // usa el del prototipo ('playing'/'beaten'/...) — este mapa traduce entre
 // los dos.
-const STATE_TO_STATUS_KEY: Record<StateEvent['type'], StatusKey> = {
+export const STATE_TO_STATUS_KEY: Record<StateEvent['type'], StatusKey> = {
   started: 'playing',
   completed: 'beaten',
   dropped: 'dropped',

@@ -20,3 +20,19 @@ export const useAddStateEvent = (): UseMutationResult<
     },
   });
 };
+
+export const useUpdateStateEvent = (): UseMutationResult<
+  StateEvent | null,
+  Error,
+  { id: number; note: string | null },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string | null }) =>
+      window.api.stateEvents.update(id, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};

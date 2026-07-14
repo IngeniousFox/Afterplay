@@ -51,24 +51,24 @@ export const createGameWithDetails = async (
     sgdbSearch(detail.title, detail.releaseYear),
   ]);
 
-  const willCreateStateEvent = input.initialStatus !== null;
-  // Si no va a haber evento de estado inicial (juego normal añadido como
-  // Unplayed, sin marcar "jugado antes"), la nota del usuario no tiene dónde
-  // colgarse — se guarda como nota general del juego en vez de perderse.
-  const notesFallback = !willCreateStateEvent && input.note ? input.note : null;
-
   const gameInput: CreateGameInput = {
     title: detail.title,
     coverUrl: input.coverUrl ?? detail.covers[0] ?? null,
     heroUrl: input.heroUrl ?? detail.heroes[0] ?? null,
+    developer: detail.developer,
+    publisher: detail.publisher,
+    genres: detail.genres.length > 0 ? detail.genres : null,
     igdbId: detail.igdbId,
     steamGridDbId,
     officialPlatforms: detail.platforms.length > 0 ? detail.platforms : null,
+    releaseYear: detail.releaseYear,
     hltbMain: hltb?.hltbMain ?? null,
     hltbMainExtras: hltb?.hltbMainExtras ?? null,
     hltbCompletionist: hltb?.hltbCompletionist ?? null,
-    notes: notesFallback,
+    notes: input.gameNotes,
     executablePath: input.executablePath,
+    installDirectory: input.installDirectory,
+    installSizeBytes: input.installSizeBytes,
     endless: input.endless,
   };
 
@@ -143,6 +143,20 @@ export const createGameWithDetails = async (
     }
 
     if (input.initialStatus) {
+      // SPEC 4.5 — el log de una iteración siempre debe arrancar por
+      // "started" antes de un estado terminal (completed/dropped/on_hold/
+      // resting); si no, el historial empezaría directo en "Completado" sin
+      // haber pasado nunca por "Jugando".
+      if (input.initialStatus !== 'started' && started) {
+        await tx.insert(stateEventsTable).values({
+          iterationId: iteration.id,
+          type: 'started',
+          occurredAt: started.date,
+          datePrecision: started.precision,
+          note: null,
+        });
+      }
+
       const occurredAt = finished?.date ?? started?.date ?? undefined;
       const datePrecision = finished?.precision ?? started?.precision ?? 'day';
       await tx.insert(stateEventsTable).values({

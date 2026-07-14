@@ -24,7 +24,10 @@ export const FORMAT_OPTIONS: { value: 'digital' | 'physical'; label: string }[] 
 // estado es justo lo que pasa cuando NO se marca ese checkbox.
 export type PastStatusKey = Exclude<StatusKey, 'unplayed'>;
 export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'playing', 'on_hold'];
-export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting'];
+// SPEC 10.8 — discrepancia resuelta: el prototipo solo ofrecía Playing/Rest
+// para endless, pero la sección 4.5 exige mantener dropped disponible
+// también para endless (resting se añade, no sustituye a on_hold/dropped).
+export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting', 'dropped'];
 
 // Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
 export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
@@ -47,7 +50,16 @@ export type AddGameFormValues = {
   pastStatus: PastStatusKey;
   moneySpent: string;
   executablePath: string;
+  // Carpeta de instalación + su tamaño ya calculado al elegirla (ver
+  // InstallDirectoryField) — installSizeBytes va de la mano, nunca se
+  // rellena a mano.
+  installDirectory: string;
+  installSizeBytes: number | null;
   note: string;
+  // Notas generales del juego — independientes del note de arriba (que va
+  // al stateEvent inicial). Su desplegable en el modal no depende de
+  // playedBefore ni de si hay estado inicial.
+  gameNotes: string;
   // Elegidas a mano en el CoverPicker (SPEC 4.6) — null = sin elección
   // propia, el backend usa su propio default (primera candidata de IGDB).
   coverUrl: string | null;
@@ -66,7 +78,10 @@ export const DEFAULT_FORM_VALUES: AddGameFormValues = {
   pastStatus: 'beaten',
   moneySpent: '',
   executablePath: '',
+  installDirectory: '',
+  installSizeBytes: null,
   note: '',
+  gameNotes: '',
   coverUrl: null,
   heroUrl: null,
 };

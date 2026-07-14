@@ -1,8 +1,16 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { AddStateEventInput, StateEvent } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
-import { iterationsTable, stateEventsTable } from '../../schema';
+import { iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
+
+// Hitos que cierran un playthrough (todo salvo 'started') — si la iteración
+// tiene una sesión sin cerrar cuando se registra uno de estos, se ancla como
+// endSessionId (SPEC 4: "al marcar un hito con sesión activa, asociarlo a la
+// última sesión"). Hoy no hay nada que deje sesiones abiertas (el watcher del
+// Bloque 3 no existe todavía, y las manuales siempre llegan con endedAt ya
+// puesto), pero la asociación tiene que estar lista para cuando lo haya.
+const TERMINAL_TYPES = new Set(['completed', 'dropped', 'on_hold', 'resting']);
 
 export const addStateEvent = async (input: AddStateEventInput): Promise<StateEvent> => {
   const db = getDb();
@@ -74,6 +82,22 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
     }
 
     const [event] = await tx.insert(stateEventsTable).values(input).returning(stateEventColumns);
+
+    if (TERMINAL_TYPES.has(input.type)) {
+      const [openSession] = await tx
+        .select({ id: sessionsTable.id })
+        .from(sessionsTable)
+        .where(and(eq(sessionsTable.iterationId, input.iterationId), isNull(sessionsTable.endedAt)))
+        .limit(1);
+
+      if (openSession) {
+        await tx
+          .update(iterationsTable)
+          .set({ endSessionId: openSession.id })
+          .where(eq(iterationsTable.id, input.iterationId));
+      }
+    }
+
     return event;
   });
 };

@@ -8,6 +8,41 @@ export const formatHours = (hours: number): string => {
   return minutes ? `${wholeHours}h ${minutes}m` : `${wholeHours}h`;
 };
 
+// Mismo separador decimal que el placeholder "0.00" del campo de gasto —
+// nunca coma, sin importar el locale del sistema.
+export const formatMoney = (amount: number): string => `€${amount.toFixed(2)}`;
+
+// Fechas de eventos/sesiones (Date real, no el isoDate del picker) según su
+// datePrecision — 'en-US' fijo, mismo motivo que formatDisplay del picker:
+// el resto de la UI está en inglés sin i18n.
+export const formatByPrecision = (
+  date: Date,
+  precision: 'year' | 'month' | 'day' | 'datetime',
+): string => {
+  if (precision === 'year') return String(date.getFullYear());
+  if (precision === 'month') {
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+  if (precision === 'day') {
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  const datePart = date.toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return `${datePart} · ${timePart}`;
+};
+
+// GB si llega a 1024MB, si no MB — el tamaño de una carpeta de instalación
+// nunca es tan pequeño como para necesitar KB/bytes sueltos.
+export const formatBytes = (bytes: number): string => {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${mb.toFixed(0)} MB`;
+};
+
 // HH:MM:SS con ceros a la izquierda — el contador en vivo de una sesión
 // abierta (mismo formato que el prototipo, fmtTimer).
 export const formatElapsed = (seconds: number): string => {
