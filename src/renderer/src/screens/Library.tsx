@@ -1,15 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { GameGrid } from '../components/library/GameGrid';
 import { useGames } from '../hooks/games';
 
-type LibraryProps = {
-  onSelectGame: (id: number) => void;
-};
-
-export const Library = ({ onSelectGame }: LibraryProps): React.JSX.Element => {
+export const Library = (): React.JSX.Element => {
+  const navigate = useNavigate();
   const { data: games = [], isLoading, isError } = useGames();
   const [addModalOpen, setAddModalOpen] = useState(false);
 
@@ -47,7 +45,7 @@ export const Library = ({ onSelectGame }: LibraryProps): React.JSX.Element => {
           <p className="text-xs text-muted-foreground">Add your first game to start tracking it.</p>
         </div>
       ) : (
-        <GameGrid games={games} onSelectGame={onSelectGame} />
+        <GameGrid games={games} onSelectGame={(id) => navigate(`/games/${id}`)} />
       )}
     </div>
   );
