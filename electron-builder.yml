@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: afterplay
+appId: com.afterplay.app
+productName: Afterplay
 directories:
   buildResources: build
 files:
@@ -11,8 +11,13 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  # El watcher ejecuta este .exe embebido (ps-list, Fase 1 del barrido de
+  # procesos) — un binario no puede ejecutarse desde dentro del asar sin
+  # depender de la extracción temporal automática de Electron; desempaquetado
+  # queda como fichero real y execFile lo lanza directo.
+  - node_modules/ps-list/vendor/**
 win:
-  executableName: afterplay
+  executableName: Afterplay
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
