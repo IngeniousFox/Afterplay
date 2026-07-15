@@ -27,6 +27,24 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  // Qué playthrough está eligiendo el dropdown de PlaythroughPanel — vive
+  // aquí (no dentro de ese componente) porque HowLongToBeatCard también lo
+  // necesita, para mover su marcador al cambiar de playthrough. La más
+  // reciente = la última creada (getGameById ordena las iteraciones por id
+  // ascendente).
+  const newestId = game?.iterations[game.iterations.length - 1]?.id;
+  const [selectedIterationId, setSelectedIterationId] = useState<number | null>(newestId ?? null);
+  // Al entrar se muestra la más reciente, y si aparece una nueva (p.ej. el
+  // watcher creó un playthrough con el detalle abierto) la selección salta a
+  // ella. Patrón de "ajustar estado durante el render" (compatible con React
+  // Compiler, sin useEffect). Elegir a mano una anterior en el dropdown se
+  // respeta: eso no cambia `newestId`, así que no se reajusta.
+  const [seenNewestId, setSeenNewestId] = useState(newestId);
+  if (newestId !== seenNewestId) {
+    setSeenNewestId(newestId);
+    setSelectedIterationId(newestId ?? null);
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -56,6 +74,10 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
   const allSessions = game.iterations
     .flatMap((iteration) => iteration.sessions)
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+  const selectedIteration =
+    game.iterations.find((it) => it.id === selectedIterationId) ??
+    game.iterations[game.iterations.length - 1] ??
+    null;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -88,8 +110,24 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
           </div>
 
           <div className="flex w-92 min-w-70 flex-none flex-col gap-4.5">
-            <HowLongToBeatCard game={game} />
-            {game.endless ? <EndlessBadge /> : <PlaythroughPanel game={game} />}
+            <HowLongToBeatCard
+              game={game}
+              markerHours={
+                game.endless ? game.totalHours : (selectedIteration?.hours ?? game.totalHours)
+              }
+              markerScope={game.endless ? 'total' : 'playthrough'}
+            />
+            {game.endless ? (
+              <EndlessBadge />
+            ) : (
+              selectedIteration && (
+                <PlaythroughPanel
+                  game={game}
+                  selectedIteration={selectedIteration}
+                  onSelectIteration={setSelectedIterationId}
+                />
+              )
+            )}
             <DetailsCard game={game} />
           </div>
         </div>

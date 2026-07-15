@@ -1,6 +1,5 @@
 import { Package, Star } from 'lucide-react';
-import { useState } from 'react';
-import type { GameDetail } from '../../../../../shared/types';
+import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useUpdateIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
@@ -9,6 +8,11 @@ import { Dropdown } from '../add-game/Dropdown';
 
 type PlaythroughPanelProps = {
   game: GameDetail;
+  // Controlado desde GameDetail (no estado propio): HowLongToBeatCard
+  // necesita saber cuál es el playthrough elegido para mover su marcador,
+  // así que la selección vive un nivel más arriba, no aquí dentro.
+  selectedIteration: IterationDetail;
+  onSelectIteration: (id: number) => void;
 };
 
 const FieldRow = ({
@@ -83,29 +87,14 @@ const RatingRow = ({
 
 // SPEC 10.7 / prototipo — card "Playthrough" del sidebar: selector + badge
 // de extra content + valoración (editable) + campos de solo lectura.
-export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Element | null => {
+export const PlaythroughPanel = ({
+  game,
+  selectedIteration,
+  onSelectIteration,
+}: PlaythroughPanelProps): React.JSX.Element => {
   const updateIteration = useUpdateIteration();
   const { data: timeFormat = '24h' } = useTimeFormat();
-  // La más reciente = la última creada (getGameById ordena las iteraciones por
-  // id ascendente).
-  const newestId = game.iterations[game.iterations.length - 1]?.id;
-  const [selectedId, setSelectedId] = useState(() => String(newestId ?? ''));
-  // Al entrar se muestra la más reciente, y si aparece una nueva (p.ej. el
-  // watcher creó un playthrough con el detalle abierto) la selección salta a
-  // ella. Patrón de "ajustar estado durante el render" (compatible con React
-  // Compiler, sin useEffect). Elegir a mano una anterior en el dropdown se
-  // respeta: eso no cambia `newestId`, así que no se reajusta.
-  const [seenNewestId, setSeenNewestId] = useState(newestId);
-  if (newestId !== seenNewestId) {
-    setSeenNewestId(newestId);
-    setSelectedId(String(newestId ?? ''));
-  }
-
-  if (game.iterations.length === 0) return null;
-
-  const iteration =
-    game.iterations.find((it) => String(it.id) === selectedId) ??
-    game.iterations[game.iterations.length - 1];
+  const iteration = selectedIteration;
   // El selector muestra las horas de cada playthrough para poder comparar
   // sin tener que ir cambiando de uno en uno — un badge ONGOING si es el
   // activo (todavía sin fecha de fin, las horas seguirán subiendo).
@@ -132,14 +121,9 @@ export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Ele
 
       {game.iterations.length > 1 && (
         <Dropdown
-          // La iteración mostrada (`iteration`) puede caer en el fallback al
-          // último cuando `selectedId` quedó obsoleto (p.ej. el watcher creó
-          // una nueva mientras el detalle estaba abierto). El dropdown refleja
-          // esa iteración real, no el `selectedId` crudo, para no quedar en
-          // blanco al no encontrar su etiqueta.
           value={String(iteration.id)}
           options={game.iterations.map((it) => String(it.id))}
-          onChange={setSelectedId}
+          onChange={(id) => onSelectIteration(Number(id))}
           renderOption={(id) => labelsById.get(id)}
         />
       )}

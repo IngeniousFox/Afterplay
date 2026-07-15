@@ -1,8 +1,16 @@
+import { Info } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { formatHours } from '../../../lib/format';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 
 type HowLongToBeatCardProps = {
   game: GameDetail;
+  // El marcador compara contra el playthrough elegido en el dropdown de al
+  // lado (GameDetail resuelve cuál es y pasa sus horas aquí) — para un
+  // endless no hay playthroughs que comparar entre sí, así que ahí siempre
+  // son las horas totales del juego.
+  markerHours: number;
+  markerScope: 'playthrough' | 'total';
 };
 
 const StatBox = ({
@@ -26,7 +34,11 @@ const StatBox = ({
 // SPEC 10.7 / prototipo — barra de 3 tramos (main/main+extra/100%) +
 // marcador vertical blanco con etiqueta mostrando las horas propias como
 // posición relativa al total "100%" (completionist).
-export const HowLongToBeatCard = ({ game }: HowLongToBeatCardProps): React.JSX.Element | null => {
+export const HowLongToBeatCard = ({
+  game,
+  markerHours,
+  markerScope,
+}: HowLongToBeatCardProps): React.JSX.Element | null => {
   const main = game.hltbMain ?? 0;
   const extra = game.hltbMainExtras ?? 0;
   const completionist = game.hltbCompletionist ?? 0;
@@ -36,13 +48,28 @@ export const HowLongToBeatCard = ({ game }: HowLongToBeatCardProps): React.JSX.E
   const segMain = (main / comp) * 100;
   const segExtra = (Math.max(0, extra - main) / comp) * 100;
   const segComp = (Math.max(0, completionist - extra) / comp) * 100;
-  const markerPct = Math.max(0, Math.min(100, (game.totalHours / comp) * 100));
+  const markerPct = Math.max(0, Math.min(100, (markerHours / comp) * 100));
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
       <div className="text-[13.5px] font-bold text-foreground">How long to beat</div>
-      <div className="mt-0.5 mb-6.5 text-xs text-muted-foreground">
-        Marker shows what you&apos;ve played
+      <div className="mt-0.5 mb-6.5 flex items-center gap-1.25 text-xs text-muted-foreground">
+        {markerScope === 'playthrough' ? (
+          <>
+            <span>Marker shows this playthrough&apos;s hours</span>
+            <Tooltip>
+              <TooltipTrigger>
+                <Info size={12} />
+              </TooltipTrigger>
+              <TooltipContent>
+                Switch playthroughs in the dropdown below to see how each one compares to these
+                times.
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : (
+          <span>Marker shows what you&apos;ve played</span>
+        )}
       </div>
 
       <div className="relative mb-4.5">
@@ -50,7 +77,7 @@ export const HowLongToBeatCard = ({ game }: HowLongToBeatCardProps): React.JSX.E
           className="absolute -top-5 -translate-x-1/2 rounded-md border border-input px-1.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(0,0,0,.4)]"
           style={{ left: `${markerPct}%`, background: '#1d211f' }}
         >
-          {formatHours(game.totalHours)}
+          {formatHours(markerHours)}
         </div>
         <div
           className="absolute -top-0.75 -translate-x-1/2 rounded-sm bg-white"
