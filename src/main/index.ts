@@ -1,6 +1,6 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import { config as loadDotenv } from 'dotenv';
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog, powerMonitor, shell } from 'electron';
 import { copyFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
@@ -10,6 +10,7 @@ import type { Tray } from 'electron';
 import { seedDatabase } from './db/seed';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
+import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { ProcessWatcher } from './watcher/watcher';
@@ -74,12 +75,10 @@ if (app.isPackaged) {
 registerImageProtocolScheme();
 
 function createWindow(): void {
-  // Si Windows arrancó la app sola por el login item, no se enseña la
-  // ventana — arranca directa a la bandeja (SPEC 3E). wasOpenedAtLogin es
-  // solo de Windows; en otras plataformas createWindow() se llama siempre
-  // manualmente (activate/primera vez), así que da igual.
-  const wasOpenedAtLogin =
-    process.platform === 'win32' && app.getLoginItemSettings().wasOpenedAtLogin;
+  // Si Windows/macOS arrancó la app sola por el login item, no se enseña la
+  // ventana — arranca directa a la bandeja (SPEC 3E). Ver lib/loginItem.ts
+  // para el porqué esto no es tan simple como parece en Windows.
+  const wasOpenedAtLogin = wasOpenedHiddenAtLogin();
 
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -157,9 +156,7 @@ app.whenReady().then(async () => {
   // renderer...). Si la app la abrió Windows sola al iniciar sesión, no
   // hay nada que enseñar todavía (arranca directa a la bandeja, SPEC 3E) —
   // mismo chequeo que createWindow() usa para decidir si mostrarse.
-  const wasOpenedAtLogin =
-    process.platform === 'win32' && app.getLoginItemSettings().wasOpenedAtLogin;
-  if (!wasOpenedAtLogin) splashWindow = createSplashWindow();
+  if (!wasOpenedHiddenAtLogin()) splashWindow = createSplashWindow();
 
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
@@ -234,6 +231,17 @@ app.whenReady().then(async () => {
     },
   );
   watcher.start();
+
+  // Bloque 3G — bloquear/suspender el PC no es tiempo jugado, siga el
+  // proceso vivo detrás o no. 'lock-screen'/'resume' son Windows (Win+L,
+  // pantalla de bloqueo); 'suspend'/'resume' cubren además Mac/Linux y el
+  // suspendido real de Windows. Los cuatro apuntan a pause()/resume(), que ya
+  // son idempotentes (no pasa nada si se disparan los dos a la vez, ej. al
+  // cerrar la tapa del portátil).
+  powerMonitor.on('suspend', () => watcher?.pause());
+  powerMonitor.on('lock-screen', () => watcher?.pause());
+  powerMonitor.on('resume', () => watcher?.resume());
+  powerMonitor.on('unlock-screen', () => watcher?.resume());
 
   // Sync con Turso (Bloque 4): la conexión decidió si tiene sync o no al
   // arrancar (dentro de runMigrations()). Si arrancó sin red, cada ciclo

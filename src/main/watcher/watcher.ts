@@ -23,6 +23,12 @@ export class ProcessWatcher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
   private reconciled = false;
+  // true mientras el PC está bloqueado o suspendido (powerMonitor, ver
+  // main/index.ts). El sondeo se salta entero mientras tanto — nada de
+  // escanear procesos ni de abrir sesiones nuevas — para que un juego que
+  // sigue "corriendo" detrás de la pantalla de bloqueo no reabra sola una
+  // sesión a los 5s de haberla cerrado por pausa.
+  private paused = false;
   // Foto anterior: sesiones abiertas que el watcher sigue, indexadas por
   // gameId (SPEC 4.5: como mucho un playthrough activo por juego → una sesión
   // por juego). Sobrevive entre ciclos; NO se recalcula desde la DB.
@@ -60,7 +66,48 @@ export class ProcessWatcher {
     }
   }
 
+  // PC bloqueado o suspendido (powerMonitor 'lock-screen'/'suspend'): cierra
+  // YA todas las sesiones que se estén siguiendo (no esperar al próximo
+  // sondeo) y deja de escanear hasta el resume/unlock. Cierra SIEMPRE que el
+  // juego siga corriendo detrás del bloqueo — el tiempo con la pantalla
+  // bloqueada no es tiempo jugado, esté el proceso vivo o no.
+  pause(): void {
+    if (this.paused) return;
+    this.paused = true;
+    void this.closeAllActive('pause');
+  }
+
+  // 'resume'/'unlock-screen': sondeo inmediato en vez de esperar el próximo
+  // tick (hasta 5s) — si el juego seguía corriendo detrás del bloqueo, se
+  // retoma con una sesión nueva sin ese hueco de espera.
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    void this.poll();
+  }
+
+  private async closeAllActive(reason: string): Promise<void> {
+    if (this.active.size === 0) return;
+
+    const endedAt = new Date();
+    await withDbAccess(async () => {
+      for (const [gameId, activeSession] of this.active) {
+        await closeSession(activeSession.sessionId, endedAt);
+        console.log(
+          `[watcher] [${reason}] juego ${gameId} pausado -> sesion ${activeSession.sessionId} cerrada`,
+        );
+      }
+      this.active.clear();
+    });
+
+    this.notifyRenderer();
+    this.onActiveGamesChange?.(this.getActiveTitles());
+  }
+
   private async poll(): Promise<void> {
+    // Nada que hacer con el PC bloqueado/suspendido — pause() ya cerró todo
+    // lo que hubiera; escanear ahora solo reabriría sesiones sin querer.
+    if (this.paused) return;
     // Un ciclo puede tardar más que el intervalo si find-process va lento (o
     // el sistema tiene muchos procesos) — evito que dos ciclos se solapen.
     if (this.polling) return;
