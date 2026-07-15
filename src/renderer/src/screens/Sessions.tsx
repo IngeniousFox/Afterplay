@@ -1,8 +1,9 @@
 import { Activity, ArrowRight, Calendar, Clock, Flame } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SessionWithGame } from '../../../shared/types';
 import { MetricCard } from '../components/library/detail/MetricsRow';
+import { Pager } from '../components/sessions/Pager';
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
@@ -11,44 +12,59 @@ import { formatHours, pluralize } from '../lib/format';
 const outlineButtonClass =
   'flex items-center gap-1.75 rounded-[9px] border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap';
 
-// Sin filtro, el panel solo lista las últimas 25 sesiones de TODA la
-// biblioteca (un feed de actividad reciente, no un muro sin fondo de toda tu
-// vida jugando); filtrado a un juego sí se ve completo, porque ahí el
-// volumen ya es manejable. El prototipo (Backlog.html) usaba 18 — subido a
-// 25 a petición expresa.
-const UNFILTERED_LIMIT = 25;
-
+const PAGE_SIZE = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
 const startOfDay = (date: Date): number =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
-type SessionGroup = { label: string; sessions: SessionWithGame[] };
+// Cubos de fecha para las cabeceras — de "Today" a un año concreto, cuanto
+// más lejos en el tiempo más grueso el cubo (nadie necesita saber el día
+// exacto de hace dos años, pero sí el de ayer). `now` se calcula UNA vez por
+// render (no una por sesión) para que todas las filas de la misma pasada
+// usen el mismo "hoy", sin desajustes de un milisegundo entre unas y otras.
+const getSessionGroupLabel = (date: Date, now: Date): string => {
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / DAY_MS);
 
-// Agrupa por antigüedad relativa al día de hoy — rompe la monotonía de una
-// lista plana de filas idénticas. Se agrupa por la fecha real de la sesión
-// sin mirar su datePrecision: una sesión logueada a mano con precisión de
-// año casi siempre cae en "Earlier" de todos modos, sin necesitar un caso
-// especial.
-const groupSessionsByDate = (sessions: SessionWithGame[]): SessionGroup[] => {
-  const todayStart = startOfDay(new Date());
-  const buckets: Record<'Today' | 'Yesterday' | 'This Week' | 'Earlier', SessionWithGame[]> = {
-    Today: [],
-    Yesterday: [],
-    'This Week': [],
-    Earlier: [],
-  };
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays <= 7) return 'This Week';
+  if (diffDays <= 14) return 'Last Week';
 
-  for (const session of sessions) {
-    const diffDays = Math.round((todayStart - startOfDay(session.startedAt)) / DAY_MS);
-    if (diffDays <= 0) buckets.Today.push(session);
-    else if (diffDays === 1) buckets.Yesterday.push(session);
-    else if (diffDays <= 7) buckets['This Week'].push(session);
-    else buckets.Earlier.push(session);
+  if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
+    return 'This Month';
   }
 
-  return (['Today', 'Yesterday', 'This Week', 'Earlier'] as const)
-    .map((label) => ({ label, sessions: buckets[label] }))
-    .filter((group) => group.sessions.length > 0);
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  if (date.getFullYear() === lastMonth.getFullYear() && date.getMonth() === lastMonth.getMonth()) {
+    return 'Last Month';
+  }
+
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString('en-US', { month: 'long' });
+  }
+
+  // Años anteriores: siempre desglosado por mes ("March 2025", "January
+  // 2025"...), no un cubo único por año.
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+};
+
+type SessionGroup = { label: string; sessions: SessionWithGame[] };
+
+// Agrupa una PÁGINA de sesiones, no la lista entera — la cabecera del primer
+// registro de la página SIEMPRE se pinta, siga o no el mismo grupo que
+// terminaba la página anterior. Sin esto, cambiar de página podía dejar una
+// tanda de filas "This Week" arrancando a mitad, sin ningún titulito encima
+// (el grupo ya se había impreso en la página anterior y no volvía a salir).
+const groupPageByDate = (sessions: SessionWithGame[], now: Date): SessionGroup[] => {
+  const groups: SessionGroup[] = [];
+  for (const session of sessions) {
+    const label = getSessionGroupLabel(session.startedAt, now);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.sessions.push(session);
+    else groups.push({ label, sessions: [session] });
+  }
+  return groups;
 };
 
 // Bloque 5A — todas las sesiones, o filtradas a un juego vía el ?game= que
@@ -64,26 +80,42 @@ export const Sessions = (): React.JSX.Element => {
   const { data: sessions = [], isLoading, isError } = useAllSessions();
   const { data: games = [] } = useGames();
 
+  const [page, setPage] = useState(1);
+  // Cambiar de filtro (elegir otro juego, o volver a "All games") vuelve a
+  // la página 1 — mismo patrón de "ajustar estado durante el render" que
+  // PlaythroughPanel (compatible con React Compiler, sin useEffect).
+  const [seenGameId, setSeenGameId] = useState(gameId);
+  if (gameId !== seenGameId) {
+    setSeenGameId(gameId);
+    setPage(1);
+  }
+
   const selectedGame = gameId === null ? null : (games.find((g) => g.id === gameId) ?? null);
   const filtered = useMemo(
     () => (gameId === null ? sessions : sessions.filter((s) => s.gameId === gameId)),
     [sessions, gameId],
   );
-  const visible = gameId === null ? filtered.slice(0, UNFILTERED_LIMIT) : filtered;
-  const groups = useMemo(() => groupSessionsByDate(visible), [visible]);
 
-  // Filtrado a un juego, usa selectedGame.totalHours (useGames(), la misma
-  // fuente que Library/detalle) en vez de re-sumar durationSec a mano — así
-  // nunca puede desacordarse del número que se ve en el resto de la app
-  // (esta vista no sabe de manualTotalPlayed, que sí cuenta ahí). Sin
-  // filtro, suma esa misma fuente para las 4 cards de resumen.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Por si la página quedó fuera de rango (p.ej. el total bajó tras cerrar
+  // el filtro anterior con más páginas) — nunca una página en blanco.
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const groups = useMemo(() => groupPageByDate(pageItems, new Date()), [pageItems]);
+
+  // Cambiar de página con el scroll a mitad de la lista dejaría la vista
+  // "flotando" sobre filas de la página nueva sin su cabecera de fecha a la
+  // vista (esa cabecera está arriba del todo) — subir el scroll es lo que
+  // hace que la página nueva se lea desde donde tiene sentido empezar.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [safePage]);
+
   const totalHours = selectedGame
     ? selectedGame.totalHours
     : games.reduce((sum, game) => sum + game.totalHours, 0);
 
-  // Sesión más larga y media SOLO de sesiones ya cerradas — una en marcha
-  // tiene durationSec null (su tiempo real está en su propio contador en
-  // vivo, no aquí), incluirla como 0 falsearía las dos métricas hacia abajo.
   const closedSessions = filtered.filter((session) => session.endedAt !== null);
   const longestSessionSec = closedSessions.reduce(
     (max, session) => Math.max(max, session.durationSec ?? 0),
@@ -100,7 +132,7 @@ export const Sessions = (): React.JSX.Element => {
     : `${pluralize(sessions.length, 'session')} across your library`;
 
   return (
-    <div className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
+    <div ref={scrollRef} className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
       <div className="mx-auto max-w-250">
         <div className="mb-6.5 flex items-end justify-between gap-4">
           <div>
@@ -164,8 +196,8 @@ export const Sessions = (): React.JSX.Element => {
             </div>
 
             <div className="flex flex-col gap-5.5">
-              {groups.map((group) => (
-                <div key={group.label}>
+              {groups.map((group, index) => (
+                <div key={`${group.label}-${index}`}>
                   <div className="mb-2.5 text-[11px] font-bold tracking-[.13em] text-muted-foreground uppercase">
                     {group.label}
                   </div>
@@ -177,6 +209,8 @@ export const Sessions = (): React.JSX.Element => {
                 </div>
               ))}
             </div>
+
+            <Pager page={safePage} totalPages={totalPages} onChange={setPage} />
           </>
         )}
       </div>

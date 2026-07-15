@@ -10,12 +10,18 @@ import { runMigrations, runSyncCycle } from './db';
 import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
+import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { ProcessWatcher } from './watcher/watcher';
 
 // La ventana principal a nivel de módulo para que el watcher pueda avisarle
 // (webContents.send) sin acoplarse a createWindow. Null mientras no exista.
 let mainWindow: BrowserWindow | null = null;
+// Pantalla de arranque (ver splash/splash.ts) — vive a nivel de módulo para
+// que createWindow() (llamada tanto en el arranque como luego desde
+// 'activate'/el tray) pueda cerrarla la primera vez que la ventana real
+// esté lista, sin necesidad de pasársela como parámetro.
+let splashWindow: BrowserWindow | null = null;
 let watcher: ProcessWatcher | null = null;
 let tray: Tray | null = null;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
@@ -65,6 +71,12 @@ function createWindow(): void {
   const window = mainWindow;
 
   window.on('ready-to-show', () => {
+    // Se cierra aquí y no antes: este es el primer momento en que la
+    // ventana real tiene algo pintado que enseñar en su lugar. En llamadas
+    // posteriores a createWindow() (activate del dock, tray) splashWindow ya
+    // está a null — cerrar null no hace nada.
+    splashWindow?.close();
+    splashWindow = null;
     if (!wasOpenedAtLogin) window.show();
   });
 
@@ -110,6 +122,15 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  // Splash — tan pronto como Electron deja crear ventanas, antes de nada
+  // más (migraciones, conexión con Turso, arranque del bundle del
+  // renderer...). Si la app la abrió Windows sola al iniciar sesión, no
+  // hay nada que enseñar todavía (arranca directa a la bandeja, SPEC 3E) —
+  // mismo chequeo que createWindow() usa para decidir si mostrarse.
+  const wasOpenedAtLogin =
+    process.platform === 'win32' && app.getLoginItemSettings().wasOpenedAtLogin;
+  if (!wasOpenedAtLogin) splashWindow = createSplashWindow();
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
 
@@ -127,6 +148,7 @@ app.whenReady().then(async () => {
     await runMigrations();
   } catch (error) {
     console.error('Database migration failed:', error);
+    splashWindow?.close();
     dialog.showErrorBox(
       'Afterplay',
       'No se pudo preparar la base de datos. La app se va a cerrar.',
