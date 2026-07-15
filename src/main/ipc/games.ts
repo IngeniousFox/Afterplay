@@ -4,15 +4,20 @@ import { handleDb } from './dbHandle';
 import type {
   CreateGameInput,
   CreateGameWithDetailsInput,
+  CreatePlannedGameInput,
   GameRow,
   LaunchExecutableResult,
+  PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
 import { createGame } from '../db/queries/games/createGame';
 import { createGameWithDetails } from '../db/queries/games/createGameWithDetails';
+import { createPlannedGame } from '../db/queries/games/createPlannedGame';
 import { deleteGame } from '../db/queries/games/deleteGame';
 import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
+import { getPlannedGames } from '../db/queries/games/getPlannedGames';
+import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
 import { updateGame } from '../db/queries/games/updateGame';
 import { cacheImage } from '../images/cache';
 
@@ -50,6 +55,23 @@ export const registerGamesHandlers = (): void => {
 
   handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
     const game = await createGameWithDetails(input);
+    warmImageCache(game);
+    return game;
+  });
+
+  // Sección Plan to Play (alta reducida + lista propia + paso a biblioteca).
+  handleDb('games:getPlanned', async () => {
+    return getPlannedGames();
+  });
+
+  handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
+    const game = await createPlannedGame(input);
+    warmImageCache(game);
+    return game;
+  });
+
+  handleDb('games:promote', async (_event, input: PromotePlannedGameInput) => {
+    const game = await promotePlannedGame(input);
     warmImageCache(game);
     return game;
   });

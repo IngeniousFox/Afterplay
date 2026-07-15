@@ -5,7 +5,10 @@ import { CoverThumb } from './CoverThumb';
 
 type SelectedGameSummaryProps = {
   selected: IgdbSearchResult;
-  onChangeSelection: () => void;
+  // Sin esto no hay botón "Change" — el paso de un Plan to Play a la
+  // biblioteca abre este mismo modal con el juego YA fijado, y ahí cambiar
+  // de juego no tiene sentido.
+  onChangeSelection?: () => void;
 };
 
 export const SelectedGameSummary = ({
@@ -37,13 +40,15 @@ export const SelectedGameSummary = ({
           <span className="font-semibold text-foreground">{hltbMainLabel ?? '—'}</span> main story
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onChangeSelection}
-        className="flex-none rounded-lg border border-border bg-white/[0.03] px-3 py-1.75 text-[12.5px] font-semibold text-foreground hover:bg-white/[0.06]"
-      >
-        Change
-      </button>
+      {onChangeSelection && (
+        <button
+          type="button"
+          onClick={onChangeSelection}
+          className="flex-none rounded-lg border border-border bg-white/[0.03] px-3 py-1.75 text-[12.5px] font-semibold text-foreground hover:bg-white/[0.06]"
+        >
+          Change
+        </button>
+      )}
     </div>
   );
 };

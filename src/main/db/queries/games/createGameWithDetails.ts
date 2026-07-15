@@ -27,8 +27,9 @@ type EdgeMilestone = 'completed' | 'dropped' | 'on_hold';
 // propósito: ninguno de los dos es un punto de fin válido — 'started' porque
 // todavía no se ha dejado de jugar (el renderer ya no manda `finished` en
 // ese caso, esto es cinturón y tirantes), y 'resting' porque ni siquiera
-// existe en sessionsTable.milestone.
-const STATUS_TO_MILESTONE: Record<string, EdgeMilestone | undefined> = {
+// existe en sessionsTable.milestone. Exportado porque promotePlannedGame
+// (pasar un Plan to Play a la biblioteca) aplica exactamente la misma regla.
+export const STATUS_TO_MILESTONE: Record<string, EdgeMilestone | undefined> = {
   completed: 'completed',
   dropped: 'dropped',
   on_hold: 'on_hold',

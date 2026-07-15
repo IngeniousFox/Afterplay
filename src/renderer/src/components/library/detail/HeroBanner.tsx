@@ -3,13 +3,15 @@ import type { GameDetail } from '../../../../../shared/types';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import { formatElapsed } from '../../../lib/format';
-import { getGameStatusMeta } from '../../../lib/gameStatus';
+import { getGameStatusMeta, STATUS_META } from '../../../lib/gameStatus';
 import { CoverThumb } from '../add-game/CoverThumb';
 
 type HeroBannerProps = {
   game: GameDetail;
   liveSince: Date | null;
   onBack: () => void;
+  // La ficha de Plan to Play vuelve a /plan, no a la biblioteca.
+  backLabel?: string;
 };
 
 // SPEC 10.6/10.7 + prototipo Backlog.html — hero 316px, degradado vertical
@@ -17,9 +19,16 @@ type HeroBannerProps = {
 // izquierda -> transparente 45%), botón glass de vuelta, badge PLAYING con
 // pulso si hay sesión en marcha, carátula 118×158 + título 38px/800 +
 // badge de estado + metadatos superpuestos abajo-izquierda.
-export const HeroBanner = ({ game, liveSince, onBack }: HeroBannerProps): React.JSX.Element => {
+export const HeroBanner = ({
+  game,
+  liveSince,
+  onBack,
+  backLabel = 'Back to library',
+}: HeroBannerProps): React.JSX.Element => {
   const heroSrc = useImageSrc(game.heroUrl, 'heroes');
-  const status = getGameStatusMeta(game.currentState);
+  // Un juego planeado no tiene estado real (currentState deriva ignorando
+  // el evento de plan — ver getGameById) — su badge es el del Plan.
+  const status = game.planned ? STATUS_META.plan : getGameStatusMeta(game.currentState);
   const elapsedSeconds = useLiveTimer(liveSince);
 
   const meta = [
@@ -59,7 +68,7 @@ export const HeroBanner = ({ game, liveSince, onBack }: HeroBannerProps): React.
         style={{ background: 'rgba(8,12,10,.66)' }}
       >
         <ArrowLeft size={16} />
-        <span>Back to library</span>
+        <span>{backLabel}</span>
       </button>
 
       {liveSince && (

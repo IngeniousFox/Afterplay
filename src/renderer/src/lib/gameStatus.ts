@@ -1,4 +1,4 @@
-import { Circle, Moon, Pause, Play, Trophy, XCircle } from 'lucide-react';
+import { Bookmark, Circle, Moon, Pause, Play, Trophy, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { StateEvent } from '../../../shared/types';
 
@@ -11,7 +11,8 @@ export type GameStatusMeta = {
   filled: boolean;
 };
 
-export type StatusKey = 'playing' | 'beaten' | 'dropped' | 'on_hold' | 'resting' | 'unplayed';
+export type StatusKey =
+  'playing' | 'beaten' | 'dropped' | 'on_hold' | 'resting' | 'unplayed' | 'plan';
 
 // SPEC 10.2 — colores propios del estado del juego. Deliberadamente NO son
 // los tokens de tema de shadcn (--primary, --destructive...) aunque algunos
@@ -27,6 +28,10 @@ export const STATUS_META: Record<StatusKey, GameStatusMeta> = {
   // está tocando ahora mismo.
   resting: { label: 'Resting', color: '#7c86c8', Icon: Moon, filled: false },
   unplayed: { label: 'Unplayed', color: '#888f8a', Icon: Circle, filled: false },
+  // Sección Plan to Play — un estado "de intención", no de juego: nunca
+  // aparece en ningún dropdown de estados (no se puede elegir ni volver a
+  // él), solo se muestra en la sección /plan y como entrada del historial.
+  plan: { label: 'Plan to play', color: '#85a3d6', Icon: Bookmark, filled: false },
 };
 
 // currentState ('started'/'completed'/...) es el vocabulario de la DB; la UI
@@ -38,6 +43,7 @@ export const STATE_TO_STATUS_KEY: Record<StateEvent['type'], StatusKey> = {
   dropped: 'dropped',
   on_hold: 'on_hold',
   resting: 'resting',
+  plan_to_play: 'plan',
 };
 
 export const getGameStatusMeta = (currentState: StateEvent['type'] | null): GameStatusMeta =>

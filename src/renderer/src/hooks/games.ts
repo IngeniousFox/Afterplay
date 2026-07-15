@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateGameInput,
   CreateGameWithDetailsInput,
+  CreatePlannedGameInput,
   GameDetail,
   GameListItem,
   GameRow,
   LaunchExecutableResult,
+  PromotePlannedGameInput,
   StateEvent,
   UpdateGamePatch,
 } from '../../../shared/types';
@@ -34,6 +36,52 @@ export const useGame = (id: number): UseQueryResult<GameDetail | null, Error> =>
     queryKey: queryKeys.games.detail(id),
     queryFn: () => window.api.games.getById(id),
   });
+
+// Sección Plan to Play — la contrapartida de useGames(): solo los juegos
+// planeados (que useGames() nunca trae). Mismo staleTime Infinity: su key
+// vive bajo el prefijo ['games'], así que todas las invalidaciones de
+// games.all la refrescan también.
+export const usePlannedGames = (): UseQueryResult<GameListItem[], Error> =>
+  useQuery({
+    queryKey: queryKeys.games.planned,
+    queryFn: () => window.api.games.getPlanned(),
+    staleTime: Infinity,
+  });
+
+export const useCreatePlannedGame = (): UseMutationResult<
+  GameRow,
+  Error,
+  CreatePlannedGameInput,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreatePlannedGameInput) => window.api.games.createPlanned(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};
+
+export const usePromotePlannedGame = (): UseMutationResult<
+  GameRow,
+  Error,
+  PromotePlannedGameInput,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: PromotePlannedGameInput) => window.api.games.promote(input),
+    onSuccess: () => {
+      // El juego cambia de lista (planned → library) y puede traer gasto y
+      // eventos nuevos — games.all cascada a planned/detail por prefijo,
+      // pero spend/stateEvents viven en keys propias.
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.spend.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
+    },
+  });
+};
 
 export const useCreateGame = (): UseMutationResult<GameRow, Error, CreateGameInput, unknown> => {
   const queryClient = useQueryClient();

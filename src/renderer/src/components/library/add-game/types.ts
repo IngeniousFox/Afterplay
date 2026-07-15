@@ -21,8 +21,10 @@ export const FORMAT_OPTIONS: { value: 'digital' | 'physical'; label: string }[] 
 ];
 
 // El dropdown de Status del "jugado antes" nunca ofrece 'unplayed' — ese
-// estado es justo lo que pasa cuando NO se marca ese checkbox.
-export type PastStatusKey = Exclude<StatusKey, 'unplayed'>;
+// estado es justo lo que pasa cuando NO se marca ese checkbox. Tampoco
+// 'plan': a Plan to Play no se puede volver ni elegirlo como estado (solo
+// se entra al añadir el juego desde la sección /plan).
+export type PastStatusKey = Exclude<StatusKey, 'unplayed' | 'plan'>;
 export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'playing', 'on_hold'];
 // SPEC 10.8 — discrepancia resuelta: el prototipo solo ofrecía Playing/Rest
 // para endless, pero la sección 4.5 exige mantener dropped disponible

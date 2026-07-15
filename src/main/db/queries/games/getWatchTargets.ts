@@ -1,4 +1,4 @@
-import { isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { basename } from 'path';
 import { getDb } from '../..';
 import { gamesTable } from '../../schema';
@@ -21,6 +21,10 @@ export type WatchTarget = {
 // ya se encarga de poner el juego en "Playing" (ver startGameSession). Se
 // recalcula cada ciclo (dato minúsculo) para recoger juegos recién añadidos
 // sin reiniciar.
+//
+// Excepción: los juegos de Plan to Play (planned) — un juego planeado no
+// tiene sesiones (por definición aún no lo juegas dentro de la app), así que
+// el watcher no debe abrirle una aunque tuviera un exe configurado.
 export const getWatchTargets = async (): Promise<WatchTarget[]> => {
   const db = getDb();
 
@@ -31,7 +35,7 @@ export const getWatchTargets = async (): Promise<WatchTarget[]> => {
       executablePath: gamesTable.executablePath,
     })
     .from(gamesTable)
-    .where(isNotNull(gamesTable.executablePath));
+    .where(and(isNotNull(gamesTable.executablePath), eq(gamesTable.planned, false)));
 
   const targets: WatchTarget[] = [];
   for (const game of games) {

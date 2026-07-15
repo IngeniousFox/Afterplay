@@ -100,6 +100,25 @@ export type CreateGameWithDetailsInput = {
   installSizeBytes: number | null;
 };
 
+// Sección Plan to Play — alta reducida: un juego planeado no tiene
+// playthrough real todavía (ni plataforma, ni gasto, ni exe), solo el juego
+// del catálogo + tus notas + la nota del historial ("por qué lo planeo").
+export type CreatePlannedGameInput = {
+  igdbId: number;
+  note: string | null;
+  gameNotes: string | null;
+  coverUrl: string | null;
+  heroUrl: string | null;
+};
+
+// Pasar un juego planeado a la biblioteca de verdad: mismos datos que el
+// alta normal (el modal de Add Game se abre prellenado) pero sobre el juego
+// YA existente — nada de borrar y recrear, el historial (incluida la
+// entrada de "Plan to Play") se conserva.
+export type PromotePlannedGameInput = Omit<CreateGameWithDetailsInput, 'igdbId'> & {
+  gameId: number;
+};
+
 // Resultado del picker de carpeta (Install directory, Add/Edit game) — el
 // tamaño ya viene calculado desde el main, no hace falta un segundo viaje.
 export type DirectoryPickResult = { path: string; sizeBytes: number };

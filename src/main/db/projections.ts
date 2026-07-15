@@ -36,6 +36,7 @@ export const gameColumns = {
   installSizeBytes: gamesTable.installSizeBytes,
   genres: gamesTable.genres,
   endless: gamesTable.endless,
+  planned: gamesTable.planned,
   addedAt: gamesTable.addedAt,
 };
 

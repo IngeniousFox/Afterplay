@@ -21,6 +21,10 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // inserción si no se pide nada. Un único sitio para el orden: tanto la
   // biblioteca como el rail lateral (MiddleColumn) leen de este mismo query
   // vía useGames(), así que se ordenan igual en los dos sin más esfuerzo.
+  //
+  // Sin juegos planeados: la sección Plan to Play es la ÚNICA que los ve
+  // (getPlannedGames) — al excluirlos aquí desaparecen de Library, Sessions,
+  // Stats y las columnas de navegación de una sola vez.
   const games = await db
     .select({
       id: gamesTable.id,
@@ -29,6 +33,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       genres: gamesTable.genres,
     })
     .from(gamesTable)
+    .where(eq(gamesTable.planned, false))
     .orderBy(sql`${gamesTable.title} collate nocase`);
 
   // Horas manuales por juego (ya vienen en horas, se suman directas). Agrupo
@@ -101,6 +106,11 @@ export const getGames = async (): Promise<GameListItem[]> => {
   const latestStateEventByGame = new Map<number, StateEventCandidate>();
 
   for (const row of stateEventRows) {
+    // 'plan_to_play' es solo una entrada de historial (ver schema.ts) — no
+    // cuenta para el estado actual: un juego pasado del Plan a la biblioteca
+    // como "jugado en el pasado" tiene su evento real (completed/...) con
+    // fecha ANTERIOR al plan, y sin este filtro el plan ganaría siempre.
+    if (row.type === 'plan_to_play') continue;
     const previousLatest = latestStateEventByGame.get(row.gameId);
 
     if (!previousLatest) {

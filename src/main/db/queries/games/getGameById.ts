@@ -109,7 +109,11 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     const endSession = iterationSessions.find((session) => session.id === iteration.endSessionId);
 
     const iterationStateEvents = stateEventsByIteration.get(iteration.id) ?? [];
-    const latestEvent = iterationStateEvents[iterationStateEvents.length - 1];
+    // Ignorando 'plan_to_play': es solo historial (ver schema.ts), nunca el
+    // estado real — un juego promovido desde el Plan como Unplayed no tiene
+    // más eventos y debe salir null (Unplayed), no "planeado".
+    const realStateEvents = iterationStateEvents.filter((event) => event.type !== 'plan_to_play');
+    const latestEvent = realStateEvents[realStateEvents.length - 1];
 
     return {
       ...iteration,
@@ -128,7 +132,9 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   const costPerHour = totalHours > 0 ? totalSpend / totalHours : null;
 
   const isLive = sessions.some((session) => session.endedAt === null);
-  const latestStateEvent = stateEvents[stateEvents.length - 1];
+  // Mismo filtro de 'plan_to_play' que arriba (solo historial, nunca estado).
+  const realGameStateEvents = stateEvents.filter((event) => event.type !== 'plan_to_play');
+  const latestStateEvent = realGameStateEvents[realGameStateEvents.length - 1];
 
   return {
     ...game,

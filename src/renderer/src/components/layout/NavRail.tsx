@@ -1,4 +1,4 @@
-import { BarChart3, Clock, Gamepad2 } from 'lucide-react';
+import { BarChart3, Bookmark, Clock, Gamepad2 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { SettingsModal } from './SettingsModal';
@@ -12,6 +12,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/games', Icon: Gamepad2, size: 22, label: 'Games' },
+  { to: '/plan', Icon: Bookmark, size: 21, label: 'Plan to play' },
   { to: '/sessions', Icon: Clock, size: 21, label: 'Sessions' },
   { to: '/stats', Icon: BarChart3, size: 21, label: 'Stats' },
 ];

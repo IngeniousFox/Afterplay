@@ -2,7 +2,7 @@ import { BarChart3, Gamepad2, LayoutGrid, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { GameListItem } from '../../../../shared/types';
-import { useGames } from '../../hooks/games';
+import { useGames, usePlannedGames } from '../../hooks/games';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours, pluralize } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
@@ -194,6 +194,40 @@ const LibraryNavColumn = (): React.JSX.Element => {
   );
 };
 
+// Sección Plan to Play — mismo patrón que LibraryNavColumn pero sobre la
+// lista de planeados (usePlannedGames): estos juegos no aparecen en ninguna
+// otra columna ni pantalla de la app. Sin horas a la derecha (un juego
+// planeado no tiene tiempo jugado por definición).
+const PlanNavColumn = (): React.JSX.Element => {
+  const navigate = useNavigate();
+  const detailMatch = useMatch('/plan/:id');
+  const selectedId = detailMatch ? Number(detailMatch.params.id) : null;
+  const { data: games = [] } = usePlannedGames();
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLowerCase();
+  const filtered = query ? games.filter((game) => game.title.toLowerCase().includes(query)) : games;
+
+  return (
+    <MiddleColumnShell
+      label="PLAN TO PLAY"
+      sub={pluralize(games.length, 'game')}
+      search={search}
+      onSearchChange={setSearch}
+    >
+      {filtered.map((game) => (
+        <GameRow
+          key={game.id}
+          game={game}
+          selected={game.id === selectedId}
+          onClick={() => navigate(`/plan/${game.id}`)}
+          subtitle={<StatusSubtitle game={game} showLive={false} />}
+          rightLabel=""
+        />
+      ))}
+    </MiddleColumnShell>
+  );
+};
+
 // La selección aquí SÍ es navegación real (Bloque 5A): vive en el query
 // param `?game=` de la propia URL de /sessions, así que Sessions.tsx (el
 // panel de la derecha) lee el mismo estado sin necesitar un context ni una
@@ -286,5 +320,6 @@ export const MiddleColumn = (): React.JSX.Element => {
   const location = useLocation();
   if (location.pathname === '/sessions') return <SessionsNavColumn />;
   if (location.pathname === '/stats') return <StatsNavColumn />;
+  if (location.pathname.startsWith('/plan')) return <PlanNavColumn />;
   return <LibraryNavColumn />;
 };

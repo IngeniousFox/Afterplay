@@ -1,8 +1,10 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "ac0fa5b1-2145-4fcc-b1e2-2eae483c1f27",
-  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "id": "4f66b679-498e-4fe1-9c43-979d06f76804",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
   "ddl": [
     {
       "name": "games",
@@ -211,6 +213,16 @@
       "default": "false",
       "generated": null,
       "name": "endless",
+      "entityType": "columns",
+      "table": "games"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "planned",
       "entityType": "columns",
       "table": "games"
     },
@@ -555,9 +567,13 @@
       "table": "state_events"
     },
     {
-      "columns": ["gameId"],
+      "columns": [
+        "gameId"
+      ],
       "tableTo": "games",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -566,9 +582,13 @@
       "table": "iterations"
     },
     {
-      "columns": ["startSessionId"],
+      "columns": [
+        "startSessionId"
+      ],
       "tableTo": "sessions",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
@@ -577,9 +597,13 @@
       "table": "iterations"
     },
     {
-      "columns": ["endSessionId"],
+      "columns": [
+        "endSessionId"
+      ],
       "tableTo": "sessions",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
@@ -588,9 +612,13 @@
       "table": "iterations"
     },
     {
-      "columns": ["iterationId"],
+      "columns": [
+        "iterationId"
+      ],
       "tableTo": "iterations",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -599,9 +627,13 @@
       "table": "sessions"
     },
     {
-      "columns": ["gameId"],
+      "columns": [
+        "gameId"
+      ],
       "tableTo": "games",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -610,9 +642,13 @@
       "table": "spend_events"
     },
     {
-      "columns": ["iterationId"],
+      "columns": [
+        "iterationId"
+      ],
       "tableTo": "iterations",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -621,101 +657,67 @@
       "table": "state_events"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "games_pk",
       "table": "games",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "iterations_pk",
       "table": "iterations",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "sessions_pk",
       "table": "sessions",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "spend_events_pk",
       "table": "spend_events",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "state_events_pk",
       "table": "state_events",
       "entityType": "pks"
     },
     {
-      "columns": ["igdbId"],
+      "columns": [
+        "igdbId"
+      ],
       "nameExplicit": false,
       "name": "games_igdbId_unique",
       "entityType": "uniques",
       "table": "games"
     },
     {
-      "columns": ["steamGridDbId"],
+      "columns": [
+        "steamGridDbId"
+      ],
       "nameExplicit": false,
       "name": "games_steamGridDbId_unique",
       "entityType": "uniques",
       "table": "games"
-    },
-    {
-      "value": "\"format\" in ('digital', 'physical')",
-      "name": "format_check",
-      "entityType": "checks",
-      "table": "iterations"
-    },
-    {
-      "value": "\"rating\" is null or (\"rating\" between 1 and 5)",
-      "name": "rating_range",
-      "entityType": "checks",
-      "table": "iterations"
-    },
-    {
-      "value": "\"datePrecision\" in ('year', 'month', 'day', 'datetime')",
-      "name": "sessions_date_precision_check",
-      "entityType": "checks",
-      "table": "sessions"
-    },
-    {
-      "value": "\"milestone\" is null or \"milestone\" in ('started', 'completed', 'dropped', 'on_hold')",
-      "name": "sessions_milestone_check",
-      "entityType": "checks",
-      "table": "sessions"
-    },
-    {
-      "value": "\"type\" in ('purchase', 'ingame_spend')",
-      "name": "spend_events_type_check",
-      "entityType": "checks",
-      "table": "spend_events"
-    },
-    {
-      "value": "\"datePrecision\" in ('year', 'month', 'day', 'datetime')",
-      "name": "spend_events_date_precision_check",
-      "entityType": "checks",
-      "table": "spend_events"
-    },
-    {
-      "value": "\"type\" in ('started', 'completed', 'dropped', 'on_hold', 'resting')",
-      "name": "state_events_type_check",
-      "entityType": "checks",
-      "table": "state_events"
-    },
-    {
-      "value": "\"datePrecision\" in ('year', 'month', 'day', 'datetime')",
-      "name": "state_events_date_precision_check",
-      "entityType": "checks",
-      "table": "state_events"
     }
   ],
   "renames": []

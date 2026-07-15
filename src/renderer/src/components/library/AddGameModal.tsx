@@ -1,8 +1,12 @@
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
-import type { IgdbSearchResult } from '../../../../shared/types';
-import { useCreateGameWithDetails } from '../../hooks/games';
+import type { GameDetail, IgdbSearchResult } from '../../../../shared/types';
+import {
+  useCreateGameWithDetails,
+  useCreatePlannedGame,
+  usePromotePlannedGame,
+} from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
 import { Dialog, DialogContent } from '../ui/dialog';
 import { AddGameImagesField } from './add-game/AddGameImagesField';
@@ -33,6 +37,19 @@ import {
 type AddGameModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // 'library' (por defecto): alta normal. 'plan': alta reducida — el juego
+  // nace en la sección Plan to Play, así que todo lo de playthrough/gasto/
+  // exe se oculta (eso se pregunta al pasarlo a la biblioteca de verdad).
+  mode?: 'library' | 'plan';
+  // Si viene, este modal ES el paso de un juego planeado a la biblioteca: la
+  // búsqueda se salta (el juego ya está fijado), el formulario arranca
+  // prellenado con lo que ya se sabe de él, y guardar llama a promote en
+  // vez de crear un juego nuevo. Montar el modal SOLO cuando se abre — el
+  // prellenado vive en los inicializadores de useState/useForm.
+  promoteGame?: GameDetail;
+  // Tras promocionar con éxito (el juego ya no está en el Plan) — para que
+  // la pantalla dueña navegue a donde toque (su ficha de biblioteca).
+  onPromoted?: () => void;
 };
 
 const toBackendDate = (
@@ -47,13 +64,53 @@ const parseOptionalNumber = (raw: string): number | null => {
   return Number.isNaN(value) ? null : value;
 };
 
-export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.JSX.Element => {
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<IgdbSearchResult | null>(null);
-  const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
-  const [notesOpen, setNotesOpen] = useState(false);
+export const AddGameModal = ({
+  open,
+  onOpenChange,
+  mode = 'library',
+  promoteGame,
+  onPromoted,
+}: AddGameModalProps): React.JSX.Element => {
+  const isPlan = mode === 'plan';
+  const isPromote = promoteGame != null;
+  // El playthrough por defecto que createPlannedGame dejó creado — de él
+  // salen los valores iniciales de plataforma/origen/formato del prellenado.
+  const promoteIteration = promoteGame?.iterations[0];
 
-  const methods = useForm<AddGameFormValues>({ defaultValues: DEFAULT_FORM_VALUES });
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<IgdbSearchResult | null>(() =>
+    promoteGame
+      ? {
+          igdbId: promoteGame.igdbId,
+          title: promoteGame.title,
+          coverUrl: promoteGame.coverUrl,
+          releaseYear: promoteGame.releaseYear,
+          platforms: promoteGame.officialPlatforms ?? [],
+          genres: promoteGame.genres ?? [],
+          summary: null,
+        }
+      : null,
+  );
+  const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
+  const [notesOpen, setNotesOpen] = useState(() => Boolean(promoteGame?.notes));
+
+  const methods = useForm<AddGameFormValues>({
+    defaultValues: promoteGame
+      ? {
+          ...DEFAULT_FORM_VALUES,
+          platform: promoteIteration?.playedPlatform ?? DEFAULT_FORM_VALUES.platform,
+          origin: promoteIteration?.origin ?? DEFAULT_FORM_VALUES.origin,
+          format: promoteIteration?.format ?? DEFAULT_FORM_VALUES.format,
+          endless: promoteGame.endless,
+          executablePath: promoteGame.executablePath ?? '',
+          installDirectory: promoteGame.installDirectory ?? '',
+          installSizeBytes: promoteGame.installSizeBytes,
+          gameNotes: promoteGame.notes ?? '',
+          coverUrl: promoteGame.coverUrl,
+          heroUrl: promoteGame.heroUrl,
+        }
+      : DEFAULT_FORM_VALUES,
+  });
   const { control, setValue, getValues, reset: resetForm } = methods;
   const endless = useWatch({ control, name: 'endless' });
   const playedBefore = useWatch({ control, name: 'playedBefore' });
@@ -61,6 +118,9 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
 
   const search = useIgdbSearch(query);
   const createGame = useCreateGameWithDetails();
+  const createPlanned = useCreatePlannedGame();
+  const promote = usePromotePlannedGame();
+  const activeMutation = isPromote ? promote : isPlan ? createPlanned : createGame;
 
   const resetAll = (): void => {
     setQuery('');
@@ -69,10 +129,12 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
     setNotesOpen(false);
     resetForm(DEFAULT_FORM_VALUES);
     createGame.reset();
+    createPlanned.reset();
+    promote.reset();
   };
 
   const handleClose = (): void => {
-    if (createGame.isPending) return;
+    if (activeMutation.isPending) return;
     resetAll();
     onOpenChange(false);
   };
@@ -92,14 +154,28 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
     if (!selected) return;
     const values = getValues();
 
+    if (isPlan) {
+      // Alta reducida (Plan to Play): un juego planeado no tiene playthrough
+      // real todavía — solo el juego elegido, las imágenes y las notas.
+      await createPlanned.mutateAsync({
+        igdbId: selected.igdbId,
+        note: values.note.trim() || null,
+        gameNotes: values.gameNotes.trim() || null,
+        coverUrl: values.coverUrl,
+        heroUrl: values.heroUrl,
+      });
+      resetAll();
+      onOpenChange(false);
+      return;
+    }
+
     const initialStatus = values.playedBefore
       ? STATUS_TO_STATE_TYPE[values.pastStatus]
       : values.endless
         ? 'resting'
         : null;
 
-    await createGame.mutateAsync({
-      igdbId: selected.igdbId,
+    const details = {
       endless: values.endless,
       iteration: {
         playedPlatform: values.platform,
@@ -118,7 +194,17 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
       installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
       coverUrl: values.coverUrl,
       heroUrl: values.heroUrl,
-    });
+    };
+
+    if (isPromote && promoteGame) {
+      await promote.mutateAsync({ gameId: promoteGame.id, ...details });
+      resetAll();
+      onOpenChange(false);
+      onPromoted?.();
+      return;
+    }
+
+    await createGame.mutateAsync({ igdbId: selected.igdbId, ...details });
 
     resetAll();
     onOpenChange(false);
@@ -138,10 +224,14 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
         <div className="flex items-center justify-between border-b border-border px-5.5 py-4.5">
           <div>
             <div className="text-[17px] font-extrabold tracking-[-.01em] text-foreground">
-              Add game
+              {isPromote ? 'Add to library' : 'Add game'}
             </div>
             <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-              Search the catalog, then fill the details
+              {isPromote
+                ? 'Fill the details — it moves out of your Plan to play'
+                : isPlan
+                  ? 'Search the catalog — saved to your Plan to play'
+                  : 'Search the catalog, then fill the details'}
             </div>
           </div>
           <button
@@ -178,117 +268,134 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
             <FormProvider {...methods}>
               <SelectedGameSummary
                 selected={selected}
-                onChangeSelection={() => {
-                  setSelected(null);
-                  setValue('coverUrl', null);
-                  setValue('heroUrl', null);
-                }}
+                // En modo promote no hay botón "Change": el juego viene
+                // fijado desde su ficha del Plan, cambiarlo aquí no tiene
+                // sentido.
+                onChangeSelection={
+                  isPromote
+                    ? undefined
+                    : () => {
+                        setSelected(null);
+                        setValue('coverUrl', null);
+                        setValue('heroUrl', null);
+                      }
+                }
               />
 
               <div className="mt-4.5 flex flex-col gap-4">
                 <AddGameImagesField selected={selected} onPick={setPickerTarget} />
-                <div>
-                  <div className={fieldLabelClass}>PLATFORM YOU PLAY ON</div>
-                  <Controller
-                    control={control}
-                    name="platform"
-                    render={({ field }) => (
-                      <Dropdown
-                        value={field.value}
-                        options={PLATFORM_OPTIONS}
-                        onChange={field.onChange}
-                        renderOption={(option) => option}
+                {/* Todo lo de playthrough/gasto/exe se pregunta al pasar el
+                    juego a la biblioteca, no al planearlo — un Plan to Play
+                    solo lleva el juego, sus imágenes y tus notas. */}
+                {!isPlan && (
+                  <>
+                    <div>
+                      <div className={fieldLabelClass}>PLATFORM YOU PLAY ON</div>
+                      <Controller
+                        control={control}
+                        name="platform"
+                        render={({ field }) => (
+                          <Dropdown
+                            value={field.value}
+                            options={PLATFORM_OPTIONS}
+                            onChange={field.onChange}
+                            renderOption={(option) => option}
+                          />
+                        )}
                       />
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <div className={fieldLabelClass}>ORIGIN</div>
-                  <Controller
-                    control={control}
-                    name="origin"
-                    render={({ field }) => (
-                      <SegmentedButtonGroup
-                        value={field.value}
-                        options={ORIGIN_OPTIONS.map((option) => ({ value: option, label: option }))}
-                        onChange={field.onChange}
-                        wrap
-                      />
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <div className={fieldLabelClass}>FORMAT</div>
-                  <Controller
-                    control={control}
-                    name="format"
-                    render={({ field }) => (
-                      <SegmentedButtonGroup
-                        value={field.value}
-                        options={FORMAT_OPTIONS}
-                        onChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-
-                {origin === 'Purchased' && (
-                  <div>
-                    <div className={fieldLabelClass}>
-                      MONEY SPENT (€){' '}
-                      <span className="font-medium tracking-normal normal-case">
-                        · saved as a purchase
-                      </span>
                     </div>
-                    <Controller
-                      control={control}
-                      name="moneySpent"
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          placeholder="0.00"
-                          className={textInputClass}
+
+                    <div>
+                      <div className={fieldLabelClass}>ORIGIN</div>
+                      <Controller
+                        control={control}
+                        name="origin"
+                        render={({ field }) => (
+                          <SegmentedButtonGroup
+                            value={field.value}
+                            options={ORIGIN_OPTIONS.map((option) => ({
+                              value: option,
+                              label: option,
+                            }))}
+                            onChange={field.onChange}
+                            wrap
+                          />
+                        )}
+                      />
+                    </div>
+
+                    <div>
+                      <div className={fieldLabelClass}>FORMAT</div>
+                      <Controller
+                        control={control}
+                        name="format"
+                        render={({ field }) => (
+                          <SegmentedButtonGroup
+                            value={field.value}
+                            options={FORMAT_OPTIONS}
+                            onChange={field.onChange}
+                          />
+                        )}
+                      />
+                    </div>
+
+                    {origin === 'Purchased' && (
+                      <div>
+                        <div className={fieldLabelClass}>
+                          MONEY SPENT (€){' '}
+                          <span className="font-medium tracking-normal normal-case">
+                            · saved as a purchase
+                          </span>
+                        </div>
+                        <Controller
+                          control={control}
+                          name="moneySpent"
+                          render={({ field }) => (
+                            <input
+                              {...field}
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              placeholder="0.00"
+                              className={textInputClass}
+                            />
+                          )}
                         />
-                      )}
+                      </div>
+                    )}
+
+                    <CheckboxRow
+                      checked={endless}
+                      onToggle={() => handleEndlessToggle(!endless)}
+                      title="Endless game"
+                      description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
+                      borderColorChecked="rgba(47,220,126,.7)"
+                      fillColorChecked="#2fdc7e"
+                      checkIconColor="#08120c"
                     />
-                  </div>
+
+                    <CheckboxRow
+                      checked={playedBefore}
+                      onToggle={() => setValue('playedBefore', !playedBefore)}
+                      title="I played this before, outside the app"
+                      description={
+                        endless
+                          ? 'Log the hours you already put in instead of starting fresh.'
+                          : 'Add a past playthrough with your own dates instead of starting as Unplayed.'
+                      }
+                      borderColorChecked="rgba(133,163,214,.6)"
+                      fillColorChecked="#85a3d6"
+                      checkIconColor="#0a0b0a"
+                      rowBorderFollowsChecked
+                    />
+
+                    {playedBefore && <PlayedBeforePanel />}
+
+                    <ExecutablePathField />
+
+                    <InstallDirectoryField />
+                  </>
                 )}
-
-                <CheckboxRow
-                  checked={endless}
-                  onToggle={() => handleEndlessToggle(!endless)}
-                  title="Endless game"
-                  description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
-                  borderColorChecked="rgba(47,220,126,.7)"
-                  fillColorChecked="#2fdc7e"
-                  checkIconColor="#08120c"
-                />
-
-                <CheckboxRow
-                  checked={playedBefore}
-                  onToggle={() => setValue('playedBefore', !playedBefore)}
-                  title="I played this before, outside the app"
-                  description={
-                    endless
-                      ? 'Log the hours you already put in instead of starting fresh.'
-                      : 'Add a past playthrough with your own dates instead of starting as Unplayed.'
-                  }
-                  borderColorChecked="rgba(133,163,214,.6)"
-                  fillColorChecked="#85a3d6"
-                  checkIconColor="#0a0b0a"
-                  rowBorderFollowsChecked
-                />
-
-                {playedBefore && <PlayedBeforePanel />}
-
-                <ExecutablePathField />
-
-                <InstallDirectoryField />
 
                 <div>
                   <CheckboxRow
@@ -320,18 +427,23 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
                     render={({ field }) => (
                       <input
                         {...field}
-                        placeholder="e.g. Birthday gift · GOG winter sale…"
+                        placeholder={
+                          isPlan
+                            ? 'e.g. Recommended by Marta · looks like Hades…'
+                            : 'e.g. Birthday gift · GOG winter sale…'
+                        }
                         className={textInputClass}
                       />
                     )}
                   />
                 </div>
 
-                <StatusSummaryLine />
+                {!isPlan && <StatusSummaryLine />}
 
-                {createGame.isError && (
+                {activeMutation.isError && (
                   <div className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
-                    Couldn&apos;t add the game — {createGame.error.message}
+                    Couldn&apos;t {isPromote ? 'move' : 'add'} the game —{' '}
+                    {activeMutation.error.message}
                   </div>
                 )}
               </div>
@@ -350,7 +462,7 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selected || createGame.isPending}
+            disabled={!selected || activeMutation.isPending}
             className="flex items-center gap-2 rounded-[10px] px-5.5 py-2.5 text-[13.5px] font-bold disabled:cursor-not-allowed"
             style={
               selected
@@ -359,7 +471,15 @@ export const AddGameModal = ({ open, onOpenChange }: AddGameModalProps): React.J
             }
           >
             <Plus size={16} />
-            <span>{createGame.isPending ? 'Adding…' : 'Add to library'}</span>
+            <span>
+              {activeMutation.isPending
+                ? isPromote
+                  ? 'Moving…'
+                  : 'Adding…'
+                : isPlan
+                  ? 'Add to plan'
+                  : 'Add to library'}
+            </span>
           </button>
         </div>
       </DialogContent>

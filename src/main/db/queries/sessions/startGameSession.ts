@@ -43,7 +43,13 @@ export const startGameSession = async (gameId: number): Promise<Session | null> 
           ),
         )
         .orderBy(asc(stateEventsTable.occurredAt), asc(stateEventsTable.id));
-      for (const event of events) latestTypeByIteration.set(event.iterationId, event.type);
+      for (const event of events) {
+        // 'plan_to_play' es solo historial (ver schema.ts), no estado — sin
+        // esto, un juego recién pasado del Plan a la biblioteca tendría el
+        // plan como "último estado" y confundiría la lógica de abajo.
+        if (event.type === 'plan_to_play') continue;
+        latestTypeByIteration.set(event.iterationId, event.type);
+      }
     }
 
     const now = new Date();
