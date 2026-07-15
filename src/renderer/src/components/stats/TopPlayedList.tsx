@@ -23,9 +23,13 @@ const Cover = ({ url }: { url: string | null }): React.JSX.Element => {
 };
 
 // SPEC 10.7 / prototipo — ranking numerado top 5, sin barra (a diferencia de
-// Most Played), solo puesto + carátula + título + horas.
+// Most Played), solo puesto + carátula + título + horas. Mismo filtro de 0h
+// que MostPlayedList — ver el comentario ahí.
 export const TopPlayedList = ({ entries }: TopPlayedListProps): React.JSX.Element => {
-  const top = [...entries].sort((a, b) => b.hours - a.hours).slice(0, MAX_ENTRIES);
+  const top = entries
+    .filter((entry) => entry.hours > 0)
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, MAX_ENTRIES);
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">

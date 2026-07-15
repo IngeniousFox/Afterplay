@@ -27,9 +27,15 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
   );
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
+    // flex column + h-full: esta card vive en una grid junto a TopPlayedList
+    // (Stats.tsx), que suele salir más alta (hasta 5 filas) — la grid
+    // estira el div exterior a esa altura, pero sin esto el título y el SVG
+    // se quedaban apilados con su alto natural y todo el sobrante quedaba
+    // como hueco suelto DEBAJO, empujando el hexágono hacia arriba en vez de
+    // quedar centrado en el alto real de la card.
+    <div className="flex h-full flex-col rounded-[14px] border border-border bg-card px-5.5 py-5">
       <div className="mb-2 text-[14px] font-bold text-foreground">Genre Spread</div>
-      <div className="flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <svg width={220} height={208} viewBox="0 0 220 208">
           {RING_FRACTIONS.map((fraction) => (
             <polygon

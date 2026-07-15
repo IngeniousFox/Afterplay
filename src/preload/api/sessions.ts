@@ -9,4 +9,6 @@ export const sessionsApi = {
     ipcRenderer.invoke('sessions:getByIteration', iterationId),
   close: (id: number, endedAt: Date): Promise<Session | null> =>
     ipcRenderer.invoke('sessions:close', id, endedAt),
+  startForGame: (gameId: number): Promise<Session | null> =>
+    ipcRenderer.invoke('sessions:startForGame', gameId),
 };

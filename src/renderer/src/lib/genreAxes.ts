@@ -6,10 +6,21 @@ export const GENRE_AXES = ['RPG', 'Action', 'Adventure', 'Strategy', 'Sim', 'Puz
 
 export type GenreAxis = (typeof GENRE_AXES)[number];
 
+// Cubre los 23 géneros reales del catálogo de IGDB. IGDB no tiene ningún
+// género que se llame literalmente "Action" — los que en la práctica SON
+// acción (Shooter, Platform, Fighting, Arcade, Hack and slash/Beat 'em up)
+// están repartidos bajo otros nombres, así que es aquí donde aterrizan.
+// 'Music' (ritmo) e 'Indie' (una etiqueta de negocio, no de jugabilidad) no
+// encajan bien en ninguno de los 6 ejes — se dejan fuera a propósito
+// (mapGenreToAxis devuelve null para ellos).
 const GENRE_TO_AXIS: Record<string, GenreAxis> = {
   'Role-playing (RPG)': 'RPG',
   RPG: 'RPG',
-  "Hack and slash/Beat 'em up": 'RPG',
+  Fighting: 'Action',
+  Shooter: 'Action',
+  Platform: 'Action',
+  Arcade: 'Action',
+  "Hack and slash/Beat 'em up": 'Action',
   Adventure: 'Adventure',
   'Point-and-click': 'Adventure',
   'Visual Novel': 'Adventure',

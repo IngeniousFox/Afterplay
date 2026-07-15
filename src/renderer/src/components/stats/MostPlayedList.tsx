@@ -24,9 +24,16 @@ const Cover = ({ url }: { url: string | null }): React.JSX.Element => {
 };
 
 // SPEC 10.7 / prototipo — top 6 por horas, barra proporcional al más jugado
-// de la lista (no al total de la biblioteca).
+// de la lista (no al total de la biblioteca). Fuera los juegos con 0h en la
+// ventana activa: con un año concreto seleccionado, `entries` trae TODOS los
+// juegos de la biblioteca (para que Genre Radar pueda sumar sobre el mismo
+// conjunto), incluidos los que se añadieron después de ese año — sin este
+// filtro, rellenaban hasta 6 huecos con juegos que ese año ni existían aún.
 export const MostPlayedList = ({ entries }: MostPlayedListProps): React.JSX.Element => {
-  const top = [...entries].sort((a, b) => b.hours - a.hours).slice(0, MAX_ENTRIES);
+  const top = entries
+    .filter((entry) => entry.hours > 0)
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, MAX_ENTRIES);
   const maxHours = Math.max(1, ...top.map((entry) => entry.hours));
 
   return (

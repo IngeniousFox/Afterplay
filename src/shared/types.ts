@@ -104,6 +104,13 @@ export type CreateGameWithDetailsInput = {
 // tamaño ya viene calculado desde el main, no hace falta un segundo viaje.
 export type DirectoryPickResult = { path: string; sizeBytes: number };
 
+// Botón Play — lanzar el .exe configurado (games:launchExecutable). 'missing'
+// cuando la ruta guardada ya no existe (se movió/desinstaló el juego desde
+// que se guardó); 'error' para cualquier otro fallo al abrirlo (shell.openPath
+// devuelve un mensaje descriptivo, ej. permisos).
+export type LaunchExecutableResult =
+  { ok: true } | { ok: false; reason: 'missing' } | { ok: false; reason: 'error'; message: string };
+
 export type { IgdbGameDetail, IgdbSearchResult } from '../main/igdb/types';
 
 export type { HltbTimes } from '../main/hltb/types';

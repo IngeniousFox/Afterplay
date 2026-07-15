@@ -85,18 +85,49 @@ export class ProcessWatcher {
         }
 
         // Arranques: corriendo ahora y sin sesión que el watcher siga todavía.
-        for (const [gameId, info] of running) {
-          if (this.active.has(gameId)) continue;
+        const untrackedGameIds = Array.from(running.keys()).filter(
+          (gameId) => !this.active.has(gameId),
+        );
+        if (untrackedGameIds.length > 0) {
+          // Alguno de estos puede tener YA una sesión abierta que el watcher
+          // no esté siguiendo todavía — ej. el botón Play, que lanza el .exe
+          // y abre su propia sesión automática (ver ActionBar/
+          // startGameSession) antes de que este ciclo la vea. Sin esto,
+          // startGameSession() de abajo la detectaría como "ya abierta" y
+          // devolvería null (no se duplica) — pero sin quedar NUNCA en
+          // `this.active`, así que su cierre no se detectaría jamás (la
+          // sección de "Cierres" de más abajo solo mira `this.active`): había
+          // que esperar SIEMPRE al botón Stop manual. Se ADOPTA en vez de
+          // dejarla huérfana — misma idea que reconcileOpenSessions, pero
+          // repetida en cada ciclo, no solo al arrancar la app.
+          const openSessions = await getOpenSessions();
+          for (const gameId of untrackedGameIds) {
+            const info = running.get(gameId);
+            if (!info) continue;
 
-          // Deja el juego en "Playing" (creando/reanudando playthrough) y cuelga
-          // la sesión. null = ya había una sesión abierta (no se duplica).
-          const session = await startGameSession(gameId);
-          if (session) {
-            this.active.set(gameId, { pid: info.pid, sessionId: session.id, title: info.title });
-            console.log(
-              `[watcher] [start] "${info.title}" (pid ${info.pid}) -> sesion ${session.id}`,
-            );
-            changed = true;
+            const existingOpen = openSessions.find((session) => session.gameId === gameId);
+            if (existingOpen) {
+              this.active.set(gameId, {
+                pid: info.pid,
+                sessionId: existingOpen.sessionId,
+                title: info.title,
+              });
+              console.log(
+                `[watcher] [adopt] "${info.title}" (pid ${info.pid}) -> sesion ${existingOpen.sessionId}`,
+              );
+              continue;
+            }
+
+            // Deja el juego en "Playing" (creando/reanudando playthrough) y
+            // cuelga la sesión.
+            const session = await startGameSession(gameId);
+            if (session) {
+              this.active.set(gameId, { pid: info.pid, sessionId: session.id, title: info.title });
+              console.log(
+                `[watcher] [start] "${info.title}" (pid ${info.pid}) -> sesion ${session.id}`,
+              );
+              changed = true;
+            }
           }
         }
 

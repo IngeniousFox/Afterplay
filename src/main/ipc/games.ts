@@ -1,8 +1,11 @@
+import { existsSync } from 'fs';
+import { ipcMain, shell } from 'electron';
 import { handleDb } from './dbHandle';
 import type {
   CreateGameInput,
   CreateGameWithDetailsInput,
   GameRow,
+  LaunchExecutableResult,
   UpdateGamePatch,
 } from '../../shared/types';
 import { createGame } from '../db/queries/games/createGame';
@@ -60,4 +63,22 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:delete', async (_event, id: number) => {
     return deleteGame(id);
   });
+
+  // Botón Play — no es acceso a datos (ipcMain.handle directo, no handleDb).
+  // Comprobación de existencia propia ANTES de shell.openPath: así el
+  // mensaje ("no se encontró el ejecutable") es nuestro y está en español,
+  // en vez del texto crudo que devuelva el sistema operativo.
+  ipcMain.handle(
+    'games:launchExecutable',
+    async (_event, executablePath: string): Promise<LaunchExecutableResult> => {
+      if (!existsSync(executablePath)) {
+        return { ok: false, reason: 'missing' };
+      }
+      const error = await shell.openPath(executablePath);
+      if (error) {
+        return { ok: false, reason: 'error', message: error };
+      }
+      return { ok: true };
+    },
+  );
 };

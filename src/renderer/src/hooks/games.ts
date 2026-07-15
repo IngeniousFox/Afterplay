@@ -6,6 +6,7 @@ import type {
   GameDetail,
   GameListItem,
   GameRow,
+  LaunchExecutableResult,
   StateEvent,
   UpdateGamePatch,
 } from '../../../shared/types';
@@ -86,6 +87,19 @@ export const useDeleteGame = (): UseMutationResult<boolean, Error, number, unkno
     },
   });
 };
+
+// Sin invalidación: lanzar el .exe no cambia ningún dato — la sesión (si el
+// lanzamiento sale bien) la abre ActionBar por separado, con su propia
+// mutation de siempre.
+export const useLaunchExecutable = (): UseMutationResult<
+  LaunchExecutableResult,
+  Error,
+  string,
+  unknown
+> =>
+  useMutation({
+    mutationFn: (executablePath: string) => window.api.games.launchExecutable(executablePath),
+  });
 
 type GameStatus = Omit<UseQueryResult<GameDetail | null, Error>, 'data'> & {
   currentState: StateEvent['type'] | null;
