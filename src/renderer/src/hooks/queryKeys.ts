@@ -16,6 +16,9 @@ export const queryKeys = {
   spend: {
     all: ['spend'] as const,
   },
+  stateEvents: {
+    all: ['stateEvents'] as const,
+  },
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
     details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,

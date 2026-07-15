@@ -241,14 +241,16 @@ const SessionsNavColumn = (): React.JSX.Element => {
   );
 };
 
-// Stats no tiene todavía un detalle por juego que filtrar (Bloque 5B) — la
-// selección aquí es solo visual, estado local que se pierde al cambiar de
-// sección, no una navegación real como en Sessions.
+// La selección aquí SÍ es navegación real (Bloque 5F, mismo patrón que
+// Sessions): vive en el query param `?game=` de la propia URL de /stats,
+// así que Stats.tsx lee el mismo estado sin necesitar un context aparte.
 const StatsNavColumn = (): React.JSX.Element => {
   const { data: games = [] } = useGames();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const filtered = useFilteredGames(search);
+  const gameParam = searchParams.get('game');
+  const selectedId = gameParam ? Number(gameParam) : null;
 
   return (
     <MiddleColumnShell
@@ -261,14 +263,14 @@ const StatsNavColumn = (): React.JSX.Element => {
         Icon={BarChart3}
         subtitle="Overview & charts"
         selected={selectedId === null}
-        onClick={() => setSelectedId(null)}
+        onClick={() => setSearchParams({})}
       />
       {filtered.map((game) => (
         <GameRow
           key={game.id}
           game={game}
           selected={game.id === selectedId}
-          onClick={() => setSelectedId(game.id)}
+          onClick={() => setSearchParams({ game: String(game.id) })}
           subtitle={<StatusSubtitle game={game} showLive={false} />}
           rightLabel={formatHours(game.totalHours)}
         />

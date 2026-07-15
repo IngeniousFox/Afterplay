@@ -118,6 +118,9 @@ export type GameListItem = {
   id: number;
   title: string;
   coverUrl: string | null;
+  // Solo para el Genre Radar (Bloque 5E) — se usa genres[0] como género
+  // "principal" del juego, igual que officialPlatforms?.[0] en otros sitios.
+  genres: string[] | null;
   totalHours: number;
   currentState: StateEvent['type'] | null;
   isLive: boolean;
@@ -131,6 +134,14 @@ export type GameListItem = {
 // Un solo tipo compartido: el main la persiste (config/store.ts), el
 // renderer la usa para formatear cualquier datetime (lib/format.ts).
 export type TimeFormat = '12h' | '24h';
+
+// Cambio de estado suelto para el desglose "Status Changes" de Stats por
+// año (Bloque 5D) — ver getAllStateEvents.ts.
+export type StateEventSummary = {
+  gameId: number;
+  type: StateEvent['type'];
+  occurredAt: Date;
+};
 
 // Gasto suelto para las métricas globales de Stats (Bloque 5B) — ver
 // getAllSpendEvents.ts. Sin gameId/type/note: esta vista solo suma importes

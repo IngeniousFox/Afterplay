@@ -1,29 +1,38 @@
-import { Calendar, Check, ChevronDown, Clock, DollarSign, Gamepad2, Gauge } from 'lucide-react';
+import { Clock, DollarSign, Gamepad2, Gauge } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MetricCard } from '../components/library/detail/MetricsRow';
-import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
+import { GenreRadar } from '../components/stats/GenreRadar';
+import { MostPlayedList } from '../components/stats/MostPlayedList';
+import { StatusBreakdown } from '../components/stats/StatusBreakdown';
+import { TopPlayedList } from '../components/stats/TopPlayedList';
+import type { Year } from '../components/stats/YearPicker';
+import { YearPicker } from '../components/stats/YearPicker';
 import { useGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
 import { useAllSpendEvents } from '../hooks/spend';
+import { useAllStateEvents } from '../hooks/stateEvents';
 import { formatHours, formatMoney } from '../lib/format';
+import { mapGenreToAxis } from '../lib/genreAxes';
+import { GameStats } from './GameStats';
 
-type Year = 'all' | number;
-
-// Bloque 5B / prototipo (Backlog.html, panel STATS global) — "Games
-// Tracked"/"Games Played" según haya año elegido o no, sin año es el total
-// exacto de useGames() (misma fuente que Library/detalle); con año, solo
-// cuenta sesiones REALES de ese año (getAllSessions ya trae fecha exacta) —
-// manualTotalPlayed no tiene fecha propia, así que solo puede sumar al
-// total "All Time", nunca a un año concreto (adaptación deliberada: el
-// prototipo, con datos de mentira, reparte esas horas a partes iguales
-// entre los años del juego, un atajo sin sentido con datos reales).
+// Bloque 5B/5C/5D/5E — panel global de Stats: 4 métricas + año activo,
+// heatmap de actividad, Most/Top Played, Status Breakdown y Genre Radar.
+// Filtrar a un juego concreto (columna de nav) lleva a GameStats.tsx, un
+// panel bastante distinto — este archivo solo decide cuál de los dos tocan.
 export const Stats = (): React.JSX.Element => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const gameParam = searchParams.get('game');
+  const selectedGameId = gameParam ? Number(gameParam) : null;
+
   const [selectedYear, setSelectedYear] = useState<Year>('all');
-  const [yearMenuOpen, setYearMenuOpen] = useState(false);
 
   const { data: games = [] } = useGames();
   const { data: sessions = [] } = useAllSessions();
   const { data: spendEvents = [] } = useAllSpendEvents();
+  const { data: stateEvents = [] } = useAllStateEvents();
 
   const years = useMemo(() => {
     const set = new Set<number>();
@@ -42,15 +51,29 @@ export const Stats = (): React.JSX.Element => {
     return map;
   }, [sessions, selectedYear]);
 
+  // Horas por juego para EL AÑO ACTIVO — base compartida de Most/Top Played
+  // y Genre Radar. "All Time" usa game.totalHours (misma fuente que
+  // Library/detalle, incluye manualTotalPlayed); un año concreto solo puede
+  // venir de sesiones reales con fecha (mismo motivo que el resto de Stats:
+  // ver el comentario de más abajo sobre por qué no hay atajo mejor).
+  const hoursByGame = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const game of games) {
+      const hours =
+        selectedYear === 'all'
+          ? game.totalHours
+          : (trackedSecondsByGameInYear?.get(game.id) ?? 0) / 3600;
+      map.set(game.id, hours);
+    }
+    return map;
+  }, [games, selectedYear, trackedSecondsByGameInYear]);
+
   const totalGames =
     selectedYear === 'all'
       ? games.length
-      : games.filter((game) => (trackedSecondsByGameInYear?.get(game.id) ?? 0) > 0).length;
+      : games.filter((game) => (hoursByGame.get(game.id) ?? 0) > 0).length;
 
-  const totalHours =
-    selectedYear === 'all'
-      ? games.reduce((sum, game) => sum + game.totalHours, 0)
-      : [...(trackedSecondsByGameInYear?.values() ?? [])].reduce((sum, sec) => sum + sec, 0) / 3600;
+  const totalHours = [...hoursByGame.values()].reduce((sum, hours) => sum + hours, 0);
 
   const totalSpent =
     selectedYear === 'all'
@@ -61,9 +84,44 @@ export const Stats = (): React.JSX.Element => {
 
   const costPerHour = totalHours > 0 ? totalSpent / totalHours : null;
 
-  const yearLabel = selectedYear === 'all' ? 'All Time' : String(selectedYear);
   const gamesLabel = selectedYear === 'all' ? 'GAMES TRACKED' : 'GAMES PLAYED';
   const spentLabel = selectedYear === 'all' ? 'TOTAL SPENT' : `SPENT IN ${selectedYear}`;
+
+  const playedEntries = useMemo(
+    () =>
+      games.map((game) => ({
+        id: game.id,
+        title: game.title,
+        coverUrl: game.coverUrl,
+        hours: hoursByGame.get(game.id) ?? 0,
+      })),
+    [games, hoursByGame],
+  );
+
+  // Genre Radar — cada juego cuenta para el eje de su género principal
+  // (genres[0]), con las horas del año activo. Respeta el filtro de año
+  // porque usa hoursByGame, que ya lo respeta. Juegos sin género reconocido
+  // (mapGenreToAxis devuelve null) no cuentan para ningún eje.
+  const minutesByAxis = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const game of games) {
+      const axis = mapGenreToAxis(game.genres?.[0] ?? null);
+      if (axis === null) continue;
+      const hours = hoursByGame.get(game.id) ?? 0;
+      totals[axis] = (totals[axis] ?? 0) + hours * 60;
+    }
+    return totals;
+  }, [games, hoursByGame]);
+
+  if (selectedGameId !== null) {
+    return (
+      <GameStats
+        gameId={selectedGameId}
+        onOpenGame={() => navigate(`/games/${selectedGameId}`)}
+        onClearFilter={() => navigate('/stats')}
+      />
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
@@ -78,32 +136,7 @@ export const Stats = (): React.JSX.Element => {
             </p>
           </div>
 
-          <Popover open={yearMenuOpen} onOpenChange={setYearMenuOpen}>
-            <PopoverTrigger className="flex flex-none items-center gap-2.25 rounded-[10px] border border-input bg-white/[0.03] px-3.75 py-2.25 text-[13.5px] font-bold text-foreground hover:bg-white/[0.06]">
-              <Calendar size={15} />
-              <span>{yearLabel}</span>
-              <ChevronDown size={15} />
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="max-h-65 w-37.5 overflow-y-auto border-input bg-[rgba(23,25,24,.99)] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.55)]"
-            >
-              {(['all', ...years] as Year[]).map((year) => (
-                <button
-                  key={year}
-                  type="button"
-                  onClick={() => {
-                    setSelectedYear(year);
-                    setYearMenuOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between rounded-[8px] px-2.75 py-2.25 text-left text-[13.5px] font-semibold text-foreground hover:bg-white/[0.06]"
-                >
-                  <span>{year === 'all' ? 'All Time' : year}</span>
-                  {year === selectedYear && <Check size={14} className="text-primary" />}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
+          <YearPicker years={years} value={selectedYear} onChange={setSelectedYear} />
         </div>
 
         <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
@@ -115,6 +148,24 @@ export const Stats = (): React.JSX.Element => {
             label="AVG COST / HOUR"
             value={costPerHour !== null ? formatMoney(costPerHour) : '—'}
           />
+        </div>
+
+        <div className="mt-4.5">
+          <ActivityHeatmap sessions={sessions} year={selectedYear} />
+        </div>
+
+        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+          <MostPlayedList entries={playedEntries} />
+          {selectedYear === 'all' ? (
+            <StatusBreakdown mode="all-time" games={games} />
+          ) : (
+            <StatusBreakdown mode="year" stateEvents={stateEvents} year={selectedYear} />
+          )}
+        </div>
+
+        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+          <TopPlayedList entries={playedEntries} />
+          <GenreRadar minutesByAxis={minutesByAxis} />
         </div>
       </div>
     </div>

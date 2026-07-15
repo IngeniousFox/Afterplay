@@ -22,7 +22,12 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // biblioteca como el rail lateral (MiddleColumn) leen de este mismo query
   // vía useGames(), así que se ordenan igual en los dos sin más esfuerzo.
   const games = await db
-    .select({ id: gamesTable.id, title: gamesTable.title, coverUrl: gamesTable.coverUrl })
+    .select({
+      id: gamesTable.id,
+      title: gamesTable.title,
+      coverUrl: gamesTable.coverUrl,
+      genres: gamesTable.genres,
+    })
     .from(gamesTable)
     .orderBy(sql`${gamesTable.title} collate nocase`);
 
@@ -127,6 +132,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       id: game.id,
       title: game.title,
       coverUrl: game.coverUrl,
+      genres: game.genres,
       totalHours: manualHours + trackedHours,
       currentState: latestStateEvent?.type ?? null,
       isLive: liveSince !== null,
