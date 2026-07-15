@@ -19,7 +19,7 @@ export const YearDropdown = ({
   year,
   onSelectYear,
   minYear = 1970,
-  maxYear = CURRENT_YEAR + 1,
+  maxYear = CURRENT_YEAR,
 }: YearDropdownProps): React.JSX.Element => {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);

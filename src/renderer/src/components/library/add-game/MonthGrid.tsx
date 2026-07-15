@@ -23,11 +23,16 @@ const MONTH_LABELS = [
   'Dec',
 ];
 
+const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth();
+
 // Rejilla de meses + año navegable — react-day-picker no trae un modo "solo
 // mes" de fábrica, y montar un calendario de días completo para elegir un
-// mes sería enseñar más de lo que hace falta.
+// mes sería enseñar más de lo que hace falta. Lo que se registra aquí ya
+// pasó, nunca es una fecha futura: ni el año ni, dentro del año actual, los
+// meses todavía no llegados se pueden elegir.
 export const MonthGrid = ({ value, onSelect }: MonthGridProps): React.JSX.Element => {
-  const [year, setYear] = useState(value?.getFullYear() ?? new Date().getFullYear());
+  const [year, setYear] = useState(value?.getFullYear() ?? CURRENT_YEAR);
 
   return (
     <div className="w-56 p-3">
@@ -42,8 +47,9 @@ export const MonthGrid = ({ value, onSelect }: MonthGridProps): React.JSX.Elemen
         <YearDropdown year={year} onSelectYear={setYear} />
         <button
           type="button"
+          disabled={year >= CURRENT_YEAR}
           onClick={() => setYear((current) => current + 1)}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
         >
           <ChevronRight size={16} />
         </button>
@@ -51,13 +57,15 @@ export const MonthGrid = ({ value, onSelect }: MonthGridProps): React.JSX.Elemen
       <div className="grid grid-cols-3 gap-1.5">
         {MONTH_LABELS.map((label, index) => {
           const isSelected = value?.getFullYear() === year && value.getMonth() === index;
+          const isFuture = year > CURRENT_YEAR || (year === CURRENT_YEAR && index > CURRENT_MONTH);
           return (
             <button
               key={label}
               type="button"
+              disabled={isFuture}
               onClick={() => onSelect(new Date(year, index, 1))}
               className={cn(
-                'rounded-md py-2 text-sm hover:bg-muted',
+                'rounded-md py-2 text-sm hover:bg-muted disabled:pointer-events-none disabled:opacity-40',
                 isSelected ? 'font-semibold' : 'text-foreground',
               )}
               style={

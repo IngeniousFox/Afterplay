@@ -8,11 +8,14 @@ import { YearGrid } from './YearGrid';
 
 // Sin esto, react-day-picker arranca el desplegable de año en "hace 100
 // años" por defecto (documentado, y comprobado en vivo: con hoy en 2026
-// abría en 1926) — mismo rango 1970–hoy+1 que ya usa YearGrid para el otro
-// modo de precisión, para que ambos se comporten igual.
-const CURRENT_YEAR = new Date().getFullYear();
+// abría en 1926). El tope de arriba es HOY, no hoy+1: lo que se registra
+// aquí (sesiones, gastos, cambios de estado) ya pasó, nunca es una fecha
+// futura — mismo criterio en los tres pickers (día/mes/año, ver
+// MonthGrid/YearGrid/YearDropdown).
+const TODAY = new Date();
+const CURRENT_YEAR = TODAY.getFullYear();
 const CALENDAR_START_MONTH = new Date(1970, 0);
-const CALENDAR_END_MONTH = new Date(CURRENT_YEAR + 1, 11);
+const CALENDAR_END_MONTH = new Date(CURRENT_YEAR, 11);
 
 export type DatePrecision = 'year' | 'month' | 'day';
 
@@ -128,6 +131,7 @@ export const DateWithPrecisionPicker = ({
                   captionLayout="dropdown"
                   startMonth={CALENDAR_START_MONTH}
                   endMonth={CALENDAR_END_MONTH}
+                  disabled={{ after: TODAY }}
                   components={{ Dropdown: CalendarDropdown }}
                   selected={value ? parseIsoDate(value.isoDate) : undefined}
                   onSelect={(date) => {
