@@ -1,8 +1,7 @@
-// Primer import a propósito: carga el .env (credenciales de Twitch/IGDB, y
-// las de Turso cuando toque) en process.env antes de que nada las lea.
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
 import { app, BrowserWindow, dialog, shell } from 'electron';
+import { copyFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 import { runMigrations, runSyncCycle } from './db';
@@ -39,6 +38,36 @@ let isQuitting = false;
 // call — including the lazy one inside getDb() — so it's the very first thing
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
+
+// Credenciales (.env: Turso, Twitch/IGDB, SteamGridDB) en process.env antes
+// de que nada las lea — todo el código las consulta en el momento de usarlas
+// (hasRemoteConfigured, getCredentials...), nunca al importar, así que basta
+// con cargarlas aquí, ya con el nombre de la app fijado.
+//
+// La app INSTALADA lee %APPDATA%/Afterplay/.env: el instalador no empaqueta
+// el .env a propósito (electron-builder.yml lo excluye — secretos fuera del
+// asar) y el cwd de una app instalada no es el proyecto, así que sin esa
+// copia arrancaría sin Turso ni IGDB en silencio. Es la misma carpeta donde
+// ya viven la DB y config.json, y sobrevive a reinstalaciones.
+//
+// En DESARROLLO se lee el .env del proyecto (la fuente de verdad) y se
+// REFRESCA la copia de %APPDATA% en cada arranque — así rotar un token en el
+// proyecto se propaga a la app instalada con solo arrancar dev una vez,
+// sin tener que acordarse de copiarlo a mano.
+const userDataEnvPath = join(app.getPath('userData'), '.env');
+if (app.isPackaged) {
+  loadDotenv({ path: userDataEnvPath });
+} else {
+  loadDotenv();
+  const projectEnvPath = join(process.cwd(), '.env');
+  if (existsSync(projectEnvPath)) {
+    try {
+      copyFileSync(projectEnvPath, userDataEnvPath);
+    } catch (error) {
+      console.warn('[env] no se pudo refrescar la copia de .env en userData:', error);
+    }
+  }
+}
 
 // También tiene que ir antes de whenReady() — Electron lo exige para poder
 // registrar esquemas con privilegios (ver images/protocol.ts).

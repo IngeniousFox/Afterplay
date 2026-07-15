@@ -14,8 +14,9 @@ import type { Year } from '../components/stats/YearPicker';
 import { YearPicker } from '../components/stats/YearPicker';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useGame, useGames } from '../hooks/games';
-import { formatElapsed, formatHours, formatMoney } from '../lib/format';
+import { formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
+import { longestStreak, playedDayKeys } from '../lib/streaks';
 
 type GameStatsProps = {
   gameId: number;
@@ -73,6 +74,10 @@ export const GameStats = ({
       ? closedRealSessions.reduce((sum, session) => sum + (session.durationSec ?? 0), 0) /
         closedRealSessions.length
       : 0;
+  // La racha más larga DE ESTE JUEGO, de todos los tiempos (aquí no hay
+  // filtro de año — el del heatmap de abajo es solo suyo). Días con al menos
+  // una sesión trackeada real, ver lib/streaks.ts.
+  const longestDailyStreak = longestStreak(playedDayKeys(realSessions));
 
   const ranked = [...allGames].sort((a, b) => b.totalHours - a.totalHours);
   const rankIndex = ranked.findIndex((g) => g.id === gameId);
@@ -204,10 +209,16 @@ export const GameStats = ({
                 {formatElapsed(avgSessionSec)}
               </span>
             </div>
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between border-b border-white/5 py-2">
               <span className="text-[12.5px] text-muted-foreground">Longest</span>
               <span className="text-[14px] font-bold tabular-nums text-foreground">
                 {formatElapsed(longestSessionSec)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-[12.5px] text-muted-foreground">Longest daily streak</span>
+              <span className="text-[14px] font-bold tabular-nums text-foreground">
+                {pluralize(longestDailyStreak, 'day')}
               </span>
             </div>
           </div>

@@ -3,9 +3,12 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
+import { GameAgeDonut } from '../components/stats/GameAgeDonut';
 import { GenreRadar } from '../components/stats/GenreRadar';
+import { HoursByMonthChart } from '../components/stats/HoursByMonthChart';
 import { MostPlayedList } from '../components/stats/MostPlayedList';
 import { StatusBreakdown } from '../components/stats/StatusBreakdown';
+import { StreakCard } from '../components/stats/StreakCard';
 import { TopPlayedList } from '../components/stats/TopPlayedList';
 import type { Year } from '../components/stats/YearPicker';
 import { YearPicker } from '../components/stats/YearPicker';
@@ -98,6 +101,17 @@ export const Stats = (): React.JSX.Element => {
     [games, hoursByGame],
   );
 
+  // Donut de edad de juegos — misma base year-aware (hoursByGame) que
+  // Most/Top Played y Genre Radar.
+  const ageEntries = useMemo(
+    () =>
+      games.map((game) => ({
+        hours: hoursByGame.get(game.id) ?? 0,
+        releaseYear: game.releaseYear,
+      })),
+    [games, hoursByGame],
+  );
+
   // Genre Radar — cada juego cuenta para el eje de su género principal
   // (genres[0]), con las horas del año activo. Respeta el filtro de año
   // porque usa hoursByGame, que ya lo respeta. Juegos sin género reconocido
@@ -155,6 +169,11 @@ export const Stats = (): React.JSX.Element => {
         </div>
 
         <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+          <HoursByMonthChart sessions={sessions} year={selectedYear} />
+          <StreakCard sessions={sessions} year={selectedYear} />
+        </div>
+
+        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
           <MostPlayedList entries={playedEntries} />
           {selectedYear === 'all' ? (
             <StatusBreakdown mode="all-time" games={games} />
@@ -166,6 +185,10 @@ export const Stats = (): React.JSX.Element => {
         <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
           <TopPlayedList entries={playedEntries} />
           <GenreRadar minutesByAxis={minutesByAxis} />
+        </div>
+
+        <div className="mt-4.5">
+          <GameAgeDonut entries={ageEntries} year={selectedYear} />
         </div>
       </div>
     </div>

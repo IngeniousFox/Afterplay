@@ -31,6 +31,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       title: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
       genres: gamesTable.genres,
+      releaseYear: gamesTable.releaseYear,
     })
     .from(gamesTable)
     .where(eq(gamesTable.planned, false))
@@ -143,6 +144,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       title: game.title,
       coverUrl: game.coverUrl,
       genres: game.genres,
+      releaseYear: game.releaseYear,
       totalHours: manualHours + trackedHours,
       currentState: latestStateEvent?.type ?? null,
       isLive: liveSince !== null,

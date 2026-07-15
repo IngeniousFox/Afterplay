@@ -1,10 +1,15 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { formatElapsed, formatHours, pluralize } from '../../lib/format';
+import { useTimeFormat } from '../../hooks/settings';
 
 type HeatmapSession = {
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
   isManual: boolean;
+  // Solo lo trae el heatmap global (SessionWithGame) — en el de un juego
+  // concreto todas las sesiones son suyas y no hace falta título.
+  gameTitle?: string;
 };
 
 type ActivityHeatmapProps = {
@@ -80,6 +85,10 @@ export const ActivityHeatmap = ({
   // desbordaba la tarjeta.
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  // Celda bajo el ratón + dónde anclar su tooltip (coordenadas relativas al
+  // contenedor de la rejilla, calculadas al entrar en la celda).
+  const [hovered, setHovered] = useState<{ dayMs: number; x: number; y: number } | null>(null);
+  const { data: timeFormat = '24h' } = useTimeFormat();
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -91,7 +100,7 @@ export const ActivityHeatmap = ({
     return () => observer.disconnect();
   }, []);
 
-  const { cells, monthLabels, weeks } = useMemo(() => {
+  const { cells, monthLabels, weeks, sessionsByDay, secondsByDay } = useMemo(() => {
     const today = startOfDay(new Date());
 
     let rangeStart: Date;
@@ -114,11 +123,22 @@ export const ActivityHeatmap = ({
     const weeks = Math.max(1, Math.ceil(daysInclusive / 7));
 
     const secondsByDay = new Map<number, number>();
+    // Para el tooltip: las sesiones de cada día (aquí también las aún
+    // abiertas — el nivel de color solo cuenta las cerradas, pero al pasar
+    // el ratón tiene sentido ver la que está en marcha).
+    const sessionsByDay = new Map<number, HeatmapSession[]>();
     for (const session of sessions) {
-      if (session.isManual || session.endedAt === null) continue;
+      if (session.isManual) continue;
       const dayMs = startOfDayMs(session.startedAt);
       if (dayMs < rangeStart.getTime() || dayMs > rangeEnd.getTime()) continue;
+      const daySessions = sessionsByDay.get(dayMs) ?? [];
+      daySessions.push(session);
+      sessionsByDay.set(dayMs, daySessions);
+      if (session.endedAt === null) continue;
       secondsByDay.set(dayMs, (secondsByDay.get(dayMs) ?? 0) + (session.durationSec ?? 0));
+    }
+    for (const daySessions of sessionsByDay.values()) {
+      daySessions.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
     }
 
     const maxSeconds = Math.max(0, ...secondsByDay.values());
@@ -134,7 +154,7 @@ export const ActivityHeatmap = ({
 
     // Columna-mayor (semana a semana), 7 filas por columna — mismo orden que
     // el `grid-auto-flow:column` del prototipo.
-    const cells: { level: number; dayMs: number }[] = [];
+    const cells: { level: number; dayMs: number; inRange: boolean }[] = [];
     const monthLabels: string[] = [];
     let previousMonth = -1;
 
@@ -166,11 +186,11 @@ export const ActivityHeatmap = ({
         const inRange =
           dayMs <= Math.min(rangeEnd.getTime(), today.getTime()) &&
           (year === 'all' || dayDate.getFullYear() === year);
-        cells.push({ level: inRange ? levelFor(secondsByDay.get(dayMs) ?? 0) : 0, dayMs });
+        cells.push({ level: inRange ? levelFor(secondsByDay.get(dayMs) ?? 0) : 0, dayMs, inRange });
       }
     }
 
-    return { cells, monthLabels, weeks };
+    return { cells, monthLabels, weeks, sessionsByDay, secondsByDay };
   }, [sessions, year]);
 
   // Celda cuadrada que hace que la rejilla mida EXACTAMENTE el ancho del
@@ -201,7 +221,7 @@ export const ActivityHeatmap = ({
         </div>
       </div>
 
-      <div ref={containerRef}>
+      <div ref={containerRef} className="relative">
         {cellPx > 0 && (
           <>
             {/* Fila de meses — mismas columnas de semana que la rejilla de
@@ -247,10 +267,109 @@ export const ActivityHeatmap = ({
                 <div
                   key={cell.dayMs}
                   className="rounded-[3px]"
-                  style={{ background: LEVEL_COLORS[cell.level] }}
+                  style={{
+                    background: LEVEL_COLORS[cell.level],
+                    boxShadow:
+                      hovered?.dayMs === cell.dayMs
+                        ? '0 0 0 1.5px rgba(255,255,255,.55)'
+                        : undefined,
+                  }}
+                  // Solo días reales del rango — el futuro y los restos de
+                  // diciembre anterior no tienen nada que contar.
+                  onMouseEnter={
+                    cell.inRange
+                      ? (event) => {
+                          const container = containerRef.current;
+                          if (!container) return;
+                          const cellRect = event.currentTarget.getBoundingClientRect();
+                          const containerRect = container.getBoundingClientRect();
+                          // Anclado al centro-arriba de la celda, con la X
+                          // acotada para que el tooltip no se salga de la
+                          // tarjeta en las columnas de los extremos.
+                          const x = Math.min(
+                            Math.max(cellRect.left - containerRect.left + cellRect.width / 2, 110),
+                            containerRect.width - 110,
+                          );
+                          setHovered({
+                            dayMs: cell.dayMs,
+                            x,
+                            y: cellRect.top - containerRect.top,
+                          });
+                        }
+                      : undefined
+                  }
+                  onMouseLeave={cell.inRange ? () => setHovered(null) : undefined}
                 />
               ))}
             </div>
+
+            {hovered &&
+              (() => {
+                const daySessions = sessionsByDay.get(hovered.dayMs) ?? [];
+                const totalSeconds = secondsByDay.get(hovered.dayMs) ?? 0;
+                const shown = daySessions.slice(0, 6);
+                const hiddenCount = daySessions.length - shown.length;
+                const dateLabel = new Date(hovered.dayMs).toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                });
+                return (
+                  <div
+                    className="pointer-events-none absolute z-10 w-55 rounded-[10px] border border-input bg-[rgba(23,25,24,.99)] px-3.25 py-2.75 shadow-[0_18px_50px_rgba(0,0,0,.55)]"
+                    style={{
+                      left: hovered.x,
+                      top: hovered.y - 9,
+                      transform: 'translate(-50%, -100%)',
+                    }}
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12px] font-bold text-foreground">{dateLabel}</span>
+                      {totalSeconds > 0 && (
+                        <span className="text-[12px] font-bold text-primary tabular-nums">
+                          {formatHours(totalSeconds / 3600)}
+                        </span>
+                      )}
+                    </div>
+
+                    {daySessions.length === 0 ? (
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">No sessions</div>
+                    ) : (
+                      <div className="mt-1.5 flex flex-col gap-1">
+                        {shown.map((session, index) => (
+                          <div key={index} className="flex items-center gap-1.75 text-[11.5px]">
+                            <span className="h-1.5 w-1.5 flex-none rounded-full bg-primary/70" />
+                            <span className="flex-none text-muted-foreground tabular-nums">
+                              {session.startedAt.toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: timeFormat === '12h',
+                              })}
+                            </span>
+                            <span className="flex-none font-semibold text-foreground tabular-nums">
+                              {session.endedAt === null ? (
+                                <span className="text-primary">live</span>
+                              ) : (
+                                formatElapsed(session.durationSec ?? 0)
+                              )}
+                            </span>
+                            {session.gameTitle && (
+                              <span className="truncate text-muted-foreground">
+                                — {session.gameTitle}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {hiddenCount > 0 && (
+                          <div className="text-[11px] text-muted-foreground/70">
+                            +{pluralize(hiddenCount, 'more session')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
           </>
         )}
       </div>

@@ -86,6 +86,13 @@
   --sidebar-accent-foreground: #eaece9;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #2fdc7e;
+  /* Acentos del prototipo (Backlog.html los define en su raíz) — varias
+   * barras de progreso portadas usan gradientes var(--ac)/var(--ac2) tal
+   * cual; sin declararlas aquí, esos gradientes se resolvían a NADA y las
+   * barras quedaban invisibles (bug real: Hours per month, Share of your
+   * playtime y Time per playthrough estuvieron sin pintar por esto). */
+  --ac: #2fdc7e;
+  --ac2: #1c7d4a;
 }
 
 .dark {
@@ -121,6 +128,8 @@
   --sidebar-accent-foreground: #eaece9;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #2fdc7e;
+  --ac: #2fdc7e;
+  --ac2: #1c7d4a;
 }
 
 @layer base {

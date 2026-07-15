@@ -147,6 +147,9 @@ export type GameListItem = {
   // Solo para el Genre Radar (Bloque 5E) — se usa genres[0] como género
   // "principal" del juego, igual que officialPlatforms?.[0] en otros sitios.
   genres: string[] | null;
+  // Para el donut de "edad" de los juegos jugados (estilo resumen anual de
+  // Steam): nuevos vs 1-5 / 5-10 / 10+ años respecto al año filtrado.
+  releaseYear: number | null;
   totalHours: number;
   currentState: StateEvent['type'] | null;
   isLive: boolean;
