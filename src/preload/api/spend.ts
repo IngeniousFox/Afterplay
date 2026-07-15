@@ -1,8 +1,9 @@
 import { ipcRenderer } from 'electron';
-import type { AddSpendEventInput, SpendEvent } from '../../shared/types';
+import type { AddSpendEventInput, SpendEvent, SpendEventSummary } from '../../shared/types';
 
 export const spendApi = {
   add: (input: AddSpendEventInput): Promise<SpendEvent> => ipcRenderer.invoke('spend:add', input),
+  getAll: (): Promise<SpendEventSummary[]> => ipcRenderer.invoke('spend:getAll'),
   getByGame: (gameId: number): Promise<SpendEvent[]> =>
     ipcRenderer.invoke('spend:getByGame', gameId),
   delete: (id: number): Promise<boolean> => ipcRenderer.invoke('spend:delete', id),

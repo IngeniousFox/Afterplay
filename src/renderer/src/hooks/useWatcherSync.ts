@@ -14,6 +14,9 @@ export const useWatcherSync = (): void => {
   useEffect(() => {
     return window.api.watcher.onGamesChanged(() => {
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      // El watcher también crea/cierra sesiones directo en la DB — la vista
+      // de Sesiones (Bloque 5A) necesita el mismo aviso que games.all.
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
     });
   }, [queryClient]);
 };

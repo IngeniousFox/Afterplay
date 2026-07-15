@@ -1,19 +1,27 @@
 import { X } from 'lucide-react';
-import { useOpenAtLogin, useSetOpenAtLogin } from '../../hooks/settings';
+import {
+  useOpenAtLogin,
+  useSetOpenAtLogin,
+  useSetTimeFormat,
+  useTimeFormat,
+} from '../../hooks/settings';
 import { CheckboxRow } from '../library/add-game/CheckboxRow';
 import { Dialog, DialogContent } from '../ui/dialog';
+import { TimeFormatSlider } from './TimeFormatSlider';
 
 type SettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-// SPEC 3E — de momento solo trae "iniciar con Windows" (opción activable, no
-// forzada al primer arranque), pero vive en su propio modal para que futuros
-// ajustes (tema, etc.) tengan dónde caer sin inventar otro sitio.
+// SPEC 3E — de momento trae "iniciar con Windows" y el formato de hora
+// (12h/24h), pero vive en su propio modal para que futuros ajustes (tema,
+// etc.) tengan dónde caer sin inventar otro sitio.
 export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps): React.JSX.Element => {
   const { data: openAtLogin = false, isLoading } = useOpenAtLogin();
   const setOpenAtLogin = useSetOpenAtLogin();
+  const { data: timeFormat = '24h' } = useTimeFormat();
+  const setTimeFormat = useSetTimeFormat();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -34,7 +42,7 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps): React
           </button>
         </div>
 
-        <div className="px-5.5 py-5">
+        <div className="flex flex-col gap-3.5 px-5.5 py-5">
           {!isLoading && (
             <CheckboxRow
               checked={openAtLogin}
@@ -46,6 +54,19 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps): React
               checkIconColor="#08120c"
             />
           )}
+
+          <div
+            className="flex items-center justify-between gap-3 rounded-[10px] bg-white/[0.02] px-3.25 py-2.75"
+            style={{ border: '1px solid var(--border)' }}
+          >
+            <div className="flex-1">
+              <div className="text-[13.5px] font-semibold text-foreground">Time format</div>
+              <div className="mt-0.25 text-xs text-muted-foreground">
+                Show times in 12-hour or 24-hour format everywhere in the app.
+              </div>
+            </div>
+            <TimeFormatSlider value={timeFormat} onChange={(next) => setTimeFormat.mutate(next)} />
+          </div>
         </div>
       </DialogContent>
     </Dialog>

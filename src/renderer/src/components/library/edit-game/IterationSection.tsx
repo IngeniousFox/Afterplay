@@ -2,6 +2,7 @@ import { Info, Trash2 } from 'lucide-react';
 import { useFormContext, useWatch } from 'react-hook-form';
 import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useDeleteIteration } from '../../../hooks/iterations';
+import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision } from '../../../lib/format';
 import { STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
 import { CheckboxRow } from '../add-game/CheckboxRow';
@@ -318,12 +319,13 @@ const ReadonlyDateField = ({
   field: 'startedAt' | 'endedAt';
 }): React.JSX.Element => {
   const date = iteration[field];
+  const { data: timeFormat = '24h' } = useTimeFormat();
   return (
     <div className="flex-1">
       <div className={fieldLabelClass}>{label}</div>
       <Tooltip>
         <TooltipTrigger className="flex w-full items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.02] px-3.25 py-2.5 text-left text-[13px] text-muted-foreground">
-          {date ? formatByPrecision(date, 'day') : '—'}
+          {date ? formatByPrecision(date, 'day', timeFormat) : '—'}
           <span className="text-[11px]">(auto)</span>
         </TooltipTrigger>
         <TooltipContent>Derived from this playthrough&apos;s sessions.</TooltipContent>

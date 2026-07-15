@@ -2,12 +2,17 @@ import { handleDb } from './dbHandle';
 import type { AddSpendEventInput } from '../../shared/types';
 import { addSpendEvent } from '../db/queries/spend/addSpendEvent';
 import { deleteSpendEvent } from '../db/queries/spend/deleteSpendEvent';
+import { getAllSpendEvents } from '../db/queries/spend/getAllSpendEvents';
 import { getSpendByGame } from '../db/queries/spend/getSpendByGame';
 import { updateSpendEvent } from '../db/queries/spend/updateSpendEvent';
 
 export const registerSpendHandlers = (): void => {
   handleDb('spend:add', async (_event, input: AddSpendEventInput) => {
     return addSpendEvent(input);
+  });
+
+  handleDb('spend:getAll', async () => {
+    return getAllSpendEvents();
   });
 
   handleDb('spend:getByGame', async (_event, gameId: number) => {

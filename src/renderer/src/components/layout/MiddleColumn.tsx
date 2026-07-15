@@ -1,14 +1,11 @@
 import { BarChart3, Gamepad2, LayoutGrid, Search } from 'lucide-react';
 import { useState } from 'react';
-import { useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { GameListItem } from '../../../../shared/types';
 import { useGames } from '../../hooks/games';
 import { useImageSrc } from '../../hooks/useImageSrc';
-import { formatHours } from '../../lib/format';
+import { formatHours, pluralize } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
-
-const pluralize = (count: number, noun: string): string =>
-  `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 type ShellProps = {
   label: string;
@@ -197,16 +194,18 @@ const LibraryNavColumn = (): React.JSX.Element => {
   );
 };
 
-// Sessions/Stats no tienen todavía un detalle por juego que filtrar (llega
-// en bloques posteriores) — la selección aquí es solo visual, estado local
-// que se pierde al cambiar de sección (el componente se desmonta), no una
-// navegación real como en Library.
+// La selección aquí SÍ es navegación real (Bloque 5A): vive en el query
+// param `?game=` de la propia URL de /sessions, así que Sessions.tsx (el
+// panel de la derecha) lee el mismo estado sin necesitar un context ni una
+// librería aparte solo para compartir un id entre dos componentes.
 const SessionsNavColumn = (): React.JSX.Element => {
   const { data: games = [] } = useGames();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const filtered = useFilteredGames(search);
   const totalSessions = games.reduce((sum, game) => sum + game.sessionCount, 0);
+  const gameParam = searchParams.get('game');
+  const selectedId = gameParam ? Number(gameParam) : null;
 
   return (
     <MiddleColumnShell
@@ -219,14 +218,14 @@ const SessionsNavColumn = (): React.JSX.Element => {
         Icon={LayoutGrid}
         subtitle={pluralize(totalSessions, 'session')}
         selected={selectedId === null}
-        onClick={() => setSelectedId(null)}
+        onClick={() => setSearchParams({})}
       />
       {filtered.map((game) => (
         <GameRow
           key={game.id}
           game={game}
           selected={game.id === selectedId}
-          onClick={() => setSelectedId(game.id)}
+          onClick={() => setSearchParams({ game: String(game.id) })}
           subtitle={
             <>
               <span className="text-xs text-muted-foreground">
@@ -242,6 +241,9 @@ const SessionsNavColumn = (): React.JSX.Element => {
   );
 };
 
+// Stats no tiene todavía un detalle por juego que filtrar (Bloque 5B) — la
+// selección aquí es solo visual, estado local que se pierde al cambiar de
+// sección, no una navegación real como en Sessions.
 const StatsNavColumn = (): React.JSX.Element => {
   const { data: games = [] } = useGames();
   const [search, setSearch] = useState('');

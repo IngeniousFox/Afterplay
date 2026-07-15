@@ -9,17 +9,21 @@ type MetricsRowProps = {
   liveSince: Date | null;
 };
 
-const MetricCard = ({
-  Icon,
-  label,
-  value,
-  liveHint,
-}: {
+export type MetricCardProps = {
   Icon: LucideIcon;
   label: string;
   value: string;
   liveHint?: string;
-}): React.JSX.Element => (
+};
+
+// Exportada — la vista de Sesiones (Bloque 5A) reusa esta misma card para su
+// propia tira de resumen en vez de duplicar el estilo.
+export const MetricCard = ({
+  Icon,
+  label,
+  value,
+  liveHint,
+}: MetricCardProps): React.JSX.Element => (
   <div className="min-w-42 flex-1 rounded-[13px] border border-border bg-card px-4.5 py-4">
     <div className="flex items-center gap-1.75 text-muted-foreground">
       <Icon size={14} />

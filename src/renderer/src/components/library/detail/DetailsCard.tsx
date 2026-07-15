@@ -1,6 +1,7 @@
 import { Building2, Calendar, Clock, Folder, Gamepad2, RotateCcw, Tag } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
+import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatBytes } from '../../../lib/format';
 
 type DetailsCardProps = {
@@ -32,13 +33,16 @@ const Row = ({
 // SPEC 10.7 / prototipo — card "Details" del sidebar. Features se
 // intercambia por Genres (viene de IGDB, no es editable a mano).
 export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
+  const { data: timeFormat = '24h' } = useTimeFormat();
   const replays = Math.max(0, game.iterations.length - 1);
   const replaysLabel = replays === 0 ? 'Never' : `${replays} ${replays === 1 ? 'time' : 'times'}`;
 
   const lastSession = game.iterations
     .flatMap((it) => it.sessions)
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
-  const recentActivity = lastSession ? formatByPrecision(lastSession.startedAt, 'day') : '—';
+  const recentActivity = lastSession
+    ? formatByPrecision(lastSession.startedAt, 'day', timeFormat)
+    : '—';
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">

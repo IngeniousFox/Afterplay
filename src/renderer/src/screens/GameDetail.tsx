@@ -84,7 +84,7 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
               <HistoryList stateHistory={game.stateHistory} spendHistory={game.spendHistory} />
             </div>
 
-            <SessionHistoryList sessions={allSessions} />
+            <SessionHistoryList sessions={allSessions} gameId={gameId} />
           </div>
 
           <div className="flex w-92 min-w-70 flex-none flex-col gap-4.5">

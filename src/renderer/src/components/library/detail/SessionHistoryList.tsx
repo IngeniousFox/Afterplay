@@ -1,10 +1,13 @@
 import { ArrowRight, Flag, Timer } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { Session } from '../../../../../shared/types';
+import { useTimeFormat } from '../../../hooks/settings';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
-import { formatByPrecision, formatElapsed } from '../../../lib/format';
+import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
 
 type SessionHistoryListProps = {
   sessions: Session[];
+  gameId: number;
 };
 
 const VISIBLE_LIMIT = 5;
@@ -12,9 +15,8 @@ const VISIBLE_LIMIT = 5;
 // SPEC 10.7 / prototipo — icono + fecha + subtítulo (Manual/Live) + barra
 // proporcional a la duración (relativa a la más larga de ESTA lista) +
 // duración a la derecha (contador en vivo si es la sesión activa). Máximo
-// 5 filas — el botón "ver todas" está pensado para llevar a una pestaña de
-// Sesiones filtrada por este juego (SPEC), que todavía no existe (Bloque
-// 5), así que hoy no hace nada — no expande en sitio, es un placeholder.
+// 5 filas — el botón "ver todas" lleva a la pestaña de Sesiones (Bloque 5A)
+// filtrada por este juego.
 const SessionRow = ({
   session,
   maxDurationSec,
@@ -26,6 +28,8 @@ const SessionRow = ({
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
   const durationSec = isLive ? liveSeconds : (session.durationSec ?? 0);
   const barPercent = Math.max(4, maxDurationSec > 0 ? (durationSec / maxDurationSec) * 100 : 4);
+  const { data: timeFormat = '24h' } = useTimeFormat();
+  const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
   // Las sesiones de borde (inicio/fin de un playthrough manual, ver
   // createGameWithDetails.ts/EditGameModal.tsx) siempre llevan duración 0 a
   // propósito — son solo un marcador de fecha, nunca una partida real. Un
@@ -51,8 +55,11 @@ const SessionRow = ({
       </div>
       <div className="w-37.5 flex-none">
         <div className="text-[13.5px] font-semibold text-foreground">
-          {formatByPrecision(session.startedAt, session.datePrecision)}
+          {formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}
         </div>
+        {endTime && (
+          <div className="mt-0.25 text-[11.5px] text-muted-foreground/70">→ {endTime}</div>
+        )}
         <div
           className="mt-0.5 text-xs"
           style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
@@ -91,7 +98,9 @@ const SessionRow = ({
 
 export const SessionHistoryList = ({
   sessions,
+  gameId,
 }: SessionHistoryListProps): React.JSX.Element | null => {
+  const navigate = useNavigate();
   if (sessions.length === 0) return null;
 
   const maxDurationSec = Math.max(
@@ -99,6 +108,10 @@ export const SessionHistoryList = ({
     1,
   );
   const visible = sessions.slice(0, VISIBLE_LIMIT);
+  // La vista de Sesiones (Bloque 5A) no cuenta los marcadores de borde — el
+  // número del botón debe prometer lo mismo que ahí se va a ver, aunque esta
+  // lista de aquí SÍ siga mostrando los marcadores (con su icono de bandera).
+  const realSessionsCount = sessions.filter((session) => session.milestone === null).length;
 
   return (
     <div className="mt-7.5">
@@ -112,11 +125,10 @@ export const SessionHistoryList = ({
         {sessions.length > VISIBLE_LIMIT && (
           <button
             type="button"
-            disabled
-            title="Coming soon — will open the Sessions tab filtered by this game"
-            className="flex w-fit cursor-not-allowed items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-4 py-2.25 text-[13px] font-semibold text-foreground opacity-60"
+            onClick={() => navigate(`/sessions?game=${gameId}`)}
+            className="flex w-fit items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-4 py-2.25 text-[13px] font-semibold text-foreground hover:bg-white/[0.06]"
           >
-            <span>View all {sessions.length} sessions</span>
+            <span>View all {realSessionsCount} sessions</span>
             <ArrowRight size={14} />
           </button>
         )}

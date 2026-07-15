@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { SpendEvent, StateEvent } from '../../../../../shared/types';
 import { useUpdateStateEvent } from '../../../hooks/stateEvents';
 import { useDeleteSpendEvent, useUpdateSpendEvent } from '../../../hooks/spend';
+import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 
@@ -49,6 +50,7 @@ export const HistoryList = ({
   const updateStateEvent = useUpdateStateEvent();
   const updateSpendEvent = useUpdateSpendEvent();
   const deleteSpend = useDeleteSpendEvent();
+  const { data: timeFormat = '24h' } = useTimeFormat();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
 
@@ -137,7 +139,7 @@ export const HistoryList = ({
                     <span className="text-[12.5px] text-muted-foreground">
                       {entry.kind === 'spend' && `${SPEND_TYPE_LABEL[entry.event.type]} — `}
                       {entry.kind === 'status' && '— '}
-                      {formatByPrecision(entry.date, entry.datePrecision)}
+                      {formatByPrecision(entry.date, entry.datePrecision, timeFormat)}
                     </span>
                   </div>
 

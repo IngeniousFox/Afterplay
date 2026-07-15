@@ -2,6 +2,7 @@ import { Package, Star } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useUpdateIteration } from '../../../hooks/iterations';
+import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { Dropdown } from '../add-game/Dropdown';
@@ -84,6 +85,7 @@ const RatingRow = ({
 // de extra content + valoración (editable) + campos de solo lectura.
 export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Element | null => {
   const updateIteration = useUpdateIteration();
+  const { data: timeFormat = '24h' } = useTimeFormat();
   // La más reciente = la última creada (getGameById ordena las iteraciones por
   // id ascendente).
   const newestId = game.iterations[game.iterations.length - 1]?.id;
@@ -168,7 +170,11 @@ export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Ele
           label="Started"
           value={
             iteration.startedAt
-              ? formatByPrecision(iteration.startedAt, startSession?.datePrecision ?? 'day')
+              ? formatByPrecision(
+                  iteration.startedAt,
+                  startSession?.datePrecision ?? 'day',
+                  timeFormat,
+                )
               : '—'
           }
         />
@@ -176,7 +182,7 @@ export const PlaythroughPanel = ({ game }: PlaythroughPanelProps): React.JSX.Ele
           label="Finished / left"
           value={
             iteration.endedAt
-              ? formatByPrecision(iteration.endedAt, endSession?.datePrecision ?? 'day')
+              ? formatByPrecision(iteration.endedAt, endSession?.datePrecision ?? 'day', timeFormat)
               : '—'
           }
         />

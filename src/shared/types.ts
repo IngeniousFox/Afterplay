@@ -127,6 +127,37 @@ export type GameListItem = {
   sessionCount: number;
 };
 
+// Preferencia de formato de hora (ajustes, SPEC 3E-bis) — 24h por defecto.
+// Un solo tipo compartido: el main la persiste (config/store.ts), el
+// renderer la usa para formatear cualquier datetime (lib/format.ts).
+export type TimeFormat = '12h' | '24h';
+
+// Gasto suelto para las métricas globales de Stats (Bloque 5B) — ver
+// getAllSpendEvents.ts. Sin gameId/type/note: esta vista solo suma importes
+// por fecha (total y por año), no necesita más.
+export type SpendEventSummary = {
+  amount: number;
+  occurredAt: Date;
+};
+
+// Sesión de la vista de Sesiones (Bloque 5A) con el juego ya resuelto — ver
+// getAllSessions.ts. Campos explícitos (no `Session & {...}`) porque el
+// select() que la produce tampoco trae `milestone`: ya filtra por él, no hace
+// falta devolverlo (siempre sería null).
+export type SessionWithGame = {
+  id: number;
+  iterationId: number;
+  isManual: boolean;
+  startedAt: Date;
+  endedAt: Date | null;
+  durationSec: number | null;
+  lastHeartbeatAt: Date | null;
+  datePrecision: 'year' | 'month' | 'day' | 'datetime';
+  gameId: number;
+  gameTitle: string;
+  coverUrl: string | null;
+};
+
 export type IterationDetail = Iteration & {
   hours: number;
   startedAt: Date | null;

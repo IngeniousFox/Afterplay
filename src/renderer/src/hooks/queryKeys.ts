@@ -10,6 +10,12 @@ export const queryKeys = {
     detail: (id: number) => ['games', id] as const,
     spend: (gameId: number) => ['games', gameId, 'spend'] as const,
   },
+  sessions: {
+    all: ['sessions'] as const,
+  },
+  spend: {
+    all: ['spend'] as const,
+  },
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
     details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,
@@ -22,5 +28,6 @@ export const queryKeys = {
   },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,
+    timeFormat: ['settings', 'timeFormat'] as const,
   },
 };
