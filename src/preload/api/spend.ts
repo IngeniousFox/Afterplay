@@ -1,5 +1,10 @@
 import { ipcRenderer } from 'electron';
-import type { AddSpendEventInput, SpendEvent, SpendEventSummary } from '../../shared/types';
+import type {
+  AddSpendEventInput,
+  SpendEvent,
+  SpendEventSummary,
+  UpdateSpendEventPatch,
+} from '../../shared/types';
 
 export const spendApi = {
   add: (input: AddSpendEventInput): Promise<SpendEvent> => ipcRenderer.invoke('spend:add', input),
@@ -7,6 +12,6 @@ export const spendApi = {
   getByGame: (gameId: number): Promise<SpendEvent[]> =>
     ipcRenderer.invoke('spend:getByGame', gameId),
   delete: (id: number): Promise<boolean> => ipcRenderer.invoke('spend:delete', id),
-  update: (id: number, note: string | null): Promise<SpendEvent | null> =>
-    ipcRenderer.invoke('spend:update', id, note),
+  update: (id: number, patch: UpdateSpendEventPatch): Promise<SpendEvent | null> =>
+    ipcRenderer.invoke('spend:update', id, patch),
 };

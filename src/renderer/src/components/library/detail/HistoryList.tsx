@@ -1,11 +1,20 @@
 import { Check, DollarSign, Pencil, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
-import type { SpendEvent, StateEvent } from '../../../../../shared/types';
+import type {
+  SpendEvent,
+  StateEvent,
+  UpdateSpendEventPatch,
+  UpdateStateEventPatch,
+} from '../../../../../shared/types';
 import { useUpdateStateEvent } from '../../../hooks/stateEvents';
 import { useDeleteSpendEvent, useUpdateSpendEvent } from '../../../hooks/spend';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
+import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
+import type { PrecisionDateValue } from '../add-game/precisionDate';
+import { toIsoDate } from '../add-game/precisionDate';
+import { fieldLabelClass, textInputClass } from '../add-game/styles';
 
 type HistoryListProps = {
   stateHistory: StateEvent[];
@@ -38,11 +47,21 @@ type Entry =
       event: SpendEvent;
     };
 
+// El valor de picker de una entrada existente. 'datetime' (eventos creados
+// en vivo por la app, con hora real) cae a 'day' para el picker — pero solo
+// degrada la precisión guardada si el usuario TOCA la fecha (ver save()).
+const entryPickerValue = (entry: Entry): PrecisionDateValue => ({
+  precision: entry.datePrecision === 'datetime' ? 'day' : entry.datePrecision,
+  isoDate: toIsoDate(entry.date),
+});
+
 // SPEC 4.5/4.6 fusionado — un único "History" con estados y gastos
-// entrelazados por fecha, mismo estilo de timeline para los dos. La nota de
-// cada entrada es editable in-place (icono de lápiz), y los gastos también
-// se pueden borrar desde aquí — los iconos solo aparecen al pasar el ratón
-// para no ensuciar la lista en reposo.
+// entrelazados por fecha, mismo estilo de timeline para los dos. El lápiz
+// de cada entrada abre un editor in-place: fecha + nota (estados) o
+// cantidad + fecha + nota (gastos) — el TIPO nunca se edita (SPEC 4.5,
+// corregir un estado es añadir un evento nuevo; esto es para erratas). Los
+// gastos también se pueden borrar desde aquí — los iconos solo aparecen al
+// pasar el ratón para no ensuciar la lista en reposo.
 export const HistoryList = ({
   stateHistory,
   spendHistory,
@@ -53,6 +72,8 @@ export const HistoryList = ({
   const { data: timeFormat = '24h' } = useTimeFormat();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
+  const [draftAmount, setDraftAmount] = useState('');
+  const [draftDate, setDraftDate] = useState<PrecisionDateValue | null>(null);
 
   const entries: Entry[] = [
     ...stateHistory.map((event): Entry => ({
@@ -80,12 +101,43 @@ export const HistoryList = ({
   const startEditing = (entry: Entry): void => {
     setEditingKey(entry.key);
     setDraftNote(entry.note ?? '');
+    setDraftAmount(entry.kind === 'spend' ? String(entry.event.amount) : '');
+    setDraftDate(entryPickerValue(entry));
   };
 
-  const saveNote = (entry: Entry): void => {
+  const save = (entry: Entry): void => {
+    // La fecha solo entra al patch si CAMBIÓ respecto a la guardada — así un
+    // evento con precisión 'datetime' (hora real) que solo edita la nota no
+    // pierde su hora por el simple hecho de pasar por el picker de días.
+    const original = entryPickerValue(entry);
+    const dateChanged =
+      draftDate !== null &&
+      (draftDate.isoDate !== original.isoDate || draftDate.precision !== original.precision);
+    const datePatch = dateChanged
+      ? {
+          occurredAt: new Date(`${draftDate.isoDate}T00:00:00`),
+          datePrecision: draftDate.precision,
+        }
+      : {};
+
     const note = draftNote.trim() || null;
-    if (entry.kind === 'status') updateStateEvent.mutate({ id: entry.id, note });
-    else updateSpendEvent.mutate({ id: entry.id, note });
+
+    if (entry.kind === 'status') {
+      const patch: UpdateStateEventPatch = { note, ...datePatch };
+      updateStateEvent.mutate({ id: entry.id, patch });
+    } else {
+      const parsedAmount = Number(draftAmount);
+      const amountValid =
+        draftAmount.trim() !== '' && !Number.isNaN(parsedAmount) && parsedAmount > 0;
+      const patch: UpdateSpendEventPatch = {
+        note,
+        ...datePatch,
+        // Cantidad inválida (vacía/0/no numérica): se conserva la guardada
+        // en vez de romper el gasto.
+        ...(amountValid && parsedAmount !== entry.event.amount ? { amount: parsedAmount } : {}),
+      };
+      updateSpendEvent.mutate({ id: entry.id, patch });
+    }
     setEditingKey(null);
   };
 
@@ -144,42 +196,73 @@ export const HistoryList = ({
                   </div>
 
                   {isEditing ? (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <input
-                        autoFocus
-                        value={draftNote}
-                        onChange={(event) => setDraftNote(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') saveNote(entry);
-                          if (event.key === 'Escape') setEditingKey(null);
-                        }}
-                        // Guarda también al hacer click fuera — sin esto,
-                        // el único sitio para confirmar era el icono de
-                        // 13px, fácil de no acertar (bug reportado: "lo
-                        // editas pero no se guarda").
-                        onBlur={() => saveNote(entry)}
-                        placeholder="Note…"
-                        className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2 py-1 text-[12.5px] text-foreground outline-none"
-                      />
-                      <button
-                        type="button"
-                        // Evita que el input pierda el foco (y dispare su
-                        // propio onBlur) antes de que corra este onClick —
-                        // si no, Cancelar también guardaría por el blur.
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => saveNote(entry)}
-                        className="flex-none rounded-md p-1 text-primary hover:bg-primary/10"
-                      >
-                        <Check size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => setEditingKey(null)}
-                        className="flex-none rounded-md p-1 text-muted-foreground hover:bg-white/6"
-                      >
-                        <X size={13} />
-                      </button>
+                    // Editor multi-campo: sin auto-guardar en blur (el foco
+                    // salta legítimamente de un campo a otro) — se confirma
+                    // con el check o con Enter en cualquier input.
+                    <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-input bg-white/[0.02] p-2.5">
+                      <div className="flex items-end gap-2">
+                        {entry.kind === 'spend' && (
+                          <div className="w-24 flex-none">
+                            <div className={fieldLabelClass}>AMOUNT (€)</div>
+                            <input
+                              autoFocus
+                              value={draftAmount}
+                              onChange={(event) => setDraftAmount(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') save(entry);
+                                if (event.key === 'Escape') setEditingKey(null);
+                              }}
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              // Ver PlayedBeforePanel.tsx — la rueda cambia
+                              // el valor de un input number con foco.
+                              onWheel={(event) => event.currentTarget.blur()}
+                              className={textInputClass}
+                            />
+                          </div>
+                        )}
+                        <DateWithPrecisionPicker
+                          label="Date"
+                          value={draftDate}
+                          onChange={(next) => {
+                            // La X del picker dejaría la entrada sin fecha —
+                            // eso aquí no existe (toda entrada tiene fecha):
+                            // se ignora y se mantiene la que había.
+                            if (next) setDraftDate(next);
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          autoFocus={entry.kind === 'status'}
+                          value={draftNote}
+                          onChange={(event) => setDraftNote(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') save(entry);
+                            if (event.key === 'Escape') setEditingKey(null);
+                          }}
+                          placeholder="Note…"
+                          className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2 py-1.5 text-[12.5px] text-foreground outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => save(entry)}
+                          className="flex-none rounded-md p-1.5 text-primary hover:bg-primary/10"
+                          aria-label="Save changes"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingKey(null)}
+                          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-white/6"
+                          aria-label="Cancel"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     entry.note && (

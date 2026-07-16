@@ -1,5 +1,5 @@
 import { handleDb } from './dbHandle';
-import type { AddStateEventInput } from '../../shared/types';
+import type { AddStateEventInput, UpdateStateEventPatch } from '../../shared/types';
 import { addStateEvent } from '../db/queries/stateEvents/addStateEvent';
 import { getAllStateEvents } from '../db/queries/stateEvents/getAllStateEvents';
 import { getStateEventsByIteration } from '../db/queries/stateEvents/getStateEventsByIteration';
@@ -18,7 +18,7 @@ export const registerStateEventsHandlers = (): void => {
     return getStateEventsByIteration(iterationId);
   });
 
-  handleDb('stateEvents:update', async (_event, id: number, note: string | null) => {
-    return updateStateEvent(id, note);
+  handleDb('stateEvents:update', async (_event, id: number, patch: UpdateStateEventPatch) => {
+    return updateStateEvent(id, patch);
   });
 };

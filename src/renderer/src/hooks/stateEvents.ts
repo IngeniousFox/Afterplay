@@ -1,6 +1,11 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AddStateEventInput, StateEvent, StateEventSummary } from '../../../shared/types';
+import type {
+  AddStateEventInput,
+  StateEvent,
+  StateEventSummary,
+  UpdateStateEventPatch,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 // Bloque 5D — todos los cambios de estado de la biblioteca (para "Status
@@ -36,15 +41,19 @@ export const useAddStateEvent = (): UseMutationResult<
 export const useUpdateStateEvent = (): UseMutationResult<
   StateEvent | null,
   Error,
-  { id: number; note: string | null },
+  { id: number; patch: UpdateStateEventPatch },
   unknown
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, note }: { id: number; note: string | null }) =>
-      window.api.stateEvents.update(id, note),
+    mutationFn: ({ id, patch }: { id: number; patch: UpdateStateEventPatch }) =>
+      window.api.stateEvents.update(id, patch),
     onSuccess: () => {
+      // La fecha de un evento puede cambiar el orden del historial y hasta
+      // el estado actual derivado (el evento más reciente) — y Stats por año
+      // cuenta transiciones por fecha (stateEvents.all).
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
     },
   });
 };

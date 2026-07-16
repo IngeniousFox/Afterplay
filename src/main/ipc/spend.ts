@@ -1,5 +1,5 @@
 import { handleDb } from './dbHandle';
-import type { AddSpendEventInput } from '../../shared/types';
+import type { AddSpendEventInput, UpdateSpendEventPatch } from '../../shared/types';
 import { addSpendEvent } from '../db/queries/spend/addSpendEvent';
 import { deleteSpendEvent } from '../db/queries/spend/deleteSpendEvent';
 import { getAllSpendEvents } from '../db/queries/spend/getAllSpendEvents';
@@ -23,7 +23,7 @@ export const registerSpendHandlers = (): void => {
     return deleteSpendEvent(id);
   });
 
-  handleDb('spend:update', async (_event, id: number, note: string | null) => {
-    return updateSpendEvent(id, note);
+  handleDb('spend:update', async (_event, id: number, patch: UpdateSpendEventPatch) => {
+    return updateSpendEvent(id, patch);
   });
 };

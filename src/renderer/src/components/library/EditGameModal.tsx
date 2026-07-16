@@ -4,7 +4,7 @@ import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
 import { useUpdateGame } from '../../hooks/games';
 import { useAddIteration, useUpdateIteration } from '../../hooks/iterations';
-import { useAddSession } from '../../hooks/sessions';
+import { useAddSession, useUpdateMilestoneSession } from '../../hooks/sessions';
 import { useAddStateEvent } from '../../hooks/stateEvents';
 import { STATE_TO_STATUS_KEY } from '../../lib/gameStatus';
 import { Dialog, DialogContent } from '../ui/dialog';
@@ -15,6 +15,7 @@ import { STATUS_TO_STATE_TYPE } from './add-game/types';
 import { ExecutablePathField } from './edit-game/ExecutablePathField';
 import { InstallDirectoryField } from './edit-game/InstallDirectoryField';
 import { IterationSection } from './edit-game/IterationSection';
+import { anchorPickerValue, milestoneAnchor } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
 
 type EditGameModalProps = {
@@ -48,8 +49,10 @@ const buildDefaults = (game: GameDetail): EditGameFormValues => {
     iterationMode: iteration ? 'existing' : 'none',
     selectedIterationId: iteration?.id ?? null,
     label: iteration?.label ?? '',
-    started: null,
-    finished: null,
+    // Editables solo cuando el ancla es un marcador manual — misma regla
+    // que loadIteration() en IterationSection.tsx.
+    started: iteration ? anchorPickerValue(milestoneAnchor(iteration, 'start')) : null,
+    finished: iteration ? anchorPickerValue(milestoneAnchor(iteration, 'end')) : null,
     extraContent: iteration?.extraContent ?? false,
     status: iteration?.currentState ? STATE_TO_STATUS_KEY[iteration.currentState] : 'beaten',
     platform: iteration?.playedPlatform ?? 'Steam',
@@ -85,13 +88,15 @@ export const EditGameModal = ({
   const updateIteration = useUpdateIteration();
   const addSession = useAddSession();
   const addStateEvent = useAddStateEvent();
+  const updateMilestoneSession = useUpdateMilestoneSession();
 
   const isSaving =
     updateGame.isPending ||
     addIteration.isPending ||
     updateIteration.isPending ||
     addSession.isPending ||
-    addStateEvent.isPending;
+    addStateEvent.isPending ||
+    updateMilestoneSession.isPending;
 
   const handleClose = (): void => {
     if (isSaving) return;
@@ -192,6 +197,33 @@ export const EditGameModal = ({
       });
 
       const originalIteration = game.iterations.find((it) => it.id === iterationId);
+
+      // Fechas Started/Finished corregidas — solo si el ancla es un marcador
+      // manual (si no, ni siquiera están en el formulario) y el valor cambió
+      // de verdad respecto al guardado. Un draft a null (borrado con la X del
+      // picker) se ignora: quitar una fecha del todo sería borrar el marcador,
+      // no corregirlo — fuera de alcance aquí.
+      if (originalIteration) {
+        for (const which of ['start', 'end'] as const) {
+          const anchor = milestoneAnchor(originalIteration, which);
+          const draft = which === 'start' ? values.started : values.finished;
+          if (!anchor || !draft) continue;
+          const original = anchorPickerValue(anchor);
+          if (
+            original &&
+            original.isoDate === draft.isoDate &&
+            original.precision === draft.precision
+          ) {
+            continue;
+          }
+          await updateMilestoneSession.mutateAsync({
+            id: anchor.id,
+            date: isoDateToDate(draft.isoDate),
+            precision: draft.precision,
+          });
+        }
+      }
+
       const previousStatus = originalIteration?.currentState
         ? STATE_TO_STATUS_KEY[originalIteration.currentState]
         : null;

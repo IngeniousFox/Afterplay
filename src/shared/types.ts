@@ -57,6 +57,23 @@ export type AddStateEventInput = Omit<NewStateEvent, 'id'>;
 
 export type AddSpendEventInput = Omit<NewSpendEvent, 'id'>;
 
+// Corrección de una entrada manual del historial (lápiz de HistoryList).
+// El TIPO nunca se toca en ninguno de los dos (SPEC 4.5: corregir un estado
+// es añadir un evento nuevo) — pero una FECHA/CANTIDAD tecleada mal no es un
+// cambio de opinión, es una errata, y eso sí se corrige sobre la entrada.
+export type UpdateStateEventPatch = {
+  occurredAt?: Date;
+  datePrecision?: 'year' | 'month' | 'day' | 'datetime';
+  note?: string | null;
+};
+
+export type UpdateSpendEventPatch = {
+  amount?: number;
+  occurredAt?: Date;
+  datePrecision?: 'year' | 'month' | 'day' | 'datetime';
+  note?: string | null;
+};
+
 // Input del guardado atómico del modal de añadir juego (Bloque 2F). Va en
 // una sola llamada porque el main resuelve TODO lo que hace falta de fuera
 // (detalle de IGDB, tiempos de HLTB, id de SteamGridDB) y escribe game +

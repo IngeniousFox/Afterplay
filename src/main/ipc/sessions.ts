@@ -5,6 +5,7 @@ import { closeSession } from '../db/queries/sessions/closeSession';
 import { getAllSessions } from '../db/queries/sessions/getAllSessions';
 import { getSessionsByIteration } from '../db/queries/sessions/getSessionsByIteration';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
+import { updateMilestoneSession } from '../db/queries/sessions/updateMilestoneSession';
 
 export const registerSessionsHandlers = (): void => {
   handleDb('sessions:add', async (_event, input: AddManualSessionInput) => {
@@ -33,4 +34,14 @@ export const registerSessionsHandlers = (): void => {
   handleDb('sessions:close', async (_event, id: number, endedAt: Date) => {
     return closeSession(id, endedAt);
   });
+
+  // Corregir la fecha de un marcador manual de inicio/fin de playthrough
+  // ("I played this before" con el día equivocado) — ver la query para el
+  // porqué también corrige los stateEvents nacidos con él.
+  handleDb(
+    'sessions:updateMilestone',
+    async (_event, id: number, date: Date, precision: 'year' | 'month' | 'day') => {
+      return updateMilestoneSession(id, date, precision);
+    },
+  );
 };

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AddGameModal } from '../components/library/AddGameModal';
 import { ActionBar } from '../components/library/detail/ActionBar';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
@@ -26,6 +27,7 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
   const [editOpen, setEditOpen] = useState(false);
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [addGameOpen, setAddGameOpen] = useState(false);
 
   // Qué playthrough está eligiendo el dropdown de PlaythroughPanel — vive
   // aquí (no dentro de ese componente) porque HowLongToBeatCard también lo
@@ -81,7 +83,12 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
 
   return (
     <div className="h-full overflow-y-auto">
-      <HeroBanner game={game} liveSince={liveSession?.startedAt ?? null} onBack={onBack} />
+      <HeroBanner
+        game={game}
+        liveSince={liveSession?.startedAt ?? null}
+        onBack={onBack}
+        onAddGame={() => setAddGameOpen(true)}
+      />
 
       <div className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
         <div className="flex items-start gap-6">
@@ -134,6 +141,7 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
       </div>
 
       <EditGameModal game={game} open={editOpen} onOpenChange={setEditOpen} />
+      <AddGameModal open={addGameOpen} onOpenChange={setAddGameOpen} />
       <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
       <DeleteGameDialog
         game={game}

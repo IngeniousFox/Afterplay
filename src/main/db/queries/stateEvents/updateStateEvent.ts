@@ -1,21 +1,32 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../..';
-import type { StateEvent } from '../../../../shared/types';
+import type { StateEvent, UpdateStateEventPatch } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
 import { stateEventsTable } from '../../schema';
 
-// Solo la nota es editable — el tipo/fecha del hito nunca se toca (SPEC 4.5:
-// corregir un ESTADO es añadir un evento nuevo, no reescribir el pasado).
-// Corregir un typo en la nota no es lo mismo que corregir el estado, así
-// que esto sí es una actualización real, no un evento nuevo.
+// Corrección de un evento del historial: fecha y nota. El TIPO nunca se
+// toca (SPEC 4.5: corregir un ESTADO es añadir un evento nuevo, no
+// reescribir el pasado) — pero una fecha elegida mal en un picker no es un
+// cambio de opinión, es una errata, y eso sí se corrige sobre la entrada.
 export const updateStateEvent = async (
   id: number,
-  note: string | null,
+  patch: UpdateStateEventPatch,
 ): Promise<StateEvent | null> => {
   const db = getDb();
+
+  // Drizzle peta con un .set() vacío (mismo caso que updateGame.ts).
+  if (Object.keys(patch).length === 0) {
+    const [event] = await db
+      .select(stateEventColumns)
+      .from(stateEventsTable)
+      .where(eq(stateEventsTable.id, id))
+      .limit(1);
+    return event ?? null;
+  }
+
   const [updated] = await db
     .update(stateEventsTable)
-    .set({ note })
+    .set(patch)
     .where(eq(stateEventsTable.id, id))
     .returning(stateEventColumns);
   return updated ?? null;

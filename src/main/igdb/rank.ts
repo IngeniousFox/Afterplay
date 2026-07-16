@@ -117,11 +117,16 @@ const scoreGame = (
 // saga dominante entre los candidatos, y popularidad como desempate — no solo
 // el orden de texto libre que devuelve IGDB tal cual.
 export const filterAndRankGames = <T extends RankableGame>(games: T[], query: string): T[] => {
+  // Sin exigir parentGame === null: IGDB lo usa también para spin-offs
+  // standalone de pleno derecho (Dead Rising 2: Off the Record, Dishonored:
+  // Death of the Outsider…) — juegos completos y jugables sin el original,
+  // solo enlazados por compartir universo/motor. Esos SÍ son category 0
+  // (main_game, se comprobó en vivo contra la API) y por eso ya pasan el
+  // filtro de categoría de abajo; exigir además parentGame null los tiraba
+  // fuera igualmente. versionParent sigue filtrando (eso es reediciones
+  // literales del mismo producto, un caso distinto).
   const eligible = games.filter(
-    (game) =>
-      ALLOWED_CATEGORIES.has(game.category) &&
-      game.versionParent === null &&
-      game.parentGame === null,
+    (game) => ALLOWED_CATEGORIES.has(game.category) && game.versionParent === null,
   );
   if (eligible.length === 0) return [];
 

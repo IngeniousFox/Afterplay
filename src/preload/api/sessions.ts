@@ -11,4 +11,9 @@ export const sessionsApi = {
     ipcRenderer.invoke('sessions:close', id, endedAt),
   startForGame: (gameId: number): Promise<Session | null> =>
     ipcRenderer.invoke('sessions:startForGame', gameId),
+  updateMilestone: (
+    id: number,
+    date: Date,
+    precision: 'year' | 'month' | 'day',
+  ): Promise<Session | null> => ipcRenderer.invoke('sessions:updateMilestone', id, date, precision),
 };

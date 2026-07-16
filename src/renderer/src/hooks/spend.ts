@@ -1,6 +1,11 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AddSpendEventInput, SpendEvent, SpendEventSummary } from '../../../shared/types';
+import type {
+  AddSpendEventInput,
+  SpendEvent,
+  SpendEventSummary,
+  UpdateSpendEventPatch,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 export const useGameSpend = (gameId: number): UseQueryResult<SpendEvent[], Error> =>
@@ -51,13 +56,13 @@ export const useDeleteSpendEvent = (): UseMutationResult<boolean, Error, number,
 export const useUpdateSpendEvent = (): UseMutationResult<
   SpendEvent | null,
   Error,
-  { id: number; note: string | null },
+  { id: number; patch: UpdateSpendEventPatch },
   unknown
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, note }: { id: number; note: string | null }) =>
-      window.api.spend.update(id, note),
+    mutationFn: ({ id, patch }: { id: number; patch: UpdateSpendEventPatch }) =>
+      window.api.spend.update(id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.spend.all });

@@ -75,3 +75,25 @@ export const useStartGameSession = (): UseMutationResult<
     },
   });
 };
+
+// Corregir la fecha de un marcador manual de inicio/fin de playthrough
+// (EditGameModal, fechas Started/Finished de una iteración existente).
+// También corrige los stateEvents que nacieron con él (ver la query), de
+// ahí que invalide stateEvents.all además de games/sessions.
+export const useUpdateMilestoneSession = (): UseMutationResult<
+  Session | null,
+  Error,
+  { id: number; date: Date; precision: 'year' | 'month' | 'day' },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, date, precision }) =>
+      window.api.sessions.updateMilestone(id, date, precision),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
+    },
+  });
+};

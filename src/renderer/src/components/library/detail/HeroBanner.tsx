@@ -1,4 +1,4 @@
-import { ArrowLeft, Gamepad2 } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Plus } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
@@ -12,6 +12,10 @@ type HeroBannerProps = {
   onBack: () => void;
   // La ficha de Plan to Play vuelve a /plan, no a la biblioteca.
   backLabel?: string;
+  // Solo la ficha normal de biblioteca lo pasa — la de Plan to Play ya tiene
+  // su propio call-to-action grande ("Add to library" para ESTE juego), un
+  // botón genérico de más aquí sería redundante y confuso ahí.
+  onAddGame?: () => void;
 };
 
 // SPEC 10.6/10.7 + prototipo Backlog.html — hero 316px, degradado vertical
@@ -24,6 +28,7 @@ export const HeroBanner = ({
   liveSince,
   onBack,
   backLabel = 'Back to library',
+  onAddGame,
 }: HeroBannerProps): React.JSX.Element => {
   const heroSrc = useImageSrc(game.heroUrl, 'heroes');
   // Un juego planeado no tiene estado real (currentState deriva ignorando
@@ -71,25 +76,41 @@ export const HeroBanner = ({
         <span>{backLabel}</span>
       </button>
 
-      {liveSince && (
+      {(onAddGame || liveSince) && (
         <div className="absolute top-5 right-6 flex items-center gap-2.5">
-          <div
-            className="flex items-center gap-1.75 rounded-[9px] border px-2.75 py-1.5"
-            style={{
-              background: 'rgba(8,20,13,.7)',
-              borderColor: 'rgba(47,220,126,.55)',
-              animation: 'afterplay-pulse-badge 2.4s infinite',
-            }}
-          >
-            <span
-              className="h-1.5 w-1.5 rounded-full bg-primary"
-              style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
-            />
-            <span className="text-[10px] font-extrabold tracking-[.1em] text-primary">PLAYING</span>
-            <span className="border-l border-primary/30 pl-2.25 text-[12.5px] font-bold text-primary tabular-nums">
-              {formatElapsed(elapsedSeconds)}
-            </span>
-          </div>
+          {onAddGame && (
+            <button
+              type="button"
+              onClick={onAddGame}
+              className="flex items-center gap-1.75 rounded-[9px] border border-white/8 px-3 py-1.75 text-[13px] text-foreground"
+              style={{ background: 'rgba(8,12,10,.66)' }}
+            >
+              <Plus size={16} />
+              <span>Add game</span>
+            </button>
+          )}
+
+          {liveSince && (
+            <div
+              className="flex items-center gap-1.75 rounded-[9px] border px-2.75 py-1.5"
+              style={{
+                background: 'rgba(8,20,13,.7)',
+                borderColor: 'rgba(47,220,126,.55)',
+                animation: 'afterplay-pulse-badge 2.4s infinite',
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-primary"
+                style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
+              />
+              <span className="text-[10px] font-extrabold tracking-[.1em] text-primary">
+                PLAYING
+              </span>
+              <span className="border-l border-primary/30 pl-2.25 text-[12.5px] font-bold text-primary tabular-nums">
+                {formatElapsed(elapsedSeconds)}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

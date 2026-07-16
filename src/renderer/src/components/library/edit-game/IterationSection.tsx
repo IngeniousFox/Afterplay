@@ -17,7 +17,7 @@ import {
   PLATFORM_OPTIONS,
 } from '../add-game/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
-import { EMPTY_ITERATION_FIELDS } from './types';
+import { anchorPickerValue, EMPTY_ITERATION_FIELDS, milestoneAnchor } from './types';
 import type { EditGameFormValues } from './types';
 
 type IterationSectionProps = {
@@ -53,6 +53,11 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
       'hoursPlayed',
       iteration.manualTotalPlayed !== null ? String(iteration.manualTotalPlayed) : '',
     );
+    // Solo las fechas ancladas a un marcador MANUAL entran al formulario
+    // (editables); las de sesiones reales se quedan fuera (null) y su campo
+    // se pinta en solo lectura.
+    setValue('started', anchorPickerValue(milestoneAnchor(iteration, 'start')));
+    setValue('finished', anchorPickerValue(milestoneAnchor(iteration, 'end')));
   };
 
   const startNewManual = (): void => {
@@ -143,13 +148,25 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
       </div>
 
       {iterationMode === 'existing' && selectedIteration ? (
+        // Editable SOLO si el ancla es un marcador manual (fecha tecleada a
+        // mano al registrar el playthrough — corregible); si es una sesión
+        // real trackeada, la fecha es una medición y se queda en solo
+        // lectura, como siempre.
         <div className="flex gap-2.5">
-          <ReadonlyDateField label="Started" iteration={selectedIteration} field="startedAt" />
-          <ReadonlyDateField
-            label="Finished / left"
-            iteration={selectedIteration}
-            field="endedAt"
-          />
+          {milestoneAnchor(selectedIteration, 'start') ? (
+            <FormDatePicker name="started" label="Started" />
+          ) : (
+            <ReadonlyDateField label="Started" iteration={selectedIteration} field="startedAt" />
+          )}
+          {milestoneAnchor(selectedIteration, 'end') ? (
+            <FormDatePicker name="finished" label="Finished / left" />
+          ) : (
+            <ReadonlyDateField
+              label="Finished / left"
+              iteration={selectedIteration}
+              field="endedAt"
+            />
+          )}
         </div>
       ) : (
         <div className="flex gap-2.5">
