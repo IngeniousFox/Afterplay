@@ -139,7 +139,11 @@ export const createGameWithDetails = async (
         gameId: game.id,
         type: 'purchase',
         amount: input.moneySpent,
-        datePrecision: 'day',
+        // undefined (no null) para que $defaultFn del schema caiga a HOY si
+        // por lo que sea no llega fecha — mismo patrón que el resto de este
+        // archivo (ver el occurredAt de más abajo).
+        occurredAt: input.moneySpentDate?.date,
+        datePrecision: input.moneySpentDate?.precision ?? 'day',
       });
     }
 

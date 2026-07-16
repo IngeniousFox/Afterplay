@@ -13,11 +13,13 @@ import { AddGameImagesField } from './add-game/AddGameImagesField';
 import { CheckboxRow } from './add-game/CheckboxRow';
 import type { CoverPickerTarget } from './add-game/CoverPicker';
 import { CoverPicker } from './add-game/CoverPicker';
+import { DateWithPrecisionPicker } from './add-game/DateWithPrecisionPicker';
 import { Dropdown } from './add-game/Dropdown';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { GameNotesPanel } from './add-game/GameNotesPanel';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
+import { todayValue } from './add-game/precisionDate';
 import { SearchStep } from './add-game/SearchStep';
 import { SegmentedButtonGroup } from './add-game/SegmentedButtonGroup';
 import { SelectedGameSummary } from './add-game/SelectedGameSummary';
@@ -108,8 +110,9 @@ export const AddGameModal = ({
           gameNotes: promoteGame.notes ?? '',
           coverUrl: promoteGame.coverUrl,
           heroUrl: promoteGame.heroUrl,
+          moneySpentDate: todayValue(),
         }
-      : DEFAULT_FORM_VALUES,
+      : { ...DEFAULT_FORM_VALUES, moneySpentDate: todayValue() },
   });
   const { control, setValue, getValues, reset: resetForm } = methods;
   const endless = useWatch({ control, name: 'endless' });
@@ -127,7 +130,7 @@ export const AddGameModal = ({
     setSelected(null);
     setPickerTarget(null);
     setNotesOpen(false);
-    resetForm(DEFAULT_FORM_VALUES);
+    resetForm({ ...DEFAULT_FORM_VALUES, moneySpentDate: todayValue() });
     createGame.reset();
     createPlanned.reset();
     promote.reset();
@@ -189,6 +192,7 @@ export const AddGameModal = ({
       note: values.note.trim() || null,
       gameNotes: values.gameNotes.trim() || null,
       moneySpent: values.origin === 'Purchased' ? parseOptionalNumber(values.moneySpent) : null,
+      moneySpentDate: values.origin === 'Purchased' ? toBackendDate(values.moneySpentDate) : null,
       executablePath: values.executablePath.trim() || null,
       installDirectory: values.installDirectory.trim() || null,
       installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
@@ -340,24 +344,49 @@ export const AddGameModal = ({
                     </div>
 
                     {origin === 'Purchased' && (
-                      <div>
-                        <div className={fieldLabelClass}>
-                          MONEY SPENT (€){' '}
-                          <span className="font-medium tracking-normal normal-case">
-                            · saved as a purchase
-                          </span>
+                      <div className="flex gap-2.5">
+                        <div className="flex-1">
+                          <div className={fieldLabelClass}>
+                            MONEY SPENT (€){' '}
+                            <span className="font-medium tracking-normal normal-case">
+                              · saved as a purchase
+                            </span>
+                          </div>
+                          <Controller
+                            control={control}
+                            name="moneySpent"
+                            render={({ field }) => (
+                              <input
+                                {...field}
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                placeholder="0.00"
+                                // Ver el comentario del mismo fix en
+                                // PlayedBeforePanel.tsx — la rueda del ratón
+                                // cambia el valor de un input number con foco,
+                                // sin avisar.
+                                onWheel={(event) => event.currentTarget.blur()}
+                                className={textInputClass}
+                              />
+                            )}
+                          />
                         </div>
+
                         <Controller
                           control={control}
-                          name="moneySpent"
+                          name="moneySpentDate"
                           render={({ field }) => (
-                            <input
-                              {...field}
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className={textInputClass}
+                            // Cuándo se compró — por defecto hoy (ver el
+                            // moneySpentDate: todayValue() de más arriba), no
+                            // la fecha en la que se acaba guardando el gasto
+                            // sin más: comprar algo hace tiempo y añadirlo
+                            // hoy a la app no debería registrarlo como
+                            // gastado hoy.
+                            <DateWithPrecisionPicker
+                              label="Purchased on"
+                              value={field.value}
+                              onChange={field.onChange}
                             />
                           )}
                         />

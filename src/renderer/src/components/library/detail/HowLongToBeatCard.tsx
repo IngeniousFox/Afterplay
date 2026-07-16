@@ -44,11 +44,19 @@ export const HowLongToBeatCard = ({
   const completionist = game.hltbCompletionist ?? 0;
   if (main === 0 && extra === 0 && completionist === 0) return null;
 
-  const comp = Math.max(1, completionist);
-  const segMain = (main / comp) * 100;
-  const segExtra = (Math.max(0, extra - main) / comp) * 100;
-  const segComp = (Math.max(0, completionist - extra) / comp) * 100;
-  const markerPct = Math.max(0, Math.min(100, (markerHours / comp) * 100));
+  // Escala la barra al mayor de los tres datos que SÍ conocemos — no siempre
+  // a completionist. HLTB no siempre trae los tres tiempos; un dato que
+  // falta llega como 0 igual que uno genuinamente 0, y si fuera justo
+  // completionist el que falta (el caso más común: main+extra sí, 100% no),
+  // escalar contra él da un denominador falso de 1h — los segmentos se
+  // salen del 100% (el bug real: nada de verde, marcador siempre al borde).
+  // Con el mayor de los tres, main+extra suman como mucho 100% y el
+  // marcador cae donde toca de verdad.
+  const scale = Math.max(main, extra, completionist, 1);
+  const segMain = (main / scale) * 100;
+  const segExtra = (Math.max(0, extra - main) / scale) * 100;
+  const segComp = (Math.max(0, completionist - extra) / scale) * 100;
+  const markerPct = Math.max(0, Math.min(100, (markerHours / scale) * 100));
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">

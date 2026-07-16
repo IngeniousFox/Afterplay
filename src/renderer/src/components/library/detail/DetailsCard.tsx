@@ -50,7 +50,11 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       <Row Icon={Gamepad2} label="Developer" value={game.developer ?? '—'} />
       <Row Icon={Building2} label="Publisher" value={game.publisher ?? '—'} />
       <Row Icon={Calendar} label="Released" value={game.releaseYear ?? '—'} />
-      <Row Icon={RotateCcw} label="Times replayed" value={replaysLabel} />
+      {/* Un endless nunca llega a "Beaten" (no existe ese estado para él,
+          ver ENDLESS_STATUS_OPTIONS) — su única forma de generar una
+          iteración nueva es Dropped -> empezar de cero, que no es lo que
+          "replayed" da a entender (terminarlo y volver a jugarlo entero). */}
+      {!game.endless && <Row Icon={RotateCcw} label="Times replayed" value={replaysLabel} />}
       <Row Icon={Clock} label="Recent activity" value={recentActivity} />
       {game.installDirectory && (
         <div className="border-b border-white/5 py-2.75">

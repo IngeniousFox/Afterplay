@@ -37,29 +37,31 @@ export const getGames = async (): Promise<GameListItem[]> => {
     .where(eq(gamesTable.planned, false))
     .orderBy(sql`${gamesTable.title} collate nocase`);
 
-  // Horas manuales por juego (ya vienen en horas, se suman directas). Agrupo
-  // solo sobre iterations sin tocar sessions todavía — si mezclo las dos
-  // tablas en un JOIN, esto se duplica una vez por cada sesión de la iteración.
-  const manualHoursByGame = await db
+  // Iteraciones con su manualTotalPlayed — a nivel de ITERACIÓN, no ya
+  // sumado por juego, porque las horas de cada iteración se resuelven igual
+  // que en getGameById.ts: manualTotalPlayed reemplaza a lo trackeado en ESA
+  // iteración (es un total de mano, no un extra encima), nunca se suman los
+  // dos. Sumar ambos por separado (como hacía esto antes) inflaba el total
+  // en cuanto una iteración con horas manuales tenía además alguna sesión
+  // real — el bug real detrás de "meto un número y sale otro distinto".
+  const iterations = await db
     .select({
+      id: iterationsTable.id,
       gameId: iterationsTable.gameId,
-      totalManualHours: sql<number>`coalesce(sum(${iterationsTable.manualTotalPlayed}), 0)`,
+      manualTotalPlayed: iterationsTable.manualTotalPlayed,
     })
-    .from(iterationsTable)
-    .groupBy(iterationsTable.gameId);
-
-  const manualHoursMap = new Map(
-    manualHoursByGame.map((row) => [row.gameId, row.totalManualHours]),
-  );
+    .from(iterationsTable);
 
   // Todas las sesiones del juego (vía sus iteraciones), sin agregar. De aquí
-  // salen CUATRO cosas a la vez en el mismo bucle de abajo: horas trackeadas,
-  // nº de sesiones, si hay alguna sesión abierta ahora mismo (LIVE), y desde
-  // cuándo (para el contador en vivo de la card — SPEC 10.7 lo pide junto al
-  // badge PLAYING, no basta con saber que está en marcha).
+  // salen CUATRO cosas a la vez en el mismo bucle de abajo: horas trackeadas
+  // (agrupadas por ITERACIÓN, para el reemplazo de arriba), nº de sesiones,
+  // si hay alguna sesión abierta ahora mismo (LIVE), y desde cuándo (para el
+  // contador en vivo de la card — SPEC 10.7 lo pide junto al badge PLAYING,
+  // no basta con saber que está en marcha).
   const sessionRows = await db
     .select({
       gameId: iterationsTable.gameId,
+      iterationId: sessionsTable.iterationId,
       startedAt: sessionsTable.startedAt,
       durationSec: sessionsTable.durationSec,
       endedAt: sessionsTable.endedAt,
@@ -67,21 +69,30 @@ export const getGames = async (): Promise<GameListItem[]> => {
     .from(sessionsTable)
     .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id));
 
-  const trackedSecondsByGame = new Map<number, number>();
+  const trackedSecondsByIteration = new Map<number, number>();
   const sessionCountByGame = new Map<number, number>();
   // startedAt de la sesión abierta del juego (SPEC 4.5: como mucho un
   // playthrough activo por juego, así que como mucho una sesión abierta).
   const liveSinceByGame = new Map<number, Date>();
 
   for (const row of sessionRows) {
-    trackedSecondsByGame.set(
-      row.gameId,
-      (trackedSecondsByGame.get(row.gameId) ?? 0) + (row.durationSec ?? 0),
+    trackedSecondsByIteration.set(
+      row.iterationId,
+      (trackedSecondsByIteration.get(row.iterationId) ?? 0) + (row.durationSec ?? 0),
     );
     sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
     if (row.endedAt === null) {
       liveSinceByGame.set(row.gameId, row.startedAt);
     }
+  }
+
+  // Horas por juego = suma de las horas de cada una de sus iteraciones,
+  // cada una ya resuelta con la misma regla manual-o-trackeado-nunca-los-dos.
+  const hoursByGame = new Map<number, number>();
+  for (const iteration of iterations) {
+    const trackedSeconds = trackedSecondsByIteration.get(iteration.id) ?? 0;
+    const hours = iteration.manualTotalPlayed ?? trackedSeconds / 3600;
+    hoursByGame.set(iteration.gameId, (hoursByGame.get(iteration.gameId) ?? 0) + hours);
   }
 
   // Todos los stateEvents del juego (vía sus iteraciones), sin agregar
@@ -131,10 +142,6 @@ export const getGames = async (): Promise<GameListItem[]> => {
   }
 
   return games.map((game) => {
-    const manualHours = manualHoursMap.get(game.id) ?? 0;
-    const trackedSeconds = trackedSecondsByGame.get(game.id) ?? 0;
-    const trackedHours = trackedSeconds / 3600;
-
     const latestStateEvent = latestStateEventByGame.get(game.id);
 
     const liveSince = liveSinceByGame.get(game.id) ?? null;
@@ -145,7 +152,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       coverUrl: game.coverUrl,
       genres: game.genres,
       releaseYear: game.releaseYear,
-      totalHours: manualHours + trackedHours,
+      totalHours: hoursByGame.get(game.id) ?? 0,
       currentState: latestStateEvent?.type ?? null,
       isLive: liveSince !== null,
       liveSince,

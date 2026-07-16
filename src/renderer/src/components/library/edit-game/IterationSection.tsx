@@ -217,7 +217,18 @@ const FormInput = ({
   name: 'label' | 'platform' | 'hoursPlayed';
 } & React.InputHTMLAttributes<HTMLInputElement>): React.JSX.Element => {
   const { register } = useFormContext<EditGameFormValues>();
-  return <input {...register(name)} {...props} className={textInputClass} />;
+  return (
+    <input
+      {...register(name)}
+      {...props}
+      // Solo para type="number" (hoursPlayed aquí): la rueda del ratón
+      // cambia el valor de un input number con foco, sin avisar — bug real
+      // reportado ("metí 68 y se guardó 65"). Ver el mismo fix en
+      // PlayedBeforePanel.tsx/AddGameModal.tsx/AddSpendPopover.tsx.
+      onWheel={props.type === 'number' ? (event) => event.currentTarget.blur() : undefined}
+      className={textInputClass}
+    />
+  );
 };
 
 const FormSegmented = ({

@@ -4,7 +4,11 @@ import { Calendar } from '../../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { CalendarDropdown, CalendarDropdownGroup } from './CalendarDropdown';
 import { MonthGrid } from './MonthGrid';
+import { toIsoDate } from './precisionDate';
+import type { DatePrecision, PrecisionDateValue } from './precisionDate';
 import { YearGrid } from './YearGrid';
+
+export type { DatePrecision, PrecisionDateValue } from './precisionDate';
 
 // Sin esto, react-day-picker arranca el desplegable de año en "hace 100
 // años" por defecto (documentado, y comprobado en vivo: con hoy en 2026
@@ -16,16 +20,6 @@ const TODAY = new Date();
 const CURRENT_YEAR = TODAY.getFullYear();
 const CALENDAR_START_MONTH = new Date(1970, 0);
 const CALENDAR_END_MONTH = new Date(CURRENT_YEAR, 11);
-
-export type DatePrecision = 'year' | 'month' | 'day';
-
-// isoDate va SIEMPRE completo (YYYY-MM-DD) — la parte que no pinta según la
-// precisión (mes/día cuando precision es 'year', día cuando es 'month')
-// simplemente se rellena a 01 y no se muestra ni se usa aguas abajo: el
-// timestamp guardado en sessions/stateEvents es siempre completo, precision
-// solo dice cuánto de ese timestamp es de fiar (mismo modelo que ya usan
-// esas tablas — no es un formato nuevo, es lo mismo con otro envoltorio).
-export type PrecisionDateValue = { precision: DatePrecision; isoDate: string };
 
 type DateWithPrecisionPickerProps = {
   label: string;
@@ -44,9 +38,6 @@ const PRECISION_OPTIONS: { value: DatePrecision; label: string }[] = [
 // `new Date('YYYY-MM-DD')` (eso lo interpreta como UTC medianoche y lo
 // muestra un día antes en husos horarios negativos).
 const parseIsoDate = (isoDate: string): Date => new Date(`${isoDate}T00:00:00`);
-
-const toIsoDate = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 // 'en-US' fijo, no el locale del sistema — el resto de la UI está en inglés
 // sin i18n, así que dejar que esto cambie de idioma solo (el navegador de

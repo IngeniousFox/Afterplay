@@ -2,8 +2,9 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { SpendEvent } from '../../../../../shared/types';
 import { useAddSpend } from '../../../hooks/spend';
-import type { PrecisionDateValue } from '../add-game/DateWithPrecisionPicker';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
+import type { PrecisionDateValue } from '../add-game/precisionDate';
+import { todayValue } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
@@ -16,11 +17,6 @@ const TYPE_OPTIONS: { value: SpendEvent['type']; label: string }[] = [
   { value: 'purchase', label: 'Purchase' },
   { value: 'ingame_spend', label: 'In-game spend' },
 ];
-
-const toIsoDate = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
-const todayValue = (): PrecisionDateValue => ({ precision: 'day', isoDate: toIsoDate(new Date()) });
 
 // Botón "Añadir gasto" de la barra de acciones (SPEC 4.5) — popover con un
 // formulario pequeño e independiente del playthrough: tipo, cantidad, fecha
@@ -86,6 +82,9 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
               min={0}
               step="0.01"
               placeholder="0.00"
+              // Ver PlayedBeforePanel.tsx — la rueda del ratón cambia el
+              // valor de un input number con foco, sin avisar.
+              onWheel={(event) => event.currentTarget.blur()}
               className={textInputClass}
             />
           </div>

@@ -4,6 +4,8 @@ import type { PrecisionDateValue } from './DateWithPrecisionPicker';
 
 export const PLATFORM_OPTIONS = [
   'Steam',
+  'PC',
+  'EA Play',
   'GOG',
   'Epic',
   'Steam Deck',
@@ -51,6 +53,10 @@ export type AddGameFormValues = {
   hoursPlayed: string;
   pastStatus: PastStatusKey;
   moneySpent: string;
+  // Cuándo se compró — separado del resto de fechas (started/finished, que
+  // son de cuándo se jugó): un gasto puede pasar mucho antes de empezar a
+  // jugarlo. Precisión propia por si solo recuerdas el mes/año de compra.
+  moneySpentDate: PrecisionDateValue | null;
   executablePath: string;
   // Carpeta de instalación + su tamaño ya calculado al elegirla (ver
   // InstallDirectoryField) — installSizeBytes va de la mano, nunca se
@@ -79,6 +85,7 @@ export const DEFAULT_FORM_VALUES: AddGameFormValues = {
   hoursPlayed: '',
   pastStatus: 'beaten',
   moneySpent: '',
+  moneySpentDate: null,
   executablePath: '',
   installDirectory: '',
   installSizeBytes: null,

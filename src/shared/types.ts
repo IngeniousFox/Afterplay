@@ -87,6 +87,10 @@ export type CreateGameWithDetailsInput = {
   // atado a si se marcó "jugado antes" ni a si hay estado inicial.
   gameNotes: string | null;
   moneySpent: number | null;
+  // Cuándo se compró — solo tiene sentido con moneySpent puesto. null =
+  // "hoy" a nivel de UI, pero se manda explícito desde el renderer (no un
+  // default silencioso aquí en el main).
+  moneySpentDate: { date: Date; precision: 'year' | 'month' | 'day' } | null;
   executablePath: string | null;
   // Elegidos a mano en el CoverPicker (SPEC 4.6) — null significa "sin
   // elección propia", el main usa su propio default (detail.covers[0]/

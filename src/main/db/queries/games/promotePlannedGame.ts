@@ -116,7 +116,8 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
         gameId: game.id,
         type: 'purchase',
         amount: input.moneySpent,
-        datePrecision: 'day',
+        occurredAt: input.moneySpentDate?.date,
+        datePrecision: input.moneySpentDate?.precision ?? 'day',
       });
     }
 

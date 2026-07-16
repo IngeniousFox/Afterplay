@@ -7,7 +7,6 @@ import icon from '../../resources/icon.png?asset';
 import { runMigrations, runSyncCycle } from './db';
 // [SEED] cuando quite el seed: este import + borrar src/main/db/seed.ts.
 import type { Tray } from 'electron';
-import { seedDatabase } from './db/seed';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
 import { wasOpenedHiddenAtLogin } from './lib/loginItem';
@@ -189,7 +188,7 @@ app.whenReady().then(async () => {
   // Si peta no pasa nada, se loguea y la app sigue tirando igual.
   if (is.dev) {
     try {
-      await seedDatabase();
+      // await seedDatabase();
     } catch (error) {
       console.error('[seed] Error en el seed de desarrollo:', error);
     }
