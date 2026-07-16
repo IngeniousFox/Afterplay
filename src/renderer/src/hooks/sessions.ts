@@ -1,6 +1,11 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AddManualSessionInput, Session, SessionWithGame } from '../../../shared/types';
+import type {
+  AddManualSessionInput,
+  PendingSession,
+  Session,
+  SessionWithGame,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 // Bloque 5A — todas las sesiones de la biblioteca (para la vista de
@@ -13,6 +18,36 @@ export const useAllSessions = (): UseQueryResult<SessionWithGame[], Error> =>
     queryFn: () => window.api.sessions.getAll(),
     staleTime: Infinity,
   });
+
+// EMULADORES.md §6 — la bandeja "Pending": sesiones de emulador sin asignar.
+// Su key vive bajo ['sessions'], así que el watcher (useWatcherSync) y las
+// mutations de sesiones la refrescan sin tocarla explícitamente.
+export const usePendingSessions = (): UseQueryResult<PendingSession[], Error> =>
+  useQuery({
+    queryKey: queryKeys.sessions.pending,
+    queryFn: () => window.api.sessions.getPending(),
+    staleTime: Infinity,
+  });
+
+// Asignar una sesión pendiente a un juego emulado — el juego recibe las
+// horas (y puede pasar a "Playing"/crear playthrough, ver assignSession),
+// así que invalida el árbol entero de juegos además de las sesiones.
+export const useAssignSession = (): UseMutationResult<
+  Session | null,
+  Error,
+  { sessionId: number; gameId: number },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, gameId }) => window.api.sessions.assign(sessionId, gameId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
+    },
+  });
+};
 
 export const useAddSession = (): UseMutationResult<
   Session,

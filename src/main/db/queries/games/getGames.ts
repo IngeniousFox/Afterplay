@@ -31,6 +31,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       title: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
       genres: gamesTable.genres,
+      isEmulated: gamesTable.isEmulated,
       releaseYear: gamesTable.releaseYear,
     })
     .from(gamesTable)
@@ -151,6 +152,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       title: game.title,
       coverUrl: game.coverUrl,
       genres: game.genres,
+      isEmulated: game.isEmulated,
       releaseYear: game.releaseYear,
       totalHours: hoursByGame.get(game.id) ?? 0,
       currentState: latestStateEvent?.type ?? null,

@@ -1,6 +1,7 @@
 import { BarChart3, Bookmark, Clock, Gamepad2 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { usePendingSessions } from '../../hooks/sessions';
 import { SettingsModal } from './SettingsModal';
 
 type NavItem = {
@@ -19,6 +20,11 @@ const NAV_ITEMS: NavItem[] = [
 
 export const NavRail = (): React.JSX.Element => {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Badge de sesiones de emulador sin asignar sobre el icono de Sessions
+  // (EMULADORES.md §6): ámbar ESTÁTICO, sin pulso — atención pasiva, no
+  // actividad en vivo (ese lenguaje queda para el verde de PLAYING).
+  const { data: pendingSessions = [] } = usePendingSessions();
+  const pendingCount = pendingSessions.length;
 
   return (
     <div
@@ -63,6 +69,14 @@ export const NavRail = (): React.JSX.Element => {
               )}
               <div className="relative z-1">
                 <Icon size={size} color={isActive ? '#e9ebe9' : 'var(--muted-foreground)'} />
+                {to === '/sessions' && pendingCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-extrabold"
+                    style={{ background: '#e3b24a', color: '#0a0b0a' }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
               </div>
             </>
           )}

@@ -71,6 +71,7 @@ export const createGameWithDetails = async (
     installDirectory: input.installDirectory,
     installSizeBytes: input.installSizeBytes,
     endless: input.endless,
+    isEmulated: input.isEmulated,
   };
 
   const started = input.started;

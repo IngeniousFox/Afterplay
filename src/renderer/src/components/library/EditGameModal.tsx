@@ -46,6 +46,7 @@ const buildDefaults = (game: GameDetail): EditGameFormValues => {
     executablePath: game.executablePath ?? '',
     notes: game.notes ?? '',
     endless: game.endless,
+    isEmulated: game.isEmulated,
     iterationMode: iteration ? 'existing' : 'none',
     selectedIterationId: iteration?.id ?? null,
     label: iteration?.label ?? '',
@@ -77,6 +78,7 @@ export const EditGameModal = ({
   const methods = useForm<EditGameFormValues>({ defaultValues: buildDefaults(game) });
   const { control, getValues, reset, setValue } = methods;
   const endless = useWatch({ control, name: 'endless' });
+  const isEmulated = useWatch({ control, name: 'isEmulated' });
 
   useEffect(() => {
     if (open) reset(buildDefaults(game));
@@ -112,9 +114,12 @@ export const EditGameModal = ({
         title: values.title.trim() || game.title,
         installDirectory: values.installDirectory.trim() || null,
         installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
-        executablePath: values.executablePath.trim() || null,
+        // Marcarlo como emulado retira el .exe propio: lo vigilado pasa a
+        // ser el emulador, no el juego (EMULADORES.md §5).
+        executablePath: values.isEmulated ? null : values.executablePath.trim() || null,
         notes: values.notes.trim() || null,
         endless: values.endless,
+        isEmulated: values.isEmulated,
       },
     });
 
@@ -301,7 +306,9 @@ export const EditGameModal = ({
 
               <InstallDirectoryField />
 
-              <ExecutablePathField />
+              {/* Un juego emulado no tiene .exe propio (EMULADORES.md §5) —
+                  mismo ocultamiento que en Add Game. */}
+              {!isEmulated && <ExecutablePathField />}
 
               <div>
                 <div className={fieldLabelClass}>NOTES</div>
@@ -323,6 +330,16 @@ export const EditGameModal = ({
                 onToggle={() => setValue('endless', !endless)}
                 title="Endless game"
                 description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
+                borderColorChecked="rgba(47,220,126,.7)"
+                fillColorChecked="#2fdc7e"
+                checkIconColor="#08120c"
+              />
+
+              <CheckboxRow
+                checked={isEmulated}
+                onToggle={() => setValue('isEmulated', !isEmulated)}
+                title="Emulated game"
+                description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
                 borderColorChecked="rgba(47,220,126,.7)"
                 fillColorChecked="#2fdc7e"
                 checkIconColor="#08120c"

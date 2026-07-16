@@ -15,6 +15,12 @@ export const queryKeys = {
   },
   sessions: {
     all: ['sessions'] as const,
+    // Bajo el prefijo ['sessions'] a propósito — cualquier invalidación de
+    // sessions.all (mutations, useWatcherSync) refresca también la bandeja.
+    pending: ['sessions', 'pending'] as const,
+  },
+  emulators: {
+    all: ['emulators'] as const,
   },
   spend: {
     all: ['spend'] as const,

@@ -1,5 +1,10 @@
 import { ipcRenderer } from 'electron';
-import type { AddManualSessionInput, Session, SessionWithGame } from '../../shared/types';
+import type {
+  AddManualSessionInput,
+  PendingSession,
+  Session,
+  SessionWithGame,
+} from '../../shared/types';
 
 export const sessionsApi = {
   add: (input: AddManualSessionInput): Promise<Session> =>
@@ -16,4 +21,7 @@ export const sessionsApi = {
     date: Date,
     precision: 'year' | 'month' | 'day',
   ): Promise<Session | null> => ipcRenderer.invoke('sessions:updateMilestone', id, date, precision),
+  getPending: (): Promise<PendingSession[]> => ipcRenderer.invoke('sessions:getPending'),
+  assign: (sessionId: number, gameId: number): Promise<Session | null> =>
+    ipcRenderer.invoke('sessions:assign', sessionId, gameId),
 };

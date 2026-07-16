@@ -1,12 +1,21 @@
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { basename } from 'path';
 import { getDb } from '../..';
-import { gamesTable } from '../../schema';
+import { emulatorsTable, gamesTable } from '../../schema';
 
-// Lo que el watcher necesita para reconocer el proceso de un juego.
+// Lo que el watcher necesita para reconocer un proceso vigilado — un juego
+// nativo o un emulador (EMULADORES.md §4: para el watcher un emulador es un
+// .exe más, mismo barrido de dos fases; lo único distinto es qué pasa al
+// detectarlo, y eso lo decide `kind`).
 export type WatchTarget = {
-  gameId: number;
-  gameTitle: string;
+  // Clave única entre las dos familias ("game:12" / "emu:3") — es la clave
+  // del mapa de sesiones activas del watcher, donde juegos y emuladores
+  // conviven sin pisarse.
+  key: string;
+  kind: 'game' | 'emulator';
+  // id del juego o del emulador, según kind.
+  refId: number;
+  title: string;
   // Nombre del .exe en minúsculas (basename de executablePath) — Fase 1 del
   // barrido, comparado contra ps-list.
   exeName: string;
@@ -25,6 +34,9 @@ export type WatchTarget = {
 // Excepción: los juegos de Plan to Play (planned) — un juego planeado no
 // tiene sesiones (por definición aún no lo juegas dentro de la app), así que
 // el watcher no debe abrirle una aunque tuviera un exe configurado.
+//
+// Y ADEMÁS todos los emuladores registrados (Ajustes) — al detectar uno, la
+// sesión nace sin juego asignado (ver createEmulatorSession).
 export const getWatchTargets = async (): Promise<WatchTarget[]> => {
   const db = getDb();
 
@@ -37,14 +49,34 @@ export const getWatchTargets = async (): Promise<WatchTarget[]> => {
     .from(gamesTable)
     .where(and(isNotNull(gamesTable.executablePath), eq(gamesTable.planned, false)));
 
+  const emulators = await db
+    .select({
+      id: emulatorsTable.id,
+      name: emulatorsTable.name,
+      executablePath: emulatorsTable.executablePath,
+    })
+    .from(emulatorsTable);
+
   const targets: WatchTarget[] = [];
   for (const game of games) {
     if (!game.executablePath) continue;
     targets.push({
-      gameId: game.id,
-      gameTitle: game.title,
+      key: `game:${game.id}`,
+      kind: 'game',
+      refId: game.id,
+      title: game.title,
       exeName: basename(game.executablePath).toLowerCase(),
       exePath: game.executablePath.toLowerCase(),
+    });
+  }
+  for (const emulator of emulators) {
+    targets.push({
+      key: `emu:${emulator.id}`,
+      kind: 'emulator',
+      refId: emulator.id,
+      title: emulator.name,
+      exeName: basename(emulator.executablePath).toLowerCase(),
+      exePath: emulator.executablePath.toLowerCase(),
     });
   }
 

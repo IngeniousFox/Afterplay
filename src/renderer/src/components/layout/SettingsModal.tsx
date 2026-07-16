@@ -7,6 +7,7 @@ import {
 } from '../../hooks/settings';
 import { CheckboxRow } from '../library/add-game/CheckboxRow';
 import { Dialog, DialogContent } from '../ui/dialog';
+import { EmulatorsSection } from './EmulatorsSection';
 import { TimeFormatSlider } from './TimeFormatSlider';
 
 type SettingsModalProps = {
@@ -27,7 +28,7 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps): React
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="w-100 max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-[18px] border border-input bg-[#121413] p-0 shadow-[0_30px_80px_rgba(0,0,0,.6)]"
+        className="flex max-h-[80vh] w-100 max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[18px] border border-input bg-[#121413] p-0 shadow-[0_30px_80px_rgba(0,0,0,.6)]"
       >
         <div className="flex items-center justify-between border-b border-border px-5.5 py-4.5">
           <div className="text-[17px] font-extrabold tracking-[-.01em] text-foreground">
@@ -42,7 +43,7 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps): React
           </button>
         </div>
 
-        <div className="flex flex-col gap-3.5 px-5.5 py-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5.5 py-5">
           {!isLoading && (
             <CheckboxRow
               checked={openAtLogin}
@@ -67,6 +68,8 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps): React
             </div>
             <TimeFormatSlider value={timeFormat} onChange={(next) => setTimeFormat.mutate(next)} />
           </div>
+
+          <EmulatorsSection />
         </div>
       </DialogContent>
     </Dialog>

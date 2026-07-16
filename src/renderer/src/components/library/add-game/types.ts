@@ -47,6 +47,9 @@ export type AddGameFormValues = {
   origin: string;
   format: 'digital' | 'physical';
   endless: boolean;
+  // EMULADORES.md §5 — se juega vía emulador: sin .exe propio que vigilar
+  // (el campo se oculta), las sesiones llegan por asignación manual.
+  isEmulated: boolean;
   playedBefore: boolean;
   started: PrecisionDateValue | null;
   finished: PrecisionDateValue | null;
@@ -79,6 +82,7 @@ export const DEFAULT_FORM_VALUES: AddGameFormValues = {
   origin: 'Purchased',
   format: 'digital',
   endless: false,
+  isEmulated: false,
   playedBefore: false,
   started: null,
   finished: null,

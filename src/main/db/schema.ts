@@ -17,6 +17,7 @@ export type Session = typeof sessionsTable.$inferSelect;
 export type Iteration = typeof iterationsTable.$inferSelect;
 export type StateEvent = typeof stateEventsTable.$inferSelect;
 export type SpendEvent = typeof spendEventsTable.$inferSelect;
+export type Emulator = typeof emulatorsTable.$inferSelect;
 
 // Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
 // columnas con default son opcionales. Son la base de los inputs de los
@@ -26,6 +27,7 @@ export type NewSession = typeof sessionsTable.$inferInsert;
 export type NewIteration = typeof iterationsTable.$inferInsert;
 export type NewStateEvent = typeof stateEventsTable.$inferInsert;
 export type NewSpendEvent = typeof spendEventsTable.$inferInsert;
+export type NewEmulator = typeof emulatorsTable.$inferInsert;
 
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
@@ -53,6 +55,12 @@ export const gamesTable = sqliteTable('games', {
   installSizeBytes: int(),
   genres: text({ mode: 'json' }).$type<string[]>(),
   endless: int({ mode: 'boolean' }).notNull().default(false),
+  // EMULADORES.md §5 — este juego se juega vía emulador, no tiene .exe
+  // propio que vigilar (lo vigilado es el emulador). Flag a nivel de JUEGO
+  // a propósito (y no derivado de iteration.playedPlatform === 'Emulated'):
+  // cubre juegos unplayed sin iteración con plataforma aún, y solo alimenta
+  // el filtro del modal de asignación, no las stats.
+  isEmulated: int({ mode: 'boolean' }).notNull().default(false),
   // Sección Plan to Play: true = vive SOLO en /plan (fuera de Library/
   // Sessions/Stats/watcher). La fuente de verdad es esta columna, NO el
   // evento 'plan_to_play' del historial: pasar el juego a la biblioteca
@@ -67,9 +75,17 @@ export const gamesTable = sqliteTable('games', {
 
 export const sessionsTable = sqliteTable('sessions', {
   id: int().primaryKey({ autoIncrement: true }),
-  iterationId: int()
-    .notNull()
-    .references(() => iterationsTable.id, { onDelete: 'cascade' }),
+  // Nullable desde EMULADORES.md §5: una sesión de emulador SIN ASIGNAR
+  // todavía no pertenece a ningún playthrough (iterationId null +
+  // emulatorId puesto) — vive en la bandeja "Pending" hasta que el usuario
+  // la asigna a un juego. Las sesiones normales siguen llevando iterationId
+  // SIEMPRE (lo garantiza la capa de app; la DB ya no puede).
+  iterationId: int().references(() => iterationsTable.id, { onDelete: 'cascade' }),
+  // Qué emulador generó esta sesión — se queda puesto también después de
+  // asignarla (registro de origen, útil para stats/filtros futuros). SET
+  // NULL y no CASCADE: borrar un emulador no debe llevarse las sesiones ya
+  // asignadas a juegos (deleteEmulator limpia las pendientes él mismo).
+  emulatorId: int().references(() => emulatorsTable.id, { onDelete: 'set null' }),
   isManual: int({ mode: 'boolean' }).notNull().default(false),
   startedAt: int({ mode: 'timestamp_ms' })
     .notNull()
@@ -121,6 +137,15 @@ export const stateEventsTable = sqliteTable('state_events', {
     .$defaultFn(() => new Date()),
   datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
   note: text(),
+});
+
+// EMULADORES.md §5 — un emulador no es un juego, es una herramienta que el
+// watcher vigila con el MISMO mecanismo que un .exe cualquiera (getWatchTargets
+// deriva exeName del basename de executablePath, igual que con games).
+export const emulatorsTable = sqliteTable('emulators', {
+  id: int().primaryKey({ autoIncrement: true }),
+  name: text().notNull(),
+  executablePath: text().notNull(),
 });
 
 export const spendEventsTable = sqliteTable('spend_events', {

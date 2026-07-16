@@ -1,4 +1,5 @@
 import { dialogApi } from './dialog';
+import { emulatorsApi } from './emulators';
 import { gamesApi } from './games';
 import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
@@ -16,6 +17,7 @@ export const api = {
   window: windowApi,
   dialog: dialogApi,
   games: gamesApi,
+  emulators: emulatorsApi,
   iterations: iterationsApi,
   sessions: sessionsApi,
   stateEvents: stateEventsApi,

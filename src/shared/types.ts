@@ -1,6 +1,7 @@
 import type {
   GameRow,
   Iteration,
+  NewEmulator,
   NewGame,
   NewIteration,
   NewSession,
@@ -12,8 +13,10 @@ import type {
 } from '../main/db/schema';
 
 export type {
+  Emulator,
   GameRow,
   Iteration,
+  NewEmulator,
   NewGame,
   NewIteration,
   NewSession,
@@ -57,6 +60,20 @@ export type AddStateEventInput = Omit<NewStateEvent, 'id'>;
 
 export type AddSpendEventInput = Omit<NewSpendEvent, 'id'>;
 
+// EMULADORES.md — registrar un emulador para que el watcher lo vigile.
+export type CreateEmulatorInput = Omit<NewEmulator, 'id'>;
+
+// Sesión de emulador pendiente de asignar (bandeja "Pending" de la vista de
+// Sesiones) — con el nombre del emulador ya resuelto para pintarla.
+export type PendingSession = {
+  id: number;
+  emulatorId: number;
+  emulatorName: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  durationSec: number | null;
+};
+
 // Corrección de una entrada manual del historial (lápiz de HistoryList).
 // El TIPO nunca se toca en ninguno de los dos (SPEC 4.5: corregir un estado
 // es añadir un evento nuevo) — pero una FECHA/CANTIDAD tecleada mal no es un
@@ -83,6 +100,9 @@ export type UpdateSpendEventPatch = {
 export type CreateGameWithDetailsInput = {
   igdbId: number;
   endless: boolean;
+  // EMULADORES.md §5 — checkbox "Emulated game" del modal: sin .exe propio
+  // que vigilar (el campo se oculta), sesiones vía asignación manual.
+  isEmulated: boolean;
   iteration: {
     playedPlatform: string;
     origin: string;
@@ -168,6 +188,9 @@ export type GameListItem = {
   // Solo para el Genre Radar (Bloque 5E) — se usa genres[0] como género
   // "principal" del juego, igual que officialPlatforms?.[0] en otros sitios.
   genres: string[] | null;
+  // EMULADORES.md — alimenta el filtro del modal de asignación de sesiones
+  // pendientes (solo juegos emulados pueden recibirlas).
+  isEmulated: boolean;
   // Para el donut de "edad" de los juegos jugados (estilo resumen anual de
   // Steam): nuevos vs 1-5 / 5-10 / 10+ años respecto al año filtrado.
   releaseYear: number | null;

@@ -4,16 +4,21 @@ import { iterationsTable, sessionsTable } from '../../schema';
 
 export type OpenSession = {
   sessionId: number;
-  gameId: number;
+  // Exactamente uno de los dos viene puesto: gameId para sesiones normales
+  // (resuelto vía su iteración), emulatorId para sesiones de emulador sin
+  // asignar (iterationId null — por eso el join es LEFT, un inner las
+  // dejaría invisibles para el watcher y sus cierres no se detectarían).
+  gameId: number | null;
+  emulatorId: number | null;
   startedAt: Date;
   // Último latido del watcher mientras la sesión estaba viva. Es la mejor
   // estimación del fin real si la app murió de golpe (ver reconcile).
   lastHeartbeatAt: Date | null;
 };
 
-// Todas las sesiones abiertas (endedAt null) con el juego al que pertenecen.
-// Las usa el watcher al arrancar para reconciliar: si el juego no está en
-// marcha de verdad, esa sesión abierta ya no es válida (ver watcher).
+// Todas las sesiones abiertas (endedAt null) con su dueño (juego o
+// emulador). Las usa el watcher al arrancar para reconciliar y en cada
+// ciclo para adoptar sesiones que él no abrió (botón Play).
 export const getOpenSessions = async (): Promise<OpenSession[]> => {
   const db = getDb();
 
@@ -21,10 +26,11 @@ export const getOpenSessions = async (): Promise<OpenSession[]> => {
     .select({
       sessionId: sessionsTable.id,
       gameId: iterationsTable.gameId,
+      emulatorId: sessionsTable.emulatorId,
       startedAt: sessionsTable.startedAt,
       lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
     })
     .from(sessionsTable)
-    .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id))
+    .leftJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id))
     .where(isNull(sessionsTable.endedAt));
 };

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SessionWithGame } from '../../../shared/types';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { Pager } from '../components/sessions/Pager';
+import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
@@ -162,6 +163,11 @@ export const Sessions = (): React.JSX.Element => {
             </div>
           )}
         </div>
+
+        {/* Bandeja de sesiones de emulador sin asignar (EMULADORES.md §6) —
+            solo en la vista global: una sesión pendiente no pertenece a
+            ningún juego todavía, no pinta nada bajo un filtro de juego. */}
+        {gameId === null && <PendingSessionsSection />}
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading sessions…</p>

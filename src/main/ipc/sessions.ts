@@ -3,6 +3,8 @@ import type { AddManualSessionInput } from '../../shared/types';
 import { addManualSession } from '../db/queries/sessions/addManualSession';
 import { closeSession } from '../db/queries/sessions/closeSession';
 import { getAllSessions } from '../db/queries/sessions/getAllSessions';
+import { assignSession } from '../db/queries/sessions/assignSession';
+import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { getSessionsByIteration } from '../db/queries/sessions/getSessionsByIteration';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 import { updateMilestoneSession } from '../db/queries/sessions/updateMilestoneSession';
@@ -44,4 +46,14 @@ export const registerSessionsHandlers = (): void => {
       return updateMilestoneSession(id, date, precision);
     },
   );
+
+  // EMULADORES.md — bandeja de sesiones de emulador sin asignar y su
+  // asignación a un juego de la biblioteca.
+  handleDb('sessions:getPending', async () => {
+    return getPendingSessions();
+  });
+
+  handleDb('sessions:assign', async (_event, sessionId: number, gameId: number) => {
+    return assignSession(sessionId, gameId);
+  });
 };

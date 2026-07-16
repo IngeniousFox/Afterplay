@@ -8,6 +8,7 @@ import {
   usePromotePlannedGame,
 } from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
+import { useAssignSession } from '../../hooks/sessions';
 import { Dialog, DialogContent } from '../ui/dialog';
 import { AddGameImagesField } from './add-game/AddGameImagesField';
 import { CheckboxRow } from './add-game/CheckboxRow';
@@ -52,6 +53,13 @@ type AddGameModalProps = {
   // Tras promocionar con éxito (el juego ya no está en el Plan) — para que
   // la pantalla dueña navegue a donde toque (su ficha de biblioteca).
   onPromoted?: () => void;
+  // EMULADORES.md §6 — flujo "+ Add new game" desde el modal de asignación:
+  // el checkbox de emulado arranca premarcado…
+  defaultEmulated?: boolean;
+  // …y al crear el juego, esta sesión pendiente se le asigna sola (montar
+  // el modal solo al abrirlo, igual que promoteGame — el prellenado vive en
+  // los inicializadores).
+  assignSessionId?: number;
 };
 
 const toBackendDate = (
@@ -72,6 +80,8 @@ export const AddGameModal = ({
   mode = 'library',
   promoteGame,
   onPromoted,
+  defaultEmulated = false,
+  assignSessionId,
 }: AddGameModalProps): React.JSX.Element => {
   const isPlan = mode === 'plan';
   const isPromote = promoteGame != null;
@@ -104,6 +114,7 @@ export const AddGameModal = ({
           origin: promoteIteration?.origin ?? DEFAULT_FORM_VALUES.origin,
           format: promoteIteration?.format ?? DEFAULT_FORM_VALUES.format,
           endless: promoteGame.endless,
+          isEmulated: promoteGame.isEmulated,
           executablePath: promoteGame.executablePath ?? '',
           installDirectory: promoteGame.installDirectory ?? '',
           installSizeBytes: promoteGame.installSizeBytes,
@@ -112,10 +123,15 @@ export const AddGameModal = ({
           heroUrl: promoteGame.heroUrl,
           moneySpentDate: todayValue(),
         }
-      : { ...DEFAULT_FORM_VALUES, moneySpentDate: todayValue() },
+      : {
+          ...DEFAULT_FORM_VALUES,
+          moneySpentDate: todayValue(),
+          ...(defaultEmulated ? { isEmulated: true, platform: 'Emulated' } : {}),
+        },
   });
   const { control, setValue, getValues, reset: resetForm } = methods;
   const endless = useWatch({ control, name: 'endless' });
+  const isEmulated = useWatch({ control, name: 'isEmulated' });
   const playedBefore = useWatch({ control, name: 'playedBefore' });
   const origin = useWatch({ control, name: 'origin' });
 
@@ -123,6 +139,7 @@ export const AddGameModal = ({
   const createGame = useCreateGameWithDetails();
   const createPlanned = useCreatePlannedGame();
   const promote = usePromotePlannedGame();
+  const assignSession = useAssignSession();
   const activeMutation = isPromote ? promote : isPlan ? createPlanned : createGame;
 
   const resetAll = (): void => {
@@ -153,6 +170,18 @@ export const AddGameModal = ({
     }
   };
 
+  // EMULADORES.md §5 — marcar "Emulated game" preselecciona la plataforma
+  // "Emulated" (coherencia sin esfuerzo); desmarcarlo la devuelve al default
+  // solo si nadie la tocó entremedias.
+  const handleEmulatedToggle = (checked: boolean): void => {
+    setValue('isEmulated', checked);
+    if (checked && getValues('platform') !== 'Emulated') {
+      setValue('platform', 'Emulated');
+    } else if (!checked && getValues('platform') === 'Emulated') {
+      setValue('platform', DEFAULT_FORM_VALUES.platform);
+    }
+  };
+
   const handleSave = async (): Promise<void> => {
     if (!selected) return;
     const values = getValues();
@@ -180,6 +209,7 @@ export const AddGameModal = ({
 
     const details = {
       endless: values.endless,
+      isEmulated: values.isEmulated,
       iteration: {
         playedPlatform: values.platform,
         origin: values.origin,
@@ -193,7 +223,9 @@ export const AddGameModal = ({
       gameNotes: values.gameNotes.trim() || null,
       moneySpent: values.origin === 'Purchased' ? parseOptionalNumber(values.moneySpent) : null,
       moneySpentDate: values.origin === 'Purchased' ? toBackendDate(values.moneySpentDate) : null,
-      executablePath: values.executablePath.trim() || null,
+      // Un juego emulado no tiene .exe propio (el campo ni se muestra) — si
+      // quedó un valor de antes de marcar el checkbox, no debe viajar.
+      executablePath: values.isEmulated ? null : values.executablePath.trim() || null,
       installDirectory: values.installDirectory.trim() || null,
       installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
       coverUrl: values.coverUrl,
@@ -208,7 +240,13 @@ export const AddGameModal = ({
       return;
     }
 
-    await createGame.mutateAsync({ igdbId: selected.igdbId, ...details });
+    const created = await createGame.mutateAsync({ igdbId: selected.igdbId, ...details });
+
+    // Flujo "+ Add new game" del modal de asignación (EMULADORES.md §6): la
+    // sesión pendiente que lo originó se asigna sola al juego recién creado.
+    if (assignSessionId !== undefined) {
+      await assignSession.mutateAsync({ sessionId: assignSessionId, gameId: created.id });
+    }
 
     resetAll();
     onOpenChange(false);
@@ -404,6 +442,16 @@ export const AddGameModal = ({
                     />
 
                     <CheckboxRow
+                      checked={isEmulated}
+                      onToggle={() => handleEmulatedToggle(!isEmulated)}
+                      title="Emulated game"
+                      description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
+                      borderColorChecked="rgba(47,220,126,.7)"
+                      fillColorChecked="#2fdc7e"
+                      checkIconColor="#08120c"
+                    />
+
+                    <CheckboxRow
                       checked={playedBefore}
                       onToggle={() => setValue('playedBefore', !playedBefore)}
                       title="I played this before, outside the app"
@@ -420,7 +468,9 @@ export const AddGameModal = ({
 
                     {playedBefore && <PlayedBeforePanel />}
 
-                    <ExecutablePathField />
+                    {/* Un juego emulado no tiene .exe propio que vigilar —
+                        lo vigilado es el emulador (EMULADORES.md §5). */}
+                    {!isEmulated && <ExecutablePathField />}
 
                     <InstallDirectoryField />
                   </>

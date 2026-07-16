@@ -1,4 +1,5 @@
 import { registerDialogHandlers } from './dialog';
+import { registerEmulatorsHandlers } from './emulators';
 import { registerGamesHandlers } from './games';
 import { registerHltbHandlers } from './hltb';
 import { registerIgdbHandlers } from './igdb';
@@ -18,6 +19,7 @@ export const registerIpcHandlers = (): void => {
   registerWindowHandlers();
   registerDialogHandlers();
   registerGamesHandlers();
+  registerEmulatorsHandlers();
   registerIterationsHandlers();
   registerSessionsHandlers();
   registerStateEventsHandlers();

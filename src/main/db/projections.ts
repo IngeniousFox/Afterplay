@@ -1,4 +1,5 @@
 import {
+  emulatorsTable,
   gamesTable,
   iterationsTable,
   sessionsTable,
@@ -36,6 +37,7 @@ export const gameColumns = {
   installSizeBytes: gamesTable.installSizeBytes,
   genres: gamesTable.genres,
   endless: gamesTable.endless,
+  isEmulated: gamesTable.isEmulated,
   planned: gamesTable.planned,
   addedAt: gamesTable.addedAt,
 };
@@ -57,6 +59,7 @@ export const iterationColumns = {
 export const sessionColumns = {
   id: sessionsTable.id,
   iterationId: sessionsTable.iterationId,
+  emulatorId: sessionsTable.emulatorId,
   isManual: sessionsTable.isManual,
   startedAt: sessionsTable.startedAt,
   endedAt: sessionsTable.endedAt,
@@ -64,6 +67,12 @@ export const sessionColumns = {
   lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
   datePrecision: sessionsTable.datePrecision,
   milestone: sessionsTable.milestone,
+};
+
+export const emulatorColumns = {
+  id: emulatorsTable.id,
+  name: emulatorsTable.name,
+  executablePath: emulatorsTable.executablePath,
 };
 
 export const stateEventColumns = {

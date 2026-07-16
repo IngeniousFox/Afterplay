@@ -1,9 +1,11 @@
+import { createClient } from '@libsql/client';
 import { app, net } from 'electron';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/tursodatabase-sync';
 import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
 import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { pushPendingMigrations } from './migrationSync';
 
 // Bloque 4 — @tursodatabase/sync sustituye por completo a @tursodatabase/
 // database: su propio connect() ya da el mismo Database (mismo prepare/exec/
@@ -85,6 +87,40 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
     return await Promise.race([promise, timeout]);
   } finally {
     clearTimeout(timer!);
+  }
+};
+
+// El CDC de @tursodatabase/sync replica bien filas, pero no de forma fiable
+// el DDL de una migración con recreación de tabla (CREATE __new_x + INSERT +
+// DROP + RENAME) — ya nos ha dejado el remoto a medias o directamente sin
+// la migración más de una vez. Esto aplica las migraciones que falten
+// DIRECTAMENTE contra Turso, con una conexión propia y aparte que no toca
+// dbInstance ni el fichero local — así el remoto queda al día sin depender
+// de que el CDC replique DDL. Nunca bloquea el arranque: sin red o sin
+// Turso configurado, simplemente no hace nada y sigue el flujo normal.
+const pushMigrationsToRemote = async (): Promise<void> => {
+  if (!hasRemoteConfigured()) return;
+
+  const client = createClient({
+    url: process.env.DATABASE_URL as string,
+    authToken: process.env.DATABASE_AUTH_TOKEN as string,
+  });
+
+  try {
+    const { applied } = await withTimeout(
+      pushPendingMigrations(client, join(__dirname, '../../drizzle')),
+      CONNECT_TIMEOUT_MS,
+    );
+    if (applied.length > 0) {
+      console.log(`[db] migraciones aplicadas directamente en Turso: ${applied.join(', ')}`);
+    }
+  } catch (error) {
+    console.warn(
+      '[db] no se pudo empujar migraciones directamente a Turso, sigo igualmente:',
+      error,
+    );
+  } finally {
+    client.close();
   }
 };
 
@@ -174,6 +210,11 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 // in the packaged app (electron-builder includes the folder by default; it's
 // plain text read via fs, so it doesn't need asarUnpack).
 export const runMigrations = async (): Promise<void> => {
+  // Conexión aparte, antes de tocar la de verdad: deja el remoto al día por
+  // su cuenta (ver pushMigrationsToRemote) para que el CDC nunca tenga que
+  // cargar con el DDL de esta migración.
+  await pushMigrationsToRemote();
+
   const { db, capable } = await attemptInitialConnect();
   dbInstance = db;
   syncCapable = capable;
@@ -248,6 +289,14 @@ const IDLE_TIMEOUT_MS = 8000;
 const attemptSyncUpgrade = async (): Promise<void> => {
   if (syncCapable || !hasRemoteConfigured() || !dbInstance) return;
   if (!(await isTursoReachable())) return;
+
+  // Si la sesión arrancó sin red, una migración pudo haberse aplicado SOLO
+  // en local (runMigrations() ya lo intentó contra el remoto al arrancar,
+  // pero sin red no llegó a nada). Este es el primer momento en que hay
+  // conexión otra vez — aprovecharlo para dejar el remoto al día por la vía
+  // directa, ANTES de reconectar con sync, para que el CDC no sea quien
+  // tenga que cargar con ese DDL al hacer push() más abajo.
+  await pushMigrationsToRemote();
 
   swapGate = new Promise((resolve) => {
     releaseSwapGate = resolve;

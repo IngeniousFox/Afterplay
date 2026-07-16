@@ -35,6 +35,7 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
       .set({
         planned: false,
         endless: input.endless,
+        isEmulated: input.isEmulated,
         notes: input.gameNotes,
         executablePath: input.executablePath,
         installDirectory: input.installDirectory,

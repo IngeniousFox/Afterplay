@@ -13,6 +13,7 @@ export type EditGameFormValues = {
   executablePath: string;
   notes: string;
   endless: boolean;
+  isEmulated: boolean;
 
   iterationMode: 'none' | 'existing' | 'new';
   selectedIterationId: number | null;

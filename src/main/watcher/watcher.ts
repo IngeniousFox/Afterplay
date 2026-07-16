@@ -2,7 +2,8 @@ import type { BrowserWindow } from 'electron';
 import { withDbAccess } from '../db';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
 import { closeSession } from '../db/queries/sessions/closeSession';
-import { getOpenSessions } from '../db/queries/sessions/getOpenSessions';
+import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
+import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
 import { heartbeatSessions } from '../db/queries/sessions/heartbeatSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 
@@ -11,14 +12,27 @@ const POLL_INTERVAL_MS = 5000;
 // Una sesión que el watcher tiene abierta ahora mismo.
 type ActiveSession = { pid: number; sessionId: number; title: string };
 
-// Un juego vigilado que está corriendo AHORA (verificado por ruta en la
-// Fase 2). Es la "foto actual" que se compara contra `active`.
-type RunningGame = { pid: number; title: string };
+// Un objetivo vigilado (juego o emulador) que está corriendo AHORA
+// (verificado por ruta en la Fase 2). Es la "foto actual" que se compara
+// contra `active`.
+type RunningTarget = { pid: number; target: WatchTarget };
 
-// SPEC sección 6/7 — el watcher vive en el main, observa los procesos del
-// sistema cada ~5s (no lanza nada) y traduce arranques/cierres en sesiones
-// automáticas. Enfoque de dos fases: barrido barato por nombre (ps-list) +
-// verificación cara por ruta solo de los candidatos (find-process).
+// La clave del mapa de sesiones activas para una sesión abierta de la DB —
+// el mismo formato que WatchTarget.key ("game:12" / "emu:3"), o null si la
+// sesión no tiene dueño reconocible (huérfana de un emulador borrado).
+const openSessionKey = (session: OpenSession): string | null => {
+  if (session.gameId !== null) return `game:${session.gameId}`;
+  if (session.emulatorId !== null) return `emu:${session.emulatorId}`;
+  return null;
+};
+
+// SPEC sección 6/7 + EMULADORES.md — el watcher vive en el main, observa los
+// procesos del sistema cada ~5s (no lanza nada) y traduce arranques/cierres
+// en sesiones automáticas. Enfoque de dos fases: barrido barato por nombre
+// (ps-list) + verificación cara por ruta solo de los candidatos
+// (find-process). Los emuladores usan EXACTAMENTE el mismo barrido — la
+// única diferencia es qué se crea al detectar uno: una sesión sin juego
+// asignado (createEmulatorSession) en vez de un playthrough activo.
 export class ProcessWatcher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
@@ -29,10 +43,12 @@ export class ProcessWatcher {
   // sigue "corriendo" detrás de la pantalla de bloqueo no reabra sola una
   // sesión a los 5s de haberla cerrado por pausa.
   private paused = false;
-  // Foto anterior: sesiones abiertas que el watcher sigue, indexadas por
-  // gameId (SPEC 4.5: como mucho un playthrough activo por juego → una sesión
-  // por juego). Sobrevive entre ciclos; NO se recalcula desde la DB.
-  private readonly active = new Map<number, ActiveSession>();
+  // Foto anterior: sesiones abiertas que el watcher sigue, indexadas por la
+  // clave del objetivo ("game:12" / "emu:3" — SPEC 4.5: como mucho una
+  // sesión abierta por juego, y el dedup de createEmulatorSession garantiza
+  // lo mismo por emulador). Sobrevive entre ciclos; NO se recalcula desde
+  // la DB.
+  private readonly active = new Map<string, ActiveSession>();
   private readonly getWindow: () => BrowserWindow | null;
   // Bandeja del sistema (SPEC 6, opcional): deja ver de un vistazo qué se
   // está jugando sin abrir la ventana. Se llama con los títulos actualmente
@@ -91,10 +107,10 @@ export class ProcessWatcher {
 
     const endedAt = new Date();
     await withDbAccess(async () => {
-      for (const [gameId, activeSession] of this.active) {
+      for (const [key, activeSession] of this.active) {
         await closeSession(activeSession.sessionId, endedAt);
         console.log(
-          `[watcher] [${reason}] juego ${gameId} pausado -> sesion ${activeSession.sessionId} cerrada`,
+          `[watcher] [${reason}] ${key} pausado -> sesion ${activeSession.sessionId} cerrada`,
         );
       }
       this.active.clear();
@@ -132,10 +148,8 @@ export class ProcessWatcher {
         }
 
         // Arranques: corriendo ahora y sin sesión que el watcher siga todavía.
-        const untrackedGameIds = Array.from(running.keys()).filter(
-          (gameId) => !this.active.has(gameId),
-        );
-        if (untrackedGameIds.length > 0) {
+        const untrackedKeys = Array.from(running.keys()).filter((key) => !this.active.has(key));
+        if (untrackedKeys.length > 0) {
           // Alguno de estos puede tener YA una sesión abierta que el watcher
           // no esté siguiendo todavía — ej. el botón Play, que lanza el .exe
           // y abre su propia sesión automática (ver ActionBar/
@@ -148,45 +162,56 @@ export class ProcessWatcher {
           // dejarla huérfana — misma idea que reconcileOpenSessions, pero
           // repetida en cada ciclo, no solo al arrancar la app.
           const openSessions = await getOpenSessions();
-          for (const gameId of untrackedGameIds) {
-            const info = running.get(gameId);
+          for (const key of untrackedKeys) {
+            const info = running.get(key);
             if (!info) continue;
 
-            const existingOpen = openSessions.find((session) => session.gameId === gameId);
+            const existingOpen = openSessions.find((session) => openSessionKey(session) === key);
             if (existingOpen) {
-              this.active.set(gameId, {
+              this.active.set(key, {
                 pid: info.pid,
                 sessionId: existingOpen.sessionId,
-                title: info.title,
+                title: info.target.title,
               });
               console.log(
-                `[watcher] [adopt] "${info.title}" (pid ${info.pid}) -> sesion ${existingOpen.sessionId}`,
+                `[watcher] [adopt] "${info.target.title}" (pid ${info.pid}) -> sesion ${existingOpen.sessionId}`,
               );
               continue;
             }
 
-            // Deja el juego en "Playing" (creando/reanudando playthrough) y
-            // cuelga la sesión.
-            const session = await startGameSession(gameId);
+            // La ÚNICA bifurcación juego/emulador de todo el watcher: un
+            // juego deja su playthrough en "Playing" y cuelga la sesión de
+            // él; un emulador crea una sesión sin juego asignado (bandeja
+            // Pending, EMULADORES.md §4). Cierre, latido, adopción y
+            // reconciliación son idénticos para los dos a partir de aquí.
+            const session =
+              info.target.kind === 'game'
+                ? await startGameSession(info.target.refId)
+                : await createEmulatorSession(info.target.refId);
             if (session) {
-              this.active.set(gameId, { pid: info.pid, sessionId: session.id, title: info.title });
+              this.active.set(key, {
+                pid: info.pid,
+                sessionId: session.id,
+                title: info.target.title,
+              });
               console.log(
-                `[watcher] [start] "${info.title}" (pid ${info.pid}) -> sesion ${session.id}`,
+                `[watcher] [start] "${info.target.title}" (pid ${info.pid}) -> sesion ${session.id}`,
               );
               changed = true;
             }
           }
         }
 
-        // Cierres: seguíamos una sesión y el juego ya no corre. Se cierra a la
-        // hora actual (la detección es de ~5s, así que la duración es fiable).
-        for (const [gameId, activeSession] of this.active) {
-          if (running.has(gameId)) continue;
+        // Cierres: seguíamos una sesión y el proceso ya no corre. Se cierra a
+        // la hora actual (la detección es de ~5s, así que la duración es
+        // fiable).
+        for (const [key, activeSession] of this.active) {
+          if (running.has(key)) continue;
 
           await closeSession(activeSession.sessionId, new Date());
-          this.active.delete(gameId);
+          this.active.delete(key);
           console.log(
-            `[watcher] [stop] juego ${gameId} cerrado -> sesion ${activeSession.sessionId} cerrada`,
+            `[watcher] [stop] ${key} cerrado -> sesion ${activeSession.sessionId} cerrada`,
           );
           changed = true;
         }
@@ -219,29 +244,31 @@ export class ProcessWatcher {
 
   // Al arrancar puede haber sesiones abiertas de antes: la app se cerró con un
   // juego en marcha (cierre brusco / corte de luz), o quedó un Play manual sin
-  // parar. Por cada una: si el juego está corriendo AHORA se adopta (para
-  // cerrarla bien cuando muera); si no, ya no es válida y se cierra en su
-  // último latido del watcher (`lastHeartbeatAt`) — así se conserva el tiempo
-  // jugado hasta ~5s antes del corte, sin inflarlo con el hueco app-apagada.
-  // Si nunca latió (sesión manual, o murió en el primer ciclo) se cae a
-  // `startedAt` → duración 0, sin inventar horas que no se midieron.
-  private async reconcileOpenSessions(running: Map<number, RunningGame>): Promise<boolean> {
+  // parar. Por cada una: si el dueño (juego o emulador) está corriendo AHORA
+  // se adopta (para cerrarla bien cuando muera); si no, ya no es válida y se
+  // cierra en su último latido del watcher (`lastHeartbeatAt`) — así se
+  // conserva el tiempo jugado hasta ~5s antes del corte, sin inflarlo con el
+  // hueco app-apagada. Si nunca latió (sesión manual, o murió en el primer
+  // ciclo) se cae a `startedAt` → duración 0, sin inventar horas que no se
+  // midieron.
+  private async reconcileOpenSessions(running: Map<string, RunningTarget>): Promise<boolean> {
     const openSessions = await getOpenSessions();
     let changed = false;
 
     for (const session of openSessions) {
-      const runningGame = running.get(session.gameId);
-      if (runningGame) {
-        this.active.set(session.gameId, {
-          pid: runningGame.pid,
+      const key = openSessionKey(session);
+      const runningTarget = key !== null ? running.get(key) : undefined;
+      if (key !== null && runningTarget) {
+        this.active.set(key, {
+          pid: runningTarget.pid,
           sessionId: session.sessionId,
-          title: runningGame.title,
+          title: runningTarget.target.title,
         });
       } else {
         const endedAt = session.lastHeartbeatAt ?? session.startedAt;
         await closeSession(session.sessionId, endedAt);
         console.log(
-          `[watcher] [info] sesion ${session.sessionId} (juego ${session.gameId}) recuperada al arrancar - cerrada en su ultimo latido`,
+          `[watcher] [info] sesion ${session.sessionId} (${key ?? 'sin dueno'}) recuperada al arrancar - cerrada en su ultimo latido`,
         );
         changed = true;
       }
@@ -251,9 +278,10 @@ export class ProcessWatcher {
   }
 
   // Fase 1 (barrido barato por nombre) + Fase 2 (verificación por ruta),
-  // SPEC sección 7. Devuelve qué juegos vigilados están corriendo ahora.
-  private async scan(targets: WatchTarget[]): Promise<Map<number, RunningGame>> {
-    const running = new Map<number, RunningGame>();
+  // SPEC sección 7. Devuelve qué objetivos vigilados están corriendo ahora,
+  // por clave ("game:12" / "emu:3").
+  private async scan(targets: WatchTarget[]): Promise<Map<string, RunningTarget>> {
+    const running = new Map<string, RunningTarget>();
     if (targets.length === 0) return running;
 
     // ps-list es ESM puro; find-process es dual pero expone su función como
@@ -284,11 +312,11 @@ export class ProcessWatcher {
     // Fase 2: verificación por ruta completa (cmd) solo de los candidatos.
     for (const { pid, target } of candidates) {
       // Ya confirmado por otro proceso con el mismo nombre: no repito find.
-      if (running.has(target.gameId)) continue;
+      if (running.has(target.key)) continue;
       try {
         const [detail] = await find('pid', pid);
         if (detail && detail.cmd.toLowerCase().includes(target.exePath)) {
-          running.set(target.gameId, { pid, title: target.gameTitle });
+          running.set(target.key, { pid, target });
         }
       } catch (error) {
         // El pid puede morir entre Fase 1 y 2, o find-process fallar en un
