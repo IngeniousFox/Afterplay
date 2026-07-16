@@ -24,4 +24,6 @@ export const sessionsApi = {
   getPending: (): Promise<PendingSession[]> => ipcRenderer.invoke('sessions:getPending'),
   assign: (sessionId: number, gameId: number): Promise<Session | null> =>
     ipcRenderer.invoke('sessions:assign', sessionId, gameId),
+  deletePending: (sessionId: number): Promise<boolean> =>
+    ipcRenderer.invoke('sessions:deletePending', sessionId),
 };

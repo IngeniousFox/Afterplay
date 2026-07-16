@@ -49,6 +49,19 @@ export const useAssignSession = (): UseMutationResult<
   });
 };
 
+// Descartar una sesión de emulador sin asignar (se abrió el emulador solo
+// para configurarlo, no para jugar) — nunca tocó ningún juego, así que solo
+// hace falta refrescar la propia bandeja de pendientes.
+export const useDeletePendingSession = (): UseMutationResult<boolean, Error, number, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: number) => window.api.sessions.deletePending(sessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.pending });
+    },
+  });
+};
+
 export const useAddSession = (): UseMutationResult<
   Session,
   Error,

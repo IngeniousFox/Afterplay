@@ -1,7 +1,7 @@
-import { Joystick } from 'lucide-react';
+import { Joystick, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { PendingSession } from '../../../../shared/types';
-import { usePendingSessions } from '../../hooks/sessions';
+import { useDeletePendingSession, usePendingSessions } from '../../hooks/sessions';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useTimeFormat } from '../../hooks/settings';
 import { formatByPrecision, formatElapsed } from '../../lib/format';
@@ -26,6 +26,7 @@ const PendingSessionCard = ({
 }: PendingSessionCardProps): React.JSX.Element => {
   const isLive = session.endedAt === null;
   const elapsedSeconds = useLiveTimer(isLive ? session.startedAt : null);
+  const deletePending = useDeletePendingSession();
 
   return (
     <div
@@ -62,6 +63,17 @@ const PendingSessionCard = ({
       >
         Assign
       </button>
+      {!isLive && (
+        <button
+          type="button"
+          onClick={() => deletePending.mutate(session.id)}
+          disabled={deletePending.isPending}
+          title="Discard (e.g. you only opened the emulator to configure it)"
+          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
     </div>
   );
 };

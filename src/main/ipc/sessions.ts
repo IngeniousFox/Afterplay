@@ -4,6 +4,7 @@ import { addManualSession } from '../db/queries/sessions/addManualSession';
 import { closeSession } from '../db/queries/sessions/closeSession';
 import { getAllSessions } from '../db/queries/sessions/getAllSessions';
 import { assignSession } from '../db/queries/sessions/assignSession';
+import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { getSessionsByIteration } from '../db/queries/sessions/getSessionsByIteration';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
@@ -55,5 +56,9 @@ export const registerSessionsHandlers = (): void => {
 
   handleDb('sessions:assign', async (_event, sessionId: number, gameId: number) => {
     return assignSession(sessionId, gameId);
+  });
+
+  handleDb('sessions:deletePending', async (_event, sessionId: number) => {
+    return deletePendingSession(sessionId);
   });
 };
