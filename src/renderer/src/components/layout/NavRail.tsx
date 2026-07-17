@@ -2,6 +2,7 @@ import { BarChart3, Bookmark, Clock, Gamepad2 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { usePendingSessions } from '../../hooks/sessions';
+import { useCredentials } from '../../hooks/settings';
 import { AMBER } from '../../lib/colors';
 import { SettingsModal } from './SettingsModal';
 
@@ -27,6 +28,22 @@ export const NavRail = (): React.JSX.Element => {
   const { data: pendingSessions = [] } = usePendingSessions();
   const pendingCount = pendingSessions.length;
 
+  // Primer arranque sin credenciales de IGDB (instalación virgen, sin .env
+  // que importar): se abre Ajustes UNA vez con la sección API & Sync
+  // expandida y el aviso de bienvenida — sin ellas no hay búsqueda de juegos
+  // y el porqué no es obvio. Ajustar-estado-durante-render (sin useEffect),
+  // como el resto de la app; una sola vez por sesión para no dar la lata.
+  const { data: credentials } = useCredentials();
+  const [credentialsChecked, setCredentialsChecked] = useState(false);
+  const [credentialsSpotlight, setCredentialsSpotlight] = useState(false);
+  if (credentials && !credentialsChecked) {
+    setCredentialsChecked(true);
+    if (!credentials.twitchClientId || !credentials.twitchClientSecret) {
+      setCredentialsSpotlight(true);
+      setSettingsOpen(true);
+    }
+  }
+
   return (
     <div
       className="relative z-2 flex w-15.5 flex-none flex-col items-center gap-1.5 border-r border-border py-3.5 backdrop-blur-md"
@@ -45,7 +62,16 @@ export const NavRail = (): React.JSX.Element => {
         <Gamepad2 size={20} color="#08120c" />
       </button>
 
-      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={(next) => {
+          setSettingsOpen(next);
+          // El spotlight es solo para ESA apertura — al cerrar, el modal
+          // vuelve a ser el de siempre (sección colapsada, sin aviso).
+          if (!next) setCredentialsSpotlight(false);
+        }}
+        credentialsSpotlight={credentialsSpotlight}
+      />
 
       {NAV_ITEMS.map(({ to, Icon, size, label }) => (
         <NavLink

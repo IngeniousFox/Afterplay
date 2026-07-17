@@ -1,6 +1,6 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TimeFormat } from '../../../shared/types';
+import type { CredentialsValues, TimeFormat } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 export const useOpenAtLogin = (): UseQueryResult<boolean, Error> =>
@@ -36,6 +36,32 @@ export const useSetTimeFormat = (): UseMutationResult<void, Error, TimeFormat, u
     mutationFn: (format: TimeFormat) => window.api.settings.setTimeFormat(format),
     onSuccess: (_data, format) => {
       queryClient.setQueryData(queryKeys.settings.timeFormat, format);
+    },
+  });
+};
+
+// Credenciales de servicios externos (ver main/config/credentials.ts) —
+// deciden qué funciona (búsqueda IGDB, carátulas SGDB, sync Turso) y guían
+// el primer arranque (NavRail abre Ajustes si falta IGDB).
+export const useCredentials = (): UseQueryResult<CredentialsValues, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.credentials,
+    queryFn: () => window.api.settings.getCredentials(),
+    staleTime: Infinity,
+  });
+
+export const useSetCredentials = (): UseMutationResult<
+  CredentialsValues,
+  Error,
+  CredentialsValues,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CredentialsValues) => window.api.settings.setCredentials(input),
+    onSuccess: (saved) => {
+      // El main devuelve los valores ya normalizados — se fijan directos.
+      queryClient.setQueryData(queryKeys.settings.credentials, saved);
     },
   });
 };

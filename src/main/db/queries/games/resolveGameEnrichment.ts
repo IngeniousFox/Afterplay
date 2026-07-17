@@ -42,9 +42,15 @@ export const resolveGameEnrichment = async (
     throw new Error(`No se encontró el juego de IGDB ${igdbId} (¿lo quitaron del catálogo?)`);
   }
 
+  // SGDB es opcional (clave sin configurar, servicio caído...): sin él se
+  // pierde steamGridDbId (menos candidatas de carátula), pero el alta del
+  // juego NO debe fallar — IGDB es la única fuente imprescindible aquí.
   const [hltb, steamGridDbId] = await Promise.all([
     getHltbTimes(detail.title, detail.releaseYear),
-    sgdbSearch(detail.title, detail.releaseYear),
+    sgdbSearch(detail.title, detail.releaseYear).catch((error) => {
+      console.warn('[sgdb] sin id de SteamGridDB para este alta (sigo sin él):', error);
+      return null;
+    }),
   ]);
 
   return {

@@ -40,5 +40,6 @@ export const queryKeys = {
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,
     timeFormat: ['settings', 'timeFormat'] as const,
+    credentials: ['settings', 'credentials'] as const,
   },
 };

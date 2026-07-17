@@ -1,7 +1,11 @@
 import { app, ipcMain } from 'electron';
+import { getCredentials, setCredentials } from '../config/credentials';
 import { getConfigValue, setConfigValue } from '../config/store';
+import { runSyncCycle } from '../db';
+import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
-import type { TimeFormat } from '../../shared/types';
+import { resetSgdbClient } from '../sgdb/client';
+import type { CredentialsValues, TimeFormat } from '../../shared/types';
 
 // SPEC 3E — "iniciar con Windows" como opción activable desde el modal de
 // ajustes, no forzada al primer arranque. app.setLoginItemSettings es la API
@@ -36,5 +40,24 @@ export const registerSettingsHandlers = (): void => {
 
   ipcMain.handle('settings:setTimeFormat', (_event, format: TimeFormat) => {
     setConfigValue('timeFormat', format);
+  });
+
+  // Credenciales de servicios externos (ver config/credentials.ts). Los
+  // valores viajan al renderer para poder editarlos en Ajustes — app
+  // personal, preload propio, sin contenido remoto: mismo perímetro de
+  // confianza que el .env que sustituyen.
+  ipcMain.handle('settings:getCredentials', () => getCredentials());
+
+  ipcMain.handle('settings:setCredentials', (_event, input: CredentialsValues) => {
+    setCredentials(input);
+    // Los clientes cacheados capturaron la clave vieja al construirse — se
+    // tiran para que la siguiente llamada use la recién guardada.
+    invalidateToken();
+    resetSgdbClient();
+    // Si acaban de aparecer credenciales de Turso, esto enciende el sync ya
+    // mismo (attemptSyncUpgrade relee process.env) en vez de esperar al
+    // siguiente ciclo de 60s. Fire-and-forget: nunca lanza.
+    void runSyncCycle();
+    return getCredentials();
   });
 };

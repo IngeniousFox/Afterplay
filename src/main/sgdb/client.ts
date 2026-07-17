@@ -13,9 +13,15 @@ let cachedClient: SGDB | null = null;
 const getApiKey = (): string => {
   const key = process.env.STEAMGRIDDB_API_KEY;
   if (!key) {
-    throw new Error('Falta STEAMGRIDDB_API_KEY en el .env');
+    throw new Error('Falta la clave de SteamGridDB — configúrala en Ajustes.');
   }
   return key;
+};
+
+// El cliente captura la clave al construirse — si se cambia desde Ajustes
+// hay que tirar el cacheado para que la siguiente llamada use la nueva.
+export const resetSgdbClient = (): void => {
+  cachedClient = null;
 };
 
 // Lazy por el mismo motivo que getDb(): así el .env ya está cargado cuando

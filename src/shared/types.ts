@@ -202,6 +202,17 @@ export type GameListItem = {
 // renderer la usa para formatear cualquier datetime (lib/format.ts).
 export type TimeFormat = '12h' | '24h';
 
+// Credenciales de servicios externos, editables desde Ajustes y guardadas
+// cifradas en userData (ver main/config/credentials.ts) — la app funciona
+// sin ninguna (modo local, sin búsqueda IGDB); null = sin configurar.
+export type CredentialsValues = {
+  twitchClientId: string | null;
+  twitchClientSecret: string | null;
+  steamGridDbApiKey: string | null;
+  databaseUrl: string | null;
+  databaseAuthToken: string | null;
+};
+
 // Cambio de estado suelto para el desglose "Status Changes" de Stats por
 // año (Bloque 5D) — ver getAllStateEvents.ts.
 export type StateEventSummary = {

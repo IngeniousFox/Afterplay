@@ -20,7 +20,7 @@ const getCredentials = (): { clientId: string; clientSecret: string } => {
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    throw new Error('Faltan TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET en el .env');
+    throw new Error('Faltan las credenciales de Twitch/IGDB — configúralas en Ajustes.');
   }
   return { clientId, clientSecret };
 };

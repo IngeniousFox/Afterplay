@@ -28,6 +28,7 @@ import { GameNotesPanel } from './add-game/GameNotesPanel';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
 import { parseIsoDate, todayValue } from './add-game/precisionDate';
+import { useCredentials } from '../../hooks/settings';
 import { SearchStep } from './add-game/SearchStep';
 import { SegmentedButtonGroup } from './add-game/SegmentedButtonGroup';
 import { SelectedGameSummary } from './add-game/SelectedGameSummary';
@@ -90,6 +91,12 @@ export const AddGameModal = ({
   // El playthrough por defecto que createPlannedGame dejó creado — de él
   // salen los valores iniciales de plataforma/origen/formato del prellenado.
   const promoteIteration = promoteGame?.iterations[0];
+
+  // Sin las claves de Twitch/IGDB no hay catálogo que buscar — se enseña un
+  // aviso con el porqué en vez del buscador mudo (la búsqueda fallaría en
+  // silencio). Solo aplica al alta nueva: promover un Plan ya trae el juego.
+  const { data: credentials } = useCredentials();
+  const igdbReady = Boolean(credentials?.twitchClientId && credentials?.twitchClientSecret);
 
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<IgdbSearchResult | null>(() =>
@@ -304,7 +311,18 @@ export const AddGameModal = ({
         </>
       }
     >
-      {selected === null ? (
+      {selected === null && !igdbReady ? (
+        <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-border px-6 py-10 text-center">
+          <p className="text-[13.5px] font-semibold text-foreground">
+            Game search needs your IGDB keys.
+          </p>
+          <p className="max-w-90 text-[12.5px] leading-relaxed text-muted-foreground">
+            Add your Twitch/IGDB credentials in Settings (the green button at the top of the
+            sidebar) under API &amp; Sync — takes a minute and it&apos;s free. Until then the
+            catalog can&apos;t be searched.
+          </p>
+        </div>
+      ) : selected === null ? (
         <SearchStep
           query={query}
           onQueryChange={setQuery}
