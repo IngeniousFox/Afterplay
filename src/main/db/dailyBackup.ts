@@ -1,8 +1,7 @@
 import { app } from 'electron';
-import { sql } from 'drizzle-orm';
 import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { getDb } from '.';
+import { vacuumInto } from './backupCore';
 
 const MAX_BACKUPS = 5;
 const BACKUP_PREFIX = 'Afterplay-';
@@ -25,11 +24,6 @@ const listBackups = (dir: string): string[] =>
         .sort()
     : [];
 
-// VACUUM INTO no acepta parámetros ligados para el destino — va en el
-// literal SQL, de ahí el escapado manual. La ruta es siempre la nuestra
-// (userData), nunca algo que venga de fuera.
-const escapeSqlString = (value: string): string => value.replace(/'/g, "''");
-
 // Una copia física del .db local al día, sin tocar Turso para nada — para
 // el "se me ha ido la pinza con algo y quiero volver a ayer/anteayer" sin
 // depender de tener red ni de la ventana de retención de Turso. Corre justo
@@ -44,7 +38,7 @@ export const runDailyBackup = async (): Promise<void> => {
   if (existsSync(filePath)) return;
 
   try {
-    await getDb().run(sql.raw(`VACUUM INTO '${escapeSqlString(filePath)}'`));
+    await vacuumInto(filePath);
     console.log(`[backup] copia diaria creada: ${filePath}`);
   } catch (error) {
     console.warn('[backup] no se pudo crear la copia diaria:', error);

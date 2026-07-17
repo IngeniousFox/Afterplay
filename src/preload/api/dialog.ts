@@ -6,4 +6,5 @@ export const dialogApi = {
   pickExecutable: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickExecutable'),
   pickDirectory: (): Promise<DirectoryPickResult | null> =>
     ipcRenderer.invoke('dialog:pickDirectory'),
+  pickFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickFolder'),
 };

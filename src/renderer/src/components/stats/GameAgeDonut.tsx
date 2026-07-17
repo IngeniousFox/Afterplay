@@ -13,6 +13,12 @@ const SIZE = 190;
 const STROKE = 30;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// La porción activa engorda su trazo en +4 al pasar el ratón — sin este
+// margen extra, ese trazo más grueso se sale justo del viewBox (que mide lo
+// mismo que el círculo en reposo) y se ve cortado. El SVG crece este margen
+// por cada lado; el círculo en sí (RADIUS) no cambia, solo su lienzo.
+const HOVER_STROKE_EXTRA = 4;
+const SVG_SIZE = SIZE + HOVER_STROKE_EXTRA * 2;
 
 type Bucket = {
   key: string;
@@ -127,19 +133,21 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
           const active = slices.find((slice) => slice.key === hoveredKey) ?? biggest;
           return (
             <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-5">
-              <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-                <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
+              <svg width={SVG_SIZE} height={SVG_SIZE} viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}>
+                <g transform={`rotate(-90 ${SVG_SIZE / 2} ${SVG_SIZE / 2})`}>
                   {slices
                     .filter((slice) => slice.fraction > 0)
                     .map((slice) => (
                       <circle
                         key={slice.key}
-                        cx={SIZE / 2}
-                        cy={SIZE / 2}
+                        cx={SVG_SIZE / 2}
+                        cy={SVG_SIZE / 2}
                         r={RADIUS}
                         fill="none"
                         stroke={slice.color}
-                        strokeWidth={slice.key === active.key ? STROKE + 4 : STROKE}
+                        strokeWidth={
+                          slice.key === active.key ? STROKE + HOVER_STROKE_EXTRA : STROKE
+                        }
                         strokeDasharray={`${slice.fraction * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
                         strokeDashoffset={-slice.offset * CIRCUMFERENCE}
                         opacity={slice.key === active.key ? 1 : 0.45}

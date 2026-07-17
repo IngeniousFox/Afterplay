@@ -1,3 +1,4 @@
+import { backupApi } from './backup';
 import { dialogApi } from './dialog';
 import { emulatorsApi } from './emulators';
 import { gamesApi } from './games';
@@ -16,6 +17,7 @@ import { windowApi } from './window';
 export const api = {
   window: windowApi,
   dialog: dialogApi,
+  backup: backupApi,
   games: gamesApi,
   emulators: emulatorsApi,
   iterations: iterationsApi,

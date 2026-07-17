@@ -37,4 +37,17 @@ export const registerDialogHandlers = (): void => {
     const sizeBytes = await getDirectorySize(path);
     return { path, sizeBytes };
   });
+
+  // Botón "Back up now" de Ajustes — a diferencia de pickDirectory, no hace
+  // falta el tamaño de la carpeta elegida, así que no vale la pena pagar el
+  // recorrido de getDirectorySize por algo que se va a ignorar.
+  ipcMain.handle('dialog:pickFolder', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = { properties: ['openDirectory'] };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
 };

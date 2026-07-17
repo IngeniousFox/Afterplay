@@ -55,7 +55,7 @@ export const EditNotesModal = ({
     >
       <DialogContent
         showCloseButton={false}
-        className="flex w-135 max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[18px] border border-input bg-[#121413] p-0 shadow-[0_30px_80px_rgba(0,0,0,.6)]"
+        className="flex w-135 max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[18px] border border-input bg-[#121413] p-0 shadow-[0_30px_80px_rgba(0,0,0,.6)] sm:max-w-[calc(100%-2rem)]"
       >
         <div className="flex items-center justify-between border-b border-border px-5.5 py-4.5">
           <div className="text-[17px] font-extrabold tracking-[-.01em] text-foreground">
