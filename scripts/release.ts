@@ -62,25 +62,32 @@ const run = (command: string, args: string[]): void => {
   if (result.status !== 0) process.exit(result.status ?? 1);
 };
 
-console.log(`[release] compilando y publicando ${tag}...`);
-run('npm', ['run', 'build']);
-// --publish always: crea (o actualiza) la release en GitHub como BORRADOR
-// con el instalador + latest.yml + blockmap — falta rellenar las notas y
-// quitarle el borrador, que es justo lo que viene abajo.
-run('npx', ['electron-builder', '--win', '--publish', 'always']);
+// tsx compila este archivo como CJS (el proyecto no es "type": "module"),
+// que no admite await a nivel superior — de ahí la función envolvente, igual
+// que scripts/push-migrations-to-turso.ts.
+const main = async (): Promise<void> => {
+  console.log(`[release] compilando y publicando ${tag}...`);
+  run('npm', ['run', 'build']);
+  // --publish always: crea (o actualiza) la release en GitHub como BORRADOR
+  // con el instalador + latest.yml + blockmap — falta rellenar las notas y
+  // quitarle el borrador, que es justo lo que viene abajo.
+  run('npx', ['electron-builder', '--win', '--publish', 'always']);
 
-const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
 
-console.log(`[release] rellenando changelog de ${tag}...`);
-const { data: release } = await axios.get<{ id: number }>(
-  `https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${tag}`,
-  { headers },
-);
+  console.log(`[release] rellenando changelog de ${tag}...`);
+  const { data: release } = await axios.get<{ id: number }>(
+    `https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${tag}`,
+    { headers },
+  );
 
-await axios.patch(
-  `https://api.github.com/repos/${OWNER}/${REPO}/releases/${release.id}`,
-  { body: changelog, draft: false },
-  { headers },
-);
+  await axios.patch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/releases/${release.id}`,
+    { body: changelog, draft: false },
+    { headers },
+  );
 
-console.log(`[release] ${tag} publicada:\n${changelog}`);
+  console.log(`[release] ${tag} publicada:\n${changelog}`);
+};
+
+main();
