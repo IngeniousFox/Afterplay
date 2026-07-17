@@ -76,10 +76,22 @@ const main = async (): Promise<void> => {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
 
   console.log(`[release] rellenando changelog de ${tag}...`);
-  const { data: release } = await axios.get<{ id: number }>(
-    `https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${tag}`,
-    { headers },
+  // NO se puede usar GET /releases/tags/{tag} — ese endpoint solo devuelve
+  // releases YA PUBLICADAS (confirmado en la doc de GitHub: "Get a
+  // PUBLISHED release..."), y electron-builder la deja como borrador por
+  // defecto. El listado sí incluye borradores para quien tiene push access,
+  // así que se busca ahí por tag_name.
+  const { data: releases } = await axios.get<{ id: number; tag_name: string }[]>(
+    `https://api.github.com/repos/${OWNER}/${REPO}/releases`,
+    { headers, params: { per_page: 50 } },
   );
+  const release = releases.find((candidate) => candidate.tag_name === tag);
+  if (!release) {
+    console.error(
+      `[release] electron-builder dijo que publicó, pero no encuentro ninguna release (borrador o no) con el tag ${tag}.`,
+    );
+    process.exit(1);
+  }
 
   await axios.patch(
     `https://api.github.com/repos/${OWNER}/${REPO}/releases/${release.id}`,
