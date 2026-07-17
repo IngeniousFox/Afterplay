@@ -262,6 +262,7 @@ const FormPlatformDropdown = (): React.JSX.Element => {
       options={PLATFORM_OPTIONS}
       onChange={(next) => setValue('platform', next)}
       renderOption={(option) => option}
+      searchable
     />
   );
 };

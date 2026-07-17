@@ -8,16 +8,40 @@ export const parseOptionalNumber = (raw: string): number | null => {
   return Number.isNaN(value) ? null : value;
 };
 
+// Agrupadas por familia (PC/launchers → PlayStation → Xbox → Nintendo →
+// Emulated) — el dropdown es filtrable escribiendo, así que la lista puede
+// ser larga sin hacer incómodo encontrar nada.
 export const PLATFORM_OPTIONS = [
   'Steam',
+  'Steam Deck',
   'PC',
-  'EA Play',
   'GOG',
   'Epic',
-  'Steam Deck',
+  'EA Play',
+  'Ubisoft Connect',
+  'Rockstar Launcher',
+  'PlayStation 1',
+  'PlayStation 2',
+  'PlayStation 3',
+  'PlayStation 4',
   'PlayStation 5',
+  'PSP',
   'Xbox',
+  'Xbox 360',
+  'Xbox One',
+  'Xbox Series X/S',
+  'NES',
+  'SNES',
+  'Nintendo 64',
+  'GameCube',
+  'Wii',
+  'Wii U',
   'Switch',
+  'Switch 2',
+  'Game Boy',
+  'Game Boy Advance',
+  'Nintendo DS',
+  'Nintendo 3DS',
   'Emulated',
 ];
 

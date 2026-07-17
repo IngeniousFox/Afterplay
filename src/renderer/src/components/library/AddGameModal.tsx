@@ -378,6 +378,7 @@ export const AddGameModal = ({
                         options={PLATFORM_OPTIONS}
                         onChange={field.onChange}
                         renderOption={(option) => option}
+                        searchable
                       />
                     )}
                   />
