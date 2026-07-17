@@ -1,11 +1,16 @@
 import { Controller, useFormContext, useWatch } from 'react-hook-form';
-import { STATUS_META } from '../../../lib/gameStatus';
+import {
+  ENDLESS_STATUS_OPTIONS,
+  NORMAL_STATUS_OPTIONS,
+  STATUS_META,
+} from '../../../lib/gameStatus';
+import type { PastStatusKey } from '../../../lib/gameStatus';
+import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from './DateWithPrecisionPicker';
 import { Dropdown } from './Dropdown';
 import { parseIsoDate } from './precisionDate';
 import { fieldLabelClass, textInputClass } from './styles';
-import type { AddGameFormValues, PastStatusKey } from './types';
-import { ENDLESS_STATUS_OPTIONS, NORMAL_STATUS_OPTIONS } from './types';
+import type { AddGameFormValues } from './types';
 
 // Panel condicional que aparece cuando se marca "I played this before" —
 // Started/Finished solo para juegos no-endless (un endless no tiene un
@@ -60,22 +65,7 @@ export const PlayedBeforePanel = (): React.JSX.Element => {
             control={control}
             name="hoursPlayed"
             render={({ field }) => (
-              <input
-                {...field}
-                type="number"
-                min={0}
-                placeholder="e.g. 42"
-                // Chromium cambia el valor de un <input type="number"> con la
-                // rueda del ratón mientras tiene el foco — igual que si fueran
-                // las flechitas, pero sin ningún indicio visual de que ha
-                // pasado. Muy fácil de disparar sin querer al bajar por un
-                // modal con scroll justo después de escribir aquí (bug real
-                // reportado: "metí 68 y se guardó 65"). Quitar el foco al
-                // recibir la rueda deja que el scroll actúe sobre la página,
-                // no sobre el número.
-                onWheel={(event) => event.currentTarget.blur()}
-                className={textInputClass}
-              />
+              <NumberInput {...field} min={0} placeholder="e.g. 42" className={textInputClass} />
             )}
           />
         </div>

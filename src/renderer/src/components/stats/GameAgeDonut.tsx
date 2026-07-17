@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
+import { AMBER } from '../../lib/colors';
 import { formatHours, pluralize } from '../../lib/format';
+import { StatCard } from './StatCard';
 import type { Year } from './YearPicker';
 
 export type AgeEntry = { hours: number; releaseYear: number | null };
@@ -48,7 +50,7 @@ const BUCKETS: Bucket[] = [
     key: 'modern',
     label: '5–10 years',
     description: () => '5 to 10 years old',
-    color: '#e3b24a',
+    color: AMBER,
     matches: (age) => age > 5 && age <= 10,
   },
   {
@@ -112,7 +114,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
   }, [entries, referenceYear]);
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
+    <StatCard>
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="text-[14px] font-bold text-foreground">Playtime by game age</div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -220,6 +222,6 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
           );
         })()
       )}
-    </div>
+    </StatCard>
   );
 };

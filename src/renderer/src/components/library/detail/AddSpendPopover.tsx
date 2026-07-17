@@ -2,9 +2,11 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { SpendEvent } from '../../../../../shared/types';
 import { useAddSpend } from '../../../hooks/spend';
+import { accentGradientStyle, floatingPanelClass } from '../../../lib/styles';
+import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import type { PrecisionDateValue } from '../add-game/precisionDate';
-import { todayValue } from '../add-game/precisionDate';
+import { parseIsoDate, todayValue } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
@@ -45,7 +47,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
       gameId,
       type,
       amount: parsedAmount,
-      occurredAt: new Date(`${date.isoDate}T00:00:00`),
+      occurredAt: parseIsoDate(date.isoDate),
       datePrecision: date.precision,
       note: note.trim() || null,
     });
@@ -66,7 +68,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
         <Plus size={16} />
         Add spend
       </PopoverTrigger>
-      <PopoverContent className="w-80 border-input bg-[rgba(23,25,24,.99)] p-4 shadow-[0_18px_50px_rgba(0,0,0,.55)]">
+      <PopoverContent className={`w-80 ${floatingPanelClass} p-4`}>
         <div className="flex flex-col gap-3.5">
           <div>
             <div className={fieldLabelClass}>TYPE</div>
@@ -75,16 +77,12 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
 
           <div>
             <div className={fieldLabelClass}>AMOUNT (€)</div>
-            <input
+            <NumberInput
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
-              type="number"
               min={0}
               step="0.01"
               placeholder="0.00"
-              // Ver PlayedBeforePanel.tsx — la rueda del ratón cambia el
-              // valor de un input number con foco, sin avisar.
-              onWheel={(event) => event.currentTarget.blur()}
               className={textInputClass}
             />
           </div>
@@ -112,7 +110,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
             onClick={handleSubmit}
             disabled={addSpend.isPending}
             className="rounded-[9px] px-4 py-2.25 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ background: 'linear-gradient(135deg,#2fdc7e,#16a35a)', color: '#08120c' }}
+            style={accentGradientStyle}
           >
             {addSpend.isPending ? 'Adding…' : 'Add spend'}
           </button>

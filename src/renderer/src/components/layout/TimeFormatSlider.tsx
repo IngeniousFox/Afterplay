@@ -1,4 +1,5 @@
 import type { TimeFormat } from '../../../../shared/types';
+import { accentGradientStyle } from '../../lib/styles';
 
 type TimeFormatSliderProps = {
   value: TimeFormat;
@@ -17,7 +18,7 @@ export const TimeFormatSlider = ({ value, onChange }: TimeFormatSliderProps): Re
         className="absolute top-0.5 bottom-0.5 w-15 rounded-full transition-[left] duration-200 ease-out"
         style={{
           left: is24h ? 'calc(50% - 2px)' : '2px',
-          background: 'linear-gradient(135deg,#2fdc7e,#16a35a)',
+          background: accentGradientStyle.background,
         }}
       />
       <button

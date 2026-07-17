@@ -2,6 +2,7 @@ import { BarChart3, Bookmark, Clock, Gamepad2 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { usePendingSessions } from '../../hooks/sessions';
+import { AMBER } from '../../lib/colors';
 import { SettingsModal } from './SettingsModal';
 
 type NavItem = {
@@ -72,7 +73,7 @@ export const NavRail = (): React.JSX.Element => {
                 {to === '/sessions' && pendingCount > 0 && (
                   <span
                     className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-extrabold"
-                    style={{ background: '#e3b24a', color: '#0a0b0a' }}
+                    style={{ background: AMBER, color: '#0a0b0a' }}
                   >
                     {pendingCount}
                   </span>

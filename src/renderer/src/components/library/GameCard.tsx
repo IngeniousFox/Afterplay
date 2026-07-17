@@ -4,6 +4,7 @@ import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { formatElapsed } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
+import { StatusIcon } from '../StatusIcon';
 
 type GameCardProps = {
   game: GameListItem;
@@ -105,12 +106,7 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
             {game.title}
           </div>
           <div className="mt-1.25 flex items-center gap-1.5">
-            <status.Icon
-              size={15}
-              color={status.color}
-              fill={status.filled ? status.color : 'none'}
-              strokeWidth={2}
-            />
+            <StatusIcon meta={status} size={15} strokeWidth={2} />
             <span className="text-xs font-semibold" style={{ color: status.color }}>
               {status.label}
             </span>

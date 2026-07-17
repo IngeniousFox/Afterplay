@@ -2,6 +2,7 @@ import { Package, Star } from 'lucide-react';
 import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useUpdateIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
+import { AMBER } from '../../../lib/colors';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { Dropdown } from '../add-game/Dropdown';
@@ -60,10 +61,7 @@ const RatingRow = ({
   >
     <div>
       <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">MY RATING</div>
-      <div
-        className="mt-0.5 text-[11.5px] font-semibold text-amber-400"
-        style={{ color: '#e3b24a' }}
-      >
+      <div className="mt-0.5 text-[11.5px] font-semibold text-amber-400" style={{ color: AMBER }}>
         {rating ? `${rating}/5` : 'Not rated'}
       </div>
     </div>
@@ -77,7 +75,7 @@ const RatingRow = ({
             onClick={() => onRate(value === rating ? 0 : value)}
             className="flex-none cursor-pointer"
           >
-            <Star size={19} color="#e3b24a" fill={on ? '#e3b24a' : 'none'} strokeWidth={1.6} />
+            <Star size={19} color={AMBER} fill={on ? AMBER : 'none'} strokeWidth={1.6} />
           </button>
         );
       })}

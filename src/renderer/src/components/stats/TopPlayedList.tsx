@@ -1,39 +1,21 @@
-import { Gamepad2 } from 'lucide-react';
-import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
-import type { PlayedEntry } from './MostPlayedList';
+import type { PlayedEntry } from '../../lib/playedEntries';
+import { topPlayedEntries } from '../../lib/playedEntries';
+import { GameCover } from '../GameCover';
+import { StatCard } from './StatCard';
 
 type TopPlayedListProps = { entries: PlayedEntry[] };
 
 const MAX_ENTRIES = 5;
 
-const Cover = ({ url }: { url: string | null }): React.JSX.Element => {
-  const src = useImageSrc(url, 'covers');
-  return (
-    <div className="h-9.5 w-7 flex-none overflow-hidden rounded-[6px] border border-border">
-      {src ? (
-        <img src={src} loading="lazy" alt="" className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-muted">
-          <Gamepad2 size={12} className="text-muted-foreground/40" />
-        </div>
-      )}
-    </div>
-  );
-};
-
 // SPEC 10.7 / prototipo — ranking numerado top 5, sin barra (a diferencia de
 // Most Played), solo puesto + carátula + título + horas. Mismo filtro de 0h
 // que MostPlayedList — ver el comentario ahí.
 export const TopPlayedList = ({ entries }: TopPlayedListProps): React.JSX.Element => {
-  const top = entries
-    .filter((entry) => entry.hours > 0)
-    .sort((a, b) => b.hours - a.hours)
-    .slice(0, MAX_ENTRIES);
+  const top = topPlayedEntries(entries, MAX_ENTRIES);
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
-      <div className="mb-4 text-[14px] font-bold text-foreground">Top Played</div>
+    <StatCard title="Top Played" titleClassName="mb-4">
       {top.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nothing tracked yet.</p>
       ) : (
@@ -46,7 +28,11 @@ export const TopPlayedList = ({ entries }: TopPlayedListProps): React.JSX.Elemen
               <div className="w-5.5 flex-none text-[13px] font-extrabold text-muted-foreground tabular-nums">
                 {index + 1}
               </div>
-              <Cover url={entry.coverUrl} />
+              <GameCover
+                url={entry.coverUrl}
+                className="h-9.5 w-7 flex-none overflow-hidden rounded-[6px] border border-border"
+                iconSize={12}
+              />
               <div className="flex-1 truncate text-[13.5px] font-semibold text-foreground">
                 {entry.title}
               </div>
@@ -57,6 +43,6 @@ export const TopPlayedList = ({ entries }: TopPlayedListProps): React.JSX.Elemen
           ))}
         </div>
       )}
-    </div>
+    </StatCard>
   );
 };

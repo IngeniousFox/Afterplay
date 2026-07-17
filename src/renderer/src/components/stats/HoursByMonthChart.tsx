@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { formatHours } from '../../lib/format';
+import { StatCard } from './StatCard';
 import type { Year } from './YearPicker';
 
 type ChartSession = {
@@ -66,7 +67,7 @@ export const HoursByMonthChart = ({
   }, [sessions, year]);
 
   return (
-    <div className="flex h-full flex-col rounded-[14px] border border-border bg-card px-5.5 py-5">
+    <StatCard className="flex h-full flex-col">
       <div className="mb-4.5 flex items-baseline justify-between gap-4">
         <div className="text-[14px] font-bold text-foreground">Hours per month</div>
         <div className="text-[11.5px] text-muted-foreground">
@@ -106,7 +107,7 @@ export const HoursByMonthChart = ({
               {showLabel && (
                 <span
                   className="absolute left-1/2 -translate-x-1/2 text-[10.5px] font-bold whitespace-nowrap tabular-nums"
-                  style={{ bottom: barPx + 5, color: isHovered ? '#eaece9' : '#2fdc7e' }}
+                  style={{ bottom: barPx + 5, color: isHovered ? 'var(--foreground)' : '#2fdc7e' }}
                 >
                   {formatHours(month.seconds / 3600)}
                 </span>
@@ -132,7 +133,7 @@ export const HoursByMonthChart = ({
             key={index}
             className="flex-1 text-center text-[10px]"
             style={{
-              color: hoveredIndex === index ? '#eaece9' : 'var(--muted-foreground)',
+              color: hoveredIndex === index ? 'var(--foreground)' : 'var(--muted-foreground)',
               fontWeight: hoveredIndex === index ? 700 : 400,
             }}
           >
@@ -140,6 +141,6 @@ export const HoursByMonthChart = ({
           </div>
         ))}
       </div>
-    </div>
+    </StatCard>
   );
 };

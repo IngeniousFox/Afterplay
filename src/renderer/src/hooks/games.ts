@@ -1,7 +1,6 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  CreateGameInput,
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
   GameDetail,
@@ -9,7 +8,6 @@ import type {
   GameRow,
   LaunchExecutableResult,
   PromotePlannedGameInput,
-  StateEvent,
   UpdateGamePatch,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
@@ -31,10 +29,15 @@ export const useGames = (): UseQueryResult<GameListItem[], Error> =>
     staleTime: Infinity,
   });
 
+// Mismo staleTime Infinity que useGames (ver su comentario): su key
+// ['games', id] cuelga del prefijo ['games'], así que toda invalidación de
+// games.all (mutations + watcher) la refresca también — sin esto, refetcheaba
+// de más en cada mount/focus sin ningún cambio real detrás.
 export const useGame = (id: number): UseQueryResult<GameDetail | null, Error> =>
   useQuery({
     queryKey: queryKeys.games.detail(id),
     queryFn: () => window.api.games.getById(id),
+    staleTime: Infinity,
   });
 
 // Sección Plan to Play — la contrapartida de useGames(): solo los juegos
@@ -79,16 +82,6 @@ export const usePromotePlannedGame = (): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.spend.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
-    },
-  });
-};
-
-export const useCreateGame = (): UseMutationResult<GameRow, Error, CreateGameInput, unknown> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: CreateGameInput) => window.api.games.create(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
     },
   });
 };
@@ -148,17 +141,3 @@ export const useLaunchExecutable = (): UseMutationResult<
   useMutation({
     mutationFn: (executablePath: string) => window.api.games.launchExecutable(executablePath),
   });
-
-type GameStatus = Omit<UseQueryResult<GameDetail | null, Error>, 'data'> & {
-  currentState: StateEvent['type'] | null;
-  stateHistory: StateEvent[];
-};
-
-export const useGameStatus = (id: number): GameStatus => {
-  const { data, ...rest } = useGame(id);
-  return {
-    ...rest,
-    currentState: data?.currentState ?? null,
-    stateHistory: data?.stateHistory ?? [],
-  };
-};

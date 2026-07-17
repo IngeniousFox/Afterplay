@@ -44,13 +44,13 @@ const safeImageCall = async (call: () => Promise<unknown>): Promise<SgdbImageCan
   }
 };
 
-export const sgdbGetGrids = async (id: number): Promise<SgdbImageCandidate[]> =>
+const sgdbGetGrids = async (id: number): Promise<SgdbImageCandidate[]> =>
   safeImageCall(async () => (await getSgdbClient()).getGridsById(id));
 
-export const sgdbGetHeroes = async (id: number): Promise<SgdbImageCandidate[]> =>
+const sgdbGetHeroes = async (id: number): Promise<SgdbImageCandidate[]> =>
   safeImageCall(async () => (await getSgdbClient()).getHeroesById(id));
 
-export const sgdbGetLogos = async (id: number): Promise<SgdbImageCandidate[]> =>
+const sgdbGetLogos = async (id: number): Promise<SgdbImageCandidate[]> =>
   safeImageCall(async () => (await getSgdbClient()).getLogosById(id));
 
 export const getSgdbImages = async (input: GetSgdbImagesInput): Promise<SgdbImages> => {

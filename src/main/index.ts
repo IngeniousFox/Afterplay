@@ -6,7 +6,6 @@ import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 import { runMigrations, runSyncCycle } from './db';
 import { runDailyBackup } from './db/dailyBackup';
-// [SEED] cuando quite el seed: este import + borrar src/main/db/seed.ts.
 import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
@@ -188,17 +187,6 @@ app.whenReady().then(async () => {
     await runDailyBackup();
   } catch (error) {
     console.warn('[backup] fallo inesperado en la copia diaria (sigo igualmente):', error);
-  }
-
-  // [SEED] Datos de prueba, solo en dev. Para quitarlo: este bloque + el
-  // import de seedDatabase de arriba + borrar src/main/db/seed.ts.
-  // Si peta no pasa nada, se loguea y la app sigue tirando igual.
-  if (is.dev) {
-    try {
-      // await seedDatabase();
-    } catch (error) {
-      console.error('[seed] Error en el seed de desarrollo:', error);
-    }
   }
 
   registerIpcHandlers();

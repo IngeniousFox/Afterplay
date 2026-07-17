@@ -1,4 +1,4 @@
-import { Save, X } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useEffect } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
@@ -6,14 +6,16 @@ import { useUpdateGame } from '../../hooks/games';
 import { useAddIteration, useUpdateIteration } from '../../hooks/iterations';
 import { useAddSession, useUpdateMilestoneSession } from '../../hooks/sessions';
 import { useAddStateEvent } from '../../hooks/stateEvents';
-import { STATE_TO_STATUS_KEY } from '../../lib/gameStatus';
-import { Dialog, DialogContent } from '../ui/dialog';
+import { STATE_TO_STATUS_KEY, STATUS_TO_STATE_TYPE } from '../../lib/gameStatus';
+import { activeOrLastIteration } from '../../lib/iterations';
+import { ModalFooter, ModalShell } from '../ui/modal-shell';
 import { Textarea } from '../ui/textarea';
 import { CheckboxRow } from './add-game/CheckboxRow';
+import { ExecutablePathField } from './add-game/ExecutablePathField';
+import { InstallDirectoryField } from './add-game/InstallDirectoryField';
+import { parseIsoDate } from './add-game/precisionDate';
 import { fieldLabelClass, textInputClass } from './add-game/styles';
-import { STATUS_TO_STATE_TYPE } from './add-game/types';
-import { ExecutablePathField } from './edit-game/ExecutablePathField';
-import { InstallDirectoryField } from './edit-game/InstallDirectoryField';
+import { parseOptionalNumber } from './add-game/types';
 import { IterationSection } from './edit-game/IterationSection';
 import { anchorPickerValue, milestoneAnchor } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
@@ -24,20 +26,8 @@ type EditGameModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-const parseOptionalNumber = (raw: string): number | null => {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const value = Number(trimmed);
-  return Number.isNaN(value) ? null : value;
-};
-
-const isoDateToDate = (isoDate: string): Date => new Date(`${isoDate}T00:00:00`);
-
 const buildDefaults = (game: GameDetail): EditGameFormValues => {
-  const iteration =
-    game.iterations.find((it) => it.currentState === 'started') ??
-    game.iterations[game.iterations.length - 1] ??
-    null;
+  const iteration = activeOrLastIteration(game.iterations);
 
   return {
     title: game.title,
@@ -136,7 +126,7 @@ export const EditGameModal = ({
       const isOngoing = values.status === 'playing';
 
       if (values.started) {
-        const date = isoDateToDate(values.started.isoDate);
+        const date = parseIsoDate(values.started.isoDate);
         await addSession.mutateAsync({
           iterationId: iteration.id,
           startedAt: date,
@@ -149,7 +139,7 @@ export const EditGameModal = ({
       }
 
       if (values.finished && !isOngoing) {
-        const date = isoDateToDate(values.finished.isoDate);
+        const date = parseIsoDate(values.finished.isoDate);
         await addSession.mutateAsync({
           iterationId: iteration.id,
           startedAt: date,
@@ -169,7 +159,7 @@ export const EditGameModal = ({
         await addStateEvent.mutateAsync({
           iterationId: iteration.id,
           type: 'started',
-          occurredAt: isoDateToDate(values.started.isoDate),
+          occurredAt: parseIsoDate(values.started.isoDate),
           datePrecision: values.started.precision,
           note: null,
         });
@@ -179,7 +169,7 @@ export const EditGameModal = ({
       await addStateEvent.mutateAsync({
         iterationId: iteration.id,
         type: STATUS_TO_STATE_TYPE[values.status],
-        occurredAt: anchorDate ? isoDateToDate(anchorDate.isoDate) : new Date(),
+        occurredAt: anchorDate ? parseIsoDate(anchorDate.isoDate) : new Date(),
         datePrecision: anchorDate?.precision ?? 'day',
         note: null,
       });
@@ -223,7 +213,7 @@ export const EditGameModal = ({
           }
           await updateMilestoneSession.mutateAsync({
             id: anchor.id,
-            date: isoDateToDate(draft.isoDate),
+            date: parseIsoDate(draft.isoDate),
             precision: draft.precision,
           });
         }
@@ -248,135 +238,101 @@ export const EditGameModal = ({
   };
 
   return (
-    <Dialog
+    <ModalShell
       open={open}
-      onOpenChange={(next) => {
-        if (!next) handleClose();
-      }}
+      onClose={handleClose}
+      title="Edit game"
+      widthClass="w-160"
+      maxHClass="max-h-[80vh]"
+      footer={
+        <ModalFooter
+          onCancel={handleClose}
+          onSubmit={handleSave}
+          submitting={isSaving}
+          submitLabel="Save changes"
+          submittingLabel="Saving…"
+          icon={<Save size={16} />}
+        />
+      }
     >
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[80vh] w-160 max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[18px] border border-input bg-[#121413] p-0 shadow-[0_30px_80px_rgba(0,0,0,.6)] sm:max-w-[calc(100%-2rem)]"
-      >
-        <div className="flex items-center justify-between border-b border-border px-5.5 py-4.5">
-          <div className="text-[17px] font-extrabold tracking-[-.01em] text-foreground">
-            Edit game
+      <FormProvider {...methods}>
+        <div className="flex flex-col gap-4">
+          <div>
+            <div className={fieldLabelClass}>TITLE</div>
+            <Controller
+              control={control}
+              name="title"
+              render={({ field }) => <input {...field} className={textInputClass} />}
+            />
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] border border-border bg-white/3 text-foreground"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5.5 py-5">
-          <FormProvider {...methods}>
-            <div className="flex flex-col gap-4">
-              <div>
-                <div className={fieldLabelClass}>TITLE</div>
-                <Controller
-                  control={control}
-                  name="title"
-                  render={({ field }) => <input {...field} className={textInputClass} />}
-                />
+          <div className="flex gap-2.5">
+            <div className="flex-1">
+              <div className={fieldLabelClass}>
+                DEVELOPER{' '}
+                <span className="font-medium tracking-normal normal-case">· from IGDB</span>
               </div>
-
-              <div className="flex gap-2.5">
-                <div className="flex-1">
-                  <div className={fieldLabelClass}>
-                    DEVELOPER{' '}
-                    <span className="font-medium tracking-normal normal-case">· from IGDB</span>
-                  </div>
-                  <div className="rounded-[9px] border border-input bg-white/[0.015] px-3.25 py-2.5 text-[13px] text-muted-foreground">
-                    {game.developer ?? '—'}
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <div className={fieldLabelClass}>
-                    PUBLISHER{' '}
-                    <span className="font-medium tracking-normal normal-case">· from IGDB</span>
-                  </div>
-                  <div className="rounded-[9px] border border-input bg-white/[0.015] px-3.25 py-2.5 text-[13px] text-muted-foreground">
-                    {game.publisher ?? '—'}
-                  </div>
-                </div>
+              <div className="rounded-[9px] border border-input bg-white/[0.015] px-3.25 py-2.5 text-[13px] text-muted-foreground">
+                {game.developer ?? '—'}
               </div>
-
-              <InstallDirectoryField />
-
-              {/* Un juego emulado no tiene .exe propio (EMULADORES.md §5) —
-                  mismo ocultamiento que en Add Game. */}
-              {!isEmulated && <ExecutablePathField />}
-
-              <div>
-                <div className={fieldLabelClass}>NOTES</div>
-                <Controller
-                  control={control}
-                  name="notes"
-                  render={({ field }) => (
-                    <Textarea
-                      {...field}
-                      placeholder="Markdown supported…"
-                      className={`${textInputClass} min-h-20 font-mono`}
-                    />
-                  )}
-                />
-              </div>
-
-              <CheckboxRow
-                checked={endless}
-                onToggle={() => setValue('endless', !endless)}
-                title="Endless game"
-                description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
-                borderColorChecked="rgba(47,220,126,.7)"
-                fillColorChecked="#2fdc7e"
-                checkIconColor="#08120c"
-              />
-
-              <CheckboxRow
-                checked={isEmulated}
-                onToggle={() => setValue('isEmulated', !isEmulated)}
-                title="Emulated game"
-                description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
-                borderColorChecked="rgba(47,220,126,.7)"
-                fillColorChecked="#2fdc7e"
-                checkIconColor="#08120c"
-              />
-
-              {endless ? (
-                <div className="rounded-[10px] border border-border bg-white/[0.02] px-3.5 py-3 text-[12.5px] text-muted-foreground">
-                  Tracked by sessions — no playthroughs to edit.
-                </div>
-              ) : (
-                <IterationSection game={game} />
-              )}
             </div>
-          </FormProvider>
-        </div>
+            <div className="flex-1">
+              <div className={fieldLabelClass}>
+                PUBLISHER{' '}
+                <span className="font-medium tracking-normal normal-case">· from IGDB</span>
+              </div>
+              <div className="rounded-[9px] border border-input bg-white/[0.015] px-3.25 py-2.5 text-[13px] text-muted-foreground">
+                {game.publisher ?? '—'}
+              </div>
+            </div>
+          </div>
 
-        <div className="flex items-center justify-end gap-2.5 border-t border-border px-5.5 py-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={isSaving}
-            className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-white/6 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 rounded-[10px] px-5.5 py-2.5 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ background: 'linear-gradient(135deg,#2fdc7e,#16a35a)', color: '#08120c' }}
-          >
-            <Save size={16} />
-            <span>{isSaving ? 'Saving…' : 'Save changes'}</span>
-          </button>
+          <InstallDirectoryField showOptionalHint={false} />
+
+          {/* Un juego emulado no tiene .exe propio (EMULADORES.md §5) —
+                  mismo ocultamiento que en Add Game. */}
+          {!isEmulated && <ExecutablePathField />}
+
+          <div>
+            <div className={fieldLabelClass}>NOTES</div>
+            <Controller
+              control={control}
+              name="notes"
+              render={({ field }) => (
+                <Textarea
+                  {...field}
+                  placeholder="Markdown supported…"
+                  className={`${textInputClass} min-h-20 font-mono`}
+                />
+              )}
+            />
+          </div>
+
+          <CheckboxRow
+            checked={endless}
+            onToggle={() => setValue('endless', !endless)}
+            title="Endless game"
+            description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
+            accent="green"
+          />
+
+          <CheckboxRow
+            checked={isEmulated}
+            onToggle={() => setValue('isEmulated', !isEmulated)}
+            title="Emulated game"
+            description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
+            accent="green"
+          />
+
+          {endless ? (
+            <div className="rounded-[10px] border border-border bg-white/[0.02] px-3.5 py-3 text-[12.5px] text-muted-foreground">
+              Tracked by sessions — no playthroughs to edit.
+            </div>
+          ) : (
+            <IterationSection game={game} />
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </FormProvider>
+    </ModalShell>
   );
 };

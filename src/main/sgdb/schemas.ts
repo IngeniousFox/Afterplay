@@ -8,7 +8,6 @@ export const sgdbGameSchema = z.object({
   id: z.number(),
   name: z.string(),
   release_date: z.number().nullable().optional(), // unix en segundos; algunas entradas no lo traen
-  verified: z.boolean().optional(),
 });
 export type SgdbGame = z.infer<typeof sgdbGameSchema>;
 

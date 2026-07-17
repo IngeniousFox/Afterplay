@@ -1,10 +1,12 @@
 import { Folder } from 'lucide-react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { fieldLabelClass } from './styles';
-import type { AddGameFormValues } from './types';
 
+// Compartido por Add Game y Edit Game (mismo campo, dos formularios): el
+// tipado solo pide el subconjunto de campos que de verdad toca, así sirve
+// para AddGameFormValues y EditGameFormValues sin castear nada.
 export const ExecutablePathField = (): React.JSX.Element => {
-  const { control, setValue } = useFormContext<AddGameFormValues>();
+  const { control, setValue } = useFormContext<{ executablePath: string }>();
 
   const handleBrowse = async (): Promise<void> => {
     const path = await window.api.dialog.pickExecutable();

@@ -48,3 +48,23 @@ export const STATE_TO_STATUS_KEY: Record<StateEvent['type'], StatusKey> = {
 
 export const getGameStatusMeta = (currentState: StateEvent['type'] | null): GameStatusMeta =>
   STATUS_META[currentState === null ? 'unplayed' : STATE_TO_STATUS_KEY[currentState]];
+
+// El dropdown de Status del "jugado antes" nunca ofrece 'unplayed' — ese
+// estado es justo lo que pasa cuando NO se marca ese checkbox. Tampoco
+// 'plan': a Plan to Play no se puede volver ni elegirlo como estado (solo
+// se entra al añadir el juego desde la sección /plan).
+export type PastStatusKey = Exclude<StatusKey, 'unplayed' | 'plan'>;
+export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'playing', 'on_hold'];
+// SPEC 10.8 — discrepancia resuelta: el prototipo solo ofrecía Playing/Rest
+// para endless, pero la sección 4.5 exige mantener dropped disponible
+// también para endless (resting se añade, no sustituye a on_hold/dropped).
+export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting', 'dropped'];
+
+// Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
+export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
+  playing: 'started',
+  beaten: 'completed',
+  dropped: 'dropped',
+  on_hold: 'on_hold',
+  resting: 'resting',
+};

@@ -3,6 +3,7 @@ import { getDb } from '../..';
 import type { Session } from '../../../../shared/types';
 import { sessionColumns } from '../../projections';
 import { sessionsTable } from '../../schema';
+import { computeDurationSec } from './sessionDuration';
 
 // Cierra una sesión abierta (botón Play del detalle, o el watcher del
 // Bloque 3 al detectar que el proceso murió). Idempotente a propósito: si ya
@@ -23,10 +24,7 @@ export const closeSession = async (id: number, endedAt: Date): Promise<Session |
   if (!session) return null;
   if (session.endedAt !== null) return session;
 
-  const durationSec = Math.max(
-    0,
-    Math.round((endedAt.getTime() - session.startedAt.getTime()) / 1000),
-  );
+  const durationSec = computeDurationSec(session.startedAt, endedAt);
 
   const [updated] = await db
     .update(sessionsTable)

@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail, IgdbSearchResult } from '../../../../shared/types';
@@ -9,7 +9,14 @@ import {
 } from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
 import { useAssignSession } from '../../hooks/sessions';
-import { Dialog, DialogContent } from '../ui/dialog';
+import {
+  ENDLESS_STATUS_OPTIONS,
+  NORMAL_STATUS_OPTIONS,
+  STATUS_TO_STATE_TYPE,
+} from '../../lib/gameStatus';
+import { accentGradientStyle } from '../../lib/styles';
+import { ModalShell } from '../ui/modal-shell';
+import { NumberInput } from '../ui/number-input';
 import { AddGameImagesField } from './add-game/AddGameImagesField';
 import { CheckboxRow } from './add-game/CheckboxRow';
 import type { CoverPickerTarget } from './add-game/CoverPicker';
@@ -20,7 +27,7 @@ import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { GameNotesPanel } from './add-game/GameNotesPanel';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
-import { todayValue } from './add-game/precisionDate';
+import { parseIsoDate, todayValue } from './add-game/precisionDate';
 import { SearchStep } from './add-game/SearchStep';
 import { SegmentedButtonGroup } from './add-game/SegmentedButtonGroup';
 import { SelectedGameSummary } from './add-game/SelectedGameSummary';
@@ -29,12 +36,10 @@ import { fieldLabelClass, textInputClass } from './add-game/styles';
 import type { AddGameFormValues } from './add-game/types';
 import {
   DEFAULT_FORM_VALUES,
-  ENDLESS_STATUS_OPTIONS,
   FORMAT_OPTIONS,
-  NORMAL_STATUS_OPTIONS,
-  ORIGIN_OPTIONS,
+  ORIGIN_SEGMENT_OPTIONS,
+  parseOptionalNumber,
   PLATFORM_OPTIONS,
-  STATUS_TO_STATE_TYPE,
 } from './add-game/types';
 
 type AddGameModalProps = {
@@ -62,17 +67,14 @@ type AddGameModalProps = {
   assignSessionId?: number;
 };
 
+// parseIsoDate (medianoche LOCAL) y no new Date(isoDate) a secas: ese parseo
+// interpreta la fecha como medianoche UTC y era la única vía de guardado de
+// la app que difería del resto (Edit Game, gastos, historial ya guardaban en
+// local) — misma fecha elegida, timestamps distintos según el modal.
 const toBackendDate = (
   value: AddGameFormValues['started'],
 ): { date: Date; precision: 'year' | 'month' | 'day' } | null =>
-  value ? { date: new Date(value.isoDate), precision: value.precision } : null;
-
-const parseOptionalNumber = (raw: string): number | null => {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const value = Number(trimmed);
-  return Number.isNaN(value) ? null : value;
-};
+  value ? { date: parseIsoDate(value.isoDate), precision: value.precision } : null;
 
 export const AddGameModal = ({
   open,
@@ -253,284 +255,23 @@ export const AddGameModal = ({
   };
 
   return (
-    <Dialog
+    <ModalShell
       open={open}
-      onOpenChange={(next) => {
-        if (!next) handleClose();
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[80vh] w-160 max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[18px] border border-input bg-[#121413] p-0 shadow-[0_30px_80px_rgba(0,0,0,.6)] sm:max-w-[calc(100%-2rem)]"
-      >
-        <div className="flex items-center justify-between border-b border-border px-5.5 py-4.5">
-          <div>
-            <div className="text-[17px] font-extrabold tracking-[-.01em] text-foreground">
-              {isPromote ? 'Add to library' : 'Add game'}
-            </div>
-            <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-              {isPromote
-                ? 'Fill the details — it moves out of your Plan to play'
-                : isPlan
-                  ? 'Search the catalog — saved to your Plan to play'
-                  : 'Search the catalog, then fill the details'}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] border border-border bg-white/3 text-foreground"
-          >
-            <X size={18} />
-          </button>
+      onClose={handleClose}
+      title={isPromote ? 'Add to library' : 'Add game'}
+      widthClass="w-160"
+      maxHClass="max-h-[80vh]"
+      headerExtra={
+        <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+          {isPromote
+            ? 'Fill the details — it moves out of your Plan to play'
+            : isPlan
+              ? 'Search the catalog — saved to your Plan to play'
+              : 'Search the catalog, then fill the details'}
         </div>
-
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5.5 py-5">
-          {selected === null ? (
-            <SearchStep
-              query={query}
-              onQueryChange={setQuery}
-              isLoading={search.isLoading}
-              results={search.data}
-              onSelect={setSelected}
-            />
-          ) : pickerTarget !== null ? (
-            <CoverPicker
-              target={pickerTarget}
-              igdbId={selected.igdbId}
-              title={selected.title}
-              releaseYear={selected.releaseYear}
-              onSelect={(url) => {
-                setValue(pickerTarget === 'cover' ? 'coverUrl' : 'heroUrl', url);
-                setPickerTarget(null);
-              }}
-              onCancel={() => setPickerTarget(null)}
-            />
-          ) : (
-            <FormProvider {...methods}>
-              <SelectedGameSummary
-                selected={selected}
-                // En modo promote no hay botón "Change": el juego viene
-                // fijado desde su ficha del Plan, cambiarlo aquí no tiene
-                // sentido.
-                onChangeSelection={
-                  isPromote
-                    ? undefined
-                    : () => {
-                        setSelected(null);
-                        setValue('coverUrl', null);
-                        setValue('heroUrl', null);
-                      }
-                }
-              />
-
-              <div className="mt-4.5 flex flex-col gap-4">
-                <AddGameImagesField selected={selected} onPick={setPickerTarget} />
-                {/* Todo lo de playthrough/gasto/exe se pregunta al pasar el
-                    juego a la biblioteca, no al planearlo — un Plan to Play
-                    solo lleva el juego, sus imágenes y tus notas. */}
-                {!isPlan && (
-                  <>
-                    <div>
-                      <div className={fieldLabelClass}>PLATFORM YOU PLAY ON</div>
-                      <Controller
-                        control={control}
-                        name="platform"
-                        render={({ field }) => (
-                          <Dropdown
-                            value={field.value}
-                            options={PLATFORM_OPTIONS}
-                            onChange={field.onChange}
-                            renderOption={(option) => option}
-                          />
-                        )}
-                      />
-                    </div>
-
-                    <div>
-                      <div className={fieldLabelClass}>ORIGIN</div>
-                      <Controller
-                        control={control}
-                        name="origin"
-                        render={({ field }) => (
-                          <SegmentedButtonGroup
-                            value={field.value}
-                            options={ORIGIN_OPTIONS.map((option) => ({
-                              value: option,
-                              label: option,
-                            }))}
-                            onChange={field.onChange}
-                            wrap
-                          />
-                        )}
-                      />
-                    </div>
-
-                    <div>
-                      <div className={fieldLabelClass}>FORMAT</div>
-                      <Controller
-                        control={control}
-                        name="format"
-                        render={({ field }) => (
-                          <SegmentedButtonGroup
-                            value={field.value}
-                            options={FORMAT_OPTIONS}
-                            onChange={field.onChange}
-                          />
-                        )}
-                      />
-                    </div>
-
-                    {origin === 'Purchased' && (
-                      <div className="flex gap-2.5">
-                        <div className="flex-1">
-                          <div className={fieldLabelClass}>
-                            MONEY SPENT (€){' '}
-                            <span className="font-medium tracking-normal normal-case">
-                              · saved as a purchase
-                            </span>
-                          </div>
-                          <Controller
-                            control={control}
-                            name="moneySpent"
-                            render={({ field }) => (
-                              <input
-                                {...field}
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                placeholder="0.00"
-                                // Ver el comentario del mismo fix en
-                                // PlayedBeforePanel.tsx — la rueda del ratón
-                                // cambia el valor de un input number con foco,
-                                // sin avisar.
-                                onWheel={(event) => event.currentTarget.blur()}
-                                className={textInputClass}
-                              />
-                            )}
-                          />
-                        </div>
-
-                        <Controller
-                          control={control}
-                          name="moneySpentDate"
-                          render={({ field }) => (
-                            // Cuándo se compró — por defecto hoy (ver el
-                            // moneySpentDate: todayValue() de más arriba), no
-                            // la fecha en la que se acaba guardando el gasto
-                            // sin más: comprar algo hace tiempo y añadirlo
-                            // hoy a la app no debería registrarlo como
-                            // gastado hoy.
-                            <DateWithPrecisionPicker
-                              label="Purchased on"
-                              value={field.value}
-                              onChange={field.onChange}
-                            />
-                          )}
-                        />
-                      </div>
-                    )}
-
-                    <CheckboxRow
-                      checked={endless}
-                      onToggle={() => handleEndlessToggle(!endless)}
-                      title="Endless game"
-                      description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
-                      borderColorChecked="rgba(47,220,126,.7)"
-                      fillColorChecked="#2fdc7e"
-                      checkIconColor="#08120c"
-                    />
-
-                    <CheckboxRow
-                      checked={isEmulated}
-                      onToggle={() => handleEmulatedToggle(!isEmulated)}
-                      title="Emulated game"
-                      description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
-                      borderColorChecked="rgba(47,220,126,.7)"
-                      fillColorChecked="#2fdc7e"
-                      checkIconColor="#08120c"
-                    />
-
-                    <CheckboxRow
-                      checked={playedBefore}
-                      onToggle={() => setValue('playedBefore', !playedBefore)}
-                      title="I played this before, outside the app"
-                      description={
-                        endless
-                          ? 'Log the hours you already put in instead of starting fresh.'
-                          : 'Add a past playthrough with your own dates instead of starting as Unplayed.'
-                      }
-                      borderColorChecked="rgba(133,163,214,.6)"
-                      fillColorChecked="#85a3d6"
-                      checkIconColor="#0a0b0a"
-                      rowBorderFollowsChecked
-                    />
-
-                    {playedBefore && <PlayedBeforePanel />}
-
-                    {/* Un juego emulado no tiene .exe propio que vigilar —
-                        lo vigilado es el emulador (EMULADORES.md §5). */}
-                    {!isEmulated && <ExecutablePathField />}
-
-                    <InstallDirectoryField />
-                  </>
-                )}
-
-                <div>
-                  <CheckboxRow
-                    checked={notesOpen}
-                    onToggle={() => setNotesOpen(!notesOpen)}
-                    title="Add notes"
-                    description="Personal notes about this game — markdown supported."
-                    borderColorChecked="rgba(133,163,214,.6)"
-                    fillColorChecked="#85a3d6"
-                    checkIconColor="#0a0b0a"
-                  />
-                  {notesOpen && (
-                    <div className="mt-2.75">
-                      <GameNotesPanel />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div className={fieldLabelClass}>
-                    NOTE{' '}
-                    <span className="font-medium tracking-normal normal-case">
-                      · saved to status history
-                    </span>
-                  </div>
-                  <Controller
-                    control={control}
-                    name="note"
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        placeholder={
-                          isPlan
-                            ? 'e.g. Recommended by Marta · looks like Hades…'
-                            : 'e.g. Birthday gift · GOG winter sale…'
-                        }
-                        className={textInputClass}
-                      />
-                    )}
-                  />
-                </div>
-
-                {!isPlan && <StatusSummaryLine />}
-
-                {activeMutation.isError && (
-                  <div className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
-                    Couldn&apos;t {isPromote ? 'move' : 'add'} the game —{' '}
-                    {activeMutation.error.message}
-                  </div>
-                )}
-              </div>
-            </FormProvider>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2.5 border-t border-border px-5.5 py-4">
+      }
+      footer={
+        <>
           <button
             type="button"
             onClick={handleClose}
@@ -545,7 +286,7 @@ export const AddGameModal = ({
             className="flex items-center gap-2 rounded-[10px] px-5.5 py-2.5 text-[13.5px] font-bold disabled:cursor-not-allowed"
             style={
               selected
-                ? { background: 'linear-gradient(135deg,#2fdc7e,#16a35a)', color: '#08120c' }
+                ? accentGradientStyle
                 : { background: 'rgba(255,255,255,.06)', color: '#888f8a', opacity: 0.6 }
             }
           >
@@ -560,8 +301,233 @@ export const AddGameModal = ({
                   : 'Add to library'}
             </span>
           </button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      {selected === null ? (
+        <SearchStep
+          query={query}
+          onQueryChange={setQuery}
+          isLoading={search.isLoading}
+          results={search.data}
+          onSelect={setSelected}
+        />
+      ) : pickerTarget !== null ? (
+        <CoverPicker
+          target={pickerTarget}
+          igdbId={selected.igdbId}
+          title={selected.title}
+          releaseYear={selected.releaseYear}
+          onSelect={(url) => {
+            setValue(pickerTarget === 'cover' ? 'coverUrl' : 'heroUrl', url);
+            setPickerTarget(null);
+          }}
+          onCancel={() => setPickerTarget(null)}
+        />
+      ) : (
+        <FormProvider {...methods}>
+          <SelectedGameSummary
+            selected={selected}
+            // En modo promote no hay botón "Change": el juego viene
+            // fijado desde su ficha del Plan, cambiarlo aquí no tiene
+            // sentido.
+            onChangeSelection={
+              isPromote
+                ? undefined
+                : () => {
+                    setSelected(null);
+                    setValue('coverUrl', null);
+                    setValue('heroUrl', null);
+                  }
+            }
+          />
+
+          <div className="mt-4.5 flex flex-col gap-4">
+            <AddGameImagesField selected={selected} onPick={setPickerTarget} />
+            {/* Todo lo de playthrough/gasto/exe se pregunta al pasar el
+                    juego a la biblioteca, no al planearlo — un Plan to Play
+                    solo lleva el juego, sus imágenes y tus notas. */}
+            {!isPlan && (
+              <>
+                <div>
+                  <div className={fieldLabelClass}>PLATFORM YOU PLAY ON</div>
+                  <Controller
+                    control={control}
+                    name="platform"
+                    render={({ field }) => (
+                      <Dropdown
+                        value={field.value}
+                        options={PLATFORM_OPTIONS}
+                        onChange={field.onChange}
+                        renderOption={(option) => option}
+                      />
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <div className={fieldLabelClass}>ORIGIN</div>
+                  <Controller
+                    control={control}
+                    name="origin"
+                    render={({ field }) => (
+                      <SegmentedButtonGroup
+                        value={field.value}
+                        options={ORIGIN_SEGMENT_OPTIONS}
+                        onChange={field.onChange}
+                        wrap
+                      />
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <div className={fieldLabelClass}>FORMAT</div>
+                  <Controller
+                    control={control}
+                    name="format"
+                    render={({ field }) => (
+                      <SegmentedButtonGroup
+                        value={field.value}
+                        options={FORMAT_OPTIONS}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+
+                {origin === 'Purchased' && (
+                  <div className="flex gap-2.5">
+                    <div className="flex-1">
+                      <div className={fieldLabelClass}>
+                        MONEY SPENT (€){' '}
+                        <span className="font-medium tracking-normal normal-case">
+                          · saved as a purchase
+                        </span>
+                      </div>
+                      <Controller
+                        control={control}
+                        name="moneySpent"
+                        render={({ field }) => (
+                          <NumberInput
+                            {...field}
+                            min={0}
+                            step="0.01"
+                            placeholder="0.00"
+                            className={textInputClass}
+                          />
+                        )}
+                      />
+                    </div>
+
+                    <Controller
+                      control={control}
+                      name="moneySpentDate"
+                      render={({ field }) => (
+                        // Cuándo se compró — por defecto hoy (ver el
+                        // moneySpentDate: todayValue() de más arriba), no
+                        // la fecha en la que se acaba guardando el gasto
+                        // sin más: comprar algo hace tiempo y añadirlo
+                        // hoy a la app no debería registrarlo como
+                        // gastado hoy.
+                        <DateWithPrecisionPicker
+                          label="Purchased on"
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      )}
+                    />
+                  </div>
+                )}
+
+                <CheckboxRow
+                  checked={endless}
+                  onToggle={() => handleEndlessToggle(!endless)}
+                  title="Endless game"
+                  description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
+                  accent="green"
+                />
+
+                <CheckboxRow
+                  checked={isEmulated}
+                  onToggle={() => handleEmulatedToggle(!isEmulated)}
+                  title="Emulated game"
+                  description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
+                  accent="green"
+                />
+
+                <CheckboxRow
+                  checked={playedBefore}
+                  onToggle={() => setValue('playedBefore', !playedBefore)}
+                  title="I played this before, outside the app"
+                  description={
+                    endless
+                      ? 'Log the hours you already put in instead of starting fresh.'
+                      : 'Add a past playthrough with your own dates instead of starting as Unplayed.'
+                  }
+                  accent="blue"
+                  rowBorderFollowsChecked
+                />
+
+                {playedBefore && <PlayedBeforePanel />}
+
+                {/* Un juego emulado no tiene .exe propio que vigilar —
+                        lo vigilado es el emulador (EMULADORES.md §5). */}
+                {!isEmulated && <ExecutablePathField />}
+
+                <InstallDirectoryField />
+              </>
+            )}
+
+            <div>
+              <CheckboxRow
+                checked={notesOpen}
+                onToggle={() => setNotesOpen(!notesOpen)}
+                title="Add notes"
+                description="Personal notes about this game — markdown supported."
+                accent="blue"
+              />
+              {notesOpen && (
+                <div className="mt-2.75">
+                  <GameNotesPanel />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className={fieldLabelClass}>
+                NOTE{' '}
+                <span className="font-medium tracking-normal normal-case">
+                  · saved to status history
+                </span>
+              </div>
+              <Controller
+                control={control}
+                name="note"
+                render={({ field }) => (
+                  <input
+                    {...field}
+                    placeholder={
+                      isPlan
+                        ? 'e.g. Recommended by Marta · looks like Hades…'
+                        : 'e.g. Birthday gift · GOG winter sale…'
+                    }
+                    className={textInputClass}
+                  />
+                )}
+              />
+            </div>
+
+            {!isPlan && <StatusSummaryLine />}
+
+            {activeMutation.isError && (
+              <div className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+                Couldn&apos;t {isPromote ? 'move' : 'add'} the game — {activeMutation.error.message}
+              </div>
+            )}
+          </div>
+        </FormProvider>
+      )}
+    </ModalShell>
   );
 };

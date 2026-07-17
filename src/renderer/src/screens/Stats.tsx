@@ -16,6 +16,7 @@ import { useGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
 import { useAllSpendEvents } from '../hooks/spend';
 import { useAllStateEvents } from '../hooks/stateEvents';
+import { yearsDesc } from '../lib/dateMath';
 import { formatHours, formatMoney } from '../lib/format';
 import { mapGenreToAxis } from '../lib/genreAxes';
 import { GameStats } from './GameStats';
@@ -37,12 +38,14 @@ export const Stats = (): React.JSX.Element => {
   const { data: spendEvents = [] } = useAllSpendEvents();
   const { data: stateEvents = [] } = useAllStateEvents();
 
-  const years = useMemo(() => {
-    const set = new Set<number>();
-    for (const session of sessions) set.add(session.startedAt.getFullYear());
-    for (const event of spendEvents) set.add(event.occurredAt.getFullYear());
-    return [...set].sort((a, b) => b - a);
-  }, [sessions, spendEvents]);
+  const years = useMemo(
+    () =>
+      yearsDesc([
+        ...sessions.map((session) => session.startedAt),
+        ...spendEvents.map((event) => event.occurredAt),
+      ]),
+    [sessions, spendEvents],
+  );
 
   const trackedSecondsByGameInYear = useMemo(() => {
     if (selectedYear === 'all') return null;

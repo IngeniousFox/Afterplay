@@ -2,21 +2,34 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { GameDetail, IterationDetail } from '../../../../shared/types';
 import {
+  gameColumns,
+  iterationColumns,
+  sessionColumns,
+  spendEventColumns,
+  stateEventColumns,
+} from '../../projections';
+import {
   gamesTable,
   iterationsTable,
   sessionsTable,
   spendEventsTable,
   stateEventsTable,
 } from '../../schema';
+import { latestRealStateEvent } from '../stateEvents/latestRealStateEvent';
+import { resolveIterationHours } from './iterationHours';
 
 export const getGameById = async (id: number): Promise<GameDetail | null> => {
   const db = getDb();
 
-  const [game] = await db.select().from(gamesTable).where(eq(gamesTable.id, id)).limit(1);
+  const [game] = await db
+    .select(gameColumns)
+    .from(gamesTable)
+    .where(eq(gamesTable.id, id))
+    .limit(1);
   if (!game) return null;
 
   const iterations = await db
-    .select()
+    .select(iterationColumns)
     .from(iterationsTable)
     .where(eq(iterationsTable.gameId, id))
     .orderBy(asc(iterationsTable.id));
@@ -26,19 +39,22 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   // Hollow Knight en el seed), no hay nada que buscar en sessions/stateEvents
   // evito el inArray con array vacío, que en SQL sería un "IN ()" inválido.
   const sessions = iterationIds.length
-    ? await db.select().from(sessionsTable).where(inArray(sessionsTable.iterationId, iterationIds))
+    ? await db
+        .select(sessionColumns)
+        .from(sessionsTable)
+        .where(inArray(sessionsTable.iterationId, iterationIds))
     : [];
 
   const stateEvents = iterationIds.length
     ? await db
-        .select()
+        .select(stateEventColumns)
         .from(stateEventsTable)
         .where(inArray(stateEventsTable.iterationId, iterationIds))
         .orderBy(asc(stateEventsTable.occurredAt), asc(stateEventsTable.id))
     : [];
 
   const spendEvents = await db
-    .select()
+    .select(spendEventColumns)
     .from(spendEventsTable)
     .where(eq(spendEventsTable.gameId, id))
     .orderBy(asc(spendEventsTable.occurredAt), asc(spendEventsTable.id));
@@ -101,7 +117,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
       0,
     );
 
-    const hours = iteration.manualTotalPlayed ?? trackedSeconds / 3600;
+    const hours = resolveIterationHours(iteration.manualTotalPlayed, trackedSeconds);
 
     const startSession = iterationSessions.find(
       (session) => session.id === iteration.startSessionId,
@@ -112,8 +128,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     // Ignorando 'plan_to_play': es solo historial (ver schema.ts), nunca el
     // estado real — un juego promovido desde el Plan como Unplayed no tiene
     // más eventos y debe salir null (Unplayed), no "planeado".
-    const realStateEvents = iterationStateEvents.filter((event) => event.type !== 'plan_to_play');
-    const latestEvent = realStateEvents[realStateEvents.length - 1];
+    const latestEvent = latestRealStateEvent(iterationStateEvents);
 
     return {
       ...iteration,
@@ -133,8 +148,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
 
   const isLive = sessions.some((session) => session.endedAt === null);
   // Mismo filtro de 'plan_to_play' que arriba (solo historial, nunca estado).
-  const realGameStateEvents = stateEvents.filter((event) => event.type !== 'plan_to_play');
-  const latestStateEvent = realGameStateEvents[realGameStateEvents.length - 1];
+  const latestStateEvent = latestRealStateEvent(stateEvents);
 
   return {
     ...game,

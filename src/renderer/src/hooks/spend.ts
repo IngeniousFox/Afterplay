@@ -8,12 +8,6 @@ import type {
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
-export const useGameSpend = (gameId: number): UseQueryResult<SpendEvent[], Error> =>
-  useQuery({
-    queryKey: queryKeys.games.spend(gameId),
-    queryFn: () => window.api.spend.getByGame(gameId),
-  });
-
 // Bloque 5B — todos los gastos de la biblioteca (para Total Spent / Avg
 // Cost per Hour, con o sin filtro de año). Misma historia que useGames()/
 // useAllSessions(): staleTime Infinity, invalidada por las mutations de aquí.
@@ -34,8 +28,7 @@ export const useAddSpend = (): UseMutationResult<
   return useMutation({
     mutationFn: (input: AddSpendEventInput) => window.api.spend.add(input),
     onSuccess: () => {
-      // ['games'] cascada tanto al detalle del juego (cambia totalSpend/
-      // costPerHour) como a ['games', gameId, 'spend'] — misma jerarquía.
+      // ['games'] cascada al detalle del juego (cambia totalSpend/costPerHour).
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.spend.all });
     },

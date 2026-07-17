@@ -8,7 +8,6 @@ export const queryKeys = {
   games: {
     all: ['games'] as const,
     detail: (id: number) => ['games', id] as const,
-    spend: (gameId: number) => ['games', gameId, 'spend'] as const,
     // Bajo el prefijo ['games'] a propósito: cualquier mutation que ya
     // invalide games.all refresca también la lista del Plan sin tocarla.
     planned: ['games', 'planned'] as const,

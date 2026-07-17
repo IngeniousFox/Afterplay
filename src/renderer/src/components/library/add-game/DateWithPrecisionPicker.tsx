@@ -1,23 +1,17 @@
 import { CalendarIcon, X } from 'lucide-react';
 import { useState } from 'react';
+import { formatDateOnly } from '../../../lib/format';
+import { floatingPanelClass } from '../../../lib/styles';
 import { Calendar } from '../../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { CalendarDropdown, CalendarDropdownGroup } from './CalendarDropdown';
 import { MonthGrid } from './MonthGrid';
-import { parseIsoDate, toIsoDate } from './precisionDate';
+import { CURRENT_YEAR, parseIsoDate, TODAY, toIsoDate } from './precisionDate';
 import type { DatePrecision, PrecisionDateValue } from './precisionDate';
 import { YearGrid } from './YearGrid';
 
 export type { DatePrecision, PrecisionDateValue } from './precisionDate';
 
-// Sin esto, react-day-picker arranca el desplegable de año en "hace 100
-// años" por defecto (documentado, y comprobado en vivo: con hoy en 2026
-// abría en 1926). El tope de arriba es HOY, no hoy+1: lo que se registra
-// aquí (sesiones, gastos, cambios de estado) ya pasó, nunca es una fecha
-// futura — mismo criterio en los tres pickers (día/mes/año, ver
-// MonthGrid/YearGrid/YearDropdown).
-const TODAY = new Date();
-const CURRENT_YEAR = TODAY.getFullYear();
 const CALENDAR_START_MONTH = new Date(1970, 0);
 const CALENDAR_END_MONTH = new Date(CURRENT_YEAR, 11);
 
@@ -38,18 +32,8 @@ const PRECISION_OPTIONS: { value: DatePrecision; label: string }[] = [
   { value: 'year', label: 'Year' },
 ];
 
-// 'en-US' fijo, no el locale del sistema — el resto de la UI está en inglés
-// sin i18n, así que dejar que esto cambie de idioma solo (el navegador de
-// pruebas de Claude Code está en es-ES, y salía "15 de julio de 2026" aquí
-// en medio de una interfaz en inglés) sería inconsistente.
-const formatDisplay = (value: PrecisionDateValue): string => {
-  const date = parseIsoDate(value.isoDate);
-  if (value.precision === 'year') return String(date.getFullYear());
-  if (value.precision === 'month') {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-};
+const formatDisplay = (value: PrecisionDateValue): string =>
+  formatDateOnly(parseIsoDate(value.isoDate), value.precision);
 
 // Selector de precisión (Day/Month/Year) + un picker de verdad para cada una
 // — calendario para día (shadcn/react-day-picker), rejilla de meses o de
@@ -106,7 +90,7 @@ export const DateWithPrecisionPicker = ({
               {value ? formatDisplay(value) : 'Not set'}
             </span>
           </PopoverTrigger>
-          <PopoverContent className="w-auto border-input bg-[rgba(23,25,24,.99)] p-0 shadow-[0_18px_50px_rgba(0,0,0,.55)]">
+          <PopoverContent className={`w-auto ${floatingPanelClass} p-0`}>
             {precision === 'day' && (
               // captionLayout="dropdown" para poder saltar rápido de mes/año
               // — react-day-picker lo implementa con un <select> nativo por

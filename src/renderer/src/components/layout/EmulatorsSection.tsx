@@ -1,7 +1,9 @@
 import { FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useCreateEmulator, useDeleteEmulator, useEmulators } from '../../hooks/emulators';
+import { accentGradientStyle } from '../../lib/styles';
 import { fieldLabelClass, textInputClass } from '../library/add-game/styles';
+import { SettingsCard } from './SettingsCard';
 
 // EMULADORES.md §8 — "UI sencilla para registrar un emulador (nombre + ruta
 // del .exe)", viviendo en Ajustes. El watcher los vigila con el mismo
@@ -32,18 +34,11 @@ export const EmulatorsSection = (): React.JSX.Element => {
   };
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[10px] bg-white/[0.02] px-3.25 py-2.75"
-      style={{ border: '1px solid var(--border)' }}
+    <SettingsCard
+      layout="column"
+      title="Emulators"
+      description="Watched like any game — sessions they generate land in Sessions as pending, for you to assign to the right game."
     >
-      <div>
-        <div className="text-[13.5px] font-semibold text-foreground">Emulators</div>
-        <div className="mt-0.25 text-xs text-muted-foreground">
-          Watched like any game — sessions they generate land in Sessions as pending, for you to
-          assign to the right game.
-        </div>
-      </div>
-
       {emulators.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {emulators.map((emulator) => (
@@ -107,7 +102,7 @@ export const EmulatorsSection = (): React.JSX.Element => {
           onClick={handleAdd}
           disabled={!canAdd}
           className="flex w-fit items-center gap-1.75 rounded-[9px] px-3.5 py-2 text-[12.5px] font-bold disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg,#2fdc7e,#16a35a)', color: '#08120c' }}
+          style={accentGradientStyle}
         >
           <Plus size={14} />
           {createEmulator.isPending ? 'Adding…' : 'Add emulator'}
@@ -118,6 +113,6 @@ export const EmulatorsSection = (): React.JSX.Element => {
           </div>
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 };

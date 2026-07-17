@@ -9,11 +9,15 @@ import type {
 import { useUpdateStateEvent } from '../../../hooks/stateEvents';
 import { useDeleteSpendEvent, useUpdateSpendEvent } from '../../../hooks/spend';
 import { useTimeFormat } from '../../../hooks/settings';
+import { AMBER } from '../../../lib/colors';
 import { formatByPrecision, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
+import { StatCard } from '../../stats/StatCard';
+import { StatusIcon } from '../../StatusIcon';
+import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import type { PrecisionDateValue } from '../add-game/precisionDate';
-import { toIsoDate } from '../add-game/precisionDate';
+import { parseIsoDate, toPickerValue } from '../add-game/precisionDate';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
 
 type HistoryListProps = {
@@ -21,7 +25,7 @@ type HistoryListProps = {
   spendHistory: SpendEvent[];
 };
 
-const SPEND_COLOR = '#e3b24a';
+const SPEND_COLOR = AMBER;
 const SPEND_TYPE_LABEL: Record<SpendEvent['type'], string> = {
   purchase: 'Purchase',
   ingame_spend: 'In-game spend',
@@ -50,10 +54,8 @@ type Entry =
 // El valor de picker de una entrada existente. 'datetime' (eventos creados
 // en vivo por la app, con hora real) cae a 'day' para el picker — pero solo
 // degrada la precisión guardada si el usuario TOCA la fecha (ver save()).
-const entryPickerValue = (entry: Entry): PrecisionDateValue => ({
-  precision: entry.datePrecision === 'datetime' ? 'day' : entry.datePrecision,
-  isoDate: toIsoDate(entry.date),
-});
+const entryPickerValue = (entry: Entry): PrecisionDateValue =>
+  toPickerValue(entry.date, entry.datePrecision);
 
 // SPEC 4.5/4.6 fusionado — un único "History" con estados y gastos
 // entrelazados por fecha, mismo estilo de timeline para los dos. El lápiz
@@ -115,7 +117,7 @@ export const HistoryList = ({
       (draftDate.isoDate !== original.isoDate || draftDate.precision !== original.precision);
     const datePatch = dateChanged
       ? {
-          occurredAt: new Date(`${draftDate.isoDate}T00:00:00`),
+          occurredAt: parseIsoDate(draftDate.isoDate),
           datePrecision: draftDate.precision,
         }
       : {};
@@ -146,7 +148,7 @@ export const HistoryList = ({
       <div className="mb-3.25 text-[11px] font-bold tracking-[.13em] text-muted-foreground">
         HISTORY
       </div>
-      <div className="max-h-96 overflow-x-hidden overflow-y-auto rounded-[14px] border border-border bg-card px-5.5 py-5">
+      <StatCard className="max-h-96 overflow-x-hidden overflow-y-auto">
         {entries.map((entry, index) => {
           const isLast = index === entries.length - 1;
           const isEditing = editingKey === entry.key;
@@ -161,16 +163,7 @@ export const HistoryList = ({
                   style={{ background: `${color}22`, borderColor: `${color}66` }}
                 >
                   {entry.kind === 'status' ? (
-                    (() => {
-                      const status = getGameStatusMeta(entry.event.type);
-                      return (
-                        <status.Icon
-                          size={14}
-                          color={status.color}
-                          fill={status.filled ? status.color : 'none'}
-                        />
-                      );
-                    })()
+                    <StatusIcon meta={getGameStatusMeta(entry.event.type)} size={14} />
                   ) : (
                     <DollarSign size={14} color={SPEND_COLOR} />
                   )}
@@ -204,7 +197,7 @@ export const HistoryList = ({
                         {entry.kind === 'spend' && (
                           <div className="w-24 flex-none">
                             <div className={fieldLabelClass}>AMOUNT (€)</div>
-                            <input
+                            <NumberInput
                               autoFocus
                               value={draftAmount}
                               onChange={(event) => setDraftAmount(event.target.value)}
@@ -212,12 +205,8 @@ export const HistoryList = ({
                                 if (event.key === 'Enter') save(entry);
                                 if (event.key === 'Escape') setEditingKey(null);
                               }}
-                              type="number"
                               min={0}
                               step="0.01"
-                              // Ver PlayedBeforePanel.tsx — la rueda cambia
-                              // el valor de un input number con foco.
-                              onWheel={(event) => event.currentTarget.blur()}
                               className={textInputClass}
                             />
                           </div>
@@ -298,7 +287,7 @@ export const HistoryList = ({
             </div>
           );
         })}
-      </div>
+      </StatCard>
     </div>
   );
 };

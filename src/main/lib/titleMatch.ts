@@ -3,6 +3,12 @@
 // sueltos junto al juego base, y en los dos el año de IGDB es el desempate
 // que los separa.
 
+// Año UTC a partir de un unix timestamp en segundos — igdb/api.ts (fecha de
+// lanzamiento) y sgdb/match.ts (fecha de lanzamiento del candidato) parten
+// del mismo dato crudo y solo difieren en cómo envuelven la nulabilidad.
+export const unixSecondsToUtcYear = (unixSeconds: number): number =>
+  new Date(unixSeconds * 1000).getUTCFullYear();
+
 // Minúsculas, fuera apóstrofos, los separadores (: - –) pasan a espacio, el
 // resto de puntuación se quita y los espacios se colapsan. Los números
 // (romanos o no) se dejan tal cual — las fuentes suelen coincidir ahí, y

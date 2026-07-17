@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode, SelectHTMLAttributes } from 'react';
+import { floatingPanelClass } from '../../../lib/styles';
 
 type CalendarDropdownOption = { value: number; label: string; disabled: boolean };
 
@@ -79,7 +80,7 @@ export const CalendarDropdown = ({
       {open && (
         <div
           ref={panelRef}
-          className="absolute top-full left-0 z-40 mt-1 max-h-52 w-28 overflow-y-auto rounded-[10px] border border-input bg-[rgba(23,25,24,.99)] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.55)]"
+          className={`absolute top-full left-0 z-40 mt-1 max-h-52 w-28 overflow-y-auto rounded-[10px] border ${floatingPanelClass} p-1.5`}
         >
           {options.map((option) => {
             const isSelected = String(option.value) === String(value);

@@ -1,4 +1,5 @@
 import { GENRE_AXES } from '../../lib/genreAxes';
+import { StatCard } from './StatCard';
 
 type GenreRadarProps = {
   // Minutos jugados por eje — ya sumados fuera (Stats.tsx/GameStats.tsx),
@@ -33,8 +34,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
     // se quedaban apilados con su alto natural y todo el sobrante quedaba
     // como hueco suelto DEBAJO, empujando el hexágono hacia arriba en vez de
     // quedar centrado en el alto real de la card.
-    <div className="flex h-full flex-col rounded-[14px] border border-border bg-card px-5.5 py-5">
-      <div className="mb-2 text-[14px] font-bold text-foreground">Genre Spread</div>
+    <StatCard title="Genre Spread" titleClassName="mb-2" className="flex h-full flex-col">
       <div className="flex flex-1 items-center justify-center">
         <svg width={220} height={208} viewBox="0 0 220 208">
           {RING_FRACTIONS.map((fraction) => (
@@ -78,7 +78,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                 key={axis}
                 x={x}
                 y={y}
-                fill="#888f8a"
+                fill="var(--muted-foreground)"
                 fontSize={10}
                 textAnchor="middle"
                 dominantBaseline="middle"
@@ -90,6 +90,6 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
           })}
         </svg>
       </div>
-    </div>
+    </StatCard>
   );
 };

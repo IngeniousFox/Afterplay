@@ -1,6 +1,5 @@
 import { ipcRenderer } from 'electron';
 import type {
-  CreateGameInput,
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
   GameDetail,
@@ -19,7 +18,6 @@ export const gamesApi = {
   promote: (input: PromotePlannedGameInput): Promise<GameRow> =>
     ipcRenderer.invoke('games:promote', input),
   getById: (id: number): Promise<GameDetail | null> => ipcRenderer.invoke('games:getById', id),
-  create: (input: CreateGameInput): Promise<GameRow> => ipcRenderer.invoke('games:create', input),
   createWithDetails: (input: CreateGameWithDetailsInput): Promise<GameRow> =>
     ipcRenderer.invoke('games:createWithDetails', input),
   update: (id: number, patch: UpdateGamePatch): Promise<GameRow | null> =>

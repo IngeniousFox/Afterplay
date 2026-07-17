@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import { floatingPanelClass } from '../../../lib/styles';
 
 type DropdownProps<T extends string> = {
   value: T;
@@ -34,7 +35,7 @@ export const Dropdown = <T extends string>({
       </button>
       {open && (
         <div
-          className={`absolute left-0 z-40 max-h-52 w-full overflow-y-auto rounded-[11px] border border-input bg-[rgba(23,25,24,.99)] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.55)] ${
+          className={`absolute left-0 z-40 max-h-52 w-full overflow-y-auto rounded-[11px] border ${floatingPanelClass} p-1.5 ${
             openDirection === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
           }`}
         >

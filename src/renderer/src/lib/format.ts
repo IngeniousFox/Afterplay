@@ -21,31 +21,37 @@ export const formatMoney = (amount: number): string => `€${amount.toFixed(2)}`
 
 // 'en-US' fijo (mismo motivo que abajo) — hour12 es lo único que cambia
 // según el ajuste de Settings (slider 12h/24h, 24h por defecto).
-const formatTime = (date: Date, timeFormat: TimeFormat): string =>
+export const formatTime = (date: Date, timeFormat: TimeFormat): string =>
   date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: timeFormat === '12h',
   });
 
+// 'en-US' fijo, no el locale del sistema — el resto de la UI está en inglés
+// sin i18n, así que dejar que esto cambie de idioma solo (el navegador de
+// pruebas de Claude Code está en es-ES, y salía "15 de julio de 2026" aquí
+// en medio de una interfaz en inglés) sería inconsistente.
+export const formatDateOnly = (date: Date, precision: 'year' | 'month' | 'day'): string => {
+  if (precision === 'year') return String(date.getFullYear());
+  if (precision === 'month') {
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 // Fechas de eventos/sesiones (Date real, no el isoDate del picker) según su
-// datePrecision — 'en-US' fijo, mismo motivo que formatDisplay del picker:
-// el resto de la UI está en inglés sin i18n. timeFormat es obligatorio (no
-// opcional con default) a propósito: así el compilador señala cualquier
-// llamada que se me olvide actualizar si este archivo cambia, en vez de
-// dejarla colada en 24h en silencio.
+// datePrecision — 'en-US' fijo, mismo motivo que formatDateOnly: el resto de
+// la UI está en inglés sin i18n. timeFormat es obligatorio (no opcional con
+// default) a propósito: así el compilador señala cualquier llamada que se me
+// olvide actualizar si este archivo cambia, en vez de dejarla colada en 24h
+// en silencio.
 export const formatByPrecision = (
   date: Date,
   precision: 'year' | 'month' | 'day' | 'datetime',
   timeFormat: TimeFormat,
 ): string => {
-  if (precision === 'year') return String(date.getFullYear());
-  if (precision === 'month') {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }
-  if (precision === 'day') {
-    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-  }
+  if (precision !== 'datetime') return formatDateOnly(date, precision);
   const datePart = date.toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'short',

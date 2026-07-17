@@ -1,5 +1,6 @@
 import type { GameListItem, StateEvent, StateEventSummary } from '../../../../shared/types';
 import { STATE_TO_STATUS_KEY, STATUS_META, type StatusKey } from '../../lib/gameStatus';
+import { StatCard } from './StatCard';
 
 type StatusBreakdownProps =
   | { mode: 'all-time'; games: GameListItem[] }
@@ -49,10 +50,10 @@ export const StatusBreakdown = (props: StatusBreakdownProps): React.JSX.Element 
   const maxCount = Math.max(1, ...bars.map((bar) => bar.count));
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
-      <div className="mb-4.5 text-[14px] font-bold text-foreground">
-        {props.mode === 'all-time' ? 'Status Breakdown' : 'Status Changes'}
-      </div>
+    <StatCard
+      title={props.mode === 'all-time' ? 'Status Breakdown' : 'Status Changes'}
+      titleClassName="mb-4.5"
+    >
       <div className="flex flex-col gap-4">
         {bars.map((bar) => (
           <div key={bar.key}>
@@ -74,6 +75,6 @@ export const StatusBreakdown = (props: StatusBreakdownProps): React.JSX.Element 
           </div>
         ))}
       </div>
-    </div>
+    </StatCard>
   );
 };

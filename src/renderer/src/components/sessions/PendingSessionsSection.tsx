@@ -4,11 +4,11 @@ import type { PendingSession } from '../../../../shared/types';
 import { useDeletePendingSession, usePendingSessions } from '../../hooks/sessions';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useTimeFormat } from '../../hooks/settings';
+import { AMBER } from '../../lib/colors';
 import { formatByPrecision, formatElapsed } from '../../lib/format';
+import { accentGradientStyle } from '../../lib/styles';
 import { AddGameModal } from '../library/AddGameModal';
 import { AssignSessionModal } from './AssignSessionModal';
-
-const AMBER = '#e3b24a';
 
 type PendingSessionCardProps = {
   session: PendingSession;
@@ -59,7 +59,7 @@ const PendingSessionCard = ({
         type="button"
         onClick={onAssign}
         className="flex-none rounded-[9px] px-4 py-2 text-[12.5px] font-bold"
-        style={{ background: 'linear-gradient(135deg,#2fdc7e,#16a35a)', color: '#08120c' }}
+        style={accentGradientStyle}
       >
         Assign
       </button>

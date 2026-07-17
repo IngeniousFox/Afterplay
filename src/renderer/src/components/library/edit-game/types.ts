@@ -1,7 +1,7 @@
 import type { IterationDetail, Session } from '../../../../../shared/types';
+import type { PastStatusKey } from '../../../lib/gameStatus';
 import type { PrecisionDateValue } from '../add-game/DateWithPrecisionPicker';
-import { toIsoDate } from '../add-game/precisionDate';
-import type { PastStatusKey } from '../add-game/types';
+import { toPickerValue } from '../add-game/precisionDate';
 
 // Formulario único para juego + la iteración que se esté viendo/creando en
 // el momento de guardar (SPEC 4.5: "nuevo manual" vs "editar existente" son
@@ -47,12 +47,7 @@ export const milestoneAnchor = (
 // manuales siempre llevan precisión year/month/day, pero por robustez un
 // 'datetime' inesperado cae a 'day' (el picker no maneja horas).
 export const anchorPickerValue = (session: Session | null): PrecisionDateValue | null =>
-  session
-    ? {
-        precision: session.datePrecision === 'datetime' ? 'day' : session.datePrecision,
-        isoDate: toIsoDate(session.startedAt),
-      }
-    : null;
+  session ? toPickerValue(session.startedAt, session.datePrecision) : null;
 
 export const EMPTY_ITERATION_FIELDS: Pick<
   EditGameFormValues,

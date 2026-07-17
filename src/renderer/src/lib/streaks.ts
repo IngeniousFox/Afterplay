@@ -4,21 +4,9 @@
 // pasado" pueden llevar precisión de solo mes/año, no representan un día
 // concreto jugado.
 
+import { addDays, DAY_MS, startOfDay } from './dateMath';
+
 type StreakSession = { startedAt: Date; isManual: boolean };
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const startOfDay = (date: Date): Date =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-// setDate y no aritmética de milisegundos — al cruzar un cambio de hora un
-// día "dura" 23h/25h y la medianoche calculada se correría una hora (mismo
-// cuidado que ActivityHeatmap.tsx).
-const addDays = (date: Date, days: number): Date => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
 
 // Días jugados como claves de medianoche local (ms) — la base de las dos
 // funciones de abajo. Cuentan también las sesiones aún abiertas (abrir la

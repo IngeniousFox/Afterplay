@@ -1,5 +1,6 @@
 import { Calendar, Check, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import { floatingPanelClass } from '../../lib/styles';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
 export type Year = 'all' | number;
@@ -51,7 +52,7 @@ export const YearPicker = ({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="max-h-65 w-37.5 overflow-y-auto border-input bg-[rgba(23,25,24,.99)] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.55)]"
+        className={`max-h-65 w-37.5 overflow-y-auto ${floatingPanelClass} p-1.5`}
       >
         {options.map((year) => (
           <button

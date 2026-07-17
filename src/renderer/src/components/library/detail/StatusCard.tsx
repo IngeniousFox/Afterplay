@@ -4,14 +4,19 @@ import type { GameDetail } from '../../../../../shared/types';
 import { useAddIteration } from '../../../hooks/iterations';
 import { useAddSession } from '../../../hooks/sessions';
 import { useAddStateEvent } from '../../../hooks/stateEvents';
-import { getGameStatusMeta, STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
-import { Dropdown } from '../add-game/Dropdown';
 import {
   ENDLESS_STATUS_OPTIONS,
+  getGameStatusMeta,
   NORMAL_STATUS_OPTIONS,
+  STATE_TO_STATUS_KEY,
+  STATUS_META,
   STATUS_TO_STATE_TYPE,
-} from '../add-game/types';
-import type { PastStatusKey } from '../add-game/types';
+} from '../../../lib/gameStatus';
+import type { PastStatusKey } from '../../../lib/gameStatus';
+import { isTerminal, lastIteration, startedIteration } from '../../../lib/iterations';
+import { accentGradientStyle } from '../../../lib/styles';
+import { StatusIcon } from '../../StatusIcon';
+import { Dropdown } from '../add-game/Dropdown';
 
 type StatusCardProps = {
   game: GameDetail;
@@ -52,19 +57,17 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
   const handleSave = async (): Promise<void> => {
     if (isNoOp) return;
 
-    const activeIteration = game.iterations.find((it) => it.currentState === 'started');
-    const lastIteration = game.iterations[game.iterations.length - 1];
-    const lastIsTerminal =
-      lastIteration != null &&
-      (lastIteration.currentState === 'completed' || lastIteration.currentState === 'dropped');
+    const activeIteration = startedIteration(game.iterations);
+    const lastIt = lastIteration(game.iterations);
+    const lastIsTerminal = isTerminal(lastIt);
 
     // SPEC 4 — retomar "Playing" después de un final (Beaten/Dropped) es un
     // playthrough nuevo, no una reapertura del anterior; on_hold/resting sí
     // reutilizan la misma iteración, solo estaba en pausa.
     const needsNewIteration =
-      !activeIteration && (!lastIteration || (lastIsTerminal && pending === 'playing'));
+      !activeIteration && (!lastIt || (lastIsTerminal && pending === 'playing'));
 
-    let iterationId = needsNewIteration ? undefined : (activeIteration?.id ?? lastIteration?.id);
+    let iterationId = needsNewIteration ? undefined : (activeIteration?.id ?? lastIt?.id);
 
     if (!iterationId) {
       const iteration = await addIteration.mutateAsync({
@@ -126,11 +129,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
             className="flex h-10.5 w-10.5 flex-none items-center justify-center rounded-[11px]"
             style={{ background: `${status.color}22` }}
           >
-            <status.Icon
-              size={20}
-              color={status.color}
-              fill={status.filled ? status.color : 'none'}
-            />
+            <StatusIcon meta={status} size={20} />
           </div>
           <div>
             <div className="text-[16px] font-bold" style={{ color: status.color }}>
@@ -149,11 +148,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
               const meta = STATUS_META[option];
               return (
                 <span className="flex items-center gap-1.5">
-                  <meta.Icon
-                    size={13}
-                    color={meta.color}
-                    fill={meta.filled ? meta.color : 'none'}
-                  />
+                  <StatusIcon meta={meta} size={13} />
                   {STATUS_ITEM_LABEL[option]}
                 </span>
               );
@@ -180,7 +175,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
               : undefined
           }
           className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.75 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: 'linear-gradient(135deg,#2fdc7e,#16a35a)', color: '#08120c' }}
+          style={accentGradientStyle}
         >
           <Check size={16} />
           <span>{isSaving ? 'Saving…' : 'Save status'}</span>

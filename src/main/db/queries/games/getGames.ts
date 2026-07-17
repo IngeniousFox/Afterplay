@@ -2,6 +2,8 @@ import { eq, sql } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { GameListItem, StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
+import { latestRealStateEvent } from '../stateEvents/latestRealStateEvent';
+import { resolveIterationHours } from './iterationHours';
 
 // Forma de una fila candidata a "evento de estado más reciente de este
 // juego". La nombro explícitamente en vez de inferirla del array para no
@@ -92,7 +94,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
   const hoursByGame = new Map<number, number>();
   for (const iteration of iterations) {
     const trackedSeconds = trackedSecondsByIteration.get(iteration.id) ?? 0;
-    const hours = iteration.manualTotalPlayed ?? trackedSeconds / 3600;
+    const hours = resolveIterationHours(iteration.manualTotalPlayed, trackedSeconds);
     hoursByGame.set(iteration.gameId, (hoursByGame.get(iteration.gameId) ?? 0) + hours);
   }
 
@@ -111,35 +113,22 @@ export const getGames = async (): Promise<GameListItem[]> => {
     .from(stateEventsTable)
     .innerJoin(iterationsTable, eq(stateEventsTable.iterationId, iterationsTable.id));
 
-  // Recorro todas las candidatas y me quedo, por cada gameId, con la más
-  // reciente vista hasta ese momento. El Map empieza vacío pero se va
-  // llenando según avanza el bucle: la primera fila de un juego gana por
-  // defecto (no hay nada con qué compararla), y las siguientes del MISMO
-  // juego se comparan contra lo que dejó guardado una vuelta anterior.
-  const latestStateEventByGame = new Map<number, StateEventCandidate>();
-
+  // Agrupo las candidatas por gameId y le paso cada grupo al helper
+  // compartido (ignora 'plan_to_play' — ver schema.ts — y desempata por id):
+  // un juego pasado del Plan a la biblioteca como "jugado en el pasado"
+  // tiene su evento real (completed/...) con fecha ANTERIOR al plan, y sin
+  // ese filtro el plan ganaría siempre.
+  const candidatesByGame = new Map<number, StateEventCandidate[]>();
   for (const row of stateEventRows) {
-    // 'plan_to_play' es solo una entrada de historial (ver schema.ts) — no
-    // cuenta para el estado actual: un juego pasado del Plan a la biblioteca
-    // como "jugado en el pasado" tiene su evento real (completed/...) con
-    // fecha ANTERIOR al plan, y sin este filtro el plan ganaría siempre.
-    if (row.type === 'plan_to_play') continue;
-    const previousLatest = latestStateEventByGame.get(row.gameId);
+    const list = candidatesByGame.get(row.gameId) ?? [];
+    list.push(row);
+    candidatesByGame.set(row.gameId, list);
+  }
 
-    if (!previousLatest) {
-      // Nada guardado todavía para este juego, así que esta fila gana directa.
-      latestStateEventByGame.set(row.gameId, row);
-      continue;
-    }
-
-    const rowIsNewer = row.occurredAt.getTime() > previousLatest.occurredAt.getTime();
-    const rowIsSameDateButHigherId =
-      row.occurredAt.getTime() === previousLatest.occurredAt.getTime() &&
-      row.id > previousLatest.id;
-
-    if (rowIsNewer || rowIsSameDateButHigherId) {
-      latestStateEventByGame.set(row.gameId, row);
-    }
+  const latestStateEventByGame = new Map<number, StateEventCandidate>();
+  for (const [gameId, candidates] of candidatesByGame) {
+    const latest = latestRealStateEvent(candidates);
+    if (latest) latestStateEventByGame.set(gameId, latest);
   }
 
   return games.map((game) => {

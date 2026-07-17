@@ -2,7 +2,6 @@ import { existsSync } from 'fs';
 import { ipcMain, shell } from 'electron';
 import { handleDb } from './dbHandle';
 import type {
-  CreateGameInput,
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
   GameRow,
@@ -10,7 +9,6 @@ import type {
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
-import { createGame } from '../db/queries/games/createGame';
 import { createGameWithDetails } from '../db/queries/games/createGameWithDetails';
 import { createPlannedGame } from '../db/queries/games/createPlannedGame';
 import { deleteGame } from '../db/queries/games/deleteGame';
@@ -45,12 +43,6 @@ export const registerGamesHandlers = (): void => {
 
   handleDb('games:getById', async (_event, id: number) => {
     return getGameById(id);
-  });
-
-  handleDb('games:create', async (_event, input: CreateGameInput) => {
-    const game = await createGame(input);
-    warmImageCache(game);
-    return game;
   });
 
   handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {

@@ -3,6 +3,8 @@ import { getDb } from '../..';
 import type { AddStateEventInput, StateEvent } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
 import { iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
+import { computeDurationSec } from '../sessions/sessionDuration';
+import { latestRealStateEvent } from './latestRealStateEvent';
 
 // Hitos que cierran un playthrough (todo salvo 'started'). Al registrar uno se
 // ancla una sesión como endSessionId de la iteración, de la que se derivan su
@@ -50,17 +52,24 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
                 stateEventsTable.iterationId,
                 siblings.map((sibling) => sibling.id),
               ),
-            )
-            .orderBy(asc(stateEventsTable.occurredAt), asc(stateEventsTable.id));
+            );
 
-          // Vienen ordenados, así que quedarse con el último por iteración es
-          // ir machacando la entrada del Map en cada vuelta.
-          const latestBySibling = new Map<number, StateEvent>();
+          // El último estado REAL por hermano — misma regla (ignorar
+          // 'plan_to_play') que getGames/getGameById/resolveIterationForPlay.
+          // Sin el filtro, un juego promovido del Plan con fechas del pasado
+          // (started retroactivo anterior al plan_to_play) parecía "no
+          // activo" aquí mientras el resto de la app lo mostraba Playing, y
+          // la auto-pausa no saltaba: dos playthroughs activos a la vez.
+          const eventsBySibling = new Map<number, StateEvent[]>();
           for (const event of siblingEvents) {
-            latestBySibling.set(event.iterationId, event);
+            const list = eventsBySibling.get(event.iterationId);
+            if (list) list.push(event);
+            else eventsBySibling.set(event.iterationId, [event]);
           }
 
-          for (const [siblingId, latest] of latestBySibling) {
+          for (const [siblingId, events] of eventsBySibling) {
+            const latest = latestRealStateEvent(events);
+            if (!latest) continue;
             const siblingIsActive = latest.type === 'started';
             // Registrar un started del PASADO (un playthrough manual viejo)
             // no debe pausar nada del presente: solo se pausa al hermano si
@@ -111,10 +120,7 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
         // sus horas se quedarían sin contar (durationSec null mientras está
         // abierta) hasta que el watcher detecte el cierre real más tarde, y
         // "Finished/left" mostraría el INICIO de esa sesión en vez de ahora.
-        const durationSec = Math.max(
-          0,
-          Math.round((occurredAt.getTime() - openSession.startedAt.getTime()) / 1000),
-        );
+        const durationSec = computeDurationSec(openSession.startedAt, occurredAt);
         await tx
           .update(sessionsTable)
           .set({ endedAt: occurredAt, durationSec })

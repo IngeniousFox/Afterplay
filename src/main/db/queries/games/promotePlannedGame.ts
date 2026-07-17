@@ -2,14 +2,8 @@ import { asc, eq } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { GameRow, PromotePlannedGameInput } from '../../../../shared/types';
 import { gameColumns } from '../../projections';
-import {
-  gamesTable,
-  iterationsTable,
-  sessionsTable,
-  spendEventsTable,
-  stateEventsTable,
-} from '../../schema';
-import { STATUS_TO_MILESTONE } from './createGameWithDetails';
+import { gamesTable, iterationsTable } from '../../schema';
+import { writeInitialPlaythrough } from './writeInitialPlaythrough';
 
 // Pasar un Plan to Play a la biblioteca de verdad. Espejo del tramo de
 // escritura de createGameWithDetails, pero sobre el juego YA existente:
@@ -72,77 +66,7 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
     // De aquí para abajo: mismo guion que createGameWithDetails — sesiones
     // marcadoras de borde para las fechas, gasto inicial y el log de estados
     // (con 'started' por delante de un estado terminal, SPEC 4.5).
-    const started = input.started;
-    const finished = input.finished;
-
-    if (started) {
-      const [session] = await tx
-        .insert(sessionsTable)
-        .values({
-          iterationId: iteration.id,
-          startedAt: started.date,
-          endedAt: started.date,
-          durationSec: 0,
-          datePrecision: started.precision,
-          milestone: 'started',
-        })
-        .returning({ id: sessionsTable.id });
-      await tx
-        .update(iterationsTable)
-        .set({ startSessionId: session.id })
-        .where(eq(iterationsTable.id, iteration.id));
-    }
-
-    const endMilestone = input.initialStatus ? STATUS_TO_MILESTONE[input.initialStatus] : undefined;
-    if (finished && endMilestone) {
-      const [session] = await tx
-        .insert(sessionsTable)
-        .values({
-          iterationId: iteration.id,
-          startedAt: finished.date,
-          endedAt: finished.date,
-          durationSec: 0,
-          datePrecision: finished.precision,
-          milestone: endMilestone,
-        })
-        .returning({ id: sessionsTable.id });
-      await tx
-        .update(iterationsTable)
-        .set({ endSessionId: session.id })
-        .where(eq(iterationsTable.id, iteration.id));
-    }
-
-    if (input.moneySpent) {
-      await tx.insert(spendEventsTable).values({
-        gameId: game.id,
-        type: 'purchase',
-        amount: input.moneySpent,
-        occurredAt: input.moneySpentDate?.date,
-        datePrecision: input.moneySpentDate?.precision ?? 'day',
-      });
-    }
-
-    if (input.initialStatus) {
-      if (input.initialStatus !== 'started' && started) {
-        await tx.insert(stateEventsTable).values({
-          iterationId: iteration.id,
-          type: 'started',
-          occurredAt: started.date,
-          datePrecision: started.precision,
-          note: null,
-        });
-      }
-
-      const occurredAt = finished?.date ?? started?.date ?? undefined;
-      const datePrecision = finished?.precision ?? started?.precision ?? 'day';
-      await tx.insert(stateEventsTable).values({
-        iterationId: iteration.id,
-        type: input.initialStatus,
-        occurredAt,
-        datePrecision,
-        note: input.note,
-      });
-    }
+    await writeInitialPlaythrough(tx, game.id, iteration.id, input);
 
     return game;
   });

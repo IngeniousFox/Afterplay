@@ -2,6 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, stateEventsTable } from '../../schema';
+import { latestRealStateEvent } from '../stateEvents/latestRealStateEvent';
 
 // El `tx` de una transacción de drizzle — mismo query builder que la
 // conexión, tipado desde ella para no importar internos de drizzle.
@@ -40,7 +41,12 @@ export const resolveIterationForPlay = async (
   const latestTypeByIteration = new Map<number, StateEvent['type']>();
   if (iterations.length > 0) {
     const events = await tx
-      .select({ iterationId: stateEventsTable.iterationId, type: stateEventsTable.type })
+      .select({
+        iterationId: stateEventsTable.iterationId,
+        type: stateEventsTable.type,
+        occurredAt: stateEventsTable.occurredAt,
+        id: stateEventsTable.id,
+      })
       .from(stateEventsTable)
       .where(
         inArray(
@@ -49,12 +55,20 @@ export const resolveIterationForPlay = async (
         ),
       )
       .orderBy(asc(stateEventsTable.occurredAt), asc(stateEventsTable.id));
+
+    // Agrupo por iterationId y me quedo con el más reciente de cada grupo
+    // (helper compartido: ignora 'plan_to_play' — ver schema.ts, no estado —
+    // sin esto un juego recién pasado del Plan a la biblioteca tendría el
+    // plan como "último estado" y confundiría la lógica de abajo).
+    const eventsByIteration = new Map<number, typeof events>();
     for (const event of events) {
-      // 'plan_to_play' es solo historial (ver schema.ts), no estado — sin
-      // esto, un juego recién pasado del Plan a la biblioteca tendría el
-      // plan como "último estado" y confundiría la lógica de abajo.
-      if (event.type === 'plan_to_play') continue;
-      latestTypeByIteration.set(event.iterationId, event.type);
+      const list = eventsByIteration.get(event.iterationId) ?? [];
+      list.push(event);
+      eventsByIteration.set(event.iterationId, list);
+    }
+    for (const [iterationId, iterationEvents] of eventsByIteration) {
+      const latest = latestRealStateEvent(iterationEvents);
+      if (latest) latestTypeByIteration.set(iterationId, latest.type);
     }
   }
 

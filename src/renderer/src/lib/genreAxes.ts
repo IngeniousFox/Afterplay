@@ -4,7 +4,7 @@
 // cercano.
 export const GENRE_AXES = ['RPG', 'Action', 'Adventure', 'Strategy', 'Sim', 'Puzzle'] as const;
 
-export type GenreAxis = (typeof GENRE_AXES)[number];
+type GenreAxis = (typeof GENRE_AXES)[number];
 
 // Cubre los 23 géneros reales del catálogo de IGDB. IGDB no tiene ningún
 // género que se llame literalmente "Action" — los que en la práctica SON

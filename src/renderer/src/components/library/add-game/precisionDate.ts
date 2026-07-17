@@ -30,3 +30,26 @@ export const todayValue = (): PrecisionDateValue => ({
   precision: 'day',
   isoDate: toIsoDate(new Date()),
 });
+
+// Sin esto, react-day-picker arranca el desplegable de año en "hace 100
+// años" por defecto (documentado, y comprobado en vivo: con hoy en 2026
+// abría en 1926). El tope de arriba es HOY, no hoy+1: lo que se registra
+// aquí (sesiones, gastos, cambios de estado) ya pasó, nunca es una fecha
+// futura — mismo criterio en los tres pickers (día/mes/año, ver
+// MonthGrid/YearGrid/YearDropdown).
+export const TODAY = new Date();
+export const CURRENT_YEAR = TODAY.getFullYear();
+
+// El valor de picker (fecha+precisión) de una fecha con precisión real de la
+// DB ('datetime' incluido) — 'datetime' (eventos creados en vivo, con hora)
+// cae a 'day' porque el picker no maneja horas. Compartido por los sitios
+// que derivan un PrecisionDateValue de un ancla/entrada ya guardada
+// (edit-game/types.ts anchorPickerValue, detail/HistoryList.tsx
+// entryPickerValue).
+export const toPickerValue = (
+  date: Date,
+  precision: 'year' | 'month' | 'day' | 'datetime',
+): PrecisionDateValue => ({
+  precision: precision === 'datetime' ? 'day' : precision,
+  isoDate: toIsoDate(date),
+});

@@ -8,19 +8,6 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -68,24 +55,10 @@
   --accent: rgba(255, 255, 255, 0.045);
   --accent-foreground: #eaece9;
   --destructive: #e85d72;
-  --destructive-foreground: #eaece9;
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.14);
   --ring: #2fdc7e;
-  --chart-1: #2fdc7e;
-  --chart-2: #85a3d6;
-  --chart-3: #e3b24a;
-  --chart-4: #e85d72;
-  --chart-5: #7c86c8;
   --radius: 0.5rem;
-  --sidebar: #0a0b0a;
-  --sidebar-foreground: #eaece9;
-  --sidebar-primary: #2fdc7e;
-  --sidebar-primary-foreground: #0a0b0a;
-  --sidebar-accent: rgba(255, 255, 255, 0.045);
-  --sidebar-accent-foreground: #eaece9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #2fdc7e;
   /* Acentos del prototipo (Backlog.html los define en su raíz) — varias
    * barras de progreso portadas usan gradientes var(--ac)/var(--ac2) tal
    * cual; sin declararlas aquí, esos gradientes se resolvían a NADA y las
@@ -111,23 +84,9 @@
   --accent: rgba(255, 255, 255, 0.045);
   --accent-foreground: #eaece9;
   --destructive: #e85d72;
-  --destructive-foreground: #eaece9;
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.14);
   --ring: #2fdc7e;
-  --chart-1: #2fdc7e;
-  --chart-2: #85a3d6;
-  --chart-3: #e3b24a;
-  --chart-4: #e85d72;
-  --chart-5: #7c86c8;
-  --sidebar: #0a0b0a;
-  --sidebar-foreground: #eaece9;
-  --sidebar-primary: #2fdc7e;
-  --sidebar-primary-foreground: #0a0b0a;
-  --sidebar-accent: rgba(255, 255, 255, 0.045);
-  --sidebar-accent-foreground: #eaece9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #2fdc7e;
   --ac: #2fdc7e;
   --ac2: #1c7d4a;
 }

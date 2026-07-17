@@ -1,6 +1,7 @@
 import { FolderOpen, HardDriveDownload } from 'lucide-react';
 import { useState } from 'react';
 import { useCreateManualBackup } from '../../hooks/backup';
+import { SettingsCard } from './SettingsCard';
 
 // Copia de seguridad a demanda, en la carpeta que elija el usuario — aparte
 // de la automática diaria (dailyBackup.ts, 5 rotando dentro de userData):
@@ -19,26 +20,26 @@ export const BackupSection = (): React.JSX.Element => {
   };
 
   return (
-    <div
-      className="flex items-center justify-between gap-3 rounded-[10px] bg-white/[0.02] px-3.25 py-2.75"
-      style={{ border: '1px solid var(--border)' }}
+    <SettingsCard
+      layout="row"
+      title="Backups"
+      description="On top of the automatic daily copies, save one right now wherever you want."
+      textClassName="min-w-0 flex-1"
+      extra={
+        <>
+          {savedPath && (
+            <div className="mt-1.5 truncate font-mono text-[10.5px] text-primary" title={savedPath}>
+              Saved to {savedPath}
+            </div>
+          )}
+          {createManualBackup.isError && (
+            <div className="mt-1.5 text-[11px] text-destructive">
+              Couldn&apos;t create the backup — {createManualBackup.error.message}
+            </div>
+          )}
+        </>
+      }
     >
-      <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold text-foreground">Backups</div>
-        <div className="mt-0.25 text-xs text-muted-foreground">
-          On top of the automatic daily copies, save one right now wherever you want.
-        </div>
-        {savedPath && (
-          <div className="mt-1.5 truncate font-mono text-[10.5px] text-primary" title={savedPath}>
-            Saved to {savedPath}
-          </div>
-        )}
-        {createManualBackup.isError && (
-          <div className="mt-1.5 text-[11px] text-destructive">
-            Couldn&apos;t create the backup — {createManualBackup.error.message}
-          </div>
-        )}
-      </div>
       <button
         type="button"
         onClick={handleBackupNow}
@@ -52,6 +53,6 @@ export const BackupSection = (): React.JSX.Element => {
         )}
         {createManualBackup.isPending ? 'Saving…' : 'Back up now'}
       </button>
-    </div>
+    </SettingsCard>
   );
 };

@@ -6,7 +6,6 @@ import { getAllSessions } from '../db/queries/sessions/getAllSessions';
 import { assignSession } from '../db/queries/sessions/assignSession';
 import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
-import { getSessionsByIteration } from '../db/queries/sessions/getSessionsByIteration';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 import { updateMilestoneSession } from '../db/queries/sessions/updateMilestoneSession';
 
@@ -28,10 +27,6 @@ export const registerSessionsHandlers = (): void => {
 
   handleDb('sessions:getAll', async () => {
     return getAllSessions();
-  });
-
-  handleDb('sessions:getByIteration', async (_event, iterationId: number) => {
-    return getSessionsByIteration(iterationId);
   });
 
   handleDb('sessions:close', async (_event, id: number, endedAt: Date) => {

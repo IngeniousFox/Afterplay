@@ -3,13 +3,28 @@ import { useState } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { formatBytes } from '../../../lib/format';
 import { fieldLabelClass, textInputClass } from './styles';
-import type { AddGameFormValues } from './types';
 
-// Igual que ExecutablePathField (input + Browse), pero eligiendo una
-// carpeta — y al elegirla, el main ya devuelve su tamaño calculado (ver
+type InstallDirectoryFieldProps = {
+  // El sufijo "· optional" tiene sentido en Add Game (el resto de campos de
+  // esa sección también lo llevan) pero no en Edit Game, donde este campo va
+  // suelto y ya se entiende que es opcional — true por defecto (Add), Edit
+  // lo pasa a false.
+  showOptionalHint?: boolean;
+};
+
+// Compartido por Add Game y Edit Game (mismo campo, dos formularios): el
+// tipado solo pide el subconjunto de campos que de verdad toca, así sirve
+// para AddGameFormValues y EditGameFormValues sin castear nada. Igual que
+// ExecutablePathField (input + Browse), pero eligiendo una carpeta — y al
+// elegirla, el main ya devuelve su tamaño calculado (ver
 // dialog:pickDirectory), así que se guarda de la mano con la ruta.
-export const InstallDirectoryField = (): React.JSX.Element => {
-  const { control, setValue, watch } = useFormContext<AddGameFormValues>();
+export const InstallDirectoryField = ({
+  showOptionalHint = true,
+}: InstallDirectoryFieldProps): React.JSX.Element => {
+  const { control, setValue, watch } = useFormContext<{
+    installDirectory: string;
+    installSizeBytes: number | null;
+  }>();
   const [calculating, setCalculating] = useState(false);
   const sizeBytes = watch('installSizeBytes');
 
@@ -29,8 +44,13 @@ export const InstallDirectoryField = (): React.JSX.Element => {
   return (
     <div>
       <div className={fieldLabelClass}>
-        INSTALL DIRECTORY{' '}
-        <span className="font-medium tracking-normal normal-case">· optional</span>
+        INSTALL DIRECTORY
+        {showOptionalHint && (
+          <>
+            {' '}
+            <span className="font-medium tracking-normal normal-case">· optional</span>
+          </>
+        )}
       </div>
       <div className="flex gap-2">
         <Controller

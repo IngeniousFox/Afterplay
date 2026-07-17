@@ -41,8 +41,6 @@ export const getDb = (): Db => {
   return dbInstance;
 };
 
-export const isDbSyncCapable = (): boolean => syncCapable;
-
 // Una conexión sin url no registra sus escrituras en la cola de CDC (el
 // mecanismo del que push() saca qué subir): el modo de captura es POR
 // CONEXIÓN y solo las conexiones con sync lo activan solas. Sin esto, todo
@@ -72,6 +70,10 @@ const enableOfflineChangeCapture = async (db: Db): Promise<void> => {
 const connectLocalOnly = async (): Promise<Db> => {
   const db = drizzle({ connection: { path: getDbPath(), clientName: 'afterplay' } });
   await db.$client.connect();
+  // SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
+  // conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
+  // borrar un juego dejaría huérfanas sus iterations/sessions/events.
+  await db.run(sql`PRAGMA foreign_keys = ON`);
   await enableOfflineChangeCapture(db);
   return db;
 };
@@ -134,6 +136,10 @@ const connectWithSync = async (): Promise<Db> => {
     },
   });
   await withTimeout(db.$client.connect(), CONNECT_TIMEOUT_MS);
+  // SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
+  // conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
+  // borrar un juego dejaría huérfanas sus iterations/sessions/events.
+  await db.run(sql`PRAGMA foreign_keys = ON`);
   return db;
 };
 
@@ -219,12 +225,6 @@ export const runMigrations = async (): Promise<void> => {
   dbInstance = db;
   syncCapable = capable;
 
-  // SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
-  // conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
-  // borrar un juego dejaría huérfanas sus iterations/sessions/events.
-  // Se activa aquí porque las migraciones son lo primero que corre en el
-  // arranque y la conexión es un singleton — todo lo demás la hereda ya ON.
-  await db.run(sql`PRAGMA foreign_keys = ON`);
   await migrate(db, { migrationsFolder: join(__dirname, '../../drizzle') });
 };
 
@@ -318,15 +318,12 @@ const attemptSyncUpgrade = async (): Promise<void> => {
 
     try {
       const db = await connectWithSync();
-      await db.run(sql`PRAGMA foreign_keys = ON`);
       dbInstance = db;
       syncCapable = true;
       console.log('[db] conexion con Turso restablecida - sync activado');
     } catch (error) {
       console.warn('[db] reintento de conexion con Turso fallido, sigo en local:', error);
-      const db = await connectLocalOnly();
-      await db.run(sql`PRAGMA foreign_keys = ON`);
-      dbInstance = db;
+      dbInstance = await connectLocalOnly();
     }
   } finally {
     releaseSwapGate?.();

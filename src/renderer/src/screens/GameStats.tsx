@@ -1,21 +1,20 @@
-import {
-  ArrowRight,
-  Clock,
-  DollarSign,
-  Gamepad2,
-  Gauge,
-  Calendar as SessionsIcon,
-} from 'lucide-react';
+import { ArrowRight, Clock, DollarSign, Gauge, Calendar as SessionsIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { HowLongToBeatCard } from '../components/library/detail/HowLongToBeatCard';
+import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
+import { StatCard } from '../components/stats/StatCard';
 import type { Year } from '../components/stats/YearPicker';
 import { YearPicker } from '../components/stats/YearPicker';
-import { useImageSrc } from '../hooks/useImageSrc';
+import { GameCover } from '../components/GameCover';
+import { StatusIcon } from '../components/StatusIcon';
 import { useGame, useGames } from '../hooks/games';
+import { yearsDesc } from '../lib/dateMath';
 import { formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
+import { sessionDurationStats } from '../lib/sessionStats';
+import { outlineButtonClass } from '../lib/styles';
 import { longestStreak, playedDayKeys } from '../lib/streaks';
 
 type GameStatsProps = {
@@ -23,9 +22,6 @@ type GameStatsProps = {
   onOpenGame: () => void;
   onClearFilter: () => void;
 };
-
-const outlineButtonClass =
-  'flex items-center gap-1.75 rounded-[9px] border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap';
 
 // Bloque 5F — stats de un único juego: mismas 4 métricas que el detalle,
 // share de tu tiempo total + medias de sesión, el mismo widget de How Long
@@ -38,7 +34,6 @@ export const GameStats = ({
 }: GameStatsProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
   const { data: allGames = [] } = useGames();
-  const coverSrc = useImageSrc(game?.coverUrl ?? null, 'covers');
 
   // useAllSessions() ya trae todo esto, pero game.iterations (useGame) es la
   // misma info sin un segundo viaje — el detalle de un juego ya la trae
@@ -51,11 +46,10 @@ export const GameStats = ({
     () => allSessions.filter((session) => session.milestone === null),
     [allSessions],
   );
-  const heatmapYears = useMemo(() => {
-    const set = new Set<number>();
-    for (const session of realSessions) set.add(session.startedAt.getFullYear());
-    return [...set].sort((a, b) => b - a);
-  }, [realSessions]);
+  const heatmapYears = useMemo(
+    () => yearsDesc(realSessions.map((session) => session.startedAt)),
+    [realSessions],
+  );
   // Propio de esta card, independiente del año que esté elegido (si acaso)
   // en la página global de Stats. Sin "All Time" aquí (ver YearPicker).
   // Mientras el usuario no toque el desplegable (null), se muestra el año
@@ -64,16 +58,8 @@ export const GameStats = ({
   // juego no se ha jugado este año.
   const [heatmapYear, setHeatmapYear] = useState<Year | null>(null);
   const effectiveHeatmapYear = heatmapYear ?? heatmapYears[0] ?? new Date().getFullYear();
-  const closedRealSessions = realSessions.filter((session) => session.endedAt !== null);
-  const longestSessionSec = closedRealSessions.reduce(
-    (max, session) => Math.max(max, session.durationSec ?? 0),
-    0,
-  );
-  const avgSessionSec =
-    closedRealSessions.length > 0
-      ? closedRealSessions.reduce((sum, session) => sum + (session.durationSec ?? 0), 0) /
-        closedRealSessions.length
-      : 0;
+  const { longestSec: longestSessionSec, avgSec: avgSessionSec } =
+    sessionDurationStats(realSessions);
   // La racha más larga DE ESTE JUEGO, de todos los tiempos (aquí no hay
   // filtro de año — el del heatmap de abajo es solo suyo). Días con al menos
   // una sesión trackeada real, ver lib/streaks.ts.
@@ -85,26 +71,14 @@ export const GameStats = ({
   const sharePct = game && libraryTotalHours > 0 ? (game.totalHours / libraryTotalHours) * 100 : 0;
   const maxIterationHours = Math.max(1, ...(game?.iterations.map((it) => it.hours) ?? [1]));
 
-  if (isLoading) {
+  if (isLoading || isError || !game) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
-  }
-
-  if (isError || !game) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-destructive">Couldn&apos;t load stats for this game.</p>
-        <button
-          type="button"
-          onClick={onClearFilter}
-          className="rounded-[10px] border border-input bg-white/3 px-4 py-2 text-[13px] font-semibold text-foreground"
-        >
-          Back to all games
-        </button>
-      </div>
+      <QueryStatePlaceholder
+        isLoading={isLoading}
+        errorText="Couldn't load stats for this game."
+        backLabel="Back to all games"
+        onBack={onClearFilter}
+      />
     );
   }
 
@@ -115,25 +89,17 @@ export const GameStats = ({
       <div className="mx-auto max-w-250">
         <div className="mb-6.5 flex items-end justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3.75">
-            <div className="h-15.25 w-11.5 flex-none overflow-hidden rounded-[8px] border border-border">
-              {coverSrc ? (
-                <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-muted">
-                  <Gamepad2 size={16} className="text-muted-foreground/40" />
-                </div>
-              )}
-            </div>
+            <GameCover
+              url={game.coverUrl}
+              className="h-15.25 w-11.5 flex-none overflow-hidden rounded-[8px] border border-border"
+              iconSize={16}
+            />
             <div className="min-w-0">
               <h1 className="truncate text-[24px] font-extrabold tracking-[-.01em] text-foreground">
                 {game.title}
               </h1>
               <div className="mt-1 flex items-center gap-1.75">
-                <status.Icon
-                  size={14}
-                  color={status.color}
-                  fill={status.filled ? status.color : 'none'}
-                />
+                <StatusIcon meta={status} size={14} />
                 <span className="text-[13px] font-semibold" style={{ color: status.color }}>
                   {status.label}
                 </span>
@@ -171,14 +137,16 @@ export const GameStats = ({
           <MetricCard
             Icon={SessionsIcon}
             label="SESSIONS"
-            value={String(game.iterations.reduce((sum, it) => sum + it.sessions.length, 0))}
+            // realSessions y no la suma cruda: los marcadores de borde no son
+            // sesiones jugadas, y la vista de Sesiones de este mismo juego
+            // tampoco los cuenta — mismo número en las dos pantallas.
+            value={String(realSessions.length)}
           />
           <MetricCard Icon={DollarSign} label="TOTAL SPENT" value={formatMoney(game.totalSpend)} />
         </div>
 
         <div className="mt-4.5 grid grid-cols-[1.4fr_1fr] gap-4.5">
-          <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
-            <div className="text-[14px] font-bold text-foreground">Share of your playtime</div>
+          <StatCard title="Share of your playtime">
             <div className="mt-0.5 mb-4 text-xs text-muted-foreground">
               How much of your total hours went here
             </div>
@@ -199,10 +167,9 @@ export const GameStats = ({
                 }}
               />
             </div>
-          </div>
+          </StatCard>
 
-          <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
-            <div className="mb-3.5 text-[14px] font-bold text-foreground">Sessions</div>
+          <StatCard title="Sessions" titleClassName="mb-3.5">
             <div className="flex items-center justify-between border-b border-white/5 py-2">
               <span className="text-[12.5px] text-muted-foreground">Average length</span>
               <span className="text-[14px] font-bold tabular-nums text-foreground">
@@ -221,7 +188,7 @@ export const GameStats = ({
                 {pluralize(longestDailyStreak, 'day')}
               </span>
             </div>
-          </div>
+          </StatCard>
         </div>
 
         <div className="mt-4.5">
@@ -230,7 +197,7 @@ export const GameStats = ({
 
         <div className="mt-4.5">
           <ActivityHeatmap
-            sessions={allSessions}
+            sessions={realSessions}
             title="Activity — this game"
             year={effectiveHeatmapYear}
             yearPicker={
@@ -246,19 +213,14 @@ export const GameStats = ({
         </div>
 
         {game.iterations.length > 1 && (
-          <div className="mt-4.5 rounded-[14px] border border-border bg-card px-5.5 py-5">
-            <div className="mb-4.5 text-[14px] font-bold text-foreground">Time per playthrough</div>
+          <StatCard className="mt-4.5" title="Time per playthrough" titleClassName="mb-4.5">
             <div className="flex flex-col gap-3.75">
               {game.iterations.map((iteration) => {
                 const iterationStatus = getGameStatusMeta(iteration.currentState);
                 return (
                   <div key={iteration.id} className="flex items-center gap-3.25">
                     <div className="flex w-45 flex-none items-center gap-2">
-                      <iterationStatus.Icon
-                        size={14}
-                        color={iterationStatus.color}
-                        fill={iterationStatus.filled ? iterationStatus.color : 'none'}
-                      />
+                      <StatusIcon meta={iterationStatus} size={14} />
                       <span className="truncate text-[13.5px] font-semibold text-foreground">
                         {iteration.label}
                       </span>
@@ -279,7 +241,7 @@ export const GameStats = ({
                 );
               })}
             </div>
-          </div>
+          </StatCard>
         )}
       </div>
     </div>

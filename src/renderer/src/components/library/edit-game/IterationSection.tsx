@@ -4,19 +4,16 @@ import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useDeleteIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision } from '../../../lib/format';
-import { STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
+import { NORMAL_STATUS_OPTIONS, STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
+import { StatusIcon } from '../../StatusIcon';
+import { NumberInput } from '../../ui/number-input';
 import { CheckboxRow } from '../add-game/CheckboxRow';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import { Dropdown } from '../add-game/Dropdown';
 import { parseIsoDate } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
-import {
-  FORMAT_OPTIONS,
-  NORMAL_STATUS_OPTIONS,
-  ORIGIN_OPTIONS,
-  PLATFORM_OPTIONS,
-} from '../add-game/types';
+import { FORMAT_OPTIONS, ORIGIN_SEGMENT_OPTIONS, PLATFORM_OPTIONS } from '../add-game/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { anchorPickerValue, EMPTY_ITERATION_FIELDS, milestoneAnchor } from './types';
 import type { EditGameFormValues } from './types';
@@ -24,8 +21,6 @@ import type { EditGameFormValues } from './types';
 type IterationSectionProps = {
   game: GameDetail;
 };
-
-const STATUS_DROPDOWN_OPTIONS = NORMAL_STATUS_OPTIONS;
 
 // SPEC 4.5 — dos modos del mismo formulario: 'existing' (fechas derivadas de
 // sus sesiones, solo lectura) y 'new' (pide fechas para generar las sesiones
@@ -201,11 +196,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
 
       <div>
         <div className={fieldLabelClass}>ORIGIN</div>
-        <FormSegmented
-          name="origin"
-          options={ORIGIN_OPTIONS.map((option) => ({ value: option, label: option }))}
-          wrap
-        />
+        <FormSegmented name="origin" options={ORIGIN_SEGMENT_OPTIONS} wrap />
       </div>
 
       {iterationMode === 'existing' && selectedIterationId && (
@@ -232,21 +223,13 @@ const FormInput = ({
   name,
   ...props
 }: {
-  name: 'label' | 'platform' | 'hoursPlayed';
+  name: 'label' | 'hoursPlayed';
 } & React.InputHTMLAttributes<HTMLInputElement>): React.JSX.Element => {
   const { register } = useFormContext<EditGameFormValues>();
-  return (
-    <input
-      {...register(name)}
-      {...props}
-      // Solo para type="number" (hoursPlayed aquí): la rueda del ratón
-      // cambia el valor de un input number con foco, sin avisar — bug real
-      // reportado ("metí 68 y se guardó 65"). Ver el mismo fix en
-      // PlayedBeforePanel.tsx/AddGameModal.tsx/AddSpendPopover.tsx.
-      onWheel={props.type === 'number' ? (event) => event.currentTarget.blur() : undefined}
-      className={textInputClass}
-    />
-  );
+  if (props.type === 'number') {
+    return <NumberInput {...register(name)} {...props} className={textInputClass} />;
+  }
+  return <input {...register(name)} {...props} className={textInputClass} />;
 };
 
 const FormSegmented = ({
@@ -289,13 +272,13 @@ const FormStatusDropdown = (): React.JSX.Element => {
   return (
     <Dropdown
       value={value}
-      options={STATUS_DROPDOWN_OPTIONS}
+      options={NORMAL_STATUS_OPTIONS}
       onChange={(next) => setValue('status', next)}
       renderOption={(option) => {
         const meta = STATUS_META[option];
         return (
           <span className="flex items-center gap-1.5">
-            <meta.Icon size={13} color={meta.color} fill={meta.filled ? meta.color : 'none'} />
+            <StatusIcon meta={meta} size={13} />
             {meta.label}
           </span>
         );
@@ -313,9 +296,7 @@ const FormCheckboxExtraContent = (): React.JSX.Element => {
       onToggle={() => setValue('extraContent', !checked)}
       title="Extra content only"
       description="This run was just for added content (DLC/expansion), not a full base-game replay."
-      borderColorChecked="rgba(133,163,214,.6)"
-      fillColorChecked="#85a3d6"
-      checkIconColor="#0a0b0a"
+      accent="blue"
     />
   );
 };

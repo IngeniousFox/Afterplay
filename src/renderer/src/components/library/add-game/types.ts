@@ -1,6 +1,12 @@
-import type { StateEvent } from '../../../../../shared/types';
-import type { StatusKey } from '../../../lib/gameStatus';
+import type { PastStatusKey } from '../../../lib/gameStatus';
 import type { PrecisionDateValue } from './DateWithPrecisionPicker';
+
+export const parseOptionalNumber = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  return Number.isNaN(value) ? null : value;
+};
 
 export const PLATFORM_OPTIONS = [
   'Steam',
@@ -15,32 +21,18 @@ export const PLATFORM_OPTIONS = [
   'Emulated',
 ];
 
-export const ORIGIN_OPTIONS = ['Purchased', 'Pirate', 'Gift', 'Subscription'];
+export const ORIGIN_OPTIONS = ['Purchased', 'Pirate', 'Gift', 'Subscription', 'Free to Play'];
+// Mismo array, en la forma {value,label} que pide SegmentedButtonGroup — el
+// origen es texto plano, así que value y label siempre coinciden.
+export const ORIGIN_SEGMENT_OPTIONS = ORIGIN_OPTIONS.map((option) => ({
+  value: option,
+  label: option,
+}));
 
 export const FORMAT_OPTIONS: { value: 'digital' | 'physical'; label: string }[] = [
   { value: 'digital', label: 'Digital' },
   { value: 'physical', label: 'Physical' },
 ];
-
-// El dropdown de Status del "jugado antes" nunca ofrece 'unplayed' — ese
-// estado es justo lo que pasa cuando NO se marca ese checkbox. Tampoco
-// 'plan': a Plan to Play no se puede volver ni elegirlo como estado (solo
-// se entra al añadir el juego desde la sección /plan).
-export type PastStatusKey = Exclude<StatusKey, 'unplayed' | 'plan'>;
-export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'playing', 'on_hold'];
-// SPEC 10.8 — discrepancia resuelta: el prototipo solo ofrecía Playing/Rest
-// para endless, pero la sección 4.5 exige mantener dropped disponible
-// también para endless (resting se añade, no sustituye a on_hold/dropped).
-export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting', 'dropped'];
-
-// Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
-export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
-  playing: 'started',
-  beaten: 'completed',
-  dropped: 'dropped',
-  on_hold: 'on_hold',
-  resting: 'resting',
-};
 
 export type AddGameFormValues = {
   platform: string;

@@ -1,7 +1,5 @@
-import { Gamepad2 } from 'lucide-react';
 import type { SessionWithGame } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
-import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import {
   formatByPrecision,
@@ -9,6 +7,7 @@ import {
   formatHours,
   formatSessionEndTime,
 } from '../../lib/format';
+import { GameCover } from '../GameCover';
 
 type SessionRowProps = {
   session: SessionWithGame;
@@ -24,7 +23,6 @@ type SessionRowProps = {
 // que es solo para el contador en vivo (fmtTimer); SessionHistoryList usa
 // HH:MM:SS para las dos cosas, pero ese es un componente distinto.
 export const SessionRow = ({ session }: SessionRowProps): React.JSX.Element => {
-  const coverSrc = useImageSrc(session.coverUrl, 'covers');
   const isLive = session.endedAt === null;
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
   const { data: timeFormat = '24h' } = useTimeFormat();
@@ -39,15 +37,11 @@ export const SessionRow = ({ session }: SessionRowProps): React.JSX.Element => {
           : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
       }
     >
-      <div className="h-15 w-11.5 flex-none overflow-hidden rounded-[8px] border border-border">
-        {coverSrc ? (
-          <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <Gamepad2 size={16} className="text-muted-foreground/40" />
-          </div>
-        )}
-      </div>
+      <GameCover
+        url={session.coverUrl}
+        className="h-15 w-11.5 flex-none overflow-hidden rounded-[8px] border border-border"
+        iconSize={16}
+      />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-bold text-foreground">{session.gameTitle}</div>
         <div className="mt-0.75 text-[12.5px] text-muted-foreground">

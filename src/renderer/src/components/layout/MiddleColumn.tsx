@@ -1,11 +1,13 @@
-import { BarChart3, Gamepad2, LayoutGrid, Search } from 'lucide-react';
+import { BarChart3, LayoutGrid, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { GameListItem } from '../../../../shared/types';
 import { useGames, usePlannedGames } from '../../hooks/games';
-import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours, pluralize } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
+import { filterByTitle } from '../../lib/search';
+import { GameCover } from '../GameCover';
+import { StatusIcon } from '../StatusIcon';
 
 type ShellProps = {
   label: string;
@@ -66,7 +68,7 @@ const StatusSubtitle = ({
   const status = getGameStatusMeta(game.currentState);
   return (
     <>
-      <status.Icon size={13} color={status.color} fill={status.filled ? status.color : 'none'} />
+      <StatusIcon meta={status} size={13} />
       <span className="truncate text-xs font-medium" style={{ color: status.color }}>
         {status.label}
       </span>
@@ -93,7 +95,6 @@ const GameRow = ({
   subtitle,
   rightLabel,
 }: RowProps): React.JSX.Element => {
-  const coverSrc = useImageSrc(game.coverUrl, 'covers');
   return (
     <div
       onClick={onClick}
@@ -105,15 +106,11 @@ const GameRow = ({
           style={{ background: 'rgba(255,255,255,.06)', borderColor: 'rgba(255,255,255,.12)' }}
         />
       )}
-      <div className="relative z-1 h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border">
-        {coverSrc ? (
-          <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <Gamepad2 size={14} className="text-muted-foreground/40" />
-          </div>
-        )}
-      </div>
+      <GameCover
+        url={game.coverUrl}
+        className="relative z-1 h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border"
+        iconSize={14}
+      />
       <div className="relative z-1 min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-semibold text-foreground">{game.title}</div>
         <div className="mt-0.75 flex items-center gap-1.25">{subtitle}</div>
@@ -161,8 +158,7 @@ const AllGamesRow = ({
 
 const useFilteredGames = (search: string): GameListItem[] => {
   const { data: games = [] } = useGames();
-  const query = search.trim().toLowerCase();
-  return query ? games.filter((game) => game.title.toLowerCase().includes(query)) : games;
+  return filterByTitle(games, search);
 };
 
 const LibraryNavColumn = (): React.JSX.Element => {
@@ -204,8 +200,7 @@ const PlanNavColumn = (): React.JSX.Element => {
   const selectedId = detailMatch ? Number(detailMatch.params.id) : null;
   const { data: games = [] } = usePlannedGames();
   const [search, setSearch] = useState('');
-  const query = search.trim().toLowerCase();
-  const filtered = query ? games.filter((game) => game.title.toLowerCase().includes(query)) : games;
+  const filtered = filterByTitle(games, search);
 
   return (
     <MiddleColumnShell

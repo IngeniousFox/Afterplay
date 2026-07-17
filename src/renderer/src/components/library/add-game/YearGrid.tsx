@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../../lib/utils';
+import { CURRENT_YEAR } from './precisionDate';
 
 type YearGridProps = {
   value: number | null;
@@ -11,7 +12,6 @@ type YearGridProps = {
 };
 
 const PAGE_SIZE = 12;
-const CURRENT_YEAR = new Date().getFullYear();
 
 // Mismo patrón visual que MonthGrid (rejilla + paginación con flechas), pero
 // paginando por bloques de 12 años en vez de meses de un año. Lo que se

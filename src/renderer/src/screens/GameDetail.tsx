@@ -15,7 +15,9 @@ import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCar
 import { SessionHistoryList } from '../components/library/detail/SessionHistoryList';
 import { StatusCard } from '../components/library/detail/StatusCard';
 import { EditGameModal } from '../components/library/EditGameModal';
+import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { useGame } from '../hooks/games';
+import { lastIteration } from '../lib/iterations';
 
 type GameDetailProps = {
   gameId: number;
@@ -34,7 +36,7 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
   // necesita, para mover su marcador al cambiar de playthrough. La más
   // reciente = la última creada (getGameById ordena las iteraciones por id
   // ascendente).
-  const newestId = game?.iterations[game.iterations.length - 1]?.id;
+  const newestId = lastIteration(game?.iterations ?? [])?.id;
   const [selectedIterationId, setSelectedIterationId] = useState<number | null>(newestId ?? null);
   // Al entrar se muestra la más reciente, y si aparece una nueva (p.ej. el
   // watcher creó un playthrough con el detalle abierto) la selección salta a
@@ -47,39 +49,23 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
     setSelectedIterationId(newestId ?? null);
   }
 
-  if (isLoading) {
+  if (isLoading || isError || !game) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
+      <QueryStatePlaceholder
+        isLoading={isLoading}
+        errorText="Couldn't load this game."
+        backLabel="Back to library"
+        onBack={onBack}
+      />
     );
   }
 
-  if (isError || !game) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-destructive">Couldn&apos;t load this game.</p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-[10px] border border-input bg-white/3 px-4 py-2 text-[13px] font-semibold text-foreground"
-        >
-          Back to library
-        </button>
-      </div>
-    );
-  }
-
-  const liveSession = game.iterations
-    .flatMap((iteration) => iteration.sessions)
-    .find((session) => session.endedAt === null);
   const allSessions = game.iterations
     .flatMap((iteration) => iteration.sessions)
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+  const liveSession = allSessions.find((session) => session.endedAt === null);
   const selectedIteration =
-    game.iterations.find((it) => it.id === selectedIterationId) ??
-    game.iterations[game.iterations.length - 1] ??
-    null;
+    game.iterations.find((it) => it.id === selectedIterationId) ?? lastIteration(game.iterations);
 
   return (
     <div className="h-full overflow-y-auto">

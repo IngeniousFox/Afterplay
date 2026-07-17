@@ -8,16 +8,12 @@ import { PendingSessionsSection } from '../components/sessions/PendingSessionsSe
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
+import { DAY_MS, startOfDayMs } from '../lib/dateMath';
 import { formatHours, pluralize } from '../lib/format';
-
-const outlineButtonClass =
-  'flex items-center gap-1.75 rounded-[9px] border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap';
+import { sessionDurationStats } from '../lib/sessionStats';
+import { outlineButtonClass } from '../lib/styles';
 
 const PAGE_SIZE = 20;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const startOfDay = (date: Date): number =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 // Cubos de fecha para las cabeceras — de "Today" a un año concreto, cuanto
 // más lejos en el tiempo más grueso el cubo (nadie necesita saber el día
@@ -25,7 +21,7 @@ const startOfDay = (date: Date): number =>
 // render (no una por sesión) para que todas las filas de la misma pasada
 // usen el mismo "hoy", sin desajustes de un milisegundo entre unas y otras.
 const getSessionGroupLabel = (date: Date, now: Date): string => {
-  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / DAY_MS);
+  const diffDays = Math.round((startOfDayMs(now) - startOfDayMs(date)) / DAY_MS);
 
   if (diffDays <= 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
@@ -117,16 +113,7 @@ export const Sessions = (): React.JSX.Element => {
     ? selectedGame.totalHours
     : games.reduce((sum, game) => sum + game.totalHours, 0);
 
-  const closedSessions = filtered.filter((session) => session.endedAt !== null);
-  const longestSessionSec = closedSessions.reduce(
-    (max, session) => Math.max(max, session.durationSec ?? 0),
-    0,
-  );
-  const avgSessionSec =
-    closedSessions.length > 0
-      ? closedSessions.reduce((sum, session) => sum + (session.durationSec ?? 0), 0) /
-        closedSessions.length
-      : 0;
+  const { longestSec: longestSessionSec, avgSec: avgSessionSec } = sessionDurationStats(filtered);
 
   const subtitle = selectedGame
     ? `${pluralize(filtered.length, 'session')} · ${formatHours(selectedGame.totalHours)} total`

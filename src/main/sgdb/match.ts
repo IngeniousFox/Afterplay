@@ -1,8 +1,8 @@
-import { findBestTitleMatch } from '../lib/titleMatch';
+import { findBestTitleMatch, unixSecondsToUtcYear } from '../lib/titleMatch';
 import type { SgdbGame } from './schemas';
 
 const toYear = (candidate: SgdbGame): number | undefined =>
-  candidate.release_date ? new Date(candidate.release_date * 1000).getUTCFullYear() : undefined;
+  candidate.release_date ? unixSecondsToUtcYear(candidate.release_date) : undefined;
 
 export const findBestMatch = (
   candidates: SgdbGame[],

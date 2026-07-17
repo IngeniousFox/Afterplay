@@ -10,7 +10,9 @@ import { HowLongToBeatCard } from '../components/library/detail/HowLongToBeatCar
 import { NotesSection } from '../components/library/detail/NotesSection';
 import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCarousel';
 import { AddGameModal } from '../components/library/AddGameModal';
+import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { useGame } from '../hooks/games';
+import { accentGradientStyle } from '../lib/styles';
 
 type PlanGameDetailProps = {
   gameId: number;
@@ -37,26 +39,14 @@ export const PlanGameDetail = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editNotesOpen, setEditNotesOpen] = useState(false);
 
-  if (isLoading) {
+  if (isLoading || isError || !game) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
-  }
-
-  if (isError || !game) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-destructive">Couldn&apos;t load this game.</p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-[10px] border border-input bg-white/3 px-4 py-2 text-[13px] font-semibold text-foreground"
-        >
-          Back to plan
-        </button>
-      </div>
+      <QueryStatePlaceholder
+        isLoading={isLoading}
+        errorText="Couldn't load this game."
+        backLabel="Back to plan"
+        onBack={onBack}
+      />
     );
   }
 
@@ -73,8 +63,7 @@ export const PlanGameDetail = ({
                 onClick={() => setPromoteOpen(true)}
                 className="flex items-center gap-2.25 rounded-[11px] px-7.5 py-3 text-[15px] font-bold shadow-[0_6px_18px_rgba(0,0,0,.28)]"
                 style={{
-                  background: 'linear-gradient(135deg,#2fdc7e,#16a35a)',
-                  color: '#08120c',
+                  ...accentGradientStyle,
                   border: '1px solid transparent',
                 }}
               >

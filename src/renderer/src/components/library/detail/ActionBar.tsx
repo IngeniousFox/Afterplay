@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useLaunchExecutable } from '../../../hooks/games';
 import { useCloseSession, useStartGameSession } from '../../../hooks/sessions';
+import { accentGradientStyle } from '../../../lib/styles';
 import { AddSpendPopover } from './AddSpendPopover';
 
 type ActionBarProps = {
@@ -86,8 +87,7 @@ export const ActionBar = ({
                   border: '1px solid rgba(47,220,126,.5)',
                 }
               : {
-                  background: 'linear-gradient(135deg,#2fdc7e,#16a35a)',
-                  color: '#08120c',
+                  ...accentGradientStyle,
                   border: '1px solid transparent',
                 }
           }

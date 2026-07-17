@@ -3,7 +3,6 @@ import type { AddSpendEventInput, UpdateSpendEventPatch } from '../../shared/typ
 import { addSpendEvent } from '../db/queries/spend/addSpendEvent';
 import { deleteSpendEvent } from '../db/queries/spend/deleteSpendEvent';
 import { getAllSpendEvents } from '../db/queries/spend/getAllSpendEvents';
-import { getSpendByGame } from '../db/queries/spend/getSpendByGame';
 import { updateSpendEvent } from '../db/queries/spend/updateSpendEvent';
 
 export const registerSpendHandlers = (): void => {
@@ -13,10 +12,6 @@ export const registerSpendHandlers = (): void => {
 
   handleDb('spend:getAll', async () => {
     return getAllSpendEvents();
-  });
-
-  handleDb('spend:getByGame', async (_event, gameId: number) => {
-    return getSpendByGame(gameId);
   });
 
   handleDb('spend:delete', async (_event, id: number) => {

@@ -1,6 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { formatElapsed, formatHours, pluralize } from '../../lib/format';
+import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../../lib/dateMath';
+import { formatElapsed, formatHours, formatTime, pluralize } from '../../lib/format';
+import { floatingPanelClass } from '../../lib/styles';
 import { useTimeFormat } from '../../hooks/settings';
+import { StatCard } from './StatCard';
 
 type HeatmapSession = {
   startedAt: Date;
@@ -26,7 +29,6 @@ type ActivityHeatmapProps = {
   yearPicker?: React.ReactNode;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const ROLLING_WEEKS = 52;
 const GAP_PX = 3;
 const DAY_LABEL_WIDTH_PX = 26;
@@ -42,21 +44,6 @@ const LEVEL_COLORS = [
 ];
 
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
-
-const startOfDay = (date: Date): Date =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate());
-const startOfDayMs = (date: Date): number => startOfDay(date).getTime();
-
-// Sumar días vía setDate (no sumando milisegundos): al cruzar un cambio de
-// hora (DST) un día "dura" 23h o 25h, y la aritmética en ms iría dejando la
-// medianoche calculada una hora corrida — con lo que los días de la rejilla
-// dejarían de casar con las claves reales (medianoche local) de las
-// sesiones. setDate mantiene siempre las 00:00 locales.
-const addDays = (date: Date, days: number): Date => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
 
 // Lunes de la semana de `date` — semanas empiezan en lunes (SPEC: etiquetas
 // Mon/Wed/Fri), a diferencia de getDay() de JS que empieza en domingo.
@@ -202,7 +189,7 @@ export const ActivityHeatmap = ({
       : 0;
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5.5 py-5">
+    <StatCard>
       <div className="mb-4 flex items-center justify-between">
         <div className="text-[14px] font-bold text-foreground">{title}</div>
         <div className="flex items-center gap-3">
@@ -316,7 +303,7 @@ export const ActivityHeatmap = ({
                 });
                 return (
                   <div
-                    className="pointer-events-none absolute z-10 w-55 rounded-[10px] border border-input bg-[rgba(23,25,24,.99)] px-3.25 py-2.75 shadow-[0_18px_50px_rgba(0,0,0,.55)]"
+                    className={`pointer-events-none absolute z-10 w-55 rounded-[10px] border ${floatingPanelClass} px-3.25 py-2.75`}
                     style={{
                       left: hovered.x,
                       top: hovered.y - 9,
@@ -340,11 +327,7 @@ export const ActivityHeatmap = ({
                           <div key={index} className="flex items-center gap-1.75 text-[11.5px]">
                             <span className="h-1.5 w-1.5 flex-none rounded-full bg-primary/70" />
                             <span className="flex-none text-muted-foreground tabular-nums">
-                              {session.startedAt.toLocaleTimeString('en-US', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: timeFormat === '12h',
-                              })}
+                              {formatTime(session.startedAt, timeFormat)}
                             </span>
                             <span className="flex-none font-semibold text-foreground tabular-nums">
                               {session.endedAt === null ? (
@@ -373,6 +356,6 @@ export const ActivityHeatmap = ({
           </>
         )}
       </div>
-    </div>
+    </StatCard>
   );
 };

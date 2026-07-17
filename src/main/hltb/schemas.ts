@@ -7,12 +7,10 @@ export const hltbGameSchema = z.object({
   id: z.string(),
   name: z.string(),
   releaseYear: z.number().optional(),
-  reviewScore: z.number().optional(),
   completionTimes: z.object({
     main: z.number().optional(),
     mainExtra: z.number().optional(),
     completionist: z.number().optional(),
-    allStyles: z.number().optional(),
   }),
 });
 

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../../lib/utils';
+import { CURRENT_YEAR, TODAY } from './precisionDate';
 import { YearDropdown } from './YearDropdown';
 
 type MonthGridProps = {
@@ -27,8 +28,7 @@ const MONTH_LABELS = [
   'Dec',
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
-const CURRENT_MONTH = new Date().getMonth();
+const CURRENT_MONTH = TODAY.getMonth();
 
 // Rejilla de meses + año navegable — react-day-picker no trae un modo "solo
 // mes" de fábrica, y montar un calendario de días completo para elegir un

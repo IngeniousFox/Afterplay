@@ -1,3 +1,4 @@
+import { unixSecondsToUtcYear } from '../lib/titleMatch';
 import { igdbRequest } from './client';
 import { igdbImageUrl } from './images';
 import { filterAndRankGames } from './rank';
@@ -21,7 +22,7 @@ const RESULT_LIMIT = 25;
 const escapeQuery = (query: string): string => query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
 const toReleaseYear = (unixSeconds: number | undefined): number | null =>
-  unixSeconds === undefined ? null : new Date(unixSeconds * 1000).getUTCFullYear();
+  unixSeconds === undefined ? null : unixSecondsToUtcYear(unixSeconds);
 
 export const searchGames = async (query: string): Promise<IgdbSearchResult[]> => {
   const escaped = escapeQuery(query);
