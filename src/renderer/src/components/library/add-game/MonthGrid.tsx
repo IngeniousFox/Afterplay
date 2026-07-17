@@ -5,6 +5,10 @@ import { YearDropdown } from './YearDropdown';
 
 type MonthGridProps = {
   value: Date | null;
+  // Año por el que arrancar navegado si `value` es null (p.ej. el año de
+  // "Started" para que "Finished" abra ahí sin seleccionar nada). `value`
+  // manda si existe.
+  initialMonth?: Date;
   onSelect: (date: Date) => void;
 };
 
@@ -31,8 +35,10 @@ const CURRENT_MONTH = new Date().getMonth();
 // mes sería enseñar más de lo que hace falta. Lo que se registra aquí ya
 // pasó, nunca es una fecha futura: ni el año ni, dentro del año actual, los
 // meses todavía no llegados se pueden elegir.
-export const MonthGrid = ({ value, onSelect }: MonthGridProps): React.JSX.Element => {
-  const [year, setYear] = useState(value?.getFullYear() ?? CURRENT_YEAR);
+export const MonthGrid = ({ value, initialMonth, onSelect }: MonthGridProps): React.JSX.Element => {
+  const [year, setYear] = useState(
+    value?.getFullYear() ?? initialMonth?.getFullYear() ?? CURRENT_YEAR,
+  );
 
   return (
     <div className="w-56 p-3">

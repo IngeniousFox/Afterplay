@@ -4,6 +4,9 @@ import { cn } from '../../../lib/utils';
 
 type YearGridProps = {
   value: number | null;
+  // Año por el que arrancar navegado si `value` es null (misma idea que
+  // MonthGrid.initialMonth). `value` manda si existe.
+  initialYear?: number;
   onSelect: (year: number) => void;
 };
 
@@ -15,9 +18,9 @@ const CURRENT_YEAR = new Date().getFullYear();
 // registra aquí ya pasó, nunca es una fecha futura: ni se puede paginar más
 // allá del bloque que contiene el año actual, ni elegir un año posterior
 // dentro de ese bloque.
-export const YearGrid = ({ value, onSelect }: YearGridProps): React.JSX.Element => {
+export const YearGrid = ({ value, initialYear, onSelect }: YearGridProps): React.JSX.Element => {
   const [pageStart, setPageStart] = useState(() => {
-    const base = value ?? CURRENT_YEAR;
+    const base = value ?? initialYear ?? CURRENT_YEAR;
     return base - (base % PAGE_SIZE);
   });
   const years = Array.from({ length: PAGE_SIZE }, (_, index) => pageStart + index);

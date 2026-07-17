@@ -15,6 +15,12 @@ export type PrecisionDateValue = { precision: DatePrecision; isoDate: string };
 export const toIsoDate = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+// isoDate va siempre en hora local a propósito (sin sufijo Z) — parsear como
+// fecha+hora local evita el clásico desfase de un día que da
+// `new Date('YYYY-MM-DD')` (eso lo interpreta como UTC medianoche y lo
+// muestra un día antes en husos horarios negativos).
+export const parseIsoDate = (isoDate: string): Date => new Date(`${isoDate}T00:00:00`);
+
 // Compartido por cualquier picker de este tipo que quiera arrancar en HOY en
 // vez de vacío (AddSpendPopover, y el de "cuándo lo compraste" en Add Game)
 // — una función y no una constante calculada una vez, para que cada llamada

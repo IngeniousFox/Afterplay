@@ -2,6 +2,7 @@ import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import { STATUS_META } from '../../../lib/gameStatus';
 import { DateWithPrecisionPicker } from './DateWithPrecisionPicker';
 import { Dropdown } from './Dropdown';
+import { parseIsoDate } from './precisionDate';
 import { fieldLabelClass, textInputClass } from './styles';
 import type { AddGameFormValues, PastStatusKey } from './types';
 import { ENDLESS_STATUS_OPTIONS, NORMAL_STATUS_OPTIONS } from './types';
@@ -13,6 +14,7 @@ export const PlayedBeforePanel = (): React.JSX.Element => {
   const { control, setValue } = useFormContext<AddGameFormValues>();
   const endless = useWatch({ control, name: 'endless' });
   const pastStatus = useWatch({ control, name: 'pastStatus' });
+  const started = useWatch({ control, name: 'started' });
   const statusOptions = endless ? ENDLESS_STATUS_OPTIONS : NORMAL_STATUS_OPTIONS;
   // Si sigue jugándolo ahora mismo, todavía no lo ha "dejado" — no hay fecha
   // de fin que anotar (igual que on_hold/dropped/beaten sí la tienen, porque
@@ -43,6 +45,7 @@ export const PlayedBeforePanel = (): React.JSX.Element => {
                   label="Finished / left"
                   value={field.value}
                   onChange={field.onChange}
+                  defaultMonth={started ? parseIsoDate(started.isoDate) : undefined}
                 />
               )}
             />

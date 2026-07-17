@@ -4,7 +4,7 @@ import { Calendar } from '../../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { CalendarDropdown, CalendarDropdownGroup } from './CalendarDropdown';
 import { MonthGrid } from './MonthGrid';
-import { toIsoDate } from './precisionDate';
+import { parseIsoDate, toIsoDate } from './precisionDate';
 import type { DatePrecision, PrecisionDateValue } from './precisionDate';
 import { YearGrid } from './YearGrid';
 
@@ -25,6 +25,11 @@ type DateWithPrecisionPickerProps = {
   label: string;
   value: PrecisionDateValue | null;
   onChange: (value: PrecisionDateValue | null) => void;
+  // Mes/año por el que arrancar navegado la PRIMERA vez que se abre sin
+  // `value` todavía — pensado para el picker de "Finished" cuando "Started"
+  // ya tiene fecha: se abre en ese mismo mes, sin seleccionar nada.
+  // `value`, si existe, siempre manda sobre esto.
+  defaultMonth?: Date;
 };
 
 const PRECISION_OPTIONS: { value: DatePrecision; label: string }[] = [
@@ -32,12 +37,6 @@ const PRECISION_OPTIONS: { value: DatePrecision; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'year', label: 'Year' },
 ];
-
-// isoDate es "YYYY-MM-DD" en hora local a propósito (sin sufijo Z) — parsear
-// como fecha+hora local evita el clásico desfase de un día que da
-// `new Date('YYYY-MM-DD')` (eso lo interpreta como UTC medianoche y lo
-// muestra un día antes en husos horarios negativos).
-const parseIsoDate = (isoDate: string): Date => new Date(`${isoDate}T00:00:00`);
 
 // 'en-US' fijo, no el locale del sistema — el resto de la UI está en inglés
 // sin i18n, así que dejar que esto cambie de idioma solo (el navegador de
@@ -60,6 +59,7 @@ export const DateWithPrecisionPicker = ({
   label,
   value,
   onChange,
+  defaultMonth,
 }: DateWithPrecisionPickerProps): React.JSX.Element => {
   // Solo importa mientras value es null: qué picker enseñar hasta que el
   // usuario elija algo. En cuanto hay value, manda su propia precisión.
@@ -120,11 +120,27 @@ export const DateWithPrecisionPicker = ({
                 <Calendar
                   mode="single"
                   captionLayout="dropdown"
+                  // Sin esto, react-day-picker calcula cuántas semanas pintar
+                  // según cómo caiga el mes (4 a 6 filas) — un popover más
+                  // bajo en meses "cortos" cabe debajo del input, pero en un
+                  // mes de 6 filas se sale y el propio Popover lo voltea
+                  // arriba (bug real: "en algunos meses concretos aparece
+                  // arriba"). Fijar siempre 6 filas deja la altura constante,
+                  // así el popover no cambia de lado mes a mes.
+                  fixedWeeks
                   startMonth={CALENDAR_START_MONTH}
                   endMonth={CALENDAR_END_MONTH}
                   disabled={{ after: TODAY }}
                   components={{ Dropdown: CalendarDropdown }}
                   selected={value ? parseIsoDate(value.isoDate) : undefined}
+                  // Sin esto, aunque `selected` ya tenga una fecha, react-day-
+                  // picker abre siempre en el mes de HOY — hacía falta
+                  // decirle explícitamente en qué mes navegar al montar
+                  // (bug real: "si se vuelve a abrir con una fecha ya puesta
+                  // debería estar en ese momento"). Si tampoco hay value,
+                  // cae a defaultMonth (p.ej. el mes de "Started", para que
+                  // "Finished" abra ahí sin seleccionar nada).
+                  defaultMonth={value ? parseIsoDate(value.isoDate) : defaultMonth}
                   onSelect={(date) => {
                     if (!date) return;
                     onChange({ precision: 'day', isoDate: toIsoDate(date) });
@@ -136,6 +152,7 @@ export const DateWithPrecisionPicker = ({
             {precision === 'month' && (
               <MonthGrid
                 value={value ? parseIsoDate(value.isoDate) : null}
+                initialMonth={defaultMonth}
                 onSelect={(date) => {
                   onChange({ precision: 'month', isoDate: toIsoDate(date) });
                   setOpen(false);
@@ -145,6 +162,7 @@ export const DateWithPrecisionPicker = ({
             {precision === 'year' && (
               <YearGrid
                 value={value ? parseIsoDate(value.isoDate).getFullYear() : null}
+                initialYear={defaultMonth?.getFullYear()}
                 onSelect={(year) => {
                   onChange({ precision: 'year', isoDate: `${year}-01-01` });
                   setOpen(false);

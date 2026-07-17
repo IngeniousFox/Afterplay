@@ -8,6 +8,7 @@ import { STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
 import { CheckboxRow } from '../add-game/CheckboxRow';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import { Dropdown } from '../add-game/Dropdown';
+import { parseIsoDate } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
 import {
@@ -328,11 +329,15 @@ const FormDatePicker = ({
 }): React.JSX.Element => {
   const { control, setValue } = useFormContext<EditGameFormValues>();
   const value = useWatch({ control, name });
+  // Si "Finished" todavía no tiene fecha, que abra navegado al mismo mes que
+  // "Started" (sin seleccionar nada) en vez de al mes de hoy.
+  const started = useWatch({ control, name: 'started' });
   return (
     <DateWithPrecisionPicker
       label={label}
       value={value}
       onChange={(next) => setValue(name, next)}
+      defaultMonth={name === 'finished' && started ? parseIsoDate(started.isoDate) : undefined}
     />
   );
 };
