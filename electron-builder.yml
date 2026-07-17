@@ -43,6 +43,12 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# Auto-actualización vía GitHub Releases (repo público — descargas sin
+# token). Publicar: subir version en package.json y `npm run release:win`
+# con GH_TOKEN en el entorno; electron-builder sube instalador + latest.yml
+# + blockmap a una Release nueva, y el updater de cada instalación (ver
+# src/main/updater.ts) la detecta solo.
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: IngeniousFox
+  repo: Afterplay

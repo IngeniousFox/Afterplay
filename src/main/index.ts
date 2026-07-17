@@ -11,6 +11,7 @@ import { registerIpcHandlers } from './ipc';
 import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
+import { startAutoUpdater } from './updater';
 import { ProcessWatcher } from './watcher/watcher';
 
 // La ventana principal a nivel de módulo para que el watcher pueda avisarle
@@ -225,6 +226,11 @@ app.whenReady().then(async () => {
   // arrancar" — sin bloquear el resto del arranque.
   void runSyncCycle();
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
+
+  // Auto-actualización (solo app empaquetada — ver updater.ts). Al final del
+  // arranque a propósito: comprobar una release jamás debe retrasar la
+  // ventana, el watcher ni el sync.
+  startAutoUpdater();
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
