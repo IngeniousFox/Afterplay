@@ -23,6 +23,12 @@ import { fieldLabelClass, textInputClass } from '../add-game/styles';
 type HistoryListProps = {
   stateHistory: StateEvent[];
   spendHistory: SpendEvent[];
+  // Cuándo entró el juego en Afterplay (gamesTable.addedAt) — pinta una
+  // entrada sintética "Added to Afterplay" al fondo de la línea temporal.
+  // Sintética de verdad: no existe como evento en la DB (ni editable ni
+  // borrable), solo se deriva aquí. PlanGameDetail no la pasa — su evento
+  // 'plan_to_play' ya cuenta lo mismo con la misma fecha.
+  addedAt?: Date;
 };
 
 const SPEND_COLOR = AMBER;
@@ -49,6 +55,17 @@ type Entry =
       datePrecision: SpendEvent['datePrecision'];
       note: string | null;
       event: SpendEvent;
+    }
+  | {
+      // "Added to Afterplay" — derivada de gamesTable.addedAt, no es un
+      // evento real de la DB: sin id propio, sin edición. La nota (si hay)
+      // la hereda del evento 'plan_to_play' que esta entrada oculta.
+      key: string;
+      kind: 'added';
+      id: number;
+      date: Date;
+      datePrecision: StateEvent['datePrecision'];
+      note: string | null;
     };
 
 // El valor de picker de una entrada existente. 'datetime' (eventos creados
@@ -67,6 +84,7 @@ const entryPickerValue = (entry: Entry): PrecisionDateValue =>
 export const HistoryList = ({
   stateHistory,
   spendHistory,
+  addedAt,
 }: HistoryListProps): React.JSX.Element | null => {
   const updateStateEvent = useUpdateStateEvent();
   const updateSpendEvent = useUpdateSpendEvent();
@@ -77,8 +95,16 @@ export const HistoryList = ({
   const [draftAmount, setDraftAmount] = useState('');
   const [draftDate, setDraftDate] = useState<PrecisionDateValue | null>(null);
 
+  // Con la entrada "Added to Afterplay" en la línea temporal, el evento
+  // 'plan_to_play' es redundante (misma fecha, misma información: "entró en
+  // la app vía Plan") — se oculta SOLO del pintado; el evento sigue en la DB
+  // y en la ficha del Plan (que no pasa addedAt y lo enseña como siempre).
+  const visibleStateHistory = addedAt
+    ? stateHistory.filter((event) => event.type !== 'plan_to_play')
+    : stateHistory;
+
   const entries: Entry[] = [
-    ...stateHistory.map((event): Entry => ({
+    ...visibleStateHistory.map((event): Entry => ({
       key: `status-${event.id}`,
       kind: 'status',
       id: event.id,
@@ -96,6 +122,24 @@ export const HistoryList = ({
       note: event.note,
       event,
     })),
+    // id 0 (ningún evento real lo tiene): en empate de fecha exacta (un
+    // juego planeado comparte addedAt con su evento 'plan_to_play' al
+    // milisegundo) el desempate por id la deja siempre al fondo — primero
+    // "entró en Afterplay", luego todo lo demás. La nota del 'plan_to_play'
+    // oculto ("Recommended by Marta…") se hereda aquí para que no se pierda
+    // al ocultar el evento.
+    ...(addedAt
+      ? [
+          {
+            key: 'added',
+            kind: 'added',
+            id: 0,
+            date: addedAt,
+            datePrecision: 'datetime',
+            note: stateHistory.find((event) => event.type === 'plan_to_play')?.note ?? null,
+          } satisfies Entry,
+        ]
+      : []),
   ].sort((a, b) => b.date.getTime() - a.date.getTime() || b.id - a.id);
 
   if (entries.length === 0) return null;
@@ -127,7 +171,7 @@ export const HistoryList = ({
     if (entry.kind === 'status') {
       const patch: UpdateStateEventPatch = { note, ...datePatch };
       updateStateEvent.mutate({ id: entry.id, patch });
-    } else {
+    } else if (entry.kind === 'spend') {
       const parsedAmount = Number(draftAmount);
       const amountValid =
         draftAmount.trim() !== '' && !Number.isNaN(parsedAmount) && parsedAmount > 0;
@@ -152,8 +196,15 @@ export const HistoryList = ({
         {entries.map((entry, index) => {
           const isLast = index === entries.length - 1;
           const isEditing = editingKey === entry.key;
-          const color =
-            entry.kind === 'status' ? getGameStatusMeta(entry.event.type).color : SPEND_COLOR;
+          // 'added' comparte look con Unplayed (gris, círculo) — es el
+          // estado con el que todo juego entra a la app.
+          const statusMeta =
+            entry.kind === 'status'
+              ? getGameStatusMeta(entry.event.type)
+              : entry.kind === 'added'
+                ? getGameStatusMeta(null)
+                : null;
+          const color = statusMeta ? statusMeta.color : SPEND_COLOR;
 
           return (
             <div key={entry.key} className="group/row flex gap-3.75">
@@ -162,8 +213,8 @@ export const HistoryList = ({
                   className="z-1 flex h-7.5 w-7.5 items-center justify-center rounded-full border"
                   style={{ background: `${color}22`, borderColor: `${color}66` }}
                 >
-                  {entry.kind === 'status' ? (
-                    <StatusIcon meta={getGameStatusMeta(entry.event.type)} size={14} />
+                  {statusMeta ? (
+                    <StatusIcon meta={statusMeta} size={14} />
                   ) : (
                     <DollarSign size={14} color={SPEND_COLOR} />
                   )}
@@ -179,11 +230,13 @@ export const HistoryList = ({
                     <span className="text-sm font-bold" style={{ color }}>
                       {entry.kind === 'status'
                         ? getGameStatusMeta(entry.event.type).label
-                        : formatMoney(entry.event.amount)}
+                        : entry.kind === 'added'
+                          ? 'Added to Afterplay'
+                          : formatMoney(entry.event.amount)}
                     </span>
                     <span className="text-[12.5px] text-muted-foreground">
                       {entry.kind === 'spend' && `${SPEND_TYPE_LABEL[entry.event.type]} — `}
-                      {entry.kind === 'status' && '— '}
+                      {entry.kind !== 'spend' && '— '}
                       {formatByPrecision(entry.date, entry.datePrecision, timeFormat)}
                     </span>
                   </div>
@@ -260,7 +313,7 @@ export const HistoryList = ({
                   )}
                 </div>
 
-                {!isEditing && (
+                {!isEditing && entry.kind !== 'added' && (
                   <div className="flex flex-none items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
                     <button
                       type="button"

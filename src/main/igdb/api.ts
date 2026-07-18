@@ -117,7 +117,11 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     publisher: companies.find((entry) => entry.publisher)?.company.name ?? null,
     covers: game.cover ? [igdbImageUrl(game.cover.image_id, 'cover_big')] : [],
     heroes: game.artworks?.map((artwork) => igdbImageUrl(artwork.image_id, '1080p')) ?? [],
-    screenshots:
-      game.screenshots?.map((shot) => igdbImageUrl(shot.image_id, 'screenshot_big')) ?? [],
+    // 1080p en vez de screenshot_big (889×500) — mismo aspect ratio 16:9,
+    // pero a resolución completa. Es una transformación de Cloudinary, no un
+    // tamaño pre-generado: si la screenshot original fuera más pequeña
+    // (raro, la mayoría ya vienen a 1080p o más), Cloudinary la escala hacia
+    // arriba en vez de fallar — nunca peor que el tamaño de antes.
+    screenshots: game.screenshots?.map((shot) => igdbImageUrl(shot.image_id, '1080p')) ?? [],
   };
 };

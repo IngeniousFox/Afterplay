@@ -96,7 +96,11 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
 
             <div className="mt-7.5 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4.5">
               <StatusCard game={game} />
-              <HistoryList stateHistory={game.stateHistory} spendHistory={game.spendHistory} />
+              <HistoryList
+                stateHistory={game.stateHistory}
+                spendHistory={game.spendHistory}
+                addedAt={game.addedAt}
+              />
             </div>
 
             <SessionHistoryList sessions={allSessions} gameId={gameId} />
