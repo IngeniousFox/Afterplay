@@ -58,6 +58,34 @@ export const FORMAT_OPTIONS: { value: 'digital' | 'physical'; label: string }[] 
   { value: 'physical', label: 'Physical' },
 ];
 
+// Un playthrough manual DE MÁS (más allá del primero, que vive en los campos
+// sueltos started/finished/hoursPlayed/pastStatus de abajo) — mismos campos
+// por-iteración que Edit Game pide en su modo "+ Add manual"
+// (edit-game/IterationSection.tsx), para que "Add game" pueda registrar de
+// entrada más de una partida pasada en vez de tener que añadir el resto
+// luego desde Edit.
+export type ManualPlaythroughEntry = {
+  label: string;
+  started: PrecisionDateValue | null;
+  finished: PrecisionDateValue | null;
+  hoursPlayed: string;
+  pastStatus: PastStatusKey;
+  platform: string;
+  format: 'digital' | 'physical';
+  origin: string;
+};
+
+export const EMPTY_MANUAL_PLAYTHROUGH: ManualPlaythroughEntry = {
+  label: '',
+  started: null,
+  finished: null,
+  hoursPlayed: '',
+  pastStatus: 'beaten',
+  platform: 'Steam',
+  format: 'digital',
+  origin: 'Purchased',
+};
+
 export type AddGameFormValues = {
   platform: string;
   origin: string;
@@ -71,6 +99,9 @@ export type AddGameFormValues = {
   finished: PrecisionDateValue | null;
   hoursPlayed: string;
   pastStatus: PastStatusKey;
+  // Playthroughs pasados de más, además del de arriba — ver
+  // ManualPlaythroughEntry.
+  extraPlaythroughs: ManualPlaythroughEntry[];
   moneySpent: string;
   // Cuándo se compró — separado del resto de fechas (started/finished, que
   // son de cuándo se jugó): un gasto puede pasar mucho antes de empezar a
@@ -91,6 +122,10 @@ export type AddGameFormValues = {
   // propia, el backend usa su propio default (primera candidata de IGDB).
   coverUrl: string | null;
   heroUrl: string | null;
+  // Id de SteamGridDB editable a mano — null = el backend lo busca solo por
+  // nombre+año (comportamiento de siempre); puesto, se usa tal cual y el
+  // CoverPicker busca fotos de ESE juego concreto.
+  steamGridDbId: number | null;
 };
 
 export const DEFAULT_FORM_VALUES: AddGameFormValues = {
@@ -104,6 +139,7 @@ export const DEFAULT_FORM_VALUES: AddGameFormValues = {
   finished: null,
   hoursPlayed: '',
   pastStatus: 'beaten',
+  extraPlaythroughs: [],
   moneySpent: '',
   moneySpentDate: null,
   executablePath: '',
@@ -113,4 +149,5 @@ export const DEFAULT_FORM_VALUES: AddGameFormValues = {
   gameNotes: '',
   coverUrl: null,
   heroUrl: null,
+  steamGridDbId: null,
 };

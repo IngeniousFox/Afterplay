@@ -23,6 +23,7 @@ export const AddGameImagesField = ({
   const { control, setValue } = useFormContext<AddGameFormValues>();
   const coverUrl = useWatch({ control, name: 'coverUrl' });
   const heroUrl = useWatch({ control, name: 'heroUrl' });
+  const steamGridDbId = useWatch({ control, name: 'steamGridDbId' });
   const detail = useIgdbDetails(selected.igdbId);
 
   useEffect(() => {
@@ -31,5 +32,13 @@ export const AddGameImagesField = ({
     }
   }, [heroUrl, detail.data, setValue]);
 
-  return <ImagesField coverUrl={coverUrl ?? selected.coverUrl} heroUrl={heroUrl} onPick={onPick} />;
+  return (
+    <ImagesField
+      coverUrl={coverUrl ?? selected.coverUrl}
+      heroUrl={heroUrl}
+      onPick={onPick}
+      steamGridDbId={steamGridDbId}
+      onSteamGridDbIdChange={(id) => setValue('steamGridDbId', id)}
+    />
+  );
 };

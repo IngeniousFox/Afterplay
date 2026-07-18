@@ -19,6 +19,7 @@ export const createGameWithDetails = async (
   const enrichment = await resolveGameEnrichment(input.igdbId, {
     coverUrl: input.coverUrl,
     heroUrl: input.heroUrl,
+    steamGridDbId: input.steamGridDbId,
   });
 
   const gameInput: CreateGameInput = {

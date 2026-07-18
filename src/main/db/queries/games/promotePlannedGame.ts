@@ -38,6 +38,7 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
         // juego ya tenía de cuando se planeó, no se pisa con null.
         ...(input.coverUrl ? { coverUrl: input.coverUrl } : {}),
         ...(input.heroUrl ? { heroUrl: input.heroUrl } : {}),
+        ...(input.steamGridDbId !== null ? { steamGridDbId: input.steamGridDbId } : {}),
       })
       .where(eq(gamesTable.id, input.gameId))
       .returning(gameColumns);

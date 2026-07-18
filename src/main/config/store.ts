@@ -8,11 +8,22 @@ import type { TimeFormat } from '../../shared/types';
 // app.setLoginItemSettings — ver ipc/settings.ts). Fichero plano en
 // userData, igual que la DB — vale para lo poco que hay hoy y para lo que
 // se añada después (SPEC 1.5.D, tema claro/oscuro, sigue pendiente).
+// Tamaño/posición de la ventana SIN maximizar (ver lib/windowState.ts) —
+// null hasta el primer resize/move/cierre real, o si el monitor donde
+// estaba ya no está conectado.
+type WindowBounds = { x: number; y: number; width: number; height: number };
+
 type AppConfig = {
   timeFormat: TimeFormat;
+  windowBounds: WindowBounds | null;
+  windowMaximized: boolean;
 };
 
-const DEFAULT_CONFIG: AppConfig = { timeFormat: '24h' };
+const DEFAULT_CONFIG: AppConfig = {
+  timeFormat: '24h',
+  windowBounds: null,
+  windowMaximized: false,
+};
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath
 // depende de app.setName(), que corre al principio de main/index.ts pero

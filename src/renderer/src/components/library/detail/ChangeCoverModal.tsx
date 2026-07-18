@@ -26,6 +26,7 @@ export const ChangeCoverModal = ({
   const updateGame = useUpdateGame();
   const [coverUrl, setCoverUrl] = useState(game.coverUrl);
   const [heroUrl, setHeroUrl] = useState(game.heroUrl);
+  const [steamGridDbId, setSteamGridDbId] = useState(game.steamGridDbId);
   const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
 
   // "Adjusting state when a prop changes" (react.dev) — al reabrir el modal
@@ -37,6 +38,7 @@ export const ChangeCoverModal = ({
     if (open) {
       setCoverUrl(game.coverUrl);
       setHeroUrl(game.heroUrl);
+      setSteamGridDbId(game.steamGridDbId);
       setPickerTarget(null);
     }
   }
@@ -47,7 +49,7 @@ export const ChangeCoverModal = ({
   };
 
   const handleSave = async (): Promise<void> => {
-    await updateGame.mutateAsync({ id: game.id, patch: { coverUrl, heroUrl } });
+    await updateGame.mutateAsync({ id: game.id, patch: { coverUrl, heroUrl, steamGridDbId } });
     onOpenChange(false);
   };
 
@@ -75,6 +77,7 @@ export const ChangeCoverModal = ({
           igdbId={game.igdbId}
           title={game.title}
           releaseYear={game.releaseYear}
+          steamGridDbId={steamGridDbId}
           onSelect={(url) => {
             if (pickerTarget === 'cover') setCoverUrl(url);
             else setHeroUrl(url);
@@ -83,7 +86,13 @@ export const ChangeCoverModal = ({
           onCancel={() => setPickerTarget(null)}
         />
       ) : (
-        <ImagesField coverUrl={coverUrl} heroUrl={heroUrl} onPick={setPickerTarget} />
+        <ImagesField
+          coverUrl={coverUrl}
+          heroUrl={heroUrl}
+          onPick={setPickerTarget}
+          steamGridDbId={steamGridDbId}
+          onSteamGridDbIdChange={setSteamGridDbId}
+        />
       )}
     </ModalShell>
   );

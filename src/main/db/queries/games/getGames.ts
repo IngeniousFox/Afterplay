@@ -68,6 +68,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       startedAt: sessionsTable.startedAt,
       durationSec: sessionsTable.durationSec,
       endedAt: sessionsTable.endedAt,
+      milestone: sessionsTable.milestone,
     })
     .from(sessionsTable)
     .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id));
@@ -83,7 +84,13 @@ export const getGames = async (): Promise<GameListItem[]> => {
       row.iterationId,
       (trackedSecondsByIteration.get(row.iterationId) ?? 0) + (row.durationSec ?? 0),
     );
-    sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
+    // Los marcadores de borde ("I played this before": milestone puesto,
+    // duración 0) NO cuentan como sesiones — nadie las jugó. Mismo criterio
+    // que getAllSessions y GameStats; sin este filtro, la columna de
+    // Sessions decía "2 sessions" para un juego cuya lista salía vacía.
+    if (row.milestone === null) {
+      sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
+    }
     if (row.endedAt === null) {
       liveSinceByGame.set(row.gameId, row.startedAt);
     }

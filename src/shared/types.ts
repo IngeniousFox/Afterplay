@@ -129,6 +129,11 @@ export type CreateGameWithDetailsInput = {
   // existiera el picker.
   coverUrl: string | null;
   heroUrl: string | null;
+  // Igual que coverUrl/heroUrl: null = "sin elección propia", el main busca
+  // el id él solo (mismo criterio nombre+año que siempre). Puesto a mano =
+  // se usa ESE id tal cual, sin buscar — para cuando el auto-match falla o
+  // el usuario ya sabe cuál es el juego correcto en SteamGridDB.
+  steamGridDbId: number | null;
   // Carpeta de instalación + su tamaño ya calculado (ver dialog:pickDirectory)
   // — null si no se eligió ninguna al añadir el juego.
   installDirectory: string | null;
@@ -144,6 +149,7 @@ export type CreatePlannedGameInput = {
   gameNotes: string | null;
   coverUrl: string | null;
   heroUrl: string | null;
+  steamGridDbId: number | null;
 };
 
 // Pasar un juego planeado a la biblioteca de verdad: mismos datos que el

@@ -14,6 +14,10 @@ type CoverPickerProps = {
   igdbId: number;
   title: string;
   releaseYear: number | null;
+  // Puesto (no null) = buscar imágenes de SteamGridDB de ESE id concreto en
+  // vez de por nombre+año — así un id editado a mano en el campo de arriba
+  // se refleja aquí sin más pasos.
+  steamGridDbId: number | null;
   onSelect: (url: string) => void;
   onCancel: () => void;
 };
@@ -39,11 +43,14 @@ export const CoverPicker = ({
   igdbId,
   title,
   releaseYear,
+  steamGridDbId,
   onSelect,
   onCancel,
 }: CoverPickerProps): React.JSX.Element => {
   const detail = useIgdbDetails(igdbId);
-  const sgdb = useSgdbImages({ title, releaseYear });
+  const sgdb = useSgdbImages(
+    steamGridDbId !== null ? { sgdbId: steamGridDbId } : { title, releaseYear },
+  );
 
   const candidates = useMemo(() => {
     const fromIgdb = target === 'cover' ? (detail.data?.covers ?? []) : (detail.data?.heroes ?? []);

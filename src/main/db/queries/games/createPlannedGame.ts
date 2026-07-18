@@ -15,6 +15,7 @@ export const createPlannedGame = async (input: CreatePlannedGameInput): Promise<
   const enrichment = await resolveGameEnrichment(input.igdbId, {
     coverUrl: input.coverUrl,
     heroUrl: input.heroUrl,
+    steamGridDbId: input.steamGridDbId,
   });
 
   const db = getDb();

@@ -12,6 +12,7 @@ import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
+import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { ProcessWatcher } from './watcher/watcher';
 
 // La ventana principal a nivel de módulo para que el watcher pueda avisarle
@@ -49,10 +50,17 @@ function createWindow(): void {
   // para el porqué esto no es tan simple como parece en Windows.
   const wasOpenedAtLogin = wasOpenedHiddenAtLogin();
 
+  // Mismo tamaño/posición que tenía al cerrarla la última vez (o el de
+  // siempre si es la primera vez, o si el monitor de entonces ya no está
+  // conectado) — ver lib/windowState.ts.
+  const { x, y, width, height, isMaximized } = getSavedWindowOptions();
+
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 768,
+    x,
+    y,
+    width,
+    height,
     minWidth: 1000,
     minHeight: 700,
     show: false,
@@ -67,6 +75,8 @@ function createWindow(): void {
   });
 
   const window = mainWindow;
+  if (isMaximized) window.maximize();
+  trackWindowState(window);
 
   window.on('ready-to-show', () => {
     // Se cierra aquí y no antes: este es el primer momento en que la

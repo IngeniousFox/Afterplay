@@ -8,7 +8,9 @@ import {
   usePromotePlannedGame,
 } from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
-import { useAssignSession } from '../../hooks/sessions';
+import { useAddIteration } from '../../hooks/iterations';
+import { useAddSession, useAssignSession } from '../../hooks/sessions';
+import { useAddStateEvent } from '../../hooks/stateEvents';
 import {
   ENDLESS_STATUS_OPTIONS,
   NORMAL_STATUS_OPTIONS,
@@ -26,6 +28,7 @@ import { Dropdown } from './add-game/Dropdown';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { GameNotesPanel } from './add-game/GameNotesPanel';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
+import { ManualPlaythroughsField } from './add-game/ManualPlaythroughsField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
 import { parseIsoDate, todayValue } from './add-game/precisionDate';
 import { useCredentials } from '../../hooks/settings';
@@ -34,7 +37,7 @@ import { SegmentedButtonGroup } from './add-game/SegmentedButtonGroup';
 import { SelectedGameSummary } from './add-game/SelectedGameSummary';
 import { StatusSummaryLine } from './add-game/StatusSummaryLine';
 import { fieldLabelClass, textInputClass } from './add-game/styles';
-import type { AddGameFormValues } from './add-game/types';
+import type { AddGameFormValues, ManualPlaythroughEntry } from './add-game/types';
 import {
   DEFAULT_FORM_VALUES,
   FORMAT_OPTIONS,
@@ -130,6 +133,7 @@ export const AddGameModal = ({
           gameNotes: promoteGame.notes ?? '',
           coverUrl: promoteGame.coverUrl,
           heroUrl: promoteGame.heroUrl,
+          steamGridDbId: promoteGame.steamGridDbId,
           moneySpentDate: todayValue(),
         }
       : {
@@ -143,13 +147,28 @@ export const AddGameModal = ({
   const isEmulated = useWatch({ control, name: 'isEmulated' });
   const playedBefore = useWatch({ control, name: 'playedBefore' });
   const origin = useWatch({ control, name: 'origin' });
+  // Leído aquí (no solo dentro de AddGameImagesField) porque el CoverPicker
+  // se pinta como hermano del FormProvider, no dentro de él.
+  const steamGridDbId = useWatch({ control, name: 'steamGridDbId' });
 
   const search = useIgdbSearch(query);
   const createGame = useCreateGameWithDetails();
   const createPlanned = useCreatePlannedGame();
   const promote = usePromotePlannedGame();
   const assignSession = useAssignSession();
+  // Playthroughs manuales de más (allá del primero, ya cubierto por
+  // createGame/promote) — mismas mutations que EditGameModal usa para su
+  // modo "+ Add manual" (ver addManualPlaythrough más abajo).
+  const addIteration = useAddIteration();
+  const addSession = useAddSession();
+  const addStateEvent = useAddStateEvent();
   const activeMutation = isPromote ? promote : isPlan ? createPlanned : createGame;
+  const isSaving =
+    activeMutation.isPending ||
+    assignSession.isPending ||
+    addIteration.isPending ||
+    addSession.isPending ||
+    addStateEvent.isPending;
 
   const resetAll = (): void => {
     setQuery('');
@@ -163,7 +182,7 @@ export const AddGameModal = ({
   };
 
   const handleClose = (): void => {
-    if (activeMutation.isPending) return;
+    if (isSaving) return;
     resetAll();
     onOpenChange(false);
   };
@@ -191,6 +210,74 @@ export const AddGameModal = ({
     }
   };
 
+  // Un playthrough manual DE MÁS, más allá del primero (que createGame/
+  // promote ya crean junto al propio juego) — mismo guion que EditGameModal
+  // usa en su modo "+ Add manual" (iteración + sesiones de borde + log de
+  // estado), aplicado sobre el juego que se acaba de crear.
+  const addManualPlaythrough = async (
+    gameId: number,
+    entry: ManualPlaythroughEntry,
+  ): Promise<void> => {
+    const iteration = await addIteration.mutateAsync({
+      gameId,
+      label: entry.label.trim() || null,
+      playedPlatform: entry.platform,
+      origin: entry.origin,
+      format: entry.format,
+      manualTotalPlayed: parseOptionalNumber(entry.hoursPlayed),
+    });
+
+    const isOngoing = entry.pastStatus === 'playing';
+
+    if (entry.started) {
+      const date = parseIsoDate(entry.started.isoDate);
+      await addSession.mutateAsync({
+        iterationId: iteration.id,
+        startedAt: date,
+        endedAt: date,
+        durationSec: 0,
+        datePrecision: entry.started.precision,
+        milestone: 'started',
+        anchorAs: 'start',
+      });
+    }
+
+    if (entry.finished && !isOngoing) {
+      const date = parseIsoDate(entry.finished.isoDate);
+      await addSession.mutateAsync({
+        iterationId: iteration.id,
+        startedAt: date,
+        endedAt: date,
+        durationSec: 0,
+        datePrecision: entry.finished.precision,
+        milestone: STATUS_TO_STATE_TYPE[entry.pastStatus] as 'completed' | 'dropped' | 'on_hold',
+        anchorAs: 'end',
+      });
+    }
+
+    // SPEC 4.5 — el log de una iteración siempre arranca por "started" antes
+    // de un estado terminal (mismo fix que writeInitialPlaythrough.ts y
+    // EditGameModal para su propio "+ Add manual").
+    if (entry.started && STATUS_TO_STATE_TYPE[entry.pastStatus] !== 'started') {
+      await addStateEvent.mutateAsync({
+        iterationId: iteration.id,
+        type: 'started',
+        occurredAt: parseIsoDate(entry.started.isoDate),
+        datePrecision: entry.started.precision,
+        note: null,
+      });
+    }
+
+    const anchorDate = entry.finished ?? entry.started;
+    await addStateEvent.mutateAsync({
+      iterationId: iteration.id,
+      type: STATUS_TO_STATE_TYPE[entry.pastStatus],
+      occurredAt: anchorDate ? parseIsoDate(anchorDate.isoDate) : new Date(),
+      datePrecision: anchorDate?.precision ?? 'day',
+      note: null,
+    });
+  };
+
   const handleSave = async (): Promise<void> => {
     if (!selected) return;
     const values = getValues();
@@ -204,6 +291,7 @@ export const AddGameModal = ({
         gameNotes: values.gameNotes.trim() || null,
         coverUrl: values.coverUrl,
         heroUrl: values.heroUrl,
+        steamGridDbId: values.steamGridDbId,
       });
       resetAll();
       onOpenChange(false);
@@ -239,10 +327,21 @@ export const AddGameModal = ({
       installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
       coverUrl: values.coverUrl,
       heroUrl: values.heroUrl,
+      steamGridDbId: values.steamGridDbId,
     };
+
+    // Playthroughs de más allá del primero — solo tienen sentido si se
+    // marcó "jugado antes" y el juego no es endless (mismo hueco que
+    // EditGameModal deja sin IterationSection para endless: no hay
+    // playthroughs discretos que registrar).
+    const extraPlaythroughs =
+      values.playedBefore && !values.endless ? values.extraPlaythroughs : [];
 
     if (isPromote && promoteGame) {
       await promote.mutateAsync({ gameId: promoteGame.id, ...details });
+      for (const entry of extraPlaythroughs) {
+        await addManualPlaythrough(promoteGame.id, entry);
+      }
       resetAll();
       onOpenChange(false);
       onPromoted?.();
@@ -255,6 +354,10 @@ export const AddGameModal = ({
     // sesión pendiente que lo originó se asigna sola al juego recién creado.
     if (assignSessionId !== undefined) {
       await assignSession.mutateAsync({ sessionId: assignSessionId, gameId: created.id });
+    }
+
+    for (const entry of extraPlaythroughs) {
+      await addManualPlaythrough(created.id, entry);
     }
 
     resetAll();
@@ -289,7 +392,7 @@ export const AddGameModal = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selected || activeMutation.isPending}
+            disabled={!selected || isSaving}
             className="flex items-center gap-2 rounded-[10px] px-5.5 py-2.5 text-[13.5px] font-bold disabled:cursor-not-allowed"
             style={
               selected
@@ -299,7 +402,7 @@ export const AddGameModal = ({
           >
             <Plus size={16} />
             <span>
-              {activeMutation.isPending
+              {isSaving
                 ? isPromote
                   ? 'Moving…'
                   : 'Adding…'
@@ -336,6 +439,7 @@ export const AddGameModal = ({
           igdbId={selected.igdbId}
           title={selected.title}
           releaseYear={selected.releaseYear}
+          steamGridDbId={steamGridDbId}
           onSelect={(url) => {
             setValue(pickerTarget === 'cover' ? 'coverUrl' : 'heroUrl', url);
             setPickerTarget(null);
@@ -356,6 +460,7 @@ export const AddGameModal = ({
                     setSelected(null);
                     setValue('coverUrl', null);
                     setValue('heroUrl', null);
+                    setValue('steamGridDbId', null);
                   }
             }
           />
@@ -489,6 +594,10 @@ export const AddGameModal = ({
                 />
 
                 {playedBefore && <PlayedBeforePanel />}
+                {/* Playthroughs pasados de más, allá del primero — un
+                        endless no tiene playthroughs discretos que registrar
+                        (mismo hueco que EditGameModal deja para endless). */}
+                {playedBefore && !endless && <ManualPlaythroughsField />}
 
                 {/* Un juego emulado no tiene .exe propio que vigilar —
                         lo vigilado es el emulador (EMULADORES.md §5). */}

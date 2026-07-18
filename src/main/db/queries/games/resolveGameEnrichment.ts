@@ -15,6 +15,9 @@ export type GameEnrichmentOverrides = {
   // la primera candidata de IGDB).
   coverUrl: string | null;
   heroUrl: string | null;
+  // null = buscar el id en SteamGridDB por nombre+año, como siempre. Puesto
+  // a mano = usar ESE id directo, sin sgdbSearch — el usuario ya lo tecleó.
+  steamGridDbId: number | null;
 };
 
 export type GameEnrichment = {
@@ -44,13 +47,16 @@ export const resolveGameEnrichment = async (
 
   // SGDB es opcional (clave sin configurar, servicio caído...): sin él se
   // pierde steamGridDbId (menos candidatas de carátula), pero el alta del
-  // juego NO debe fallar — IGDB es la única fuente imprescindible aquí.
+  // juego NO debe fallar — IGDB es la única fuente imprescindible aquí. Si
+  // el usuario ya escribió un id a mano, ni se busca: se usa ese.
   const [hltb, steamGridDbId] = await Promise.all([
     getHltbTimes(detail.title, detail.releaseYear),
-    sgdbSearch(detail.title, detail.releaseYear).catch((error) => {
-      console.warn('[sgdb] sin id de SteamGridDB para este alta (sigo sin él):', error);
-      return null;
-    }),
+    overrides.steamGridDbId !== null
+      ? Promise.resolve(overrides.steamGridDbId)
+      : sgdbSearch(detail.title, detail.releaseYear).catch((error) => {
+          console.warn('[sgdb] sin id de SteamGridDB para este alta (sigo sin él):', error);
+          return null;
+        }),
   ]);
 
   return {
