@@ -20,6 +20,8 @@ export const getPlannedGames = async (): Promise<GameListItem[]> => {
       genres: gamesTable.genres,
       isEmulated: gamesTable.isEmulated,
       releaseYear: gamesTable.releaseYear,
+      addedAt: gamesTable.addedAt,
+      hltbMain: gamesTable.hltbMain,
     })
     .from(gamesTable)
     .where(eq(gamesTable.planned, true))
@@ -33,6 +35,9 @@ export const getPlannedGames = async (): Promise<GameListItem[]> => {
     isEmulated: game.isEmulated,
     releaseYear: game.releaseYear,
     totalHours: 0,
+    addedAt: game.addedAt,
+    hltbMain: game.hltbMain,
+    manualIterations: [],
     currentState: 'plan_to_play' as const,
     isLive: false,
     liveSince: null,

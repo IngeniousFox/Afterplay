@@ -1,4 +1,4 @@
-import { BarChart3, LayoutGrid, Search } from 'lucide-react';
+import { BarChart3, ChevronDown, LayoutGrid, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { GameListItem } from '../../../../shared/types';
@@ -161,13 +161,70 @@ const useFilteredGames = (search: string): GameListItem[] => {
   return filterByTitle(games, search);
 };
 
+// Cabecera de grupo de la columna de biblioteca (estilo Steam) — clicable
+// para plegar/desplegar cuando lleva onToggle; sin él es un rótulo fijo.
+const GroupHeader = ({
+  label,
+  count,
+  open,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  open?: boolean;
+  onToggle?: () => void;
+}): React.JSX.Element => (
+  <div
+    onClick={onToggle}
+    className={`flex items-center gap-1.5 rounded-md px-2.5 pt-2 pb-1.5 text-[10.5px] font-bold tracking-[.11em] text-muted-foreground ${
+      onToggle ? 'cursor-pointer select-none hover:text-foreground' : ''
+    }`}
+  >
+    {onToggle && (
+      <ChevronDown
+        size={12}
+        className="transition-transform"
+        style={{ transform: open ? 'none' : 'rotate(-90deg)' }}
+      />
+    )}
+    <span>{label}</span>
+    <span className="font-semibold tracking-normal">({count})</span>
+  </div>
+);
+
 const LibraryNavColumn = (): React.JSX.Element => {
   const navigate = useNavigate();
   const detailMatch = useMatch('/games/:id');
   const selectedId = detailMatch ? Number(detailMatch.params.id) : null;
   const { data: games = [] } = useGames();
   const [search, setSearch] = useState('');
+  const [activeOpen, setActiveOpen] = useState(true);
+  const [restOpen, setRestOpen] = useState(true);
   const filtered = useFilteredGames(search);
+
+  // Sección especial estilo Steam: lo que estás jugando o tienes en pausa,
+  // arriba y plegable. Los juegos se MUEVEN aquí, no se duplican — el
+  // listado general de abajo los excluye. Playing por delante de On Hold
+  // (dentro de cada estado se conserva el alfabético de la query).
+  const isActive = (game: GameListItem): boolean =>
+    game.currentState === 'started' || game.currentState === 'on_hold';
+  const activeGames = filtered
+    .filter(isActive)
+    .sort((a, b) =>
+      a.currentState === b.currentState ? 0 : a.currentState === 'started' ? -1 : 1,
+    );
+  const restGames = filtered.filter((game) => !isActive(game));
+
+  const renderRow = (game: GameListItem): React.JSX.Element => (
+    <GameRow
+      key={game.id}
+      game={game}
+      selected={game.id === selectedId}
+      onClick={() => navigate(`/games/${game.id}`)}
+      subtitle={<StatusSubtitle game={game} showLive />}
+      rightLabel={formatHours(game.totalHours)}
+    />
+  );
 
   return (
     <MiddleColumnShell
@@ -176,16 +233,28 @@ const LibraryNavColumn = (): React.JSX.Element => {
       search={search}
       onSearchChange={setSearch}
     >
-      {filtered.map((game) => (
-        <GameRow
-          key={game.id}
-          game={game}
-          selected={game.id === selectedId}
-          onClick={() => navigate(`/games/${game.id}`)}
-          subtitle={<StatusSubtitle game={game} showLive />}
-          rightLabel={formatHours(game.totalHours)}
-        />
-      ))}
+      {activeGames.length > 0 ? (
+        <>
+          <GroupHeader
+            label="PLAYING & ON HOLD"
+            count={activeGames.length}
+            open={activeOpen}
+            onToggle={() => setActiveOpen(!activeOpen)}
+          />
+          {activeOpen && activeGames.map(renderRow)}
+          <GroupHeader
+            label="ALL GAMES"
+            count={restGames.length}
+            open={restOpen}
+            onToggle={() => setRestOpen(!restOpen)}
+          />
+          {restOpen && restGames.map(renderRow)}
+        </>
+      ) : (
+        // Sin juegos activos no hay grupos que separar — lista plana de
+        // siempre, sin cabeceras que plegar.
+        restGames.map(renderRow)
+      )}
     </MiddleColumnShell>
   );
 };

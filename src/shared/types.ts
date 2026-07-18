@@ -195,6 +195,22 @@ export type GameListItem = {
   // Steam): nuevos vs 1-5 / 5-10 / 10+ años respecto al año filtrado.
   releaseYear: number | null;
   totalHours: number;
+  // Cuándo entró en Afterplay — el gráfico Backlog Flow de Stats acumula
+  // altas por mes contra completados por mes.
+  addedAt: Date;
+  // Main Story de HowLongToBeat — para el "You vs HLTB" de Stats (tus horas
+  // frente al tiempo oficial en juegos completados). Null si HLTB no lo
+  // tenía al enriquecer el juego.
+  hltbMain: number | null;
+  // Playthroughs con horas manuales ("I played this before"), con el año al
+  // que atribuirlas: el de su fecha de fin (o la de inicio si no hay fin), o
+  // null si el playthrough no tiene ninguna fecha. Las vistas por año de
+  // Stats las suman al año que toca — sin esto, esas horas solo existían
+  // dentro de totalHours y desaparecían al filtrar por año. El iterationId
+  // permite además EXCLUIR las sesiones trackeadas de esos playthroughs del
+  // conteo por año (manual reemplaza a trackeado, nunca se suman los dos —
+  // misma regla que resolveIterationHours).
+  manualIterations: { iterationId: number; hours: number; year: number | null }[];
   currentState: StateEvent['type'] | null;
   isLive: boolean;
   // startedAt de la sesión abierta, para el contador en vivo de la card
@@ -222,9 +238,18 @@ export type CredentialsValues = {
 // Cambio de estado suelto para el desglose "Status Changes" de Stats por
 // año (Bloque 5D) — ver getAllStateEvents.ts.
 export type StateEventSummary = {
+  id: number;
   gameId: number;
+  // Playthrough dueño del evento — "You vs HowLongToBeat" lo usa para
+  // comparar las horas de ESE playthrough (el último completado), no las
+  // totales del juego.
+  iterationId: number;
   type: StateEvent['type'];
   occurredAt: Date;
+  datePrecision: StateEvent['datePrecision'];
+  // Etiqueta del playthrough dueño del evento ("Playthrough 2") — la galería
+  // de completados de Stats la enseña en el tooltip de cada carátula.
+  iterationLabel: string;
 };
 
 // Gasto suelto para las métricas globales de Stats (Bloque 5B) — ver

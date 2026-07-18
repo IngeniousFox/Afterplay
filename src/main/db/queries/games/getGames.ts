@@ -35,6 +35,8 @@ export const getGames = async (): Promise<GameListItem[]> => {
       genres: gamesTable.genres,
       isEmulated: gamesTable.isEmulated,
       releaseYear: gamesTable.releaseYear,
+      addedAt: gamesTable.addedAt,
+      hltbMain: gamesTable.hltbMain,
     })
     .from(gamesTable)
     .where(eq(gamesTable.planned, false))
@@ -52,6 +54,10 @@ export const getGames = async (): Promise<GameListItem[]> => {
       id: iterationsTable.id,
       gameId: iterationsTable.gameId,
       manualTotalPlayed: iterationsTable.manualTotalPlayed,
+      // Anclas de inicio/fin — para atribuir las horas manuales de la
+      // iteración a un año concreto (ver manualIterations más abajo).
+      startSessionId: iterationsTable.startSessionId,
+      endSessionId: iterationsTable.endSessionId,
     })
     .from(iterationsTable);
 
@@ -63,6 +69,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // no basta con saber que está en marcha).
   const sessionRows = await db
     .select({
+      id: sessionsTable.id,
       gameId: iterationsTable.gameId,
       iterationId: sessionsTable.iterationId,
       startedAt: sessionsTable.startedAt,
@@ -103,6 +110,31 @@ export const getGames = async (): Promise<GameListItem[]> => {
     const trackedSeconds = trackedSecondsByIteration.get(iteration.id) ?? 0;
     const hours = resolveIterationHours(iteration.manualTotalPlayed, trackedSeconds);
     hoursByGame.set(iteration.gameId, (hoursByGame.get(iteration.gameId) ?? 0) + hours);
+  }
+
+  // Playthroughs con horas manuales, con el año al que atribuirlas para las
+  // vistas por año de Stats: el de su fecha de FIN (o la de inicio si no hay
+  // fin — un playthrough aún "Playing" con horas manuales), o null si no
+  // tiene ninguna fecha (solo puede contar en All Time). La fecha sale de la
+  // sesión ancla, que ya viene en sessionRows.
+  const sessionStartById = new Map<number, Date>();
+  for (const row of sessionRows) sessionStartById.set(row.id, row.startedAt);
+
+  const manualIterationsByGame = new Map<
+    number,
+    { iterationId: number; hours: number; year: number | null }[]
+  >();
+  for (const iteration of iterations) {
+    if (iteration.manualTotalPlayed === null) continue;
+    const anchorId = iteration.endSessionId ?? iteration.startSessionId;
+    const anchorDate = anchorId !== null ? sessionStartById.get(anchorId) : undefined;
+    const list = manualIterationsByGame.get(iteration.gameId) ?? [];
+    list.push({
+      iterationId: iteration.id,
+      hours: iteration.manualTotalPlayed,
+      year: anchorDate?.getFullYear() ?? null,
+    });
+    manualIterationsByGame.set(iteration.gameId, list);
   }
 
   // Todos los stateEvents del juego (vía sus iteraciones), sin agregar
@@ -151,6 +183,9 @@ export const getGames = async (): Promise<GameListItem[]> => {
       isEmulated: game.isEmulated,
       releaseYear: game.releaseYear,
       totalHours: hoursByGame.get(game.id) ?? 0,
+      addedAt: game.addedAt,
+      hltbMain: game.hltbMain,
+      manualIterations: manualIterationsByGame.get(game.id) ?? [],
       currentState: latestStateEvent?.type ?? null,
       isLive: liveSince !== null,
       liveSince,

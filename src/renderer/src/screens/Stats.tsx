@@ -3,16 +3,22 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
+import { BacklogFlowChart } from '../components/stats/BacklogFlowChart';
+import { CompletedGallery } from '../components/stats/CompletedGallery';
 import { GameAgeDonut } from '../components/stats/GameAgeDonut';
 import { GenreRadar } from '../components/stats/GenreRadar';
+import { HltbCompareList } from '../components/stats/HltbCompareList';
 import { HoursByMonthChart } from '../components/stats/HoursByMonthChart';
 import { MostPlayedList } from '../components/stats/MostPlayedList';
+import { SessionLengthHistogram } from '../components/stats/SessionLengthHistogram';
+import { SpendByMonthChart } from '../components/stats/SpendByMonthChart';
 import { StatusBreakdown } from '../components/stats/StatusBreakdown';
 import { StreakCard } from '../components/stats/StreakCard';
-import { TopPlayedList } from '../components/stats/TopPlayedList';
+import { WhenDoYouPlayChart } from '../components/stats/WhenDoYouPlayChart';
+import { YearOverYearCompare } from '../components/stats/YearOverYearCompare';
 import type { Year } from '../components/stats/YearPicker';
 import { YearPicker } from '../components/stats/YearPicker';
-import { useGames } from '../hooks/games';
+import { useGames, usePlannedGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
 import { useAllSpendEvents } from '../hooks/spend';
 import { useAllStateEvents } from '../hooks/stateEvents';
@@ -34,17 +40,39 @@ export const Stats = (): React.JSX.Element => {
   const [selectedYear, setSelectedYear] = useState<Year>('all');
 
   const { data: games = [] } = useGames();
+  // Solo para la línea "Plan to play" del Backlog flow — el resto de Stats
+  // sigue siendo territorio exclusivo de la biblioteca real.
+  const { data: plannedGames = [] } = usePlannedGames();
   const { data: sessions = [] } = useAllSessions();
   const { data: spendEvents = [] } = useAllSpendEvents();
   const { data: stateEvents = [] } = useAllStateEvents();
 
+  // El selector de año ofrece cualquier año con ACTIVIDAD de cualquier tipo:
+  // sesiones, gastos, cambios de estado (un Beaten de 2019 registrado a mano
+  // debe hacer aparecer 2019 aunque no haya sesiones trackeadas), y los años
+  // de atribución de horas manuales (ver manualIterations en getGames.ts).
   const years = useMemo(
     () =>
       yearsDesc([
         ...sessions.map((session) => session.startedAt),
         ...spendEvents.map((event) => event.occurredAt),
+        ...stateEvents.map((event) => event.occurredAt),
+        ...games.flatMap((game) =>
+          game.manualIterations.flatMap((manual) =>
+            manual.year !== null ? [new Date(manual.year, 6, 1)] : [],
+          ),
+        ),
       ]),
-    [sessions, spendEvents],
+    [sessions, spendEvents, stateEvents, games],
+  );
+
+  // Playthroughs con horas manuales: sus sesiones trackeadas NO cuentan para
+  // las horas (manual reemplaza a trackeado, misma regla que
+  // resolveIterationHours en el main) — se excluyen del conteo por año.
+  const manualIterationIds = useMemo(
+    () =>
+      new Set(games.flatMap((game) => game.manualIterations.map((manual) => manual.iterationId))),
+    [games],
   );
 
   const trackedSecondsByGameInYear = useMemo(() => {
@@ -52,24 +80,31 @@ export const Stats = (): React.JSX.Element => {
     const map = new Map<number, number>();
     for (const session of sessions) {
       if (session.startedAt.getFullYear() !== selectedYear) continue;
+      if (manualIterationIds.has(session.iterationId)) continue;
       map.set(session.gameId, (map.get(session.gameId) ?? 0) + (session.durationSec ?? 0));
     }
     return map;
-  }, [sessions, selectedYear]);
+  }, [sessions, selectedYear, manualIterationIds]);
 
-  // Horas por juego para EL AÑO ACTIVO — base compartida de Most/Top Played
-  // y Genre Radar. "All Time" usa game.totalHours (misma fuente que
-  // Library/detalle, incluye manualTotalPlayed); un año concreto solo puede
-  // venir de sesiones reales con fecha (mismo motivo que el resto de Stats:
-  // ver el comentario de más abajo sobre por qué no hay atajo mejor).
+  // Horas por juego para EL AÑO ACTIVO — base compartida de Most Played,
+  // Genre Radar y el donut de edad. "All Time" usa game.totalHours (misma
+  // fuente que Library/detalle, incluye manualTotalPlayed); un año concreto
+  // suma las sesiones reales con fecha de ese año MÁS las horas manuales
+  // atribuidas a ese año (por la fecha de fin de su playthrough) — sin esa
+  // segunda parte, un playthrough de 200h terminado en 2019 aportaba 0h a la
+  // vista de 2019 aunque su Beaten sí saliera en el desglose de estados.
   const hoursByGame = useMemo(() => {
     const map = new Map<number, number>();
     for (const game of games) {
-      const hours =
-        selectedYear === 'all'
-          ? game.totalHours
-          : (trackedSecondsByGameInYear?.get(game.id) ?? 0) / 3600;
-      map.set(game.id, hours);
+      if (selectedYear === 'all') {
+        map.set(game.id, game.totalHours);
+        continue;
+      }
+      const trackedHours = (trackedSecondsByGameInYear?.get(game.id) ?? 0) / 3600;
+      const manualHours = game.manualIterations
+        .filter((manual) => manual.year === selectedYear)
+        .reduce((sum, manual) => sum + manual.hours, 0);
+      map.set(game.id, trackedHours + manualHours);
     }
     return map;
   }, [games, selectedYear, trackedSecondsByGameInYear]);
@@ -92,6 +127,54 @@ export const Stats = (): React.JSX.Element => {
 
   const gamesLabel = selectedYear === 'all' ? 'GAMES TRACKED' : 'GAMES PLAYED';
   const spentLabel = selectedYear === 'all' ? 'TOTAL SPENT' : `SPENT IN ${selectedYear}`;
+
+  // Comparación con el año anterior (solo tiene sentido con un año concreto
+  // filtrado — "All Time" no tiene un "año pasado"). Mismo cálculo que
+  // arriba (hoursByGame/totalGames/totalHours/totalSpent/costPerHour) pero
+  // fijado al año-1, en vez de reactivo al selector.
+  const previousYear = selectedYear === 'all' ? null : selectedYear - 1;
+  const previousYearStats = useMemo(() => {
+    if (previousYear === null) return null;
+
+    const trackedSecondsByGamePrev = new Map<number, number>();
+    for (const session of sessions) {
+      if (session.startedAt.getFullYear() !== previousYear) continue;
+      if (manualIterationIds.has(session.iterationId)) continue;
+      trackedSecondsByGamePrev.set(
+        session.gameId,
+        (trackedSecondsByGamePrev.get(session.gameId) ?? 0) + (session.durationSec ?? 0),
+      );
+    }
+
+    const hoursByGamePrev = new Map<number, number>();
+    for (const game of games) {
+      const trackedHours = (trackedSecondsByGamePrev.get(game.id) ?? 0) / 3600;
+      const manualHours = game.manualIterations
+        .filter((manual) => manual.year === previousYear)
+        .reduce((sum, manual) => sum + manual.hours, 0);
+      hoursByGamePrev.set(game.id, trackedHours + manualHours);
+    }
+
+    const totalGamesPrev = games.filter((game) => (hoursByGamePrev.get(game.id) ?? 0) > 0).length;
+    const totalHoursPrev = [...hoursByGamePrev.values()].reduce((sum, hours) => sum + hours, 0);
+    const totalSpentPrev = spendEvents
+      .filter((event) => event.occurredAt.getFullYear() === previousYear)
+      .reduce((sum, event) => sum + event.amount, 0);
+    const costPerHourPrev = totalHoursPrev > 0 ? totalSpentPrev / totalHoursPrev : null;
+
+    return {
+      totalGames: totalGamesPrev,
+      totalHours: totalHoursPrev,
+      totalSpent: totalSpentPrev,
+      costPerHour: costPerHourPrev,
+    };
+  }, [previousYear, games, sessions, spendEvents, manualIterationIds]);
+
+  // Solo se enseña si ese año anterior tiene ALGUNA actividad registrada —
+  // comparar contra un año vacío saldría siempre "todo menos", ruido sin
+  // información real (ej. el primer año que usas la app).
+  const showYearCompare =
+    previousYear !== null && previousYearStats !== null && years.includes(previousYear);
 
   const playedEntries = useMemo(
     () =>
@@ -167,6 +250,14 @@ export const Stats = (): React.JSX.Element => {
           />
         </div>
 
+        {showYearCompare && previousYear !== null && previousYearStats !== null && (
+          <YearOverYearCompare
+            current={{ totalGames, totalHours, totalSpent, costPerHour }}
+            previous={previousYearStats}
+            previousYear={previousYear}
+          />
+        )}
+
         <div className="mt-4.5">
           <ActivityHeatmap sessions={sessions} year={selectedYear} />
         </div>
@@ -177,17 +268,49 @@ export const Stats = (): React.JSX.Element => {
         </div>
 
         <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+          <SpendByMonthChart spendEvents={spendEvents} year={selectedYear} />
+          <WhenDoYouPlayChart sessions={sessions} year={selectedYear} />
+        </div>
+
+        <div className="mt-4.5">
           <MostPlayedList entries={playedEntries} />
+        </div>
+
+        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
           {selectedYear === 'all' ? (
             <StatusBreakdown mode="all-time" games={games} />
           ) : (
             <StatusBreakdown mode="year" stateEvents={stateEvents} year={selectedYear} />
           )}
+          <GenreRadar minutesByAxis={minutesByAxis} />
+        </div>
+
+        <div className="mt-4.5">
+          <CompletedGallery
+            stateEvents={stateEvents}
+            games={games}
+            year={selectedYear}
+            onOpenGame={(gameId) => navigate(`/games/${gameId}`)}
+          />
         </div>
 
         <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
-          <TopPlayedList entries={playedEntries} />
-          <GenreRadar minutesByAxis={minutesByAxis} />
+          <HltbCompareList
+            games={games}
+            stateEvents={stateEvents}
+            sessions={sessions}
+            year={selectedYear}
+          />
+          <SessionLengthHistogram sessions={sessions} year={selectedYear} />
+        </div>
+
+        <div className="mt-4.5">
+          <BacklogFlowChart
+            games={games}
+            plannedGames={plannedGames}
+            stateEvents={stateEvents}
+            year={selectedYear}
+          />
         </div>
 
         <div className="mt-4.5">

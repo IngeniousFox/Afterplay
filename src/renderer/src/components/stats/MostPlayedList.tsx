@@ -1,3 +1,4 @@
+import { AMBER } from '../../lib/colors';
 import { formatHours } from '../../lib/format';
 import type { PlayedEntry } from '../../lib/playedEntries';
 import { topPlayedEntries } from '../../lib/playedEntries';
@@ -23,28 +24,39 @@ export const MostPlayedList = ({ entries }: MostPlayedListProps): React.JSX.Elem
       {top.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nothing tracked yet.</p>
       ) : (
-        <div className="flex flex-col gap-3.75">
+        <div className="flex flex-col gap-2">
           {top.map((entry) => (
             <div key={entry.id} className="flex items-center gap-3.25">
               <GameCover
                 url={entry.coverUrl}
-                className="h-10 w-7.5 flex-none overflow-hidden rounded-[6px] border border-border"
-                iconSize={13}
+                className="h-16 w-12 flex-none overflow-hidden rounded-[7px] border border-border"
+                iconSize={19}
               />
-              <div className="w-37.5 flex-none truncate text-[13.5px] font-semibold text-foreground">
-                {entry.title}
-              </div>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+              {/* La barra ES la fila (estilo recap de Steam): una pista a lo
+                  ancho con el relleno dorado proporcional DETRÁS del título
+                  y las horas — así no existe el hueco muerto entre nombre y
+                  barra que dejaba cualquier reparto en columnas. Misma altura
+                  que la carátula, para que las dos casen en la fila. */}
+              <div className="relative h-16 flex-1 overflow-hidden rounded-[9px] bg-white/[0.03]">
                 <div
-                  className="h-full rounded-full"
+                  className="absolute inset-y-0 left-0"
                   style={{
-                    width: `${(entry.hours / maxHours) * 100}%`,
-                    background: 'linear-gradient(90deg,rgba(255,255,255,.2),rgba(255,255,255,.42))',
+                    width: `${Math.max(2, (entry.hours / maxHours) * 100)}%`,
+                    background: `linear-gradient(90deg, ${AMBER}3d, ${AMBER}14)`,
+                    borderRight: `2px solid ${AMBER}b3`,
                   }}
                 />
-              </div>
-              <div className="w-17.5 flex-none text-right text-[12.5px] text-muted-foreground tabular-nums">
-                {formatHours(entry.hours)}
+                <div className="relative z-1 flex h-full items-center justify-between gap-3 px-3.5">
+                  <span className="truncate text-[13.5px] font-semibold text-foreground">
+                    {entry.title}
+                  </span>
+                  <span
+                    className="flex-none text-[12.5px] font-bold tabular-nums"
+                    style={{ color: AMBER }}
+                  >
+                    {formatHours(entry.hours)}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
