@@ -8,10 +8,11 @@ import { PendingSessionsSection } from '../components/sessions/PendingSessionsSe
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
+import { useCountUp } from '../hooks/useCountUp';
 import { DAY_MS, startOfDayMs } from '../lib/dateMath';
 import { formatHours, pluralize } from '../lib/format';
 import { sessionDurationStats } from '../lib/sessionStats';
-import { outlineButtonClass } from '../lib/styles';
+import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
 
 const PAGE_SIZE = 20;
 
@@ -115,6 +116,13 @@ export const Sessions = (): React.JSX.Element => {
 
   const { longestSec: longestSessionSec, avgSec: avgSessionSec } = sessionDurationStats(filtered);
 
+  // Contadores animados de las 4 métricas — mismo count-up que Stats; al
+  // cambiar de filtro los targets cambian y vuelven a subir solos.
+  const animatedHours = useCountUp(totalHours);
+  const animatedCount = useCountUp(filtered.length);
+  const animatedLongestSec = useCountUp(longestSessionSec);
+  const animatedAvgSec = useCountUp(avgSessionSec);
+
   const subtitle = selectedGame
     ? `${pluralize(filtered.length, 'session')} · ${formatHours(selectedGame.totalHours)} total`
     : `${pluralize(sessions.length, 'session')} across your library`;
@@ -173,34 +181,81 @@ export const Sessions = (): React.JSX.Element => {
           </div>
         ) : (
           <>
-            <div className="mb-6.5 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
-              <MetricCard Icon={Clock} label="TOTAL HOURS" value={formatHours(totalHours)} />
-              <MetricCard Icon={Calendar} label="SESSIONS" value={String(filtered.length)} />
+            <div
+              className={`mb-6.5 grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
+              style={revealStyle(0)}
+            >
+              <MetricCard
+                Icon={Clock}
+                label="TOTAL HOURS"
+                value={formatHours(animatedHours)}
+                accent="#2fdc7e"
+              />
+              <MetricCard
+                Icon={Calendar}
+                label="SESSIONS"
+                value={String(Math.round(animatedCount))}
+                accent="#85a3d6"
+              />
               <MetricCard
                 Icon={Flame}
                 label="LONGEST SESSION"
-                value={formatHours(longestSessionSec / 3600)}
+                value={formatHours(animatedLongestSec / 3600)}
+                accent="#e85d72"
               />
               <MetricCard
                 Icon={Activity}
                 label="AVG SESSION"
-                value={formatHours(avgSessionSec / 3600)}
+                value={formatHours(animatedAvgSec / 3600)}
+                accent="#7c86c8"
               />
             </div>
 
-            <div className="flex flex-col gap-5.5">
-              {groups.map((group, index) => (
-                <div key={`${group.label}-${index}`}>
-                  <div className="mb-2.5 text-[11px] font-bold tracking-[.13em] text-muted-foreground uppercase">
-                    {group.label}
+            {/* key por filtro+página: cambiar cualquiera de los dos relanza
+                la cascada de los grupos con los datos nuevos. */}
+            <div key={`${gameId ?? 'all'}-${safePage}`} className="flex flex-col gap-5.5">
+              {groups.map((group, index) => {
+                const groupSeconds = group.sessions.reduce(
+                  (sum, session) =>
+                    session.endedAt !== null ? sum + (session.durationSec ?? 0) : sum,
+                  0,
+                );
+                return (
+                  <div
+                    key={`${group.label}-${index}`}
+                    className={revealClass}
+                    // Escalonado acotado: con muchos grupos en una página, a
+                    // partir del sexto entran todos a la vez — una cola de
+                    // delays de medio segundo ya no aporta nada.
+                    style={revealStyle(Math.min(index + 1, 6))}
+                  >
+                    <div className="mb-2.5 flex items-baseline gap-2.5">
+                      <span className="text-[11px] font-bold tracking-[.13em] text-muted-foreground uppercase">
+                        {group.label}
+                      </span>
+                      <span className="h-px flex-1 self-center bg-white/5" />
+                      <span className="text-[11px] text-muted-foreground/70 tabular-nums">
+                        {pluralize(group.sessions.length, 'session')}
+                        {groupSeconds > 0 && ` · ${formatHours(groupSeconds / 3600)}`}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-2.5">
+                      {group.sessions.map((session) => (
+                        <SessionRow
+                          key={session.id}
+                          session={session}
+                          maxDurationSec={longestSessionSec}
+                          isRecord={
+                            session.endedAt !== null &&
+                            longestSessionSec > 0 &&
+                            (session.durationSec ?? 0) === longestSessionSec
+                          }
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2.5">
-                    {group.sessions.map((session) => (
-                      <SessionRow key={session.id} session={session} />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <Pager page={safePage} totalPages={totalPages} onChange={setPage} />

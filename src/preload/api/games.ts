@@ -27,4 +27,6 @@ export const gamesApi = {
     ipcRenderer.invoke('games:resetEndlessState', id),
   launchExecutable: (executablePath: string): Promise<LaunchExecutableResult> =>
     ipcRenderer.invoke('games:launchExecutable', executablePath),
+  openInstallDirectory: (installDirectory: string): Promise<LaunchExecutableResult> =>
+    ipcRenderer.invoke('games:openInstallDirectory', installDirectory),
 };

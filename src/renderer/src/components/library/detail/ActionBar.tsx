@@ -1,7 +1,7 @@
-import { AlertTriangle, ImagePlus, Pause, Pencil, Play, Trash2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, ImagePlus, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
-import { useLaunchExecutable } from '../../../hooks/games';
+import { useLaunchExecutable, useOpenInstallDirectory } from '../../../hooks/games';
 import { useCloseSession, useStartGameSession } from '../../../hooks/sessions';
 import { accentGradientStyle } from '../../../lib/styles';
 import { AddSpendPopover } from './AddSpendPopover';
@@ -32,10 +32,25 @@ export const ActionBar = ({
   const closeSession = useCloseSession();
   const startGameSession = useStartGameSession();
   const launchExecutable = useLaunchExecutable();
+  const openInstallDirectory = useOpenInstallDirectory();
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [dirError, setDirError] = useState<string | null>(null);
   const isLive = liveSessionId !== null;
   const isBusy = closeSession.isPending || startGameSession.isPending || launchExecutable.isPending;
   const canPlay = isLive || game.executablePath !== null;
+
+  const handleOpenInstallDirectory = async (): Promise<void> => {
+    if (!game.installDirectory) return;
+    setDirError(null);
+    const result = await openInstallDirectory.mutateAsync(game.installDirectory);
+    if (!result.ok) {
+      setDirError(
+        result.reason === 'missing'
+          ? 'Couldn’t find the install folder — it may have been moved or deleted. Check the path in Edit.'
+          : `Couldn't open the folder — ${result.message}`,
+      );
+    }
+  };
 
   const handleTogglePlay = async (): Promise<void> => {
     if (isLive && liveSessionId !== null) {
@@ -114,6 +129,16 @@ export const ActionBar = ({
 
         <button
           type="button"
+          onClick={handleOpenInstallDirectory}
+          disabled={!game.installDirectory || openInstallDirectory.isPending}
+          title={game.installDirectory ? 'Open install folder' : 'No install folder set (Edit)'}
+          className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-input bg-white/[0.03] hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.03]"
+        >
+          <FolderOpen size={17} />
+        </button>
+
+        <button
+          type="button"
           onClick={onDelete}
           title="Delete game"
           className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-destructive/40 bg-destructive/8 hover:bg-destructive/18"
@@ -126,6 +151,13 @@ export const ActionBar = ({
         <div className="flex items-center gap-2 text-[12.5px] text-destructive">
           <AlertTriangle size={13} className="flex-none" />
           {launchError}
+        </div>
+      )}
+
+      {dirError && (
+        <div className="flex items-center gap-2 text-[12.5px] text-destructive">
+          <AlertTriangle size={13} className="flex-none" />
+          {dirError}
         </div>
       )}
     </div>

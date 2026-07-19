@@ -156,3 +156,16 @@ export const useLaunchExecutable = (): UseMutationResult<
   useMutation({
     mutationFn: (executablePath: string) => window.api.games.launchExecutable(executablePath),
   });
+
+// Botón "abrir carpeta" del detalle — sin invalidación, mismo motivo que
+// useLaunchExecutable: abrir el explorador de archivos no cambia ningún dato.
+export const useOpenInstallDirectory = (): UseMutationResult<
+  LaunchExecutableResult,
+  Error,
+  string,
+  unknown
+> =>
+  useMutation({
+    mutationFn: (installDirectory: string) =>
+      window.api.games.openInstallDirectory(installDirectory),
+  });

@@ -344,11 +344,17 @@ export const GameStats = ({
           style={revealStyle(0)}
         >
           {/* Valores animados (count-up): suben hasta el real al entrar. */}
-          <MetricCard Icon={Clock} label="TOTAL HOURS" value={formatHours(animatedHours)} />
+          <MetricCard
+            Icon={Clock}
+            label="TOTAL HOURS"
+            value={formatHours(animatedHours)}
+            accent="#2fdc7e"
+          />
           <MetricCard
             Icon={Gauge}
             label="COST / HOUR"
             value={game.costPerHour !== null ? formatMoney(animatedCost) : '—'}
+            accent="#7c86c8"
           />
           <MetricCard
             Icon={SessionsIcon}
@@ -357,8 +363,14 @@ export const GameStats = ({
             // sesiones jugadas, y la vista de Sesiones de este mismo juego
             // tampoco los cuenta — mismo número en las dos pantallas.
             value={String(Math.round(animatedSessions))}
+            accent="#85a3d6"
           />
-          <MetricCard Icon={DollarSign} label="TOTAL SPENT" value={formatMoney(animatedSpent)} />
+          <MetricCard
+            Icon={DollarSign}
+            label="TOTAL SPENT"
+            value={formatMoney(animatedSpent)}
+            accent="#e3b24a"
+          />
         </div>
 
         <div className={`mt-4.5 ${revealClass}`} style={revealStyle(1)}>

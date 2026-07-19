@@ -259,13 +259,25 @@ export const Stats = (): React.JSX.Element => {
             Icon={Gamepad2}
             label={gamesLabel}
             value={String(Math.round(animatedGames))}
+            accent="#85a3d6"
           />
-          <MetricCard Icon={Clock} label="TOTAL PLAYTIME" value={formatHours(animatedHours)} />
-          <MetricCard Icon={DollarSign} label={spentLabel} value={formatMoney(animatedSpent)} />
+          <MetricCard
+            Icon={Clock}
+            label="TOTAL PLAYTIME"
+            value={formatHours(animatedHours)}
+            accent="#2fdc7e"
+          />
+          <MetricCard
+            Icon={DollarSign}
+            label={spentLabel}
+            value={formatMoney(animatedSpent)}
+            accent="#e3b24a"
+          />
           <MetricCard
             Icon={Gauge}
             label="AVG COST / HOUR"
             value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
+            accent="#7c86c8"
           />
         </div>
 

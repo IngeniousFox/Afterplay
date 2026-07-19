@@ -102,4 +102,22 @@ export const registerGamesHandlers = (): void => {
       return { ok: true };
     },
   );
+
+  // Botón "abrir carpeta" del detalle — shell.openPath también sirve para
+  // directorios (los abre en el explorador del sistema, no intenta
+  // "ejecutarlos"), así que reusa exactamente el mismo resultado que el
+  // botón Play en vez de inventar un tipo aparte para la misma forma.
+  ipcMain.handle(
+    'games:openInstallDirectory',
+    async (_event, installDirectory: string): Promise<LaunchExecutableResult> => {
+      if (!existsSync(installDirectory)) {
+        return { ok: false, reason: 'missing' };
+      }
+      const error = await shell.openPath(installDirectory);
+      if (error) {
+        return { ok: false, reason: 'error', message: error };
+      }
+      return { ok: true };
+    },
+  );
 };

@@ -95,7 +95,14 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
             <ScreenshotsCarousel igdbId={game.igdbId} />
 
             <div className="mt-7.5 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4.5">
-              <StatusCard game={game} />
+              {/* key={game.id}: StatusCard inicializa su dropdown/nota con
+                  useState desde `game` — sin remontar al cambiar de juego
+                  (navegación sin recarga completa, misma ruta /games/:id),
+                  React reutiliza la instancia y el "pending" del juego
+                  anterior se queda pegado. Bug real: venir de un endless con
+                  "Rest" elegido dejaba "Rest" seleccionado en un juego
+                  normal, cuyas opciones ni lo incluyen. */}
+              <StatusCard key={game.id} game={game} />
               <HistoryList
                 stateHistory={game.stateHistory}
                 spendHistory={game.spendHistory}
