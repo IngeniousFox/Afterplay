@@ -13,6 +13,9 @@ type ChartSession = {
 type WhenDoYouPlayChartProps = {
   sessions: ChartSession[];
   year: Year;
+  // GameStats reusa esta card para UN juego ("When do you play it?") — el
+  // título por defecto es el de la página global.
+  title?: string;
 };
 
 const BAR_AREA_PX = 150;
@@ -30,6 +33,7 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export const WhenDoYouPlayChart = ({
   sessions,
   year,
+  title = 'When do you play?',
 }: WhenDoYouPlayChartProps): React.JSX.Element => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -52,7 +56,7 @@ export const WhenDoYouPlayChart = ({
   return (
     <StatCard className="flex h-full flex-col">
       <div className="mb-4.5 flex items-baseline justify-between gap-4">
-        <div className="text-[14px] font-bold text-foreground">When do you play?</div>
+        <div className="text-[14px] font-bold text-foreground">{title}</div>
         {peakIndex >= 0 && (
           <div className="text-[11.5px] text-muted-foreground">
             {DAY_LABELS[peakIndex]} is your day

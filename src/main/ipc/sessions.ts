@@ -7,6 +7,7 @@ import { assignSession } from '../db/queries/sessions/assignSession';
 import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
+import { updateMilestoneOutcome } from '../db/queries/sessions/updateMilestoneOutcome';
 import { updateMilestoneSession } from '../db/queries/sessions/updateMilestoneSession';
 
 export const registerSessionsHandlers = (): void => {
@@ -40,6 +41,16 @@ export const registerSessionsHandlers = (): void => {
     'sessions:updateMilestone',
     async (_event, id: number, date: Date, precision: 'year' | 'month' | 'day') => {
       return updateMilestoneSession(id, date, precision);
+    },
+  );
+
+  // Corregir el DESENLACE de un playthrough manual (Beaten → Dropped…) —
+  // reescribe el marcador de fin y su stateEvent conservando la fecha, en
+  // vez de añadir un evento nuevo fechado hoy (ver la query).
+  handleDb(
+    'sessions:updateMilestoneOutcome',
+    async (_event, id: number, milestone: 'completed' | 'dropped' | 'on_hold') => {
+      return updateMilestoneOutcome(id, milestone);
     },
   );
 

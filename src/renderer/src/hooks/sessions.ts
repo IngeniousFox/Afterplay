@@ -145,3 +145,24 @@ export const useUpdateMilestoneSession = (): UseMutationResult<
     },
   });
 };
+
+// Corregir el desenlace de un playthrough manual (Beaten → Dropped…) desde
+// EditGameModal — reescribe marcador + stateEvent conservando la fecha, no
+// añade un evento nuevo. Mismas invalidaciones que updateMilestone: cambia
+// el estado derivado del juego, el marcador y el historial a la vez.
+export const useUpdateMilestoneOutcome = (): UseMutationResult<
+  Session | null,
+  Error,
+  { id: number; milestone: 'completed' | 'dropped' | 'on_hold' },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, milestone }) => window.api.sessions.updateMilestoneOutcome(id, milestone),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
+    },
+  });
+};

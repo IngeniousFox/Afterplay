@@ -19,6 +19,11 @@ export const sessionsApi = {
     date: Date,
     precision: 'year' | 'month' | 'day',
   ): Promise<Session | null> => ipcRenderer.invoke('sessions:updateMilestone', id, date, precision),
+  updateMilestoneOutcome: (
+    id: number,
+    milestone: 'completed' | 'dropped' | 'on_hold',
+  ): Promise<Session | null> =>
+    ipcRenderer.invoke('sessions:updateMilestoneOutcome', id, milestone),
   getPending: (): Promise<PendingSession[]> => ipcRenderer.invoke('sessions:getPending'),
   assign: (sessionId: number, gameId: number): Promise<Session | null> =>
     ipcRenderer.invoke('sessions:assign', sessionId, gameId),

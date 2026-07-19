@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 // Estilo del degradado verde de acento — el mismo objeto que hoy se repite
 // (inline, `style={{...}}`) en botones "submit" de modales, popovers y
 // tarjetas de toda la app. Un solo sitio para no divergir el verde/negro por
@@ -19,3 +21,13 @@ export const floatingPanelClass =
 // sus propias clases de color según el estado activo/inactivo.
 export const outlineButtonClass =
   'flex items-center gap-1.75 rounded-[9px] border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap';
+
+// Entrada escalonada de secciones (Stats global y por juego): fade + subida
+// sutil, con ~70ms entre cada una según su `order`. fill-mode backwards para
+// que el delay no enseñe la card "ya llegada" antes de arrancar su
+// animación. Remontar el contenedor (key por juego/año) la vuelve a lanzar.
+export const revealClass = 'animate-in fade-in-0 slide-in-from-bottom-3 duration-500';
+export const revealStyle = (order: number): CSSProperties => ({
+  animationDelay: `${order * 70}ms`,
+  animationFillMode: 'backwards',
+});

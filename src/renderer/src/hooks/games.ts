@@ -129,6 +129,21 @@ export const useDeleteGame = (): UseMutationResult<boolean, Error, number, unkno
   });
 };
 
+// Conversión a endless (EditGameModal): limpia desenlaces/marcadores del
+// juego conservando sesiones y horas — toca juegos, sesiones (borra
+// marcadores) e historial de estados a la vez, de ahí las tres claves.
+export const useResetEndlessState = (): UseMutationResult<boolean, Error, number, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => window.api.games.resetEndlessState(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
+    },
+  });
+};
+
 // Sin invalidación: lanzar el .exe no cambia ningún dato — la sesión (si el
 // lanzamiento sale bien) la abre ActionBar por separado, con su propia
 // mutation de siempre.

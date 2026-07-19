@@ -16,6 +16,7 @@ import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
 import { getPlannedGames } from '../db/queries/games/getPlannedGames';
 import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
+import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
 import { cacheImage } from '../images/cache';
 
@@ -76,6 +77,12 @@ export const registerGamesHandlers = (): void => {
 
   handleDb('games:delete', async (_event, id: number) => {
     return deleteGame(id);
+  });
+
+  // Conversión a endless: limpia desenlaces y marcadores de partida discreta
+  // CONSERVANDO sesiones trackeadas y horas manuales (ver la query).
+  handleDb('games:resetEndlessState', async (_event, id: number) => {
+    return resetEndlessState(id);
   });
 
   // Botón Play — no es acceso a datos (ipcMain.handle directo, no handleDb).

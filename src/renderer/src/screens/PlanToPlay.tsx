@@ -22,6 +22,7 @@ export const PlanToPlay = (): React.JSX.Element => {
       isLoading={isLoading}
       isError={isError}
       modalMode="plan"
+      scrollKey="plan"
       onSelectGame={(id) => navigate(`/plan/${id}`)}
     />
   );

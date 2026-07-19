@@ -17,6 +17,7 @@ export const Library = (): React.JSX.Element => {
       games={games}
       isLoading={isLoading}
       isError={isError}
+      scrollKey="library"
       onSelectGame={(id) => navigate(`/games/${id}`)}
     />
   );

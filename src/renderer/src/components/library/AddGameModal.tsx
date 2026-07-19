@@ -62,6 +62,10 @@ type AddGameModalProps = {
   // Tras promocionar con éxito (el juego ya no está en el Plan) — para que
   // la pantalla dueña navegue a donde toque (su ficha de biblioteca).
   onPromoted?: () => void;
+  // Tras crear un juego nuevo (biblioteca o plan) — la pantalla dueña
+  // navega a su ficha, para que lo recién añadido quede seleccionado en vez
+  // de volver a la lista sin más.
+  onCreated?: (gameId: number) => void;
   // EMULADORES.md §6 — flujo "+ Add new game" desde el modal de asignación:
   // el checkbox de emulado arranca premarcado…
   defaultEmulated?: boolean;
@@ -86,6 +90,7 @@ export const AddGameModal = ({
   mode = 'library',
   promoteGame,
   onPromoted,
+  onCreated,
   defaultEmulated = false,
   assignSessionId,
 }: AddGameModalProps): React.JSX.Element => {
@@ -285,7 +290,7 @@ export const AddGameModal = ({
     if (isPlan) {
       // Alta reducida (Plan to Play): un juego planeado no tiene playthrough
       // real todavía — solo el juego elegido, las imágenes y las notas.
-      await createPlanned.mutateAsync({
+      const planned = await createPlanned.mutateAsync({
         igdbId: selected.igdbId,
         note: values.note.trim() || null,
         gameNotes: values.gameNotes.trim() || null,
@@ -295,6 +300,7 @@ export const AddGameModal = ({
       });
       resetAll();
       onOpenChange(false);
+      onCreated?.(planned.id);
       return;
     }
 
@@ -362,6 +368,7 @@ export const AddGameModal = ({
 
     resetAll();
     onOpenChange(false);
+    onCreated?.(created.id);
   };
 
   return (

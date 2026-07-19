@@ -23,6 +23,8 @@ export const gamesApi = {
   update: (id: number, patch: UpdateGamePatch): Promise<GameRow | null> =>
     ipcRenderer.invoke('games:update', id, patch),
   delete: (id: number): Promise<boolean> => ipcRenderer.invoke('games:delete', id),
+  resetEndlessState: (id: number): Promise<boolean> =>
+    ipcRenderer.invoke('games:resetEndlessState', id),
   launchExecutable: (executablePath: string): Promise<LaunchExecutableResult> =>
     ipcRenderer.invoke('games:launchExecutable', executablePath),
 };

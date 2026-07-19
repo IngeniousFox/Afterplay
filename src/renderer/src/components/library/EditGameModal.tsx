@@ -2,11 +2,19 @@ import { Save } from 'lucide-react';
 import { useEffect } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
-import { useUpdateGame } from '../../hooks/games';
+import { useResetEndlessState, useUpdateGame } from '../../hooks/games';
 import { useAddIteration, useUpdateIteration } from '../../hooks/iterations';
-import { useAddSession, useUpdateMilestoneSession } from '../../hooks/sessions';
+import {
+  useAddSession,
+  useUpdateMilestoneOutcome,
+  useUpdateMilestoneSession,
+} from '../../hooks/sessions';
 import { useAddStateEvent } from '../../hooks/stateEvents';
-import { STATE_TO_STATUS_KEY, STATUS_TO_STATE_TYPE } from '../../lib/gameStatus';
+import {
+  ENDLESS_STATUS_OPTIONS,
+  STATE_TO_STATUS_KEY,
+  STATUS_TO_STATE_TYPE,
+} from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
 import { ModalFooter, ModalShell } from '../ui/modal-shell';
 import { Textarea } from '../ui/textarea';
@@ -15,7 +23,8 @@ import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { parseIsoDate } from './add-game/precisionDate';
 import { fieldLabelClass, textInputClass } from './add-game/styles';
-import { parseOptionalNumber } from './add-game/types';
+import { DEFAULT_FORM_VALUES, parseOptionalNumber } from './add-game/types';
+import { EndlessSection } from './edit-game/EndlessSection';
 import { IterationSection } from './edit-game/IterationSection';
 import { anchorPickerValue, milestoneAnchor } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
@@ -45,7 +54,13 @@ const buildDefaults = (game: GameDetail): EditGameFormValues => {
     started: iteration ? anchorPickerValue(milestoneAnchor(iteration, 'start')) : null,
     finished: iteration ? anchorPickerValue(milestoneAnchor(iteration, 'end')) : null,
     extraContent: iteration?.extraContent ?? false,
-    status: iteration?.currentState ? STATE_TO_STATUS_KEY[iteration.currentState] : 'beaten',
+    // El fallback depende del tipo de juego: un endless sin estado arranca
+    // en 'resting' (su dropdown ni ofrece 'beaten').
+    status: iteration?.currentState
+      ? STATE_TO_STATUS_KEY[iteration.currentState]
+      : game.endless
+        ? 'resting'
+        : 'beaten',
     platform: iteration?.playedPlatform ?? 'Steam',
     format: iteration?.format ?? 'digital',
     origin: iteration?.origin ?? 'Purchased',
@@ -78,17 +93,21 @@ export const EditGameModal = ({
   const updateGame = useUpdateGame();
   const addIteration = useAddIteration();
   const updateIteration = useUpdateIteration();
+  const resetEndlessState = useResetEndlessState();
   const addSession = useAddSession();
   const addStateEvent = useAddStateEvent();
   const updateMilestoneSession = useUpdateMilestoneSession();
+  const updateMilestoneOutcome = useUpdateMilestoneOutcome();
 
   const isSaving =
     updateGame.isPending ||
     addIteration.isPending ||
     updateIteration.isPending ||
+    resetEndlessState.isPending ||
     addSession.isPending ||
     addStateEvent.isPending ||
-    updateMilestoneSession.isPending;
+    updateMilestoneSession.isPending ||
+    updateMilestoneOutcome.isPending;
 
   const handleClose = (): void => {
     if (isSaving) return;
@@ -113,7 +132,63 @@ export const EditGameModal = ({
       },
     });
 
-    if (!values.endless && values.iterationMode === 'new') {
+    if (values.endless) {
+      // ── Juego endless ──────────────────────────────────────────────────
+      // Convertirlo desde normal limpia los desenlaces y marcadores de
+      // partida discreta CONSERVANDO las sesiones trackeadas y las horas
+      // manuales (ver resetEndlessState) — sin esto el juego seguía saliendo
+      // como "Beaten" por un playthrough que conceptualmente ya no existe,
+      // pero borrar iteraciones enteras se llevaba lo medido por el watcher.
+      const converting = !game.endless;
+      if (converting) {
+        await resetEndlessState.mutateAsync(game.id);
+      }
+
+      // El playthrough CONTENEDOR del endless (el que agrupa sesiones,
+      // horas manuales y estado — mismo shape que crea Add Game): se
+      // actualiza el existente o se crea uno si no hay ninguno.
+      const container = activeOrLastIteration(game.iterations);
+      const manualHours = parseOptionalNumber(values.hoursPlayed);
+
+      if (container) {
+        await updateIteration.mutateAsync({
+          id: container.id,
+          patch: { manualTotalPlayed: manualHours },
+        });
+        // Tras una conversión el historial acaba de limpiarse entero (el
+        // currentState del prop es una foto vieja) — el estado elegido se
+        // escribe SIEMPRE; sin conversión, solo si cambió de verdad.
+        const previousStatus =
+          !converting && container.currentState
+            ? STATE_TO_STATUS_KEY[container.currentState]
+            : null;
+        if (converting || values.status !== previousStatus) {
+          await addStateEvent.mutateAsync({
+            iterationId: container.id,
+            type: STATUS_TO_STATE_TYPE[values.status],
+            occurredAt: new Date(),
+            datePrecision: 'datetime',
+            note: null,
+          });
+        }
+      } else {
+        const iteration = await addIteration.mutateAsync({
+          gameId: game.id,
+          label: null,
+          playedPlatform: values.platform || DEFAULT_FORM_VALUES.platform,
+          origin: values.origin || DEFAULT_FORM_VALUES.origin,
+          format: values.format,
+          manualTotalPlayed: manualHours,
+        });
+        await addStateEvent.mutateAsync({
+          iterationId: iteration.id,
+          type: STATUS_TO_STATE_TYPE[values.status],
+          occurredAt: new Date(),
+          datePrecision: 'datetime',
+          note: null,
+        });
+      }
+    } else if (values.iterationMode === 'new') {
       const iteration = await addIteration.mutateAsync({
         gameId: game.id,
         label: values.label.trim() || null,
@@ -173,11 +248,7 @@ export const EditGameModal = ({
         datePrecision: anchorDate?.precision ?? 'day',
         note: null,
       });
-    } else if (
-      !values.endless &&
-      values.iterationMode === 'existing' &&
-      values.selectedIterationId
-    ) {
+    } else if (values.iterationMode === 'existing' && values.selectedIterationId) {
       const iterationId = values.selectedIterationId;
       await updateIteration.mutateAsync({
         id: iterationId,
@@ -224,13 +295,30 @@ export const EditGameModal = ({
         : null;
 
       if (values.status !== previousStatus) {
-        await addStateEvent.mutateAsync({
-          iterationId,
-          type: STATUS_TO_STATE_TYPE[values.status],
-          occurredAt: new Date(),
-          datePrecision: 'datetime',
-          note: null,
-        });
+        const newType = STATUS_TO_STATE_TYPE[values.status];
+        const endAnchor = originalIteration ? milestoneAnchor(originalIteration, 'end') : null;
+        // Playthrough MANUAL cuyo estado actual es justo el del marcador de
+        // fin, cambiado a otro desenlace terminal (Beaten → Dropped…): se
+        // corrige el registro (marcador + evento, conservando su fecha) en
+        // vez de añadir un evento nuevo fechado hoy — que dejaba el Beaten
+        // viejo en el historial y un Dropped "de hoy" sin sentido para una
+        // partida del pasado.
+        const isTerminal =
+          newType === 'completed' || newType === 'dropped' || newType === 'on_hold';
+        if (endAnchor && isTerminal && originalIteration?.currentState === endAnchor.milestone) {
+          await updateMilestoneOutcome.mutateAsync({
+            id: endAnchor.id,
+            milestone: newType as 'completed' | 'dropped' | 'on_hold',
+          });
+        } else {
+          await addStateEvent.mutateAsync({
+            iterationId,
+            type: newType,
+            occurredAt: new Date(),
+            datePrecision: 'datetime',
+            note: null,
+          });
+        }
       }
     }
 
@@ -310,7 +398,16 @@ export const EditGameModal = ({
 
           <CheckboxRow
             checked={endless}
-            onToggle={() => setValue('endless', !endless)}
+            onToggle={() => {
+              const next = !endless;
+              setValue('endless', next);
+              // Al activarlo, el estado del formulario puede quedar apuntando
+              // a una opción que el dropdown endless ni ofrece ("Beaten") —
+              // mismo ajuste que hace AddGameModal con su handleEndlessToggle.
+              if (next && !ENDLESS_STATUS_OPTIONS.includes(getValues('status'))) {
+                setValue('status', 'resting');
+              }
+            }}
             title="Endless game"
             description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
             accent="green"
@@ -325,9 +422,22 @@ export const EditGameModal = ({
           />
 
           {endless ? (
-            <div className="rounded-[10px] border border-border bg-white/[0.02] px-3.5 py-3 text-[12.5px] text-muted-foreground">
-              Tracked by sessions — no playthroughs to edit.
-            </div>
+            <>
+              {/* Convertir un juego normal a endless limpia su historial de
+                  estados y desenlaces al guardar (sesiones y horas se
+                  conservan) — avisar ANTES, no después. Mismo azul
+                  informativo que el aviso de playthrough manual. */}
+              {!game.endless && game.iterations.length > 0 && (
+                <div
+                  className="rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                  style={{ background: 'rgba(133,163,214,.1)', color: '#85a3d6' }}
+                >
+                  Saving clears its status history and playthrough outcomes — tracked sessions and
+                  hours are kept; an endless game just has no discrete runs.
+                </div>
+              )}
+              <EndlessSection />
+            </>
           ) : (
             <IterationSection game={game} />
           )}

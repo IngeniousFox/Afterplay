@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { GameListItem } from '../../../../shared/types';
+import { useScrollMemory } from '../../hooks/useScrollMemory';
 import { accentGradientStyle } from '../../lib/styles';
 import { AddGameModal } from './AddGameModal';
 import { GameGrid } from './GameGrid';
@@ -19,6 +20,10 @@ type GameListScreenProps = {
   // Modo del AddGameModal — 'plan' para Plan to Play, sin especificar
   // (default 'library') para la biblioteca normal.
   modalMode?: 'library' | 'plan';
+  // Clave de memoria de scroll — entrar al detalle de un juego y volver
+  // restaura el punto exacto de la lista (ver useScrollMemory). Distinta por
+  // pantalla para que Library y Plan no se pisen la posición.
+  scrollKey: string;
   onSelectGame: (id: number) => void;
 };
 
@@ -36,12 +41,14 @@ export const GameListScreen = ({
   isLoading,
   isError,
   modalMode,
+  scrollKey,
   onSelectGame,
 }: GameListScreenProps): React.JSX.Element => {
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const { attachRef, onScroll } = useScrollMemory<HTMLDivElement>(scrollKey);
 
   return (
-    <div className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
+    <div ref={attachRef} onScroll={onScroll} className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
       <div className="mb-6.5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">{title}</h1>
@@ -58,7 +65,14 @@ export const GameListScreen = ({
         </Button>
       </div>
 
-      <AddGameModal open={addModalOpen} onOpenChange={setAddModalOpen} mode={modalMode} />
+      {/* onCreated = onSelectGame: el juego recién añadido queda
+          seleccionado (su ficha abierta) en vez de volver a la lista. */}
+      <AddGameModal
+        open={addModalOpen}
+        onOpenChange={setAddModalOpen}
+        mode={modalMode}
+        onCreated={onSelectGame}
+      />
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">{loadingText}</p>

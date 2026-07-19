@@ -22,9 +22,11 @@ import { useGames, usePlannedGames } from '../hooks/games';
 import { useAllSessions } from '../hooks/sessions';
 import { useAllSpendEvents } from '../hooks/spend';
 import { useAllStateEvents } from '../hooks/stateEvents';
+import { useCountUp } from '../hooks/useCountUp';
 import { yearsDesc } from '../lib/dateMath';
 import { formatHours, formatMoney } from '../lib/format';
 import { mapGenreToAxis } from '../lib/genreAxes';
+import { revealClass, revealStyle } from '../lib/styles';
 import { GameStats } from './GameStats';
 
 // Bloque 5B/5C/5D/5E — panel global de Stats: 4 métricas + año activo,
@@ -176,6 +178,14 @@ export const Stats = (): React.JSX.Element => {
   const showYearCompare =
     previousYear !== null && previousYearStats !== null && years.includes(previousYear);
 
+  // Contadores animados de las 4 métricas — mismo count-up que las stats de
+  // un juego; al cambiar el filtro de año vuelven a subir hacia el valor
+  // nuevo (el target cambia y el hook re-anima).
+  const animatedGames = useCountUp(totalGames);
+  const animatedHours = useCountUp(totalHours);
+  const animatedSpent = useCountUp(totalSpent);
+  const animatedCost = useCountUp(costPerHour ?? 0);
+
   const playedEntries = useMemo(
     () =>
       games.map((game) => ({
@@ -225,7 +235,9 @@ export const Stats = (): React.JSX.Element => {
 
   return (
     <div className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
-      <div className="mx-auto max-w-250">
+      {/* key por año: cambiar el filtro remonta el árbol — la cascada de
+          entrada y los contadores vuelven a animar con los datos nuevos. */}
+      <div key={String(selectedYear)} className="mx-auto max-w-250">
         <div className="mb-6.5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
@@ -239,44 +251,62 @@ export const Stats = (): React.JSX.Element => {
           <YearPicker years={years} value={selectedYear} onChange={setSelectedYear} />
         </div>
 
-        <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
-          <MetricCard Icon={Gamepad2} label={gamesLabel} value={String(totalGames)} />
-          <MetricCard Icon={Clock} label="TOTAL PLAYTIME" value={formatHours(totalHours)} />
-          <MetricCard Icon={DollarSign} label={spentLabel} value={formatMoney(totalSpent)} />
+        <div
+          className={`grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
+          style={revealStyle(0)}
+        >
+          <MetricCard
+            Icon={Gamepad2}
+            label={gamesLabel}
+            value={String(Math.round(animatedGames))}
+          />
+          <MetricCard Icon={Clock} label="TOTAL PLAYTIME" value={formatHours(animatedHours)} />
+          <MetricCard Icon={DollarSign} label={spentLabel} value={formatMoney(animatedSpent)} />
           <MetricCard
             Icon={Gauge}
             label="AVG COST / HOUR"
-            value={costPerHour !== null ? formatMoney(costPerHour) : '—'}
+            value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
           />
         </div>
 
         {showYearCompare && previousYear !== null && previousYearStats !== null && (
-          <YearOverYearCompare
-            current={{ totalGames, totalHours, totalSpent, costPerHour }}
-            previous={previousYearStats}
-            previousYear={previousYear}
-          />
+          <div className={revealClass} style={revealStyle(1)}>
+            <YearOverYearCompare
+              current={{ totalGames, totalHours, totalSpent, costPerHour }}
+              previous={previousYearStats}
+              previousYear={previousYear}
+            />
+          </div>
         )}
 
-        <div className="mt-4.5">
+        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(2)}>
           <ActivityHeatmap sessions={sessions} year={selectedYear} />
         </div>
 
-        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+        <div
+          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+          style={revealStyle(3)}
+        >
           <HoursByMonthChart sessions={sessions} year={selectedYear} />
           <StreakCard sessions={sessions} year={selectedYear} />
         </div>
 
-        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+        <div
+          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+          style={revealStyle(4)}
+        >
           <SpendByMonthChart spendEvents={spendEvents} year={selectedYear} />
           <WhenDoYouPlayChart sessions={sessions} year={selectedYear} />
         </div>
 
-        <div className="mt-4.5">
+        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(5)}>
           <MostPlayedList entries={playedEntries} />
         </div>
 
-        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+        <div
+          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+          style={revealStyle(6)}
+        >
           {selectedYear === 'all' ? (
             <StatusBreakdown mode="all-time" games={games} />
           ) : (
@@ -285,7 +315,7 @@ export const Stats = (): React.JSX.Element => {
           <GenreRadar minutesByAxis={minutesByAxis} />
         </div>
 
-        <div className="mt-4.5">
+        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(7)}>
           <CompletedGallery
             stateEvents={stateEvents}
             games={games}
@@ -294,7 +324,10 @@ export const Stats = (): React.JSX.Element => {
           />
         </div>
 
-        <div className="mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5">
+        <div
+          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+          style={revealStyle(8)}
+        >
           <HltbCompareList
             games={games}
             stateEvents={stateEvents}
@@ -304,7 +337,7 @@ export const Stats = (): React.JSX.Element => {
           <SessionLengthHistogram sessions={sessions} year={selectedYear} />
         </div>
 
-        <div className="mt-4.5">
+        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(9)}>
           <BacklogFlowChart
             games={games}
             plannedGames={plannedGames}
@@ -313,7 +346,7 @@ export const Stats = (): React.JSX.Element => {
           />
         </div>
 
-        <div className="mt-4.5">
+        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
           <GameAgeDonut entries={ageEntries} year={selectedYear} />
         </div>
       </div>
