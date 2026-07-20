@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron';
+import { closeSync, openSync } from 'node:fs';
 import { withDbAccess } from '../db';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
 import { closeSession } from '../db/queries/sessions/closeSession';
@@ -8,6 +9,27 @@ import { heartbeatSessions } from '../db/queries/sessions/heartbeatSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 
 const POLL_INTERVAL_MS = 5000;
+
+// ¿Está este .exe ejecutándose AHORA? — Windows bloquea contra escritura el
+// archivo de imagen de todo proceso vivo, así que intentar abrirlo en
+// lectura+escritura falla con EBUSY mientras corre y funciona en cuanto
+// muere. Comprobación EXCEPCIONAL (Fase 2b): solo se consulta cuando la
+// Fase 2 no ha podido leer la ruta del proceso (juegos con anti-cheat que
+// bloquean la introspección vía WMI — caso real: Neverness to Everness).
+// Con ruta legible, mande o no, este candado NI SE MIRA. Solo EBUSY cuenta
+// como "corriendo" — un EACCES/EPERM es un problema de permisos de la
+// carpeta (ej. Program Files sin elevar), no una señal de ejecución, y
+// tratarlo como tal daría falsos positivos permanentes. La ruta viene en
+// minúsculas (WatchTarget.exePath) — da igual, el sistema de archivos de
+// Windows es insensible a mayúsculas.
+const isExecutableBusy = (exePath: string): boolean => {
+  try {
+    closeSync(openSync(exePath, 'r+'));
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EBUSY';
+  }
+};
 
 // Una sesión que el watcher tiene abierta ahora mismo.
 type ActiveSession = { pid: number; sessionId: number; title: string };
@@ -313,15 +335,37 @@ export class ProcessWatcher {
     for (const { pid, target } of candidates) {
       // Ya confirmado por otro proceso con el mismo nombre: no repito find.
       if (running.has(target.key)) continue;
+
+      // null = "no se pudo leer la ruta del proceso": pasa con juegos
+      // protegidos por anti-cheat (bloquean la introspección vía WMI incluso
+      // al mismo usuario) y si el pid murió entre Fase 1 y 2.
+      let cmd: string | null = null;
       try {
         const [detail] = await find('pid', pid);
-        if (detail && detail.cmd.toLowerCase().includes(target.exePath)) {
+        cmd = detail?.cmd?.trim() ? detail.cmd.toLowerCase() : null;
+      } catch {
+        cmd = null;
+      }
+
+      // Camino NORMAL: la ruta se pudo leer — ella decide, en exclusiva.
+      // Si no coincide con la configurada es otro programa con el mismo
+      // nombre de exe y se descarta, exactamente igual que siempre; la
+      // Fase 2b de abajo ni se consulta en este caso.
+      if (cmd !== null) {
+        if (cmd.includes(target.exePath)) {
           running.set(target.key, { pid, target });
         }
-      } catch (error) {
-        // El pid puede morir entre Fase 1 y 2, o find-process fallar en un
-        // proceso protegido (anti-cheat) — no debe tumbar el resto del ciclo.
-        console.warn(`[watcher] No se pudo verificar el pid ${pid}:`, error);
+        continue;
+      }
+
+      // Fase 2b — comprobación EXCEPCIONAL, solo al no poder leer la ruta:
+      // Windows bloquea contra escritura el .exe en ejecución, así que si EL
+      // ARCHIVO CONCRETO configurado está bloqueado ahora mismo (habiendo
+      // además un proceso vivo con su mismo nombre), es este juego. Un
+      // "game.exe" ajeno corriendo desde otra carpeta no bloquea nuestro
+      // archivo — la protección contra nombres duplicados se mantiene.
+      if (isExecutableBusy(target.exePath)) {
+        running.set(target.key, { pid, target });
       }
     }
 

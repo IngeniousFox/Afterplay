@@ -80,6 +80,21 @@ export const useAddSession = (): UseMutationResult<
   });
 };
 
+// Borrar una sesión real cerrada — cambia horas/contadores/fechas derivadas
+// del juego (games) y la propia lista (sessions). stateEvents no se toca:
+// el borrado deja el historial de estados intacto a propósito (ver
+// deleteSession.ts en el main).
+export const useDeleteSession = (): UseMutationResult<boolean, Error, number, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => window.api.sessions.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+    },
+  });
+};
+
 export const useCloseSession = (): UseMutationResult<
   Session | null,
   Error,

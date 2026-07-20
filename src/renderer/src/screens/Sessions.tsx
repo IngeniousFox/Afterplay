@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SessionWithGame } from '../../../shared/types';
 import { MetricCard } from '../components/library/detail/MetricsRow';
+import { DeleteSessionDialog } from '../components/sessions/DeleteSessionDialog';
 import { Pager } from '../components/sessions/Pager';
 import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
 import { SessionRow } from '../components/sessions/SessionRow';
@@ -79,6 +80,8 @@ export const Sessions = (): React.JSX.Element => {
   const { data: games = [] } = useGames();
 
   const [page, setPage] = useState(1);
+  // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
+  const [pendingDelete, setPendingDelete] = useState<SessionWithGame | null>(null);
   // Cambiar de filtro (elegir otro juego, o volver a "All games") vuelve a
   // la página 1 — mismo patrón de "ajustar estado durante el render" que
   // PlaythroughPanel (compatible con React Compiler, sin useEffect).
@@ -250,6 +253,7 @@ export const Sessions = (): React.JSX.Element => {
                             longestSessionSec > 0 &&
                             (session.durationSec ?? 0) === longestSessionSec
                           }
+                          onDelete={() => setPendingDelete(session)}
                         />
                       ))}
                     </div>
@@ -262,6 +266,21 @@ export const Sessions = (): React.JSX.Element => {
           </>
         )}
       </div>
+
+      <DeleteSessionDialog
+        session={
+          pendingDelete
+            ? {
+                id: pendingDelete.id,
+                label: `${pendingDelete.gameTitle} — ${pendingDelete.startedAt.toLocaleDateString(
+                  'en-US',
+                  { month: 'short', day: 'numeric', year: 'numeric' },
+                )} · ${formatHours((pendingDelete.durationSec ?? 0) / 3600)}`,
+              }
+            : null
+        }
+        onClose={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

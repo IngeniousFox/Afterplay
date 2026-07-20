@@ -2,6 +2,7 @@ import { handleDb } from './dbHandle';
 import type { AddManualSessionInput } from '../../shared/types';
 import { addManualSession } from '../db/queries/sessions/addManualSession';
 import { closeSession } from '../db/queries/sessions/closeSession';
+import { deleteSession } from '../db/queries/sessions/deleteSession';
 import { getAllSessions } from '../db/queries/sessions/getAllSessions';
 import { assignSession } from '../db/queries/sessions/assignSession';
 import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
@@ -32,6 +33,13 @@ export const registerSessionsHandlers = (): void => {
 
   handleDb('sessions:close', async (_event, id: number, endedAt: Date) => {
     return closeSession(id, endedAt);
+  });
+
+  // Borrar una sesión real cerrada (vista de Sesiones / Session History del
+  // detalle) — la query re-ancla el playthrough si la sesión era su ancla y
+  // rechaza abiertas y marcadores (ver deleteSession.ts).
+  handleDb('sessions:delete', async (_event, id: number) => {
+    return deleteSession(id);
   });
 
   // Corregir la fecha de un marcador manual de inicio/fin de playthrough

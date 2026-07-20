@@ -1,4 +1,4 @@
-import { Flame } from 'lucide-react';
+import { Flame, Trash2 } from 'lucide-react';
 import type { SessionWithGame } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
@@ -18,6 +18,10 @@ type SessionRowProps = {
   maxDurationSec?: number;
   // ¿Es LA sesión más larga del filtro? — llamita al lado de la duración.
   isRecord?: boolean;
+  // Papelera al pasar el ratón (abre la confirmación de la vista dueña).
+  // Solo se pinta en sesiones CERRADAS — una en vivo se para con Stop, no
+  // se borra (el watcher la reabriría al ciclo siguiente).
+  onDelete?: () => void;
 };
 
 // Bloque 5A / prototipo (Backlog.html, panel "ALL SESSIONS") — carátula,
@@ -31,6 +35,7 @@ export const SessionRow = ({
   session,
   maxDurationSec = 0,
   isRecord = false,
+  onDelete,
 }: SessionRowProps): React.JSX.Element => {
   const isLive = session.endedAt === null;
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
@@ -46,7 +51,7 @@ export const SessionRow = ({
 
   return (
     <div
-      className="relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
+      className="group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
       style={
         isLive
           ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.05)' }
@@ -104,6 +109,16 @@ export const SessionRow = ({
             {formatHours((session.durationSec ?? 0) / 3600)}
           </span>
         </div>
+      )}
+      {onDelete && !isLive && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Delete session"
+          className="relative z-1 flex-none rounded-md p-1.5 text-muted-foreground opacity-0 group-hover/session:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 size={14} />
+        </button>
       )}
     </div>
   );

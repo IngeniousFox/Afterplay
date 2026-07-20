@@ -1,10 +1,12 @@
-import { ArrowRight, Flag, Flame, Timer } from 'lucide-react';
+import { ArrowRight, Flag, Flame, Timer, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Session } from '../../../../../shared/types';
 import { useTimeFormat } from '../../../hooks/settings';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
 import { revealClass, revealStyle } from '../../../lib/styles';
+import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
 
 type SessionHistoryListProps = {
   sessions: Session[];
@@ -24,10 +26,14 @@ const SessionRow = ({
   session,
   maxDurationSec,
   isRecord,
+  onDelete,
 }: {
   session: Session;
   maxDurationSec: number;
   isRecord: boolean;
+  // Solo llega para sesiones reales CERRADAS — ni las vivas (se paran con
+  // Stop) ni los marcadores (se gestionan desde Edit) se borran desde aquí.
+  onDelete?: () => void;
 }): React.JSX.Element => {
   const isLive = session.endedAt === null;
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
@@ -47,7 +53,7 @@ const SessionRow = ({
 
   return (
     <div
-      className="relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
+      className="group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
       style={
         isLive
           ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
@@ -100,6 +106,16 @@ const SessionRow = ({
           {isMarker ? '—' : formatElapsed(durationSec)}
         </span>
       </div>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Delete session"
+          className="relative z-1 flex-none rounded-md p-1.5 text-muted-foreground opacity-0 group-hover/session:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
     </div>
   );
 };
@@ -109,6 +125,9 @@ export const SessionHistoryList = ({
   gameId,
 }: SessionHistoryListProps): React.JSX.Element | null => {
   const navigate = useNavigate();
+  // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
+  const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
+  const { data: timeFormat = '24h' } = useTimeFormat();
   if (sessions.length === 0) return null;
 
   const maxDurationSec = Math.max(
@@ -138,6 +157,11 @@ export const SessionHistoryList = ({
                 session.durationSec > 0 &&
                 session.durationSec === maxDurationSec
               }
+              onDelete={
+                session.endedAt !== null && session.milestone === null
+                  ? () => setPendingDelete(session)
+                  : undefined
+              }
             />
           </div>
         ))}
@@ -152,6 +176,18 @@ export const SessionHistoryList = ({
           </button>
         )}
       </div>
+
+      <DeleteSessionDialog
+        session={
+          pendingDelete
+            ? {
+                id: pendingDelete.id,
+                label: `${formatByPrecision(pendingDelete.startedAt, pendingDelete.datePrecision, timeFormat)} · ${formatElapsed(pendingDelete.durationSec ?? 0)}`,
+              }
+            : null
+        }
+        onClose={() => setPendingDelete(null)}
+      />
     </div>
   );
 };
