@@ -10,9 +10,6 @@ type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 export type ResolvedIteration = {
   iterationId: number;
-  // La iteración destino no tenía sesión de inicio — quien llame debe anclar
-  // la sesión que cree/asigne como startSessionId de la iteración.
-  needsStartAnchor: boolean;
 };
 
 // "¿En qué playthrough cae jugar a este juego AHORA (o en `at`)?" — la regla
@@ -33,7 +30,7 @@ export const resolveIterationForPlay = async (
   at: Date,
 ): Promise<ResolvedIteration> => {
   const iterations = await tx
-    .select({ id: iterationsTable.id, startSessionId: iterationsTable.startSessionId })
+    .select({ id: iterationsTable.id })
     .from(iterationsTable)
     .where(eq(iterationsTable.gameId, gameId))
     .orderBy(asc(iterationsTable.id));
@@ -76,21 +73,14 @@ export const resolveIterationForPlay = async (
     (iteration) => latestTypeByIteration.get(iteration.id) === 'started',
   );
 
-  // Si la iteración destino ya tiene sesión de inicio, su "Started At" está
-  // fijado y no se toca; si no, la sesión que cuelgue el llamador pasa a ser
-  // su inicio. Cubre los tres casos: iteración nueva, iteración reanudada
-  // que nunca se ancló (Playthrough recién creado por Add Game, sin
-  // sesiones), y por robustez una activa a la que le faltara.
   if (activeIteration) {
-    // Ya está "Playing": solo falta colgar la sesión.
-    return {
-      iterationId: activeIteration.id,
-      needsStartAnchor: activeIteration.startSessionId == null,
-    };
+    // Ya está "Playing": solo falta colgar la sesión (modelo v2 — la fecha
+    // de inicio se deriva de sesiones+eventos al leer, no hay ancla que
+    // mantener).
+    return { iterationId: activeIteration.id };
   }
 
   let targetIterationId: number;
-  let targetHasStartSession: boolean;
 
   const lastIteration = iterations[iterations.length - 1];
   const lastType = lastIteration ? latestTypeByIteration.get(lastIteration.id) : undefined;
@@ -119,13 +109,10 @@ export const resolveIterationForPlay = async (
       })
       .returning({ id: iterationsTable.id });
     targetIterationId = created.id;
-    targetHasStartSession = false; // su inicio = la sesión del llamador
   } else {
-    // Reanudar la última iteración: un on_hold/resting (ya tiene su inicio)
-    // o un Playthrough recién creado por Add Game que nunca se tocó (sin
-    // sesiones → el llamador la anclará).
+    // Reanudar la última iteración: un on_hold/resting, o un Playthrough
+    // recién creado por Add Game que nunca se tocó.
     targetIterationId = lastIteration.id;
-    targetHasStartSession = lastIteration.startSessionId != null;
   }
 
   // Evento 'started' para dejar el playthrough activo. No hay hermano activo
@@ -139,5 +126,5 @@ export const resolveIterationForPlay = async (
     note: null,
   });
 
-  return { iterationId: targetIterationId, needsStartAnchor: !targetHasStartSession };
+  return { iterationId: targetIterationId };
 };

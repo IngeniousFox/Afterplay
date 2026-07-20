@@ -1,11 +1,6 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  AddManualSessionInput,
-  PendingSession,
-  Session,
-  SessionWithGame,
-} from '../../../shared/types';
+import type { PendingSession, Session, SessionWithGame } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 // Bloque 5A — todas las sesiones de la biblioteca (para la vista de
@@ -62,24 +57,6 @@ export const useDeletePendingSession = (): UseMutationResult<boolean, Error, num
   });
 };
 
-export const useAddSession = (): UseMutationResult<
-  Session,
-  Error,
-  AddManualSessionInput,
-  unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: AddManualSessionInput) => window.api.sessions.add(input),
-    onSuccess: () => {
-      // Una sesión nueva cambia totalHours/isLive/sessionCount del juego, y
-      // la lista de sessions.all en sí.
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-    },
-  });
-};
-
 // Borrar una sesión real cerrada — cambia horas/contadores/fechas derivadas
 // del juego (games) y la propia lista (sessions). stateEvents no se toca:
 // el borrado deja el historial de estados intacto a propósito (ver
@@ -131,49 +108,6 @@ export const useStartGameSession = (): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (gameId: number) => window.api.sessions.startForGame(gameId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
-    },
-  });
-};
-
-// Corregir la fecha de un marcador manual de inicio/fin de playthrough
-// (EditGameModal, fechas Started/Finished de una iteración existente).
-// También corrige los stateEvents que nacieron con él (ver la query), de
-// ahí que invalide stateEvents.all además de games/sessions.
-export const useUpdateMilestoneSession = (): UseMutationResult<
-  Session | null,
-  Error,
-  { id: number; date: Date; precision: 'year' | 'month' | 'day' },
-  unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, date, precision }) =>
-      window.api.sessions.updateMilestone(id, date, precision),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
-    },
-  });
-};
-
-// Corregir el desenlace de un playthrough manual (Beaten → Dropped…) desde
-// EditGameModal — reescribe marcador + stateEvent conservando la fecha, no
-// añade un evento nuevo. Mismas invalidaciones que updateMilestone: cambia
-// el estado derivado del juego, el marcador y el historial a la vez.
-export const useUpdateMilestoneOutcome = (): UseMutationResult<
-  Session | null,
-  Error,
-  { id: number; milestone: 'completed' | 'dropped' | 'on_hold' },
-  unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, milestone }) => window.api.sessions.updateMilestoneOutcome(id, milestone),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });

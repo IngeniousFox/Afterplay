@@ -4,7 +4,6 @@ import type {
   NewEmulator,
   NewGame,
   NewIteration,
-  NewSession,
   NewSpendEvent,
   NewStateEvent,
   Session,
@@ -28,10 +27,9 @@ export type CreateGameInput = Omit<NewGame, 'id'>;
 
 export type UpdateGamePatch = Partial<Omit<NewGame, 'id' | 'addedAt'>>;
 
-export type CreateIterationInput = Omit<
-  NewIteration,
-  'id' | 'label' | 'startSessionId' | 'endSessionId'
-> & { label?: string | null };
+export type CreateIterationInput = Omit<NewIteration, 'id' | 'label'> & {
+  label?: string | null;
+};
 
 export type UpdateIterationPatch = Partial<
   Pick<
@@ -45,10 +43,6 @@ export type UpdateIterationPatch = Partial<
     | 'rating'
   >
 >;
-
-export type AddManualSessionInput = Omit<NewSession, 'id' | 'isManual'> & {
-  anchorAs?: 'start' | 'end';
-};
 
 export type AddStateEventInput = Omit<NewStateEvent, 'id'>;
 
@@ -68,11 +62,14 @@ export type PendingSession = {
   durationSec: number | null;
 };
 
-// Corrección de una entrada manual del historial (lápiz de HistoryList).
-// El TIPO nunca se toca en ninguno de los dos (SPEC 4.5: corregir un estado
-// es añadir un evento nuevo) — pero una FECHA/CANTIDAD tecleada mal no es un
-// cambio de opinión, es una errata, y eso sí se corrige sobre la entrada.
+// Corrección de una entrada del historial (lápiz de HistoryList, y las
+// fechas/desenlace del Edit desde el modelo v2 — los eventos SON las fechas
+// de los playthroughs). Cambiar el `type` está reservado a corregir el
+// DESENLACE de un playthrough manual (Beaten → Dropped) desde Edit: ahí no
+// es "reescribir el pasado", es corregir un registro tecleado — el mismo
+// criterio que siempre aplicó a las fechas.
 export type UpdateStateEventPatch = {
+  type?: StateEvent['type'];
   occurredAt?: Date;
   datePrecision?: 'year' | 'month' | 'day' | 'datetime';
   note?: string | null;
@@ -261,9 +258,8 @@ export type SpendEventSummary = {
 };
 
 // Sesión de la vista de Sesiones (Bloque 5A) con el juego ya resuelto — ver
-// getAllSessions.ts. Campos explícitos (no `Session & {...}`) porque el
-// select() que la produce tampoco trae `milestone`: ya filtra por él, no hace
-// falta devolverlo (siempre sería null).
+// getAllSessions.ts. Campos explícitos (no `Session & {...}`) para reflejar
+// exactamente lo que su select() devuelve.
 export type SessionWithGame = {
   id: number;
   iterationId: number;
@@ -278,10 +274,30 @@ export type SessionWithGame = {
   coverUrl: string | null;
 };
 
+// Referencia al evento que fija una fecha de borde del playthrough (modelo
+// v2: las fechas viven en el log de estados) — con lo justo para prellenar
+// el picker del Edit y parchear el evento al guardar.
+export type IterationEdgeEvent = {
+  id: number;
+  occurredAt: Date;
+  datePrecision: 'year' | 'month' | 'day' | 'datetime';
+};
+
 export type IterationDetail = Iteration & {
   hours: number;
+  // Derivadas (modelo v2): startedAt = lo más temprano entre su primera
+  // sesión real y su primer evento 'started'; endedAt = la fecha del último
+  // evento terminal (completed/dropped/on_hold) si el playthrough está en
+  // uno de esos estados ahora.
   startedAt: Date | null;
   endedAt: Date | null;
+  // Primer evento 'started' y último terminal — los "dueños" editables de
+  // esas fechas en Edit. startedBySession=true significa que la fecha de
+  // inicio derivada viene de una sesión MEDIDA (anterior al evento): esa no
+  // se edita, una medición no se falsea.
+  startEvent: IterationEdgeEvent | null;
+  endEvent: IterationEdgeEvent | null;
+  startedBySession: boolean;
   currentState: StateEvent['type'] | null;
   sessions: Session[];
   // Gasto atribuido a ESTE playthrough (no el total del juego) — ver

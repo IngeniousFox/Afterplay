@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { Session } from '../../../../shared/types';
 import { sessionColumns } from '../../projections';
-import { gamesTable, iterationsTable, sessionsTable } from '../../schema';
+import { gamesTable, sessionsTable } from '../../schema';
 import { resolveIterationForPlay } from './resolveIterationForPlay';
 
 // EMULADORES.md §6 — asignar una sesión pendiente (de emulador, sin
@@ -38,11 +38,7 @@ export const assignSession = async (sessionId: number, gameId: number): Promise<
       throw new Error(`El juego ${gameId} no está marcado como emulado`);
     }
 
-    const { iterationId, needsStartAnchor } = await resolveIterationForPlay(
-      tx,
-      gameId,
-      session.startedAt,
-    );
+    const { iterationId } = await resolveIterationForPlay(tx, gameId, session.startedAt);
 
     // emulatorId se conserva a propósito: queda como registro de qué
     // emulador generó la sesión (EMULADORES.md §5).
@@ -51,13 +47,6 @@ export const assignSession = async (sessionId: number, gameId: number): Promise<
       .set({ iterationId })
       .where(eq(sessionsTable.id, sessionId))
       .returning(sessionColumns);
-
-    if (needsStartAnchor) {
-      await tx
-        .update(iterationsTable)
-        .set({ startSessionId: sessionId })
-        .where(eq(iterationsTable.id, iterationId));
-    }
 
     return updated ?? null;
   });

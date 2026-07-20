@@ -2,7 +2,6 @@ import { Check } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useAddIteration } from '../../../hooks/iterations';
-import { useAddSession } from '../../../hooks/sessions';
 import { useAddStateEvent } from '../../../hooks/stateEvents';
 import {
   ENDLESS_STATUS_OPTIONS,
@@ -43,10 +42,9 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
   );
   const [note, setNote] = useState('');
   const addIteration = useAddIteration();
-  const addSession = useAddSession();
   const addStateEvent = useAddStateEvent();
   const status = getGameStatusMeta(game.currentState);
-  const isSaving = addIteration.isPending || addSession.isPending || addStateEvent.isPending;
+  const isSaving = addIteration.isPending || addStateEvent.isPending;
 
   // SPEC 4.5 — guardar el mismo estado que ya está activo, sin nota, no
   // cambia nada de verdad: sería un evento duplicado en el log solo por
@@ -78,25 +76,11 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
       });
       iterationId = iteration.id;
 
-      // "Started" se deriva de la sesión ancla (SPEC 4), así que un
-      // playthrough nuevo necesita una para que no se quede en "—" —
-      // aquí no hay sesión real que trackear (es un cambio de estado
-      // manual, no el botón Play), así que se ancla con una de duración 0
-      // en el momento de guardar, igual que createGameWithDetails.ts.
-      const startedNow = new Date();
-      await addSession.mutateAsync({
-        iterationId,
-        startedAt: startedNow,
-        endedAt: startedNow,
-        durationSec: 0,
-        datePrecision: 'datetime',
-        milestone: 'started',
-        anchorAs: 'start',
-      });
-
-      // Un playthrough nuevo siempre arranca por "Playing" en el log —
-      // si no, el historial empezaría directo en "Completado"/"Dropped"
-      // sin haber pasado nunca por "Jugando".
+      // Un playthrough nuevo siempre arranca por "Playing" en el log — si
+      // no, el historial empezaría directo en "Completado"/"Dropped" sin
+      // haber pasado nunca por "Jugando". Modelo v2: ese evento ES además
+      // la fecha de inicio del playthrough (derivada al leer), sin sesión
+      // marcadora aparte.
       if (pending !== 'playing') {
         await addStateEvent.mutateAsync({
           iterationId,

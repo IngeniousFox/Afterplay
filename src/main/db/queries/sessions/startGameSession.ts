@@ -27,7 +27,7 @@ export const startGameSession = async (gameId: number): Promise<Session | null> 
     if (alreadyOpen) return null;
 
     const now = new Date();
-    const { iterationId, needsStartAnchor } = await resolveIterationForPlay(tx, gameId, now);
+    const { iterationId } = await resolveIterationForPlay(tx, gameId, now);
 
     const [session] = await tx
       .insert(sessionsTable)
@@ -38,16 +38,8 @@ export const startGameSession = async (gameId: number): Promise<Session | null> 
         endedAt: null,
         durationSec: null,
         datePrecision: 'datetime',
-        milestone: null,
       })
       .returning(sessionColumns);
-
-    if (needsStartAnchor) {
-      await tx
-        .update(iterationsTable)
-        .set({ startSessionId: session.id })
-        .where(eq(iterationsTable.id, iterationId));
-    }
 
     return session;
   });

@@ -9,7 +9,7 @@ import {
 } from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
 import { useAddIteration } from '../../hooks/iterations';
-import { useAddSession, useAssignSession } from '../../hooks/sessions';
+import { useAssignSession } from '../../hooks/sessions';
 import { useAddStateEvent } from '../../hooks/stateEvents';
 import {
   ENDLESS_STATUS_OPTIONS,
@@ -165,14 +165,12 @@ export const AddGameModal = ({
   // createGame/promote) — mismas mutations que EditGameModal usa para su
   // modo "+ Add manual" (ver addManualPlaythrough más abajo).
   const addIteration = useAddIteration();
-  const addSession = useAddSession();
   const addStateEvent = useAddStateEvent();
   const activeMutation = isPromote ? promote : isPlan ? createPlanned : createGame;
   const isSaving =
     activeMutation.isPending ||
     assignSession.isPending ||
     addIteration.isPending ||
-    addSession.isPending ||
     addStateEvent.isPending;
 
   const resetAll = (): void => {
@@ -217,8 +215,8 @@ export const AddGameModal = ({
 
   // Un playthrough manual DE MÁS, más allá del primero (que createGame/
   // promote ya crean junto al propio juego) — mismo guion que EditGameModal
-  // usa en su modo "+ Add manual" (iteración + sesiones de borde + log de
-  // estado), aplicado sobre el juego que se acaba de crear.
+  // usa en su modo "+ Add manual": iteración + log de estados. Modelo v2:
+  // las fechas del playthrough SON sus eventos, no hay sesiones marcadoras.
   const addManualPlaythrough = async (
     gameId: number,
     entry: ManualPlaythroughEntry,
@@ -234,34 +232,8 @@ export const AddGameModal = ({
 
     const isOngoing = entry.pastStatus === 'playing';
 
-    if (entry.started) {
-      const date = parseIsoDate(entry.started.isoDate);
-      await addSession.mutateAsync({
-        iterationId: iteration.id,
-        startedAt: date,
-        endedAt: date,
-        durationSec: 0,
-        datePrecision: entry.started.precision,
-        milestone: 'started',
-        anchorAs: 'start',
-      });
-    }
-
-    if (entry.finished && !isOngoing) {
-      const date = parseIsoDate(entry.finished.isoDate);
-      await addSession.mutateAsync({
-        iterationId: iteration.id,
-        startedAt: date,
-        endedAt: date,
-        durationSec: 0,
-        datePrecision: entry.finished.precision,
-        milestone: STATUS_TO_STATE_TYPE[entry.pastStatus] as 'completed' | 'dropped' | 'on_hold',
-        anchorAs: 'end',
-      });
-    }
-
     // SPEC 4.5 — el log de una iteración siempre arranca por "started" antes
-    // de un estado terminal (mismo fix que writeInitialPlaythrough.ts y
+    // de un estado terminal (mismo guion que writeInitialPlaythrough.ts y
     // EditGameModal para su propio "+ Add manual").
     if (entry.started && STATUS_TO_STATE_TYPE[entry.pastStatus] !== 'started') {
       await addStateEvent.mutateAsync({
@@ -273,7 +245,7 @@ export const AddGameModal = ({
       });
     }
 
-    const anchorDate = entry.finished ?? entry.started;
+    const anchorDate = (!isOngoing ? entry.finished : null) ?? entry.started;
     await addStateEvent.mutateAsync({
       iterationId: iteration.id,
       type: STATUS_TO_STATE_TYPE[entry.pastStatus],

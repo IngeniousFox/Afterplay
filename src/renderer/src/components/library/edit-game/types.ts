@@ -1,4 +1,4 @@
-import type { IterationDetail, Session } from '../../../../../shared/types';
+import type { IterationEdgeEvent } from '../../../../../shared/types';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import type { PrecisionDateValue } from '../add-game/DateWithPrecisionPicker';
 import { toPickerValue } from '../add-game/precisionDate';
@@ -28,26 +28,16 @@ export type EditGameFormValues = {
   hoursPlayed: string;
 };
 
-// La sesión ancla (startSessionId/endSessionId) de una iteración, pero SOLO
-// si es un marcador manual (milestone puesto, duración 0 — los que crea
-// "I played this before"): esas fechas las tecleó el usuario y se pueden
-// corregir. Un ancla que sea una sesión real trackeada (watcher/Play,
-// milestone null) devuelve null — una medición no se edita.
-export const milestoneAnchor = (
-  iteration: IterationDetail,
-  which: 'start' | 'end',
-): Session | null => {
-  const anchorId = which === 'start' ? iteration.startSessionId : iteration.endSessionId;
-  if (anchorId === null) return null;
-  const session = iteration.sessions.find((s) => s.id === anchorId) ?? null;
-  return session && session.milestone !== null ? session : null;
-};
-
-// El valor de picker (fecha+precisión) de un marcador. Los marcadores
-// manuales siempre llevan precisión year/month/day, pero por robustez un
-// 'datetime' inesperado cae a 'day' (el picker no maneja horas).
-export const anchorPickerValue = (session: Session | null): PrecisionDateValue | null =>
-  session ? toPickerValue(session.startedAt, session.datePrecision) : null;
+// El valor de picker (fecha+precisión) de un evento de borde del playthrough
+// (modelo v2: las fechas viven en el log de estados — ver IterationDetail).
+// Un 'datetime' (eventos creados en vivo por la app, con hora real) cae a
+// 'day' en el picker, que no maneja horas — pero solo degrada la precisión
+// guardada si el usuario TOCA la fecha (EditGameModal solo parchea si
+// cambió).
+export const edgeEventPickerValue = (
+  event: IterationEdgeEvent | null,
+): PrecisionDateValue | null =>
+  event ? toPickerValue(event.occurredAt, event.datePrecision) : null;
 
 export const EMPTY_ITERATION_FIELDS: Pick<
   EditGameFormValues,

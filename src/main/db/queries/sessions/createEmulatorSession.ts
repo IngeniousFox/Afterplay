@@ -32,7 +32,6 @@ export const createEmulatorSession = async (emulatorId: number): Promise<Session
         endedAt: null,
         durationSec: null,
         datePrecision: 'datetime',
-        milestone: null,
       })
       .returning(sessionColumns);
 

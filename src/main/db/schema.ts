@@ -99,7 +99,11 @@ export const sessionsTable = sqliteTable('sessions', {
   // ni se infla con el hueco de la app apagada. Null en sesiones manuales.
   lastHeartbeatAt: int({ mode: 'timestamp_ms' }),
   datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
-  milestone: text({ enum: ['started', 'completed', 'dropped', 'on_hold'] }),
+  // Modelo v2: una sesión es SOLO tiempo jugado real. La columna `milestone`
+  // (marcadores de borde de duración 0) y las anclas start/endSessionId de
+  // iterations desaparecieron — las fechas de inicio/fin de un playthrough
+  // viven en su log de state_events (única fuente de verdad) y se DERIVAN en
+  // las queries de lectura (ver getGameById).
 });
 
 export const iterationsTable = sqliteTable('iterations', {
@@ -116,8 +120,8 @@ export const iterationsTable = sqliteTable('iterations', {
   // motivo que el resto del archivo.
   rating: int().$type<1 | 2 | 3 | 4 | 5>(),
   extraContent: int({ mode: 'boolean' }).notNull().default(false),
-  startSessionId: int().references(() => sessionsTable.id),
-  endSessionId: int().references(() => sessionsTable.id),
+  // Modelo v2: sin startSessionId/endSessionId — las fechas del playthrough
+  // se derivan de sus sesiones y su log de state_events (ver getGameById).
 });
 
 export const stateEventsTable = sqliteTable('state_events', {

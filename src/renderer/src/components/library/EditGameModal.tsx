@@ -4,17 +4,13 @@ import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
 import { useResetEndlessState, useUpdateGame } from '../../hooks/games';
 import { useAddIteration, useUpdateIteration } from '../../hooks/iterations';
-import {
-  useAddSession,
-  useUpdateMilestoneOutcome,
-  useUpdateMilestoneSession,
-} from '../../hooks/sessions';
-import { useAddStateEvent } from '../../hooks/stateEvents';
+import { useAddStateEvent, useUpdateStateEvent } from '../../hooks/stateEvents';
 import {
   ENDLESS_STATUS_OPTIONS,
   STATE_TO_STATUS_KEY,
   STATUS_TO_STATE_TYPE,
 } from '../../lib/gameStatus';
+import type { PastStatusKey } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
 import { ModalFooter, ModalShell } from '../ui/modal-shell';
 import { Textarea } from '../ui/textarea';
@@ -26,7 +22,7 @@ import { fieldLabelClass, textInputClass } from './add-game/styles';
 import { DEFAULT_FORM_VALUES, parseOptionalNumber } from './add-game/types';
 import { EndlessSection } from './edit-game/EndlessSection';
 import { IterationSection } from './edit-game/IterationSection';
-import { anchorPickerValue, milestoneAnchor } from './edit-game/types';
+import { edgeEventPickerValue } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
 
 type EditGameModalProps = {
@@ -49,15 +45,18 @@ const buildDefaults = (game: GameDetail): EditGameFormValues => {
     iterationMode: iteration ? 'existing' : 'none',
     selectedIterationId: iteration?.id ?? null,
     label: iteration?.label ?? '',
-    // Editables solo cuando el ancla es un marcador manual — misma regla
-    // que loadIteration() en IterationSection.tsx.
-    started: iteration ? anchorPickerValue(milestoneAnchor(iteration, 'start')) : null,
-    finished: iteration ? anchorPickerValue(milestoneAnchor(iteration, 'end')) : null,
+    // Editables solo cuando la fecha viene de un EVENTO del log (modelo v2)
+    // — misma regla que loadIteration() en IterationSection.tsx; un inicio
+    // medido por sesión real queda en solo lectura (null aquí).
+    started:
+      iteration && !iteration.startedBySession ? edgeEventPickerValue(iteration.startEvent) : null,
+    finished: iteration ? edgeEventPickerValue(iteration.endEvent) : null,
     extraContent: iteration?.extraContent ?? false,
     // El fallback depende del tipo de juego: un endless sin estado arranca
-    // en 'resting' (su dropdown ni ofrece 'beaten').
+    // en 'resting' (su dropdown ni ofrece 'beaten'). El cast es seguro:
+    // currentState sale de latestRealStateEvent, que ignora 'plan_to_play'.
     status: iteration?.currentState
-      ? STATE_TO_STATUS_KEY[iteration.currentState]
+      ? (STATE_TO_STATUS_KEY[iteration.currentState] as PastStatusKey)
       : game.endless
         ? 'resting'
         : 'beaten',
@@ -94,20 +93,16 @@ export const EditGameModal = ({
   const addIteration = useAddIteration();
   const updateIteration = useUpdateIteration();
   const resetEndlessState = useResetEndlessState();
-  const addSession = useAddSession();
   const addStateEvent = useAddStateEvent();
-  const updateMilestoneSession = useUpdateMilestoneSession();
-  const updateMilestoneOutcome = useUpdateMilestoneOutcome();
+  const updateStateEvent = useUpdateStateEvent();
 
   const isSaving =
     updateGame.isPending ||
     addIteration.isPending ||
     updateIteration.isPending ||
     resetEndlessState.isPending ||
-    addSession.isPending ||
     addStateEvent.isPending ||
-    updateMilestoneSession.isPending ||
-    updateMilestoneOutcome.isPending;
+    updateStateEvent.isPending;
 
   const handleClose = (): void => {
     if (isSaving) return;
@@ -198,38 +193,14 @@ export const EditGameModal = ({
         manualTotalPlayed: parseOptionalNumber(values.hoursPlayed),
       });
 
+      // Modelo v2: las fechas del playthrough manual SON sus eventos — ya no
+      // se crean sesiones marcadoras aparte.
       const isOngoing = values.status === 'playing';
-
-      if (values.started) {
-        const date = parseIsoDate(values.started.isoDate);
-        await addSession.mutateAsync({
-          iterationId: iteration.id,
-          startedAt: date,
-          endedAt: date,
-          durationSec: 0,
-          datePrecision: values.started.precision,
-          milestone: 'started',
-          anchorAs: 'start',
-        });
-      }
-
-      if (values.finished && !isOngoing) {
-        const date = parseIsoDate(values.finished.isoDate);
-        await addSession.mutateAsync({
-          iterationId: iteration.id,
-          startedAt: date,
-          endedAt: date,
-          durationSec: 0,
-          datePrecision: values.finished.precision,
-          milestone: STATUS_TO_STATE_TYPE[values.status] as 'completed' | 'dropped' | 'on_hold',
-          anchorAs: 'end',
-        });
-      }
 
       // SPEC 4.5 — el log de una iteración siempre debe arrancar por
       // "started" antes de un estado terminal, así que si hay fecha de
-      // inicio y el estado elegido no es "playing", se ancla ese "started"
-      // primero (mismo fix que createGameWithDetails.ts para Add Game).
+      // inicio y el estado elegido no es "playing", ese 'started' va
+      // primero (mismo guion que writeInitialPlaythrough para Add Game).
       if (values.started && STATUS_TO_STATE_TYPE[values.status] !== 'started') {
         await addStateEvent.mutateAsync({
           iterationId: iteration.id,
@@ -240,7 +211,7 @@ export const EditGameModal = ({
         });
       }
 
-      const anchorDate = values.finished ?? values.started;
+      const anchorDate = (!isOngoing ? values.finished : null) ?? values.started;
       await addStateEvent.mutateAsync({
         iterationId: iteration.id,
         type: STATUS_TO_STATE_TYPE[values.status],
@@ -264,17 +235,24 @@ export const EditGameModal = ({
 
       const originalIteration = game.iterations.find((it) => it.id === iterationId);
 
-      // Fechas Started/Finished corregidas — solo si el ancla es un marcador
-      // manual (si no, ni siquiera están en el formulario) y el valor cambió
-      // de verdad respecto al guardado. Un draft a null (borrado con la X del
-      // picker) se ignora: quitar una fecha del todo sería borrar el marcador,
-      // no corregirlo — fuera de alcance aquí.
+      // Fechas Started/Finished corregidas — modelo v2: la fecha ES el
+      // evento, así que corregirla es parchear ese evento. Solo si la fecha
+      // era editable (había evento dueño y no venía de una sesión medida —
+      // si no, ni siquiera está en el formulario) y el valor cambió de
+      // verdad. Un draft a null (borrado con la X del picker) se ignora:
+      // quitar una fecha del todo sería borrar el evento, no corregirlo —
+      // fuera de alcance aquí (para eso está el History).
       if (originalIteration) {
-        for (const which of ['start', 'end'] as const) {
-          const anchor = milestoneAnchor(originalIteration, which);
-          const draft = which === 'start' ? values.started : values.finished;
-          if (!anchor || !draft) continue;
-          const original = anchorPickerValue(anchor);
+        const edges = [
+          {
+            event: originalIteration.startedBySession ? null : originalIteration.startEvent,
+            draft: values.started,
+          },
+          { event: originalIteration.endEvent, draft: values.finished },
+        ];
+        for (const { event, draft } of edges) {
+          if (!event || !draft) continue;
+          const original = edgeEventPickerValue(event);
           if (
             original &&
             original.isoDate === draft.isoDate &&
@@ -282,10 +260,12 @@ export const EditGameModal = ({
           ) {
             continue;
           }
-          await updateMilestoneSession.mutateAsync({
-            id: anchor.id,
-            date: parseIsoDate(draft.isoDate),
-            precision: draft.precision,
+          await updateStateEvent.mutateAsync({
+            id: event.id,
+            patch: {
+              occurredAt: parseIsoDate(draft.isoDate),
+              datePrecision: draft.precision,
+            },
           });
         }
       }
@@ -296,19 +276,17 @@ export const EditGameModal = ({
 
       if (values.status !== previousStatus) {
         const newType = STATUS_TO_STATE_TYPE[values.status];
-        const endAnchor = originalIteration ? milestoneAnchor(originalIteration, 'end') : null;
-        // Playthrough MANUAL cuyo estado actual es justo el del marcador de
-        // fin, cambiado a otro desenlace terminal (Beaten → Dropped…): se
-        // corrige el registro (marcador + evento, conservando su fecha) en
-        // vez de añadir un evento nuevo fechado hoy — que dejaba el Beaten
-        // viejo en el historial y un Dropped "de hoy" sin sentido para una
-        // partida del pasado.
+        // Playthrough con desenlace registrado (endEvent), cambiado a otro
+        // desenlace terminal (Beaten → Dropped…): se corrige el TIPO de ese
+        // mismo evento conservando su fecha, en vez de añadir uno nuevo
+        // fechado hoy — que dejaba el Beaten viejo en el historial y un
+        // Dropped "de hoy" sin sentido para una partida del pasado.
         const isTerminal =
           newType === 'completed' || newType === 'dropped' || newType === 'on_hold';
-        if (endAnchor && isTerminal && originalIteration?.currentState === endAnchor.milestone) {
-          await updateMilestoneOutcome.mutateAsync({
-            id: endAnchor.id,
-            milestone: newType as 'completed' | 'dropped' | 'on_hold',
+        if (originalIteration?.endEvent && isTerminal) {
+          await updateStateEvent.mutateAsync({
+            id: originalIteration.endEvent.id,
+            patch: { type: newType },
           });
         } else {
           await addStateEvent.mutateAsync({

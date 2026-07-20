@@ -8,8 +8,11 @@ import { resolveIterationHours } from './iterationHours';
 // Forma de una fila candidata a "evento de estado más reciente de este
 // juego". La nombro explícitamente en vez de inferirla del array para no
 // tener que ir a buscar la query cada vez que quiera saber qué trae.
+// iterationId: para derivar además el año de las horas manuales por
+// playthrough (modelo v2 — la fecha de fin vive en el log de estados).
 type StateEventCandidate = {
   gameId: number;
+  iterationId: number;
   type: StateEvent['type'];
   occurredAt: Date;
   id: number;
@@ -54,10 +57,6 @@ export const getGames = async (): Promise<GameListItem[]> => {
       id: iterationsTable.id,
       gameId: iterationsTable.gameId,
       manualTotalPlayed: iterationsTable.manualTotalPlayed,
-      // Anclas de inicio/fin — para atribuir las horas manuales de la
-      // iteración a un año concreto (ver manualIterations más abajo).
-      startSessionId: iterationsTable.startSessionId,
-      endSessionId: iterationsTable.endSessionId,
     })
     .from(iterationsTable);
 
@@ -71,11 +70,12 @@ export const getGames = async (): Promise<GameListItem[]> => {
     .select({
       id: sessionsTable.id,
       gameId: iterationsTable.gameId,
-      iterationId: sessionsTable.iterationId,
+      // iterationsTable.id y no sessionsTable.iterationId — mismo valor bajo
+      // el inner join, pero el tipo sale number (no nullable) sin guardas.
+      iterationId: iterationsTable.id,
       startedAt: sessionsTable.startedAt,
       durationSec: sessionsTable.durationSec,
       endedAt: sessionsTable.endedAt,
-      milestone: sessionsTable.milestone,
     })
     .from(sessionsTable)
     .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id));
@@ -91,13 +91,9 @@ export const getGames = async (): Promise<GameListItem[]> => {
       row.iterationId,
       (trackedSecondsByIteration.get(row.iterationId) ?? 0) + (row.durationSec ?? 0),
     );
-    // Los marcadores de borde ("I played this before": milestone puesto,
-    // duración 0) NO cuentan como sesiones — nadie las jugó. Mismo criterio
-    // que getAllSessions y GameStats; sin este filtro, la columna de
-    // Sessions decía "2 sessions" para un juego cuya lista salía vacía.
-    if (row.milestone === null) {
-      sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
-    }
+    // Modelo v2: toda fila de sessions es tiempo jugado real — ya no existen
+    // los marcadores de borde que antes había que descontar aquí.
+    sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
     if (row.endedAt === null) {
       liveSinceByGame.set(row.gameId, row.startedAt);
     }
@@ -112,31 +108,6 @@ export const getGames = async (): Promise<GameListItem[]> => {
     hoursByGame.set(iteration.gameId, (hoursByGame.get(iteration.gameId) ?? 0) + hours);
   }
 
-  // Playthroughs con horas manuales, con el año al que atribuirlas para las
-  // vistas por año de Stats: el de su fecha de FIN (o la de inicio si no hay
-  // fin — un playthrough aún "Playing" con horas manuales), o null si no
-  // tiene ninguna fecha (solo puede contar en All Time). La fecha sale de la
-  // sesión ancla, que ya viene en sessionRows.
-  const sessionStartById = new Map<number, Date>();
-  for (const row of sessionRows) sessionStartById.set(row.id, row.startedAt);
-
-  const manualIterationsByGame = new Map<
-    number,
-    { iterationId: number; hours: number; year: number | null }[]
-  >();
-  for (const iteration of iterations) {
-    if (iteration.manualTotalPlayed === null) continue;
-    const anchorId = iteration.endSessionId ?? iteration.startSessionId;
-    const anchorDate = anchorId !== null ? sessionStartById.get(anchorId) : undefined;
-    const list = manualIterationsByGame.get(iteration.gameId) ?? [];
-    list.push({
-      iterationId: iteration.id,
-      hours: iteration.manualTotalPlayed,
-      year: anchorDate?.getFullYear() ?? null,
-    });
-    manualIterationsByGame.set(iteration.gameId, list);
-  }
-
   // Todos los stateEvents del juego (vía sus iteraciones), sin agregar
   // todavía. El "estado actual" es otro caso de 1-fila-por-grupo (la más
   // reciente por gameId), así que lo resuelvo igual que las horas: traigo las
@@ -145,12 +116,62 @@ export const getGames = async (): Promise<GameListItem[]> => {
   const stateEventRows: StateEventCandidate[] = await db
     .select({
       gameId: iterationsTable.gameId,
+      iterationId: stateEventsTable.iterationId,
       type: stateEventsTable.type,
       occurredAt: stateEventsTable.occurredAt,
       id: stateEventsTable.id,
     })
     .from(stateEventsTable)
     .innerJoin(iterationsTable, eq(stateEventsTable.iterationId, iterationsTable.id));
+
+  // Playthroughs con horas manuales, con el año al que atribuirlas para las
+  // vistas por año de Stats (modelo v2: la fecha sale del LOG de estados,
+  // no de sesiones ancla): el año del último evento terminal del playthrough
+  // (su fin), o el del primer 'started' si no terminó, o null sin fechas
+  // (solo cuenta en All Time).
+  const eventsByIteration = new Map<number, StateEventCandidate[]>();
+  for (const row of stateEventRows) {
+    const list = eventsByIteration.get(row.iterationId) ?? [];
+    list.push(row);
+    eventsByIteration.set(row.iterationId, list);
+  }
+
+  const manualIterationsByGame = new Map<
+    number,
+    { iterationId: number; hours: number; year: number | null }[]
+  >();
+  for (const iteration of iterations) {
+    if (iteration.manualTotalPlayed === null) continue;
+    const events = eventsByIteration.get(iteration.id) ?? [];
+    let anchorDate: Date | null = null;
+    for (const event of events) {
+      const isTerminal =
+        event.type === 'completed' || event.type === 'dropped' || event.type === 'on_hold';
+      if (
+        isTerminal &&
+        (anchorDate === null || event.occurredAt.getTime() > anchorDate.getTime())
+      ) {
+        anchorDate = event.occurredAt;
+      }
+    }
+    if (anchorDate === null) {
+      for (const event of events) {
+        if (
+          event.type === 'started' &&
+          (anchorDate === null || event.occurredAt.getTime() < anchorDate.getTime())
+        ) {
+          anchorDate = event.occurredAt;
+        }
+      }
+    }
+    const list = manualIterationsByGame.get(iteration.gameId) ?? [];
+    list.push({
+      iterationId: iteration.id,
+      hours: iteration.manualTotalPlayed,
+      year: anchorDate?.getFullYear() ?? null,
+    });
+    manualIterationsByGame.set(iteration.gameId, list);
+  }
 
   // Agrupo las candidatas por gameId y le paso cada grupo al helper
   // compartido (ignora 'plan_to_play' — ver schema.ts — y desempata por id):

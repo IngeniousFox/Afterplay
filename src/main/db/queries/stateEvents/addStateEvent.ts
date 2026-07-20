@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { AddStateEventInput, StateEvent } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
@@ -6,9 +6,10 @@ import { iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
 import { computeDurationSec } from '../sessions/sessionDuration';
 import { latestRealStateEvent } from './latestRealStateEvent';
 
-// Hitos que cierran un playthrough (todo salvo 'started'). Al registrar uno se
-// ancla una sesión como endSessionId de la iteración, de la que se derivan su
-// fecha de "fin" y qué sesión marcó el hito (ver el bloque de anclaje abajo).
+// Hitos que cierran un playthrough (todo salvo 'started'). Al registrar uno,
+// si el juego sigue en marcha se cierra su sesión abierta en el instante del
+// hito (ver el bloque final) — la fecha de "fin" del playthrough es el
+// propio evento (modelo v2, derivada al leer).
 const TERMINAL_TYPES = new Set(['completed', 'dropped', 'on_hold', 'resting']);
 
 export const addStateEvent = async (input: AddStateEventInput): Promise<StateEvent> => {
@@ -96,48 +97,24 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
       .returning(stateEventColumns);
 
     if (TERMINAL_TYPES.has(input.type)) {
-      // El hito de cierre se ancla a una sesión para derivar la fecha de "fin"
-      // de la iteración (Finished/left) y saber qué sesión lo marcó (SPEC 4.5:
-      // "fin = última sesión / evento de cierre"). Sin sesiones (un juego que
-      // se marca sin haberlo jugado nunca en la app) no hay nada que anclar y
-      // "fin" se queda en blanco.
-      const sessions = await tx
-        .select({
-          id: sessionsTable.id,
-          startedAt: sessionsTable.startedAt,
-          endedAt: sessionsTable.endedAt,
-        })
+      // Terminas mientras el juego sigue en marcha (sesión del watcher
+      // todavía abierta): se cierra AQUÍ, en el instante del hito — si no,
+      // sus horas se quedarían sin contar (durationSec null mientras está
+      // abierta) hasta que el watcher detecte el cierre real más tarde.
+      // Modelo v2: la fecha de "fin" del playthrough ES este propio evento
+      // (derivada al leer) — ya no hay ancla endSessionId que mantener.
+      const [openSession] = await tx
+        .select({ id: sessionsTable.id, startedAt: sessionsTable.startedAt })
         .from(sessionsTable)
-        .where(eq(sessionsTable.iterationId, input.iterationId))
-        .orderBy(asc(sessionsTable.startedAt), asc(sessionsTable.id));
-
-      const openSession = sessions.find((session) => session.endedAt === null);
-      let endSessionId: number | undefined;
+        .where(and(eq(sessionsTable.iterationId, input.iterationId), isNull(sessionsTable.endedAt)))
+        .limit(1);
 
       if (openSession) {
-        // Terminas mientras el juego sigue en marcha (sesión del watcher
-        // todavía abierta): se cierra AQUÍ, en el instante del hito — si no,
-        // sus horas se quedarían sin contar (durationSec null mientras está
-        // abierta) hasta que el watcher detecte el cierre real más tarde, y
-        // "Finished/left" mostraría el INICIO de esa sesión en vez de ahora.
         const durationSec = computeDurationSec(openSession.startedAt, occurredAt);
         await tx
           .update(sessionsTable)
           .set({ endedAt: occurredAt, durationSec })
           .where(eq(sessionsTable.id, openSession.id));
-        endSessionId = openSession.id;
-      } else {
-        // Lo normal cuando marcas el estado DESPUÉS de cerrar el juego (el
-        // watcher ya cerró la sesión al detectar el cierre): se ancla a la
-        // última.
-        endSessionId = sessions[sessions.length - 1]?.id;
-      }
-
-      if (endSessionId) {
-        await tx
-          .update(iterationsTable)
-          .set({ endSessionId })
-          .where(eq(iterationsTable.id, input.iterationId));
       }
     }
 

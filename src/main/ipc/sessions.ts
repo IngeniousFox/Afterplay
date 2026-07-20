@@ -1,6 +1,4 @@
 import { handleDb } from './dbHandle';
-import type { AddManualSessionInput } from '../../shared/types';
-import { addManualSession } from '../db/queries/sessions/addManualSession';
 import { closeSession } from '../db/queries/sessions/closeSession';
 import { deleteSession } from '../db/queries/sessions/deleteSession';
 import { getAllSessions } from '../db/queries/sessions/getAllSessions';
@@ -8,14 +6,11 @@ import { assignSession } from '../db/queries/sessions/assignSession';
 import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
-import { updateMilestoneOutcome } from '../db/queries/sessions/updateMilestoneOutcome';
-import { updateMilestoneSession } from '../db/queries/sessions/updateMilestoneSession';
 
+// Modelo v2: fuera sessions:add y sessions:updateMilestone*(...) — los
+// marcadores de borde ya no existen; las fechas y desenlaces de un
+// playthrough se corrigen editando sus stateEvents (stateEvents:update).
 export const registerSessionsHandlers = (): void => {
-  handleDb('sessions:add', async (_event, input: AddManualSessionInput) => {
-    return addManualSession(input);
-  });
-
   // Botón Play (ActionBar): misma función que usa el watcher al detectar un
   // arranque (startGameSession) — no una reimplementación aparte a mano en
   // el renderer, para que el resultado sea IDÉNTICO se dispare como se
@@ -35,32 +30,11 @@ export const registerSessionsHandlers = (): void => {
     return closeSession(id, endedAt);
   });
 
-  // Borrar una sesión real cerrada (vista de Sesiones / Session History del
-  // detalle) — la query re-ancla el playthrough si la sesión era su ancla y
-  // rechaza abiertas y marcadores (ver deleteSession.ts).
+  // Borrar una sesión cerrada (vista de Sesiones / Session History del
+  // detalle) — rechaza abiertas (ver deleteSession.ts).
   handleDb('sessions:delete', async (_event, id: number) => {
     return deleteSession(id);
   });
-
-  // Corregir la fecha de un marcador manual de inicio/fin de playthrough
-  // ("I played this before" con el día equivocado) — ver la query para el
-  // porqué también corrige los stateEvents nacidos con él.
-  handleDb(
-    'sessions:updateMilestone',
-    async (_event, id: number, date: Date, precision: 'year' | 'month' | 'day') => {
-      return updateMilestoneSession(id, date, precision);
-    },
-  );
-
-  // Corregir el DESENLACE de un playthrough manual (Beaten → Dropped…) —
-  // reescribe el marcador de fin y su stateEvent conservando la fecha, en
-  // vez de añadir un evento nuevo fechado hoy (ver la query).
-  handleDb(
-    'sessions:updateMilestoneOutcome',
-    async (_event, id: number, milestone: 'completed' | 'dropped' | 'on_hold') => {
-      return updateMilestoneOutcome(id, milestone);
-    },
-  );
 
   // EMULADORES.md — bandeja de sesiones de emulador sin asignar y su
   // asignación a un juego de la biblioteca.

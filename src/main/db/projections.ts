@@ -52,8 +52,6 @@ export const iterationColumns = {
   manualTotalPlayed: iterationsTable.manualTotalPlayed,
   rating: iterationsTable.rating,
   extraContent: iterationsTable.extraContent,
-  startSessionId: iterationsTable.startSessionId,
-  endSessionId: iterationsTable.endSessionId,
 };
 
 export const sessionColumns = {
@@ -66,7 +64,6 @@ export const sessionColumns = {
   durationSec: sessionsTable.durationSec,
   lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
   datePrecision: sessionsTable.datePrecision,
-  milestone: sessionsTable.milestone,
 };
 
 export const emulatorColumns = {

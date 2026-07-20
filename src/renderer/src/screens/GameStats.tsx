@@ -117,15 +117,9 @@ export const GameStats = ({
 
   // useAllSessions() ya trae todo esto, pero game.iterations (useGame) es la
   // misma info sin un segundo viaje — el detalle de un juego ya la trae
-  // completa, no hace falta pedirla dos veces.
-  const allSessions = useMemo(() => game?.iterations.flatMap((it) => it.sessions) ?? [], [game]);
-  // Los marcadores de borde (milestone no nulo, duración 0 — ver
-  // createGameWithDetails.ts) no son sesiones que nadie jugó; fuera para
-  // medias/heatmap, igual que en SessionHistoryList/getAllSessions.
-  const realSessions = useMemo(
-    () => allSessions.filter((session) => session.milestone === null),
-    [allSessions],
-  );
+  // completa, no hace falta pedirla dos veces. Modelo v2: toda sesión es
+  // tiempo jugado real, ya no hay marcadores que filtrar.
+  const realSessions = useMemo(() => game?.iterations.flatMap((it) => it.sessions) ?? [], [game]);
   const heatmapYears = useMemo(
     () => yearsDesc(realSessions.map((session) => session.startedAt)),
     [realSessions],

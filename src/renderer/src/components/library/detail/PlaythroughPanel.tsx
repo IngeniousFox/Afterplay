@@ -108,10 +108,13 @@ export const PlaythroughPanel = ({
     ]),
   );
   const status = getGameStatusMeta(iteration.currentState);
-  const startSession = iteration.sessions.find(
-    (session) => session.id === iteration.startSessionId,
-  );
-  const endSession = iteration.sessions.find((session) => session.id === iteration.endSessionId);
+  // Modelo v2 — la precisión de cada fecha derivada: un inicio medido por
+  // sesión real es un instante exacto (datetime); uno tecleado a mano lleva
+  // la precisión de su evento. El fin siempre viene de un evento.
+  const startedPrecision = iteration.startedBySession
+    ? ('datetime' as const)
+    : (iteration.startEvent?.datePrecision ?? 'day');
+  const endedPrecision = iteration.endEvent?.datePrecision ?? 'day';
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
@@ -144,7 +147,11 @@ export const PlaythroughPanel = ({
         <RatingRow
           rating={iteration.rating}
           onRate={(value) =>
-            updateIteration.mutate({ id: iteration.id, patch: { rating: value || null } })
+            updateIteration.mutate({
+              id: iteration.id,
+              // 0 = quitar la nota (click en la estrella ya activa).
+              patch: { rating: value === 0 ? null : (value as 1 | 2 | 3 | 4 | 5) },
+            })
           }
         />
 
@@ -152,11 +159,7 @@ export const PlaythroughPanel = ({
           label="Started"
           value={
             iteration.startedAt
-              ? formatByPrecision(
-                  iteration.startedAt,
-                  startSession?.datePrecision ?? 'day',
-                  timeFormat,
-                )
+              ? formatByPrecision(iteration.startedAt, startedPrecision, timeFormat)
               : '—'
           }
         />
@@ -164,7 +167,7 @@ export const PlaythroughPanel = ({
           label="Finished / left"
           value={
             iteration.endedAt
-              ? formatByPrecision(iteration.endedAt, endSession?.datePrecision ?? 'day', timeFormat)
+              ? formatByPrecision(iteration.endedAt, endedPrecision, timeFormat)
               : '—'
           }
         />

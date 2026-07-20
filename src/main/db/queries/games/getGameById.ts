@@ -63,6 +63,9 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   // filtrar el array entero por cada iteración dentro del map de abajo.
   const sessionsByIteration = new Map<number, typeof sessions>();
   for (const session of sessions) {
+    // iterationId nullable en el tipo (sesiones de emulador pendientes),
+    // pero aquí imposible: la query filtra por inArray(iterationId, ids).
+    if (session.iterationId === null) continue;
     const list = sessionsByIteration.get(session.iterationId) ?? [];
     list.push(session);
     sessionsByIteration.set(session.iterationId, list);
@@ -119,22 +122,57 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
 
     const hours = resolveIterationHours(iteration.manualTotalPlayed, trackedSeconds);
 
-    const startSession = iterationSessions.find(
-      (session) => session.id === iteration.startSessionId,
-    );
-    const endSession = iterationSessions.find((session) => session.id === iteration.endSessionId);
-
     const iterationStateEvents = stateEventsByIteration.get(iteration.id) ?? [];
     // Ignorando 'plan_to_play': es solo historial (ver schema.ts), nunca el
     // estado real — un juego promovido desde el Plan como Unplayed no tiene
     // más eventos y debe salir null (Unplayed), no "planeado".
     const latestEvent = latestRealStateEvent(iterationStateEvents);
 
+    // Modelo v2 — fechas DERIVADAS, el log de estados es la fuente de
+    // verdad. Inicio: lo más temprano entre la primera sesión real y el
+    // primer evento 'started' (los eventos vienen ya ordenados asc de la
+    // query). Fin: la fecha del último evento terminal, solo si el
+    // playthrough ESTÁ en un estado terminal ahora (uno reabierto no tiene
+    // "fin" aunque tuviera un completed antiguo en el log).
+    const startEventRow = iterationStateEvents.find((event) => event.type === 'started') ?? null;
+    const firstSessionAt = iterationSessions.reduce<Date | null>(
+      (earliest, session) =>
+        earliest === null || session.startedAt.getTime() < earliest.getTime()
+          ? session.startedAt
+          : earliest,
+      null,
+    );
+    const startedBySession =
+      firstSessionAt !== null &&
+      (startEventRow === null || firstSessionAt.getTime() < startEventRow.occurredAt.getTime());
+    const startedAt = startedBySession ? firstSessionAt : (startEventRow?.occurredAt ?? null);
+
+    const currentIsTerminal =
+      latestEvent?.type === 'completed' ||
+      latestEvent?.type === 'dropped' ||
+      latestEvent?.type === 'on_hold';
+    const endEventRow = currentIsTerminal && latestEvent ? latestEvent : null;
+
     return {
       ...iteration,
       hours,
-      startedAt: startSession?.startedAt ?? null,
-      endedAt: endSession ? (endSession.endedAt ?? endSession.startedAt) : null,
+      startedAt,
+      endedAt: endEventRow?.occurredAt ?? null,
+      startEvent: startEventRow
+        ? {
+            id: startEventRow.id,
+            occurredAt: startEventRow.occurredAt,
+            datePrecision: startEventRow.datePrecision,
+          }
+        : null,
+      endEvent: endEventRow
+        ? {
+            id: endEventRow.id,
+            occurredAt: endEventRow.occurredAt,
+            datePrecision: endEventRow.datePrecision,
+          }
+        : null,
+      startedBySession,
       currentState: latestEvent?.type ?? null,
       sessions: iterationSessions,
       spend: spendByIteration.get(iteration.id) ?? 0,

@@ -5,6 +5,7 @@ import { useDeleteIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision } from '../../../lib/format';
 import { NORMAL_STATUS_OPTIONS, STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
+import type { PastStatusKey } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { NumberInput } from '../../ui/number-input';
 import { CheckboxRow } from '../add-game/CheckboxRow';
@@ -15,7 +16,7 @@ import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
 import { FORMAT_OPTIONS, ORIGIN_SEGMENT_OPTIONS, PLATFORM_OPTIONS } from '../add-game/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
-import { anchorPickerValue, EMPTY_ITERATION_FIELDS, milestoneAnchor } from './types';
+import { edgeEventPickerValue, EMPTY_ITERATION_FIELDS } from './types';
 import type { EditGameFormValues } from './types';
 
 type IterationSectionProps = {
@@ -38,9 +39,13 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
     setValue('selectedIterationId', iteration.id);
     setValue('label', iteration.label);
     setValue('extraContent', iteration.extraContent);
+    // El cast es seguro: currentState sale de latestRealStateEvent, que
+    // ignora 'plan_to_play' — nunca llega aquí el estado 'plan'.
     setValue(
       'status',
-      iteration.currentState ? STATE_TO_STATUS_KEY[iteration.currentState] : 'beaten',
+      iteration.currentState
+        ? (STATE_TO_STATUS_KEY[iteration.currentState] as PastStatusKey)
+        : 'beaten',
     );
     setValue('platform', iteration.playedPlatform);
     setValue('format', iteration.format ?? 'digital');
@@ -49,11 +54,15 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
       'hoursPlayed',
       iteration.manualTotalPlayed !== null ? String(iteration.manualTotalPlayed) : '',
     );
-    // Solo las fechas ancladas a un marcador MANUAL entran al formulario
-    // (editables); las de sesiones reales se quedan fuera (null) y su campo
-    // se pinta en solo lectura.
-    setValue('started', anchorPickerValue(milestoneAnchor(iteration, 'start')));
-    setValue('finished', anchorPickerValue(milestoneAnchor(iteration, 'end')));
+    // Modelo v2 — las fechas de borde SON eventos del log. Solo entran al
+    // formulario (editables) cuando su dueño es un evento: un inicio que
+    // viene de una sesión MEDIDA (startedBySession) se queda fuera (null) y
+    // su campo se pinta en solo lectura — una medición no se falsea.
+    setValue(
+      'started',
+      iteration.startedBySession ? null : edgeEventPickerValue(iteration.startEvent),
+    );
+    setValue('finished', edgeEventPickerValue(iteration.endEvent));
   };
 
   const startNewManual = (): void => {
@@ -144,17 +153,17 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
       </div>
 
       {iterationMode === 'existing' && selectedIteration ? (
-        // Editable SOLO si el ancla es un marcador manual (fecha tecleada a
-        // mano al registrar el playthrough — corregible); si es una sesión
-        // real trackeada, la fecha es una medición y se queda en solo
+        // Editable SOLO si la fecha viene de un evento del log (tecleada a
+        // mano — corregible, el guardado parchea ese evento); si viene de
+        // una sesión real trackeada, es una medición y se queda en solo
         // lectura, como siempre.
         <div className="flex gap-2.5">
-          {milestoneAnchor(selectedIteration, 'start') ? (
+          {!selectedIteration.startedBySession && selectedIteration.startEvent ? (
             <FormDatePicker name="started" label="Started" />
           ) : (
             <ReadonlyDateField label="Started" iteration={selectedIteration} field="startedAt" />
           )}
-          {milestoneAnchor(selectedIteration, 'end') ? (
+          {selectedIteration.endEvent ? (
             <FormDatePicker name="finished" label="Finished / left" />
           ) : (
             <ReadonlyDateField

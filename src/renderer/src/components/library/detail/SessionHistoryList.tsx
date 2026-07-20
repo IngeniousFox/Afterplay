@@ -1,4 +1,4 @@
-import { ArrowRight, Flag, Flame, Timer, Trash2 } from 'lucide-react';
+import { ArrowRight, Flame, Timer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Session } from '../../../../../shared/types';
@@ -31,8 +31,8 @@ const SessionRow = ({
   session: Session;
   maxDurationSec: number;
   isRecord: boolean;
-  // Solo llega para sesiones reales CERRADAS — ni las vivas (se paran con
-  // Stop) ni los marcadores (se gestionan desde Edit) se borran desde aquí.
+  // Solo llega para sesiones CERRADAS — una viva se para con Stop, no se
+  // borra (el watcher la reabriría al ciclo siguiente).
   onDelete?: () => void;
 }): React.JSX.Element => {
   const isLive = session.endedAt === null;
@@ -40,16 +40,10 @@ const SessionRow = ({
   const durationSec = isLive ? liveSeconds : (session.durationSec ?? 0);
   const { data: timeFormat = '24h' } = useTimeFormat();
   const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
-  // Las sesiones de borde (inicio/fin de un playthrough manual, ver
-  // createGameWithDetails.ts/EditGameModal.tsx) siempre llevan duración 0 a
-  // propósito — son solo un marcador de fecha, nunca una partida real. Un
-  // "00:00:00" ahí parece un bug; un icono de marcador + guión deja claro
-  // que es intencional. Sin relleno tampoco: no hay duración que proporcionar.
-  const isMarker = !isLive && durationSec === 0;
+  // Modelo v2: toda sesión es tiempo jugado real — los marcadores de borde
+  // de duración 0 ya no existen (las fechas viven en el historial).
   const fillPct =
-    !isMarker && !isLive && maxDurationSec > 0
-      ? Math.max(3, (durationSec / maxDurationSec) * 100)
-      : 0;
+    !isLive && maxDurationSec > 0 ? Math.max(3, (durationSec / maxDurationSec) * 100) : 0;
 
   return (
     <div
@@ -71,11 +65,7 @@ const SessionRow = ({
         />
       )}
       <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-white/5">
-        {isMarker ? (
-          <Flag size={14} className="text-muted-foreground" />
-        ) : (
-          <Timer size={15} className="text-muted-foreground" />
-        )}
+        <Timer size={15} className="text-muted-foreground" />
       </div>
       <div className="relative z-1 min-w-0 flex-1">
         <div className="text-[13.5px] font-semibold text-foreground">
@@ -88,13 +78,7 @@ const SessionRow = ({
           className="mt-0.5 text-xs"
           style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
         >
-          {isLive
-            ? 'Live now'
-            : isMarker
-              ? 'Manual Session'
-              : session.isManual
-                ? 'Manual'
-                : 'Tracked'}
+          {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
         </div>
       </div>
       <div className="relative z-1 flex flex-none items-center gap-1.5">
@@ -103,7 +87,7 @@ const SessionRow = ({
           className="text-[13px] font-semibold tabular-nums"
           style={{ color: isLive ? '#2fdc7e' : 'var(--foreground)' }}
         >
-          {isMarker ? '—' : formatElapsed(durationSec)}
+          {formatElapsed(durationSec)}
         </span>
       </div>
       {onDelete && (
@@ -135,10 +119,7 @@ export const SessionHistoryList = ({
     1,
   );
   const visible = sessions.slice(0, VISIBLE_LIMIT);
-  // La vista de Sesiones (Bloque 5A) no cuenta los marcadores de borde — el
-  // número del botón debe prometer lo mismo que ahí se va a ver, aunque esta
-  // lista de aquí SÍ siga mostrando los marcadores (con su icono de bandera).
-  const realSessionsCount = sessions.filter((session) => session.milestone === null).length;
+  const realSessionsCount = sessions.length;
 
   return (
     <div className="mt-7.5">
@@ -157,11 +138,7 @@ export const SessionHistoryList = ({
                 session.durationSec > 0 &&
                 session.durationSec === maxDurationSec
               }
-              onDelete={
-                session.endedAt !== null && session.milestone === null
-                  ? () => setPendingDelete(session)
-                  : undefined
-              }
+              onDelete={session.endedAt !== null ? () => setPendingDelete(session) : undefined}
             />
           </div>
         ))}
