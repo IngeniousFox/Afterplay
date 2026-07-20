@@ -6,6 +6,8 @@ import { useCredentials } from '../../hooks/settings';
 import { AMBER } from '../../lib/colors';
 import { SettingsModal } from './SettingsModal';
 
+const GREEN = '#2fdc7e';
+
 type NavItem = {
   to: string;
   Icon: typeof Gamepad2;
@@ -82,15 +84,19 @@ export const NavRail = (): React.JSX.Element => {
         >
           {({ isActive }) => (
             <>
+              {/* Mismo verde de acento que ya lleva la fila seleccionada del
+                  MiddleColumn de al lado (antes gris genérico aquí, la
+                  misma inconsistencia que se arregló ahí) — barra a la
+                  misma opacidad suave (no a tope) que se afinó allí. */}
               {isActive && (
                 <>
                   <div
                     className="absolute inset-0 rounded-[11px]"
-                    style={{ background: 'rgba(255,255,255,.07)' }}
+                    style={{ background: `${GREEN}1f` }}
                   />
                   <div
                     className="absolute top-2.75 bottom-2.75 w-0.75 rounded-[3px]"
-                    style={{ left: '-14px', background: 'rgba(255,255,255,.5)' }}
+                    style={{ left: '-14px', background: `${GREEN}b3` }}
                   />
                 </>
               )}

@@ -13,7 +13,7 @@ import {
 import type { PastStatusKey } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
 import { ModalFooter, ModalShell } from '../ui/modal-shell';
-import { Textarea } from '../ui/textarea';
+import { NotesEditor } from './detail/NotesEditor';
 import { CheckboxRow } from './add-game/CheckboxRow';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
@@ -360,15 +360,20 @@ export const EditGameModal = ({
           {!isEmulated && <ExecutablePathField />}
 
           <div>
-            <div className={fieldLabelClass}>NOTES</div>
+            <div className={`${fieldLabelClass} mb-1.5`}>NOTES</div>
             <Controller
               control={control}
               name="notes"
               render={({ field }) => (
-                <Textarea
-                  {...field}
-                  placeholder="Markdown supported…"
-                  className={`${textInputClass} min-h-20 font-mono`}
+                // key + value desde game.notes (no field.value): el modal
+                // reusa el formulario entre juegos y resetea en un efecto, así
+                // que remontar por juego con la nota real evita quedarse con
+                // la del juego anterior. onChange sigue escribiendo al form.
+                <NotesEditor
+                  key={game.id}
+                  value={game.notes ?? ''}
+                  onChange={field.onChange}
+                  minHeightClass="min-h-36"
                 />
               )}
             />

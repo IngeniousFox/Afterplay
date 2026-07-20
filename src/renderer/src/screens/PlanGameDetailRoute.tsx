@@ -10,7 +10,9 @@ export const PlanGameDetailRoute = (): React.JSX.Element => {
   return (
     <PlanGameDetail
       gameId={Number(id)}
-      onBack={() => navigate('/plan')}
+      // viewTransition — mismo cross-fade nativo que GameDetailRoute, mismo
+      // motivo (ver el comentario allí).
+      onBack={() => navigate('/plan', { viewTransition: true })}
       onPromoted={() => navigate(`/games/${id}`)}
     />
   );

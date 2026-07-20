@@ -1,6 +1,6 @@
 import type { StateEvent } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
-import { DAY_MS } from '../../lib/dateMath';
+import { daysBetween, humanizeSpan } from '../../lib/dateMath';
 import { formatByPrecision } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { StatusIcon } from '../StatusIcon';
@@ -13,17 +13,6 @@ type GameJourneyCardProps = {
   stateHistory: StateEvent[];
   sessions: JourneySession[];
 };
-
-// "hace 3 días" / "8 months" — un tramo de tiempo en la unidad que mejor se
-// lee: días hasta ~2 meses, meses hasta ~2 años, años después.
-const humanizeSpan = (days: number): string => {
-  if (days < 1) return 'less than a day';
-  if (days < 60) return `${Math.round(days)} ${Math.round(days) === 1 ? 'day' : 'days'}`;
-  if (days < 730) return `${Math.round(days / 30.44)} months`;
-  return `${Math.round(days / 365.25)} years`;
-};
-
-const daysBetween = (from: Date, to: Date): number => (to.getTime() - from.getTime()) / DAY_MS;
 
 // "Your journey" — la historia del juego contigo como línea temporal
 // horizontal: Added → Started → ... → Beaten, con los derivados que un

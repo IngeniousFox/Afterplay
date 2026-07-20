@@ -60,7 +60,10 @@ export const PlayedBeforePanel = (): React.JSX.Element => {
 
       <div className="flex items-end gap-2.5">
         <div className="flex-1">
-          <div className={fieldLabelClass}>HOURS PLAYED</div>
+          <div className={fieldLabelClass}>
+            HOURS PLAYED{' '}
+            <span className="font-medium tracking-normal normal-case">· outside the app</span>
+          </div>
           <Controller
             control={control}
             name="hoursPlayed"

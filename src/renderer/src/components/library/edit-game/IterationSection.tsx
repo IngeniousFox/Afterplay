@@ -188,7 +188,10 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
           <FormStatusDropdown />
         </div>
         <div className="flex-1">
-          <div className={fieldLabelClass}>HOURS PLAYED</div>
+          <div className={fieldLabelClass}>
+            HOURS PLAYED{' '}
+            <span className="font-medium tracking-normal normal-case">· outside the app</span>
+          </div>
           <FormInput name="hoursPlayed" type="number" min={0} step="0.5" placeholder="0" />
         </div>
       </div>

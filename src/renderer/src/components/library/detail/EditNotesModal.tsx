@@ -3,8 +3,7 @@ import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useUpdateGame } from '../../../hooks/games';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
-import { Textarea } from '../../ui/textarea';
-import { textInputClass } from '../add-game/styles';
+import { NotesEditor } from './NotesEditor';
 
 type EditNotesModalProps = {
   game: GameDetail;
@@ -51,7 +50,7 @@ export const EditNotesModal = ({
       open={open}
       onClose={handleClose}
       title="Edit notes"
-      widthClass="w-135"
+      widthClass="w-175"
       bodyClassName="px-5.5 py-5"
       footer={
         <ModalFooter
@@ -64,13 +63,11 @@ export const EditNotesModal = ({
         />
       }
     >
-      <Textarea
-        value={notes}
-        onChange={(event) => setNotes(event.target.value)}
-        autoFocus
-        placeholder="Markdown supported…"
-        className={`${textInputClass} min-h-40 font-mono`}
-      />
+      {/* El editor solo lee `value` al MONTAR (mientras vive, él es la fuente
+          de verdad). El portal del Dialog ya desmonta su contenido al cerrar,
+          así que cada apertura lo monta de cero con la nota recién recargada;
+          el key lo garantiza aunque eso cambie. */}
+      <NotesEditor key={open ? 'open' : 'closed'} value={notes} onChange={setNotes} />
     </ModalShell>
   );
 };

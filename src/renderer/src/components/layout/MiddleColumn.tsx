@@ -6,8 +6,11 @@ import { useGames, usePlannedGames } from '../../hooks/games';
 import { formatHours, pluralize } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { filterByTitle } from '../../lib/search';
+import { revealClass, revealStyle } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { StatusIcon } from '../StatusIcon';
+
+const GREEN = '#2fdc7e';
 
 type ShellProps = {
   label: string;
@@ -52,9 +55,16 @@ const MiddleColumnShell = ({
   </div>
 );
 
+// Mismo lenguaje que el badge PLAYING del HeroBanner y el de OngoingBadge:
+// puntito pulsante + texto, no solo texto suelto — aquí era el único sitio
+// de la app donde "LIVE" no llevaba el pulso.
 const LiveTag = (): React.JSX.Element => (
-  <span className="ml-1 flex-none text-[9.5px] font-extrabold tracking-[.08em] text-primary">
-    LIVE
+  <span className="ml-1 flex flex-none items-center gap-1">
+    <span
+      className="h-1.25 w-1.25 rounded-full bg-primary"
+      style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
+    />
+    <span className="text-[9.5px] font-extrabold tracking-[.08em] text-primary">LIVE</span>
   </span>
 );
 
@@ -85,6 +95,24 @@ type RowProps = {
   rightLabel: string;
 };
 
+// El overlay de "esta es la fila abierta ahora mismo" — antes un gris
+// translúcido genérico igual en las 2 variantes de fila (GameRow/
+// AllGamesRow); ahora el verde de acento de la marca, con una barra a la
+// izquierda a modo de "estás aquí" (mismo lenguaje que un tab activo), no
+// solo un tinte de fondo que se podía confundir con un simple hover.
+const SelectedOverlay = (): React.JSX.Element => (
+  <div
+    className="absolute inset-0 rounded-[10px] border"
+    style={{
+      background: `${GREEN}14`,
+      borderColor: `${GREEN}40`,
+      // Más fina (2.5px -> 1.5px) y ya no a tope de opacidad — a color
+      // sólido se leía como un bloque pegado al borde, no como un acento.
+      boxShadow: `inset 1.5px 0 0 0 ${GREEN}b3`,
+    }}
+  />
+);
+
 // Fila de juego con carátula — comparte marcado entre las 3 variantes,
 // solo cambia el contenido del subtítulo (estado vs nº de sesiones) y el
 // valor de la derecha, que cada columna decide.
@@ -100,12 +128,7 @@ const GameRow = ({
       onClick={onClick}
       className="relative mb-0.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.25 hover:bg-white/[0.04]"
     >
-      {selected && (
-        <div
-          className="absolute inset-0 rounded-[10px] border"
-          style={{ background: 'rgba(255,255,255,.06)', borderColor: 'rgba(255,255,255,.12)' }}
-        />
-      )}
+      {selected && <SelectedOverlay />}
       <GameCover
         url={game.coverUrl}
         className="relative z-1 h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border"
@@ -140,12 +163,7 @@ const AllGamesRow = ({
     onClick={onClick}
     className="relative mb-1.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.5 hover:bg-white/[0.04]"
   >
-    {selected && (
-      <div
-        className="absolute inset-0 rounded-[10px] border"
-        style={{ background: 'rgba(255,255,255,.06)', borderColor: 'rgba(255,255,255,.12)' }}
-      />
-    )}
+    {selected && <SelectedOverlay />}
     <div className="relative z-1 flex h-12 w-9 flex-none items-center justify-center rounded-[6px] border border-border bg-white/[0.04]">
       <Icon size={18} color="var(--muted-foreground)" />
     </div>
@@ -163,22 +181,32 @@ const useFilteredGames = (search: string): GameListItem[] => {
 
 // Cabecera de grupo de la columna de biblioteca (estilo Steam) — clicable
 // para plegar/desplegar cuando lleva onToggle; sin él es un rótulo fijo.
+// `color` opcional: un tinte para grupos que representan algo concreto (el
+// de Playing & On Hold en verde) — sin él se queda en el gris neutro de
+// siempre (All Games no es "de" ningún color, es solo "el resto").
 const GroupHeader = ({
   label,
   count,
   open,
   onToggle,
+  color,
 }: {
   label: string;
   count: number;
   open?: boolean;
   onToggle?: () => void;
+  color?: string;
 }): React.JSX.Element => (
   <div
     onClick={onToggle}
-    className={`flex items-center gap-1.5 rounded-md px-2.5 pt-2 pb-1.5 text-[10.5px] font-bold tracking-[.11em] text-muted-foreground ${
-      onToggle ? 'cursor-pointer select-none hover:text-foreground' : ''
-    }`}
+    className={`flex items-center gap-1.5 rounded-md px-2.5 pt-2 pb-1.5 text-[10.5px] font-bold tracking-[.11em] ${
+      // hover:text-foreground se queda sin efecto cuando hay `color` (un
+      // style inline SIEMPRE gana sobre una clase) — intencional: un grupo
+      // ya coloreado no necesita además un cambio de color al pasar el
+      // ratón, el propio color ya es la distinción.
+      color ? '' : 'text-muted-foreground'
+    } ${onToggle ? 'cursor-pointer select-none hover:text-foreground' : ''}`}
+    style={color ? { color } : undefined}
   >
     {onToggle && (
       <ChevronDown
@@ -188,7 +216,12 @@ const GroupHeader = ({
       />
     )}
     <span>{label}</span>
-    <span className="font-semibold tracking-normal">({count})</span>
+    <span
+      className="font-semibold tracking-normal"
+      style={color ? { color: `${color}b3` } : undefined}
+    >
+      ({count})
+    </span>
   </div>
 );
 
@@ -233,28 +266,37 @@ const LibraryNavColumn = (): React.JSX.Element => {
       search={search}
       onSearchChange={setSearch}
     >
-      {activeGames.length > 0 ? (
-        <>
-          <GroupHeader
-            label="PLAYING & ON HOLD"
-            count={activeGames.length}
-            open={activeOpen}
-            onToggle={() => setActiveOpen(!activeOpen)}
-          />
-          {activeOpen && activeGames.map(renderRow)}
-          <GroupHeader
-            label="ALL GAMES"
-            count={restGames.length}
-            open={restOpen}
-            onToggle={() => setRestOpen(!restOpen)}
-          />
-          {restOpen && restGames.map(renderRow)}
-        </>
-      ) : (
-        // Sin juegos activos no hay grupos que separar — lista plana de
-        // siempre, sin cabeceras que plegar.
-        restGames.map(renderRow)
-      )}
+      {/* revealClass en el contenido, no en el shell (cabecera+buscador no
+          deben refundirse) — y montado una vez por SECCIÓN (Games/Sessions/
+          Stats/Plan son 4 componentes distintos que MiddleColumn intercambia
+          al navegar, ver el dispatcher al final del archivo), no por cada
+          letra que se teclea en el buscador: filtrar solo vuelve a renderizar
+          este mismo componente ya montado, no lo remonta. */}
+      <div className={revealClass} style={revealStyle(0)}>
+        {activeGames.length > 0 ? (
+          <>
+            <GroupHeader
+              label="PLAYING & ON HOLD"
+              count={activeGames.length}
+              open={activeOpen}
+              onToggle={() => setActiveOpen(!activeOpen)}
+              color={GREEN}
+            />
+            {activeOpen && activeGames.map(renderRow)}
+            <GroupHeader
+              label="ALL GAMES"
+              count={restGames.length}
+              open={restOpen}
+              onToggle={() => setRestOpen(!restOpen)}
+            />
+            {restOpen && restGames.map(renderRow)}
+          </>
+        ) : (
+          // Sin juegos activos no hay grupos que separar — lista plana de
+          // siempre, sin cabeceras que plegar.
+          restGames.map(renderRow)
+        )}
+      </div>
     </MiddleColumnShell>
   );
 };
@@ -278,16 +320,18 @@ const PlanNavColumn = (): React.JSX.Element => {
       search={search}
       onSearchChange={setSearch}
     >
-      {filtered.map((game) => (
-        <GameRow
-          key={game.id}
-          game={game}
-          selected={game.id === selectedId}
-          onClick={() => navigate(`/plan/${game.id}`)}
-          subtitle={<StatusSubtitle game={game} showLive={false} />}
-          rightLabel=""
-        />
-      ))}
+      <div className={revealClass} style={revealStyle(0)}>
+        {filtered.map((game) => (
+          <GameRow
+            key={game.id}
+            game={game}
+            selected={game.id === selectedId}
+            onClick={() => navigate(`/plan/${game.id}`)}
+            subtitle={<StatusSubtitle game={game} showLive={false} />}
+            rightLabel=""
+          />
+        ))}
+      </div>
     </MiddleColumnShell>
   );
 };
@@ -312,29 +356,31 @@ const SessionsNavColumn = (): React.JSX.Element => {
       search={search}
       onSearchChange={setSearch}
     >
-      <AllGamesRow
-        Icon={LayoutGrid}
-        subtitle={pluralize(totalSessions, 'session')}
-        selected={selectedId === null}
-        onClick={() => setSearchParams({})}
-      />
-      {filtered.map((game) => (
-        <GameRow
-          key={game.id}
-          game={game}
-          selected={game.id === selectedId}
-          onClick={() => setSearchParams({ game: String(game.id) })}
-          subtitle={
-            <>
-              <span className="text-xs text-muted-foreground">
-                {pluralize(game.sessionCount, 'session')}
-              </span>
-              {game.isLive && <LiveTag />}
-            </>
-          }
-          rightLabel={formatHours(game.totalHours)}
+      <div className={revealClass} style={revealStyle(0)}>
+        <AllGamesRow
+          Icon={LayoutGrid}
+          subtitle={pluralize(totalSessions, 'session')}
+          selected={selectedId === null}
+          onClick={() => setSearchParams({})}
         />
-      ))}
+        {filtered.map((game) => (
+          <GameRow
+            key={game.id}
+            game={game}
+            selected={game.id === selectedId}
+            onClick={() => setSearchParams({ game: String(game.id) })}
+            subtitle={
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {pluralize(game.sessionCount, 'session')}
+                </span>
+                {game.isLive && <LiveTag />}
+              </>
+            }
+            rightLabel={formatHours(game.totalHours)}
+          />
+        ))}
+      </div>
     </MiddleColumnShell>
   );
 };
@@ -357,22 +403,24 @@ const StatsNavColumn = (): React.JSX.Element => {
       search={search}
       onSearchChange={setSearch}
     >
-      <AllGamesRow
-        Icon={BarChart3}
-        subtitle="Overview & charts"
-        selected={selectedId === null}
-        onClick={() => setSearchParams({})}
-      />
-      {filtered.map((game) => (
-        <GameRow
-          key={game.id}
-          game={game}
-          selected={game.id === selectedId}
-          onClick={() => setSearchParams({ game: String(game.id) })}
-          subtitle={<StatusSubtitle game={game} showLive={false} />}
-          rightLabel={formatHours(game.totalHours)}
+      <div className={revealClass} style={revealStyle(0)}>
+        <AllGamesRow
+          Icon={BarChart3}
+          subtitle="Overview & charts"
+          selected={selectedId === null}
+          onClick={() => setSearchParams({})}
         />
-      ))}
+        {filtered.map((game) => (
+          <GameRow
+            key={game.id}
+            game={game}
+            selected={game.id === selectedId}
+            onClick={() => setSearchParams({ game: String(game.id) })}
+            subtitle={<StatusSubtitle game={game} showLive={false} />}
+            rightLabel={formatHours(game.totalHours)}
+          />
+        ))}
+      </div>
     </MiddleColumnShell>
   );
 };

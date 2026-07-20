@@ -1,11 +1,31 @@
-import { Package, Star } from 'lucide-react';
-import type { GameDetail, IterationDetail } from '../../../../../shared/types';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Disc3,
+  Download,
+  Gamepad2,
+  Package,
+  Star,
+  Tag,
+} from 'lucide-react';
+import { useState } from 'react';
+import type { GameDetail, IterationDetail, TimeFormat } from '../../../../../shared/types';
 import { useUpdateIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
+import { useCountUp } from '../../../hooks/useCountUp';
 import { AMBER } from '../../../lib/colors';
+import { humanizeSpanByPrecision } from '../../../lib/dateMath';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
-import { Dropdown } from '../add-game/Dropdown';
+import { StatusIcon } from '../../StatusIcon';
+import { InfoChip } from './InfoChip';
+
+const GREEN = '#2fdc7e';
+// Píldoras por página — las que caben en el ancho del sidebar sin apretarse.
+const PER_PAGE = 4;
+// Mismo pager que CompletedGallery/HltbCompareList en Stats.
+const pagerButtonClass =
+  'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-input bg-white/[0.03] text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
 
 type PlaythroughPanelProps = {
   game: GameDetail;
@@ -16,37 +36,111 @@ type PlaythroughPanelProps = {
   onSelectIteration: (id: number) => void;
 };
 
-const FieldRow = ({
+// Las dos medidas que de verdad importan de un playthrough (lo jugado y lo
+// gastado), con el mismo código de color que las métricas generales: verde =
+// tiempo, ámbar = dinero. Antes eran dos filas grises más entre otras seis.
+const MeasureTile = ({
+  color,
   label,
   value,
-  last = false,
 }: {
+  color: string;
   label: string;
-  value: React.ReactNode;
-  last?: boolean;
+  value: string;
 }): React.JSX.Element => (
   <div
-    className={`flex items-center justify-between py-2.25 ${last ? '' : 'border-b border-white/5'}`}
+    className="rounded-[11px] border px-3 py-2.5"
+    style={{ borderColor: `${color}2e`, background: `${color}0f` }}
   >
-    <span className="text-[12.5px] text-muted-foreground">{label}</span>
-    <span className="text-[13px] font-semibold text-foreground">{value}</span>
+    <div className="text-[10px] font-bold tracking-[.11em]" style={{ color: `${color}b3` }}>
+      {label}
+    </div>
+    <div className="mt-1 text-[19px] font-extrabold tabular-nums" style={{ color }}>
+      {value}
+    </div>
   </div>
 );
 
-// Mismo lenguaje visual que el badge PLAYING del HeroBanner (punto verde
-// con pulso), en miniatura para caber en una fila del selector.
-const OngoingBadge = (): React.JSX.Element => (
-  <span
-    className="ml-1.5 inline-flex items-center gap-1 rounded-full px-1.75 py-0.5 align-middle"
-    style={{ background: 'rgba(47,220,126,.14)', border: '1px solid rgba(47,220,126,.4)' }}
-  >
-    <span
-      className="h-1.25 w-1.25 rounded-full bg-primary"
-      style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
-    />
-    <span className="text-[9.5px] font-extrabold tracking-[.08em] text-primary">ONGOING</span>
-  </span>
-);
+// La tira de viaje: inicio ──── cuánto duró ──── desenlace. Un playthrough es
+// un tramo de tiempo, y verlo como tramo dice cosas que dos fechas sueltas en
+// filas separadas no dicen (que te duró tres semanas, o que llevas dos meses
+// enganchado).
+const JourneyStrip = ({
+  iteration,
+  timeFormat,
+}: {
+  iteration: IterationDetail;
+  timeFormat: TimeFormat;
+}): React.JSX.Element | null => {
+  if (!iteration.startedAt) return null;
+
+  const status = getGameStatusMeta(iteration.currentState);
+  const isOngoing = iteration.endedAt === null;
+  // Modelo v2 — la precisión de cada fecha derivada: un inicio medido por
+  // sesión real es un instante exacto (datetime); uno tecleado a mano lleva
+  // la precisión de su evento. El fin siempre viene de un evento.
+  const startedPrecision = iteration.startedBySession
+    ? ('datetime' as const)
+    : (iteration.startEvent?.datePrecision ?? 'day');
+  const endedPrecision = iteration.endEvent?.datePrecision ?? 'day';
+  // Un playthrough en marcha se mide contra AHORA («llevas 3 semanas»), uno
+  // cerrado contra su fecha de fin. Por precisión: con fechas de solo año/mes
+  // no se puede hablar de días (ver humanizeSpanByPrecision) — "ahora" sí es
+  // un instante exacto, así que en los que siguen abiertos manda la precisión
+  // del inicio.
+  const span = humanizeSpanByPrecision(
+    iteration.startedAt,
+    iteration.endedAt ?? new Date(),
+    startedPrecision,
+    iteration.endedAt ? endedPrecision : 'datetime',
+  );
+
+  return (
+    <div className="rounded-[12px] border border-border bg-white/[0.02] px-3.5 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+            STARTED
+          </div>
+          <div className="mt-0.75 truncate text-[12.5px] font-semibold text-foreground">
+            {formatByPrecision(iteration.startedAt, startedPrecision, timeFormat)}
+          </div>
+        </div>
+        <div className="min-w-0 text-right">
+          <div
+            className="text-[9.5px] font-bold tracking-[.12em]"
+            style={{ color: isOngoing ? GREEN : `${status.color}cc` }}
+          >
+            {isOngoing ? 'ONGOING' : status.label.toUpperCase()}
+          </div>
+          <div className="mt-0.75 truncate text-[12.5px] font-semibold text-foreground">
+            {iteration.endedAt
+              ? formatByPrecision(iteration.endedAt, endedPrecision, timeFormat)
+              : 'Still going'}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2.75 flex items-center gap-2">
+        <span className="h-1.75 w-1.75 flex-none rounded-full bg-muted-foreground" />
+        <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
+        <span className="flex-none text-[10.5px] font-semibold whitespace-nowrap text-muted-foreground">
+          {/* "Same year so far" no se lee bien — con un tramo que no es una
+              duración, el sufijo sobra. */}
+          {isOngoing && !span.startsWith('Same') ? `${span} so far` : span}
+        </span>
+        <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
+        <span
+          className="h-2 w-2 flex-none rounded-full"
+          style={{
+            background: isOngoing ? GREEN : status.color,
+            ...(isOngoing ? { animation: 'afterplay-pulse-dot 1.4s infinite' } : {}),
+          }}
+        />
+      </div>
+    </div>
+  );
+};
 
 const RatingRow = ({
   rating,
@@ -55,17 +149,9 @@ const RatingRow = ({
   rating: 1 | 2 | 3 | 4 | 5 | null;
   onRate: (value: number) => void;
 }): React.JSX.Element => (
-  <div
-    className="mb-2.5 flex items-center justify-between gap-3 rounded-[10px] px-3 py-2.5"
-    style={{ background: 'rgba(227,178,74,.06)', border: '1px solid rgba(227,178,74,.18)' }}
-  >
-    <div>
-      <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">MY RATING</div>
-      <div className="mt-0.5 text-[11.5px] font-semibold text-amber-400" style={{ color: AMBER }}>
-        {rating ? `${rating}/5` : 'Not rated'}
-      </div>
-    </div>
-    <div className="flex items-center gap-1">
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-[10px] font-bold tracking-[.12em] text-muted-foreground">MY RATING</span>
+    <div className="flex items-center gap-0.75">
       {[1, 2, 3, 4, 5].map((value) => {
         const on = rating !== null && value <= rating;
         return (
@@ -73,9 +159,10 @@ const RatingRow = ({
             key={value}
             type="button"
             onClick={() => onRate(value === rating ? 0 : value)}
-            className="flex-none cursor-pointer"
+            aria-label={`Rate ${value} out of 5`}
+            className="flex-none cursor-pointer p-0.5 transition-transform hover:scale-115"
           >
-            <Star size={19} color={AMBER} fill={on ? AMBER : 'none'} strokeWidth={1.6} />
+            <Star size={17} color={AMBER} fill={on ? AMBER : 'none'} strokeWidth={1.7} />
           </button>
         );
       })}
@@ -83,8 +170,10 @@ const RatingRow = ({
   </div>
 );
 
-// SPEC 10.7 / prototipo — card "Playthrough" del sidebar: selector + badge
-// de extra content + valoración (editable) + campos de solo lectura.
+// Card "Playthrough" del sidebar. Rediseño sobre el prototipo: en vez de
+// ocho filas `label —— valor` con el mismo peso visual, tres bloques con
+// jerarquía — el tramo de tiempo (la historia), las dos medidas que importan
+// (horas y gasto) y la ficha técnica reducida a píldoras.
 export const PlaythroughPanel = ({
   game,
   selectedIteration,
@@ -93,56 +182,127 @@ export const PlaythroughPanel = ({
   const updateIteration = useUpdateIteration();
   const { data: timeFormat = '24h' } = useTimeFormat();
   const iteration = selectedIteration;
-  // El selector muestra las horas de cada playthrough para poder comparar
-  // sin tener que ir cambiando de uno en uno — un badge ONGOING si es el
-  // activo (todavía sin fecha de fin, las horas seguirán subiendo).
-  const labelsById = new Map<string, React.ReactNode>(
-    game.iterations.map((it) => [
-      String(it.id),
-      <span key={it.id} className="inline-flex items-center">
-        <span>
-          {it.label} — {formatHours(it.hours)}
-        </span>
-        {it.currentState === 'started' && <OngoingBadge />}
-      </span>,
-    ]),
-  );
+  const hours = useCountUp(iteration.hours);
+  const spend = useCountUp(iteration.spend);
   const status = getGameStatusMeta(iteration.currentState);
-  // Modelo v2 — la precisión de cada fecha derivada: un inicio medido por
-  // sesión real es un instante exacto (datetime); uno tecleado a mano lleva
-  // la precisión de su evento. El fin siempre viene de un evento.
-  const startedPrecision = iteration.startedBySession
-    ? ('datetime' as const)
-    : (iteration.startEvent?.datePrecision ?? 'day');
-  const endedPrecision = iteration.endEvent?.datePrecision ?? 'day';
+  const hasSeveral = game.iterations.length > 1;
+
+  const totalPages = Math.max(1, Math.ceil(game.iterations.length / PER_PAGE));
+  const selectedIndex = game.iterations.findIndex((it) => it.id === iteration.id);
+  const pageOfSelected = Math.floor(Math.max(0, selectedIndex) / PER_PAGE);
+  const [page, setPage] = useState(pageOfSelected);
+  // La página SIGUE a la selección cuando esta cambia desde fuera (GameDetail
+  // salta al playthrough más nuevo si el watcher crea uno con la ficha
+  // abierta) — si no, el elegido quedaría en una página que no se está
+  // viendo. Patrón de "ajustar estado durante el render", sin useEffect,
+  // igual que el resto de la app.
+  const [seenSelectedId, setSeenSelectedId] = useState(iteration.id);
+  if (iteration.id !== seenSelectedId) {
+    setSeenSelectedId(iteration.id);
+    setPage(pageOfSelected);
+  }
+  // Acotada, no confiada al estado: borrar un playthrough puede dejar `page`
+  // fuera de rango sin que ningún click lo haya pedido.
+  const currentPage = Math.min(page, totalPages - 1);
+  // El índice original viaja con cada elemento: la etiqueta "#3" es su
+  // posición en el juego, no en la página.
+  const shownIterations = game.iterations
+    .map((it, index) => ({ iteration: it, index }))
+    .slice(currentPage * PER_PAGE, (currentPage + 1) * PER_PAGE);
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
-      <div className="mb-3 text-[13.5px] font-bold text-foreground">Playthrough</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13.5px] font-bold text-foreground">Playthrough</div>
+        {/* El estado sube a la cabecera: es la respuesta a "¿en qué quedó
+            esto?" y antes estaba enterrado como la tercera fila de ocho. */}
+        <span
+          className="flex items-center gap-1.25 text-[12px] font-semibold"
+          style={{ color: status.color }}
+        >
+          <StatusIcon meta={status} size={13} />
+          {status.label}
+        </span>
+      </div>
 
-      {game.iterations.length > 1 && (
-        <Dropdown
-          value={String(iteration.id)}
-          options={game.iterations.map((it) => String(it.id))}
-          onChange={(id) => onSelectIteration(Number(id))}
-          renderOption={(id) => labelsById.get(id)}
-        />
+      {hasSeveral && (
+        // Píldoras paginadas en vez de un desplegable: comparar recorridos es
+        // justo el motivo por el que existe este selector, y con un dropdown
+        // hay que abrirlo y cerrarlo para ver el siguiente. Con muchos
+        // playthroughs se pagina (mismo pager que la galería Completed de
+        // Stats) en lugar de apilar veinte píldoras en el sidebar.
+        <div className="mt-3">
+          {totalPages > 1 && (
+            <div className="mb-1.75 flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage === 0}
+                aria-label="Earlier playthroughs"
+                className={pagerButtonClass}
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {currentPage + 1}/{totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage === totalPages - 1}
+                aria-label="Later playthroughs"
+                className={pagerButtonClass}
+              >
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {shownIterations.map(({ iteration: it, index }) => {
+              const active = it.id === iteration.id;
+              const ongoing = it.currentState === 'started';
+              return (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => onSelectIteration(it.id)}
+                  className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-semibold"
+                  style={
+                    active
+                      ? { color: GREEN, borderColor: `${GREEN}59`, background: `${GREEN}14` }
+                      : {
+                          color: 'var(--muted-foreground)',
+                          borderColor: 'var(--border)',
+                          background: 'rgba(255,255,255,.028)',
+                        }
+                  }
+                >
+                  {ongoing && (
+                    <span
+                      className="h-1.25 w-1.25 flex-none rounded-full"
+                      style={{ background: GREEN, animation: 'afterplay-pulse-dot 1.4s infinite' }}
+                    />
+                  )}
+                  <span>#{index + 1}</span>
+                  <span className="opacity-60">{formatHours(it.hours)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
-      <div className="mt-3.5">
-        {iteration.extraContent && (
-          <span
-            className="mb-2.5 inline-flex items-center gap-1.5 rounded-md px-2.25 py-1 text-[10.5px] font-extrabold tracking-[.05em]"
-            style={{
-              color: '#85a3d6',
-              border: '1px solid rgba(133,163,214,.38)',
-              background: 'rgba(133,163,214,.1)',
-            }}
-          >
-            <Package size={11} />
-            EXTRA CONTENT ONLY
-          </span>
-        )}
+      <div className="mt-3.5 flex flex-col gap-2.5">
+        <JourneyStrip iteration={iteration} timeFormat={timeFormat} />
+
+        <div className="grid grid-cols-2 gap-2">
+          <MeasureTile color={GREEN} label="PLAYED" value={formatHours(hours)} />
+          <MeasureTile
+            color={AMBER}
+            label="SPENT"
+            value={iteration.spend > 0 ? formatMoney(spend) : 'Free'}
+          />
+        </div>
 
         <RatingRow
           rating={iteration.rating}
@@ -155,48 +315,22 @@ export const PlaythroughPanel = ({
           }
         />
 
-        <FieldRow
-          label="Started"
-          value={
-            iteration.startedAt
-              ? formatByPrecision(iteration.startedAt, startedPrecision, timeFormat)
-              : '—'
-          }
-        />
-        <FieldRow
-          label="Finished / left"
-          value={
-            iteration.endedAt
-              ? formatByPrecision(iteration.endedAt, endedPrecision, timeFormat)
-              : '—'
-          }
-        />
-        <FieldRow
-          label="Status"
-          value={
-            <span className="flex items-center gap-1.25" style={{ color: status.color }}>
-              <status.Icon
-                size={13}
-                color={status.color}
-                fill={status.filled ? status.color : 'none'}
-              />
-              {status.label}
-            </span>
-          }
-        />
-        <FieldRow label="Platform" value={iteration.playedPlatform} />
-        <FieldRow label="Format" value={iteration.format === 'physical' ? 'Physical' : 'Digital'} />
-        <FieldRow label="Origin" value={<span className="capitalize">{iteration.origin}</span>} />
-        <FieldRow label="Hours" value={formatHours(iteration.hours)} />
-        <FieldRow
-          label="Spent"
-          value={
-            <span style={{ color: '#2fdc7e' }}>
-              {iteration.spend > 0 ? formatMoney(iteration.spend) : 'Free'}
-            </span>
-          }
-          last
-        />
+        {/* Ficha técnica: etiquetas, no medidas — una fila de píldoras en
+            lugar de tres filas con su propio borde inferior cada una. */}
+        <div className="flex flex-wrap gap-1.5 border-t border-white/5 pt-3">
+          <InfoChip Icon={Gamepad2}>{iteration.playedPlatform}</InfoChip>
+          <InfoChip Icon={iteration.format === 'physical' ? Disc3 : Download}>
+            {iteration.format === 'physical' ? 'Physical' : 'Digital'}
+          </InfoChip>
+          <InfoChip Icon={Tag}>
+            <span className="capitalize">{iteration.origin}</span>
+          </InfoChip>
+          {iteration.extraContent && (
+            <InfoChip Icon={Package} color="#85a3d6">
+              Extra content only
+            </InfoChip>
+          )}
+        </div>
       </div>
     </div>
   );

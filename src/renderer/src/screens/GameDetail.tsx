@@ -4,6 +4,7 @@ import { ActionBar } from '../components/library/detail/ActionBar';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
 import { DetailsCard } from '../components/library/detail/DetailsCard';
+import { EditNotesModal } from '../components/library/detail/EditNotesModal';
 import { EndlessBadge } from '../components/library/detail/EndlessBadge';
 import { HeroBanner } from '../components/library/detail/HeroBanner';
 import { HistoryList } from '../components/library/detail/HistoryList';
@@ -18,6 +19,7 @@ import { EditGameModal } from '../components/library/EditGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { useGame } from '../hooks/games';
 import { lastIteration } from '../lib/iterations';
+import { revealClass, revealStyle } from '../lib/styles';
 
 type GameDetailProps = {
   gameId: number;
@@ -30,6 +32,7 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addGameOpen, setAddGameOpen] = useState(false);
+  const [editNotesOpen, setEditNotesOpen] = useState(false);
 
   // Qué playthrough está eligiendo el dropdown de PlaythroughPanel — vive
   // aquí (no dentro de ese componente) porque HowLongToBeatCard también lo
@@ -76,33 +79,45 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
         onAddGame={() => setAddGameOpen(true)}
       />
 
-      <div className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
+      {/* key={game.id} en el contenedor: además de remontar StatusCard (ver
+          abajo), relanza la cascada de entrada al saltar de un juego a otro
+          sin recargar la ruta — mismo recurso que en Stats al cambiar de
+          año. */}
+      <div key={game.id} className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
         <div className="flex items-start gap-6">
           <div className="min-w-0 flex-1">
-            <ActionBar
-              game={game}
-              liveSessionId={liveSession?.id ?? null}
-              onEdit={() => setEditOpen(true)}
-              onChangeCover={() => setChangeCoverOpen(true)}
-              onDelete={() => setDeleteOpen(true)}
-            />
+            <div className={revealClass} style={revealStyle(0)}>
+              <ActionBar
+                game={game}
+                liveSessionId={liveSession?.id ?? null}
+                onEdit={() => setEditOpen(true)}
+                onChangeCover={() => setChangeCoverOpen(true)}
+                onDelete={() => setDeleteOpen(true)}
+              />
+            </div>
 
-            <div className="mt-6">
+            <div className={`mt-6 ${revealClass}`} style={revealStyle(1)}>
               <MetricsRow game={game} liveSince={liveSession?.startedAt ?? null} />
             </div>
 
-            <NotesSection notes={game.notes} />
-            <ScreenshotsCarousel igdbId={game.igdbId} />
+            <div className={revealClass} style={revealStyle(2)}>
+              <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
+            </div>
+            <div className={revealClass} style={revealStyle(3)}>
+              <ScreenshotsCarousel igdbId={game.igdbId} />
+            </div>
 
-            <div className="mt-7.5 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4.5">
-              {/* key={game.id}: StatusCard inicializa su dropdown/nota con
-                  useState desde `game` — sin remontar al cambiar de juego
-                  (navegación sin recarga completa, misma ruta /games/:id),
-                  React reutiliza la instancia y el "pending" del juego
-                  anterior se queda pegado. Bug real: venir de un endless con
-                  "Rest" elegido dejaba "Rest" seleccionado en un juego
-                  normal, cuyas opciones ni lo incluyen. */}
-              <StatusCard key={game.id} game={game} />
+            <div
+              className={`mt-7.5 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4.5 ${revealClass}`}
+              style={revealStyle(4)}
+            >
+              {/* StatusCard inicializa su dropdown/nota con useState desde
+                  `game` — sin remontar al cambiar de juego React reutiliza la
+                  instancia y el "pending" del juego anterior se queda pegado
+                  (bug real: venir de un endless con "Rest" elegido lo dejaba
+                  seleccionado en un juego normal, cuyas opciones ni lo
+                  incluyen). Lo garantiza el key del contenedor de arriba. */}
+              <StatusCard game={game} />
               <HistoryList
                 stateHistory={game.stateHistory}
                 spendHistory={game.spendHistory}
@@ -110,34 +125,43 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
               />
             </div>
 
-            <SessionHistoryList sessions={allSessions} gameId={gameId} />
+            <div className={revealClass} style={revealStyle(5)}>
+              <SessionHistoryList sessions={allSessions} gameId={gameId} />
+            </div>
           </div>
 
           <div className="flex w-92 min-w-70 flex-none flex-col gap-4.5">
-            <HowLongToBeatCard
-              game={game}
-              markerHours={
-                game.endless ? game.totalHours : (selectedIteration?.hours ?? game.totalHours)
-              }
-              markerScope={game.endless ? 'total' : 'playthrough'}
-            />
-            {game.endless ? (
-              <EndlessBadge />
-            ) : (
-              selectedIteration && (
-                <PlaythroughPanel
-                  game={game}
-                  selectedIteration={selectedIteration}
-                  onSelectIteration={setSelectedIterationId}
-                />
-              )
-            )}
-            <DetailsCard game={game} />
+            <div className={revealClass} style={revealStyle(1)}>
+              <HowLongToBeatCard
+                game={game}
+                markerHours={
+                  game.endless ? game.totalHours : (selectedIteration?.hours ?? game.totalHours)
+                }
+                markerScope={game.endless ? 'total' : 'playthrough'}
+              />
+            </div>
+            <div className={revealClass} style={revealStyle(2)}>
+              {game.endless ? (
+                <EndlessBadge />
+              ) : (
+                selectedIteration && (
+                  <PlaythroughPanel
+                    game={game}
+                    selectedIteration={selectedIteration}
+                    onSelectIteration={setSelectedIterationId}
+                  />
+                )
+              )}
+            </div>
+            <div className={revealClass} style={revealStyle(3)}>
+              <DetailsCard game={game} />
+            </div>
           </div>
         </div>
       </div>
 
       <EditGameModal game={game} open={editOpen} onOpenChange={setEditOpen} />
+      <EditNotesModal game={game} open={editNotesOpen} onOpenChange={setEditNotesOpen} />
       <AddGameModal open={addGameOpen} onOpenChange={setAddGameOpen} />
       <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
       <DeleteGameDialog

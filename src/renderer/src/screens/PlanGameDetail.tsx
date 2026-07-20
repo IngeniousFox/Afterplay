@@ -8,11 +8,12 @@ import { HeroBanner } from '../components/library/detail/HeroBanner';
 import { HistoryList } from '../components/library/detail/HistoryList';
 import { HowLongToBeatCard } from '../components/library/detail/HowLongToBeatCard';
 import { NotesSection } from '../components/library/detail/NotesSection';
+import { PlannedPanel } from '../components/library/detail/PlannedPanel';
 import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCarousel';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { useGame } from '../hooks/games';
-import { accentGradientStyle } from '../lib/styles';
+import { accentGradientStyle, revealClass, revealStyle } from '../lib/styles';
 
 type PlanGameDetailProps = {
   gameId: number;
@@ -54,10 +55,13 @@ export const PlanGameDetail = ({
     <div className="h-full overflow-y-auto">
       <HeroBanner game={game} liveSince={null} onBack={onBack} backLabel="Back to plan" />
 
-      <div className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
+      <div key={game.id} className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
         <div className="flex items-start gap-6">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div
+              className={`flex flex-wrap items-center gap-2.5 ${revealClass}`}
+              style={revealStyle(0)}
+            >
               <button
                 type="button"
                 onClick={() => setPromoteOpen(true)}
@@ -99,17 +103,28 @@ export const PlanGameDetail = ({
               </button>
             </div>
 
-            <NotesSection notes={game.notes} />
-            <ScreenshotsCarousel igdbId={game.igdbId} />
+            <div className={revealClass} style={revealStyle(1)}>
+              <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
+            </div>
+            <div className={revealClass} style={revealStyle(2)}>
+              <ScreenshotsCarousel igdbId={game.igdbId} />
+            </div>
 
-            <div className="mt-7.5">
+            <div className={`mt-7.5 ${revealClass}`} style={revealStyle(3)}>
               <HistoryList stateHistory={game.stateHistory} spendHistory={game.spendHistory} />
             </div>
           </div>
 
           <div className="flex w-92 min-w-70 flex-none flex-col gap-4.5">
-            <HowLongToBeatCard game={game} markerHours={0} markerScope="total" />
-            <DetailsCard game={game} />
+            <div className={revealClass} style={revealStyle(1)}>
+              <PlannedPanel game={game} />
+            </div>
+            <div className={revealClass} style={revealStyle(2)}>
+              <HowLongToBeatCard game={game} markerHours={0} markerScope="total" />
+            </div>
+            <div className={revealClass} style={revealStyle(3)}>
+              <DetailsCard game={game} />
+            </div>
           </div>
         </div>
       </div>

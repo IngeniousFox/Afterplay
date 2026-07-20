@@ -1,5 +1,5 @@
 import { Check, DollarSign, Pencil, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type {
   SpendEvent,
   StateEvent,
@@ -8,9 +8,8 @@ import type {
 } from '../../../../../shared/types';
 import { useUpdateStateEvent } from '../../../hooks/stateEvents';
 import { useDeleteSpendEvent, useUpdateSpendEvent } from '../../../hooks/spend';
-import { useTimeFormat } from '../../../hooks/settings';
 import { AMBER } from '../../../lib/colors';
-import { formatByPrecision, formatMoney } from '../../../lib/format';
+import { formatDateOnly, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatCard } from '../../stats/StatCard';
 import { StatusIcon } from '../../StatusIcon';
@@ -89,7 +88,6 @@ export const HistoryList = ({
   const updateStateEvent = useUpdateStateEvent();
   const updateSpendEvent = useUpdateSpendEvent();
   const deleteSpend = useDeleteSpendEvent();
-  const { data: timeFormat = '24h' } = useTimeFormat();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
   const [draftAmount, setDraftAmount] = useState('');
@@ -205,139 +203,205 @@ export const HistoryList = ({
                 ? getGameStatusMeta(null)
                 : null;
           const color = statusMeta ? statusMeta.color : SPEND_COLOR;
+          // Solo fecha, nunca hora: el historial es la línea temporal del
+          // juego (a qué días pasó qué), y la hora exacta de un cambio de
+          // estado no aporta nada ahí — para eso está el Session History, que
+          // sí es minuto a minuto. Un evento 'datetime' se pinta como día.
+          const dateLabel = formatDateOnly(
+            entry.date,
+            entry.datePrecision === 'datetime' ? 'day' : entry.datePrecision,
+          );
+          // Marca de año al cambiar de uno a otro (las entradas van de más
+          // reciente a más antigua): en historiales largos da un punto de
+          // referencia sin tener que leer la fecha de cada fila. En la
+          // primera no se pinta — su propia fecha ya lo dice.
+          const showYearMark =
+            index > 0 && entry.date.getFullYear() !== entries[index - 1].date.getFullYear();
 
           return (
-            <div key={entry.key} className="group/row flex gap-3.75">
-              <div className="relative flex flex-none flex-col items-center">
-                <div
-                  className="z-1 flex h-7.5 w-7.5 items-center justify-center rounded-full border"
-                  style={{ background: `${color}22`, borderColor: `${color}66` }}
-                >
-                  {statusMeta ? (
-                    <StatusIcon meta={statusMeta} size={14} />
-                  ) : (
-                    <DollarSign size={14} color={SPEND_COLOR} />
-                  )}
-                </div>
-                {!isLast && <div className="absolute top-7.5 bottom-0 w-px bg-input" />}
-              </div>
-
-              <div
-                className={`flex flex-1 items-start justify-between gap-3 ${isLast ? 'pb-0' : 'pb-3.5'}`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2.25">
-                    <span className="text-sm font-bold" style={{ color }}>
-                      {entry.kind === 'status'
-                        ? getGameStatusMeta(entry.event.type).label
-                        : entry.kind === 'added'
-                          ? 'Added to Afterplay'
-                          : formatMoney(entry.event.amount)}
-                    </span>
-                    <span className="text-[12.5px] text-muted-foreground">
-                      {entry.kind === 'spend' && `${SPEND_TYPE_LABEL[entry.event.type]} — `}
-                      {entry.kind !== 'spend' && '— '}
-                      {formatByPrecision(entry.date, entry.datePrecision, timeFormat)}
-                    </span>
+            <Fragment key={entry.key}>
+              {showYearMark && (
+                <div className="flex gap-3.5">
+                  <div className="flex w-8 flex-none justify-center">
+                    <span className="w-px" style={{ background: 'var(--border)' }} />
                   </div>
-
-                  {isEditing ? (
-                    // Editor multi-campo: sin auto-guardar en blur (el foco
-                    // salta legítimamente de un campo a otro) — se confirma
-                    // con el check o con Enter en cualquier input.
-                    <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-input bg-white/[0.02] p-2.5">
-                      <div className="flex items-end gap-2">
-                        {entry.kind === 'spend' && (
-                          <div className="w-24 flex-none">
-                            <div className={fieldLabelClass}>AMOUNT (€)</div>
-                            <NumberInput
-                              autoFocus
-                              value={draftAmount}
-                              onChange={(event) => setDraftAmount(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') save(entry);
-                                if (event.key === 'Escape') setEditingKey(null);
-                              }}
-                              min={0}
-                              step="0.01"
-                              className={textInputClass}
-                            />
-                          </div>
-                        )}
-                        <DateWithPrecisionPicker
-                          label="Date"
-                          value={draftDate}
-                          onChange={(next) => {
-                            // La X del picker dejaría la entrada sin fecha —
-                            // eso aquí no existe (toda entrada tiene fecha):
-                            // se ignora y se mantiene la que había.
-                            if (next) setDraftDate(next);
-                          }}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          autoFocus={entry.kind === 'status'}
-                          value={draftNote}
-                          onChange={(event) => setDraftNote(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') save(entry);
-                            if (event.key === 'Escape') setEditingKey(null);
-                          }}
-                          placeholder="Note…"
-                          className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2 py-1.5 text-[12.5px] text-foreground outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => save(entry)}
-                          className="flex-none rounded-md p-1.5 text-primary hover:bg-primary/10"
-                          aria-label="Save changes"
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingKey(null)}
-                          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-white/6"
-                          aria-label="Cancel"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    entry.note && (
-                      <div className="mt-0.75 text-[13px] text-[#b7bdb8]">{entry.note}</div>
-                    )
-                  )}
+                  <div className="flex flex-1 items-center gap-2 pb-2.5">
+                    <span className="text-[10px] font-bold tracking-[.1em] text-muted-foreground/55 tabular-nums">
+                      {entry.date.getFullYear()}
+                    </span>
+                    <span className="h-px flex-1 bg-white/5" />
+                  </div>
                 </div>
-
-                {!isEditing && entry.kind !== 'added' && (
-                  <div className="flex flex-none items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => startEditing(entry)}
-                      className="rounded-md p-1.5 text-muted-foreground hover:bg-white/6 hover:text-foreground"
-                      aria-label="Edit note"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                    {entry.kind === 'spend' && (
-                      <button
-                        type="button"
-                        onClick={() => deleteSpend.mutate(entry.id)}
-                        disabled={deleteSpend.isPending}
-                        className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                        aria-label="Delete spend entry"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+              )}
+              <div className="group/row relative -mx-2 flex gap-3.5 rounded-[10px] px-2 py-1.5 hover:bg-white/[0.022]">
+                <div className="relative flex flex-none flex-col items-center">
+                  <div
+                    className="z-1 flex h-8 w-8 items-center justify-center rounded-full border"
+                    style={{
+                      background: `${color}1f`,
+                      borderColor: `${color}59`,
+                      // Halo suave del color del evento: da relieve al nodo sin
+                      // subir el contraste del borde, que a este tamaño se
+                      // vuelve un anillo duro.
+                      boxShadow: `0 0 0 3px ${color}0d`,
+                    }}
+                  >
+                    {statusMeta ? (
+                      <StatusIcon meta={statusMeta} size={14} />
+                    ) : (
+                      <DollarSign size={14} color={SPEND_COLOR} />
                     )}
                   </div>
-                )}
+                  {/* El raíl arranca con el color del propio evento y se apaga
+                    hacia el siguiente — el degradado hace que la línea se lea
+                    como continuidad y no como una reja de tabla. */}
+                  {!isLast && (
+                    <div
+                      className="absolute top-8 bottom-0 w-px"
+                      style={{ background: `linear-gradient(180deg, ${color}5c, var(--border))` }}
+                    />
+                  )}
+                </div>
+
+                <div className={`flex flex-1 gap-2.5 ${isLast ? 'pb-0.5' : 'pb-4'}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-sm font-bold" style={{ color }}>
+                        {entry.kind === 'status'
+                          ? getGameStatusMeta(entry.event.type).label
+                          : entry.kind === 'added'
+                            ? 'Added to Afterplay'
+                            : formatMoney(entry.event.amount)}
+                      </span>
+                      {entry.kind === 'spend' && (
+                        <span className="text-[11.5px] text-muted-foreground">
+                          {SPEND_TYPE_LABEL[entry.event.type]}
+                        </span>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      // Editor multi-campo: sin auto-guardar en blur (el foco
+                      // salta legítimamente de un campo a otro) — se confirma
+                      // con el check o con Enter en cualquier input.
+                      <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-input bg-white/[0.02] p-2.5">
+                        <div className="flex items-end gap-2">
+                          {entry.kind === 'spend' && (
+                            <div className="w-24 flex-none">
+                              <div className={fieldLabelClass}>AMOUNT (€)</div>
+                              <NumberInput
+                                autoFocus
+                                value={draftAmount}
+                                onChange={(event) => setDraftAmount(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') save(entry);
+                                  if (event.key === 'Escape') setEditingKey(null);
+                                }}
+                                min={0}
+                                step="0.01"
+                                className={textInputClass}
+                              />
+                            </div>
+                          )}
+                          <DateWithPrecisionPicker
+                            label="Date"
+                            value={draftDate}
+                            onChange={(next) => {
+                              // La X del picker dejaría la entrada sin fecha —
+                              // eso aquí no existe (toda entrada tiene fecha):
+                              // se ignora y se mantiene la que había.
+                              if (next) setDraftDate(next);
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            autoFocus={entry.kind === 'status'}
+                            value={draftNote}
+                            onChange={(event) => setDraftNote(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') save(entry);
+                              if (event.key === 'Escape') setEditingKey(null);
+                            }}
+                            placeholder="Note…"
+                            className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2 py-1.5 text-[12.5px] text-foreground outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => save(entry)}
+                            className="flex-none rounded-md p-1.5 text-primary hover:bg-primary/10"
+                            aria-label="Save changes"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingKey(null)}
+                            className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-white/6"
+                            aria-label="Cancel"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      entry.note && (
+                        // Barra de acento a la izquierda: separa la nota (texto
+                        // tuyo) del hecho registrado sin necesidad de comillas
+                        // ni cursiva.
+                        <div
+                          className="mt-1.25 border-l-2 pl-2.5 text-[12.5px] text-[#b7bdb8]"
+                          style={{ borderColor: `${color}40` }}
+                        >
+                          {entry.note}
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  {/* Fecha a la derecha, alineada en columna con las demás: en
+                    línea tras la etiqueta cada entrada empezaba la fecha en
+                    una x distinta y no había forma de leerlas en vertical. */}
+                  {!isEditing && (
+                    <div className="flex-none pt-0.25 text-right">
+                      <div className="text-[11.5px] font-semibold text-muted-foreground tabular-nums">
+                        {dateLabel}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hueco reservado siempre (incluso en 'added', que no tiene
+                    acciones): si apareciera solo al pasar el ratón, la fecha
+                    se desplazaría en cada hover. */}
+                  {!isEditing && (
+                    <div className="flex w-12.5 flex-none items-start justify-end gap-0.5 opacity-0 group-hover/row:opacity-100">
+                      {entry.kind !== 'added' && (
+                        <button
+                          type="button"
+                          onClick={() => startEditing(entry)}
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-white/6 hover:text-foreground"
+                          aria-label="Edit note"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      {entry.kind === 'spend' && (
+                        <button
+                          type="button"
+                          onClick={() => deleteSpend.mutate(entry.id)}
+                          disabled={deleteSpend.isPending}
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                          aria-label="Delete spend entry"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </Fragment>
           );
         })}
       </StatCard>

@@ -126,18 +126,38 @@ export const Sessions = (): React.JSX.Element => {
   const animatedLongestSec = useCountUp(longestSessionSec);
   const animatedAvgSec = useCountUp(avgSessionSec);
 
+  // El conteo de sesiones ya no va en el subtítulo — se muestra en la
+  // píldora junto al título (mismo patrón que el conteo de juegos en
+  // GameListScreen). El subtítulo se queda con el dato que la píldora no
+  // dice: el total de horas jugadas.
   const subtitle = selectedGame
-    ? `${pluralize(filtered.length, 'session')} · ${formatHours(selectedGame.totalHours)} total`
-    : `${pluralize(sessions.length, 'session')} across your library`;
+    ? `${formatHours(selectedGame.totalHours)} played in total`
+    : 'Across your library';
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
       <div className="mx-auto max-w-250">
         <div className="mb-6.5 flex items-end justify-between gap-4">
           <div>
-            <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
-              {selectedGame ? selectedGame.title : 'All Sessions'}
-            </h1>
+            {/* items-baseline y no items-center — mismo motivo que
+                GameListScreen: centrar por caja contra un H1 tan grande deja
+                la píldora flotando en vez de asentada junto al texto. */}
+            <div className="flex items-baseline gap-2.75">
+              <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
+                {selectedGame ? selectedGame.title : 'All Sessions'}
+              </h1>
+              {/* Mismo patrón que el conteo de juegos en GameListScreen —
+                  contextual: cuenta lo que se está viendo ahora mismo
+                  (filtered), no siempre el total de la biblioteca entera. */}
+              {!isLoading && !isError && filtered.length > 0 && (
+                <span className="flex-none rounded-full border border-input bg-white/[0.03] px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
+                  {filtered.length}
+                  <span className="ml-1 font-semibold text-muted-foreground">
+                    {filtered.length === 1 ? 'session' : 'sessions'}
+                  </span>
+                </span>
+              )}
+            </div>
             <p className="mt-1.25 text-[13.5px] text-muted-foreground">{subtitle}</p>
           </div>
 

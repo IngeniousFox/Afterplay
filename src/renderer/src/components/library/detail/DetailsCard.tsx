@@ -1,37 +1,33 @@
-import { Building2, Calendar, Clock, Folder, Gamepad2, RotateCcw, Tag } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Folder, HardDrive } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatBytes } from '../../../lib/format';
+import { InfoChip } from './InfoChip';
 
 type DetailsCardProps = {
   game: GameDetail;
 };
 
-const Row = ({
-  Icon,
-  label,
-  value,
-  last = false,
-}: {
-  Icon: LucideIcon;
-  label: string;
-  value: React.ReactNode;
-  last?: boolean;
-}): React.JSX.Element => (
-  <div
-    className={`flex items-center justify-between py-2.25 ${last ? '' : 'border-b border-white/5'}`}
-  >
-    <span className="flex items-center gap-2.25 text-[12.5px] text-muted-foreground">
-      <Icon size={15} />
-      {label}
-    </span>
-    <span className="text-right text-[13px] font-semibold text-foreground">{value}</span>
+// Celda de la rejilla de ficha: etiqueta diminuta arriba, dato debajo. Dos
+// por fila ocupan lo que antes ocupaba UNA fila `label —— valor`, y al ir
+// alineadas en columna se comparan de un vistazo.
+const Cell = ({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element => (
+  <div className="min-w-0">
+    <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">{label}</div>
+    <div
+      className="mt-0.75 truncate text-[12.5px] font-semibold text-foreground"
+      title={typeof value === 'string' ? value : undefined}
+    >
+      {value}
+    </div>
   </div>
 );
 
-// SPEC 10.7 / prototipo — card "Details" del sidebar. Features se
-// intercambia por Genres (viene de IGDB, no es editable a mano).
+// Card "Details" del sidebar. Rediseño sobre el prototipo: los datos de
+// catálogo (que son etiquetas cortas) van en rejilla de dos columnas en vez
+// de seis filas apiladas, los géneros dejan de ser un `join(', ')` que se
+// corta feo para ser píldoras, y la carpeta de instalación gana bloque
+// propio con su tamaño — es lo único aquí que es una ruta larga de verdad.
 export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
   const { data: timeFormat = '24h' } = useTimeFormat();
   const replays = Math.max(0, game.iterations.length - 1);
@@ -46,38 +42,66 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
 
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
-      <div className="mb-2 text-[13.5px] font-bold text-foreground">Details</div>
-      <Row Icon={Gamepad2} label="Developer" value={game.developer ?? '—'} />
-      <Row Icon={Building2} label="Publisher" value={game.publisher ?? '—'} />
-      <Row Icon={Calendar} label="Released" value={game.releaseYear ?? '—'} />
-      {/* Un endless nunca llega a "Beaten" (no existe ese estado para él,
-          ver ENDLESS_STATUS_OPTIONS) — su única forma de generar una
-          iteración nueva es Dropped -> empezar de cero, que no es lo que
-          "replayed" da a entender (terminarlo y volver a jugarlo entero). */}
-      {!game.endless && <Row Icon={RotateCcw} label="Times replayed" value={replaysLabel} />}
-      <Row Icon={Clock} label="Recent activity" value={recentActivity} />
-      {game.installDirectory && (
-        <div className="border-b border-white/5 py-2.75">
-          <div className="mb-1.25 flex items-center gap-2.25 text-[12.5px] text-muted-foreground">
-            <Folder size={15} />
-            Install directory
+      <div className="text-[13.5px] font-bold text-foreground">Details</div>
+
+      <div className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3.5">
+        <Cell label="DEVELOPER" value={game.developer ?? '—'} />
+        <Cell label="PUBLISHER" value={game.publisher ?? '—'} />
+        <Cell label="RELEASED" value={game.releaseYear ?? '—'} />
+        {/* Un endless nunca llega a "Beaten" (no existe ese estado para él,
+            ver ENDLESS_STATUS_OPTIONS) — su única forma de generar una
+            iteración nueva es Dropped -> empezar de cero, que no es lo que
+            "replayed" da a entender (terminarlo y volver a jugarlo entero). */}
+        {game.endless ? (
+          <Cell label="LAST PLAYED" value={recentActivity} />
+        ) : (
+          <>
+            <Cell label="REPLAYED" value={replaysLabel} />
+            <Cell label="LAST PLAYED" value={recentActivity} />
+          </>
+        )}
+      </div>
+
+      {game.genres && game.genres.length > 0 && (
+        <div className="mt-4 border-t border-white/5 pt-3.5">
+          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+            GENRES
           </div>
-          <div className="font-mono text-xs font-semibold break-all text-foreground">
-            {game.installDirectory}
+          <div className="flex flex-wrap gap-1.5">
+            {game.genres.map((genre) => (
+              <InfoChip key={genre}>{genre}</InfoChip>
+            ))}
           </div>
-          {game.installSizeBytes !== null && (
-            <div className="mt-0.75 text-[11.5px] text-muted-foreground tabular-nums">
-              {formatBytes(game.installSizeBytes)}
-            </div>
-          )}
         </div>
       )}
-      <Row
-        Icon={Tag}
-        label="Genres"
-        value={game.genres && game.genres.length > 0 ? game.genres.join(', ') : '—'}
-        last
-      />
+
+      {game.installDirectory && (
+        <div className="mt-4 border-t border-white/5 pt-3.5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+              INSTALLED AT
+            </span>
+            {game.installSizeBytes !== null && (
+              <span className="flex items-center gap-1.25 text-[11px] font-semibold text-muted-foreground tabular-nums">
+                <HardDrive size={11} />
+                {formatBytes(game.installSizeBytes)}
+              </span>
+            )}
+          </div>
+          {/* truncate + title en vez de break-all: la ruta completa sigue
+              disponible al pasar el ratón, pero no rompe la card en cinco
+              líneas cuando el juego vive en una carpeta anidada. */}
+          <div
+            className="flex items-center gap-2 rounded-[9px] border border-border bg-white/[0.02] px-2.5 py-2"
+            title={game.installDirectory}
+          >
+            <Folder size={13} className="flex-none text-muted-foreground" />
+            <span className="truncate font-mono text-[11.5px] text-foreground">
+              {game.installDirectory}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,28 +1,22 @@
 import { Controller, useFormContext } from 'react-hook-form';
-import { Textarea } from '../../ui/textarea';
-import { textInputClass } from './styles';
+import { NotesEditor } from '../detail/NotesEditor';
 import type { AddGameFormValues } from './types';
 
-// Panel del desplegable "Add notes" — mismo contenedor que PlayedBeforePanel
-// (border-input, bg-white/[0.02], p-3.5), reutilizado tal cual para
-// mantener la misma familia visual de "toggle + panel" que playedBefore/
-// endless ya usan en este modal.
+// Panel del desplegable "Add notes" — mismo editor rico que el resto de
+// notas del juego (el modal dedicado y Edit Game), en versión compacta. Se
+// lee `field.value` al montar: en el alta el campo arranca vacío y solo lo
+// cambia el propio editor, así que remontar el panel (togglear "Add notes")
+// conserva lo ya escrito.
 export const GameNotesPanel = (): React.JSX.Element => {
   const { control } = useFormContext<AddGameFormValues>();
 
   return (
-    <div className="rounded-[11px] border border-input bg-white/[0.02] p-3.5">
-      <Controller
-        control={control}
-        name="gameNotes"
-        render={({ field }) => (
-          <Textarea
-            {...field}
-            placeholder="Markdown supported…"
-            className={`${textInputClass} min-h-24 font-mono`}
-          />
-        )}
-      />
-    </div>
+    <Controller
+      control={control}
+      name="gameNotes"
+      render={({ field }) => (
+        <NotesEditor value={field.value} onChange={field.onChange} minHeightClass="min-h-32" />
+      )}
+    />
   );
 };
