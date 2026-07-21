@@ -8,6 +8,7 @@ import { runDailyBackup } from './db/dailyBackup';
 import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
+import { registerContextMenu } from './lib/contextMenu';
 import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
@@ -116,6 +117,8 @@ function createWindow(): void {
     shell.openExternal(details.url);
     return { action: 'deny' };
   });
+
+  registerContextMenu(window);
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
