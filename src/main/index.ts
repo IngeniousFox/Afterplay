@@ -34,6 +34,11 @@ const SYNC_INTERVAL_MS = 60_000;
 // (o antes de la propia app.quit(), en before-quit) marca esto para dejar
 // pasar el cierre real. Sin esto, la app no podría cerrarse nunca de verdad.
 let isQuitting = false;
+// Arranque a bandeja con estado guardado "maximizada": la ventana queda
+// oculta SIN maximizar (maximize() sobre una ventana oculta la muestra, ver
+// ready-to-show) — esta marca lo deja pendiente para la primera apertura
+// desde el tray.
+let pendingMaximize = false;
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
@@ -76,7 +81,6 @@ function createWindow(): void {
   });
 
   const window = mainWindow;
-  if (isMaximized) window.maximize();
   trackWindowState(window);
 
   window.on('ready-to-show', () => {
@@ -86,7 +90,18 @@ function createWindow(): void {
     // está a null — cerrar null no hace nada.
     splashWindow?.close();
     splashWindow = null;
-    if (!wasOpenedAtLogin) window.show();
+    // maximize() AQUÍ y no nada más crear la ventana: en Windows, maximizar
+    // una ventana oculta (show: false) la MUESTRA — con el estado guardado
+    // en maximizado, aparecía una ventana blanca a pantalla completa (sin
+    // contenido cargado aún) conviviendo con el splash. En el arranque a
+    // bandeja (wasOpenedAtLogin) ni se maximiza: la ventana sigue oculta y
+    // queda pendingMaximize para cuando se abra desde el tray.
+    if (!wasOpenedAtLogin) {
+      if (isMaximized) window.maximize();
+      window.show();
+    } else {
+      pendingMaximize = isMaximized;
+    }
   });
 
   window.on('maximize', () => {
@@ -194,7 +209,14 @@ app.whenReady().then(async () => {
   tray = createAppTray({
     onOpen: () => {
       if (mainWindow) {
-        mainWindow.show();
+        // Primera apertura tras un arranque a bandeja: recupera el
+        // maximizado que quedó pendiente (maximize() ya muestra la ventana).
+        if (pendingMaximize) {
+          pendingMaximize = false;
+          mainWindow.maximize();
+        } else {
+          mainWindow.show();
+        }
         mainWindow.focus();
       } else {
         createWindow();

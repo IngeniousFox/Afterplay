@@ -35,6 +35,9 @@ export const getGames = async (): Promise<GameListItem[]> => {
       id: gamesTable.id,
       title: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
+      // Para la cara trasera de la card (flip) — una columna de texto más
+      // por juego, nada al lado de lo que ya agrega esta query.
+      heroUrl: gamesTable.heroUrl,
       genres: gamesTable.genres,
       isEmulated: gamesTable.isEmulated,
       releaseYear: gamesTable.releaseYear,
@@ -200,6 +203,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       id: game.id,
       title: game.title,
       coverUrl: game.coverUrl,
+      heroUrl: game.heroUrl,
       genres: game.genres,
       isEmulated: game.isEmulated,
       releaseYear: game.releaseYear,

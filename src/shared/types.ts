@@ -182,6 +182,9 @@ export type GameListItem = {
   id: number;
   title: string;
   coverUrl: string | null;
+  // Para la cara trasera de la card de la biblioteca (flip al pasar el
+  // ratón) — null si el juego no tiene hero elegido.
+  heroUrl: string | null;
   // Solo para el Genre Radar (Bloque 5E) — se usa genres[0] como género
   // "principal" del juego, igual que officialPlatforms?.[0] en otros sitios.
   genres: string[] | null;
