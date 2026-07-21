@@ -81,7 +81,7 @@ export const searchGames = async (query: string): Promise<IgdbSearchResult[]> =>
   return ranked.map((game) => ({
     igdbId: game.id,
     title: game.name,
-    coverUrl: game.cover ? igdbImageUrl(game.cover.image_id, 'cover_small') : null,
+    coverUrl: game.cover ? igdbImageUrl(game.cover.image_id, 'cover_big') : null,
     releaseYear: game.firstReleaseYear,
     platforms: game.platforms?.map((platform) => platform.name) ?? [],
     genres: game.genres?.map((genre) => genre.name) ?? [],

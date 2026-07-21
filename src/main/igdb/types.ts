@@ -6,7 +6,7 @@
 export type IgdbSearchResult = {
   igdbId: number;
   title: string;
-  coverUrl: string | null; // cover_small, para el grid de resultados
+  coverUrl: string | null;
   releaseYear: number | null;
   platforms: string[];
   genres: string[];
