@@ -2,6 +2,7 @@ import type { IterationEdgeEvent } from '../../../../../shared/types';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import type { PrecisionDateValue } from '../add-game/DateWithPrecisionPicker';
 import { toPickerValue } from '../add-game/precisionDate';
+import type { ManualPlaythroughEntry } from '../add-game/types';
 
 // Formulario único para juego + la iteración que se esté viendo/creando en
 // el momento de guardar (SPEC 4.5: "nuevo manual" vs "editar existente" son
@@ -15,8 +16,16 @@ export type EditGameFormValues = {
   endless: boolean;
   isEmulated: boolean;
 
-  iterationMode: 'none' | 'existing' | 'new';
+  // Solo dos modos: o se está editando un playthrough YA guardado, o el juego
+  // no tiene ninguno todavía. El antiguo modo 'new' desapareció — los nuevos
+  // ya no secuestran este formulario de uno en uno, se apilan en
+  // `newPlaythroughs` como en Add Game.
+  iterationMode: 'none' | 'existing';
   selectedIterationId: number | null;
+  // Playthroughs manuales preparados en ESTA edición y todavía sin crear. Se
+  // acumulan visualmente y solo se escriben al guardar; a partir de ahí ya son
+  // playthroughs normales y aparecen en el desplegable.
+  newPlaythroughs: ManualPlaythroughEntry[];
   label: string;
   started: PrecisionDateValue | null;
   finished: PrecisionDateValue | null;
@@ -39,25 +48,7 @@ export const edgeEventPickerValue = (
 ): PrecisionDateValue | null =>
   event ? toPickerValue(event.occurredAt, event.datePrecision) : null;
 
-export const EMPTY_ITERATION_FIELDS: Pick<
-  EditGameFormValues,
-  | 'label'
-  | 'started'
-  | 'finished'
-  | 'extraContent'
-  | 'status'
-  | 'platform'
-  | 'format'
-  | 'origin'
-  | 'hoursPlayed'
-> = {
-  label: '',
-  started: null,
-  finished: null,
-  extraContent: false,
-  status: 'beaten',
-  platform: 'Steam',
-  format: 'digital',
-  origin: 'Purchased',
-  hoursPlayed: '',
-};
+// EMPTY_ITERATION_FIELDS desapareció con el modo 'new': ya no hace falta
+// vaciar el formulario para preparar un playthrough nuevo, porque los nuevos
+// viven en su propia lista (`newPlaythroughs`) y arrancan de
+// EMPTY_MANUAL_PLAYTHROUGH, el mismo molde que usa Add Game.

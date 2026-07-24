@@ -59,7 +59,12 @@ export const buildGameDetails = (
       format: values.format,
     },
     hoursPlayed: values.playedBefore ? parseOptionalNumber(values.hoursPlayed) : null,
-    started: values.playedBefore && !values.endless ? toBackendDate(values.started) : null,
+    // La fecha de inicio SÍ viaja para un endless: es la que fecha su evento
+    // de estado inicial (writeInitialPlaythrough usa finished ?? started ??
+    // hoy), y sin ella un endless jugado en el pasado se registraba siempre
+    // como si su estado hubiera cambiado hoy. La de FIN sigue fuera: un
+    // endless no tiene un punto de fin que registrar.
+    started: values.playedBefore ? toBackendDate(values.started) : null,
     finished: values.playedBefore && !values.endless ? toBackendDate(values.finished) : null,
     initialStatus,
     note: values.note.trim() || null,

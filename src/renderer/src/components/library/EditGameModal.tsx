@@ -36,7 +36,7 @@ import {
   saveBaseGamePatch,
   saveEndlessIteration,
   saveExistingIteration,
-  saveNewIteration,
+  saveNewPlaythroughs,
 } from './edit-game/handleSave';
 import { IterationSection } from './edit-game/IterationSection';
 import { edgeEventPickerValue } from './edit-game/types';
@@ -61,6 +61,9 @@ const buildDefaults = (game: GameDetail): EditGameFormValues => {
     isEmulated: game.isEmulated,
     iterationMode: iteration ? 'existing' : 'none',
     selectedIterationId: iteration?.id ?? null,
+    // Los pendientes son de ESTA edición: cada apertura del modal arranca sin
+    // ninguno, se hayan guardado los de la vez anterior o no.
+    newPlaythroughs: [],
     label: iteration?.label ?? '',
     // Editables solo cuando la fecha viene de un EVENTO del log (modelo v2)
     // — misma regla que loadIteration() en IterationSection.tsx; un inicio
@@ -138,14 +141,19 @@ export const EditGameModal = ({
         addIteration,
         addStateEvent,
       });
-    } else if (values.iterationMode === 'new') {
-      await saveNewIteration(game, values, { addIteration, addStateEvent });
     } else if (values.iterationMode === 'existing' && values.selectedIterationId) {
       await saveExistingIteration(game, values, values.selectedIterationId, {
         updateIteration,
         updateStateEvent,
         addStateEvent,
       });
+    }
+
+    // Los pendientes se crean SIEMPRE (salvo endless, que no tiene
+    // playthroughs discretos) y después de tocar el existente: el orden
+    // importa porque cada 'started' nuevo puede auto-pausar al anterior.
+    if (!values.endless) {
+      await saveNewPlaythroughs(game, values, { addIteration, addStateEvent });
     }
 
     onOpenChange(false);

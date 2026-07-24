@@ -1,4 +1,6 @@
-import { ImageUp } from 'lucide-react';
+import { ChevronDown, ImageUp } from 'lucide-react';
+import { useState } from 'react';
+import { expandClass } from '../../../lib/styles';
 import { NumberInput } from '../../ui/number-input';
 import { CoverThumb } from './CoverThumb';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from './styles';
@@ -27,6 +29,13 @@ export const ImagesField = ({
   steamGridDbId,
   onSteamGridDbIdChange,
 }: ImagesFieldProps): React.JSX.Element => {
+  // Plegado por defecto: es un escape para cuando el auto-match por nombre+año
+  // falla, no algo que se toque en un alta normal — tenerlo siempre a la
+  // vista solo añadía ruido al formulario. Arranca ABIERTO si ya trae un id
+  // puesto (promover un plan, o volver a Change cover de un juego que lo
+  // tiene): un valor configurado no debe quedar escondido detrás de un clic.
+  const [idOpen, setIdOpen] = useState(steamGridDbId !== null);
+
   return (
     <div>
       <div className={fieldLabelClass}>COVER & HERO IMAGE</div>
@@ -72,23 +81,46 @@ export const ImagesField = ({
       </div>
 
       <div className="mt-2.5">
-        <div className={fieldLabelClass}>
-          STEAMGRIDDB ID{' '}
-          <span className="font-medium tracking-normal normal-case">
-            · optional, overrides auto-match
-          </span>
-        </div>
-        <NumberInput
-          value={steamGridDbId ?? ''}
-          min={0}
-          step="1"
-          placeholder="e.g. 5219 — from steamgriddb.com/game/5219"
-          onChange={(event) => {
-            const raw = event.target.value.trim();
-            onSteamGridDbIdChange(raw === '' ? null : Number(raw));
-          }}
-          className={`${textInputClass} ${textInputFocusClass}`}
-        />
+        {/* Mismo lenguaje de grupo plegable que las cabeceras de la columna de
+            biblioteca: chevron que gira, etiqueta y nada más. */}
+        <button
+          type="button"
+          onClick={() => setIdOpen((current) => !current)}
+          className="flex items-center gap-1.5 text-[11.5px] font-bold tracking-[.05em] text-muted-foreground transition-colors duration-150 select-none hover:text-foreground"
+        >
+          <ChevronDown
+            size={12}
+            className="transition-transform duration-150"
+            style={idOpen ? undefined : { transform: 'rotate(-90deg)' }}
+          />
+          <span>STEAMGRIDDB ID</span>
+          {/* Con el grupo cerrado y un id puesto, el valor se ve igualmente —
+              si no, parecería que no hay nada configurado ahí debajo. */}
+          {!idOpen && steamGridDbId !== null && (
+            <span className="font-medium tracking-normal text-foreground">{steamGridDbId}</span>
+          )}
+        </button>
+
+        {idOpen && (
+          <div className={`mt-1.75 ${expandClass}`}>
+            <div className={fieldLabelClass}>
+              <span className="font-medium tracking-normal normal-case">
+                Optional — overrides the automatic match by name and year.
+              </span>
+            </div>
+            <NumberInput
+              value={steamGridDbId ?? ''}
+              min={0}
+              step="1"
+              placeholder="e.g. 5219 — from steamgriddb.com/game/5219"
+              onChange={(event) => {
+                const raw = event.target.value.trim();
+                onSteamGridDbIdChange(raw === '' ? null : Number(raw));
+              }}
+              className={`${textInputClass} ${textInputFocusClass}`}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

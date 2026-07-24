@@ -15,12 +15,58 @@ type CredentialsSectionProps = {
 
 type FieldKey = keyof CredentialsValues;
 
-const FIELDS: { key: FieldKey; label: string; hint?: string }[] = [
-  { key: 'twitchClientId', label: 'TWITCH CLIENT ID' },
-  { key: 'twitchClientSecret', label: 'TWITCH CLIENT SECRET' },
-  { key: 'steamGridDbApiKey', label: 'STEAMGRIDDB API KEY' },
-  { key: 'databaseUrl', label: 'TURSO DATABASE URL' },
-  { key: 'databaseAuthToken', label: 'TURSO AUTH TOKEN' },
+// Las claves se agrupan POR SERVICIO, no en una lista plana: cada servicio
+// necesita un número distinto de claves (IGDB 2, SGDB 1, Turso 2...) y con
+// todas sueltas la sección se convertía en un muro de inputs que crece cada
+// vez que se integra algo nuevo. Agrupadas, un servicio nuevo cuesta UNA
+// fila plegada, no N campos a la vista.
+//
+// El nombre del servicio va en la cabecera del grupo, así que las etiquetas
+// de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
+type ServiceId = 'igdb' | 'sgdb' | 'turso';
+
+type Service = {
+  id: ServiceId;
+  label: string;
+  detail: string;
+  where: string;
+  fields: { key: FieldKey; label: string }[];
+  // Un servicio solo está listo con TODAS sus claves — IGDB y Turso necesitan
+  // las dos suyas, media configuración no sirve de nada.
+  isReady: (creds: CredentialsValues) => boolean;
+};
+
+const SERVICES: Service[] = [
+  {
+    id: 'igdb',
+    label: 'IGDB',
+    detail: 'Game search & metadata',
+    where: 'dev.twitch.tv',
+    fields: [
+      { key: 'twitchClientId', label: 'TWITCH CLIENT ID' },
+      { key: 'twitchClientSecret', label: 'TWITCH CLIENT SECRET' },
+    ],
+    isReady: (creds) => Boolean(creds.twitchClientId && creds.twitchClientSecret),
+  },
+  {
+    id: 'sgdb',
+    label: 'SteamGridDB',
+    detail: 'Covers & heroes',
+    where: 'steamgriddb.com/profile/preferences/api',
+    fields: [{ key: 'steamGridDbApiKey', label: 'API KEY' }],
+    isReady: (creds) => Boolean(creds.steamGridDbApiKey),
+  },
+  {
+    id: 'turso',
+    label: 'Turso',
+    detail: 'Cloud sync across PCs · optional',
+    where: 'turso.tech',
+    fields: [
+      { key: 'databaseUrl', label: 'DATABASE URL' },
+      { key: 'databaseAuthToken', label: 'AUTH TOKEN' },
+    ],
+    isReady: (creds) => Boolean(creds.databaseUrl && creds.databaseAuthToken),
+  },
 ];
 
 const EMPTY_DRAFT: Record<FieldKey, string> = {
@@ -30,24 +76,6 @@ const EMPTY_DRAFT: Record<FieldKey, string> = {
   databaseUrl: '',
   databaseAuthToken: '',
 };
-
-// Estado por servicio para los chips del header — IGDB necesita sus dos
-// claves a la vez, Turso también; SGDB va sola.
-const serviceStatus = (
-  creds: CredentialsValues,
-): { label: string; ready: boolean; detail: string }[] => [
-  {
-    label: 'IGDB',
-    ready: Boolean(creds.twitchClientId && creds.twitchClientSecret),
-    detail: 'search & metadata',
-  },
-  { label: 'SteamGridDB', ready: Boolean(creds.steamGridDbApiKey), detail: 'covers & heroes' },
-  {
-    label: 'Turso',
-    ready: Boolean(creds.databaseUrl && creds.databaseAuthToken),
-    detail: 'cloud sync',
-  },
-];
 
 // Credenciales de APIs externas, editables sin .env (main/config/credentials
 // las guarda cifradas en userData). Colapsable y cerrada por defecto: es
@@ -59,6 +87,10 @@ export const CredentialsSection = ({
   const setCredentials = useSetCredentials();
 
   const [open, setOpen] = useState(initiallyOpen);
+  // Acordeón: un servicio abierto a la vez. Rellenar claves es una tarea de
+  // uno en uno, y así la sección no vuelve a crecer a lo alto. Si la sección
+  // se abrió por faltar IGDB (primer arranque), ese grupo ya viene desplegado.
+  const [openService, setOpenService] = useState<ServiceId | null>(initiallyOpen ? 'igdb' : null);
   const [showValues, setShowValues] = useState(false);
   const [draft, setDraft] = useState<Record<FieldKey, string>>(EMPTY_DRAFT);
   // Los valores guardados llegan async — se siembran en el borrador UNA vez
@@ -97,7 +129,11 @@ export const CredentialsSection = ({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg text-left transition-colors duration-150 hover:bg-white/[0.03]"
+        // Padding propio + margen negativo que lo compensa: el contenido
+        // queda exactamente donde estaba, pero el fondo del hover respira en
+        // vez de ir pegado al texto (mismo truco que el carril de
+        // ScreenshotsCarousel con su -my-2 py-2).
+        className="-mx-2 -my-1.5 flex w-[calc(100%+1rem)] items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-white/[0.03]"
       >
         <div className="flex items-center gap-2">
           <div
@@ -117,22 +153,24 @@ export const CredentialsSection = ({
         <div className="flex flex-none items-center gap-2.5">
           {creds && (
             <div className="flex items-center gap-2">
-              {serviceStatus(creds).map((service) => (
-                <span
-                  key={service.label}
-                  title={service.detail}
-                  className="flex items-center gap-1 text-[10.5px] font-bold"
-                  style={{ color: service.ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
-                >
+              {SERVICES.map((service) => ({ ...service, ready: service.isReady(creds) })).map(
+                (service) => (
                   <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{
-                      background: service.ready ? '#2fdc7e' : 'rgba(255,255,255,.22)',
-                    }}
-                  />
-                  {service.label}
-                </span>
-              ))}
+                    key={service.id}
+                    title={service.detail}
+                    className="flex items-center gap-1 text-[10.5px] font-bold"
+                    style={{ color: service.ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{
+                        background: service.ready ? '#2fdc7e' : 'rgba(255,255,255,.22)',
+                      }}
+                    />
+                    {service.label}
+                  </span>
+                ),
+              )}
             </div>
           )}
           <ChevronDown
@@ -147,8 +185,8 @@ export const CredentialsSection = ({
         <div className={`mt-3 flex flex-col gap-2.5 border-t border-border pt-3 ${expandClass}`}>
           <div className="flex items-center justify-between">
             <div className="text-[11px] text-muted-foreground">
-              Get them at dev.twitch.tv (IGDB), steamgriddb.com/profile/preferences/api and
-              turso.tech — Turso is optional, only for syncing across PCs.
+              Open a service to add its keys. The app works without any of them — locally and
+              without search.
             </div>
             <button
               type="button"
@@ -160,21 +198,69 @@ export const CredentialsSection = ({
             </button>
           </div>
 
-          {FIELDS.map((field) => (
-            <div key={field.key}>
-              <div className={fieldLabelClass}>{field.label}</div>
-              <input
-                type={showValues ? 'text' : 'password'}
-                value={draft[field.key]}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, [field.key]: event.target.value }))
-                }
-                autoComplete="off"
-                spellCheck={false}
-                className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}
-              />
-            </div>
-          ))}
+          {SERVICES.map((service) => {
+            const ready = creds ? service.isReady(creds) : false;
+            const isOpen = openService === service.id;
+            return (
+              <div
+                key={service.id}
+                className="overflow-hidden rounded-[9px] border border-border bg-white/[0.02]"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenService(isOpen ? null : service.id)}
+                  className="flex w-full items-center gap-2 px-2.75 py-2.25 text-left transition-colors duration-150 hover:bg-white/[0.03]"
+                >
+                  <ChevronDown
+                    size={13}
+                    className="flex-none text-muted-foreground transition-transform duration-150"
+                    style={isOpen ? undefined : { transform: 'rotate(-90deg)' }}
+                  />
+                  <span
+                    className="h-1.5 w-1.5 flex-none rounded-full"
+                    style={{ background: ready ? '#2fdc7e' : 'rgba(255,255,255,.22)' }}
+                  />
+                  <span className="text-[12.5px] font-semibold text-foreground">
+                    {service.label}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
+                    {service.detail}
+                  </span>
+                  <span
+                    className="flex-none text-[10.5px] font-bold"
+                    style={{ color: ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
+                  >
+                    {ready ? 'Configured' : 'Not set'}
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div
+                    className={`flex flex-col gap-2.5 border-t border-border px-2.75 pt-2.5 pb-3 ${expandClass}`}
+                  >
+                    {service.fields.map((field) => (
+                      <div key={field.key}>
+                        <div className={fieldLabelClass}>{field.label}</div>
+                        <input
+                          type={showValues ? 'text' : 'password'}
+                          value={draft[field.key]}
+                          onChange={(event) =>
+                            setDraft((current) => ({ ...current, [field.key]: event.target.value }))
+                          }
+                          autoComplete="off"
+                          spellCheck={false}
+                          className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}
+                        />
+                      </div>
+                    ))}
+                    <div className="text-[11px] text-muted-foreground">
+                      Get it at {service.where}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           <div className="flex items-center gap-2.5">
             <button

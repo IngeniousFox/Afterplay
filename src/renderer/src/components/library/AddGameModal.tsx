@@ -40,7 +40,7 @@ import {
   savePromotedGame,
 } from './add-game/handleSave';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
-import { ManualPlaythroughsField } from './add-game/ManualPlaythroughsField';
+import { ManualPlaythroughsList } from './add-game/ManualPlaythroughsField';
 import { MoneyAmountField } from './add-game/MoneyAmountField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
 import { todayValue } from './add-game/precisionDate';
@@ -554,7 +554,19 @@ export const AddGameModal = ({
                           (mismo hueco que EditGameModal deja para endless). */}
                     {playedBefore && !endless && (
                       <div className={expandClass}>
-                        <ManualPlaythroughsField />
+                        <Controller
+                          control={control}
+                          name="extraPlaythroughs"
+                          render={({ field }) => (
+                            <ManualPlaythroughsList
+                              entries={field.value}
+                              onChange={field.onChange}
+                              // El 1 es el de PlayedBeforePanel; estos son los de MÁS.
+                              firstNumber={2}
+                              addLabel="Add another playthrough"
+                            />
+                          )}
+                        />
                       </div>
                     )}
                   </FormSection>

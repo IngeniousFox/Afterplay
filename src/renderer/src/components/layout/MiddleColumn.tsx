@@ -1,5 +1,5 @@
 import { BarChart3, ChevronDown, LayoutGrid, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { GameListItem } from '../../../../shared/types';
 import { useGames, usePlannedGames } from '../../hooks/games';
@@ -12,11 +12,72 @@ import { StatusIcon } from '../StatusIcon';
 
 const GREEN = '#2fdc7e';
 
+// Mueve la selección `delta` posiciones dentro de `items`. Sin selección
+// previa (o si la actual ya no está en la lista filtrada) entra por el
+// extremo que corresponda al sentido, en vez de no hacer nada.
+const nextSelection = <T,>(items: T[], current: T, delta: 1 | -1): T | undefined => {
+  if (items.length === 0) return undefined;
+  const index = items.indexOf(current);
+  if (index === -1) return delta > 0 ? items[0] : items[items.length - 1];
+  return items[Math.min(items.length - 1, Math.max(0, index + delta))];
+};
+
+// Lleva la fila seleccionada a la vista, pero SOLO cuando el usuario no la
+// tenía ya delante: al montar la columna (llegar desde "Open game" de
+// Stats/Sessions), al cambiar el tamaño de la lista (borrar la búsqueda
+// devuelve la lista completa) y al moverse con las flechas.
+//
+// Dos casos en los que NO debe moverse nada, ambos deliberados:
+//   - Clic manual en una fila: si la estás viendo y la clicas, ya está donde
+//     quieres — centrarla sería un salto gratuito bajo el cursor.
+//   - Cualquier otro render (un refresco del watcher, por ejemplo): si has
+//     desplazado la lista a mano, no debe devolverte de un tirón.
+const useSelectedRowScroll = (
+  selectedId: number | null,
+  listSize: number,
+): {
+  attachSelectedRow: (node: HTMLDivElement | null) => void;
+  onKeyboardMove: () => void;
+  onManualSelect: (nextSelectedId: number | null) => void;
+} => {
+  const lastKeyRef = useRef<string | null>(null);
+  const blockRef = useRef<ScrollLogicalPosition>('center');
+  const key = `${selectedId}:${listSize}`;
+
+  return {
+    attachSelectedRow: (node): void => {
+      if (!node || lastKeyRef.current === key) return;
+      lastKeyRef.current = key;
+      node.scrollIntoView({ block: blockRef.current });
+      blockRef.current = 'center';
+    },
+    // Con las flechas la selección avanza de una en una, así que 'nearest'
+    // desplaza lo justo para que la fila entre; 'center' daría un salto
+    // brusco en cada pulsación.
+    onKeyboardMove: (): void => {
+      blockRef.current = 'nearest';
+    },
+    // Da por atendida de antemano la clave que va a resultar del clic, así
+    // que cuando la fila se vuelva a montar no habrá nada que hacer. Se marca
+    // la clave concreta en vez de un flag suelto: un flag se quedaría
+    // colgado si el clic no llega a cambiar la selección (clicar la fila que
+    // ya estaba abierta) y se comería el siguiente desplazamiento legítimo.
+    onManualSelect: (nextSelectedId): void => {
+      lastKeyRef.current = `${nextSelectedId}:${listSize}`;
+    },
+  };
+};
+
 type ShellProps = {
   label: string;
   sub: string;
   search: string;
   onSearchChange: (value: string) => void;
+  // Flechas arriba/abajo con el foco en la columna (lista o buscador): mueven
+  // la SELECCIÓN en vez de desplazar la lista, igual que el buscador de Add
+  // Game. Se escucha en la raíz para que funcione escribiendo en el buscador
+  // sin tener que salir de él.
+  onArrowNavigate?: (delta: 1 | -1) => void;
   children: React.ReactNode;
 };
 
@@ -25,9 +86,18 @@ const MiddleColumnShell = ({
   sub,
   search,
   onSearchChange,
+  onArrowNavigate,
   children,
 }: ShellProps): React.JSX.Element => (
   <div
+    onKeyDown={(event) => {
+      if (!onArrowNavigate) return;
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      // Sin esto el contenedor scrollearía además de cambiar la selección,
+      // que es justo lo que se quiere evitar.
+      event.preventDefault();
+      onArrowNavigate(event.key === 'ArrowDown' ? 1 : -1);
+    }}
     className="relative z-2 flex w-78 flex-none flex-col overflow-hidden border-r border-border"
     style={{ background: 'rgba(15,17,16,.9)' }}
   >
@@ -51,7 +121,11 @@ const MiddleColumnShell = ({
         />
       </div>
     </div>
-    <div className="min-h-0 flex-1 overflow-y-auto p-2">{children}</div>
+    {/* tabIndex=0: sin él, clicar la lista no le da el foco y las flechas
+        seguirían scrolleando el contenedor en vez de mover la selección. */}
+    <div tabIndex={0} className="min-h-0 flex-1 overflow-y-auto p-2 outline-none">
+      {children}
+    </div>
   </div>
 );
 
@@ -93,6 +167,9 @@ type RowProps = {
   onClick: () => void;
   subtitle: React.ReactNode;
   rightLabel: string;
+  // Solo la fila seleccionada lo recibe — es el ancla para llevarla a la
+  // vista (ver useSelectedRowScroll).
+  rowRef?: (node: HTMLDivElement | null) => void;
 };
 
 // El overlay de "esta es la fila abierta ahora mismo" — antes un gris
@@ -122,9 +199,11 @@ const GameRow = ({
   onClick,
   subtitle,
   rightLabel,
+  rowRef,
 }: RowProps): React.JSX.Element => {
   return (
     <div
+      ref={rowRef}
       onClick={onClick}
       className="relative mb-0.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.25 hover:bg-white/[0.04]"
     >
@@ -248,12 +327,27 @@ const LibraryNavColumn = (): React.JSX.Element => {
     );
   const restGames = filtered.filter((game) => !isActive(game));
 
+  // Lo que se ve AHORA en el orden en que se pinta — un grupo plegado no
+  // debe poder recorrerse con las flechas.
+  const visibleGames =
+    activeGames.length > 0
+      ? [...(activeOpen ? activeGames : []), ...(restOpen ? restGames : [])]
+      : restGames;
+  const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
+    selectedId,
+    visibleGames.length,
+  );
+
   const renderRow = (game: GameListItem): React.JSX.Element => (
     <GameRow
       key={game.id}
       game={game}
       selected={game.id === selectedId}
-      onClick={() => navigate(`/games/${game.id}`)}
+      rowRef={game.id === selectedId ? attachSelectedRow : undefined}
+      onClick={() => {
+        onManualSelect(game.id);
+        navigate(`/games/${game.id}`);
+      }}
       subtitle={<StatusSubtitle game={game} showLive />}
       rightLabel={formatHours(game.totalHours)}
     />
@@ -265,6 +359,16 @@ const LibraryNavColumn = (): React.JSX.Element => {
       sub={pluralize(games.length, 'game')}
       search={search}
       onSearchChange={setSearch}
+      onArrowNavigate={(delta) => {
+        const next = nextSelection(
+          visibleGames.map((game) => game.id),
+          selectedId,
+          delta,
+        );
+        if (next === undefined) return;
+        onKeyboardMove();
+        navigate(`/games/${next}`);
+      }}
     >
       {/* revealClass en el contenido, no en el shell (cabecera+buscador no
           deben refundirse) — y montado una vez por SECCIÓN (Games/Sessions/
@@ -312,6 +416,10 @@ const PlanNavColumn = (): React.JSX.Element => {
   const { data: games = [] } = usePlannedGames();
   const [search, setSearch] = useState('');
   const filtered = filterByTitle(games, search);
+  const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
+    selectedId,
+    filtered.length,
+  );
 
   return (
     <MiddleColumnShell
@@ -319,6 +427,16 @@ const PlanNavColumn = (): React.JSX.Element => {
       sub={pluralize(games.length, 'game')}
       search={search}
       onSearchChange={setSearch}
+      onArrowNavigate={(delta) => {
+        const next = nextSelection(
+          filtered.map((game) => game.id),
+          selectedId,
+          delta,
+        );
+        if (next === undefined) return;
+        onKeyboardMove();
+        navigate(`/plan/${next}`);
+      }}
     >
       <div className={revealClass} style={revealStyle(0)}>
         {filtered.map((game) => (
@@ -326,7 +444,11 @@ const PlanNavColumn = (): React.JSX.Element => {
             key={game.id}
             game={game}
             selected={game.id === selectedId}
-            onClick={() => navigate(`/plan/${game.id}`)}
+            rowRef={game.id === selectedId ? attachSelectedRow : undefined}
+            onClick={() => {
+              onManualSelect(game.id);
+              navigate(`/plan/${game.id}`);
+            }}
             subtitle={<StatusSubtitle game={game} showLive={false} />}
             rightLabel=""
           />
@@ -348,6 +470,10 @@ const SessionsNavColumn = (): React.JSX.Element => {
   const totalSessions = games.reduce((sum, game) => sum + game.sessionCount, 0);
   const gameParam = searchParams.get('game');
   const selectedId = gameParam ? Number(gameParam) : null;
+  const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
+    selectedId,
+    filtered.length,
+  );
 
   return (
     <MiddleColumnShell
@@ -355,20 +481,39 @@ const SessionsNavColumn = (): React.JSX.Element => {
       sub={pluralize(totalSessions, 'session')}
       search={search}
       onSearchChange={setSearch}
+      // null = la fila "All games", que también es seleccionable: subir desde
+      // el primer juego llega hasta ella.
+      onArrowNavigate={(delta) => {
+        const next = nextSelection<number | null>(
+          [null, ...filtered.map((game) => game.id)],
+          selectedId,
+          delta,
+        );
+        if (next === undefined) return;
+        onKeyboardMove();
+        setSearchParams(next === null ? {} : { game: String(next) });
+      }}
     >
       <div className={revealClass} style={revealStyle(0)}>
         <AllGamesRow
           Icon={LayoutGrid}
           subtitle={pluralize(totalSessions, 'session')}
           selected={selectedId === null}
-          onClick={() => setSearchParams({})}
+          onClick={() => {
+            onManualSelect(null);
+            setSearchParams({});
+          }}
         />
         {filtered.map((game) => (
           <GameRow
             key={game.id}
             game={game}
             selected={game.id === selectedId}
-            onClick={() => setSearchParams({ game: String(game.id) })}
+            rowRef={game.id === selectedId ? attachSelectedRow : undefined}
+            onClick={() => {
+              onManualSelect(game.id);
+              setSearchParams({ game: String(game.id) });
+            }}
             subtitle={
               <>
                 <span className="text-xs text-muted-foreground">
@@ -395,6 +540,10 @@ const StatsNavColumn = (): React.JSX.Element => {
   const filtered = useFilteredGames(search);
   const gameParam = searchParams.get('game');
   const selectedId = gameParam ? Number(gameParam) : null;
+  const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
+    selectedId,
+    filtered.length,
+  );
 
   return (
     <MiddleColumnShell
@@ -402,20 +551,37 @@ const StatsNavColumn = (): React.JSX.Element => {
       sub={pluralize(games.length, 'game')}
       search={search}
       onSearchChange={setSearch}
+      onArrowNavigate={(delta) => {
+        const next = nextSelection<number | null>(
+          [null, ...filtered.map((game) => game.id)],
+          selectedId,
+          delta,
+        );
+        if (next === undefined) return;
+        onKeyboardMove();
+        setSearchParams(next === null ? {} : { game: String(next) });
+      }}
     >
       <div className={revealClass} style={revealStyle(0)}>
         <AllGamesRow
           Icon={BarChart3}
           subtitle="Overview & charts"
           selected={selectedId === null}
-          onClick={() => setSearchParams({})}
+          onClick={() => {
+            onManualSelect(null);
+            setSearchParams({});
+          }}
         />
         {filtered.map((game) => (
           <GameRow
             key={game.id}
             game={game}
             selected={game.id === selectedId}
-            onClick={() => setSearchParams({ game: String(game.id) })}
+            rowRef={game.id === selectedId ? attachSelectedRow : undefined}
+            onClick={() => {
+              onManualSelect(game.id);
+              setSearchParams({ game: String(game.id) });
+            }}
             subtitle={<StatusSubtitle game={game} showLive={false} />}
             rightLabel={formatHours(game.totalHours)}
           />

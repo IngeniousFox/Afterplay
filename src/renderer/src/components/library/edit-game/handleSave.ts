@@ -115,29 +115,18 @@ type NewIterationMutations = {
   addStateEvent: ReturnType<typeof useAddStateEvent>;
 };
 
-// Modelo v2: las fechas del playthrough manual SON sus eventos — ya no se
-// crean sesiones marcadoras aparte. Misma lógica exacta que AddGameModal
-// usa para sus "extraPlaythroughs" (add-game/handleSave.ts) — de ahí que
-// delegue en addManualPlaythrough en vez de repetirla.
-export const saveNewIteration = async (
+// Crea los playthroughs que se hayan ido apilando en esta edición, en orden.
+// Modelo v2: las fechas del playthrough manual SON sus eventos, no hay
+// sesiones marcadoras. Reusa addManualPlaythrough, exactamente la misma
+// función con la que Add Game crea sus "extraPlaythroughs".
+export const saveNewPlaythroughs = async (
   game: GameDetail,
   values: EditGameFormValues,
   mutations: NewIterationMutations,
 ): Promise<void> => {
-  await addManualPlaythrough(
-    game.id,
-    {
-      label: values.label,
-      platform: values.platform,
-      origin: values.origin,
-      format: values.format,
-      hoursPlayed: values.hoursPlayed,
-      status: values.status,
-      started: values.started,
-      finished: values.finished,
-    },
-    mutations,
-  );
+  for (const entry of values.newPlaythroughs) {
+    await addManualPlaythrough(game.id, { ...entry, status: entry.pastStatus }, mutations);
+  }
 };
 
 type ExistingIterationMutations = {

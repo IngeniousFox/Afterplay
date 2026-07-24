@@ -8,6 +8,18 @@ import { useImageSrc } from '../../../hooks/useImageSrc';
 // desincronizar si alguien cambia uno y se olvida del otro.
 const CLOSE_DURATION_MS = 200;
 
+// `fill-mode-forwards` en las dos ramas de cierre NO es decorativo, arregla un
+// parpadeo real al cerrar: tw-animate-css compila `animate-out` con
+// `animation-fill-mode: none` por defecto, así que al terminar la animación el
+// elemento vuelve de golpe a opacidad 1 / escala 1. Como el desmontaje lo
+// gobierna un setTimeout independiente del reloj de la animación, si esta
+// acaba aunque sea un fotograma antes se repinta el lightbox entero a plena
+// opacidad justo antes de desaparecer. Con forwards, el estado final se
+// mantiene hasta que React lo desmonta. (Las primitivas de ui/ no lo
+// necesitan: base-ui desmonta escuchando el fin de la animación, no con un
+// temporizador.)
+const CLOSING_ANIM = 'animate-out fill-mode-forwards';
+
 type ScreenshotLightboxProps = {
   screenshots: string[];
   index: number;
@@ -87,7 +99,7 @@ export const ScreenshotLightbox = ({
     <div
       onClick={startClose}
       className={`fixed inset-0 z-220 flex flex-col items-center justify-center px-17.5 py-10 backdrop-blur-md duration-200 ${
-        closing ? 'animate-out fade-out-0' : 'animate-in fade-in-0'
+        closing ? `${CLOSING_ANIM} fade-out-0` : 'animate-in fade-in-0'
       }`}
       style={{ background: 'rgba(4,6,5,.9)' }}
     >
@@ -128,7 +140,7 @@ export const ScreenshotLightbox = ({
       <div
         onClick={(event) => event.stopPropagation()}
         className={`w-full max-w-275 overflow-hidden rounded-[14px] border border-white/14 shadow-[0_30px_90px_rgba(0,0,0,.6)] duration-200 ${
-          closing ? 'animate-out zoom-out-95' : 'animate-in zoom-in-95'
+          closing ? `${CLOSING_ANIM} zoom-out-95` : 'animate-in zoom-in-95'
         }`}
       >
         <LightboxImage url={screenshots[index]} />
