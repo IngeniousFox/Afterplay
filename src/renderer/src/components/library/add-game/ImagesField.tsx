@@ -29,12 +29,12 @@ export const ImagesField = ({
   steamGridDbId,
   onSteamGridDbIdChange,
 }: ImagesFieldProps): React.JSX.Element => {
-  // Plegado por defecto: es un escape para cuando el auto-match por nombre+año
-  // falla, no algo que se toque en un alta normal — tenerlo siempre a la
-  // vista solo añadía ruido al formulario. Arranca ABIERTO si ya trae un id
-  // puesto (promover un plan, o volver a Change cover de un juego que lo
-  // tiene): un valor configurado no debe quedar escondido detrás de un clic.
-  const [idOpen, setIdOpen] = useState(steamGridDbId !== null);
+  // SIEMPRE plegado al abrir, tenga id o no: es un escape para cuando el
+  // auto-match por nombre+año falla, no algo que se toque a diario. Un juego
+  // ya añadido casi siempre trae id resuelto, así que abrirlo por tener valor
+  // significaba en la práctica no plegarlo nunca en "Change cover". Y no se
+  // esconde nada: con el grupo cerrado, la propia cabecera enseña el id.
+  const [idOpen, setIdOpen] = useState(false);
 
   return (
     <div>
