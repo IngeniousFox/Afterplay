@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { StateEventSummary } from '../../../../shared/types';
 import { floatingPanelClass } from '../../lib/styles';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
 
 type FlowGame = { addedAt: Date };
@@ -135,7 +136,7 @@ export const BacklogFlowChart = ({
       </div>
 
       {points.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing to chart yet.</p>
+        <StatCardEmpty>Nothing to chart yet.</StatCardEmpty>
       ) : (
         <div className="relative">
           <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">

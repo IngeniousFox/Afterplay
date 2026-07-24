@@ -25,6 +25,25 @@ export const floatingPanelClass = 'border-input bg-[#171918] shadow-[0_18px_50px
 export const outlineButtonClass =
   'flex items-center gap-1.75 rounded-[9px] border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap';
 
+// Botón cuadrado de icono (cambiar carátula, editar notas...) — idéntico
+// byte a byte entre ActionBar (ficha normal) y PlanGameDetail (ficha de
+// Plan to Play).
+export const squareIconButtonClass =
+  'flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-input bg-white/[0.03] hover:bg-white/[0.06]';
+
+// Misma forma que squareIconButtonClass pero en rojo — el botón de borrar,
+// en los mismos dos sitios.
+export const destructiveIconButtonClass =
+  'flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-destructive/40 bg-destructive/8 hover:bg-destructive/18';
+
+// Botón grande de la cabecera del detalle (Play / Add to library) — mismo
+// tamaño/forma en ActionBar y PlanGameDetail; el color sale de
+// accentGradientStyle (o del estilo "en marcha" propio de ActionBar) por
+// fuera, vía `style`. ActionBar es el único de los dos con estado
+// deshabilitado — añade sus propias clases disabled: encima de esta.
+export const heroCtaButtonClass =
+  'flex items-center gap-2.25 rounded-[11px] px-7.5 py-3 text-[15px] font-bold shadow-[0_6px_18px_rgba(0,0,0,.28)]';
+
 // Prose de las notas — el MISMO en el editor (NotesEditor) y en la vista de
 // lectura (NotesSection), para que escribir y leer se vean idénticos. Añade
 // dos arreglos sobre el prose base:

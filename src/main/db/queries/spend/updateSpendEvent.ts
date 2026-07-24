@@ -3,6 +3,7 @@ import { getDb } from '../..';
 import type { SpendEvent, UpdateSpendEventPatch } from '../../../../shared/types';
 import { spendEventColumns } from '../../projections';
 import { spendEventsTable } from '../../schema';
+import { updateOrFetch } from '../updateOrFetch';
 
 // Corrección de un gasto desde el historial: cantidad, fecha y nota — una
 // errata al teclear no es historia que preservar. El TIPO (purchase/
@@ -14,20 +15,23 @@ export const updateSpendEvent = async (
 ): Promise<SpendEvent | null> => {
   const db = getDb();
 
-  // Drizzle peta con un .set() vacío (mismo caso que updateGame.ts).
-  if (Object.keys(patch).length === 0) {
-    const [event] = await db
-      .select(spendEventColumns)
-      .from(spendEventsTable)
-      .where(eq(spendEventsTable.id, id))
-      .limit(1);
-    return event ?? null;
-  }
-
-  const [updated] = await db
-    .update(spendEventsTable)
-    .set(patch)
-    .where(eq(spendEventsTable.id, id))
-    .returning(spendEventColumns);
-  return updated ?? null;
+  return updateOrFetch(
+    patch,
+    async () => {
+      const [event] = await db
+        .select(spendEventColumns)
+        .from(spendEventsTable)
+        .where(eq(spendEventsTable.id, id))
+        .limit(1);
+      return event ?? null;
+    },
+    async () => {
+      const [updated] = await db
+        .update(spendEventsTable)
+        .set(patch)
+        .where(eq(spendEventsTable.id, id))
+        .returning(spendEventColumns);
+      return updated ?? null;
+    },
+  );
 };

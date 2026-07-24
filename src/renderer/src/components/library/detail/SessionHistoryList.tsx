@@ -7,6 +7,7 @@ import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
+import { SectionLabel } from './SectionLabel';
 
 type SessionHistoryListProps = {
   sessions: Session[];
@@ -123,9 +124,7 @@ export const SessionHistoryList = ({
 
   return (
     <div className="mt-7.5">
-      <div className="mb-3.25 text-[11px] font-bold tracking-[.13em] text-muted-foreground">
-        SESSION HISTORY
-      </div>
+      <SectionLabel className="mb-3.25">SESSION HISTORY</SectionLabel>
       <div className="flex flex-col gap-2.25">
         {visible.map((session, index) => (
           <div key={session.id} className={revealClass} style={revealStyle(index)}>

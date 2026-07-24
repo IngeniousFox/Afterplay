@@ -1,20 +1,11 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { Controller, useFieldArray, useFormContext, useWatch } from 'react-hook-form';
-import { NORMAL_STATUS_OPTIONS, STATUS_META } from '../../../lib/gameStatus';
-import type { PastStatusKey } from '../../../lib/gameStatus';
-import { DateWithPrecisionPicker } from './DateWithPrecisionPicker';
-import { Dropdown } from './Dropdown';
-import { HoursPlayedField } from './HoursPlayedField';
-import { parseIsoDate } from './precisionDate';
-import { SegmentedButtonGroup } from './SegmentedButtonGroup';
+import { NORMAL_STATUS_OPTIONS } from '../../../lib/gameStatus';
 import { expandClass } from '../../../lib/styles';
+import { PlaythroughDatesHoursStatus } from './PlaythroughDatesHoursStatus';
+import { PlaythroughPlatformFormatOrigin } from './PlaythroughPlatformFormatOrigin';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from './styles';
-import {
-  EMPTY_MANUAL_PLAYTHROUGH,
-  FORMAT_OPTIONS,
-  ORIGIN_SEGMENT_OPTIONS,
-  PLATFORM_OPTIONS,
-} from './types';
+import { EMPTY_MANUAL_PLAYTHROUGH } from './types';
 import type { AddGameFormValues } from './types';
 
 // PlayedBeforePanel ya cubre el PRIMER playthrough pasado (started/finished/
@@ -51,12 +42,14 @@ const PlaythroughEntry = ({
   index: number;
   onRemove: () => void;
 }): React.JSX.Element => {
-  const { control } = useFormContext<AddGameFormValues>();
-  const pastStatus = useWatch({ control, name: `extraPlaythroughs.${index}.pastStatus` });
+  const { control, setValue } = useFormContext<AddGameFormValues>();
   const started = useWatch({ control, name: `extraPlaythroughs.${index}.started` });
-  // Igual que PlayedBeforePanel: sigue jugándolo ahora mismo = todavía no lo
-  // ha "dejado", no hay fecha de fin que anotar.
-  const isOngoing = pastStatus === 'playing';
+  const finished = useWatch({ control, name: `extraPlaythroughs.${index}.finished` });
+  const hoursPlayed = useWatch({ control, name: `extraPlaythroughs.${index}.hoursPlayed` });
+  const pastStatus = useWatch({ control, name: `extraPlaythroughs.${index}.pastStatus` });
+  const platform = useWatch({ control, name: `extraPlaythroughs.${index}.platform` });
+  const format = useWatch({ control, name: `extraPlaythroughs.${index}.format` });
+  const origin = useWatch({ control, name: `extraPlaythroughs.${index}.origin` });
 
   return (
     <div
@@ -97,112 +90,28 @@ const PlaythroughEntry = ({
         />
       </div>
 
-      <div className="flex gap-2.5">
-        <Controller
-          control={control}
-          name={`extraPlaythroughs.${index}.started`}
-          render={({ field }) => (
-            <DateWithPrecisionPicker
-              label="Started"
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
-        />
-        {!isOngoing && (
-          <Controller
-            control={control}
-            name={`extraPlaythroughs.${index}.finished`}
-            render={({ field }) => (
-              <DateWithPrecisionPicker
-                label="Finished / left"
-                value={field.value}
-                onChange={field.onChange}
-                defaultMonth={started ? parseIsoDate(started.isoDate) : undefined}
-              />
-            )}
-          />
-        )}
-      </div>
+      <PlaythroughDatesHoursStatus
+        started={started}
+        onStartedChange={(value) => setValue(`extraPlaythroughs.${index}.started`, value)}
+        finished={finished}
+        onFinishedChange={(value) => setValue(`extraPlaythroughs.${index}.finished`, value)}
+        hoursPlayed={hoursPlayed}
+        onHoursPlayedChange={(event) =>
+          setValue(`extraPlaythroughs.${index}.hoursPlayed`, event.target.value)
+        }
+        status={pastStatus}
+        onStatusChange={(value) => setValue(`extraPlaythroughs.${index}.pastStatus`, value)}
+        statusOptions={NORMAL_STATUS_OPTIONS}
+      />
 
-      <div className="flex items-end gap-2.5">
-        <Controller
-          control={control}
-          name={`extraPlaythroughs.${index}.hoursPlayed`}
-          render={({ field }) => <HoursPlayedField {...field} />}
-        />
-        <div className="flex-1">
-          <div className={fieldLabelClass}>STATUS</div>
-          <Controller
-            control={control}
-            name={`extraPlaythroughs.${index}.pastStatus`}
-            render={({ field }) => (
-              <Dropdown<PastStatusKey>
-                value={field.value}
-                options={NORMAL_STATUS_OPTIONS}
-                onChange={field.onChange}
-                renderOption={(option) => {
-                  const meta = STATUS_META[option];
-                  return (
-                    <span className="flex items-center gap-2" style={{ color: meta.color }}>
-                      <meta.Icon size={14} />
-                      <span>{meta.label}</span>
-                    </span>
-                  );
-                }}
-              />
-            )}
-          />
-        </div>
-      </div>
-
-      <div>
-        <div className={fieldLabelClass}>PLATFORM</div>
-        <Controller
-          control={control}
-          name={`extraPlaythroughs.${index}.platform`}
-          render={({ field }) => (
-            <Dropdown
-              value={field.value}
-              options={PLATFORM_OPTIONS}
-              onChange={field.onChange}
-              renderOption={(option) => option}
-              searchable
-            />
-          )}
-        />
-      </div>
-
-      <div>
-        <div className={fieldLabelClass}>FORMAT</div>
-        <Controller
-          control={control}
-          name={`extraPlaythroughs.${index}.format`}
-          render={({ field }) => (
-            <SegmentedButtonGroup
-              value={field.value}
-              options={FORMAT_OPTIONS}
-              onChange={field.onChange}
-            />
-          )}
-        />
-      </div>
-
-      <div>
-        <div className={fieldLabelClass}>ORIGIN</div>
-        <Controller
-          control={control}
-          name={`extraPlaythroughs.${index}.origin`}
-          render={({ field }) => (
-            <SegmentedButtonGroup
-              value={field.value}
-              options={ORIGIN_SEGMENT_OPTIONS}
-              onChange={field.onChange}
-              wrap
-            />
-          )}
-        />
-      </div>
+      <PlaythroughPlatformFormatOrigin
+        platform={platform}
+        onPlatformChange={(value) => setValue(`extraPlaythroughs.${index}.platform`, value)}
+        format={format}
+        onFormatChange={(value) => setValue(`extraPlaythroughs.${index}.format`, value)}
+        origin={origin}
+        onOriginChange={(value) => setValue(`extraPlaythroughs.${index}.origin`, value)}
+      />
     </div>
   );
 };

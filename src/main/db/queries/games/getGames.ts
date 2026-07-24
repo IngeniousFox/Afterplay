@@ -50,11 +50,13 @@ export const getGames = async (): Promise<GameListItem[]> => {
 
   // Iteraciones con su manualTotalPlayed — a nivel de ITERACIÓN, no ya
   // sumado por juego, porque las horas de cada iteración se resuelven igual
-  // que en getGameById.ts: manualTotalPlayed reemplaza a lo trackeado en ESA
-  // iteración (es un total de mano, no un extra encima), nunca se suman los
-  // dos. Sumar ambos por separado (como hacía esto antes) inflaba el total
-  // en cuanto una iteración con horas manuales tenía además alguna sesión
-  // real — el bug real detrás de "meto un número y sale otro distinto".
+  // que en getGameById.ts, vía el mismo resolveIterationHours compartido de
+  // más abajo: manualTotalPlayed (jugado FUERA del tracking) se SUMA a lo
+  // trackeado en ESA iteración, nunca lo reemplaza — son tiempos disjuntos
+  // por definición. Ver iterationHours.ts para el porqué (reemplazar, no
+  // sumar, era el bug real: un playthrough con horas manuales al que el
+  // watcher le seguía colgando sesiones se quedaba clavado en el número
+  // manual para siempre).
   const iterations = await db
     .select({
       id: iterationsTable.id,

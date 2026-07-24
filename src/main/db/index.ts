@@ -67,13 +67,16 @@ const enableOfflineChangeCapture = async (db: Db): Promise<void> => {
   }
 };
 
+// SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
+// conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
+// borrar un juego dejaría huérfanas sus iterations/sessions/events. Ambas
+// vías de conexión (local y con sync) necesitan aplicarlo por igual.
+const enableForeignKeys = (db: Db): Promise<unknown> => db.run(sql`PRAGMA foreign_keys = ON`);
+
 const connectLocalOnly = async (): Promise<Db> => {
   const db = drizzle({ connection: { path: getDbPath(), clientName: 'afterplay' } });
   await db.$client.connect();
-  // SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
-  // conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
-  // borrar un juego dejaría huérfanas sus iterations/sessions/events.
-  await db.run(sql`PRAGMA foreign_keys = ON`);
+  await enableForeignKeys(db);
   await enableOfflineChangeCapture(db);
   return db;
 };
@@ -136,10 +139,7 @@ const connectWithSync = async (): Promise<Db> => {
     },
   });
   await withTimeout(db.$client.connect(), CONNECT_TIMEOUT_MS);
-  // SQLite trae las foreign keys APAGADAS por defecto (es un pragma por
-  // conexión): sin esto, los ON DELETE CASCADE del schema no se aplican y
-  // borrar un juego dejaría huérfanas sus iterations/sessions/events.
-  await db.run(sql`PRAGMA foreign_keys = ON`);
+  await enableForeignKeys(db);
   return db;
 };
 

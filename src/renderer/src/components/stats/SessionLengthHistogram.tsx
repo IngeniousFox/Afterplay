@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { pluralize } from '../../lib/format';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
 
 type HistogramSession = {
@@ -76,7 +77,7 @@ export const SessionLengthHistogram = ({
       </div>
 
       {total === 0 ? (
-        <p className="text-xs text-muted-foreground">No tracked sessions yet.</p>
+        <StatCardEmpty>No tracked sessions yet.</StatCardEmpty>
       ) : (
         <>
           {/* pt-5 reserva el hueco de la etiqueta arriba (LABEL_SPACE_PX);

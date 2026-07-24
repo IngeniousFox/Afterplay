@@ -1,6 +1,7 @@
 import { NotebookPen, Pencil } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { notesProseClass } from '../../../lib/styles';
+import { SectionLabel } from './SectionLabel';
 
 type NotesSectionProps = {
   notes: string | null;
@@ -20,7 +21,7 @@ export const NotesSection = ({ notes, onEdit }: NotesSectionProps): React.JSX.El
   return (
     <div className="group/notes mt-7.5">
       <div className="mb-3.25 flex items-center gap-2">
-        <span className="text-[11px] font-bold tracking-[.13em] text-muted-foreground">NOTES</span>
+        <SectionLabel>NOTES</SectionLabel>
         {notes && onEdit && (
           <button
             type="button"

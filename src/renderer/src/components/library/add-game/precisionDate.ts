@@ -1,7 +1,17 @@
+import type { EventDatePrecision } from '../../../../../shared/types';
+
 // Tipos + helpers puros de PrecisionDateValue, separados de
 // DateWithPrecisionPicker.tsx (que solo puede exportar el componente en sí
 // — el linter de react-refresh se queja si un archivo de componente también
 // exporta funciones/constantes de valor).
+//
+// Distinto de shared/types.ts DatePrecision (mismo shape, mismo nombre,
+// declaración propia a propósito): este es el precision elegible A MANO en
+// el picker (nadie teclea "datetime"), el de shared/types.ts es el que
+// puede llevar la fecha guardada en la DB (eventos que la app crea sola en
+// vivo sí llevan hora). Coinciden en shape hoy porque ninguno de los dos
+// picker in-app ofrece 'datetime', pero son conceptos distintos que no
+// deben fundirse en un solo alias importado.
 export type DatePrecision = 'year' | 'month' | 'day';
 
 // isoDate va SIEMPRE completo (YYYY-MM-DD) — la parte que no pinta según la
@@ -46,10 +56,7 @@ export const CURRENT_YEAR = TODAY.getFullYear();
 // que derivan un PrecisionDateValue de un ancla/entrada ya guardada
 // (edit-game/types.ts anchorPickerValue, detail/HistoryList.tsx
 // entryPickerValue).
-export const toPickerValue = (
-  date: Date,
-  precision: 'year' | 'month' | 'day' | 'datetime',
-): PrecisionDateValue => ({
+export const toPickerValue = (date: Date, precision: EventDatePrecision): PrecisionDateValue => ({
   precision: precision === 'datetime' ? 'day' : precision,
   isoDate: toIsoDate(date),
 });

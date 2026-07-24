@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
-import { useAddIteration } from '../../../hooks/iterations';
+import { useCreateIteration } from '../../../hooks/iterations';
 import { useAddStateEvent } from '../../../hooks/stateEvents';
 import { daysBetween, humanizeSpan } from '../../../lib/dateMath';
 import {
@@ -13,6 +13,7 @@ import {
   STATUS_TO_STATE_TYPE,
 } from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
+import { SectionLabel } from './SectionLabel';
 import { isTerminal, lastIteration, startedIteration } from '../../../lib/iterations';
 import { accentGradientStyle } from '../../../lib/styles';
 import { StatusIcon } from '../../StatusIcon';
@@ -44,7 +45,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
       : options[0],
   );
   const [note, setNote] = useState('');
-  const addIteration = useAddIteration();
+  const addIteration = useCreateIteration();
   const addStateEvent = useAddStateEvent();
   const status = getGameStatusMeta(game.currentState);
   const isSaving = addIteration.isPending || addStateEvent.isPending;
@@ -121,9 +122,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
 
   return (
     <div>
-      <div className="mb-3.25 text-[11px] font-bold tracking-[.13em] text-muted-foreground">
-        STATUS
-      </div>
+      <SectionLabel className="mb-3.25">STATUS</SectionLabel>
       {/* Sin overflow-hidden en la card: recortaba el panel del dropdown de
           "change status" cuando se despliega hacia abajo saliéndose de ella.
           El redondeo del degradado se consigue redondeando el propio banner

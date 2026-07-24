@@ -13,6 +13,7 @@ import { formatDateOnly, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatCard } from '../../stats/StatCard';
 import { StatusIcon } from '../../StatusIcon';
+import { SectionLabel } from './SectionLabel';
 import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import type { PrecisionDateValue } from '../add-game/precisionDate';
@@ -187,9 +188,7 @@ export const HistoryList = ({
 
   return (
     <div>
-      <div className="mb-3.25 text-[11px] font-bold tracking-[.13em] text-muted-foreground">
-        HISTORY
-      </div>
+      <SectionLabel className="mb-3.25">HISTORY</SectionLabel>
       <StatCard className="max-h-96 overflow-x-hidden overflow-y-auto">
         {entries.map((entry, index) => {
           const isLast = index === entries.length - 1;

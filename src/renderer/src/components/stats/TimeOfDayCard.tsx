@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatHours } from '../../lib/format';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
 
 type DaypartSession = {
   startedAt: Date;
@@ -53,7 +54,7 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
       </div>
 
       {total === 0 ? (
-        <p className="text-xs text-muted-foreground">No tracked sessions yet.</p>
+        <StatCardEmpty>No tracked sessions yet.</StatCardEmpty>
       ) : (
         <>
           <div className="mb-5 flex h-2.5 gap-0.5 overflow-hidden rounded-full">

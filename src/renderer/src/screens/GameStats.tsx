@@ -15,7 +15,7 @@ import { StatusIcon } from '../components/StatusIcon';
 import { GameBadges } from '../components/stats/GameBadges';
 import { TimeOfDayCard } from '../components/stats/TimeOfDayCard';
 import { useGame, useGames } from '../hooks/games';
-import { useAllSessions } from '../hooks/sessions';
+import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { startOfDayMs, yearsDesc } from '../lib/dateMath';
@@ -112,10 +112,10 @@ export const GameStats = ({
   const { data: allGames = [] } = useGames();
   // Para las comparativas "vs tu biblioteca" (duración de sesión, día
   // favorito, share de sesiones).
-  const { data: librarySessions = [] } = useAllSessions();
+  const { data: librarySessions = [] } = useSessions();
   const heroSrc = useImageSrc(game?.heroUrl ?? null, 'heroes');
 
-  // useAllSessions() ya trae todo esto, pero game.iterations (useGame) es la
+  // useSessions() ya trae todo esto, pero game.iterations (useGame) es la
   // misma info sin un segundo viaje — el detalle de un juego ya la trae
   // completa, no hace falta pedirla dos veces. Modelo v2: toda sesión es
   // tiempo jugado real, ya no hay marcadores que filtrar.

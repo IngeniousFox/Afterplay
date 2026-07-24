@@ -20,6 +20,18 @@ export type {
   StateEvent,
 } from '../main/db/schema';
 
+// Precisión de una fecha elegida a mano en un picker (Add/Edit Game,
+// History) — 'datetime' no es una opción del picker (nadie teclea hora a
+// mano), solo la llevan los eventos que la app crea ella sola en el momento
+// (ver EventDatePrecision).
+export type DatePrecision = 'year' | 'month' | 'day';
+
+// Precisión guardada en la DB para un evento de estado/gasto o una sesión —
+// añade 'datetime' a DatePrecision para los eventos que la propia app crea
+// en vivo (estado inicial al guardar, cambios de estado, sesiones
+// trackeadas), que sí llevan hora real.
+export type EventDatePrecision = DatePrecision | 'datetime';
+
 // Inputs de los handlers de escritura. Parten de las formas de INSERT de
 // Drizzle pero quitando lo que el renderer nunca debe mandar (ids, campos
 // que fija el main) — así el contrato del IPC queda explícito aquí.
@@ -71,14 +83,14 @@ export type PendingSession = {
 export type UpdateStateEventPatch = {
   type?: StateEvent['type'];
   occurredAt?: Date;
-  datePrecision?: 'year' | 'month' | 'day' | 'datetime';
+  datePrecision?: EventDatePrecision;
   note?: string | null;
 };
 
 export type UpdateSpendEventPatch = {
   amount?: number;
   occurredAt?: Date;
-  datePrecision?: 'year' | 'month' | 'day' | 'datetime';
+  datePrecision?: EventDatePrecision;
   note?: string | null;
 };
 
@@ -103,8 +115,8 @@ export type CreateGameWithDetailsInput = {
   // Estructurado desde el picker de fecha+precisión del renderer — ya no hay
   // texto libre que adivinar en el main. Solo tiene sentido si endless es
   // false (el modal oculta estos dos campos para juegos endless).
-  started: { date: Date; precision: 'year' | 'month' | 'day' } | null;
-  finished: { date: Date; precision: 'year' | 'month' | 'day' } | null;
+  started: { date: Date; precision: DatePrecision } | null;
+  finished: { date: Date; precision: DatePrecision } | null;
   // Vocabulario de la DB (StateEvent['type']), no el de la UI — el renderer
   // ya traduce la opción elegida en el dropdown antes de mandarla. null =
   // sin estado inicial (juego normal que se añade como Unplayed).
@@ -118,7 +130,7 @@ export type CreateGameWithDetailsInput = {
   // Cuándo se compró — solo tiene sentido con moneySpent puesto. null =
   // "hoy" a nivel de UI, pero se manda explícito desde el renderer (no un
   // default silencioso aquí en el main).
-  moneySpentDate: { date: Date; precision: 'year' | 'month' | 'day' } | null;
+  moneySpentDate: { date: Date; precision: DatePrecision } | null;
   executablePath: string | null;
   // Elegidos a mano en el CoverPicker (SPEC 4.6) — null significa "sin
   // elección propia", el main usa su propio default (detail.covers[0]/
@@ -271,7 +283,7 @@ export type SessionWithGame = {
   endedAt: Date | null;
   durationSec: number | null;
   lastHeartbeatAt: Date | null;
-  datePrecision: 'year' | 'month' | 'day' | 'datetime';
+  datePrecision: EventDatePrecision;
   gameId: number;
   gameTitle: string;
   coverUrl: string | null;
@@ -283,7 +295,7 @@ export type SessionWithGame = {
 export type IterationEdgeEvent = {
   id: number;
   occurredAt: Date;
-  datePrecision: 'year' | 'month' | 'day' | 'datetime';
+  datePrecision: EventDatePrecision;
 };
 
 export type IterationDetail = Iteration & {

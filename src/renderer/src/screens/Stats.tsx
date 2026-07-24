@@ -19,9 +19,9 @@ import { YearOverYearCompare } from '../components/stats/YearOverYearCompare';
 import type { Year } from '../components/stats/YearPicker';
 import { YearPicker } from '../components/stats/YearPicker';
 import { useGames, usePlannedGames } from '../hooks/games';
-import { useAllSessions } from '../hooks/sessions';
-import { useAllSpendEvents } from '../hooks/spend';
-import { useAllStateEvents } from '../hooks/stateEvents';
+import { useSessions } from '../hooks/sessions';
+import { useSpendEvents } from '../hooks/spend';
+import { useStateEvents } from '../hooks/stateEvents';
 import { useCountUp } from '../hooks/useCountUp';
 import { yearsDesc } from '../lib/dateMath';
 import { formatHours, formatMoney } from '../lib/format';
@@ -45,9 +45,9 @@ export const Stats = (): React.JSX.Element => {
   // Solo para la línea "Plan to play" del Backlog flow — el resto de Stats
   // sigue siendo territorio exclusivo de la biblioteca real.
   const { data: plannedGames = [] } = usePlannedGames();
-  const { data: sessions = [] } = useAllSessions();
-  const { data: spendEvents = [] } = useAllSpendEvents();
-  const { data: stateEvents = [] } = useAllStateEvents();
+  const { data: sessions = [] } = useSessions();
+  const { data: spendEvents = [] } = useSpendEvents();
+  const { data: stateEvents = [] } = useStateEvents();
 
   // El selector de año ofrece cualquier año con ACTIVIDAD de cualquier tipo:
   // sesiones, gastos, cambios de estado (un Beaten de 2019 registrado a mano

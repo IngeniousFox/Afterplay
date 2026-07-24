@@ -1,4 +1,4 @@
-import type { TimeFormat } from '../../../shared/types';
+import type { DatePrecision, EventDatePrecision, TimeFormat } from '../../../shared/types';
 
 // "1 game" / "3 games" — usado en las cabeceras de las columnas de nav
 // (Library/Sessions/Stats) y en la vista de Sesiones.
@@ -32,7 +32,7 @@ export const formatTime = (date: Date, timeFormat: TimeFormat): string =>
 // sin i18n, así que dejar que esto cambie de idioma solo (el navegador de
 // pruebas de Claude Code está en es-ES, y salía "15 de julio de 2026" aquí
 // en medio de una interfaz en inglés) sería inconsistente.
-export const formatDateOnly = (date: Date, precision: 'year' | 'month' | 'day'): string => {
+export const formatDateOnly = (date: Date, precision: DatePrecision): string => {
   if (precision === 'year') return String(date.getFullYear());
   if (precision === 'month') {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -48,7 +48,7 @@ export const formatDateOnly = (date: Date, precision: 'year' | 'month' | 'day'):
 // en silencio.
 export const formatByPrecision = (
   date: Date,
-  precision: 'year' | 'month' | 'day' | 'datetime',
+  precision: EventDatePrecision,
   timeFormat: TimeFormat,
 ): string => {
   if (precision !== 'datetime') return formatDateOnly(date, precision);
@@ -67,7 +67,7 @@ export const formatByPrecision = (
 // hora que dar).
 export const formatSessionEndTime = (
   endedAt: Date | null,
-  datePrecision: 'year' | 'month' | 'day' | 'datetime',
+  datePrecision: EventDatePrecision,
   timeFormat: TimeFormat,
 ): string | null => {
   if (!endedAt || datePrecision !== 'datetime') return null;

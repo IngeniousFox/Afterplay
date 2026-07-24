@@ -2,6 +2,7 @@ import { NotebookPen, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useUpdateGame } from '../../../hooks/games';
+import { useResetOnOpen } from '../../../hooks/useResetOnOpen';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
 import { NotesEditor } from './NotesEditor';
 
@@ -29,13 +30,8 @@ export const EditNotesModal = ({
 
   // Reinicia el textarea a las notas reales cada vez que el modal se ABRE
   // (no en cada render mientras está abierto, o se perdería lo que se está
-  // escribiendo) — patrón de "ajustar estado durante el render", sin
-  // useEffect, igual que el resto de la app (ver GameDetail.tsx).
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setNotes(game.notes ?? '');
-  }
+  // escribiendo).
+  useResetOnOpen(open, () => setNotes(game.notes ?? ''));
 
   const handleClose = (): void => {
     if (updateGame.isPending) return;

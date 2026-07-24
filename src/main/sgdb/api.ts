@@ -3,6 +3,24 @@ import { findBestMatch } from './match';
 import { sgdbImageResponseSchema, sgdbSearchResponseSchema } from './schemas';
 import type { GetSgdbImagesInput, SgdbImageCandidate, SgdbImages } from './types';
 
+const SGDB_TIMEOUT_MS = 10_000;
+
+// El paquete "steamgriddb" arma su propia llamada axios(options) por dentro
+// sin exponer ningún hook de timeout — a diferencia de IGDB (10s vía nuestro
+// propio cliente axios) y HLTB (30s ya incluidos en su paquete), una llamada
+// a SGDB que nunca responde se quedaría colgada sin límite. Esto le pone la
+// misma cota por fuera, sin tocar el paquete.
+const withSgdbTimeout = <T>(promise: Promise<T>): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('SteamGridDB tardó demasiado en responder')),
+        SGDB_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+
 // Busca el juego en SteamGridDB y devuelve su id, o null si no hay match con
 // confianza suficiente. Mismo criterio que HLTB (nombre + año) — aquí hace
 // más falta todavía: el buscador de SGDB devuelve DLC, mods de fans y hasta
@@ -12,7 +30,7 @@ export const sgdbSearch = async (
   releaseYear: number | null,
 ): Promise<number | null> => {
   const client = await getSgdbClient();
-  const raw = await client.searchGame(title);
+  const raw = await withSgdbTimeout(client.searchGame(title));
   const candidates = sgdbSearchResponseSchema.parse(raw);
   const match = findBestMatch(candidates, title, releaseYear);
   return match?.id ?? null;
@@ -36,7 +54,7 @@ const toCandidate = (image: {
 // para este juego concreto.
 const safeImageCall = async (call: () => Promise<unknown>): Promise<SgdbImageCandidate[]> => {
   try {
-    const raw = await call();
+    const raw = await withSgdbTimeout(call());
     return sgdbImageResponseSchema.parse(raw).map(toCandidate);
   } catch (error) {
     console.error('[sgdb] fallo pidiendo imagenes, devuelvo lista vacia:', error);

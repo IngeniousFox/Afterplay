@@ -4,6 +4,7 @@ import type { PlayedEntry } from '../../lib/playedEntries';
 import { topPlayedEntries } from '../../lib/playedEntries';
 import { GameCover } from '../GameCover';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
 
 type MostPlayedListProps = { entries: PlayedEntry[] };
 
@@ -22,7 +23,7 @@ export const MostPlayedList = ({ entries }: MostPlayedListProps): React.JSX.Elem
   return (
     <StatCard title="Most Played" titleClassName="mb-4.5">
       {top.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing tracked yet.</p>
+        <StatCardEmpty>Nothing tracked yet.</StatCardEmpty>
       ) : (
         <div className="flex flex-col gap-2">
           {top.map((entry) => (

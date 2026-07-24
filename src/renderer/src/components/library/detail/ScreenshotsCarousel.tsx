@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useIgdbDetails } from '../../../hooks/igdb';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { ScreenshotLightbox } from './ScreenshotLightbox';
+import { SectionLabel } from './SectionLabel';
 
 type ScreenshotsCarouselProps = {
   igdbId: number;
@@ -100,9 +101,7 @@ export const ScreenshotsCarousel = ({
             baja) crecía de golpe al terminar de cargar y empujaba la fila de
             imágenes hacia abajo — el salto que se notaba. */}
         <div className="mb-3.25 flex items-center justify-between">
-          <div className="text-[11px] font-bold tracking-[.13em] text-muted-foreground">
-            SCREENSHOTS
-          </div>
+          <SectionLabel>SCREENSHOTS</SectionLabel>
           <div className="h-7" />
         </div>
         <div className="flex gap-3.5">
@@ -121,9 +120,7 @@ export const ScreenshotsCarousel = ({
   return (
     <div className="mt-7.5">
       <div className="mb-3.25 flex items-center justify-between">
-        <div className="text-[11px] font-bold tracking-[.13em] text-muted-foreground">
-          SCREENSHOTS
-        </div>
+        <SectionLabel>SCREENSHOTS</SectionLabel>
         <div className="flex items-center gap-2.5">
           <span className="text-[11px] text-muted-foreground tabular-nums">
             {index + 1}/{screenshots.length}

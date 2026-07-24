@@ -3,6 +3,7 @@ import { getDb } from '../..';
 import type { StateEvent, UpdateStateEventPatch } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
 import { stateEventsTable } from '../../schema';
+import { updateOrFetch } from '../updateOrFetch';
 
 // Corrección de un evento del historial: fecha y nota. El TIPO nunca se
 // toca (SPEC 4.5: corregir un ESTADO es añadir un evento nuevo, no
@@ -14,20 +15,23 @@ export const updateStateEvent = async (
 ): Promise<StateEvent | null> => {
   const db = getDb();
 
-  // Drizzle peta con un .set() vacío (mismo caso que updateGame.ts).
-  if (Object.keys(patch).length === 0) {
-    const [event] = await db
-      .select(stateEventColumns)
-      .from(stateEventsTable)
-      .where(eq(stateEventsTable.id, id))
-      .limit(1);
-    return event ?? null;
-  }
-
-  const [updated] = await db
-    .update(stateEventsTable)
-    .set(patch)
-    .where(eq(stateEventsTable.id, id))
-    .returning(stateEventColumns);
-  return updated ?? null;
+  return updateOrFetch(
+    patch,
+    async () => {
+      const [event] = await db
+        .select(stateEventColumns)
+        .from(stateEventsTable)
+        .where(eq(stateEventsTable.id, id))
+        .limit(1);
+      return event ?? null;
+    },
+    async () => {
+      const [updated] = await db
+        .update(stateEventsTable)
+        .set(patch)
+        .where(eq(stateEventsTable.id, id))
+        .returning(stateEventColumns);
+      return updated ?? null;
+    },
+  );
 };

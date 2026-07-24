@@ -1,11 +1,9 @@
-import { existsSync } from 'fs';
-import { ipcMain, shell } from 'electron';
+import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
 import type {
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
   GameRow,
-  LaunchExecutableResult,
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
@@ -19,6 +17,7 @@ import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
 import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
 import { cacheImage } from '../images/cache';
+import { openPathResult } from '../lib/openPath';
 
 // Fire-and-forget a propósito: crear/editar un juego no debe esperar a que
 // termine de bajar la imagen de un CDN externo, eso haría el guardado lento
@@ -85,39 +84,17 @@ export const registerGamesHandlers = (): void => {
     return resetEndlessState(id);
   });
 
-  // Botón Play — no es acceso a datos (ipcMain.handle directo, no handleDb).
-  // Comprobación de existencia propia ANTES de shell.openPath: así el
-  // mensaje ("no se encontró el ejecutable") es nuestro y está en español,
-  // en vez del texto crudo que devuelva el sistema operativo.
-  ipcMain.handle(
-    'games:launchExecutable',
-    async (_event, executablePath: string): Promise<LaunchExecutableResult> => {
-      if (!existsSync(executablePath)) {
-        return { ok: false, reason: 'missing' };
-      }
-      const error = await shell.openPath(executablePath);
-      if (error) {
-        return { ok: false, reason: 'error', message: error };
-      }
-      return { ok: true };
-    },
+  // Botón Play y botón "abrir carpeta" — ni uno ni otro es acceso a datos
+  // (ipcMain.handle directo, no handleDb). openPathResult comprueba que
+  // exista ANTES de shell.openPath, así el mensaje ("no se encontró...") es
+  // nuestro en español en vez del texto crudo del sistema operativo — y
+  // sirve igual para un .exe que para un directorio (abrir carpetas en el
+  // explorador es lo mismo para openPath que "ejecutar" un archivo).
+  ipcMain.handle('games:launchExecutable', (_event, executablePath: string) =>
+    openPathResult(executablePath),
   );
 
-  // Botón "abrir carpeta" del detalle — shell.openPath también sirve para
-  // directorios (los abre en el explorador del sistema, no intenta
-  // "ejecutarlos"), así que reusa exactamente el mismo resultado que el
-  // botón Play en vez de inventar un tipo aparte para la misma forma.
-  ipcMain.handle(
-    'games:openInstallDirectory',
-    async (_event, installDirectory: string): Promise<LaunchExecutableResult> => {
-      if (!existsSync(installDirectory)) {
-        return { ok: false, reason: 'missing' };
-      }
-      const error = await shell.openPath(installDirectory);
-      if (error) {
-        return { ok: false, reason: 'error', message: error };
-      }
-      return { ok: true };
-    },
+  ipcMain.handle('games:openInstallDirectory', (_event, installDirectory: string) =>
+    openPathResult(installDirectory),
   );
 };

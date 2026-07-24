@@ -2,6 +2,7 @@ import { Image, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useUpdateGame } from '../../../hooks/games';
+import { useResetOnOpen } from '../../../hooks/useResetOnOpen';
 import type { CoverPickerTarget } from '../add-game/CoverPicker';
 import { CoverPicker } from '../add-game/CoverPicker';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
@@ -31,19 +32,12 @@ export const ChangeCoverModal = ({
   const [steamGridDbId, setSteamGridDbId] = useState(game.steamGridDbId);
   const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
 
-  // "Adjusting state when a prop changes" (react.dev) — al reabrir el modal
-  // hay que volver a partir de los valores actuales del juego, con
-  // useState en vez de un efecto para no disparar un render en cascada.
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setCoverUrl(game.coverUrl);
-      setHeroUrl(game.heroUrl);
-      setSteamGridDbId(game.steamGridDbId);
-      setPickerTarget(null);
-    }
-  }
+  useResetOnOpen(open, () => {
+    setCoverUrl(game.coverUrl);
+    setHeroUrl(game.heroUrl);
+    setSteamGridDbId(game.steamGridDbId);
+    setPickerTarget(null);
+  });
 
   const handleClose = (): void => {
     if (updateGame.isPending) return;

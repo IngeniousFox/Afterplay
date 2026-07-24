@@ -1,8 +1,8 @@
-import { ipcMain } from 'electron';
 import { createManualBackup } from '../db/manualBackup';
+import { handleDb } from './dbHandle';
 
 export const registerBackupHandlers = (): void => {
-  ipcMain.handle('backup:createManual', async (_event, directory: string) => {
+  handleDb('backup:createManual', async (_event, directory: string) => {
     return createManualBackup(directory);
   });
 };

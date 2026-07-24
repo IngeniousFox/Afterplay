@@ -1,13 +1,14 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { PendingSession, Session, SessionWithGame } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
+import { useInvalidatingMutation } from './useInvalidatingMutation';
 
 // Bloque 5A — todas las sesiones de la biblioteca (para la vista de
 // Sesiones). Misma historia que useGames(): staleTime Infinity porque solo
 // cambia por las mutations de aquí (que invalidan sessions.all) o por el
 // watcher del main (vía useWatcherSync).
-export const useAllSessions = (): UseQueryResult<SessionWithGame[], Error> =>
+export const useSessions = (): UseQueryResult<SessionWithGame[], Error> =>
   useQuery({
     queryKey: queryKeys.sessions.all,
     queryFn: () => window.api.sessions.getAll(),
@@ -32,62 +33,42 @@ export const useAssignSession = (): UseMutationResult<
   Error,
   { sessionId: number; gameId: number },
   unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ sessionId, gameId }) => window.api.sessions.assign(sessionId, gameId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
-    },
-  });
-};
+> =>
+  useInvalidatingMutation(
+    ({ sessionId, gameId }: { sessionId: number; gameId: number }) =>
+      window.api.sessions.assign(sessionId, gameId),
+    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
+  );
 
 // Descartar una sesión de emulador sin asignar (se abrió el emulador solo
 // para configurarlo, no para jugar) — nunca tocó ningún juego, así que solo
 // hace falta refrescar la propia bandeja de pendientes.
-export const useDeletePendingSession = (): UseMutationResult<boolean, Error, number, unknown> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (sessionId: number) => window.api.sessions.deletePending(sessionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.pending });
-    },
-  });
-};
+export const useDeletePendingSession = (): UseMutationResult<boolean, Error, number, unknown> =>
+  useInvalidatingMutation(
+    (sessionId: number) => window.api.sessions.deletePending(sessionId),
+    [queryKeys.sessions.pending],
+  );
 
 // Borrar una sesión real cerrada — cambia horas/contadores/fechas derivadas
 // del juego (games) y la propia lista (sessions). stateEvents no se toca:
 // el borrado deja el historial de estados intacto a propósito (ver
 // deleteSession.ts en el main).
-export const useDeleteSession = (): UseMutationResult<boolean, Error, number, unknown> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => window.api.sessions.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-    },
-  });
-};
+export const useDeleteSession = (): UseMutationResult<boolean, Error, number, unknown> =>
+  useInvalidatingMutation(
+    (id: number) => window.api.sessions.delete(id),
+    [queryKeys.games.all, queryKeys.sessions.all],
+  );
 
 export const useCloseSession = (): UseMutationResult<
   Session | null,
   Error,
   { id: number; endedAt: Date },
   unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, endedAt }: { id: number; endedAt: Date }) =>
-      window.api.sessions.close(id, endedAt),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-    },
-  });
-};
+> =>
+  useInvalidatingMutation(
+    ({ id, endedAt }: { id: number; endedAt: Date }) => window.api.sessions.close(id, endedAt),
+    [queryKeys.games.all, queryKeys.sessions.all],
+  );
 
 // Botón Play (ActionBar) — misma función que el watcher (startGameSession),
 // vía IPC. Sustituye a la orquestación manual de addIteration/addStateEvent/
@@ -99,19 +80,8 @@ export const useCloseSession = (): UseMutationResult<
 // Invalida las tres queries que tocaban las tres mutations por separado
 // (games: currentState/totalHours: sessions: la lista global; stateEvents:
 // el nuevo 'started' si tocó abrir/reanudar playthrough).
-export const useStartGameSession = (): UseMutationResult<
-  Session | null,
-  Error,
-  number,
-  unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (gameId: number) => window.api.sessions.startForGame(gameId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
-    },
-  });
-};
+export const useStartGameSession = (): UseMutationResult<Session | null, Error, number, unknown> =>
+  useInvalidatingMutation(
+    (gameId: number) => window.api.sessions.startForGame(gameId),
+    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
+  );

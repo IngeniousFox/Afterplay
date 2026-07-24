@@ -1,22 +1,26 @@
 import { Check } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { BLUE, GREEN } from '../../../lib/colors';
 
 // Las dos ternas de color (borde marcado / relleno marcado / icono de check)
 // que usa cada checkbox de este tipo en toda la app — verde para lo
 // "estructural" (endless, emulado, arranque con Windows), azul para lo que
 // es más una anotación/opción secundaria (jugado antes, extra content, notas).
+// fillColorChecked reusa los tokens compartidos (antes una tercera copia
+// suelta de los mismos hex); borderColorChecked/checkIconColor son variantes
+// de alpha propias de este componente, no una simple reutilización directa.
 const ACCENT_COLORS: Record<
   'green' | 'blue',
   { borderColorChecked: string; fillColorChecked: string; checkIconColor: string }
 > = {
   green: {
     borderColorChecked: 'rgba(47,220,126,.7)',
-    fillColorChecked: '#2fdc7e',
+    fillColorChecked: GREEN,
     checkIconColor: '#08120c',
   },
   blue: {
     borderColorChecked: 'rgba(133,163,214,.6)',
-    fillColorChecked: '#85a3d6',
+    fillColorChecked: BLUE,
     checkIconColor: '#0a0b0a',
   },
 };

@@ -8,7 +8,7 @@ import { Pager } from '../components/sessions/Pager';
 import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
-import { useAllSessions } from '../hooks/sessions';
+import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { DAY_MS, startOfDayMs } from '../lib/dateMath';
 import { formatHours, pluralize } from '../lib/format';
@@ -76,7 +76,7 @@ export const Sessions = (): React.JSX.Element => {
   const gameParam = searchParams.get('game');
   const gameId = gameParam ? Number(gameParam) : null;
 
-  const { data: sessions = [], isLoading, isError } = useAllSessions();
+  const { data: sessions = [], isLoading, isError } = useSessions();
   const { data: games = [] } = useGames();
 
   const [page, setPage] = useState(1);

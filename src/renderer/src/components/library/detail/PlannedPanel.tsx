@@ -5,34 +5,13 @@ import { AMBER } from '../../../lib/colors';
 import { daysBetween, humanizeSpan } from '../../../lib/dateMath';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
 import { STATUS_META } from '../../../lib/gameStatus';
+import { StatTile } from './StatTile';
 
 const PLAN_COLOR = STATUS_META.plan.color;
 
 type PlannedPanelProps = {
   game: GameDetail;
 };
-
-const Tile = ({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value: string;
-}): React.JSX.Element => (
-  <div
-    className="rounded-[11px] border px-3 py-2.5"
-    style={{ borderColor: `${color}2e`, background: `${color}0f` }}
-  >
-    <div className="text-[10px] font-bold tracking-[.11em]" style={{ color: `${color}b3` }}>
-      {label}
-    </div>
-    <div className="mt-1 text-[17px] font-extrabold tabular-nums" style={{ color }}>
-      {value}
-    </div>
-  </div>
-);
 
 // El equivalente del Status card para un juego que todavía no se juega: un
 // planeado no tiene estado ni playthrough, pero sí tiene lo que sí es suyo —
@@ -75,14 +54,19 @@ export const PlannedPanel = ({ game }: PlannedPanelProps): React.JSX.Element => 
       </div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-2">
-        <Tile color={PLAN_COLOR} label="WAITING" value={waiting} />
+        <StatTile color={PLAN_COLOR} label="WAITING" value={waiting} size="sm" />
         {/* Solo si HLTB trae el dato: un "0h para terminarlo" es mentira, no
             es un cero de verdad (mismo criterio que HowLongToBeatCard). */}
         {game.hltbMain ? (
-          <Tile color="#2bb6a6" label="TO BEAT" value={formatHours(game.hltbMain)} />
+          <StatTile color="#2bb6a6" label="TO BEAT" value={formatHours(game.hltbMain)} size="sm" />
         ) : null}
         {game.totalSpend > 0 && (
-          <Tile color={AMBER} label="ALREADY SPENT" value={formatMoney(game.totalSpend)} />
+          <StatTile
+            color={AMBER}
+            label="ALREADY SPENT"
+            value={formatMoney(game.totalSpend)}
+            size="sm"
+          />
         )}
       </div>
     </div>

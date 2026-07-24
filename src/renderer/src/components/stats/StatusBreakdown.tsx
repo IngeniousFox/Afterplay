@@ -6,6 +6,7 @@ import { pluralize } from '../../lib/format';
 import { StatusIcon } from '../StatusIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
 
 type StatusBreakdownProps =
   | { mode: 'all-time'; games: GameListItem[] }
@@ -94,7 +95,7 @@ export const StatusBreakdown = (props: StatusBreakdownProps): React.JSX.Element 
       </div>
 
       {total === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing here yet.</p>
+        <StatCardEmpty>Nothing here yet.</StatCardEmpty>
       ) : (
         <>
           {/* Barra apilada de proporciones (estilo lenguajes de GitHub) —

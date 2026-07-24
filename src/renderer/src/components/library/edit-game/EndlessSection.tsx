@@ -5,9 +5,8 @@ import type { PastStatusKey } from '../../../lib/gameStatus';
 import { Dropdown } from '../add-game/Dropdown';
 import { HoursPlayedField } from '../add-game/HoursPlayedField';
 import { fieldLabelClass } from '../add-game/styles';
+import { BLUE } from '../../../lib/colors';
 import type { EditGameFormValues } from './types';
-
-const BLUE = '#85a3d6';
 
 // Contrapartida de IterationSection para juegos ENDLESS: sin playthroughs
 // discretos que editar, pero sí lo que Add Game ya dejaba registrar para

@@ -13,16 +13,13 @@ import { useEffect } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
 import { useResetEndlessState, useUpdateGame } from '../../hooks/games';
-import { useAddIteration, useUpdateIteration } from '../../hooks/iterations';
+import { useCreateIteration, useUpdateIteration } from '../../hooks/iterations';
 import { useAddStateEvent, useUpdateStateEvent } from '../../hooks/stateEvents';
-import {
-  ENDLESS_STATUS_OPTIONS,
-  STATE_TO_STATUS_KEY,
-  STATUS_TO_STATE_TYPE,
-} from '../../lib/gameStatus';
+import { ENDLESS_STATUS_OPTIONS, STATE_TO_STATUS_KEY } from '../../lib/gameStatus';
 import type { PastStatusKey } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
 import { getGameStatusMeta } from '../../lib/gameStatus';
+import { BLUE, GRAY, GREEN, TEAL, VIOLET } from '../../lib/colors';
 import { expandClass, revealClass, revealStyle } from '../../lib/styles';
 import { ModalFooter, ModalShell } from '../ui/modal-shell';
 import { StatusIcon } from '../StatusIcon';
@@ -33,19 +30,17 @@ import { CoverThumb } from './add-game/CoverThumb';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { FormSection } from './add-game/FormSection';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
-import { parseIsoDate } from './add-game/precisionDate';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from './add-game/styles';
-import { DEFAULT_FORM_VALUES, parseOptionalNumber } from './add-game/types';
 import { EndlessSection } from './edit-game/EndlessSection';
+import {
+  saveBaseGamePatch,
+  saveEndlessIteration,
+  saveExistingIteration,
+  saveNewIteration,
+} from './edit-game/handleSave';
 import { IterationSection } from './edit-game/IterationSection';
 import { edgeEventPickerValue } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
-
-const GREEN = '#2fdc7e';
-const VIOLET = '#7c86c8';
-const BLUE = '#85a3d6';
-const TEAL = '#2bb6a6';
-const GRAY = '#8b93a3';
 
 type EditGameModalProps = {
   game: GameDetail;
@@ -112,7 +107,7 @@ export const EditGameModal = ({
   }, [open, game]);
 
   const updateGame = useUpdateGame();
-  const addIteration = useAddIteration();
+  const addIteration = useCreateIteration();
   const updateIteration = useUpdateIteration();
   const resetEndlessState = useResetEndlessState();
   const addStateEvent = useAddStateEvent();
@@ -134,192 +129,23 @@ export const EditGameModal = ({
   const handleSave = async (): Promise<void> => {
     const values = getValues();
 
-    await updateGame.mutateAsync({
-      id: game.id,
-      patch: {
-        title: values.title.trim() || game.title,
-        installDirectory: values.installDirectory.trim() || null,
-        installSizeBytes: values.installDirectory.trim() ? values.installSizeBytes : null,
-        // Marcarlo como emulado retira el .exe propio: lo vigilado pasa a
-        // ser el emulador, no el juego (EMULADORES.md §5).
-        executablePath: values.isEmulated ? null : values.executablePath.trim() || null,
-        notes: values.notes.trim() || null,
-        endless: values.endless,
-        isEmulated: values.isEmulated,
-      },
-    });
+    await saveBaseGamePatch(game, values, updateGame);
 
     if (values.endless) {
-      // ── Juego endless ──────────────────────────────────────────────────
-      // Convertirlo desde normal limpia los desenlaces y marcadores de
-      // partida discreta CONSERVANDO las sesiones trackeadas y las horas
-      // manuales (ver resetEndlessState) — sin esto el juego seguía saliendo
-      // como "Beaten" por un playthrough que conceptualmente ya no existe,
-      // pero borrar iteraciones enteras se llevaba lo medido por el watcher.
-      const converting = !game.endless;
-      if (converting) {
-        await resetEndlessState.mutateAsync(game.id);
-      }
-
-      // El playthrough CONTENEDOR del endless (el que agrupa sesiones,
-      // horas manuales y estado — mismo shape que crea Add Game): se
-      // actualiza el existente o se crea uno si no hay ninguno.
-      const container = activeOrLastIteration(game.iterations);
-      const manualHours = parseOptionalNumber(values.hoursPlayed);
-
-      if (container) {
-        await updateIteration.mutateAsync({
-          id: container.id,
-          patch: { manualTotalPlayed: manualHours },
-        });
-        // Tras una conversión el historial acaba de limpiarse entero (el
-        // currentState del prop es una foto vieja) — el estado elegido se
-        // escribe SIEMPRE; sin conversión, solo si cambió de verdad.
-        const previousStatus =
-          !converting && container.currentState
-            ? STATE_TO_STATUS_KEY[container.currentState]
-            : null;
-        if (converting || values.status !== previousStatus) {
-          await addStateEvent.mutateAsync({
-            iterationId: container.id,
-            type: STATUS_TO_STATE_TYPE[values.status],
-            occurredAt: new Date(),
-            datePrecision: 'datetime',
-            note: null,
-          });
-        }
-      } else {
-        const iteration = await addIteration.mutateAsync({
-          gameId: game.id,
-          label: null,
-          playedPlatform: values.platform || DEFAULT_FORM_VALUES.platform,
-          origin: values.origin || DEFAULT_FORM_VALUES.origin,
-          format: values.format,
-          manualTotalPlayed: manualHours,
-        });
-        await addStateEvent.mutateAsync({
-          iterationId: iteration.id,
-          type: STATUS_TO_STATE_TYPE[values.status],
-          occurredAt: new Date(),
-          datePrecision: 'datetime',
-          note: null,
-        });
-      }
+      await saveEndlessIteration(game, values, {
+        resetEndlessState,
+        updateIteration,
+        addIteration,
+        addStateEvent,
+      });
     } else if (values.iterationMode === 'new') {
-      const iteration = await addIteration.mutateAsync({
-        gameId: game.id,
-        label: values.label.trim() || null,
-        playedPlatform: values.platform,
-        origin: values.origin,
-        format: values.format,
-        manualTotalPlayed: parseOptionalNumber(values.hoursPlayed),
-      });
-
-      // Modelo v2: las fechas del playthrough manual SON sus eventos — ya no
-      // se crean sesiones marcadoras aparte.
-      const isOngoing = values.status === 'playing';
-
-      // SPEC 4.5 — el log de una iteración siempre debe arrancar por
-      // "started" antes de un estado terminal, así que si hay fecha de
-      // inicio y el estado elegido no es "playing", ese 'started' va
-      // primero (mismo guion que writeInitialPlaythrough para Add Game).
-      if (values.started && STATUS_TO_STATE_TYPE[values.status] !== 'started') {
-        await addStateEvent.mutateAsync({
-          iterationId: iteration.id,
-          type: 'started',
-          occurredAt: parseIsoDate(values.started.isoDate),
-          datePrecision: values.started.precision,
-          note: null,
-        });
-      }
-
-      const anchorDate = (!isOngoing ? values.finished : null) ?? values.started;
-      await addStateEvent.mutateAsync({
-        iterationId: iteration.id,
-        type: STATUS_TO_STATE_TYPE[values.status],
-        occurredAt: anchorDate ? parseIsoDate(anchorDate.isoDate) : new Date(),
-        datePrecision: anchorDate?.precision ?? 'day',
-        note: null,
-      });
+      await saveNewIteration(game, values, { addIteration, addStateEvent });
     } else if (values.iterationMode === 'existing' && values.selectedIterationId) {
-      const iterationId = values.selectedIterationId;
-      await updateIteration.mutateAsync({
-        id: iterationId,
-        patch: {
-          playedPlatform: values.platform,
-          origin: values.origin,
-          format: values.format,
-          extraContent: values.extraContent,
-          manualTotalPlayed: parseOptionalNumber(values.hoursPlayed),
-          ...(values.label.trim() ? { label: values.label.trim() } : {}),
-        },
+      await saveExistingIteration(game, values, values.selectedIterationId, {
+        updateIteration,
+        updateStateEvent,
+        addStateEvent,
       });
-
-      const originalIteration = game.iterations.find((it) => it.id === iterationId);
-
-      // Fechas Started/Finished corregidas — modelo v2: la fecha ES el
-      // evento, así que corregirla es parchear ese evento. Solo si la fecha
-      // era editable (había evento dueño y no venía de una sesión medida —
-      // si no, ni siquiera está en el formulario) y el valor cambió de
-      // verdad. Un draft a null (borrado con la X del picker) se ignora:
-      // quitar una fecha del todo sería borrar el evento, no corregirlo —
-      // fuera de alcance aquí (para eso está el History).
-      if (originalIteration) {
-        const edges = [
-          {
-            event: originalIteration.startedBySession ? null : originalIteration.startEvent,
-            draft: values.started,
-          },
-          { event: originalIteration.endEvent, draft: values.finished },
-        ];
-        for (const { event, draft } of edges) {
-          if (!event || !draft) continue;
-          const original = edgeEventPickerValue(event);
-          if (
-            original &&
-            original.isoDate === draft.isoDate &&
-            original.precision === draft.precision
-          ) {
-            continue;
-          }
-          await updateStateEvent.mutateAsync({
-            id: event.id,
-            patch: {
-              occurredAt: parseIsoDate(draft.isoDate),
-              datePrecision: draft.precision,
-            },
-          });
-        }
-      }
-
-      const previousStatus = originalIteration?.currentState
-        ? STATE_TO_STATUS_KEY[originalIteration.currentState]
-        : null;
-
-      if (values.status !== previousStatus) {
-        const newType = STATUS_TO_STATE_TYPE[values.status];
-        // Playthrough con desenlace registrado (endEvent), cambiado a otro
-        // desenlace terminal (Beaten → Dropped…): se corrige el TIPO de ese
-        // mismo evento conservando su fecha, en vez de añadir uno nuevo
-        // fechado hoy — que dejaba el Beaten viejo en el historial y un
-        // Dropped "de hoy" sin sentido para una partida del pasado.
-        const isTerminal =
-          newType === 'completed' || newType === 'dropped' || newType === 'on_hold';
-        if (originalIteration?.endEvent && isTerminal) {
-          await updateStateEvent.mutateAsync({
-            id: originalIteration.endEvent.id,
-            patch: { type: newType },
-          });
-        } else {
-          await addStateEvent.mutateAsync({
-            iterationId,
-            type: newType,
-            occurredAt: new Date(),
-            datePrecision: 'datetime',
-            note: null,
-          });
-        }
-      }
     }
 
     onOpenChange(false);

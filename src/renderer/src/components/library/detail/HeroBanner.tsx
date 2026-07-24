@@ -1,10 +1,33 @@
 import { ArrowLeft, Gamepad2, Plus } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import { formatElapsed } from '../../../lib/format';
 import { getGameStatusMeta, STATUS_META } from '../../../lib/gameStatus';
 import { CoverThumb } from '../add-game/CoverThumb';
+
+// Botón "cristal" sobre el hero (volver / añadir juego) — mismo borde/fondo
+// translúcido en los dos, solo cambian el icono y el texto.
+const HeroGlassButton = ({
+  onClick,
+  icon: Icon,
+  children,
+}: {
+  onClick: () => void;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}): React.JSX.Element => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex items-center gap-1.75 rounded-[9px] border border-white/8 px-3 py-1.75 text-[13px] text-foreground"
+    style={{ background: 'rgba(8,12,10,.66)' }}
+  >
+    <Icon size={16} />
+    <span>{children}</span>
+  </button>
+);
 
 type HeroBannerProps = {
   game: GameDetail;
@@ -66,28 +89,18 @@ export const HeroBanner = ({
         style={{ background: 'linear-gradient(90deg,rgba(10,11,10,.7),transparent 45%)' }}
       />
 
-      <button
-        type="button"
-        onClick={onBack}
-        className="absolute top-5 left-6 flex items-center gap-1.75 rounded-[9px] border border-white/8 px-3 py-1.75 text-[13px] text-foreground"
-        style={{ background: 'rgba(8,12,10,.66)' }}
-      >
-        <ArrowLeft size={16} />
-        <span>{backLabel}</span>
-      </button>
+      <div className="absolute top-5 left-6">
+        <HeroGlassButton onClick={onBack} icon={ArrowLeft}>
+          {backLabel}
+        </HeroGlassButton>
+      </div>
 
       {(onAddGame || liveSince) && (
         <div className="absolute top-5 right-6 flex items-center gap-2.5">
           {onAddGame && (
-            <button
-              type="button"
-              onClick={onAddGame}
-              className="flex items-center gap-1.75 rounded-[9px] border border-white/8 px-3 py-1.75 text-[13px] text-foreground"
-              style={{ background: 'rgba(8,12,10,.66)' }}
-            >
-              <Plus size={16} />
-              <span>Add game</span>
-            </button>
+            <HeroGlassButton onClick={onAddGame} icon={Plus}>
+              Add game
+            </HeroGlassButton>
           )}
 
           {liveSince && (

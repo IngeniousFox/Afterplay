@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AMBER } from '../../lib/colors';
 import { formatHours, pluralize } from '../../lib/format';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
 
 export type AgeEntry = { hours: number; releaseYear: number | null };
@@ -129,7 +130,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
       </div>
 
       {totalHours <= 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing tracked yet.</p>
+        <StatCardEmpty>Nothing tracked yet.</StatCardEmpty>
       ) : (
         (() => {
           const active = slices.find((slice) => slice.key === hoveredKey) ?? biggest;

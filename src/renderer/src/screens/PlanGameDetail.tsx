@@ -13,7 +13,14 @@ import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCar
 import { AddGameModal } from '../components/library/AddGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { useGame } from '../hooks/games';
-import { accentGradientStyle, revealClass, revealStyle } from '../lib/styles';
+import {
+  accentGradientStyle,
+  destructiveIconButtonClass,
+  heroCtaButtonClass,
+  revealClass,
+  revealStyle,
+  squareIconButtonClass,
+} from '../lib/styles';
 
 type PlanGameDetailProps = {
   gameId: number;
@@ -65,7 +72,7 @@ export const PlanGameDetail = ({
               <button
                 type="button"
                 onClick={() => setPromoteOpen(true)}
-                className="flex items-center gap-2.25 rounded-[11px] px-7.5 py-3 text-[15px] font-bold shadow-[0_6px_18px_rgba(0,0,0,.28)]"
+                className={heroCtaButtonClass}
                 style={{
                   ...accentGradientStyle,
                   border: '1px solid transparent',
@@ -79,7 +86,7 @@ export const PlanGameDetail = ({
                 type="button"
                 onClick={() => setChangeCoverOpen(true)}
                 title="Change cover / hero"
-                className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-input bg-white/[0.03] hover:bg-white/[0.06]"
+                className={squareIconButtonClass}
               >
                 <ImagePlus size={17} />
               </button>
@@ -88,7 +95,7 @@ export const PlanGameDetail = ({
                 type="button"
                 onClick={() => setEditNotesOpen(true)}
                 title="Edit notes"
-                className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-input bg-white/[0.03] hover:bg-white/[0.06]"
+                className={squareIconButtonClass}
               >
                 <Pencil size={17} />
               </button>
@@ -97,7 +104,7 @@ export const PlanGameDetail = ({
                 type="button"
                 onClick={() => setDeleteOpen(true)}
                 title="Delete game"
-                className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-destructive/40 bg-destructive/8 hover:bg-destructive/18"
+                className={destructiveIconButtonClass}
               >
                 <Trash2 size={17} className="text-destructive" />
               </button>

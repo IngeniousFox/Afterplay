@@ -1,3 +1,5 @@
+import type { EventDatePrecision } from '../../../shared/types';
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const startOfDay = (date: Date): Date =>
@@ -41,8 +43,8 @@ export const humanizeSpan = (days: number): string => {
 export const humanizeSpanByPrecision = (
   from: Date,
   to: Date,
-  fromPrecision: 'year' | 'month' | 'day' | 'datetime',
-  toPrecision: 'year' | 'month' | 'day' | 'datetime',
+  fromPrecision: EventDatePrecision,
+  toPrecision: EventDatePrecision,
 ): string => {
   const coarsest =
     fromPrecision === 'year' || toPrecision === 'year'

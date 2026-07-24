@@ -1,5 +1,3 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
 import { formatByPrecision, formatHours } from '../../lib/format';
@@ -7,6 +5,9 @@ import { STATUS_META } from '../../lib/gameStatus';
 import { floatingPanelClass } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
+import { StatsPager } from './StatsPager';
+import { usePagedYear } from './usePagedYear';
 import type { Year } from './YearPicker';
 
 type CompletedGalleryProps = {
@@ -37,23 +38,7 @@ export const CompletedGallery = ({
   onOpenGame,
 }: CompletedGalleryProps): React.JSX.Element => {
   const { data: timeFormat = '24h' } = useTimeFormat();
-  const [page, setPage] = useState(0);
-  // Sentido de la última navegación (1 = adelante/más antiguo, -1 = atrás/
-  // más reciente) — decide de qué lado entra la animación de la página
-  // nueva, para que se note hacia dónde te mueves y no sea un fade plano.
-  const [direction, setDirection] = useState(1);
-  // Cambiar de año reinicia la página — ajuste durante el render (mismo
-  // patrón wasOpen de ChangeCoverModal), sin useEffect.
-  const [prevYear, setPrevYear] = useState<Year>(year);
-  if (prevYear !== year) {
-    setPrevYear(year);
-    setPage(0);
-  }
-
-  const goToPage = (next: number): void => {
-    setDirection(next > page ? 1 : -1);
-    setPage(next);
-  };
+  const { page, direction, goToPage } = usePagedYear(year);
 
   const gamesById = new Map(games.map((game) => [game.id, game]));
 
@@ -75,9 +60,6 @@ export const CompletedGallery = ({
   const shown = completions.slice(currentPage * MAX_ENTRIES, (currentPage + 1) * MAX_ENTRIES);
   const beatenColor = STATUS_META.beaten.color;
 
-  const pagerButtonClass =
-    'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-input bg-white/[0.03] text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
-
   return (
     <StatCard>
       <div className="mb-4 flex items-center justify-between">
@@ -91,38 +73,20 @@ export const CompletedGallery = ({
               {completions.length} {year === 'all' ? 'all time' : `in ${year}`}
             </div>
           )}
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 0}
-                aria-label="Newer completions"
-                className={pagerButtonClass}
-              >
-                <ChevronLeft size={13} />
-              </button>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                {currentPage + 1}/{totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages - 1}
-                aria-label="Older completions"
-                className={pagerButtonClass}
-              >
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          )}
+          <StatsPager
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            prevLabel="Newer completions"
+            nextLabel="Older completions"
+          />
         </div>
       </div>
 
       {shown.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <StatCardEmpty>
           {year === 'all' ? 'Nothing completed yet.' : `Nothing completed in ${year}.`}
-        </p>
+        </StatCardEmpty>
       ) : (
         // key={currentPage} fuerza a React a remontar el grid en cada
         // cambio de página — sin eso la animación de entrada no se

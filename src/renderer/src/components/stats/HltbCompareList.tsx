@@ -1,10 +1,13 @@
-import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Info } from 'lucide-react';
+import { useMemo } from 'react';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { formatHours } from '../../lib/format';
 import { GameCover } from '../GameCover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { StatCard } from './StatCard';
+import { StatCardEmpty } from './StatCardEmpty';
+import { StatsPager } from './StatsPager';
+import { usePagedYear } from './usePagedYear';
 import type { Year } from './YearPicker';
 
 type CompareSession = {
@@ -44,9 +47,6 @@ const LIST_MIN_HEIGHT_PX = ROW_HEIGHT_PX * MAX_ENTRIES + ROW_GAP_PX * (MAX_ENTRI
 const FAST_COLOR = '#2fdc7e';
 const SAVOR_COLOR = '#e3b24a';
 
-const pagerButtonClass =
-  'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-input bg-white/[0.03] text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
-
 // Tus horas frente al Main Story de HowLongToBeat, solo en juegos
 // completados (con año filtrado, completados ESE año). Las horas son las del
 // ÚLTIMO playthrough completado del juego — no las totales de todos los
@@ -61,20 +61,7 @@ export const HltbCompareList = ({
   sessions,
   year,
 }: HltbCompareListProps): React.JSX.Element | null => {
-  const [page, setPage] = useState(0);
-  const [direction, setDirection] = useState(1);
-  // Cambiar de año reinicia la página — mismo ajuste-durante-el-render que
-  // CompletedGallery (patrón wasOpen de ChangeCoverModal), sin useEffect.
-  const [prevYear, setPrevYear] = useState<Year>(year);
-  if (prevYear !== year) {
-    setPrevYear(year);
-    setPage(0);
-  }
-
-  const goToPage = (next: number): void => {
-    setDirection(next > page ? 1 : -1);
-    setPage(next);
-  };
+  const { page, direction, goToPage } = usePagedYear(year);
 
   const entries = useMemo(() => {
     // El ÚLTIMO evento 'completed' de cada juego dentro de la ventana — de
@@ -168,39 +155,21 @@ export const HltbCompareList = ({
               typically {medianRatio.toFixed(1)}× the Main Story
             </div>
           )}
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 0}
-                aria-label="Previous games"
-                className={pagerButtonClass}
-              >
-                <ChevronLeft size={13} />
-              </button>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                {currentPage + 1}/{totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages - 1}
-                aria-label="Next games"
-                className={pagerButtonClass}
-              >
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          )}
+          <StatsPager
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            prevLabel="Previous games"
+            nextLabel="Next games"
+          />
         </div>
       </div>
 
       <div className="flex flex-1 flex-col" style={{ minHeight: LIST_MIN_HEIGHT_PX }}>
         {shown.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <StatCardEmpty>
             No completed games with HowLongToBeat data{year === 'all' ? '' : ` in ${year}`} yet.
-          </p>
+          </StatCardEmpty>
         ) : (
           // key={currentPage}: mismo remontado-para-animar que CompletedGallery.
           // justify-start (no -center): con pocas filas se quedan arriba, no

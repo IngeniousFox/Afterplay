@@ -19,6 +19,7 @@ import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { InfoChip } from './InfoChip';
+import { StatTile } from './StatTile';
 
 const GREEN = '#2fdc7e';
 // Píldoras por página — las que caben en el ancho del sidebar sin apretarse.
@@ -35,31 +36,6 @@ type PlaythroughPanelProps = {
   selectedIteration: IterationDetail;
   onSelectIteration: (id: number) => void;
 };
-
-// Las dos medidas que de verdad importan de un playthrough (lo jugado y lo
-// gastado), con el mismo código de color que las métricas generales: verde =
-// tiempo, ámbar = dinero. Antes eran dos filas grises más entre otras seis.
-const MeasureTile = ({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value: string;
-}): React.JSX.Element => (
-  <div
-    className="rounded-[11px] border px-3 py-2.5"
-    style={{ borderColor: `${color}2e`, background: `${color}0f` }}
-  >
-    <div className="text-[10px] font-bold tracking-[.11em]" style={{ color: `${color}b3` }}>
-      {label}
-    </div>
-    <div className="mt-1 text-[19px] font-extrabold tabular-nums" style={{ color }}>
-      {value}
-    </div>
-  </div>
-);
 
 // La tira de viaje: inicio ──── cuánto duró ──── desenlace. Un playthrough es
 // un tramo de tiempo, y verlo como tramo dice cosas que dos fechas sueltas en
@@ -296,8 +272,8 @@ export const PlaythroughPanel = ({
         <JourneyStrip iteration={iteration} timeFormat={timeFormat} />
 
         <div className="grid grid-cols-2 gap-2">
-          <MeasureTile color={GREEN} label="PLAYED" value={formatHours(hours)} />
-          <MeasureTile
+          <StatTile color={GREEN} label="PLAYED" value={formatHours(hours)} />
+          <StatTile
             color={AMBER}
             label="SPENT"
             value={iteration.spend > 0 ? formatMoney(spend) : 'Free'}

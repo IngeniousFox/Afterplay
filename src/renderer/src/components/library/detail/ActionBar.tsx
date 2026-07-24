@@ -3,7 +3,12 @@ import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useLaunchExecutable, useOpenInstallDirectory } from '../../../hooks/games';
 import { useCloseSession, useStartGameSession } from '../../../hooks/sessions';
-import { accentGradientStyle } from '../../../lib/styles';
+import {
+  accentGradientStyle,
+  destructiveIconButtonClass,
+  heroCtaButtonClass,
+  squareIconButtonClass,
+} from '../../../lib/styles';
 import { AddSpendPopover } from './AddSpendPopover';
 
 type ActionBarProps = {
@@ -14,7 +19,12 @@ type ActionBarProps = {
   onDelete: () => void;
 };
 
-const outlineButtonClass =
+// Nombre propio (no "outlineButtonClass"): ese nombre ya lo exporta
+// lib/styles.ts con un estilo distinto (Sessions/GameStats) — tenerlos
+// iguales de nombre pero distintos de contenido hacía que el botón Edit de
+// aquí se viera distinto a cualquier otro "outline" de la app sin que se
+// notara por qué (colisión de nombre real, encontrada en auditoría).
+const editButtonClass =
   'flex items-center gap-2 rounded-[11px] border border-input bg-white/[0.03] px-4.5 text-[14px] font-semibold text-foreground hover:bg-white/[0.06]';
 
 // SPEC 10.7 — Play/Stop (según haya sesión activa), Edit, Añadir gasto,
@@ -93,7 +103,7 @@ export const ActionBar = ({
           onClick={handleTogglePlay}
           disabled={isBusy || !canPlay}
           title={canPlay ? undefined : 'Set an executable path (Edit) to launch this game'}
-          className="flex items-center gap-2.25 rounded-[11px] px-7.5 py-3 text-[15px] font-bold shadow-[0_6px_18px_rgba(0,0,0,.28)] disabled:cursor-not-allowed disabled:opacity-60"
+          className={`${heroCtaButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
           style={
             isLive
               ? {
@@ -111,7 +121,7 @@ export const ActionBar = ({
           <span>{isLive ? 'Stop' : launchExecutable.isPending ? 'Launching…' : 'Play'}</span>
         </button>
 
-        <button type="button" onClick={onEdit} className={`${outlineButtonClass} py-3`}>
+        <button type="button" onClick={onEdit} className={`${editButtonClass} py-3`}>
           <Pencil size={16} />
           Edit
         </button>
@@ -122,7 +132,7 @@ export const ActionBar = ({
           type="button"
           onClick={onChangeCover}
           title="Change cover / hero"
-          className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-input bg-white/[0.03] hover:bg-white/[0.06]"
+          className={squareIconButtonClass}
         >
           <ImagePlus size={17} />
         </button>
@@ -132,7 +142,7 @@ export const ActionBar = ({
           onClick={handleOpenInstallDirectory}
           disabled={!game.installDirectory || openInstallDirectory.isPending}
           title={game.installDirectory ? 'Open install folder' : 'No install folder set (Edit)'}
-          className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-input bg-white/[0.03] hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.03]"
+          className={`${squareIconButtonClass} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.03]`}
         >
           <FolderOpen size={17} />
         </button>
@@ -141,7 +151,7 @@ export const ActionBar = ({
           type="button"
           onClick={onDelete}
           title="Delete game"
-          className="flex h-11.5 w-11.5 flex-none items-center justify-center rounded-[11px] border border-destructive/40 bg-destructive/8 hover:bg-destructive/18"
+          className={destructiveIconButtonClass}
         >
           <Trash2 size={17} className="text-destructive" />
         </button>

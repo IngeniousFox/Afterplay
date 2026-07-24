@@ -7,19 +7,17 @@ import { formatByPrecision } from '../../../lib/format';
 import { NORMAL_STATUS_OPTIONS, STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
+import { BLUE } from '../../../lib/colors';
 import { CheckboxRow } from '../add-game/CheckboxRow';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import { Dropdown } from '../add-game/Dropdown';
 import { HoursPlayedField } from '../add-game/HoursPlayedField';
 import { parseIsoDate } from '../add-game/precisionDate';
-import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
+import { PlaythroughPlatformFormatOrigin } from '../add-game/PlaythroughPlatformFormatOrigin';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../add-game/styles';
-import { FORMAT_OPTIONS, ORIGIN_SEGMENT_OPTIONS, PLATFORM_OPTIONS } from '../add-game/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { edgeEventPickerValue, EMPTY_ITERATION_FIELDS } from './types';
 import type { EditGameFormValues } from './types';
-
-const BLUE = '#85a3d6';
 
 type IterationSectionProps = {
   game: GameDetail;
@@ -34,6 +32,9 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
   const { control, setValue } = useFormContext<EditGameFormValues>();
   const iterationMode = useWatch({ control, name: 'iterationMode' });
   const selectedIterationId = useWatch({ control, name: 'selectedIterationId' });
+  const platform = useWatch({ control, name: 'platform' });
+  const format = useWatch({ control, name: 'format' });
+  const origin = useWatch({ control, name: 'origin' });
   const deleteIteration = useDeleteIteration();
 
   const loadIteration = (iteration: IterationDetail): void => {
@@ -195,20 +196,14 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
         <FormHoursPlayed />
       </div>
 
-      <div>
-        <div className={fieldLabelClass}>PLATFORM</div>
-        <FormPlatformDropdown />
-      </div>
-
-      <div>
-        <div className={fieldLabelClass}>FORMAT</div>
-        <FormSegmented name="format" options={FORMAT_OPTIONS} />
-      </div>
-
-      <div>
-        <div className={fieldLabelClass}>ORIGIN</div>
-        <FormSegmented name="origin" options={ORIGIN_SEGMENT_OPTIONS} wrap />
-      </div>
+      <PlaythroughPlatformFormatOrigin
+        platform={platform}
+        onPlatformChange={(value) => setValue('platform', value)}
+        format={format}
+        onFormatChange={(value) => setValue('format', value)}
+        origin={origin}
+        onOriginChange={(value) => setValue('origin', value)}
+      />
 
       {iterationMode === 'existing' && selectedIterationId && (
         <button
@@ -245,41 +240,6 @@ const FormInput = ({
 const FormHoursPlayed = (): React.JSX.Element => {
   const { register } = useFormContext<EditGameFormValues>();
   return <HoursPlayedField {...register('hoursPlayed')} />;
-};
-
-const FormSegmented = ({
-  name,
-  options,
-  wrap,
-}: {
-  name: 'format' | 'origin';
-  options: { value: string; label: string }[];
-  wrap?: boolean;
-}): React.JSX.Element => {
-  const { control, setValue } = useFormContext<EditGameFormValues>();
-  const value = useWatch({ control, name });
-  return (
-    <SegmentedButtonGroup
-      value={value}
-      options={options}
-      onChange={(next) => setValue(name, next)}
-      wrap={wrap}
-    />
-  );
-};
-
-const FormPlatformDropdown = (): React.JSX.Element => {
-  const { control, setValue } = useFormContext<EditGameFormValues>();
-  const value = useWatch({ control, name: 'platform' });
-  return (
-    <Dropdown
-      value={value}
-      options={PLATFORM_OPTIONS}
-      onChange={(next) => setValue('platform', next)}
-      renderOption={(option) => option}
-      searchable
-    />
-  );
 };
 
 const FormStatusDropdown = (): React.JSX.Element => {
