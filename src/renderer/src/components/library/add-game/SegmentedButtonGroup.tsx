@@ -21,7 +21,9 @@ export const SegmentedButtonGroup = <T extends string>({
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
-          className="rounded-[9px] px-4 py-2 text-[13px] font-semibold"
+          className={`rounded-[9px] px-4 py-2 text-[13px] font-semibold transition-[border-color,background-color,color] duration-150 ${
+            isSelected ? '' : 'hover:border-white/20 hover:bg-white/[0.06]'
+          }`}
           style={
             isSelected
               ? {

@@ -2,12 +2,13 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Controller, useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { NORMAL_STATUS_OPTIONS, STATUS_META } from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
-import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from './DateWithPrecisionPicker';
 import { Dropdown } from './Dropdown';
+import { HoursPlayedField } from './HoursPlayedField';
 import { parseIsoDate } from './precisionDate';
 import { SegmentedButtonGroup } from './SegmentedButtonGroup';
-import { fieldLabelClass, textInputClass } from './styles';
+import { expandClass } from '../../../lib/styles';
+import { fieldLabelClass, textInputClass, textInputFocusClass } from './styles';
 import {
   EMPTY_MANUAL_PLAYTHROUGH,
   FORMAT_OPTIONS,
@@ -58,9 +59,19 @@ const PlaythroughEntry = ({
   const isOngoing = pastStatus === 'playing';
 
   return (
-    <div className="flex flex-col gap-3 rounded-[11px] border border-border bg-white/[0.02] p-3.5">
+    <div
+      className={`flex flex-col gap-3 rounded-[11px] border border-border bg-white/[0.02] p-3.5 ${expandClass}`}
+    >
       <div className="flex items-center justify-between gap-2.5">
-        <div className={fieldLabelClass}>PLAYTHROUGH {index + 2}</div>
+        <div className="flex items-center gap-2">
+          <span
+            className="flex h-5 w-5 flex-none items-center justify-center rounded-full text-[10.5px] font-extrabold tabular-nums"
+            style={{ background: 'rgba(133,163,214,.15)', color: '#85a3d6' }}
+          >
+            {index + 2}
+          </span>
+          <span className={fieldLabelClass}>PLAYTHROUGH</span>
+        </div>
         <button
           type="button"
           onClick={onRemove}
@@ -77,7 +88,11 @@ const PlaythroughEntry = ({
           control={control}
           name={`extraPlaythroughs.${index}.label`}
           render={({ field }) => (
-            <input {...field} placeholder={`Playthrough ${index + 2}`} className={textInputClass} />
+            <input
+              {...field}
+              placeholder={`Playthrough ${index + 2}`}
+              className={`${textInputClass} ${textInputFocusClass}`}
+            />
           )}
         />
       </div>
@@ -111,19 +126,11 @@ const PlaythroughEntry = ({
       </div>
 
       <div className="flex items-end gap-2.5">
-        <div className="flex-1">
-          <div className={fieldLabelClass}>
-            HOURS PLAYED{' '}
-            <span className="font-medium tracking-normal normal-case">· outside the app</span>
-          </div>
-          <Controller
-            control={control}
-            name={`extraPlaythroughs.${index}.hoursPlayed`}
-            render={({ field }) => (
-              <NumberInput {...field} min={0} placeholder="e.g. 42" className={textInputClass} />
-            )}
-          />
-        </div>
+        <Controller
+          control={control}
+          name={`extraPlaythroughs.${index}.hoursPlayed`}
+          render={({ field }) => <HoursPlayedField {...field} />}
+        />
         <div className="flex-1">
           <div className={fieldLabelClass}>STATUS</div>
           <Controller

@@ -1,7 +1,7 @@
 import { Joystick, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { PendingSession } from '../../../../shared/types';
-import { useDeletePendingSession, usePendingSessions } from '../../hooks/sessions';
+import { usePendingSessions } from '../../hooks/sessions';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useTimeFormat } from '../../hooks/settings';
 import { AMBER } from '../../lib/colors';
@@ -9,11 +9,13 @@ import { formatByPrecision, formatElapsed } from '../../lib/format';
 import { accentGradientStyle } from '../../lib/styles';
 import { AddGameModal } from '../library/AddGameModal';
 import { AssignSessionModal } from './AssignSessionModal';
+import { DeleteSessionDialog } from './DeleteSessionDialog';
 
 type PendingSessionCardProps = {
   session: PendingSession;
   timeFormat: '12h' | '24h';
   onAssign: () => void;
+  onDiscard: () => void;
 };
 
 // Aparte para que useLiveTimer (un tick/segundo) solo re-renderice la card
@@ -23,10 +25,10 @@ const PendingSessionCard = ({
   session,
   timeFormat,
   onAssign,
+  onDiscard,
 }: PendingSessionCardProps): React.JSX.Element => {
   const isLive = session.endedAt === null;
   const elapsedSeconds = useLiveTimer(isLive ? session.startedAt : null);
-  const deletePending = useDeletePendingSession();
 
   return (
     <div
@@ -66,10 +68,9 @@ const PendingSessionCard = ({
       {!isLive && (
         <button
           type="button"
-          onClick={() => deletePending.mutate(session.id)}
-          disabled={deletePending.isPending}
+          onClick={onDiscard}
           title="Discard (e.g. you only opened the emulator to configure it)"
-          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+          className="flex-none rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash2 size={14} />
         </button>
@@ -91,6 +92,9 @@ export const PendingSessionsSection = (): React.JSX.Element | null => {
   // Add Game con isEmulated premarcado; al crear el juego, la sesión que
   // estaba en curso de asignación se asigna sola al recién creado.
   const [addingFor, setAddingFor] = useState<PendingSession | null>(null);
+  // Descartar una pendiente ahora pasa por el MISMO diálogo de confirmación
+  // que las sesiones normales (antes borraba directo, sin avisar).
+  const [discarding, setDiscarding] = useState<PendingSession | null>(null);
 
   if (pending.length === 0 && !addingFor) return null;
 
@@ -109,6 +113,7 @@ export const PendingSessionsSection = (): React.JSX.Element | null => {
             session={session}
             timeFormat={timeFormat}
             onAssign={() => setAssigning(session)}
+            onDiscard={() => setDiscarding(session)}
           />
         ))}
       </div>
@@ -137,6 +142,25 @@ export const PendingSessionsSection = (): React.JSX.Element | null => {
           assignSessionId={addingFor.id}
         />
       )}
+
+      {/* Mismo diálogo de confirmación que las sesiones normales, en modo
+          pending (descarta con deletePending, sin tocar ningún juego). */}
+      <DeleteSessionDialog
+        session={
+          discarding
+            ? {
+                id: discarding.id,
+                label: `${discarding.emulatorName} — ${formatByPrecision(
+                  discarding.startedAt,
+                  'day',
+                  timeFormat,
+                )} · ${formatElapsed(discarding.durationSec ?? 0)}`,
+              }
+            : null
+        }
+        onClose={() => setDiscarding(null)}
+        pending
+      />
     </div>
   );
 };

@@ -1,9 +1,11 @@
-import { Save } from 'lucide-react';
+import { NotebookPen, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useUpdateGame } from '../../../hooks/games';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
 import { NotesEditor } from './NotesEditor';
+
+const GRAY = '#8b93a3';
 
 type EditNotesModalProps = {
   game: GameDetail;
@@ -50,6 +52,8 @@ export const EditNotesModal = ({
       open={open}
       onClose={handleClose}
       title="Edit notes"
+      icon={NotebookPen}
+      color={GRAY}
       widthClass="w-175"
       bodyClassName="px-5.5 py-5"
       footer={

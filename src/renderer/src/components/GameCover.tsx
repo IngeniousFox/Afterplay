@@ -10,6 +10,11 @@ type GameCoverProps = {
   className: string;
   iconSize: number;
   type?: ImageCacheType;
+  // Clases extra para el <img> — por defecto solo cubre el contenedor.
+  // Assign Session lo usa para el zoom-en-hover (group-hover/...:scale-...)
+  // al estilo SearchStep; el resto de sitios no lo pasa y se queda como
+  // estaba.
+  imgClassName?: string;
 };
 
 export const GameCover = ({
@@ -17,12 +22,18 @@ export const GameCover = ({
   className,
   iconSize,
   type = 'covers',
+  imgClassName,
 }: GameCoverProps): React.JSX.Element => {
   const src = useImageSrc(url, type);
   return (
     <div className={className}>
       {src ? (
-        <img src={src} loading="lazy" alt="" className="h-full w-full object-cover" />
+        <img
+          src={src}
+          loading="lazy"
+          alt=""
+          className={`h-full w-full object-cover ${imgClassName ?? ''}`}
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-muted">
           <Gamepad2 size={iconSize} className="text-muted-foreground/40" />

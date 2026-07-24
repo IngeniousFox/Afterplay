@@ -1,4 +1,4 @@
-import { Info, Trash2 } from 'lucide-react';
+import { History, Info, Package, Trash2 } from 'lucide-react';
 import { useFormContext, useWatch } from 'react-hook-form';
 import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useDeleteIteration } from '../../../hooks/iterations';
@@ -7,17 +7,19 @@ import { formatByPrecision } from '../../../lib/format';
 import { NORMAL_STATUS_OPTIONS, STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
-import { NumberInput } from '../../ui/number-input';
 import { CheckboxRow } from '../add-game/CheckboxRow';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import { Dropdown } from '../add-game/Dropdown';
+import { HoursPlayedField } from '../add-game/HoursPlayedField';
 import { parseIsoDate } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
-import { fieldLabelClass, textInputClass } from '../add-game/styles';
+import { fieldLabelClass, textInputClass, textInputFocusClass } from '../add-game/styles';
 import { FORMAT_OPTIONS, ORIGIN_SEGMENT_OPTIONS, PLATFORM_OPTIONS } from '../add-game/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { edgeEventPickerValue, EMPTY_ITERATION_FIELDS } from './types';
 import type { EditGameFormValues } from './types';
+
+const BLUE = '#85a3d6';
 
 type IterationSectionProps = {
   game: GameDetail;
@@ -103,7 +105,10 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
   return (
     <div className="flex flex-col gap-3.5 rounded-[11px] border border-border bg-white/[0.02] p-3.5">
       <div className="flex items-center justify-between gap-2.5">
-        <div className={fieldLabelClass}>PLAYTHROUGH</div>
+        <div className="flex items-center gap-1.75" style={{ color: BLUE }}>
+          <History size={13} />
+          <span className="text-[11.5px] font-bold tracking-[.05em]">PLAYTHROUGH</span>
+        </div>
         {iterationMode === 'new' ? (
           game.iterations.length > 0 && (
             <button
@@ -187,13 +192,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
           <div className={fieldLabelClass}>STATUS</div>
           <FormStatusDropdown />
         </div>
-        <div className="flex-1">
-          <div className={fieldLabelClass}>
-            HOURS PLAYED{' '}
-            <span className="font-medium tracking-normal normal-case">· outside the app</span>
-          </div>
-          <FormInput name="hoursPlayed" type="number" min={0} step="0.5" placeholder="0" />
-        </div>
+        <FormHoursPlayed />
       </div>
 
       <div>
@@ -235,13 +234,17 @@ const FormInput = ({
   name,
   ...props
 }: {
-  name: 'label' | 'hoursPlayed';
+  name: 'label';
 } & React.InputHTMLAttributes<HTMLInputElement>): React.JSX.Element => {
   const { register } = useFormContext<EditGameFormValues>();
-  if (props.type === 'number') {
-    return <NumberInput {...register(name)} {...props} className={textInputClass} />;
-  }
-  return <input {...register(name)} {...props} className={textInputClass} />;
+  return (
+    <input {...register(name)} {...props} className={`${textInputClass} ${textInputFocusClass}`} />
+  );
+};
+
+const FormHoursPlayed = (): React.JSX.Element => {
+  const { register } = useFormContext<EditGameFormValues>();
+  return <HoursPlayedField {...register('hoursPlayed')} />;
 };
 
 const FormSegmented = ({
@@ -310,6 +313,7 @@ const FormCheckboxExtraContent = (): React.JSX.Element => {
       title="Extra content only"
       description="This run was just for added content (DLC/expansion), not a full base-game replay."
       accent="blue"
+      icon={Package}
     />
   );
 };

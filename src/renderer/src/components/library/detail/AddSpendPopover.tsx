@@ -3,12 +3,12 @@ import { useState } from 'react';
 import type { SpendEvent } from '../../../../../shared/types';
 import { useAddSpend } from '../../../hooks/spend';
 import { accentGradientStyle, floatingPanelClass } from '../../../lib/styles';
-import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
+import { MoneyAmountField } from '../add-game/MoneyAmountField';
 import type { PrecisionDateValue } from '../add-game/precisionDate';
 import { parseIsoDate, todayValue } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
-import { fieldLabelClass, textInputClass } from '../add-game/styles';
+import { fieldLabelClass, textInputClass, textInputFocusClass } from '../add-game/styles';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 
 type AddSpendPopoverProps = {
@@ -75,17 +75,11 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
             <SegmentedButtonGroup value={type} options={TYPE_OPTIONS} onChange={setType} />
           </div>
 
-          <div>
-            <div className={fieldLabelClass}>AMOUNT (€)</div>
-            <NumberInput
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              min={0}
-              step="0.01"
-              placeholder="0.00"
-              className={textInputClass}
-            />
-          </div>
+          <MoneyAmountField
+            label="AMOUNT (€)"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
 
           <DateWithPrecisionPicker label="Date" value={date} onChange={setDate} />
 
@@ -95,7 +89,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder="e.g. Winter sale, season pass…"
-              className={textInputClass}
+              className={`${textInputClass} ${textInputFocusClass}`}
             />
           </div>
 
@@ -109,7 +103,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
             type="button"
             onClick={handleSubmit}
             disabled={addSpend.isPending}
-            className="rounded-[9px] px-4 py-2.25 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
+            className="[will-change:transform] rounded-[9px] px-4 py-2.25 text-[13px] font-bold transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-60 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(47,220,126,.32)]"
             style={accentGradientStyle}
           >
             {addSpend.isPending ? 'Adding…' : 'Add spend'}

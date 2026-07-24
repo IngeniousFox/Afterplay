@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { ImageCacheType } from '../../../../../shared/types';
 import { useIgdbDetails } from '../../../hooks/igdb';
 import { useSgdbImages } from '../../../hooks/sgdb';
+import { revealClass, revealStyle } from '../../../lib/styles';
 import { cn } from '../../../lib/utils';
 import { CoverThumb } from './CoverThumb';
 import { fieldLabelClass } from './styles';
@@ -94,21 +95,26 @@ export const CoverPicker = ({
         </div>
       ) : (
         <div className={cn('mt-2', GRID_CLASS[target])}>
-          {candidates.map((url) => (
+          {candidates.map((url, index) => (
             <button
               key={url}
               type="button"
               onClick={() => onSelect(url)}
+              // Stagger acotado (máx. una fila y pico) — con 20 candidatas de
+              // SteamGridDB, un delay por índice libre dejaría la última
+              // apareciendo un segundo tarde.
               className={cn(
-                'overflow-hidden rounded-lg border border-input bg-muted hover:border-[#2fdc7e]',
+                'group/tile overflow-hidden rounded-lg border border-input bg-muted transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-[0_8px_20px_rgba(0,0,0,.4)]',
                 TILE_CLASS[target],
+                revealClass,
               )}
+              style={revealStyle(Math.min(index, 6))}
             >
               <CoverThumb
                 url={url}
                 type={cacheType}
                 alt=""
-                className="h-full w-full object-cover"
+                className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/tile:scale-105"
               />
             </button>
           ))}

@@ -1,4 +1,14 @@
-import { Save } from 'lucide-react';
+import {
+  Cpu,
+  Gamepad2,
+  Infinity as InfinityIcon,
+  Info,
+  NotebookPen,
+  Rocket,
+  Save,
+  SquarePen,
+  ToggleLeft,
+} from 'lucide-react';
 import { useEffect } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
@@ -12,18 +22,30 @@ import {
 } from '../../lib/gameStatus';
 import type { PastStatusKey } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
+import { getGameStatusMeta } from '../../lib/gameStatus';
+import { expandClass, revealClass, revealStyle } from '../../lib/styles';
 import { ModalFooter, ModalShell } from '../ui/modal-shell';
+import { StatusIcon } from '../StatusIcon';
+import { Cell } from './detail/DetailsCard';
 import { NotesEditor } from './detail/NotesEditor';
 import { CheckboxRow } from './add-game/CheckboxRow';
+import { CoverThumb } from './add-game/CoverThumb';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
+import { FormSection } from './add-game/FormSection';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { parseIsoDate } from './add-game/precisionDate';
-import { fieldLabelClass, textInputClass } from './add-game/styles';
+import { fieldLabelClass, textInputClass, textInputFocusClass } from './add-game/styles';
 import { DEFAULT_FORM_VALUES, parseOptionalNumber } from './add-game/types';
 import { EndlessSection } from './edit-game/EndlessSection';
 import { IterationSection } from './edit-game/IterationSection';
 import { edgeEventPickerValue } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
+
+const GREEN = '#2fdc7e';
+const VIOLET = '#7c86c8';
+const BLUE = '#85a3d6';
+const TEAL = '#2bb6a6';
+const GRAY = '#8b93a3';
 
 type EditGameModalProps = {
   game: GameDetail;
@@ -308,6 +330,8 @@ export const EditGameModal = ({
       open={open}
       onClose={handleClose}
       title="Edit game"
+      icon={SquarePen}
+      color={GREEN}
       widthClass="w-160"
       maxHClass="max-h-[80vh]"
       footer={
@@ -322,45 +346,120 @@ export const EditGameModal = ({
       }
     >
       <FormProvider {...methods}>
-        <div className="flex flex-col gap-4">
-          <div>
-            <div className={fieldLabelClass}>TITLE</div>
-            <Controller
-              control={control}
-              name="title"
-              render={({ field }) => <input {...field} className={textInputClass} />}
+        <div className="flex flex-col gap-5">
+          {/* Qué juego se está editando — hero de fondo tras un velo, misma
+              receta que la ficha del juego elegido en Add Game. Los datos
+              vienen del prop (no del formulario): esto es un letrero, no un
+              campo. */}
+          <GameBanner game={game} />
+
+          <FormSection
+            icon={Gamepad2}
+            title="Game info"
+            color={GREEN}
+            className={revealClass}
+            style={revealStyle(1)}
+          >
+            <div>
+              <div className={fieldLabelClass}>TITLE</div>
+              <Controller
+                control={control}
+                name="title"
+                render={({ field }) => (
+                  <input {...field} className={`${textInputClass} ${textInputFocusClass}`} />
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-3 gap-y-3.5 rounded-[10px] border border-border bg-white/[0.015] px-3.25 py-3">
+              <Cell label="DEVELOPER" value={game.developer ?? '—'} />
+              <Cell label="PUBLISHER" value={game.publisher ?? '—'} />
+            </div>
+          </FormSection>
+
+          <FormSection
+            icon={ToggleLeft}
+            title="Game type"
+            color={VIOLET}
+            className={revealClass}
+            style={revealStyle(2)}
+          >
+            <CheckboxRow
+              checked={endless}
+              onToggle={() => {
+                const next = !endless;
+                setValue('endless', next);
+                // Al activarlo, el estado del formulario puede quedar apuntando
+                // a una opción que el dropdown endless ni ofrece ("Beaten") —
+                // mismo ajuste que hace AddGameModal con su handleEndlessToggle.
+                if (next && !ENDLESS_STATUS_OPTIONS.includes(getValues('status'))) {
+                  setValue('status', 'resting');
+                }
+              }}
+              title="Endless game"
+              description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
+              accent="green"
+              icon={InfinityIcon}
             />
+
+            <CheckboxRow
+              checked={isEmulated}
+              onToggle={() => setValue('isEmulated', !isEmulated)}
+              title="Emulated game"
+              description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
+              accent="green"
+              icon={Cpu}
+            />
+          </FormSection>
+
+          <div className={revealClass} style={revealStyle(3)}>
+            {endless ? (
+              <div className={`flex flex-col gap-3.5 ${expandClass}`}>
+                {/* Convertir un juego normal a endless limpia su historial de
+                    estados y desenlaces al guardar (sesiones y horas se
+                    conservan) — avisar ANTES, no después. Mismo azul
+                    informativo (y mismo Info) que el aviso de playthrough
+                    manual de IterationSection. */}
+                {!game.endless && game.iterations.length > 0 && (
+                  <div
+                    className="flex items-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                    style={{ background: 'rgba(133,163,214,.1)', color: BLUE }}
+                  >
+                    <Info size={13} className="flex-none" />
+                    Saving clears its status history and playthrough outcomes — tracked sessions and
+                    hours are kept; an endless game just has no discrete runs.
+                  </div>
+                )}
+                <EndlessSection />
+              </div>
+            ) : (
+              <div className={expandClass}>
+                <IterationSection game={game} />
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-2.5">
-            <div className="flex-1">
-              <div className={fieldLabelClass}>
-                DEVELOPER{' '}
-                <span className="font-medium tracking-normal normal-case">· from IGDB</span>
-              </div>
-              <div className="rounded-[9px] border border-input bg-white/[0.015] px-3.25 py-2.5 text-[13px] text-muted-foreground">
-                {game.developer ?? '—'}
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className={fieldLabelClass}>
-                PUBLISHER{' '}
-                <span className="font-medium tracking-normal normal-case">· from IGDB</span>
-              </div>
-              <div className="rounded-[9px] border border-input bg-white/[0.015] px-3.25 py-2.5 text-[13px] text-muted-foreground">
-                {game.publisher ?? '—'}
-              </div>
-            </div>
-          </div>
+          <FormSection
+            icon={Rocket}
+            title="Launch & install"
+            color={TEAL}
+            className={revealClass}
+            style={revealStyle(4)}
+          >
+            <InstallDirectoryField showOptionalHint={false} />
 
-          <InstallDirectoryField showOptionalHint={false} />
+            {/* Un juego emulado no tiene .exe propio (EMULADORES.md §5) —
+                    mismo ocultamiento que en Add Game. */}
+            {!isEmulated && <ExecutablePathField />}
+          </FormSection>
 
-          {/* Un juego emulado no tiene .exe propio (EMULADORES.md §5) —
-                  mismo ocultamiento que en Add Game. */}
-          {!isEmulated && <ExecutablePathField />}
-
-          <div>
-            <div className={`${fieldLabelClass} mb-1.5`}>NOTES</div>
+          <FormSection
+            icon={NotebookPen}
+            title="Notes"
+            color={GRAY}
+            className={revealClass}
+            style={revealStyle(5)}
+          >
             <Controller
               control={control}
               name="notes"
@@ -377,55 +476,67 @@ export const EditGameModal = ({
                 />
               )}
             />
-          </div>
-
-          <CheckboxRow
-            checked={endless}
-            onToggle={() => {
-              const next = !endless;
-              setValue('endless', next);
-              // Al activarlo, el estado del formulario puede quedar apuntando
-              // a una opción que el dropdown endless ni ofrece ("Beaten") —
-              // mismo ajuste que hace AddGameModal con su handleEndlessToggle.
-              if (next && !ENDLESS_STATUS_OPTIONS.includes(getValues('status'))) {
-                setValue('status', 'resting');
-              }
-            }}
-            title="Endless game"
-            description={`No ending (Minecraft, Factorio…). Hides "Complete", never counts as backlog.`}
-            accent="green"
-          />
-
-          <CheckboxRow
-            checked={isEmulated}
-            onToggle={() => setValue('isEmulated', !isEmulated)}
-            title="Emulated game"
-            description="Runs inside an emulator — sessions are detected from the emulator and assigned manually."
-            accent="green"
-          />
-
-          {endless ? (
-            <>
-              {/* Convertir un juego normal a endless limpia su historial de
-                  estados y desenlaces al guardar (sesiones y horas se
-                  conservan) — avisar ANTES, no después. Mismo azul
-                  informativo que el aviso de playthrough manual. */}
-              {!game.endless && game.iterations.length > 0 && (
-                <div
-                  className="rounded-[9px] px-3 py-2 text-[12px] font-semibold"
-                  style={{ background: 'rgba(133,163,214,.1)', color: '#85a3d6' }}
-                >
-                  Saving clears its status history and playthrough outcomes — tracked sessions and
-                  hours are kept; an endless game just has no discrete runs.
-                </div>
-              )}
-              <EndlessSection />
-            </>
-          ) : (
-            <IterationSection game={game} />
-          )}
+          </FormSection>
         </div>
       </FormProvider>
     </ModalShell>
+  );
+};
+
+// Letrero de cabecera del modal: hero del juego de fondo (velo de izquierda
+// a derecha, como la ficha de Add Game), carátula, título y su estado
+// actual. Solo lectura a propósito — el título editable vive en "Game info",
+// esto responde de un vistazo a "¿qué juego estoy tocando?".
+const GameBanner = ({ game }: { game: GameDetail }): React.JSX.Element => {
+  const status = getGameStatusMeta(game.currentState);
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl border border-input bg-white/[0.03] ${revealClass}`}
+      style={revealStyle(0)}
+    >
+      {game.heroUrl && (
+        <>
+          <CoverThumb
+            url={game.heroUrl}
+            type="heroes"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.92) 40%, rgba(18,20,19,.55) 100%)',
+            }}
+          />
+        </>
+      )}
+
+      <div className="relative flex items-center gap-3.5 p-3.5">
+        <div className="h-19 w-14 flex-none overflow-hidden rounded-lg border border-white/15 bg-muted shadow-[0_8px_20px_rgba(0,0,0,.45)]">
+          <CoverThumb url={game.coverUrl} alt="" className="h-full w-full object-cover" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="truncate text-[15.5px] font-extrabold text-foreground">
+              {game.title}
+            </span>
+            {game.releaseYear !== null && (
+              <span className="flex-none text-[12px] font-semibold text-muted-foreground tabular-nums">
+                {game.releaseYear}
+              </span>
+            )}
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <StatusIcon meta={status} size={13} />
+            <span className="text-[12px] font-bold" style={{ color: status.color }}>
+              {status.label}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

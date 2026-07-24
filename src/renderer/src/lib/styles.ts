@@ -13,8 +13,11 @@ export const accentGradientStyle = {
 // que hoy repiten el mismo trío borde/fondo/sombra — cada sitio conserva el
 // resto de sus propias clases (ancho, padding, overflow…), solo este trío
 // sale de aquí.
-export const floatingPanelClass =
-  'border-input bg-[rgba(23,25,24,.99)] shadow-[0_18px_50px_rgba(0,0,0,.55)]';
+// Fondo hex sólido (#171918 = rgb(23,25,24) a opacidad plena) y no
+// rgba(...,.99): ese 1% de translucidez se colaba sobre el contenido claro
+// de detrás (la ficha, con hero/capturas) y el panel se veía semitranslúcido
+// — un panel flotante tiene que tapar, no dejar ver lo que hay debajo.
+export const floatingPanelClass = 'border-input bg-[#171918] shadow-[0_18px_50px_rgba(0,0,0,.55)]';
 
 // Botón "outline" secundario (Open game / All games / All sessions) —
 // idéntico byte a byte en Sessions.tsx y GameStats.tsx, cada uno le añade
@@ -52,3 +55,10 @@ export const revealStyle = (order: number): CSSProperties => ({
   animationDelay: `${order * 70}ms`,
   animationFillMode: 'backwards',
 });
+
+// Aparición de un panel condicional DENTRO de una sección ya visible — al
+// marcar un checkbox, cambiar una opción, expandir un desplegable. Más corta
+// y con menos desplazamiento que revealClass (pensada para secciones
+// enteras entrando de golpe al abrir); esta es para que un bloque que ya
+// vivía ahí deje de aparecer de golpe.
+export const expandClass = 'animate-in fade-in-0 slide-in-from-top-2 duration-250';

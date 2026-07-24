@@ -1,9 +1,11 @@
-import { ChevronDown, Eye, EyeOff, Save } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, KeyRound, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { CredentialsValues } from '../../../../shared/types';
 import { useCredentials, useSetCredentials } from '../../hooks/settings';
-import { fieldLabelClass, textInputClass } from '../library/add-game/styles';
-import { accentGradientStyle } from '../../lib/styles';
+import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
+import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../lib/styles';
+
+const BLUE = '#85a3d6';
 
 type CredentialsSectionProps = {
   // Primer arranque sin credenciales de IGDB: la sección nace expandida con
@@ -88,17 +90,28 @@ export const CredentialsSection = ({
   };
 
   return (
-    <div className="rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.75">
+    <div
+      className={`rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.75 ${revealClass}`}
+      style={revealStyle(1)}
+    >
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 text-left"
+        className="flex w-full items-center justify-between gap-3 rounded-lg text-left transition-colors duration-150 hover:bg-white/[0.03]"
       >
-        <div>
-          <div className="text-[13.5px] font-semibold text-foreground">API & Sync</div>
-          <div className="mt-0.25 text-xs text-muted-foreground">
-            Keys for game search, artwork and cloud sync. The app works without them — locally and
-            without search — until you add them.
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
+            style={{ background: `${BLUE}1f` }}
+          >
+            <KeyRound size={13} style={{ color: BLUE }} />
+          </div>
+          <div>
+            <div className="text-[13.5px] font-semibold text-foreground">API & Sync</div>
+            <div className="mt-0.25 text-xs text-muted-foreground">
+              Keys for game search, artwork and cloud sync. The app works without them — locally and
+              without search — until you add them.
+            </div>
           </div>
         </div>
         <div className="flex flex-none items-center gap-2.5">
@@ -124,14 +137,14 @@ export const CredentialsSection = ({
           )}
           <ChevronDown
             size={15}
-            className="text-muted-foreground transition-transform"
+            className="text-muted-foreground transition-transform duration-150"
             style={open ? { transform: 'rotate(180deg)' } : undefined}
           />
         </div>
       </button>
 
       {open && (
-        <div className="mt-3 flex flex-col gap-2.5 border-t border-border pt-3">
+        <div className={`mt-3 flex flex-col gap-2.5 border-t border-border pt-3 ${expandClass}`}>
           <div className="flex items-center justify-between">
             <div className="text-[11px] text-muted-foreground">
               Get them at dev.twitch.tv (IGDB), steamgriddb.com/profile/preferences/api and
@@ -141,7 +154,7 @@ export const CredentialsSection = ({
               type="button"
               onClick={() => setShowValues((current) => !current)}
               title={showValues ? 'Hide values' : 'Show values'}
-              className="flex flex-none items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+              className="flex flex-none items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:text-foreground"
             >
               {showValues ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
@@ -158,7 +171,7 @@ export const CredentialsSection = ({
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className={`${textInputClass} font-mono text-[11.5px]`}
+                className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}
               />
             </div>
           ))}
@@ -168,7 +181,7 @@ export const CredentialsSection = ({
               type="button"
               onClick={handleSave}
               disabled={setCredentials.isPending}
-              className="flex w-fit items-center gap-1.75 rounded-[9px] px-3.5 py-2 text-[12.5px] font-bold disabled:cursor-not-allowed disabled:opacity-50"
+              className="[will-change:transform] flex w-fit items-center gap-1.75 rounded-[9px] px-3.5 py-2 text-[12.5px] font-bold transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(47,220,126,.32)]"
               style={accentGradientStyle}
             >
               <Save size={14} />

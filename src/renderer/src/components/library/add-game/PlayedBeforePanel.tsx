@@ -5,11 +5,11 @@ import {
   STATUS_META,
 } from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
-import { NumberInput } from '../../ui/number-input';
 import { DateWithPrecisionPicker } from './DateWithPrecisionPicker';
 import { Dropdown } from './Dropdown';
+import { HoursPlayedField } from './HoursPlayedField';
 import { parseIsoDate } from './precisionDate';
-import { fieldLabelClass, textInputClass } from './styles';
+import { fieldLabelClass } from './styles';
 import type { AddGameFormValues } from './types';
 
 // Panel condicional que aparece cuando se marca "I played this before" —
@@ -59,19 +59,11 @@ export const PlayedBeforePanel = (): React.JSX.Element => {
       )}
 
       <div className="flex items-end gap-2.5">
-        <div className="flex-1">
-          <div className={fieldLabelClass}>
-            HOURS PLAYED{' '}
-            <span className="font-medium tracking-normal normal-case">· outside the app</span>
-          </div>
-          <Controller
-            control={control}
-            name="hoursPlayed"
-            render={({ field }) => (
-              <NumberInput {...field} min={0} placeholder="e.g. 42" className={textInputClass} />
-            )}
-          />
-        </div>
+        <Controller
+          control={control}
+          name="hoursPlayed"
+          render={({ field }) => <HoursPlayedField {...field} />}
+        />
         <div className="flex-1">
           <div className={fieldLabelClass}>STATUS</div>
           <Controller

@@ -1,7 +1,10 @@
 import { FolderOpen, HardDriveDownload } from 'lucide-react';
 import { useState } from 'react';
 import { useCreateManualBackup } from '../../hooks/backup';
+import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
+
+const TEAL = '#2bb6a6';
 
 // Copia de seguridad a demanda, en la carpeta que elija el usuario — aparte
 // de la automática diaria (dailyBackup.ts, 5 rotando dentro de userData):
@@ -25,6 +28,10 @@ export const BackupSection = (): React.JSX.Element => {
       title="Backups"
       description="On top of the automatic daily copies, save one right now wherever you want."
       textClassName="min-w-0 flex-1"
+      icon={HardDriveDownload}
+      color={TEAL}
+      className={revealClass}
+      style={revealStyle(4)}
       extra={
         <>
           {savedPath && (
@@ -44,7 +51,7 @@ export const BackupSection = (): React.JSX.Element => {
         type="button"
         onClick={handleBackupNow}
         disabled={createManualBackup.isPending}
-        className="flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {createManualBackup.isPending ? (
           <HardDriveDownload size={14} className="animate-pulse" />

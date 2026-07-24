@@ -45,10 +45,15 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
+      {/* Sin bg-popover aquí: compite con el fondo sólido que cada
+          consumidor pasa por className (mismo grupo de clase de Tailwind,
+          cuál gana depende del orden en que compile el CSS, no de esto) —
+          los 6 modales de la app ya traen el suyo propio, ninguno depende
+          del de aquí. Mismo motivo que popover.tsx. */}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}

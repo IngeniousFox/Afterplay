@@ -1,4 +1,4 @@
-import { Save } from 'lucide-react';
+import { Image, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useUpdateGame } from '../../../hooks/games';
@@ -6,6 +6,8 @@ import type { CoverPickerTarget } from '../add-game/CoverPicker';
 import { CoverPicker } from '../add-game/CoverPicker';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
 import { ImagesField } from '../add-game/ImagesField';
+
+const VIOLET = '#7c86c8';
 
 type ChangeCoverModalProps = {
   game: GameDetail;
@@ -58,6 +60,8 @@ export const ChangeCoverModal = ({
       open={open}
       onClose={handleClose}
       title="Change cover / hero"
+      icon={Image}
+      color={VIOLET}
       widthClass="w-160"
       maxHClass="max-h-[80vh]"
       footer={

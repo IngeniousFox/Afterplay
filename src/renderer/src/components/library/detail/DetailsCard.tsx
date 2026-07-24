@@ -11,7 +11,13 @@ type DetailsCardProps = {
 // Celda de la rejilla de ficha: etiqueta diminuta arriba, dato debajo. Dos
 // por fila ocupan lo que antes ocupaba UNA fila `label —— valor`, y al ir
 // alineadas en columna se comparan de un vistazo.
-const Cell = ({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element => (
+export const Cell = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}): React.JSX.Element => (
   <div className="min-w-0">
     <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">{label}</div>
     <div

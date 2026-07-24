@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // Las dos ternas de color (borde marcado / relleno marcado / icono de check)
 // que usa cada checkbox de este tipo en toda la app — verde para lo
@@ -29,6 +30,11 @@ type CheckboxRowProps = {
   // Endless siempre tiene el borde de la fila neutro; "jugado antes" lo
   // tiñe del acento en cuanto se marca — mismo componente, dos comportamientos.
   rowBorderFollowsChecked?: boolean;
+  // Pequeño glifo delante del título — puramente de personalidad (Infinity
+  // para "Endless", History para "jugado antes"...), no sustituye al
+  // check-square de la izquierda (ese sigue siendo la única afordancia de
+  // "esto es un toggle"). Se tiñe del acento en cuanto se marca.
+  icon?: LucideIcon;
 };
 
 export const CheckboxRow = ({
@@ -38,18 +44,19 @@ export const CheckboxRow = ({
   description,
   accent,
   rowBorderFollowsChecked = false,
+  icon: Icon,
 }: CheckboxRowProps): React.JSX.Element => {
   const { borderColorChecked, fillColorChecked, checkIconColor } = ACCENT_COLORS[accent];
   return (
     <div
       onClick={onToggle}
-      className="flex cursor-pointer items-start gap-2.75 rounded-[10px] bg-white/[0.02] px-3.25 py-2.75"
+      className="flex cursor-pointer items-start gap-2.75 rounded-[10px] bg-white/[0.02] px-3.25 py-2.75 transition-[border-color,background-color] duration-150 hover:bg-white/[0.035]"
       style={{
         border: `1px solid ${rowBorderFollowsChecked && checked ? borderColorChecked : 'var(--border)'}`,
       }}
     >
       <div
-        className="mt-0.25 flex h-5 w-5 flex-none items-center justify-center rounded-md"
+        className="mt-0.25 flex h-5 w-5 flex-none items-center justify-center rounded-md transition-[border-color,background-color] duration-150"
         style={
           checked
             ? { border: `1px solid ${borderColorChecked}`, background: fillColorChecked }
@@ -59,7 +66,16 @@ export const CheckboxRow = ({
         {checked && <Check size={14} color={checkIconColor} />}
       </div>
       <div className="flex-1">
-        <div className="text-[13.5px] font-semibold text-foreground">{title}</div>
+        <div className="flex items-center gap-1.5 text-[13.5px] font-semibold text-foreground">
+          {Icon && (
+            <Icon
+              size={13}
+              className="flex-none transition-colors duration-150"
+              style={{ color: checked ? fillColorChecked : 'var(--muted-foreground)' }}
+            />
+          )}
+          {title}
+        </div>
         <div className="mt-0.25 text-xs text-muted-foreground">{description}</div>
       </div>
     </div>

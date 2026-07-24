@@ -1,7 +1,7 @@
 import { ImageUp } from 'lucide-react';
 import { NumberInput } from '../../ui/number-input';
 import { CoverThumb } from './CoverThumb';
-import { fieldLabelClass, textInputClass } from './styles';
+import { fieldLabelClass, textInputClass, textInputFocusClass } from './styles';
 import type { CoverPickerTarget } from './CoverPicker';
 
 type ImagesFieldProps = {
@@ -34,10 +34,15 @@ export const ImagesField = ({
         <button
           type="button"
           onClick={() => onPick('cover')}
-          className="group relative h-24 w-17.5 flex-none overflow-hidden rounded-lg border border-input bg-muted"
+          className="group relative h-24 w-17.5 flex-none overflow-hidden rounded-lg border border-input bg-muted transition-colors duration-150 hover:border-primary/45"
         >
-          <CoverThumb url={coverUrl} type="covers" alt="" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-[11px] font-semibold text-white opacity-0 group-hover:bg-black/55 group-hover:opacity-100">
+          <CoverThumb
+            url={coverUrl}
+            type="covers"
+            alt=""
+            className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-[11px] font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:bg-black/55 group-hover:opacity-100">
             Change
           </div>
         </button>
@@ -45,17 +50,22 @@ export const ImagesField = ({
         <button
           type="button"
           onClick={() => onPick('hero')}
-          className="group relative h-24 flex-1 overflow-hidden rounded-lg border border-input bg-muted"
+          className="group relative h-24 flex-1 overflow-hidden rounded-lg border border-input bg-muted transition-colors duration-150 hover:border-primary/45"
         >
           {heroUrl ? (
-            <CoverThumb url={heroUrl} type="heroes" alt="" className="h-full w-full object-cover" />
+            <CoverThumb
+              url={heroUrl}
+              type="heroes"
+              alt=""
+              className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover:scale-105"
+            />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
               <ImageUp size={16} />
               <span className="text-[11.5px]">No hero image</span>
             </div>
           )}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-[11px] font-semibold text-white opacity-0 group-hover:bg-black/55 group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-[11px] font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:bg-black/55 group-hover:opacity-100">
             {heroUrl ? 'Change' : 'Choose hero'}
           </div>
         </button>
@@ -77,7 +87,7 @@ export const ImagesField = ({
             const raw = event.target.value.trim();
             onSteamGridDbIdChange(raw === '' ? null : Number(raw));
           }}
-          className={textInputClass}
+          className={`${textInputClass} ${textInputFocusClass}`}
         />
       </div>
     </div>
