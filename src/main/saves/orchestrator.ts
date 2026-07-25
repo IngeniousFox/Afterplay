@@ -22,8 +22,9 @@ import {
   backupGame,
   clearRestoreWorkspace,
   createRestoreWorkspace,
-  getGameBackupDir,
+  findGameBackupDir,
   listLocalVersions,
+  sanitizeLudusaviFolder,
   previewGame,
   restoreGame,
 } from './service';
@@ -86,7 +87,10 @@ const dedupePaths = (paths: string[]): string[] => {
 // y si la retención de ludusavi se llevó una versión en local, aquí se
 // retira también de la nube y del índice.
 const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveBackupRow[]> => {
-  const dir = getGameBackupDir(ludusaviName);
+  // findGameBackupDir y no una join a pelo: la carpeta real lleva los
+  // caracteres ilegales sustituidos por "_" (bug real con "Motor Town:
+  // Behind The Wheel" — el zip se creaba y el espejo no lo encontraba).
+  const dir = findGameBackupDir(ludusaviName);
   const versions = listVersions(readMapping(dir));
   const localNames = new Set(versions.map((version) => version.name));
 
@@ -214,7 +218,7 @@ export const purgeGameSaves = async (gameId: number): Promise<void> => {
 
     const localNames = new Set(rows.map((row) => row.ludusaviName));
     for (const name of localNames) {
-      rmSync(getGameBackupDir(name), { recursive: true, force: true });
+      rmSync(findGameBackupDir(name), { recursive: true, force: true });
     }
 
     // Y el destino de restauración recordado en esta máquina: sin juego, un
@@ -350,7 +354,9 @@ const materializeBackup = async (
   version: { name: string; chain: string[] },
 ): Promise<string> => {
   const workspace = createRestoreWorkspace(ludusaviName);
-  const gameDir = join(workspace, ludusaviName);
+  // Mismo saneado que la carpeta que creó el workspace: con ":" en el nombre
+  // la join literal apuntaba a una ruta imposible en Windows.
+  const gameDir = join(workspace, sanitizeLudusaviFolder(ludusaviName));
   const prefix = r2.gamePrefix(igdbId, machineId);
 
   await r2.downloadFile(`${prefix}${MAPPING_FILE}`, join(gameDir, MAPPING_FILE));

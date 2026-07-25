@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { applyLudusaviConfig } from './config';
 import type { RestorePlanFile } from './contracts';
-import { listVersions, readMapping, removeBackupsFromMapping, type BackupVersion } from './mapping';
+import {
+  listVersions,
+  MAPPING_FILE,
+  readMapping,
+  removeBackupsFromMapping,
+  type BackupVersion,
+} from './mapping';
 import { hasSteamIdPattern, toSlashes } from './paths';
 import {
   ensureLudusaviReady,
@@ -152,10 +158,43 @@ export const backupGame = async (
   return entry ? toScannedGame(ludusaviName, entry) : null;
 };
 
-// Carpeta local de un juego dentro del directorio de backups. Ludusavi usa
-// el nombre del juego tal cual como nombre de carpeta.
+// La carpeta de un juego NO se llama como el juego: ludusavi sustituye por
+// "_" cada carácter ilegal en rutas de Windows. Verificado con el binario:
+// "Motor Town: Behind The Wheel" -> "Motor Town_ Behind The Wheel", y
+// 'What? A "Game" <Test>' -> "What_ A _Game_ _Test_".
+//
+// Asumir nombre==carpeta fue un bug REAL y de los silenciosos: en juegos con
+// dos puntos en el título, el backup se creaba perfectamente pero el espejo
+// buscaba una carpeta inexistente, concluía "no hay versiones" y contestaba
+// "nothing changed" con el bucket vacío — sin un solo error a la vista.
+export const sanitizeLudusaviFolder = (ludusaviName: string): string =>
+  ludusaviName.replace(/[<>:"/\\|?*]/g, '_');
+
+// Carpeta local de un juego dentro del directorio de backups.
 export const getGameBackupDir = (ludusaviName: string, baseDir = getBackupDir()): string =>
-  join(baseDir, ludusaviName);
+  join(baseDir, sanitizeLudusaviFolder(ludusaviName));
+
+// Como getGameBackupDir, pero a prueba de que ludusavi cambie su esquema de
+// sustitución en el futuro: si la carpeta calculada no existe, se buscan
+// TODAS las carpetas de backups y se casa por el `name` real que cada
+// mapping.yaml lleva dentro — que es la fuente de verdad, no el nombre del
+// directorio.
+export const findGameBackupDir = (ludusaviName: string): string => {
+  const literal = getGameBackupDir(ludusaviName);
+  if (existsSync(join(literal, MAPPING_FILE))) return literal;
+
+  try {
+    for (const entry of readdirSync(getBackupDir(), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = join(getBackupDir(), entry.name);
+      if (readMapping(dir)?.name === ludusaviName) return dir;
+    }
+  } catch {
+    // Carpeta base ilegible o inexistente: se cae al literal, que para un
+    // juego sin backups todavía es la respuesta correcta.
+  }
+  return literal;
+};
 
 export const listLocalVersions = (
   ludusaviName: string,
@@ -170,7 +209,7 @@ export const listLocalVersions = (
 // que acababas de borrar reaparecía sola, y encima con un incremental colgado
 // de ella. Caso real, visto en la primera prueba de verdad.
 export const deleteLocalBackups = (ludusaviName: string, names: string[]): void => {
-  const dir = getGameBackupDir(ludusaviName);
+  const dir = findGameBackupDir(ludusaviName);
   if (!existsSync(dir)) return;
 
   for (const name of names) rmSync(join(dir, name), { force: true });
@@ -257,11 +296,15 @@ export const restoreGame = async (options: RestoreOptions): Promise<RestorePlan>
 // FUERA de la carpeta de backups a propósito: ahí dentro, cada subcarpeta es
 // un juego para ludusavi, y un directorio temporal se colaría como uno más
 // en cualquier operación que mire la carpeta entera.
+// Con nombre saneado: un juego con ":" en el título ni siquiera dejaba CREAR
+// la carpeta (mkdir con dos puntos falla en Windows), y además ludusavi
+// busca dentro del root la carpeta con SU esquema de nombres — tiene que
+// coincidir o el restore no encuentra el backup recién descargado.
 export const createRestoreWorkspace = (ludusaviName: string): string => {
   ensureSavesDirs();
   const root = getRestoreWorkspaceDir();
   rmSync(root, { recursive: true, force: true });
-  mkdirSync(join(root, ludusaviName), { recursive: true });
+  mkdirSync(join(root, sanitizeLudusaviFolder(ludusaviName)), { recursive: true });
   return root;
 };
 
