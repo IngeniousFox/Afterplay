@@ -14,6 +14,8 @@ import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
+import { setSavesNotifier } from './saves/notify';
+import { setRunningGamesProbe } from './watcher/runningGames';
 import { ProcessWatcher } from './watcher/watcher';
 
 // La ventana principal a nivel de módulo para que el watcher pueda avisarle
@@ -241,6 +243,17 @@ app.whenReady().then(async () => {
     },
   );
   watcher.start();
+  // La guarda de "no restaurar una partida con el juego abierto"
+  // (PARTIDAS-GUARDADAS.md §10bis.3) pregunta por aquí — el watcher ya sabe
+  // qué está vivo, sin escanear procesos otra vez.
+  setRunningGamesProbe((gameId) => watcher?.isGameRunning(gameId) ?? false);
+  // Copias automáticas al cerrar sesión: el renderer necesita enterarse en
+  // vivo, o la ficha abierta se queda con la foto de antes (§10.2).
+  setSavesNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('saves:activity', event);
+    }
+  });
 
   // Bloque 3G — bloquear/suspender el PC no es tiempo jugado, siga el
   // proceso vivo detrás o no. 'lock-screen'/'resume' son Windows (Win+L,

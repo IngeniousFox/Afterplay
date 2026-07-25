@@ -106,6 +106,20 @@
     @apply font-sans;
   }
   /*
+   * Manita en todo lo clicable. Tailwind v4 cambió el preflight y los
+   * <button> pasaron a `cursor: default` (en v3 heredaban el pointer del
+   * navegador), así que en toda la app había que acordarse de poner
+   * cursor-pointer botón a botón — y no se hizo en ninguno. Se repone aquí
+   * una sola vez en vez de esparcirlo por cien componentes.
+   *
+   * Deshabilitado se queda fuera a propósito: ahí la falta de manita es
+   * información, no un descuido.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+  /*
    * Reserves space for the fixed TitleBar (1.5.F, h-8 = 32px) by shrinking
    * #root's own box (not adding on top of it) — otherwise a child using
    * min-h-screen/100vh always overflows by exactly the bar's height and a

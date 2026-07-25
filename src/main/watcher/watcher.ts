@@ -7,6 +7,7 @@ import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSess
 import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
 import { heartbeatSessions } from '../db/queries/sessions/heartbeatSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
+import { scheduleSaveBackup } from '../saves/sessionHook';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -236,6 +237,16 @@ export class ProcessWatcher {
             `[watcher] [stop] ${key} cerrado -> sesion ${activeSession.sessionId} cerrada`,
           );
           changed = true;
+
+          // Momento exacto en que la partida guardada ha cambiado y un
+          // backup vale algo (PARTIDAS-GUARDADAS.md §10.2). Se dispara sin
+          // esperar: la subida corre por su cuenta con su propio retardo y
+          // NUNCA lanza, así que un fallo de nube no puede tumbar el ciclo
+          // del watcher ni retrasar el cierre de sesión.
+          const gameId = Number(key.slice('game:'.length));
+          if (key.startsWith('game:') && Number.isFinite(gameId)) {
+            void scheduleSaveBackup(gameId);
+          }
         }
 
         // Latido de las sesiones que siguen vivas: deja constancia en la DB de
@@ -370,6 +381,13 @@ export class ProcessWatcher {
     }
 
     return running;
+  }
+
+  // ¿Está corriendo AHORA este juego? Sale del mapa en memoria, sin escanear
+  // procesos ni tocar la DB. Lo consume la guarda de restauración de partidas
+  // guardadas vía watcher/runningGames.ts.
+  isGameRunning(gameId: number): boolean {
+    return this.active.has(`game:${gameId}`);
   }
 
   private getActiveTitles(): string[] {

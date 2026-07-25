@@ -10,6 +10,7 @@ import type {
 import { createGameWithDetails } from '../db/queries/games/createGameWithDetails';
 import { createPlannedGame } from '../db/queries/games/createPlannedGame';
 import { deleteGame } from '../db/queries/games/deleteGame';
+import { purgeGameSaves } from '../saves/orchestrator';
 import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
 import { getPlannedGames } from '../db/queries/games/getPlannedGames';
@@ -75,6 +76,13 @@ export const registerGamesHandlers = (): void => {
   });
 
   handleDb('games:delete', async (_event, id: number) => {
+    // Antes de borrar la fila: sus copias de partida. La tabla save_backups
+    // cuelga de games con ON DELETE CASCADE, así que el índice se va solo —
+    // pero los objetos de R2 y la carpeta local NO, y sin esto se quedarían
+    // ahí para siempre pagando espacio sin que nada los liste ni los pueda
+    // borrar. Nunca lanza: no poder limpiar la nube no puede impedir borrar
+    // un juego (PARTIDAS-GUARDADAS.md §9.1).
+    await purgeGameSaves(id);
     return deleteGame(id);
   });
 

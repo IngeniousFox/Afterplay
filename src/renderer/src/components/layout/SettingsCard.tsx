@@ -30,6 +30,11 @@ type SettingsCardProps =
   | (SettingsCardBaseProps & {
       // Columna: título+descripción arriba, cuerpo debajo (Emulators).
       layout: 'column';
+      // Control a la derecha de la CABECERA, no del cuerpo (Game saves: el
+      // botón de escanear). Con layout 'row' el control se centra
+      // verticalmente respecto a todo el contenido, así que en cuanto debajo
+      // hay una lista larga el botón acaba flotando a media altura.
+      headerRight?: React.ReactNode;
       children: React.ReactNode;
     });
 
@@ -74,9 +79,17 @@ export const SettingsCard = (props: SettingsCardProps): React.JSX.Element => {
 
   return (
     <div className={`flex flex-col gap-3 ${CARD_CLASS} ${className ?? ''}`} style={style}>
-      <div>
-        {heading}
-        <div className="mt-1 text-xs text-muted-foreground">{description}</div>
+      {/* items-center para que el control quede a la misma altura visual que
+          en el layout 'row' (Backups): centrado respecto al bloque de
+          título+descripción, no pegado arriba. Lo que va DEBAJO (la lista de
+          resultados del escaneo) ocupa el ancho completo, que es justo lo
+          que el layout 'row' no permitía. */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {heading}
+          <div className="mt-1 text-xs text-muted-foreground">{description}</div>
+        </div>
+        {props.headerRight}
       </div>
       {props.children}
     </div>

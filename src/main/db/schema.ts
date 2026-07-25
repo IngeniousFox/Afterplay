@@ -18,6 +18,7 @@ export type Iteration = typeof iterationsTable.$inferSelect;
 export type StateEvent = typeof stateEventsTable.$inferSelect;
 export type SpendEvent = typeof spendEventsTable.$inferSelect;
 export type Emulator = typeof emulatorsTable.$inferSelect;
+export type SaveBackupRow = typeof saveBackupsTable.$inferSelect;
 
 // Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
 // columnas con default son opcionales. Son la base de los inputs de los
@@ -28,6 +29,7 @@ export type NewIteration = typeof iterationsTable.$inferInsert;
 export type NewStateEvent = typeof stateEventsTable.$inferInsert;
 export type NewSpendEvent = typeof spendEventsTable.$inferInsert;
 export type NewEmulator = typeof emulatorsTable.$inferInsert;
+export type NewSaveBackup = typeof saveBackupsTable.$inferInsert;
 
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
@@ -71,6 +73,22 @@ export const gamesTable = sqliteTable('games', {
   addedAt: int({ mode: 'timestamp_ms' })
     .notNull()
     .$defaultFn(() => new Date()),
+  // ── Partidas guardadas (PARTIDAS-GUARDADAS.md §7.1) ──────────────────
+  // Capa PORTABLE: lo único de esta función que puede viajar entre PCs. Todo
+  // lo que sea un hecho sobre una máquina concreta (dónde está instalado el
+  // juego aquí, dónde restaurar) vive en machine-saves.json, fuera de la BD.
+  // Opt-in explícito: subir partidas a un bucket es mover datos personales a
+  // un servicio externo y eso no se hace por defecto (§10.5).
+  saveBackupEnabled: int({ mode: 'boolean' }).notNull().default(false),
+  saveDetectionSource: text({ enum: ['auto', 'manual'] }),
+  // Nombre con el que ludusavi conoce el juego — evita re-emparejar por
+  // título en cada operación. Es machine-independiente (sale del manifest,
+  // igual en todos los PCs), por eso sí sincroniza.
+  saveLudusaviName: text(),
+  // Solo en modo 'manual': rutas TOKENIZADAS (<winAppData>/... , ver
+  // saves/paths.ts). En modo 'auto' es null a propósito — guardar la ruta ya
+  // resuelta sería justo el error que crea el problema entre PCs.
+  saveCustomPaths: text({ mode: 'json' }).$type<string[]>(),
 });
 
 export const sessionsTable = sqliteTable('sessions', {
@@ -150,6 +168,45 @@ export const emulatorsTable = sqliteTable('emulators', {
   id: int().primaryKey({ autoIncrement: true }),
   name: text().notNull(),
   executablePath: text().notNull(),
+});
+
+// PARTIDAS-GUARDADAS.md §7.1 — un registro por versión subida a R2. Es el
+// índice que permite contestar "¿qué hay en la nube de este juego?" SIN
+// tocar la red: son metadatos ya sincronizados por Turso. Descargar el zip
+// solo pasa cuando el usuario pulsa restaurar (§10bis.4).
+export const saveBackupsTable = sqliteTable('save_backups', {
+  id: int().primaryKey({ autoIncrement: true }),
+  gameId: int()
+    .notNull()
+    .references(() => gamesTable.id, { onDelete: 'cascade' }),
+  createdAt: int({ mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  // Nombre del zip tal cual lo generó ludusavi ("backup-2026...Z.zip"): es a
+  // la vez el id de la versión para `restore --backup` y el nombre del
+  // objeto dentro de su prefijo en R2.
+  backupName: text().notNull(),
+  r2Key: text().notNull(),
+  sizeBytes: int().notNull().default(0),
+  ludusaviName: text().notNull(),
+  // Un diferencial NO se puede restaurar solo: necesita el completo del que
+  // cuelga. Guardarlo aquí evita tener que bajar el mapping.yaml solo para
+  // saber qué acompañar (§9.1).
+  differential: int({ mode: 'boolean' }).notNull().default(false),
+  parentBackupName: text(),
+  // Quién lo subió. El nombre es para la vista ("hace 2 días desde PC-Jon"),
+  // el id para comparar máquinas.
+  machineId: text().notNull(),
+  machineName: text().notNull(),
+  // El %USERPROFILE% de la máquina que hizo el backup. Es lo que permite
+  // generar solo el redirect C:/Users/Lara -> C:/Users/Jon al restaurar en
+  // otro PC, sin que el usuario configure nada (§8.2).
+  machineHome: text().notNull(),
+  // Ubicaciones distintas que cubre esta versión, ya derivadas. Guardarlas
+  // aquí es lo que hace que el selector de destino no tenga que descargar
+  // nada para preguntar dónde restaurar (§10bis.5).
+  locations: text({ mode: 'json' }).$type<string[]>(),
+  hasRegistry: int({ mode: 'boolean' }).notNull().default(false),
 });
 
 export const spendEventsTable = sqliteTable('spend_events', {

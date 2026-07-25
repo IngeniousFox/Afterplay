@@ -12,6 +12,7 @@ import { HowLongToBeatCard } from '../components/library/detail/HowLongToBeatCar
 import { MetricsRow } from '../components/library/detail/MetricsRow';
 import { NotesSection } from '../components/library/detail/NotesSection';
 import { PlaythroughPanel } from '../components/library/detail/PlaythroughPanel';
+import { SavesSection } from '../components/library/detail/SavesSection';
 import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCarousel';
 import { SessionHistoryList } from '../components/library/detail/SessionHistoryList';
 import { StatusCard } from '../components/library/detail/StatusCard';
@@ -155,6 +156,13 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
             </div>
             <div className={revealClass} style={revealStyle(3)}>
               <DetailsCard game={game} />
+            </div>
+            {/* PARTIDAS-GUARDADAS.md §10.4 — el único sitio de la app desde
+                el que se restaura una partida. No hay restauración automática
+                en ninguna parte. Va con Details porque es de la misma
+                naturaleza: datos del juego EN ESTE PC, no historial. */}
+            <div className={revealClass} style={revealStyle(4)}>
+              <SavesSection gameId={gameId} gameTitle={game.title} />
             </div>
           </div>
         </div>

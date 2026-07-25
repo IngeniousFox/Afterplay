@@ -6,6 +6,8 @@ import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
 import { imagesApi } from './images';
 import { iterationsApi } from './iterations';
+import { savesApi } from './saves';
+import { scanApi } from './scan';
 import { sessionsApi } from './sessions';
 import { settingsApi } from './settings';
 import { sgdbApi } from './sgdb';
@@ -28,6 +30,8 @@ export const api = {
   hltb: hltbApi,
   sgdb: sgdbApi,
   images: imagesApi,
+  saves: savesApi,
+  scan: scanApi,
   watcher: watcherApi,
   settings: settingsApi,
 };

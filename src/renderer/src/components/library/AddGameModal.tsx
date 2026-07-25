@@ -31,6 +31,7 @@ import { CoverPicker } from './add-game/CoverPicker';
 import { DateWithPrecisionPicker } from './add-game/DateWithPrecisionPicker';
 import { Dropdown } from './add-game/Dropdown';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
+import { FolderScanStep } from './add-game/FolderScanStep';
 import { FormSection } from './add-game/FormSection';
 import { GameNotesPanel } from './add-game/GameNotesPanel';
 import {
@@ -124,6 +125,10 @@ export const AddGameModal = ({
       : null,
   );
   const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
+  // Modo "escanear carpetas" del primer paso — alternativa al buscador, no un
+  // paso más: se sale de él eligiendo un juego (que lleva al formulario) o
+  // volviendo a la búsqueda.
+  const [scanning, setScanning] = useState(false);
   const [notesOpen, setNotesOpen] = useState(() => Boolean(promoteGame?.notes));
   // Sentido de la transición entre "pasos" del modal (buscador -> ficha ->
   // picker de imagen y vuelta) — mismo mecanismo que ya usan CompletedGallery/
@@ -191,6 +196,11 @@ export const AddGameModal = ({
     setQuery('');
     setSelected(null);
     setPickerTarget(null);
+    // El modal no se desmonta al cerrarse, así que sin esto la próxima
+    // apertura aterrizaría en el escaneo. Los RESULTADOS sí sobreviven (viven
+    // en la caché de queries), así que volver a entrar al escaneo los enseña
+    // al instante sin releer el disco.
+    setScanning(false);
     setNotesOpen(false);
     resetForm({ ...DEFAULT_FORM_VALUES, moneySpentDate: todayValue() });
     createGame.reset();
@@ -340,6 +350,28 @@ export const AddGameModal = ({
             catalog can&apos;t be searched.
           </p>
         </div>
+      ) : selected === null && scanning ? (
+        <div key="scan" className={stepTransitionClass}>
+          <FolderScanStep
+            onBack={() => {
+              setStepDirection(-1);
+              setScanning(false);
+            }}
+            onSelect={(match, folder) => {
+              // Lo que el escaneo ya sabe del disco entra en el formulario:
+              // carpeta, tamaño y el ejecutable adivinado. Es TODO el valor
+              // de escanear frente a buscar a mano — si no se prellenara,
+              // habría que volver a señalar la misma carpeta con el picker.
+              methods.setValue('installDirectory', folder.path);
+              methods.setValue('installSizeBytes', folder.sizeBytes);
+              if (folder.executablePath) {
+                methods.setValue('executablePath', folder.executablePath);
+              }
+              setStepDirection(1);
+              setSelected(match);
+            }}
+          />
+        </div>
       ) : selected === null ? (
         <div key="search" className={stepTransitionClass}>
           <SearchStep
@@ -347,6 +379,10 @@ export const AddGameModal = ({
             onQueryChange={setQuery}
             isLoading={search.isLoading}
             results={search.data}
+            onScanFolders={() => {
+              setStepDirection(1);
+              setScanning(true);
+            }}
             onSelect={(result) => {
               setStepDirection(1);
               setSelected(result);

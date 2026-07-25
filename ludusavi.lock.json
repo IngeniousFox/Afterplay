@@ -1,0 +1,17 @@
+{
+  "_comment": "Version y hashes FIJADOS del binario de ludusavi que Afterplay empaqueta (PARTIDAS-GUARDADAS.md 6.1/6.2). Unica fuente de verdad: scripts/fetch-ludusavi.ts descarga exactamente esto y falla la build si el hash no cuadra. NO se edita a mano: 'npm run ludusavi:fetch -- --bump 0.32.0' lo reescribe con los datos reales de la API de GitHub, y despues 'npm run ludusavi:fetch -- --smoke' comprueba que la CLI sigue hablando el mismo idioma (esta en 0.x y rompe algo ~1 vez al año).",
+  "version": "0.31.0",
+  "repo": "mtkennerly/ludusavi",
+  "assets": {
+    "binary": {
+      "name": "ludusavi-v0.31.0-win64.zip",
+      "size": 13802820,
+      "sha256": "f47a8ad8c708f01d2eb124704973beffab205e292f5287a10fc4a101f8d68706"
+    },
+    "legal": {
+      "name": "ludusavi-v0.31.0-legal.zip",
+      "size": 135179,
+      "sha256": "9fce11fc44942efdd5969928d89b106c229f9a041d7a713c424a6da981660ebf"
+    }
+  }
+}

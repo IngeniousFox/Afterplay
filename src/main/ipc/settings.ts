@@ -4,6 +4,7 @@ import { getConfigValue, setConfigValue } from '../config/store';
 import { runSyncCycle } from '../db';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
+import { resetR2Client } from '../saves/r2';
 import { resetSgdbClient } from '../sgdb/client';
 import type { CredentialsValues, TimeFormat } from '../../shared/types';
 
@@ -54,6 +55,9 @@ export const registerSettingsHandlers = (): void => {
     // tiran para que la siguiente llamada use la recién guardada.
     invalidateToken();
     resetSgdbClient();
+    // Lo mismo con el cliente de R2: se construyó con las claves viejas y
+    // seguiría firmando con ellas (PARTIDAS-GUARDADAS.md §9).
+    resetR2Client();
     // Si acaban de aparecer credenciales de Turso, esto enciende el sync ya
     // mismo (attemptSyncUpgrade relee process.env) en vez de esperar al
     // siguiente ciclo de 60s. Fire-and-forget: nunca lanza.

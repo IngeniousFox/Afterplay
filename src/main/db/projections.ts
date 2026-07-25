@@ -2,6 +2,7 @@ import {
   emulatorsTable,
   gamesTable,
   iterationsTable,
+  saveBackupsTable,
   sessionsTable,
   spendEventsTable,
   stateEventsTable,
@@ -40,6 +41,27 @@ export const gameColumns = {
   isEmulated: gamesTable.isEmulated,
   planned: gamesTable.planned,
   addedAt: gamesTable.addedAt,
+  saveBackupEnabled: gamesTable.saveBackupEnabled,
+  saveDetectionSource: gamesTable.saveDetectionSource,
+  saveLudusaviName: gamesTable.saveLudusaviName,
+  saveCustomPaths: gamesTable.saveCustomPaths,
+};
+
+export const saveBackupColumns = {
+  id: saveBackupsTable.id,
+  gameId: saveBackupsTable.gameId,
+  createdAt: saveBackupsTable.createdAt,
+  backupName: saveBackupsTable.backupName,
+  r2Key: saveBackupsTable.r2Key,
+  sizeBytes: saveBackupsTable.sizeBytes,
+  ludusaviName: saveBackupsTable.ludusaviName,
+  differential: saveBackupsTable.differential,
+  parentBackupName: saveBackupsTable.parentBackupName,
+  machineId: saveBackupsTable.machineId,
+  machineName: saveBackupsTable.machineName,
+  machineHome: saveBackupsTable.machineHome,
+  locations: saveBackupsTable.locations,
+  hasRegistry: saveBackupsTable.hasRegistry,
 };
 
 export const iterationColumns = {

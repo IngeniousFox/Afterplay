@@ -1,6 +1,7 @@
-import { ArrowRight, Gamepad2, Search, X } from 'lucide-react';
+import { ArrowRight, FolderSearch, Gamepad2, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import type { IgdbSearchResult } from '../../../../../shared/types';
+import { BLUE } from '../../../lib/colors';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
 
@@ -10,6 +11,10 @@ type SearchStepProps = {
   isLoading: boolean;
   results: IgdbSearchResult[] | undefined;
   onSelect: (result: IgdbSearchResult) => void;
+  // Cambia al modo "escanear mis carpetas". Opcional: el alta de un juego
+  // planeado (mode='plan') no lo ofrece — ahí no hay nada instalado que
+  // escanear todavía.
+  onScanFolders?: () => void;
 };
 
 // Cuántos géneros se pintan como chip antes de cortar — con más, la fila se
@@ -43,6 +48,7 @@ export const SearchStep = ({
   isLoading,
   results,
   onSelect,
+  onScanFolders,
 }: SearchStepProps): React.JSX.Element => {
   // Índice resaltado por TECLADO — a propósito separado del :hover del ratón
   // (que se queda en CSS puro): si el hover moviera este índice, el
@@ -102,6 +108,36 @@ export const SearchStep = ({
           </button>
         )}
       </div>
+
+      {/* La otra vía de alta, al lado del buscador y no escondida en un menú:
+          quien acaba de instalar un juego no quiere teclear su nombre, quiere
+          que la app lo encuentre en su disco. */}
+      {onScanFolders && (
+        <button
+          type="button"
+          onClick={onScanFolders}
+          className="group/scan mt-2.5 flex w-full items-center gap-2.5 rounded-[10px] border border-dashed border-input bg-white/[0.02] px-3.25 py-2.5 text-left transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.04]"
+        >
+          <span
+            className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
+            style={{ background: `${BLUE}1f` }}
+          >
+            <FolderSearch size={14} style={{ color: BLUE }} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12.5px] font-semibold text-foreground">
+              Scan my game folders
+            </span>
+            <span className="block text-[11px] text-muted-foreground">
+              Find installed games on disk, with their folder and executable
+            </span>
+          </span>
+          <ArrowRight
+            size={14}
+            className="flex-none text-muted-foreground transition-[transform,color] duration-150 group-hover/scan:translate-x-0.75 group-hover/scan:text-primary"
+          />
+        </button>
+      )}
 
       {hasResults && (
         <div className="mt-3.5 flex items-center justify-between px-0.5">

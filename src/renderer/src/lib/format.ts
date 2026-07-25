@@ -74,12 +74,15 @@ export const formatSessionEndTime = (
   return formatTime(endedAt, timeFormat);
 };
 
-// GB si llega a 1024MB, si no MB — el tamaño de una carpeta de instalación
-// nunca es tan pequeño como para necesitar KB/bytes sueltos.
+// GB si llega a 1024MB, MB si llega a 1, y KB por debajo. Los KB entraron
+// con las partidas guardadas: una carpeta de instalación nunca baja de 1 MB,
+// pero la MEDIANA de una partida guardada son 322 KB (medido sobre la
+// biblioteca real), y "0 MB" no es una talla, es un error de redondeo.
 export const formatBytes = (bytes: number): string => {
   const mb = bytes / (1024 * 1024);
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  return `${mb.toFixed(0)} MB`;
+  if (mb >= 1) return `${mb.toFixed(0)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
 // HH:MM:SS con ceros a la izquierda — el contador en vivo de una sesión

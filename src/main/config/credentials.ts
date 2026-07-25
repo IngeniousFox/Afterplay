@@ -23,6 +23,10 @@ const ENV_BY_KEY: Record<keyof CredentialsValues, string> = {
   steamGridDbApiKey: 'STEAMGRIDDB_API_KEY',
   databaseUrl: 'DATABASE_URL',
   databaseAuthToken: 'DATABASE_AUTH_TOKEN',
+  r2AccountId: 'R2_ACCOUNT_ID',
+  r2Bucket: 'R2_BUCKET',
+  r2AccessKeyId: 'R2_ACCESS_KEY_ID',
+  r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
 };
 
 const CREDENTIAL_KEYS = Object.keys(ENV_BY_KEY) as (keyof CredentialsValues)[];

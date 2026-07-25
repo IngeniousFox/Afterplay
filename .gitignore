@@ -9,3 +9,7 @@ out
 .env
 .db
 .db-wal
+# Binario de ludusavi (33 MB) — lo baja scripts/fetch-ludusavi.ts en cada
+# build a partir de ludusavi.lock.json. El repo son 3 MB y git guardaría
+# cada versión para siempre.
+ludusavi

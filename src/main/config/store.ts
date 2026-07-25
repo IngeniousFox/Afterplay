@@ -17,12 +17,18 @@ type AppConfig = {
   timeFormat: TimeFormat;
   windowBounds: WindowBounds | null;
   windowMaximized: boolean;
+  // Carpetas de juegos del modo "Scan your folders" (Add Game). Van aquí y
+  // no en la DB a propósito: son rutas de ESTA máquina, y la DB sincroniza
+  // entre PCs — el mismo motivo por el que las partidas guardadas tienen su
+  // machine-saves.json (PARTIDAS-GUARDADAS.md §7.2).
+  scanFolders: string[];
 };
 
 const DEFAULT_CONFIG: AppConfig = {
   timeFormat: '24h',
   windowBounds: null,
   windowMaximized: false,
+  scanFolders: [],
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

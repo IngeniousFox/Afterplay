@@ -27,6 +27,15 @@ export const queryKeys = {
   stateEvents: {
     all: ['stateEvents'] as const,
   },
+  // Partidas guardadas. `game(id)` cuelga del prefijo ['saves'] a propósito:
+  // cualquier mutation que invalide saves.all refresca también la sección
+  // abierta del juego que se esté mirando.
+  saves: {
+    all: ['saves'] as const,
+    status: ['saves', 'status'] as const,
+    legal: ['saves', 'legal'] as const,
+    game: (gameId: number) => ['saves', 'game', gameId] as const,
+  },
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
     details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,
@@ -36,6 +45,12 @@ export const queryKeys = {
   },
   sgdb: {
     images: (input: GetSgdbImagesInput) => ['sgdb', 'images', input] as const,
+  },
+  scan: {
+    folders: ['scan', 'folders'] as const,
+    // Las carpetas van DENTRO de la key: cambiar la lista invalida el
+    // resultado por construcción, sin tener que acordarse de limpiarlo.
+    results: (folders: string[]) => ['scan', 'results', folders] as const,
   },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,

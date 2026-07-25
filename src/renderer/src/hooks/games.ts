@@ -109,7 +109,16 @@ export const useUpdateGame = (): UseMutationResult<
 export const useDeleteGame = (): UseMutationResult<boolean, Error, number, unknown> =>
   useInvalidatingMutation(
     (id: number) => window.api.games.delete(id),
-    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.spend.all, queryKeys.stateEvents.all],
+    // saves.all incluida porque save_backups cuelga de games con ON DELETE
+    // CASCADE: sin esto quedaría en caché el índice de partidas de un juego
+    // que ya no existe — el mismo bug que ya pasó con sessions/spend.
+    [
+      queryKeys.games.all,
+      queryKeys.sessions.all,
+      queryKeys.spend.all,
+      queryKeys.stateEvents.all,
+      queryKeys.saves.all,
+    ],
   );
 
 // Conversión a endless (EditGameModal): limpia desenlaces/marcadores del

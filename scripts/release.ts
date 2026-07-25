@@ -67,6 +67,11 @@ const run = (command: string, args: string[]): void => {
 // que scripts/push-migrations-to-turso.ts.
 const main = async (): Promise<void> => {
   console.log(`[release] compilando y publicando ${tag}...`);
+  // Antes que nada: el binario de ludusavi verificado por hash y pasando su
+  // prueba de humo (PARTIDAS-GUARDADAS.md §6.2). Está en 0.x y ha roto la
+  // CLI ~1 vez al año, así que publicar sin comprobar que sigue hablando el
+  // mismo JSON es cómo se cuela una release con las partidas rotas.
+  run('npm', ['run', 'ludusavi:fetch', '--', '--smoke']);
   run('npm', ['run', 'build']);
   // --publish always: crea (o actualiza) la release en GitHub como BORRADOR
   // con el instalador + latest.yml + blockmap — falta rellenar las notas y

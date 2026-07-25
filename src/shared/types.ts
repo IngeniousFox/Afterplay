@@ -15,10 +15,29 @@ export type {
   Emulator,
   GameRow,
   Iteration,
+  SaveBackupRow,
   Session,
   SpendEvent,
   StateEvent,
 } from '../main/db/schema';
+
+// Partidas guardadas (PARTIDAS-GUARDADAS.md) — la fuente es
+// main/saves/contracts.ts, igual que igdb/hltb/sgdb reexportan la suya.
+export type {
+  RestoreMode,
+  RestorePlanFile,
+  RestoreRequestInput,
+  RestoreResult,
+  SavesActivityEvent,
+  SavesBackupResult,
+  SavesGameState,
+  SavesLocalState,
+  SavesScanEntry,
+  SavesStatus,
+} from '../main/saves/contracts';
+
+// Escaneo de carpetas del modo "Scan your folders" (Add Game).
+export type { ScanCandidate, ScannedFolder } from '../main/scan/contracts';
 
 // Precisión de una fecha elegida a mano en un picker (Add/Edit Game,
 // History) — 'datetime' no es una opción del picker (nadie teclea hora a
@@ -245,6 +264,13 @@ export type CredentialsValues = {
   steamGridDbApiKey: string | null;
   databaseUrl: string | null;
   databaseAuthToken: string | null;
+  // Cloudflare R2 para las partidas guardadas (PARTIDAS-GUARDADAS.md §9).
+  // Sin las CUATRO, la función entera queda deshabilitada — nada de
+  // partidas funciona a medias (§9.2).
+  r2AccountId: string | null;
+  r2Bucket: string | null;
+  r2AccessKeyId: string | null;
+  r2SecretAccessKey: string | null;
 };
 
 // Cambio de estado suelto para el desglose "Status Changes" de Stats por

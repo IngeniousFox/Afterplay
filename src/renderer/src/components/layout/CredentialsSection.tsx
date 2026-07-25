@@ -23,7 +23,7 @@ type FieldKey = keyof CredentialsValues;
 //
 // El nombre del servicio va en la cabecera del grupo, así que las etiquetas
 // de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
-type ServiceId = 'igdb' | 'sgdb' | 'turso';
+type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2';
 
 type Service = {
   id: ServiceId;
@@ -67,15 +67,37 @@ const SERVICES: Service[] = [
     ],
     isReady: (creds) => Boolean(creds.databaseUrl && creds.databaseAuthToken),
   },
+  {
+    id: 'r2',
+    label: 'Cloudflare R2',
+    detail: 'Cloud save backups · optional',
+    where: 'dash.cloudflare.com → R2 → Manage API tokens',
+    fields: [
+      { key: 'r2AccountId', label: 'ACCOUNT ID' },
+      { key: 'r2Bucket', label: 'BUCKET' },
+      { key: 'r2AccessKeyId', label: 'ACCESS KEY ID' },
+      { key: 'r2SecretAccessKey', label: 'SECRET ACCESS KEY' },
+    ],
+    // Las cuatro o ninguna: sin bucket no hay dónde subir, sin secreto no
+    // hay forma de firmar. Media configuración solo daría errores por
+    // sesión, así que la función entera se queda apagada hasta tenerlo todo.
+    isReady: (creds) =>
+      Boolean(
+        creds.r2AccountId && creds.r2Bucket && creds.r2AccessKeyId && creds.r2SecretAccessKey,
+      ),
+  },
 ];
 
-const EMPTY_DRAFT: Record<FieldKey, string> = {
-  twitchClientId: '',
-  twitchClientSecret: '',
-  steamGridDbApiKey: '',
-  databaseUrl: '',
-  databaseAuthToken: '',
-};
+// Derivado de SERVICES y no escrito a mano: con cuatro servicios y nueve
+// claves, tres listas paralelas (borrador vacío, siembra y guardado) eran
+// tres sitios donde olvidarse de añadir la nueva. El cast es la contrapartida
+// de Object.fromEntries, que siempre devuelve un índice ancho.
+const FIELD_KEYS = SERVICES.flatMap((service) => service.fields.map((field) => field.key));
+
+const draftFrom = (read: (key: FieldKey) => string): Record<FieldKey, string> =>
+  Object.fromEntries(FIELD_KEYS.map((key) => [key, read(key)])) as Record<FieldKey, string>;
+
+const EMPTY_DRAFT = draftFrom(() => '');
 
 // Credenciales de APIs externas, editables sin .env (main/config/credentials
 // las guarda cifradas en userData). Colapsable y cerrada por defecto: es
@@ -99,25 +121,17 @@ export const CredentialsSection = ({
   const [seeded, setSeeded] = useState(false);
   if (creds && !seeded) {
     setSeeded(true);
-    setDraft({
-      twitchClientId: creds.twitchClientId ?? '',
-      twitchClientSecret: creds.twitchClientSecret ?? '',
-      steamGridDbApiKey: creds.steamGridDbApiKey ?? '',
-      databaseUrl: creds.databaseUrl ?? '',
-      databaseAuthToken: creds.databaseAuthToken ?? '',
-    });
+    setDraft(draftFrom((key) => creds[key] ?? ''));
   }
   const [savedFlash, setSavedFlash] = useState(false);
 
   const handleSave = async (): Promise<void> => {
     setSavedFlash(false);
-    await setCredentials.mutateAsync({
-      twitchClientId: draft.twitchClientId || null,
-      twitchClientSecret: draft.twitchClientSecret || null,
-      steamGridDbApiKey: draft.steamGridDbApiKey || null,
-      databaseUrl: draft.databaseUrl || null,
-      databaseAuthToken: draft.databaseAuthToken || null,
-    });
+    await setCredentials.mutateAsync(
+      Object.fromEntries(
+        FIELD_KEYS.map((key) => [key, draft[key] || null]),
+      ) as unknown as CredentialsValues,
+    );
     setSavedFlash(true);
   };
 
