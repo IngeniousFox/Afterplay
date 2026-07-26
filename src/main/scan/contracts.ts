@@ -17,9 +17,10 @@ export type ScannedFolder = {
   // El .exe más probable, buscado EN PROFUNDIDAD (executable.ts). null si no
   // hay ninguno defendible — mejor no proponer que proponer un instalador.
   executablePath: string | null;
-  // Cuántos ejecutables plausibles había. >1 significa "es una apuesta",
-  // y la UI lo dice en vez de fingir certeza.
-  executableAlternatives: number;
+  // TODOS los candidatos plausibles, en orden (el primero es executablePath).
+  // Se mandan enteros para que la UI deje CORREGIR la apuesta: decir "best
+  // guess of 2" sin enseñar cuál es el otro no ayuda a nadie.
+  executableCandidates: string[];
 };
 
 // Una carpeta ya cruzada con IGDB, lista para que el usuario elija.
@@ -31,4 +32,14 @@ export type ScanCandidate = ScannedFolder & {
   // añadir, pero se sigue enseñando para que no parezca que el escaneo se lo
   // ha dejado.
   alreadyInLibrary: boolean;
+};
+
+// Lo que ve la pantalla de escaneo. Ya no es solo la lista: como el
+// resultado se guarda entre cierres y se refresca solo en segundo plano,
+// hace falta decir DE CUÁNDO es lo que se está enseñando.
+export type ScanReport = {
+  candidates: ScanCandidate[];
+  // ISO del escaneo más reciente de estas carpetas, o null si no hay nada
+  // guardado todavía (primer arranque, o no se ha señalado ninguna carpeta).
+  scannedAt: string | null;
 };

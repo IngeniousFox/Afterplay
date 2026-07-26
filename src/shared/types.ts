@@ -37,7 +37,7 @@ export type {
 } from '../main/saves/contracts';
 
 // Escaneo de carpetas del modo "Scan your folders" (Add Game).
-export type { ScanCandidate, ScannedFolder } from '../main/scan/contracts';
+export type { ScanCandidate, ScannedFolder, ScanReport } from '../main/scan/contracts';
 
 // Precisión de una fecha elegida a mano en un picker (Add/Edit Game,
 // History) — 'datetime' no es una opción del picker (nadie teclea hora a

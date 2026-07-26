@@ -48,9 +48,11 @@ export const queryKeys = {
   },
   scan: {
     folders: ['scan', 'folders'] as const,
-    // Las carpetas van DENTRO de la key: cambiar la lista invalida el
-    // resultado por construcción, sin tener que acordarse de limpiarlo.
-    results: (folders: string[]) => ['scan', 'results', folders] as const,
+    // Sin las carpetas dentro de la key: el resultado ya no depende de lo
+    // que se le pase al escaneo, sale de una caché en el main que el propio
+    // main mantiene al día (scan/watcher.ts). Cambiar las carpetas invalida
+    // esta key a mano, igual que hace el aviso 'scan:changed'.
+    results: ['scan', 'results'] as const,
   },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,

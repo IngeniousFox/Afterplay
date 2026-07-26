@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useCreateIteration } from '../../../hooks/iterations';
 import { useAddStateEvent } from '../../../hooks/stateEvents';
+import { celebrateCompletion } from '../../../lib/celebrate';
 import { daysBetween, humanizeSpan } from '../../../lib/dateMath';
 import {
   ENDLESS_STATUS_OPTIONS,
@@ -118,6 +119,12 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
       note: note.trim() || null,
     });
     setNote('');
+
+    // Solo al COMPLETAR, y solo después de que el guardado haya ido bien: si
+    // saltara antes se estaría celebrando algo que puede fallar. Que se
+    // dispare también al re-marcar un juego ya completado (para añadirle una
+    // nota) es a propósito — sigue siendo un juego terminado.
+    if (pending === 'beaten') celebrateCompletion();
   };
 
   return (

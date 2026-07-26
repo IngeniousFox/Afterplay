@@ -15,6 +15,7 @@ import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { setSavesNotifier } from './saves/notify';
+import { ScanWatcher, setScanWatcher } from './scan/watcher';
 import { setRunningGamesProbe } from './watcher/runningGames';
 import { ProcessWatcher } from './watcher/watcher';
 
@@ -27,6 +28,7 @@ let mainWindow: BrowserWindow | null = null;
 // esté lista, sin necesidad de pasársela como parámetro.
 let splashWindow: BrowserWindow | null = null;
 let watcher: ProcessWatcher | null = null;
+let scanWatcher: ScanWatcher | null = null;
 let tray: Tray | null = null;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 // Más espaciado que el watcher de procesos (5s) a propósito — sincronizar
@@ -255,6 +257,18 @@ app.whenReady().then(async () => {
     }
   });
 
+  // Vigilante de las carpetas de juegos (scan/watcher.ts): mantiene al día
+  // la caché de "Scan your folders" para que instalar un juego se note solo,
+  // sin tener que pedir un escaneo. Igual que el updater, va al final: su
+  // trabajo no puede retrasar ni la ventana ni el watcher de procesos.
+  scanWatcher = new ScanWatcher(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('scan:changed');
+    }
+  });
+  setScanWatcher(scanWatcher);
+  scanWatcher.start();
+
   // Bloque 3G — bloquear/suspender el PC no es tiempo jugado, siga el
   // proceso vivo detrás o no. 'lock-screen'/'resume' son Windows (Win+L,
   // pantalla de bloqueo); 'suspend'/'resume' cubren además Mac/Linux y el
@@ -303,6 +317,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isQuitting = true;
   watcher?.stop();
+  scanWatcher?.stop();
   if (syncTimer) clearInterval(syncTimer);
 });
 

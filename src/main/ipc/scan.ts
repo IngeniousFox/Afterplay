@@ -2,63 +2,52 @@ import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
 import { getConfigValue, setConfigValue } from '../config/store';
 import { getSaveGames } from '../db/queries/saves/getSaveGames';
-import { searchGames } from '../igdb/api';
 
-import type { ScanCandidate, ScannedFolder } from '../scan/contracts';
-import { buildSearchQueries, findInLibrary } from '../scan/folderTitle';
-import { scanFolders } from '../scan/folders';
+import { getCachedEntries, getLastScanAt } from '../scan/cache';
+import type { ScanReport } from '../scan/contracts';
+import { byFolderName } from '../scan/folders';
+import { findInLibrary } from '../scan/folderTitle';
+import { getScanWatcher } from '../scan/watcher';
 
 // Modo "Scan your folders" de Add Game: se leen las carpetas que el usuario
 // señale (un nivel, sin recursividad) y cada subcarpeta se cruza con IGDB por
 // su nombre. NO añade nada: propone, y el usuario elige de la lista.
+//
+// El trabajo de verdad lo hace el vigilante (scan/watcher.ts), que mantiene
+// la caché al día por su cuenta. Aquí solo quedan dos cosas: LEER esa caché
+// (instantáneo) y FORZAR un ciclo completo (el botón de Scan).
 
-// Cuántas búsquedas de IGDB van a la vez. Su límite es de 4 peticiones por
-// segundo y CADA búsqueda nuestra son dos (relevancia + comodín, ver
-// igdb/api.ts), así que de dos en dos vamos justo por debajo sin necesitar
-// un limitador de verdad.
-const SEARCH_CONCURRENCY = 2;
+// La caché guarda lo que es un hecho del disco y del catálogo, que no cambia
+// solo. "¿Ya lo tengo en la biblioteca?" NO es de esos: depende de la BD,
+// que además sincroniza desde el otro PC. Se recalcula en cada lectura —
+// cachearlo dejaría juegos ya añadidos apareciendo como nuevos.
+const buildReport = async (): Promise<ScanReport> => {
+  const roots = getConfigValue('scanFolders');
+  const entries = getCachedEntries(roots);
 
-// Tope de carpetas que se cruzan con IGDB de una tacada. Señalar por error la
-// raíz de un disco no puede convertirse en mil búsquedas.
-const MAX_CANDIDATES = 300;
+  // Los títulos que ya están en la biblioteca, tal cual: findInLibrary se
+  // encarga de normalizarlos y limpiarlos.
+  const games = await getSaveGames();
+  const libraryTitles = games.map((game) => game.title);
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+  const candidates = entries
+    .map((entry) => {
+      // "Ya está en la biblioteca" se comprueba con el juego propuesto Y con
+      // el nombre de la carpeta, y por SIMILITUD (ver findInLibrary). La
+      // comparación exacta fallaba justo donde más molesta: teniendo
+      // "Horizon Forbidden West" añadido, la carpeta "…Complete Edition"
+      // salía como juego nuevo.
+      const proposed = entry.matches[0];
+      const owned = findInLibrary(
+        [...(proposed ? [proposed.title] : []), entry.folder.folderName],
+        libraryTitles,
+      );
 
-const matchFolder = async (
-  folder: ScannedFolder,
-  libraryTitles: string[],
-): Promise<ScanCandidate> => {
-  // Cadena de consultas, de la más fiel al nombre de la carpeta a la más
-  // recortada (ver folderTitle.ts). Se para en la PRIMERA que devuelva algo:
-  // una carpeta limpia no paga el coste ni el riesgo de las variantes.
-  let matches: Awaited<ReturnType<typeof searchGames>> = [];
-  for (const query of buildSearchQueries(folder.folderName)) {
-    // Un fallo de búsqueda NO es "sin resultados": con 16 carpetas seguidas
-    // es casi siempre el rate limit de IGDB (4 peticiones/seg), y tragárselo
-    // pintaba juegos perfectamente conocidos como "no match". Se reintenta
-    // una vez tras un respiro antes de darlo por vacío.
-    let result = await searchGames(query).catch(() => null);
-    if (result === null) {
-      await sleep(1500);
-      result = await searchGames(query).catch(() => []);
-    }
-    if (result.length > 0) {
-      matches = result;
-      break;
-    }
-  }
+      return { ...entry.folder, matches: entry.matches, alreadyInLibrary: owned !== null };
+    })
+    .sort(byFolderName);
 
-  // "Ya está en la biblioteca" se comprueba con el juego propuesto Y con el
-  // nombre de la carpeta, y por SIMILITUD (ver findInLibrary). La comparación
-  // exacta fallaba justo donde más molesta: teniendo "Horizon Forbidden West"
-  // añadido, la carpeta "…Complete Edition" salía como juego nuevo.
-  const proposed = matches[0];
-  const owned = findInLibrary(
-    [...(proposed ? [proposed.title] : []), folder.folderName],
-    libraryTitles,
-  );
-
-  return { ...folder, matches: matches.slice(0, 6), alreadyInLibrary: owned !== null };
+  return { candidates, scannedAt: getLastScanAt(roots) };
 };
 
 export const registerScanHandlers = (): void => {
@@ -69,29 +58,21 @@ export const registerScanHandlers = (): void => {
 
   ipcMain.handle('scan:setFolders', (_event, folders: string[]) => {
     setConfigValue('scanFolders', folders);
+    // Reenganchar la vigilancia EN CALIENTE. Señalar una carpeta nueva y que
+    // no pasara nada hasta el siguiente barrido sería justo el momento en el
+    // que esto parece que no funciona.
+    getScanWatcher()?.rootsChanged();
     return folders;
   });
 
-  handleDb('scan:run', async (_event, folders: string[]): Promise<ScanCandidate[]> => {
-    const found = (await scanFolders(folders)).slice(0, MAX_CANDIDATES);
+  // Lo que se pinta al abrir la pantalla: sale entero de la caché, así que
+  // es instantáneo y no gasta ni disco ni cuota de IGDB.
+  handleDb('scan:cached', (): Promise<ScanReport> => buildReport());
 
-    // Los títulos que ya están en la biblioteca, tal cual: findInLibrary se
-    // encarga de normalizarlos y limpiarlos.
-    const games = await getSaveGames();
-    const libraryTitles = games.map((game) => game.title);
-
-    const candidates: ScanCandidate[] = [];
-    for (let index = 0; index < found.length; index += SEARCH_CONCURRENCY) {
-      const batch = found.slice(index, index + SEARCH_CONCURRENCY);
-      candidates.push(
-        ...(await Promise.all(batch.map((folder) => matchFolder(folder, libraryTitles)))),
-      );
-      // Respiro entre lotes: cada búsqueda son DOS peticiones (relevancia +
-      // comodín), así que un lote de 2 ya toca el límite de 4/seg de IGDB.
-      // Sin esta pausa, los lotes encadenados lo superaban y las búsquedas
-      // caían con 429.
-      if (index + SEARCH_CONCURRENCY < found.length) await sleep(600);
-    }
-    return candidates;
+  // El botón. Rehace todo ignorando la caché — la vía de escape para cuando
+  // algo no cuadra (un juego movido a mano, un tamaño que se quedó viejo).
+  handleDb('scan:run', async (): Promise<ScanReport> => {
+    await getScanWatcher()?.force();
+    return buildReport();
   });
 };

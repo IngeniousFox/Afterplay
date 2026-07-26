@@ -156,25 +156,24 @@ const score = (candidate: Candidate, folderName: string): number => {
   return points;
 };
 
-export type ExecutableGuess = {
-  path: string;
-  // Cuántos ejecutables plausibles había. Con más de uno, la UI puede
-  // advertir de que la elección es una apuesta y no un hecho.
-  alternatives: number;
-};
+// Cuántos candidatos se devuelven para que el usuario pueda elegir. Los de
+// más abajo del ranking son ruido puro (herramientas sueltas del motor), y
+// una lista larga convertiría "corrige la apuesta" en otro problema.
+const MAX_CANDIDATES = 6;
 
-export const guessExecutable = async (
-  gameDir: string,
-  folderName: string,
-): Promise<ExecutableGuess | null> => {
+// Los ejecutables plausibles, EN ORDEN: el primero es la apuesta. Se
+// devuelven varios y no solo el ganador porque el heurístico acierta mucho
+// pero no siempre —"best guess of 2" no sirve de nada si no puedes ver cuál
+// es el otro— y elegirlo aquí es un clic frente a ir a buscarlo a mano por
+// carpetas anidadas.
+export const guessExecutables = async (gameDir: string, folderName: string): Promise<string[]> => {
   const found: Candidate[] = [];
   await collect(gameDir, gameDir, 0, found, { left: MAX_ENTRIES });
 
-  const ranked = found
+  return found
     .map((candidate) => ({ candidate, points: score(candidate, folderName) }))
     .filter((entry) => entry.points >= 0)
-    .sort((a, b) => b.points - a.points);
-
-  if (ranked.length === 0) return null;
-  return { path: ranked[0].candidate.path, alternatives: ranked.length };
+    .sort((a, b) => b.points - a.points)
+    .slice(0, MAX_CANDIDATES)
+    .map((entry) => entry.candidate.path);
 };

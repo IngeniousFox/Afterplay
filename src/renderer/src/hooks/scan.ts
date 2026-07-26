@@ -1,6 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
-import type { ScanCandidate } from '../../../shared/types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import type { ScanReport } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
 
@@ -18,32 +19,61 @@ export const useScanFolders = (): UseQueryResult<string[], Error> =>
 export const useSetScanFolders = (): UseMutationResult<string[], Error, string[], unknown> =>
   useInvalidatingMutation(
     (folders: string[]) => window.api.scan.setFolders(folders),
-    [queryKeys.scan.folders],
+    [
+      queryKeys.scan.folders,
+      // Cambiar las carpetas cambia el resultado: el main ya está reenganchando
+      // su vigilancia, y esto pide la foto nueva sin esperar a su aviso.
+      queryKeys.scan.results,
+    ],
   );
 
-// El escaneo es caro (recorre el disco y consulta IGDB por cada carpeta) y
-// solo pasa cuando se pulsa el botón — pero su RESULTADO se cachea, y eso es
-// lo que arregla el camino de vuelta: al elegir un juego y pulsar "Change",
-// el paso de escaneo se desmonta; con el resultado en un useState se perdía
-// y había que volver a escanearlo todo, repitiendo cada petición a IGDB.
-//
-// `enabled: false` + `refetch()` es justo eso: nunca se dispara solo, pero
-// si ya hay datos en caché para ESTAS carpetas se devuelven al instante. La
-// clave incluye la lista de carpetas, así que tocarlas invalida el resultado
-// por construcción, sin tener que acordarse de limpiarlo.
-export const useScanResults = (
-  folders: string[],
-): UseQueryResult<ScanCandidate[], Error> & { scan: () => void } => {
+// El resultado del escaneo ya NO es algo que haya que pedir: el main lo
+// mantiene en una caché en disco (scan/cache.ts) que un vigilante refresca
+// solo cuando aparece o desaparece una carpeta (scan/watcher.ts). Así que
+// esto se comporta como cualquier otra query normal — se lee al montar y es
+// instantáneo — y `rescan()` queda como la vía de escape manual.
+export const useScanResults = (): UseQueryResult<ScanReport, Error> & {
+  rescan: () => void;
+  isRescanning: boolean;
+} => {
+  const queryClient = useQueryClient();
+  const [isRescanning, setIsRescanning] = useState(false);
+
   const query = useQuery({
-    queryKey: queryKeys.scan.results(folders),
-    queryFn: () => window.api.scan.run(folders),
-    enabled: false,
-    staleTime: Infinity,
-    // Media hora de vida: lo suficiente para ir y volver del formulario
-    // varias veces, sin quedarse con una foto del disco de anteayer.
-    gcTime: 30 * 60 * 1000,
+    queryKey: queryKeys.scan.results,
+    queryFn: () => window.api.scan.cached(),
+    // Releer SIEMPRE al montar, aunque haya datos: la suscripción de abajo
+    // solo existe con el paso abierto, así que lo que el vigilante encuentre
+    // con el modal cerrado —el caso normal: instalas y LUEGO abres Add
+    // Game— no invalidó nada. Con staleTime infinito eso se enseñaba con la
+    // foto vieja. Releer es leer la caché del main: instantáneo.
+    staleTime: 0,
+    refetchOnMount: 'always',
     retry: false,
   });
 
-  return { ...query, scan: () => void query.refetch() };
+  // El vigilante de fondo encontró algo mientras la pantalla estaba abierta.
+  // Sin esto habría que cerrar y volver a abrir para verlo, que es justo lo
+  // que la vigilancia venía a evitar.
+  useEffect(() => {
+    return window.api.scan.onChanged(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.scan.results });
+    });
+  }, [queryClient]);
+
+  // Reescaneo forzado. No pasa por refetch() a propósito: son dos cosas
+  // distintas —releer la caché es instantáneo, rehacerlo todo tarda
+  // segundos— y la pantalla necesita poder distinguirlas para enseñar el
+  // "Scanning…" solo en la segunda.
+  const rescan = (): void => {
+    if (isRescanning) return;
+    setIsRescanning(true);
+    void window.api.scan
+      .run()
+      .then((report) => queryClient.setQueryData(queryKeys.scan.results, report))
+      .catch(() => undefined)
+      .finally(() => setIsRescanning(false));
+  };
+
+  return { ...query, rescan, isRescanning };
 };

@@ -8,6 +8,7 @@ import {
   HardDrive,
   Loader2,
   MonitorPlay,
+  RefreshCw,
   Search,
   X,
 } from 'lucide-react';
@@ -19,6 +20,20 @@ import { AMBER, BLUE, GREEN } from '../../../lib/colors';
 import { formatBytes } from '../../../lib/format';
 import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
+
+// "hace 3 min" / "hace 2 h" / "ayer". Basta con el trazo gordo: el dato
+// solo está para saber si lo que se ve es de hace un momento o de otro día.
+const formatAgo = (iso: string): string => {
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+};
 
 type FolderScanStepProps = {
   onBack: () => void;
@@ -35,10 +50,11 @@ type FolderScanStepProps = {
 export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React.JSX.Element => {
   const { data: folders = [] } = useScanFolders();
   const setFolders = useSetScanFolders();
-  // Los resultados viven en la caché de queries y NO en un useState: así
-  // sobreviven a salir de este paso y volver ("Change" tras elegir un juego),
-  // que antes obligaba a repetir el escaneo entero y sus peticiones a IGDB.
-  const { data: results, isFetching, scan } = useScanResults(folders);
+  // Los resultados llegan ya hechos: el main los guarda entre cierres y los
+  // refresca solo cuando aparece o desaparece una carpeta. Aquí no se pide
+  // nada, se lee lo que ya hay — y `rescan` queda para forzarlo a mano.
+  const { data: report, isLoading, rescan, isRescanning } = useScanResults();
+  const results = report?.candidates;
 
   const handleAddFolder = async (): Promise<void> => {
     const folder = await window.api.dialog.pickFolder();
@@ -101,19 +117,37 @@ export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React
 
       <button
         type="button"
-        onClick={scan}
-        disabled={folders.length === 0 || isFetching}
+        onClick={rescan}
+        disabled={folders.length === 0 || isRescanning}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border border-input bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isFetching ? <Loader2 size={15} className="animate-spin" /> : <FolderSearch size={15} />}
-        {/* "Scan again" cuando ya hay resultados en caché: deja claro que lo
-            que se ve abajo es de antes y que pulsar vuelve a leer el disco. */}
-        {isFetching ? 'Scanning your folders…' : results ? 'Scan again' : 'Scan'}
+        {isRescanning ? <Loader2 size={15} className="animate-spin" /> : <FolderSearch size={15} />}
+        {/* "Rescan" cuando ya hay algo: el botón dejó de ser la única forma
+            de llegar a la lista (la app la mantiene sola) y pasó a ser la vía
+            de escape — rehacerlo TODO ignorando lo que ya se sabía. */}
+        {isRescanning ? 'Scanning your folders…' : results?.length ? 'Rescan' : 'Scan'}
       </button>
 
-      {results && !isFetching && <Results results={results} onSelect={onSelect} />}
+      {/* De cuándo es lo que se está viendo. Con una lista que se refresca
+          sola en segundo plano, no decirlo dejaría al usuario sin saber si
+          mira algo de hace un minuto o de la semana pasada. */}
+      {report?.scannedAt && !isRescanning && (
+        <div className="mt-1.75 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+          <RefreshCw size={10.5} className="flex-none" />
+          Updated {formatAgo(report.scannedAt)} · watching {folders.length}{' '}
+          {folders.length === 1 ? 'folder' : 'folders'} for new games
+        </div>
+      )}
 
-      {!results && !isFetching && (
+      {/* Con un escaneo hecho, Results se pinta AUNQUE esté vacío: dentro
+          vive el aviso de "señala la carpeta que contiene tus juegos, no un
+          juego" — volver a la pantalla de bienvenida tras escanear cero
+          carpetas escondía justo la pista que explica el porqué. */}
+      {results && (results.length > 0 || report?.scannedAt) && !isRescanning && (
+        <Results results={results} onSelect={onSelect} />
+      )}
+
+      {!isLoading && !isRescanning && !results?.length && !report?.scannedAt && (
         <div className="mt-6 flex flex-col items-center gap-2.5 px-4 py-8 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04]">
             <FolderSearch size={20} strokeWidth={1.5} className="text-muted-foreground/50" />
@@ -122,6 +156,10 @@ export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React
           <p className="max-w-72 text-[12px] leading-relaxed text-muted-foreground">
             Point at the folders where your games live. Each subfolder is looked up in IGDB by its
             name, and the game&apos;s executable is found for you — you pick which ones to add.
+          </p>
+          <p className="max-w-72 text-[11.5px] leading-relaxed text-muted-foreground/70">
+            Afterplay keeps watching them afterwards, so anything you install later shows up here on
+            its own.
           </p>
         </div>
       )}
@@ -182,6 +220,134 @@ const Results = ({
   );
 };
 
+// El .exe elegido para una carpeta, arrancando en la apuesta del escaneo.
+// Si un re-escaneo cambia esa apuesta (la fila NO se remonta: la clave es la
+// ruta, que no cambia) se descarta lo elegido antes, que puede que ya ni
+// exista. Ajuste durante el render, sin efecto.
+const useChosenExecutable = (entry: ScanCandidate): [string | null, (path: string) => void] => {
+  const [chosen, setChosen] = useState(entry.executablePath);
+  const [guess, setGuess] = useState(entry.executablePath);
+
+  if (guess !== entry.executablePath) {
+    setGuess(entry.executablePath);
+    setChosen(entry.executablePath);
+  }
+
+  return [chosen, setChosen];
+};
+
+const fileName = (path: string): string => path.slice(path.lastIndexOf('\\') + 1);
+
+// El .exe adivinado, y —cuando hay más de un candidato— cuál de ellos.
+// Antes esto era un rótulo muerto que decía "best guess of 2" sin enseñar
+// cuál era el otro ni dejar cambiarlo: la única salida era guardar y editar
+// el juego a mano. Vive FUERA del botón de la ficha porque es otro botón.
+const ExecutablePicker = ({
+  entry,
+  value,
+  onChange,
+}: {
+  entry: ScanCandidate;
+  value: string | null;
+  onChange: (path: string) => void;
+}): React.JSX.Element => {
+  const [open, setOpen] = useState(false);
+  const candidates = entry.executableCandidates;
+
+  if (candidates.length === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2.25">
+        <MonitorPlay size={13} className="flex-none text-muted-foreground/50" />
+        <span className="text-[12px] text-muted-foreground/60">
+          No executable found — set it later if you want the watcher.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 px-3 py-2.25">
+        <MonitorPlay size={13} className="flex-none" style={{ color: GREEN }} />
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground"
+          title={value ?? undefined}
+        >
+          {value === null ? '—' : fileName(value)}
+        </span>
+
+        {candidates.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            className="flex flex-none items-center gap-1 rounded-[7px] border border-input px-2 py-0.75 text-[11px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground"
+          >
+            <ChevronDown
+              size={11}
+              className="transition-transform duration-150"
+              style={open ? undefined : { transform: 'rotate(-90deg)' }}
+            />
+            {candidates.length} found
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className={`border-t border-border bg-black/20 px-2 py-2 ${expandClass}`}>
+          <div className="mb-1.5 px-2 text-[10.5px] font-bold tracking-[.12em] text-muted-foreground">
+            WHICH ONE LAUNCHES THE GAME?
+          </div>
+          <div className="flex flex-col gap-1">
+            {candidates.map((candidate, position) => {
+              const active = candidate === value;
+              // Ruta RELATIVA a la carpeta del juego: es lo único que distingue
+              // `Binaries/Win64/X-Shipping.exe` de `X.exe`, que es exactamente
+              // el caso en el que hace falta elegir.
+              const relative = candidate.startsWith(entry.path)
+                ? candidate.slice(entry.path.length + 1)
+                : candidate;
+              const folder = relative.slice(0, relative.length - fileName(relative).length);
+
+              return (
+                <button
+                  key={candidate}
+                  type="button"
+                  onClick={() => {
+                    onChange(candidate);
+                    setOpen(false);
+                  }}
+                  title={candidate}
+                  className={`flex w-full items-center gap-2 rounded-[7px] px-2 py-1.75 text-left transition-colors duration-150 ${
+                    active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.035]'
+                  }`}
+                >
+                  <Check
+                    size={13}
+                    strokeWidth={3}
+                    className="flex-none"
+                    style={{ color: active ? GREEN : 'transparent' }}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[12px]">
+                    <span className="text-muted-foreground/45">{folder}</span>
+                    <span className={active ? 'text-foreground' : 'text-muted-foreground'}>
+                      {fileName(relative)}
+                    </span>
+                  </span>
+                  {position === 0 && (
+                    <span className="flex-none rounded-full bg-white/[0.06] px-1.75 py-0.75 text-[10px] font-semibold text-muted-foreground">
+                      best guess
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // Fila de juego propuesto — el mismo lenguaje visual (y las mismas medidas)
 // que los resultados del buscador normal: carátula 72×100, título+año,
 // chips, elevación al hover. La diferencia es QUÉ cuenta debajo: en vez del
@@ -196,6 +362,7 @@ const CandidateRow = ({
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
 }): React.JSX.Element => {
   const [showAlternatives, setShowAlternatives] = useState(false);
+  const [executablePath, setExecutablePath] = useChosenExecutable(entry);
   const proposed = entry.matches[0];
   const alternatives = entry.matches.slice(1);
 
@@ -203,7 +370,7 @@ const CandidateRow = ({
     <div className={revealClass} style={revealStyle(Math.min(index, 6))}>
       <button
         type="button"
-        onClick={() => onSelect(proposed, entry)}
+        onClick={() => onSelect(proposed, { ...entry, executablePath })}
         className="group/result flex w-full items-start gap-3.25 rounded-[11px] border border-border bg-white/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)]"
       >
         <div className="h-25 w-18 flex-none overflow-hidden rounded-[8px] border border-border bg-muted">
@@ -251,27 +418,6 @@ const CandidateRow = ({
               {formatBytes(entry.sizeBytes)}
             </span>
           </div>
-
-          {entry.executablePath ? (
-            <div className="mt-1 flex items-center gap-1.5">
-              <MonitorPlay size={11} className="flex-none" style={{ color: GREEN }} />
-              <span
-                className="truncate font-mono text-[10.5px] text-muted-foreground"
-                title={entry.executablePath}
-              >
-                {entry.executablePath.slice(entry.executablePath.lastIndexOf('\\') + 1)}
-              </span>
-              {entry.executableAlternatives > 1 && (
-                <span className="flex-none text-[9.5px] text-muted-foreground/60">
-                  best guess of {entry.executableAlternatives}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="mt-1 text-[10.5px] text-muted-foreground/60">
-              No executable found — set it later if you want the watcher.
-            </div>
-          )}
         </div>
 
         <ArrowRight
@@ -280,52 +426,69 @@ const CandidateRow = ({
         />
       </button>
 
-      {alternatives.length > 0 && (
-        <div className="mx-2 rounded-b-[9px] border border-t-0 border-border bg-white/[0.015]">
-          <button
-            type="button"
-            onClick={() => setShowAlternatives((current) => !current)}
-            className="flex w-full items-center gap-2 px-3 py-1.75 text-left outline-none transition-colors duration-150 hover:bg-white/[0.03] focus-visible:bg-white/[0.05]"
-          >
-            <ChevronDown
-              size={12}
-              className="flex-none text-muted-foreground transition-transform duration-150"
-              style={showAlternatives ? undefined : { transform: 'rotate(-90deg)' }}
-            />
-            {/* Abanico de carátulas: enseña QUÉ hay detrás del desplegable
+      {/* Faldón de la ficha: el .exe y las otras fichas de IGDB. Los dos
+          salieron FUERA del botón grande porque los dos son elegibles, y un
+          botón dentro de otro no es ni HTML válido ni clicable sin pelearse
+          con el click del padre. */}
+      <div className="mx-2 rounded-b-[9px] border border-t-0 border-border bg-white/[0.015]">
+        <ExecutablePicker entry={entry} value={executablePath} onChange={setExecutablePath} />
+
+        {alternatives.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowAlternatives((current) => !current)}
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-1.75 text-left outline-none transition-colors duration-150 hover:bg-white/[0.03] focus-visible:bg-white/[0.05]"
+            >
+              <ChevronDown
+                size={12}
+                className="flex-none text-muted-foreground transition-transform duration-150"
+                style={showAlternatives ? undefined : { transform: 'rotate(-90deg)' }}
+              />
+              {/* Abanico de carátulas: enseña QUÉ hay detrás del desplegable
                 antes de abrirlo — tres portadas dicen "hay otros candidatos
                 reales" mejor que cualquier frase. */}
-            <span className="flex flex-none -space-x-2">
-              {alternatives.slice(0, 3).map((match) => (
-                <span
-                  key={match.igdbId}
-                  className="h-7 w-5 overflow-hidden rounded-[4px] border border-border bg-muted ring-2 ring-[#141614]"
-                >
-                  <CoverThumb url={match.coverUrl} alt="" className="h-full w-full object-cover" />
-                </span>
-              ))}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-muted-foreground">
-              Not this one? Pick from {alternatives.length} other{' '}
-              {alternatives.length === 1 ? 'match' : 'matches'}
-            </span>
-          </button>
+              <span className="flex flex-none -space-x-2">
+                {alternatives.slice(0, 3).map((match) => (
+                  <span
+                    key={match.igdbId}
+                    className="h-7 w-5 overflow-hidden rounded-[4px] border border-border bg-muted ring-2 ring-[#141614]"
+                  >
+                    <CoverThumb
+                      url={match.coverUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </span>
+                ))}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-muted-foreground">
+                Not this one? Pick from {alternatives.length} other{' '}
+                {alternatives.length === 1 ? 'match' : 'matches'}
+              </span>
+            </button>
 
-          {showAlternatives && (
-            <div className={`border-t border-border bg-black/20 px-2.5 pt-2 pb-2.5 ${expandClass}`}>
-              <div className="mb-2 flex items-center justify-between px-0.5">
-                <span className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
-                  OTHER MATCHES
-                </span>
-                <span className="text-[9.5px] text-muted-foreground/60">
-                  Click a cover to use it
-                </span>
+            {showAlternatives && (
+              <div
+                className={`border-t border-border bg-black/20 px-2.5 pt-2 pb-2.5 ${expandClass}`}
+              >
+                <div className="mb-2 flex items-center justify-between px-0.5">
+                  <span className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+                    OTHER MATCHES
+                  </span>
+                  <span className="text-[9.5px] text-muted-foreground/60">
+                    Click a cover to use it
+                  </span>
+                </div>
+                <MatchCardGrid
+                  matches={alternatives}
+                  onPick={(match) => onSelect(match, { ...entry, executablePath })}
+                />
               </div>
-              <MatchCardGrid matches={alternatives} onPick={(match) => onSelect(match, entry)} />
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -344,6 +507,7 @@ const FixMatchRow = ({
   // docena de filas buscando a la vez nada más pintar la lista sería
   // machacar el rate limit de IGDB para resultados que quizá nadie mira.
   const [query, setQuery] = useState('');
+  const [executablePath, setExecutablePath] = useChosenExecutable(entry);
   const search = useIgdbSearch(query);
 
   const handleToggle = (): void => {
@@ -380,6 +544,13 @@ const FixMatchRow = ({
         />
       </button>
 
+      {/* El .exe se encontró igual aunque el título no casara, y elegirlo
+          aquí es lo que hace que arreglar el match a mano no salga perdiendo
+          frente a la ficha con propuesta. */}
+      <div className="border-t border-border bg-white/[0.015]">
+        <ExecutablePicker entry={entry} value={executablePath} onChange={setExecutablePath} />
+      </div>
+
       {open && (
         <div className={`border-t border-border px-3 pt-2.5 pb-2 ${expandClass}`}>
           <div className="group/fix relative">
@@ -409,7 +580,7 @@ const FixMatchRow = ({
             ) : search.data && search.data.length > 0 ? (
               <MatchCardGrid
                 matches={search.data.slice(0, 8)}
-                onPick={(match) => onSelect(match, entry)}
+                onPick={(match) => onSelect(match, { ...entry, executablePath })}
               />
             ) : null}
           </div>
