@@ -50,8 +50,10 @@ const runBackup = async (gameId: number): Promise<void> => {
     if (!game?.saveBackupEnabled || !game.saveLudusaviName) {
       // Se avisa igualmente de que esto ha terminado: si no, una ficha que
       // recibió el 'scheduled' se quedaría con el spinner puesto para
-      // siempre por un juego que ni siquiera estaba activado.
-      notifySavesActivity({ gameId, phase: 'done', uploaded: 0 });
+      // siempre por un juego que ni siquiera estaba activado. foundFiles en
+      // true a propósito: aquí no se ha buscado nada, así que no hay ningún
+      // "no encontré tus partidas" que anunciar.
+      notifySavesActivity({ gameId, phase: 'done', uploaded: 0, foundFiles: true });
       return;
     }
 
@@ -70,10 +72,17 @@ const runBackup = async (gameId: number): Promise<void> => {
     const result = await withDbAccess(() => backupGameToCloud(game, games));
     if (result) {
       console.log(
-        `[saves] backup automatico de "${game.title}" (${result.uploaded} versiones nuevas)`,
+        result.foundFiles
+          ? `[saves] backup automatico de "${game.title}" (${result.uploaded} versiones nuevas)`
+          : `[saves] backup automatico de "${game.title}": NO se encontro ningun archivo de partida`,
       );
     }
-    notifySavesActivity({ gameId, phase: 'done', uploaded: result?.uploaded ?? 0 });
+    notifySavesActivity({
+      gameId,
+      phase: 'done',
+      uploaded: result?.uploaded ?? 0,
+      foundFiles: result?.foundFiles ?? true,
+    });
   } catch (error) {
     // Un fallo de backup no interrumpe nada: la partida sigue en el disco
     // del usuario y el próximo cierre de sesión reintenta.

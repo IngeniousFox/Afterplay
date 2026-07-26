@@ -100,6 +100,16 @@ export type RestoreResult = {
 export type SavesBackupResult = {
   ludusaviName: string;
   uploaded: number;
+  // ¿Había ALGO donde Afterplay mira? Separa dos casos que acaban los dos en
+  // `uploaded: 0` y que no se parecen en nada: "la partida no ha cambiado
+  // desde la última copia" (todo bien) y "no hay ni un archivo ahí" (la
+  // carpeta se movió, el juego se desinstaló, la ruta a mano se quedó
+  // vieja). Sin esta distinción el segundo caso se anunciaba como el
+  // primero — "Nothing changed since the last backup" — que es justo lo
+  // tranquilizador que no hay que decirle a alguien cuyas partidas ya no se
+  // están copiando. Verificado con el binario: una ruta inexistente devuelve
+  // `games: {}` y código de salida 0, sin un solo aviso.
+  foundFiles: boolean;
 };
 
 // Copia automática en marcha, para que la ficha abierta lo cuente en vivo
@@ -111,6 +121,11 @@ export type SavesActivityEvent = {
   // Solo en 'done': cuántas versiones nuevas se subieron (0 si la partida no
   // había cambiado desde la última copia).
   uploaded?: number;
+  // Solo en 'done': false cuando no se encontró NINGÚN archivo donde mirar
+  // (ver SavesBackupResult.foundFiles). Un backup automático que no encuentra
+  // nada es la peor forma de fallar —silenciosa y repetida— así que la ficha
+  // abierta tiene que poder decirlo en vez de dar un "listo" a secas.
+  foundFiles?: boolean;
   // Solo en 'failed'.
   message?: string;
 };

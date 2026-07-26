@@ -222,6 +222,9 @@ export type GameListItem = {
   // EMULADORES.md — alimenta el filtro del modal de asignación de sesiones
   // pendientes (solo juegos emulados pueden recibirlas).
   isEmulated: boolean;
+  // SPEC 10.8 — juegos sin final (roguelikes, simuladores, servicio). Aquí
+  // solo para el filtro "Endless" de las columnas de navegación.
+  endless: boolean;
   // Para el donut de "edad" de los juegos jugados (estilo resumen anual de
   // Steam): nuevos vs 1-5 / 5-10 / 10+ años respecto al año filtrado.
   releaseYear: number | null;
@@ -243,6 +246,11 @@ export type GameListItem = {
   // misma regla que resolveIterationHours).
   manualIterations: { iterationId: number; hours: number; year: number | null }[];
   currentState: StateEvent['type'] | null;
+  // Cuándo se tocó por última vez, para el orden "Last played" de las
+  // columnas de navegación. Sale de la última SESIÓN; si el juego no tiene
+  // ninguna (jugado antes del tracking, o solo marcado a mano), cae al
+  // último evento de estado. null si no hay ni una cosa ni la otra.
+  lastPlayedAt: Date | null;
   isLive: boolean;
   // startedAt de la sesión abierta, para el contador en vivo de la card
   // (SPEC 10.7) — null si isLive es false.

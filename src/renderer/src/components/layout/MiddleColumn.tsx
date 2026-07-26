@@ -4,11 +4,20 @@ import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-route
 import type { GameListItem } from '../../../../shared/types';
 import { useGames, usePlannedGames } from '../../hooks/games';
 import { formatHours, pluralize } from '../../lib/format';
+import {
+  applyFilters,
+  availableGenres,
+  EMPTY_FILTERS,
+  type FilterGroup,
+  type FlagKey,
+  type GameFilters,
+} from '../../lib/gameFilters';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { filterByTitle } from '../../lib/search';
 import { revealClass, revealStyle } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { StatusIcon } from '../StatusIcon';
+import { GameFilterPanel } from './GameFilterPanel';
 
 const GREEN = '#2fdc7e';
 
@@ -78,6 +87,8 @@ type ShellProps = {
   // Game. Se escucha en la raíz para que funcione escribiendo en el buscador
   // sin tener que salir de él.
   onArrowNavigate?: (delta: 1 | -1) => void;
+  // El panel de filtros, que cada columna arma con los grupos que le sirven.
+  filters?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -87,6 +98,7 @@ const MiddleColumnShell = ({
   search,
   onSearchChange,
   onArrowNavigate,
+  filters,
   children,
 }: ShellProps): React.JSX.Element => (
   <div
@@ -120,6 +132,7 @@ const MiddleColumnShell = ({
           className="w-full rounded-[9px] border border-input bg-white/[0.03] py-2.25 pr-3 pl-8.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
+      {filters}
     </div>
     {/* tabIndex=0: sin él, clicar la lista no le da el foco y las flechas
         seguirían scrolleando el contenedor en vez de mover la selección. */}
@@ -253,10 +266,40 @@ const AllGamesRow = ({
   </div>
 );
 
-const useFilteredGames = (search: string): GameListItem[] => {
-  const { data: games = [] } = useGames();
-  return filterByTitle(games, search);
+// Búsqueda + filtros de una columna. El estado vive aquí, en el componente
+// de la columna, igual que ya hacía el texto de búsqueda: al cambiar de
+// sección MiddleColumn monta un componente distinto y se limpia solo, que es
+// lo que uno espera (no volver a Sessions y encontrarse la lista recortada
+// por algo que filtró en Stats hace media hora).
+type ColumnFilters = {
+  filters: GameFilters;
+  setFilters: (next: GameFilters) => void;
+  visible: GameListItem[];
+  genres: string[];
 };
+
+const useColumnFilters = (games: GameListItem[], search: string): ColumnFilters => {
+  const [filters, setFilters] = useState<GameFilters>(EMPTY_FILTERS);
+  return {
+    filters,
+    setFilters,
+    visible: applyFilters(filterByTitle(games, search), filters),
+    // Los géneros salen de la lista COMPLETA, no de la ya buscada: si
+    // dependieran del texto del buscador, los chips bailarían con cada
+    // letra que se teclea.
+    genres: availableGenres(games),
+  };
+};
+
+// Los grupos que dependen de haber jugado (estado, horas) más los que son
+// del juego en sí (banderas, década, género). Lo usan las tres columnas de
+// biblioteca; Plan to Play se queda con un subconjunto.
+const PLAYED_GROUPS: FilterGroup[] = ['status', 'flags', 'playtime', 'era', 'genre'];
+// Las dos banderas son propiedades del JUEGO, no de cómo lo llevas. Aun así
+// 'endless' no se ofrece en Plan to Play: createPlannedGame no lo fija, así
+// que un juego planeado siempre es endless=false y el chip no devolvería
+// nunca nada.
+const PLAYED_FLAGS: FlagKey[] = ['endless', 'emulated'];
 
 // Cabecera de grupo de la columna de biblioteca (estilo Steam) — clicable
 // para plegar/desplegar cuando lleva onToggle; sin él es un rótulo fijo.
@@ -312,12 +355,14 @@ const LibraryNavColumn = (): React.JSX.Element => {
   const [search, setSearch] = useState('');
   const [activeOpen, setActiveOpen] = useState(true);
   const [restOpen, setRestOpen] = useState(true);
-  const filtered = useFilteredGames(search);
+  const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
 
   // Sección especial estilo Steam: lo que estás jugando o tienes en pausa,
   // arriba y plegable. Los juegos se MUEVEN aquí, no se duplican — el
   // listado general de abajo los excluye. Playing por delante de On Hold
-  // (dentro de cada estado se conserva el alfabético de la query).
+  // (dentro de cada estado se conserva el orden que traiga `filtered`: el
+  // sort de JS es estable, así que el criterio elegido en el panel manda
+  // dentro de cada grupo y esto solo decide qué grupo va antes).
   const isActive = (game: GameListItem): boolean =>
     game.currentState === 'started' || game.currentState === 'on_hold';
   const activeGames = filtered
@@ -359,6 +404,18 @@ const LibraryNavColumn = (): React.JSX.Element => {
       sub={pluralize(games.length, 'game')}
       search={search}
       onSearchChange={setSearch}
+      filters={
+        <GameFilterPanel
+          filters={filters}
+          onChange={setFilters}
+          groups={PLAYED_GROUPS}
+          flags={PLAYED_FLAGS}
+          sorts={['title', 'last-played', 'hours-desc', 'hours-asc', 'added-desc', 'release-desc']}
+          genres={genres}
+          shown={filtered.length}
+          total={games.length}
+        />
+      }
       onArrowNavigate={(delta) => {
         const next = nextSelection(
           visibleGames.map((game) => game.id),
@@ -415,7 +472,7 @@ const PlanNavColumn = (): React.JSX.Element => {
   const selectedId = detailMatch ? Number(detailMatch.params.id) : null;
   const { data: games = [] } = usePlannedGames();
   const [search, setSearch] = useState('');
-  const filtered = filterByTitle(games, search);
+  const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
   const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
     selectedId,
     filtered.length,
@@ -427,6 +484,22 @@ const PlanNavColumn = (): React.JSX.Element => {
       sub={pluralize(games.length, 'game')}
       search={search}
       onSearchChange={setSearch}
+      // Subconjunto a propósito: un juego planeado no se ha tocado, así que
+      // estado, horas y "jugando ahora" darían siempre lo mismo. Queda lo
+      // que sí distingue un planeado de otro — qué es y cuándo salió — y
+      // "Recently added", que en una lista de deseos es el orden natural.
+      filters={
+        <GameFilterPanel
+          filters={filters}
+          onChange={setFilters}
+          groups={['genre', 'era', 'flags']}
+          flags={['emulated']}
+          sorts={['title', 'added-desc', 'release-desc']}
+          genres={genres}
+          shown={filtered.length}
+          total={games.length}
+        />
+      }
       onArrowNavigate={(delta) => {
         const next = nextSelection(
           filtered.map((game) => game.id),
@@ -466,7 +539,7 @@ const SessionsNavColumn = (): React.JSX.Element => {
   const { data: games = [] } = useGames();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const filtered = useFilteredGames(search);
+  const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
   const totalSessions = games.reduce((sum, game) => sum + game.sessionCount, 0);
   const gameParam = searchParams.get('game');
   const selectedId = gameParam ? Number(gameParam) : null;
@@ -481,6 +554,20 @@ const SessionsNavColumn = (): React.JSX.Element => {
       sub={pluralize(totalSessions, 'session')}
       search={search}
       onSearchChange={setSearch}
+      filters={
+        <GameFilterPanel
+          filters={filters}
+          onChange={setFilters}
+          groups={PLAYED_GROUPS}
+          flags={PLAYED_FLAGS}
+          // "Most sessions" primero tras el alfabético: es la columna de
+          // sesiones, ordenar por cuántas hay es su pregunta propia.
+          sorts={['title', 'last-played', 'sessions-desc', 'hours-desc', 'added-desc']}
+          genres={genres}
+          shown={filtered.length}
+          total={games.length}
+        />
+      }
       // null = la fila "All games", que también es seleccionable: subir desde
       // el primer juego llega hasta ella.
       onArrowNavigate={(delta) => {
@@ -537,7 +624,7 @@ const StatsNavColumn = (): React.JSX.Element => {
   const { data: games = [] } = useGames();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const filtered = useFilteredGames(search);
+  const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
   const gameParam = searchParams.get('game');
   const selectedId = gameParam ? Number(gameParam) : null;
   const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
@@ -551,6 +638,25 @@ const StatsNavColumn = (): React.JSX.Element => {
       sub={pluralize(games.length, 'game')}
       search={search}
       onSearchChange={setSearch}
+      filters={
+        <GameFilterPanel
+          filters={filters}
+          onChange={setFilters}
+          groups={PLAYED_GROUPS}
+          flags={PLAYED_FLAGS}
+          sorts={[
+            'title',
+            'last-played',
+            'hours-desc',
+            'hours-asc',
+            'sessions-desc',
+            'release-desc',
+          ]}
+          genres={genres}
+          shown={filtered.length}
+          total={games.length}
+        />
+      }
       onArrowNavigate={(delta) => {
         const next = nextSelection<number | null>(
           [null, ...filtered.map((game) => game.id)],

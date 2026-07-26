@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron';
 import { closeSync, openSync } from 'node:fs';
 import { withDbAccess } from '../db';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
+import { getIterationGameId } from '../db/queries/iterations/getIterationGameId';
 import { closeSession } from '../db/queries/sessions/closeSession';
 import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
 import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
@@ -231,7 +232,7 @@ export class ProcessWatcher {
         for (const [key, activeSession] of this.active) {
           if (running.has(key)) continue;
 
-          await closeSession(activeSession.sessionId, new Date());
+          const closed = await closeSession(activeSession.sessionId, new Date());
           this.active.delete(key);
           console.log(
             `[watcher] [stop] ${key} cerrado -> sesion ${activeSession.sessionId} cerrada`,
@@ -246,6 +247,14 @@ export class ProcessWatcher {
           const gameId = Number(key.slice('game:'.length));
           if (key.startsWith('game:') && Number.isFinite(gameId)) {
             void scheduleSaveBackup(gameId);
+          } else if (closed && closed.iterationId !== null) {
+            // Sesión de EMULADOR ("emu:N") que el usuario asignó a un juego
+            // emulado mientras seguía jugando: la clave no sabe de juegos,
+            // pero la sesión ya sí. Sin esta rama, ese juego se quedaba sin
+            // backup automático SIEMPRE — la clave nunca empieza por "game:"
+            // y el disparador de arriba ni lo miraba.
+            const assignedGameId = await getIterationGameId(closed.iterationId);
+            if (assignedGameId !== null) void scheduleSaveBackup(assignedGameId);
           }
         }
 

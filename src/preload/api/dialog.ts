@@ -7,4 +7,6 @@ export const dialogApi = {
   pickDirectory: (): Promise<DirectoryPickResult | null> =>
     ipcRenderer.invoke('dialog:pickDirectory'),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickFolder'),
+  // Un archivo suelto, para las memory cards de emulador (ver ipc/dialog.ts).
+  pickFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickFile'),
 };

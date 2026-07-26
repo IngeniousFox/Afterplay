@@ -50,4 +50,13 @@ export const registerDialogHandlers = (): void => {
   ipcMain.handle('dialog:pickFolder', (event) =>
     showPicker(event, { properties: ['openDirectory'] }),
   );
+
+  // "Add a single file" de la sección Saves. Existe por los emuladores que
+  // guardan TODO en un único fichero: la memory card de PCSX2 (Mcd001.ps2)
+  // o los .mcd de DuckStation viven en una carpeta compartida con las de
+  // otros juegos, así que señalar la carpeta respaldaría partidas ajenas.
+  // Sin filtro de extensiones a propósito: cada emulador usa la suya
+  // (.ps2, .mcd, .mcr, .srm, .sav…) y una lista cerrada solo serviría para
+  // dejar fuera el emulador que no se me haya ocurrido.
+  ipcMain.handle('dialog:pickFile', (event) => showPicker(event, { properties: ['openFile'] }));
 };

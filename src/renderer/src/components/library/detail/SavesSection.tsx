@@ -2,6 +2,8 @@ import {
   Check,
   CloudOff,
   CloudUpload,
+  FilePlus2,
+  FileText,
   FolderOpen,
   FolderPlus,
   HardDriveDownload,
@@ -74,6 +76,16 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
     if (folder) await addFolder.mutateAsync({ gameId, folder }).catch(() => undefined);
   };
 
+  // Misma vía que la carpeta: lo que se guarda es una ruta, y a ludusavi le
+  // da igual que apunte a un fichero o a un directorio (verificado con el
+  // binario: un .mcd suelto se respalda igual que una carpeta). El botón
+  // aparte existe porque el diálogo nativo del sistema SÍ es distinto — con
+  // el de carpetas no se puede señalar un archivo.
+  const handlePickFile = async (): Promise<void> => {
+    const file = await window.api.dialog.pickFile();
+    if (file) await addFolder.mutateAsync({ gameId, folder: file }).catch(() => undefined);
+  };
+
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
       {/* Chip de color + título, el mismo lenguaje de identidad que
@@ -135,6 +147,7 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
             state={state}
             addingFolder={addFolder.isPending}
             onAddFolder={handlePickFolder}
+            onAddFile={handlePickFile}
             onRestore={setRestoring}
           />
         )}
@@ -265,12 +278,14 @@ const Detected = ({
   state,
   addingFolder,
   onAddFolder,
+  onAddFile,
   onRestore,
 }: {
   gameId: number;
   state: SavesGameState;
   addingFolder: boolean;
   onAddFolder: () => void;
+  onAddFile: () => void;
   onRestore: (backup: SaveBackupRow) => void;
 }): React.JSX.Element => {
   const setEnabled = useSetSaveBackupEnabled();
@@ -288,7 +303,17 @@ const Detected = ({
             text: `Backed up — ${pluralize(result.uploaded, 'new version')} in the cloud`,
             color: GREEN,
           }
-        : { text: 'Nothing changed since the last backup.', color: 'var(--muted-foreground)' },
+        : // "Nada que subir" son DOS cosas, y antes las dos decían lo mismo.
+          // Que no haya NI UN archivo donde miramos no es tranquilizador: es
+          // que la carpeta se movió, el juego se desinstaló o la ruta que
+          // añadiste a mano se quedó vieja — y la copia lleva fallando en
+          // silencio desde entonces.
+          result.foundFiles
+          ? { text: 'Nothing changed since the last backup.', color: 'var(--muted-foreground)' }
+          : {
+              text: 'No save files found where Afterplay is looking — nothing was backed up.',
+              color: AMBER,
+            },
     );
     setTimeout(() => setFlash(null), 6000);
   };
@@ -335,6 +360,7 @@ const Detected = ({
           adding={addingFolder}
           isAuto={state.detectionSource === 'auto'}
           onAdd={onAddFolder}
+          onAddFile={onAddFile}
         />
       </div>
 
@@ -422,6 +448,7 @@ const FoldersBlock = ({
   adding,
   isAuto,
   onAdd,
+  onAddFile,
 }: {
   gameId: number;
   detectedLocations: string[];
@@ -429,6 +456,7 @@ const FoldersBlock = ({
   adding: boolean;
   isAuto: boolean;
   onAdd: () => void;
+  onAddFile: () => void;
 }): React.JSX.Element => {
   const removeFolder = useRemoveSaveFolder();
 
@@ -475,6 +503,15 @@ const FoldersBlock = ({
         {adding ? 'Adding…' : ownPaths.length > 0 ? 'Add another folder' : 'Add a folder of my own'}
       </SidebarButton>
 
+      {/* Un fichero suelto, no una carpeta. Es lo que hace falta con las
+          memory cards de emulador: el Mcd001.ps2 de PCSX2 o los .mcd de
+          DuckStation comparten carpeta con los de otros juegos, así que
+          señalar el directorio respaldaría —y al restaurar, sobrescribiría—
+          partidas que no son de este juego. */}
+      <SidebarButton onClick={onAddFile} disabled={adding} icon={adding ? Loader2 : FilePlus2}>
+        {adding ? 'Adding…' : 'Add a single file'}
+      </SidebarButton>
+
       {ownPaths.length > 0 && isAuto && (
         <div className="text-[10px] leading-relaxed text-muted-foreground/80">
           Backed up on top of what Afterplay detects, registry included.
@@ -509,6 +546,12 @@ const FolderRow = ({
 }): React.JSX.Element => {
   const name = path.slice(path.lastIndexOf('/') + 1) || path;
   const parent = path.slice(0, path.lastIndexOf('/'));
+  // Estas filas ya no son solo carpetas: desde "Add a single file" también
+  // pueden ser un archivo (una memory card de emulador). Se distingue por la
+  // extensión y no preguntándole al disco porque esto es solo el icono — y
+  // una ruta que ya no existe (justo el caso que hay que poder ver) daría
+  // error en un stat.
+  const isFile = /\.[a-z0-9]{1,6}$/i.test(name);
 
   return (
     <div
@@ -525,7 +568,11 @@ const FolderRow = ({
           className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-[7px]"
           style={{ background: `${tone}1f` }}
         >
-          <FolderOpen size={12} style={{ color: tone }} />
+          {isFile ? (
+            <FileText size={12} style={{ color: tone }} />
+          ) : (
+            <FolderOpen size={12} style={{ color: tone }} />
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
@@ -575,7 +622,20 @@ const ACTIVITY_META: Record<
 };
 
 const ActivityBanner = ({ activity }: { activity: SavesActivityEvent }): React.JSX.Element => {
-  const meta = ACTIVITY_META[activity.phase];
+  // Una copia automática que termina SIN haber encontrado nada no es un
+  // "listo": es el aviso de que las partidas de este juego llevan sin
+  // copiarse desde que la carpeta dejó de estar donde estaba. Se pinta como
+  // advertencia, no como éxito, porque es el único momento en que el usuario
+  // se va a enterar sin ir a buscarlo.
+  const foundNothing = activity.phase === 'done' && activity.foundFiles === false;
+  const meta = foundNothing
+    ? {
+        label: 'No save files found where Afterplay is looking',
+        color: AMBER,
+        spinning: false,
+      }
+    : ACTIVITY_META[activity.phase];
+
   return (
     <div
       className="flex items-start gap-1.75 rounded-[9px] border px-2.75 py-2 text-[11px] font-semibold"
@@ -583,7 +643,7 @@ const ActivityBanner = ({ activity }: { activity: SavesActivityEvent }): React.J
     >
       {meta.spinning ? (
         <Loader2 size={12} className="mt-0.5 flex-none animate-spin" />
-      ) : activity.phase === 'done' ? (
+      ) : activity.phase === 'done' && !foundNothing ? (
         <Check size={12} className="mt-0.5 flex-none" />
       ) : (
         <TriangleAlert size={12} className="mt-0.5 flex-none" />

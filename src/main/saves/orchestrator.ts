@@ -7,7 +7,13 @@ import { deleteSaveBackups } from '../db/queries/saves/deleteSaveBackups';
 import { getSaveBackups } from '../db/queries/saves/getSaveBackups';
 import { isGameRunning } from '../watcher/runningGames';
 import { isLudusaviAvailable } from './binary';
-import type { RestoreMode, RestoreRequestInput, RestoreResult, SavesGameState } from './contracts';
+import type {
+  RestoreMode,
+  RestoreRequestInput,
+  RestoreResult,
+  SavesBackupResult,
+  SavesGameState,
+} from './contracts';
 import { listVersions, readMapping, MAPPING_FILE, type BackupVersion } from './mapping';
 import {
   getMachineHome,
@@ -179,19 +185,21 @@ const fileSize = (path: string): number => {
 export const backupGameToCloud = async (
   game: SaveGame,
   allGames: SaveGame[],
-): Promise<{ uploaded: number; ludusaviName: string } | null> => {
+): Promise<SavesBackupResult | null> => {
   const ludusaviName = game.saveLudusaviName;
   if (!ludusaviName) return null;
 
   const result = await backupGame(ludusaviName, buildCustomGames(allGames));
-  // Sin archivos no hay nada que subir — pasa con un juego detectado que
-  // todavía no ha generado partida.
+  // Sin archivos no hay nada que subir. Pasa en dos situaciones MUY
+  // distintas que hay que devolver distinguidas (ver foundFiles): un juego
+  // detectado que todavía no ha generado partida, y una ruta que ya no
+  // existe porque el juego se movió o se desinstaló.
   if (!result || (result.files.length === 0 && result.registryKeys.length === 0)) {
-    return { uploaded: 0, ludusaviName };
+    return { uploaded: 0, ludusaviName, foundFiles: false };
   }
 
   const created = await syncGameToR2(game, ludusaviName);
-  return { uploaded: created.length, ludusaviName };
+  return { uploaded: created.length, ludusaviName, foundFiles: true };
 };
 
 // Todo lo que un juego tenga de partidas guardadas, fuera: los objetos de su

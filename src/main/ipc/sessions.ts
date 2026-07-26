@@ -6,6 +6,7 @@ import { assignSession } from '../db/queries/sessions/assignSession';
 import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
+import { scheduleSaveBackup } from '../saves/sessionHook';
 
 // Modelo v2: fuera sessions:add y sessions:updateMilestone*(...) — los
 // marcadores de borde ya no existen; las fechas y desenlaces de un
@@ -43,7 +44,15 @@ export const registerSessionsHandlers = (): void => {
   });
 
   handleDb('sessions:assign', async (_event, sessionId: number, gameId: number) => {
-    return assignSession(sessionId, gameId);
+    const session = await assignSession(sessionId, gameId);
+    // La asignación es EL momento en que por fin se sabe de qué juego son
+    // esas partidas — el equivalente al cierre de sesión de un juego normal
+    // (§10.2), que aquí pasó de largo porque la sesión era de emulador. Solo
+    // si la sesión ya terminó: si sigue en vivo, el backup lo disparará el
+    // watcher al cerrarla (ya con el juego a bordo). scheduleSaveBackup solo
+    // arma un timer, así que no anida withDbAccess dentro de este handler.
+    if (session && session.endedAt !== null) scheduleSaveBackup(gameId);
+    return session;
   });
 
   handleDb('sessions:deletePending', async (_event, sessionId: number) => {
