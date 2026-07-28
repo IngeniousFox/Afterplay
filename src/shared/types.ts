@@ -308,6 +308,9 @@ export type StateEventSummary = {
 // getAllSpendEvents.ts. Sin gameId/type/note: esta vista solo suma importes
 // por fecha (total y por año), no necesita más.
 export type SpendEventSummary = {
+  // Stats no lo usa (sus métricas son sumas globales), pero el modo ambiente
+  // sí: necesita el gasto DE UN juego para poder decir su coste por hora.
+  gameId: number;
   amount: number;
   occurredAt: Date;
 };

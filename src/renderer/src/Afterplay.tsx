@@ -1,5 +1,6 @@
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useWatcherSync } from './hooks/useWatcherSync';
 import { router } from './router';
@@ -31,6 +32,11 @@ const Afterplay = (): React.JSX.Element => {
         style={{ width: 420 }}
         toastOptions={{ unstyled: true, classNames: { toast: 'w-full' } }}
       />
+      {/* Lo último del árbol y por encima de todo: cuando dejas de tocar la
+          app, la biblioteca se pone a desfilar sola. Fuera del router porque
+          no pertenece a ninguna pantalla — es la app entera la que se queda
+          quieta, no una sección. */}
+      <AmbientMode />
     </TooltipProvider>
   );
 };
