@@ -9,6 +9,7 @@ import {
   formatSessionEndTime,
 } from '../../lib/format';
 import { GameCover } from '../GameCover';
+import { SessionNote } from './SessionNote';
 
 type SessionRowProps = {
   session: SessionWithGame;
@@ -86,6 +87,9 @@ export const SessionRow = ({
         {endTime && (
           <div className="mt-0.25 text-[12.5px] text-muted-foreground/70">→ {endTime}</div>
         )}
+        {/* Diario de sesión, igual que en la ficha del juego: si escribiste
+            "dónde lo dejé" al cerrar, aquí se lee y se corrige. */}
+        <SessionNote sessionId={session.id} note={session.note} />
       </div>
       {isLive ? (
         <div

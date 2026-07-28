@@ -47,6 +47,12 @@ const credentials = (): {
 // para proteger.
 export const isR2Configured = (): boolean => credentials() !== null;
 
+// Contra QUÉ bucket se reconcilió la identidad de esta máquina (ver
+// saves/identity.ts). Es una cadena, no un booleano, a propósito: cambiar de
+// bucket es cambiar de mundo — el de al lado puede tener otras máquinas y
+// otros backups, así que hay que volver a mirar.
+export const getBucketName = (): string | null => credentials()?.bucket ?? null;
+
 const getClient = (): { client: S3Client; bucket: string } | null => {
   const creds = credentials();
   if (!creds) {
@@ -102,6 +108,21 @@ const requireClient = (): { client: S3Client; bucket: string } => {
 export const gamePrefix = (igdbId: number, machineId: string): string =>
   `saves/${igdbId}/${machineId}/`;
 
+// Registro de máquinas, FUERA de saves/ y con un objeto diminuto por PC.
+//
+// Es lo que hace que el bucket sepa explicarse solo. El machineId va en la
+// ruta de cada backup, pero el NOMBRE del PC y su %USERPROFILE% viven en
+// machine-saves.json, que es local y nunca sincroniza — sin ellos, un bucket
+// recuperado a pelo no puede decir de quién es cada carpeta ni generar los
+// redirects al restaurar en otro sitio.
+//
+// Aparte de saves/ y no dentro para que enumerar máquinas cueste UN listado,
+// en vez de recorrer la carpeta de cada juego (ListObjectsV2 es Clase A, la
+// cuota escasa de R2: 1M/mes frente a 10M de lecturas).
+export const MACHINES_PREFIX = 'machines/';
+
+export const machineKey = (machineId: string): string => `${MACHINES_PREFIX}${machineId}.json`;
+
 export const uploadFile = async (key: string, filePath: string): Promise<number> => {
   const { client, bucket } = requireClient();
   const body = await readFile(filePath);
@@ -109,6 +130,48 @@ export const uploadFile = async (key: string, filePath: string): Promise<number>
     new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
   );
   return body.byteLength;
+};
+
+// Subir/leer un objeto JSON pequeño sin pasar por disco — el registro de
+// máquinas es un puñado de bytes y no tiene por qué materializarse en un
+// fichero temporal solo para reusar uploadFile.
+export const uploadJson = async (key: string, value: unknown): Promise<void> => {
+  const { client, bucket } = requireClient();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: `${JSON.stringify(value, null, 2)}\n`,
+      ContentType: 'application/json',
+    }),
+  );
+};
+
+// Contenido de un objeto pequeño como texto, sin pasar por disco (el
+// mapping.yaml de un juego son unos pocos KB). null si no está o falla: la
+// recuperación recorre carpetas ajenas y una ilegible solo debe hacer que esa
+// se salte, no tumbar el barrido entero.
+export const readText = async (key: string): Promise<string | null> => {
+  const { client, bucket } = requireClient();
+  try {
+    const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    return (await response.Body?.transformToString()) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+// null si no está o si es ilegible: un manifiesto corrupto no puede tumbar el
+// arranque de la reconciliación — como mucho esa máquina sale sin describir y
+// se la trata como desconocida, que es exactamente la situación de partida.
+export const readJson = async <T>(key: string): Promise<T | null> => {
+  const text = await readText(key);
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 };
 
 const contentType = (key: string): string =>

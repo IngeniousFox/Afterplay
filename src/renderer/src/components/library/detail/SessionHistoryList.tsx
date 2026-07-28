@@ -1,12 +1,18 @@
 import { ArrowRight, Flame, Timer, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Session } from '../../../../../shared/types';
 import { useTimeFormat } from '../../../hooks/settings';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
+import {
+  consumeSessionFlash,
+  getPendingSessionFlash,
+  subscribeSessionFlash,
+} from '../../../hooks/useSessionClosedToast';
 import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
+import { SessionNote } from '../../sessions/SessionNote';
 import { SectionLabel } from './SectionLabel';
 
 type SessionHistoryListProps = {
@@ -27,11 +33,15 @@ const SessionRow = ({
   session,
   maxDurationSec,
   isRecord,
+  flash,
   onDelete,
 }: {
   session: Session;
   maxDurationSec: number;
   isRecord: boolean;
+  // Parpadeo dorado al llegar desde el aviso de cierre: "esta es la sesión de
+  // la que te hablaba". Dos pulsos y se acaba (ver main.css).
+  flash: boolean;
   // Solo llega para sesiones CERRADAS — una viva se para con Stop, no se
   // borra (el watcher la reabriría al ciclo siguiente).
   onDelete?: () => void;
@@ -46,9 +56,33 @@ const SessionRow = ({
   const fillPct =
     !isLive && maxDurationSec > 0 ? Math.max(3, (durationSec / maxDurationSec) * 100) : 0;
 
+  // El parpadeo no sirve de nada si pasa fuera de pantalla: al llegar desde
+  // el aviso, la ficha se abre arriba del todo (hero, acciones…) y el
+  // historial de sesiones queda mucho más abajo. Así que primero se lleva la
+  // fila a la vista y SOLO DESPUÉS empieza a parpadear.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [flashing, setFlashing] = useState(false);
+
+  useEffect(() => {
+    if (!flash) return;
+    rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Margen para que el desplazamiento haya llegado (o casi) antes del
+    // primer pulso — si no, el destello se gasta mientras la fila todavía
+    // está entrando en pantalla.
+    const timer = setTimeout(() => {
+      setFlashing(true);
+      // Se consume AQUÍ y no antes: consumir vuelve `flash` a false y eso
+      // dispara la limpieza de este efecto — hacerlo al entrar cancelaría el
+      // temporizador y el parpadeo no llegaría a empezar nunca.
+      consumeSessionFlash();
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [flash]);
+
   return (
     <div
-      className="group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
+      ref={rowRef}
+      className={`group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5 ${flashing ? 'afterplay-flash-gold' : ''}`}
       style={
         isLive
           ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
@@ -81,6 +115,9 @@ const SessionRow = ({
         >
           {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
         </div>
+
+        {/* Diario de sesión: "dónde lo dejé" — ver SessionNote. */}
+        <SessionNote sessionId={session.id} note={session.note} />
       </div>
       <div className="relative z-1 flex flex-none items-center gap-1.5">
         {isRecord && <Flame size={13} color="#e85d72" />}
@@ -113,6 +150,13 @@ export const SessionHistoryList = ({
   // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
   const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
   const { data: timeFormat = '24h' } = useTimeFormat();
+  // Qué sesión resaltar por haber llegado desde el aviso de cierre. Vive
+  // fuera de React (el aviso puede llegar en cualquier pantalla), así que se
+  // lee con useSyncExternalStore — que además cubre el caso de estar YA en
+  // esta ficha, donde no hay remontaje. Quien lo consume es la propia fila,
+  // en cuanto arranca el parpadeo.
+  const flashSessionId = useSyncExternalStore(subscribeSessionFlash, getPendingSessionFlash);
+
   if (sessions.length === 0) return null;
 
   const maxDurationSec = Math.max(
@@ -137,6 +181,7 @@ export const SessionHistoryList = ({
                 session.durationSec > 0 &&
                 session.durationSec === maxDurationSec
               }
+              flash={session.id === flashSessionId}
               onDelete={session.endedAt !== null ? () => setPendingDelete(session) : undefined}
             />
           </div>

@@ -14,11 +14,19 @@ import type {
   SavesBackupResult,
   SavesGameState,
 } from './contracts';
-import { listVersions, readMapping, MAPPING_FILE, type BackupVersion } from './mapping';
+import { ensureIdentityBeforeUpload } from './identity';
+import {
+  backupTimestamp,
+  listVersions,
+  readMapping,
+  MAPPING_FILE,
+  type BackupVersion,
+} from './mapping';
 import {
   getMachineHome,
   getMachineId,
   getMachineName,
+  getPruneFloor,
   getSaveLocationOverride,
   setSaveLocationOverride,
 } from './machine';
@@ -124,11 +132,22 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // 3. Retirar de la nube lo que la retención local ya no conserva. Al estar
   // dentro del prefijo de esta máquina, "lo que ya no está en local" es una
   // afirmación cierta: nadie más escribe aquí.
+  //
+  // El suelo de poda (pruneFloor) protege lo anterior a esta instalación: al
+  // reclamar la carpeta de una reinstalación previa, la carpeta LOCAL está
+  // vacía, así que sin este filtro el primer backup daría por caducadas todas
+  // las versiones que había en la nube y las borraría — justo lo que la
+  // adopción existe para salvar. Un nombre que no sepamos fechar tampoco se
+  // toca: ante la duda, no borrar.
+  const floor = getPruneFloor();
   const staleKeys = remote
     .map((object) => object.key)
     .filter((key) => {
       const name = basename(key);
-      return name !== MAPPING_FILE && !localNames.has(name);
+      if (name === MAPPING_FILE || localNames.has(name)) return false;
+      if (!floor) return true;
+      const when = backupTimestamp(name);
+      return when !== null && when.getTime() >= floor.getTime();
     });
   await r2.deleteKeys(staleKeys);
 
@@ -142,8 +161,18 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // Sin ese filtro, el primer backup hecho en este PC daría por "caducadas"
   // todas las suyas —no están en nuestra carpeta local— y las borraría del
   // índice de los dos.
+  // Y el mismo suelo de poda que arriba: si el objeto sigue en el bucket por
+  // ser anterior a esta instalación, borrar su fila lo dejaría invisible
+  // —imposible de restaurar y de borrar— que es el otro modo de perderlo.
   const ownRows = (await getSaveBackups(game.id)).filter((row) => row.machineId === machineId);
-  const staleRowIds = ownRows.filter((row) => !localNames.has(row.backupName)).map((row) => row.id);
+  const staleRowIds = ownRows
+    .filter((row) => {
+      if (localNames.has(row.backupName)) return false;
+      if (!floor) return true;
+      const when = backupTimestamp(row.backupName) ?? row.createdAt;
+      return when.getTime() >= floor.getTime();
+    })
+    .map((row) => row.id);
   await deleteSaveBackups(staleRowIds);
 
   const knownNames = new Set(
@@ -197,6 +226,12 @@ export const backupGameToCloud = async (
   if (!result || (result.files.length === 0 && result.registryKeys.length === 0)) {
     return { uploaded: 0, ludusaviName, foundFiles: false };
   }
+
+  // ANTES de escribir nada en el bucket: si esta instalación nunca lo ha
+  // mirado, esta es la última ventana en la que reclamar la carpeta de una
+  // instalación anterior sale gratis — en cuanto subamos un objeto bajo el
+  // id actual, cambiarlo dejaría ese objeto huérfano (ver identity.ts).
+  await ensureIdentityBeforeUpload();
 
   const created = await syncGameToR2(game, ludusaviName);
   return { uploaded: created.length, ludusaviName, foundFiles: true };

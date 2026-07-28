@@ -4,8 +4,12 @@ import { getSaveGames } from '../db/queries/saves/getSaveGames';
 import { updateGame } from '../db/queries/games/updateGame';
 import { getSaveBackups } from '../db/queries/saves/getSaveBackups';
 import { deleteSaveBackups } from '../db/queries/saves/deleteSaveBackups';
+import { getSaveBackupsUsage } from '../db/queries/saves/getSaveBackupsUsage';
 import { getLudusaviLegalFiles, isLudusaviAvailable } from '../saves/binary';
 import type {
+  CloudInventory,
+  IdentityCheck,
+  RecoveryResult,
   RestoreRequestInput,
   RestoreResult,
   SavesBackupResult,
@@ -13,6 +17,13 @@ import type {
   SavesScanEntry,
   SavesStatus,
 } from '../saves/contracts';
+import { deleteMachineFromCloud, recoverIndexFromCloud, scanBucket } from '../saves/recovery';
+import {
+  adoptMachine,
+  checkIdentity,
+  keepCurrentIdentity,
+  needsIdentityCheck,
+} from '../saves/identity';
 import { getMachineId, setSaveLocationOverride } from '../saves/machine';
 import {
   backupGameToCloud,
@@ -59,6 +70,46 @@ export const registerSavesHandlers = (): void => {
   });
 
   ipcMain.handle('saves:getLegalFiles', () => getLudusaviLegalFiles());
+
+  // Espacio ocupado en R2, para Ajustes (API & Sync) — SUM local sobre
+  // save_backups, cero llamadas al bucket (ver getSaveBackupsUsage).
+  handleDb('saves:getUsage', async () => getSaveBackupsUsage());
+
+  // ── Identidad de esta máquina frente al bucket (saves/identity.ts) ──
+  // La puerta es local y GRATIS: solo compara el bucket configurado con el
+  // que ya se reconcilió. Sin esto, mirar la nube en cada arranque gastaría
+  // operaciones Clase A por nada y rompería §10bis.4 (nada de fondo).
+  ipcMain.handle('saves:needsIdentityCheck', (): boolean => needsIdentityCheck());
+
+  // Esta sí va a la red — solo desde un clic explícito en Ajustes.
+  ipcMain.handle('saves:checkIdentity', async (): Promise<IdentityCheck | null> => checkIdentity());
+
+  ipcMain.handle('saves:adoptMachine', async (_event, machineId: string) => {
+    await adoptMachine(machineId);
+  });
+
+  ipcMain.handle('saves:keepIdentity', async () => {
+    await keepCurrentIdentity();
+  });
+
+  // ── Inventario y recuperación (saves/recovery.ts) ──
+  // Las tres van a la red y salen SIEMPRE de un clic explícito. Van por
+  // handleDb porque cruzan el bucket con el índice y la biblioteca.
+  handleDb('saves:scanBucket', async (): Promise<CloudInventory> => scanBucket());
+
+  handleDb('saves:recoverFromCloud', async (): Promise<RecoveryResult> => {
+    const result = await recoverIndexFromCloud();
+    console.log(
+      `[saves] recuperacion desde la nube: ${result.recovered} versiones recuperadas, ${result.skippedNoGame} sin juego en la biblioteca, ${result.unreadableFolders} carpetas ilegibles`,
+    );
+    return result;
+  });
+
+  handleDb('saves:deleteMachine', async (_event, machineId: string): Promise<number> => {
+    const deleted = await deleteMachineFromCloud(machineId);
+    console.log(`[saves] borrados ${deleted} objetos de la maquina ${machineId}`);
+    return deleted;
+  });
 
   ipcMain.handle('saves:openPath', async (_event, path: string) => {
     await shell.openPath(path);

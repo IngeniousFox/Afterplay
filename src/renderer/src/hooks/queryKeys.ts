@@ -34,6 +34,8 @@ export const queryKeys = {
     all: ['saves'] as const,
     status: ['saves', 'status'] as const,
     legal: ['saves', 'legal'] as const,
+    usage: ['saves', 'usage'] as const,
+    identityNeeded: ['saves', 'identityNeeded'] as const,
     game: (gameId: number) => ['saves', 'game', gameId] as const,
   },
   igdb: {

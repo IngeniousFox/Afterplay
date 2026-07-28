@@ -3,9 +3,16 @@ import { Check, CloudUpload, FileText, Loader2, Radar, TriangleAlert } from 'luc
 import { useState } from 'react';
 import type { SavesScanEntry } from '../../../../shared/types';
 import { queryKeys } from '../../hooks/queryKeys';
-import { useSavesStatus, useScanSaves, useSetSaveBackupEnabled } from '../../hooks/saves';
+import {
+  useSavesStatus,
+  useSavesUsage,
+  useScanSaves,
+  useSetSaveBackupEnabled,
+} from '../../hooks/saves';
 import { formatBytes, pluralize } from '../../lib/format';
 import { expandClass, revealClass, revealStyle } from '../../lib/styles';
+import { CloudIdentitySection } from './CloudIdentitySection';
+import { CloudInventorySection } from './CloudInventorySection';
 import { SettingsCard } from './SettingsCard';
 
 const BLUE = '#85a3d6';
@@ -89,6 +96,13 @@ export const SavesScanSection = (): React.JSX.Element => {
         </button>
       }
     >
+      {/* Antes que nada lo demás: si esta instalación no ha mirado el bucket,
+          reclamar su carpeta anterior es lo primero que hay que resolver —
+          después de subir algo bajo un id nuevo ya no sale gratis. */}
+      <CloudIdentitySection />
+      <CloudUsage />
+      {/* Solo tiene sentido si hay bucket al que preguntar. */}
+      {status?.r2Configured && <CloudInventorySection />}
       {!ready && <UnavailableNotice status={status} />}
       {scan.isError && (
         <div className="text-[11px] text-destructive">The scan failed — {scan.error.message}</div>
@@ -96,6 +110,52 @@ export const SavesScanSection = (): React.JSX.Element => {
       {results && <ScanResults results={results} busyGameId={busyGameId} onToggle={handleToggle} />}
       <LegalLinks />
     </SettingsCard>
+  );
+};
+
+// Cuánto ocupan las partidas en la nube. Va aquí, en la tarjeta que trata de
+// esto y a la vista sin desplegar nada — no dentro de las claves de R2, que
+// es donde se configura el acceso, no donde se mira el resultado.
+//
+// El dato NO le cuesta una sola llamada a R2: sale de sumar el sizeBytes que
+// ya se guarda por backup al subirlo, y el índice se poda en el mismo
+// momento en que se borra el objeto del bucket (ver getSaveBackupsUsage).
+// Se enseña siempre, incluso a cero: ocultarlo en el caso vacío no dejaba
+// distinguir "aún no hay nada" de "esto no funciona".
+const CloudUsage = (): React.JSX.Element | null => {
+  const { data: usage } = useSavesUsage();
+  if (!usage) return null;
+
+  const empty = usage.backupCount === 0;
+  return (
+    <div
+      className="flex items-center gap-2 rounded-[8px] border px-2.75 py-2"
+      style={
+        empty
+          ? { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+          : { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
+      }
+    >
+      <CloudUpload
+        size={13}
+        className="flex-none"
+        style={{ color: empty ? 'rgba(255,255,255,.18)' : BLUE }}
+      />
+      {empty ? (
+        <span className="text-[11.5px] text-muted-foreground">
+          Nothing in the cloud yet — turn a game on below and it&apos;ll back up when you stop
+          playing.
+        </span>
+      ) : (
+        <span className="text-[12px] font-semibold text-foreground">
+          {formatBytes(usage.totalBytes)} in the cloud
+          <span className="font-normal text-muted-foreground">
+            {' · '}
+            {pluralize(usage.backupCount, 'backup')}
+          </span>
+        </span>
+      )}
+    </div>
   );
 };
 

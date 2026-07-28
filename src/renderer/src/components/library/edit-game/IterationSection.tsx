@@ -4,7 +4,12 @@ import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useDeleteIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision } from '../../../lib/format';
-import { NORMAL_STATUS_OPTIONS, STATE_TO_STATUS_KEY, STATUS_META } from '../../../lib/gameStatus';
+import {
+  END_EVENT_STATUS_KEYS,
+  NORMAL_STATUS_OPTIONS,
+  STATE_TO_STATUS_KEY,
+  STATUS_META,
+} from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { CheckboxRow } from '../add-game/CheckboxRow';
@@ -33,6 +38,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
   const { control, setValue } = useFormContext<EditGameFormValues>();
   const iterationMode = useWatch({ control, name: 'iterationMode' });
   const selectedIterationId = useWatch({ control, name: 'selectedIterationId' });
+  const status = useWatch({ control, name: 'status' });
   const platform = useWatch({ control, name: 'platform' });
   const format = useWatch({ control, name: 'format' });
   const origin = useWatch({ control, name: 'origin' });
@@ -148,7 +154,11 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
             ) : (
               <ReadonlyDateField label="Started" iteration={selectedIteration} field="startedAt" />
             )}
-            {selectedIteration.endEvent ? (
+            {/* También editable SIN endEvent cuando el estado elegido deja
+                fecha de salida (Playing → Beaten/Dropped/Hold): esa fecha
+                fechará el evento nuevo al guardar (ver saveExistingIteration)
+                en vez de caer siempre en "hoy". */}
+            {selectedIteration.endEvent || END_EVENT_STATUS_KEYS.includes(status) ? (
               <FormDatePicker name="finished" label="Finished / left" />
             ) : (
               <ReadonlyDateField

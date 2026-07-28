@@ -60,6 +60,13 @@ export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'pla
 // también para endless (resting se añade, no sustituye a on_hold/dropped).
 export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting', 'dropped'];
 
+// Estados que dejan una fecha de salida ("Finished / left") — la misma terna
+// que puebla endEvent en el main (getGameById). OJO: no todos son finales.
+// Beaten/Dropped SÍ cierran el playthrough (isTerminal en iterations.ts);
+// On Hold solo lo deja aparcado con fecha — sigue siendo el mismo
+// playthrough y volver a Playing es retomarlo, no corregirlo.
+export const END_EVENT_STATUS_KEYS: PastStatusKey[] = ['beaten', 'dropped', 'on_hold'];
+
 // Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
 export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
   playing: 'started',

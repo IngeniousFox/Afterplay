@@ -1,6 +1,7 @@
 import { handleDb } from './dbHandle';
 import type { AddStateEventInput, UpdateStateEventPatch } from '../../shared/types';
 import { addStateEvent } from '../db/queries/stateEvents/addStateEvent';
+import { deleteStateEvent } from '../db/queries/stateEvents/deleteStateEvent';
 import { getAllStateEvents } from '../db/queries/stateEvents/getAllStateEvents';
 import { updateStateEvent } from '../db/queries/stateEvents/updateStateEvent';
 
@@ -15,5 +16,9 @@ export const registerStateEventsHandlers = (): void => {
 
   handleDb('stateEvents:update', async (_event, id: number, patch: UpdateStateEventPatch) => {
     return updateStateEvent(id, patch);
+  });
+
+  handleDb('stateEvents:delete', async (_event, id: number) => {
+    return deleteStateEvent(id);
   });
 };

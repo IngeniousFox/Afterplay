@@ -117,6 +117,12 @@ export const sessionsTable = sqliteTable('sessions', {
   // ni se infla con el hueco de la app apagada. Null en sesiones manuales.
   lastHeartbeatAt: int({ mode: 'timestamp_ms' }),
   datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
+  // Diario de sesión: "dónde lo dejé". Se ofrece al cerrar el juego (toast) y
+  // se puede escribir o corregir después desde la propia fila de la sesión —
+  // una sesión sin nota no es una tarea pendiente, la nota es opcional
+  // siempre. Es lo que hace que volver a un juego tras semanas no empiece por
+  // "¿y yo por dónde iba?".
+  note: text(),
   // Modelo v2: una sesión es SOLO tiempo jugado real. La columna `milestone`
   // (marcadores de borde de duración 0) y las anclas start/endSessionId de
   // iterations desaparecieron — las fechas de inicio/fin de un playthrough

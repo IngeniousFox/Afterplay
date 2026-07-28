@@ -5,10 +5,12 @@ import { stateEventColumns } from '../../projections';
 import { stateEventsTable } from '../../schema';
 import { updateOrFetch } from '../updateOrFetch';
 
-// Corrección de un evento del historial: fecha y nota. El TIPO nunca se
-// toca (SPEC 4.5: corregir un ESTADO es añadir un evento nuevo, no
-// reescribir el pasado) — pero una fecha elegida mal en un picker no es un
-// cambio de opinión, es una errata, y eso sí se corrige sobre la entrada.
+// Corrección de un evento del historial: fecha, nota y — solo desde la
+// corrección de playthrough del Edit modal (saveExistingIteration) — el
+// TIPO (Beaten → Dropped y compañía). SPEC 4.5 sigue mandando para los
+// cambios REALES de estado (se apilan desde Status, nunca se reescriben),
+// pero un desenlace apuntado mal no es un cambio de opinión, es una errata
+// — el mismo criterio que siempre aplicó a las fechas.
 export const updateStateEvent = async (
   id: number,
   patch: UpdateStateEventPatch,

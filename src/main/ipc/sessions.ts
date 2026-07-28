@@ -6,6 +6,7 @@ import { assignSession } from '../db/queries/sessions/assignSession';
 import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
+import { updateSessionNote } from '../db/queries/sessions/updateSessionNote';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 
 // Modelo v2: fuera sessions:add y sessions:updateMilestone*(...) — los
@@ -57,5 +58,10 @@ export const registerSessionsHandlers = (): void => {
 
   handleDb('sessions:deletePending', async (_event, sessionId: number) => {
     return deletePendingSession(sessionId);
+  });
+
+  // Diario de sesión — desde el aviso de cierre o desde la fila de la sesión.
+  handleDb('sessions:setNote', async (_event, id: number, note: string) => {
+    return updateSessionNote(id, note);
   });
 };

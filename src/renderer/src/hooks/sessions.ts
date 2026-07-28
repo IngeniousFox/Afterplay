@@ -85,3 +85,17 @@ export const useStartGameSession = (): UseMutationResult<Session | null, Error, 
     (gameId: number) => window.api.sessions.startForGame(gameId),
     [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
   );
+
+// Diario de sesión ("dónde lo dejé"). Solo toca el texto de una sesión: ni
+// horas, ni estados, ni nada derivado — de ahí que invalide sessions y
+// games (la ficha del juego pinta sus sesiones), pero no stateEvents.
+export const useSetSessionNote = (): UseMutationResult<
+  Session | null,
+  Error,
+  { id: number; note: string },
+  unknown
+> =>
+  useInvalidatingMutation(
+    ({ id, note }: { id: number; note: string }) => window.api.sessions.setNote(id, note),
+    [queryKeys.games.all, queryKeys.sessions.all],
+  );

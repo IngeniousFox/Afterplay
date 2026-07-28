@@ -86,6 +86,7 @@ export const sessionColumns = {
   durationSec: sessionsTable.durationSec,
   lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
   datePrecision: sessionsTable.datePrecision,
+  note: sessionsTable.note,
 };
 
 export const emulatorColumns = {

@@ -2,8 +2,12 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type {
+  CloudInventory,
+  IdentityCheck,
+  RecoveryResult,
   RestoreRequestInput,
   RestoreResult,
+  SaveBackupsUsage,
   SavesActivityEvent,
   SavesBackupResult,
   SavesGameState,
@@ -25,6 +29,62 @@ export const useSavesStatus = (): UseQueryResult<SavesStatus, Error> =>
     queryFn: () => window.api.saves.getStatus(),
     staleTime: Infinity,
   });
+
+// Espacio ocupado en R2 (Ajustes → API & Sync) — una SUM local, cero
+// llamadas al bucket (ver getSaveBackupsUsage). Invalidada por cualquier
+// mutation que toque saves.all (backup manual, borrado, restauración) y por
+// el 'done' de una copia automática (useSaveBackupActivity, más abajo).
+export const useSavesUsage = (): UseQueryResult<SaveBackupsUsage, Error> =>
+  useQuery({
+    queryKey: queryKeys.saves.usage,
+    queryFn: () => window.api.saves.getUsage(),
+    staleTime: Infinity,
+  });
+
+// ¿Hace falta contrastar la identidad de esta máquina con el bucket? Es una
+// comparación de cadenas en el main, sin una sola llamada a R2 — por eso se
+// puede preguntar al abrir Ajustes sin gastar operaciones ni romper la regla
+// de "nada se comprueba de fondo". Mirar la nube de verdad (useCheckIdentity)
+// solo pasa si el usuario pulsa.
+export const useNeedsIdentityCheck = (): UseQueryResult<boolean, Error> =>
+  useQuery({
+    queryKey: queryKeys.saves.identityNeeded,
+    queryFn: () => window.api.saves.needsIdentityCheck(),
+    staleTime: Infinity,
+  });
+
+export const useCheckIdentity = (): UseMutationResult<IdentityCheck | null, Error, void, unknown> =>
+  useInvalidatingMutation(() => window.api.saves.checkIdentity(), []);
+
+// Reclamar la carpeta de una instalación anterior de este mismo PC: cambia
+// el machineId, así que TODO lo de partidas cambia de sentido (qué prefijo
+// es el nuestro, qué backups son "de esta máquina").
+export const useAdoptMachine = (): UseMutationResult<void, Error, string, unknown> =>
+  useInvalidatingMutation(
+    (machineId: string) => window.api.saves.adoptMachine(machineId),
+    [queryKeys.saves.all],
+  );
+
+export const useKeepIdentity = (): UseMutationResult<void, Error, void, unknown> =>
+  useInvalidatingMutation(() => window.api.saves.keepIdentity(), [queryKeys.saves.all]);
+
+// Inventario REAL del bucket. Mutation y no query a propósito: va a la red y
+// solo debe salir de un clic — una query se refrescaría sola al invalidarse
+// cualquier cosa de saves, gastando operaciones sin que nadie lo pida.
+export const useScanBucket = (): UseMutationResult<CloudInventory, Error, void, unknown> =>
+  useInvalidatingMutation(() => window.api.saves.scanBucket(), []);
+
+// Reconstruye el índice desde el bucket: cambia qué backups existen para toda
+// la app, así que invalida saves entero (y usage, que cuelga del mismo
+// prefijo).
+export const useRecoverFromCloud = (): UseMutationResult<RecoveryResult, Error, void, unknown> =>
+  useInvalidatingMutation(() => window.api.saves.recoverFromCloud(), [queryKeys.saves.all]);
+
+export const useDeleteCloudMachine = (): UseMutationResult<number, Error, string, unknown> =>
+  useInvalidatingMutation(
+    (machineId: string) => window.api.saves.deleteMachine(machineId),
+    [queryKeys.saves.all],
+  );
 
 // El estado de un juego mezcla nube (índice ya sincronizado, cero red) y
 // local (un --preview que no escribe nada). `enabled` deja no pedirlo hasta
@@ -177,6 +237,7 @@ export const useSaveBackupActivity = (gameId: number): SavesActivityEvent | null
 
       if (event.phase === 'done') {
         queryClient.invalidateQueries({ queryKey: queryKeys.saves.game(gameId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.saves.usage });
         // El "hecho" se retira solo: es un acuse de recibo, no un estado.
         // Dejarlo fijo obligaría a cerrar la ficha para quitarlo de en medio.
         flashTimer = setTimeout(() => setActivity(null), DONE_FLASH_MS);

@@ -23,11 +23,44 @@ export type MachineSaveOverride = {
   setAt: string;
 };
 
+// Contra qué bucket se comprobó ya la identidad de esta máquina. Existe
+// porque el machineId se MINA mucho antes de que haya credenciales de R2:
+// nace la primera vez que algo lo pide (abrir la sección Saves de un juego
+// basta), así que "adoptar una identidad existente justo antes de generarla"
+// nunca llegaría a dispararse — cuando metes las claves, el UUID ya está
+// escrito. Separando minar de reconciliar, el disparo pasa a ser "hay R2 y
+// su bucket no es el que ya miré", que sí cubre poner las claves después.
+//
+// Es una CADENA y no un booleano porque cambiar de bucket es cambiar de
+// mundo: el nuevo puede tener otras máquinas y otros backups, y toca volver
+// a mirar. Y comparar dos cadenas en local no cuesta ni una llamada, así que
+// abrir y cerrar la app mil veces sin tocar nada sigue siendo gratis.
+export type MachineIdentity = {
+  reconciledBucket: string;
+  reconciledAt: string;
+  // Fecha a partir de la cual esta instalación puede podar en la nube.
+  //
+  // Existe por un fallo MUY caro: el espejo a R2 borra todo objeto remoto que
+  // no esté en la carpeta local de backups (así se replica la retención de
+  // ludusavi). Tras reinstalar, esa carpeta está VACÍA — así que al reclamar
+  // la carpeta de la instalación anterior, el primer backup daba por
+  // "caducadas" todas las versiones viejas y las borraba del bucket. La
+  // adopción, cuyo objetivo es salvar esos backups, los destruía.
+  //
+  // Con esto, lo anterior a la adopción queda protegido: esta instalación no
+  // vio nunca esas versiones en local, así que no tiene autoridad para
+  // afirmar que la retención las descartó. El coste es algo de espacio (y se
+  // pueden borrar a mano desde la lista de versiones); la alternativa era
+  // pérdida de datos irreversible.
+  pruneFloor?: string | null;
+};
+
 type MachineSavesFile = {
   version: 1;
   machineId: string;
   machineName: string;
   home: string;
+  identity: MachineIdentity | null;
   // Clave: gameId como string (JSON no admite claves numéricas).
   saveLocationOverrides: Record<string, MachineSaveOverride>;
 };
@@ -42,6 +75,11 @@ const createDefaults = (): MachineSavesFile => ({
   // en un conflicto. El uuid es para las comparaciones, no para la vista.
   machineName: process.env.COMPUTERNAME?.trim() || 'Este PC',
   home: toSlashes(homedir()),
+  // Recién minada: todavía no se ha contrastado con ningún bucket. Los
+  // ficheros de antes de este campo entran por aquí al hacer el merge de
+  // read(), que es justo lo que queremos — una instalación vieja también
+  // tiene que pasar la reconciliación una vez.
+  identity: null,
   saveLocationOverrides: {},
 });
 
@@ -76,6 +114,51 @@ const read = (): MachineSavesFile => {
 export const getMachineId = (): string => read().machineId;
 export const getMachineName = (): string => read().machineName;
 export const getMachineHome = (): string => read().home;
+export const getMachineIdentity = (): MachineIdentity | null => read().identity;
+
+// Adoptar la identidad que esta misma máquina ya tenía en el bucket (una
+// reinstalación recuperando su carpeta). Solo lo llama identity.ts, y solo
+// mientras el id actual no haya escrito nada todavía: cambiarlo después
+// dejaría huérfano lo ya subido.
+export const setMachineId = (machineId: string, bucket: string): void => {
+  const file = read();
+  const now = new Date().toISOString();
+  write({
+    ...file,
+    machineId,
+    // La carpeta viene de otra instalación: TODO lo que ya hay ahí es
+    // anterior a nosotros y queda protegido de la poda (ver pruneFloor).
+    identity: { reconciledBucket: bucket, reconciledAt: now, pruneFloor: now },
+  });
+};
+
+// Suelo de poda de la nube: null = sin restricción (instalación con historia
+// local continua, la poda replica la retención como siempre).
+export const getPruneFloor = (): Date | null => {
+  const floor = read().identity?.pruneFloor;
+  if (!floor) return null;
+  const parsed = new Date(floor);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+// Tras recuperar el índice desde el bucket pasa lo mismo que al adoptar: el
+// índice conoce versiones que esta máquina no tiene en local, y la poda las
+// borraría por "caducadas".
+export const setPruneFloor = (when: Date): void => {
+  const file = read();
+  if (!file.identity) return;
+  write({ ...file, identity: { ...file.identity, pruneFloor: when.toISOString() } });
+};
+
+// "Ya he mirado este bucket y me quedo como estoy" — PC nuevo de verdad, o
+// el usuario dice que ninguna de las máquinas de ahí es esta.
+export const markIdentityReconciled = (bucket: string): void => {
+  const file = read();
+  write({
+    ...file,
+    identity: { reconciledBucket: bucket, reconciledAt: new Date().toISOString() },
+  });
+};
 
 export const getSaveLocationOverride = (gameId: number): MachineSaveOverride | null =>
   read().saveLocationOverrides[String(gameId)] ?? null;

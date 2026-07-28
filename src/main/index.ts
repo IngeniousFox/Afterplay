@@ -1,5 +1,5 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
-import { app, BrowserWindow, dialog, powerMonitor, shell } from 'electron';
+import { app, BrowserWindow, dialog, Notification, powerMonitor, shell } from 'electron';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 import { initCredentials } from './config/credentials';
@@ -16,8 +16,19 @@ import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
+import { setSessionClosedNotifier } from './watcher/notifySession';
 import { setRunningGamesProbe } from './watcher/runningGames';
 import { ProcessWatcher } from './watcher/watcher';
+
+// "1h 47m" para el cuerpo de la notificación de Windows. Aquí y no en
+// lib/format del renderer: el main no puede importar del renderer, y son tres
+// líneas.
+const formatDuration = (seconds: number): string => {
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+};
 
 // La ventana principal a nivel de módulo para que el watcher pueda avisarle
 // (webContents.send) sin acoplarse a createWindow. Null mientras no exista.
@@ -43,6 +54,11 @@ let isQuitting = false;
 // ready-to-show) — esta marca lo deja pendiente para la primera apertura
 // desde el tray.
 let pendingMaximize = false;
+// Notificaciones nativas todavía en pantalla. Electron NO retiene sus propias
+// Notification: sin una referencia viva desde JS, el recolector se lleva el
+// objeto en cuanto el callback que lo creó termina, y con él sus manejadores
+// de eventos — el aviso aparecía pero pulsarlo no hacía nada.
+const liveNotifications = new Set<Notification>();
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
@@ -159,8 +175,16 @@ app.whenReady().then(async () => {
   // mismo chequeo que createWindow() usa para decidir si mostrarse.
   if (!wasOpenedHiddenAtLogin()) splashWindow = createSplashWindow();
 
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron');
+  // Identidad de la app para Windows. TIENE que coincidir con el appId de
+  // electron-builder.yml (com.afterplay.app): Windows resuelve el nombre que
+  // enseña en las notificaciones buscando este identificador en el acceso
+  // directo que crea el instalador. Con el 'com.electron' de la plantilla no
+  // encontraba nada y caía a la ruta del ejecutable — de ahí el
+  // "D:\...\node_modules\electron..." como título del aviso.
+  //
+  // En desarrollo puede seguir saliendo la ruta: se lanza electron.exe a pelo
+  // y no hay acceso directo instalado con este id contra el que resolver.
+  electronApp.setAppUserModelId('com.afterplay.app');
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -255,6 +279,74 @@ app.whenReady().then(async () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('saves:activity', event);
     }
+  });
+
+  // Cierre de un juego: el aviso va por una vía u otra según DÓNDE puedas
+  // verlo. Con la ventana a la vista, un toast dentro de la app (Sonner);
+  // con la app en la bandeja —que es el caso normal mientras juegas— una
+  // notificación nativa de Windows, porque un toast en una ventana oculta no
+  // lo vería nadie. Las dos llevan al mismo sitio: la ficha del juego con su
+  // última sesión resaltada.
+  setSessionClosedNotifier((event) => {
+    const window = mainWindow;
+    if (window && !window.isDestroyed() && window.isVisible()) {
+      window.webContents.send('sessions:closed', event);
+      return;
+    }
+
+    if (!Notification.isSupported()) return;
+    // Con sonido (el de Windows por defecto): esto avisa de algo que acaba de
+    // pasar mientras NO estabas mirando la app — un aviso mudo en una ventana
+    // oculta es un aviso que no existe.
+    const notification = new Notification({
+      title: event.gameTitle,
+      body: `${formatDuration(event.durationSec)} played${
+        event.isLongest ? ' · your longest session yet' : ''
+      }`,
+    });
+
+    // RETENER la notificación mientras esté en pantalla. Sin esto, en cuanto
+    // este callback termina el objeto queda sin referencias, el recolector se
+    // lo lleva y con él su manejador de 'click' — el aviso se veía pero
+    // pulsarlo no hacía absolutamente nada. En Windows la notificación
+    // sobrevive en el centro de actividades bastante después de mostrarse, así
+    // que la ventana para que esto pase es enorme.
+    liveNotifications.add(notification);
+    const release = (): void => {
+      liveNotifications.delete(notification);
+    };
+    notification.on('close', release);
+    notification.on('failed', release);
+
+    notification.on('click', () => {
+      release();
+      // Traer la ventana Y llevarla a la ficha: llegar a la biblioteca
+      // genérica obligaría a buscar el juego a mano justo cuando el aviso
+      // acaba de decirte cuál es.
+      if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+      const target = mainWindow;
+      if (!target) return;
+
+      if (pendingMaximize) {
+        pendingMaximize = false;
+        target.maximize();
+      } else {
+        target.show();
+      }
+      target.focus();
+
+      // La ventana puede acabar de crearse (app arrancada a bandeja y nunca
+      // abierta): mandar el evento antes de que el renderer cargue lo tira al
+      // vacío. Con 'did-finish-load' ya hay quien escuche.
+      if (target.webContents.isLoading()) {
+        target.webContents.once('did-finish-load', () => {
+          target.webContents.send('sessions:closed', { ...event, openGame: true });
+        });
+      } else {
+        target.webContents.send('sessions:closed', { ...event, openGame: true });
+      }
+    });
+    notification.show();
   });
 
   // Vigilante de las carpetas de juegos (scan/watcher.ts): mantiene al día

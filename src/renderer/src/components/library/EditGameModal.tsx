@@ -14,7 +14,11 @@ import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type { GameDetail } from '../../../../shared/types';
 import { useResetEndlessState, useUpdateGame } from '../../hooks/games';
 import { useCreateIteration, useUpdateIteration } from '../../hooks/iterations';
-import { useAddStateEvent, useUpdateStateEvent } from '../../hooks/stateEvents';
+import {
+  useAddStateEvent,
+  useDeleteStateEvent,
+  useUpdateStateEvent,
+} from '../../hooks/stateEvents';
 import { ENDLESS_STATUS_OPTIONS, STATE_TO_STATUS_KEY } from '../../lib/gameStatus';
 import type { PastStatusKey } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
@@ -115,6 +119,7 @@ export const EditGameModal = ({
   const resetEndlessState = useResetEndlessState();
   const addStateEvent = useAddStateEvent();
   const updateStateEvent = useUpdateStateEvent();
+  const deleteStateEvent = useDeleteStateEvent();
 
   const isSaving =
     updateGame.isPending ||
@@ -122,7 +127,8 @@ export const EditGameModal = ({
     updateIteration.isPending ||
     resetEndlessState.isPending ||
     addStateEvent.isPending ||
-    updateStateEvent.isPending;
+    updateStateEvent.isPending ||
+    deleteStateEvent.isPending;
 
   const handleClose = (): void => {
     if (isSaving) return;
@@ -146,6 +152,7 @@ export const EditGameModal = ({
         updateIteration,
         updateStateEvent,
         addStateEvent,
+        deleteStateEvent,
       });
     }
 

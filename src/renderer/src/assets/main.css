@@ -289,3 +289,75 @@
       0 0 40px rgba(47, 220, 126, 0.42);
   }
 }
+
+/* Parpadeo dorado de la última sesión al llegar desde el aviso de cierre (o
+   desde la notificación de Windows). Existe porque el aviso te deja en la
+   ficha del juego y hay que decir CUÁL de las filas es la que acabas de
+   jugar — sin esto aterrizas en la pantalla y tienes que buscarla.
+   Dos pulsos y se acaba: es un "mira aquí", no un estado permanente. El
+   ámbar es el mismo de Beaten/rachas (lib/colors.ts, AMBER #e3b24a). */
+@keyframes afterplay-flash-gold {
+  0%,
+  100% {
+    border-color: var(--border);
+    background: rgba(255, 255, 255, 0.024);
+    box-shadow: 0 0 0 0 rgba(227, 178, 74, 0);
+  }
+  25%,
+  75% {
+    border-color: rgba(227, 178, 74, 0.75);
+    background: rgba(227, 178, 74, 0.1);
+    box-shadow: 0 0 26px rgba(227, 178, 74, 0.3);
+  }
+}
+
+.afterplay-flash-gold {
+  animation: afterplay-flash-gold 1.1s ease-in-out 2;
+}
+
+/* Barra de cuenta atrás del toast: se vacía en el tiempo que dure el aviso y
+   al acabarse el toast se va. La duración real la inyecta el componente
+   (--afterplay-toast-duration), para que barra y temporizador no puedan
+   divergir. Se PAUSA con el ratón encima porque el toast de cierre de sesión
+   lleva un campo de texto: mientras escribes, Sonner congela su temporizador
+   y la barra tiene que congelarse con él o mentiría. */
+@keyframes afterplay-toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.afterplay-toast-countdown {
+  transform-origin: left;
+  animation: afterplay-toast-countdown var(--afterplay-toast-duration, 15s) linear forwards;
+}
+
+.afterplay-toast:hover .afterplay-toast-countdown,
+.afterplay-toast:focus-within .afterplay-toast-countdown {
+  animation-play-state: paused;
+}
+
+/* Entrada del aviso de cierre de sesión: llega deslizándose desde la derecha
+   con un punto de rebote y un pelín de escala. Es el remate de haber estado
+   jugando, así que tiene que llamar la atención — una aparición sin más se
+   confunde con un mensaje de sistema cualquiera. */
+@keyframes afterplay-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.94);
+  }
+  60% {
+    transform: translateX(-4px) scale(1.01);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.afterplay-toast {
+  animation: afterplay-toast-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}

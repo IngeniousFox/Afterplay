@@ -21,6 +21,7 @@ export const getAllSessions = async (): Promise<SessionWithGame[]> => {
       durationSec: sessionsTable.durationSec,
       lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
       datePrecision: sessionsTable.datePrecision,
+      note: sessionsTable.note,
       gameId: iterationsTable.gameId,
       gameTitle: gamesTable.title,
       coverUrl: gamesTable.coverUrl,

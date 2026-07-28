@@ -6,9 +6,11 @@ import { getIterationGameId } from '../db/queries/iterations/getIterationGameId'
 import { closeSession } from '../db/queries/sessions/closeSession';
 import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
 import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
+import { getSessionClosedInfo } from '../db/queries/sessions/getSessionClosedInfo';
 import { heartbeatSessions } from '../db/queries/sessions/heartbeatSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 import { scheduleSaveBackup } from '../saves/sessionHook';
+import { notifySessionClosed } from './notifySession';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -238,6 +240,15 @@ export class ProcessWatcher {
             `[watcher] [stop] ${key} cerrado -> sesion ${activeSession.sessionId} cerrada`,
           );
           changed = true;
+
+          // El momento del cierre: es cuando el diario de sesión ("dónde lo
+          // dejé") se escribe en caliente. Solo con la sesión ya asignada a
+          // un juego — una de emulador sin asignar no tiene de qué hablar
+          // todavía, y su aviso saldría sin título.
+          if (closed && closed.iterationId !== null) {
+            const info = await getSessionClosedInfo(closed.id);
+            if (info) notifySessionClosed(info);
+          }
 
           // Momento exacto en que la partida guardada ha cambiado y un
           // backup vale algo (PARTIDAS-GUARDADAS.md §10.2). Se dispara sin

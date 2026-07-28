@@ -4,9 +4,17 @@ import type { GameDetail } from '../../../../../shared/types';
 // binding importado como type-only (TS1361).
 import { useResetEndlessState, useUpdateGame } from '../../../hooks/games';
 import { useCreateIteration, useUpdateIteration } from '../../../hooks/iterations';
-import { useAddStateEvent, useUpdateStateEvent } from '../../../hooks/stateEvents';
+import {
+  useAddStateEvent,
+  useDeleteStateEvent,
+  useUpdateStateEvent,
+} from '../../../hooks/stateEvents';
 import { addManualPlaythrough } from '../add-game/handleSave';
-import { STATE_TO_STATUS_KEY, STATUS_TO_STATE_TYPE } from '../../../lib/gameStatus';
+import {
+  END_EVENT_STATUS_KEYS,
+  STATE_TO_STATUS_KEY,
+  STATUS_TO_STATE_TYPE,
+} from '../../../lib/gameStatus';
 import { activeOrLastIteration } from '../../../lib/iterations';
 import { parseIsoDate } from '../add-game/precisionDate';
 import { DEFAULT_FORM_VALUES, parseOptionalNumber } from '../add-game/types';
@@ -133,6 +141,7 @@ type ExistingIterationMutations = {
   updateIteration: ReturnType<typeof useUpdateIteration>;
   updateStateEvent: ReturnType<typeof useUpdateStateEvent>;
   addStateEvent: ReturnType<typeof useAddStateEvent>;
+  deleteStateEvent: ReturnType<typeof useDeleteStateEvent>;
 };
 
 export const saveExistingIteration = async (
@@ -141,7 +150,7 @@ export const saveExistingIteration = async (
   iterationId: number,
   mutations: ExistingIterationMutations,
 ): Promise<void> => {
-  const { updateIteration, updateStateEvent, addStateEvent } = mutations;
+  const { updateIteration, updateStateEvent, addStateEvent, deleteStateEvent } = mutations;
 
   await updateIteration.mutateAsync({
     id: iterationId,
@@ -196,25 +205,83 @@ export const saveExistingIteration = async (
     ? STATE_TO_STATUS_KEY[originalIteration.currentState]
     : null;
 
+  // Cambiar el estado desde este modal es CORREGIR el playthrough ("estaba
+  // mal apuntado"), nunca registrar que ha pasado algo nuevo — para eso está
+  // el menú Status de la ficha, que sí apila eventos. La única excepción es
+  // On Hold → Playing: On Hold no es un desenlace, es una pausa REAL del
+  // mismo playthrough, así que volver a Playing es retomarlo (mismo gesto
+  // que el menú Status), no borrar la pausa.
   if (values.status !== previousStatus) {
     const newType = STATUS_TO_STATE_TYPE[values.status];
-    // Playthrough con desenlace registrado (endEvent), cambiado a otro
-    // desenlace terminal (Beaten → Dropped…): se corrige el TIPO de ese
-    // mismo evento conservando su fecha, en vez de añadir uno nuevo
-    // fechado hoy — que dejaba el Beaten viejo en el historial y un
-    // Dropped "de hoy" sin sentido para una partida del pasado.
-    const isTerminal = newType === 'completed' || newType === 'dropped' || newType === 'on_hold';
-    if (originalIteration?.endEvent && isTerminal) {
+    const leavesEndDate = END_EVENT_STATUS_KEYS.includes(values.status);
+    const resumeNow = {
+      iterationId,
+      type: 'started' as const,
+      occurredAt: new Date(),
+      datePrecision: 'datetime' as const,
+      note: null,
+    };
+    if (originalIteration?.endEvent && leavesEndDate) {
+      // Un estado con fecha de salida apuntado mal → otro (Beaten → Dropped,
+      // Hold → Beaten…): se corrige el TIPO de ese mismo evento conservando
+      // su fecha, en vez de añadir uno nuevo fechado hoy — que dejaba el
+      // estado viejo en el historial y uno "de hoy" sin sentido para una
+      // partida del pasado.
       await updateStateEvent.mutateAsync({
         id: originalIteration.endEvent.id,
         patch: { type: newType },
       });
+    } else if (originalIteration?.endEvent && originalIteration.currentState === 'on_hold') {
+      // On Hold → Playing: retomar el MISMO playthrough. La pausa fue real y
+      // se queda en el historial; se apila el 'started' del regreso.
+      await addStateEvent.mutateAsync(resumeNow);
+    } else if (originalIteration?.endEvent) {
+      // Beaten/Dropped → Playing: ese final nunca pasó, así que se RETIRA
+      // del log en vez de apilar un 'started' fechado hoy — que dejaba el
+      // desenlace falso en el historial Y un inicio inventado. Solo caen los
+      // desenlaces de verdad (completed/dropped): las pausas (on_hold) son
+      // historia real y se conservan, y 'plan_to_play' ni cuenta ni se toca
+      // — es historial de intención y con fechas manuales del pasado puede
+      // caer en cualquier punto del log.
+      const iterationEvents = game.stateHistory.filter(
+        (event) => event.iterationId === iterationId && event.type !== 'plan_to_play',
+      );
+      const lastStartedIndex = iterationEvents.map((event) => event.type).lastIndexOf('started');
+      if (lastStartedIndex >= 0) {
+        const doomed = iterationEvents
+          .slice(lastStartedIndex + 1)
+          .filter((event) => event.type === 'completed' || event.type === 'dropped');
+        for (const event of doomed) {
+          await deleteStateEvent.mutateAsync(event.id);
+        }
+        // Si lo último que queda tras la corrección es una pausa ([started,
+        // on_hold, completed] sin el completed), el playthrough volvería a
+        // On Hold y no al Playing elegido — se apila el started del regreso,
+        // igual que el resume del menú Status.
+        const remaining = iterationEvents.filter((event) => !doomed.includes(event));
+        if (remaining[remaining.length - 1]?.type !== 'started') {
+          await addStateEvent.mutateAsync(resumeNow);
+        }
+      } else {
+        // Manual creado ya terminado ([dropped] a secas, sin 'started'):
+        // borrarlo dejaría el playthrough en Unplayed, no en Playing — el
+        // desenlace se RECONVIERTE en el inicio conservando su fecha.
+        await updateStateEvent.mutateAsync({
+          id: originalIteration.endEvent.id,
+          patch: { type: 'started' },
+        });
+      }
     } else {
       await addStateEvent.mutateAsync({
         iterationId,
         type: newType,
-        occurredAt: new Date(),
-        datePrecision: 'datetime',
+        // Playing → Beaten/Dropped/Hold: el picker "Finished / left" se
+        // vuelve editable en cuanto eliges uno de esos estados, y su fecha
+        // (si la fijas) fecha el evento — sin fecha, hoy, como un cambio en
+        // vivo.
+        occurredAt:
+          leavesEndDate && values.finished ? parseIsoDate(values.finished.isoDate) : new Date(),
+        datePrecision: leavesEndDate && values.finished ? values.finished.precision : 'datetime',
         note: null,
       });
     }

@@ -18,6 +18,7 @@ import { revealClass, revealStyle } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { StatusIcon } from '../StatusIcon';
 import { GameFilterPanel } from './GameFilterPanel';
+import { NowPlayingCard } from './NowPlayingCard';
 
 const GREEN = '#2fdc7e';
 
@@ -139,29 +140,31 @@ const MiddleColumnShell = ({
     <div tabIndex={0} className="min-h-0 flex-1 overflow-y-auto p-2 outline-none">
       {children}
     </div>
+    {/* Anclada al fondo y FUERA del área con scroll: la partida en curso no
+        puede quedarse arriba del todo de una lista de 300 juegos. Al vivir en
+        el shell, sale en las cuatro secciones (Library/Sessions/Stats/Plan)
+        sin repetirla en cada una. */}
+    <NowPlayingCard />
   </div>
 );
 
-// Mismo lenguaje que el badge PLAYING del HeroBanner y el de OngoingBadge:
-// puntito pulsante + texto, no solo texto suelto — aquí era el único sitio
-// de la app donde "LIVE" no llevaba el pulso.
-const LiveTag = (): React.JSX.Element => (
-  <span className="ml-1 flex flex-none items-center gap-1">
-    <span
-      className="h-1.25 w-1.25 rounded-full bg-primary"
-      style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
-    />
-    <span className="text-[9.5px] font-extrabold tracking-[.08em] text-primary">LIVE</span>
-  </span>
+// Tinte verde de la fila del juego que está EN MARCHA. Sustituye al badge
+// "LIVE" que llevaba antes cada fila: con la tarjeta de abajo diciendo qué
+// juegas, repetirlo en la fila era ruido — pero quitarlo del todo dejaba la
+// lista muerta mientras juegas. La tarjeta responde "qué estoy jugando"; esto
+// responde "dónde está en mi biblioteca", que es otra pregunta.
+//
+// Sin borde ni barra lateral: eso es el vocabulario de la fila SELECCIONADA
+// (SelectedOverlay) y confundirlos haría que "abierta" y "en marcha" se
+// leyeran igual.
+const LiveOverlay = (): React.JSX.Element => (
+  <div
+    className="pointer-events-none absolute inset-0 rounded-[10px]"
+    style={{ background: `${GREEN}0f` }}
+  />
 );
 
-const StatusSubtitle = ({
-  game,
-  showLive,
-}: {
-  game: GameListItem;
-  showLive: boolean;
-}): React.JSX.Element => {
+const StatusSubtitle = ({ game }: { game: GameListItem }): React.JSX.Element => {
   const status = getGameStatusMeta(game.currentState);
   return (
     <>
@@ -169,7 +172,6 @@ const StatusSubtitle = ({
       <span className="truncate text-xs font-medium" style={{ color: status.color }}>
         {status.label}
       </span>
-      {showLive && game.isLive && <LiveTag />}
     </>
   );
 };
@@ -220,6 +222,9 @@ const GameRow = ({
       onClick={onClick}
       className="relative mb-0.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.25 hover:bg-white/[0.04]"
     >
+      {/* En marcha DEBAJO de la selección: si el juego que juegas es además
+          el que tienes abierto, manda el marco de "estás aquí". */}
+      {game.isLive && <LiveOverlay />}
       {selected && <SelectedOverlay />}
       <GameCover
         url={game.coverUrl}
@@ -393,7 +398,7 @@ const LibraryNavColumn = (): React.JSX.Element => {
         onManualSelect(game.id);
         navigate(`/games/${game.id}`);
       }}
-      subtitle={<StatusSubtitle game={game} showLive />}
+      subtitle={<StatusSubtitle game={game} />}
       rightLabel={formatHours(game.totalHours)}
     />
   );
@@ -522,7 +527,7 @@ const PlanNavColumn = (): React.JSX.Element => {
               onManualSelect(game.id);
               navigate(`/plan/${game.id}`);
             }}
-            subtitle={<StatusSubtitle game={game} showLive={false} />}
+            subtitle={<StatusSubtitle game={game} />}
             rightLabel=""
           />
         ))}
@@ -602,12 +607,9 @@ const SessionsNavColumn = (): React.JSX.Element => {
               setSearchParams({ game: String(game.id) });
             }}
             subtitle={
-              <>
-                <span className="text-xs text-muted-foreground">
-                  {pluralize(game.sessionCount, 'session')}
-                </span>
-                {game.isLive && <LiveTag />}
-              </>
+              <span className="text-xs text-muted-foreground">
+                {pluralize(game.sessionCount, 'session')}
+              </span>
             }
             rightLabel={formatHours(game.totalHours)}
           />
@@ -688,7 +690,7 @@ const StatsNavColumn = (): React.JSX.Element => {
               onManualSelect(game.id);
               setSearchParams({ game: String(game.id) });
             }}
-            subtitle={<StatusSubtitle game={game} showLive={false} />}
+            subtitle={<StatusSubtitle game={game} />}
             rightLabel={formatHours(game.totalHours)}
           />
         ))}

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
+import { BacklogDebtCard } from '../components/stats/BacklogDebtCard';
 import { BacklogFlowChart } from '../components/stats/BacklogFlowChart';
 import { CompletedGallery } from '../components/stats/CompletedGallery';
 import { GameAgeDonut } from '../components/stats/GameAgeDonut';
@@ -349,6 +350,10 @@ export const Stats = (): React.JSX.Element => {
           <SessionLengthHistogram sessions={sessions} year={selectedYear} />
         </div>
 
+        {/* Los dos van a lo ANCHO, uno encima del otro: el flujo es una línea
+            temporal de meses y en media columna la línea se aplasta hasta no
+            leerse, y la deuda es una cifra sola que a lo ancho se lee mejor
+            en banda que en columna alta. */}
         <div className={`mt-4.5 ${revealClass}`} style={revealStyle(9)}>
           <BacklogFlowChart
             games={games}
@@ -358,7 +363,15 @@ export const Stats = (): React.JSX.Element => {
           />
         </div>
 
-        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
+        {/* La deuda es una foto de AHORA (lo que te queda y a qué ritmo vas),
+            así que no tiene lectura por año: con un año filtrado no se pinta. */}
+        {selectedYear === 'all' && (
+          <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
+            <BacklogDebtCard games={games} plannedGames={plannedGames} sessions={sessions} />
+          </div>
+        )}
+
+        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(11)}>
           <GameAgeDonut entries={ageEntries} year={selectedYear} />
         </div>
       </div>

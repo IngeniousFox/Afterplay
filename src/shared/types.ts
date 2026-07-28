@@ -24,10 +24,16 @@ export type {
 // Partidas guardadas (PARTIDAS-GUARDADAS.md) — la fuente es
 // main/saves/contracts.ts, igual que igdb/hltb/sgdb reexportan la suya.
 export type {
+  CloudFolder,
+  CloudInventory,
+  CloudMachine,
+  IdentityCheck,
+  RecoveryResult,
   RestoreMode,
   RestorePlanFile,
   RestoreRequestInput,
   RestoreResult,
+  SaveBackupsUsage,
   SavesActivityEvent,
   SavesBackupResult,
   SavesGameState,
@@ -318,9 +324,35 @@ export type SessionWithGame = {
   durationSec: number | null;
   lastHeartbeatAt: Date | null;
   datePrecision: EventDatePrecision;
+  note: string | null;
   gameId: number;
   gameTitle: string;
   coverUrl: string | null;
+};
+
+// Un juego se acaba de cerrar y el watcher ha cerrado su sesión. Viaja del
+// main al renderer para levantar el aviso con la duración y el atajo de
+// escribir la nota — el renderer no puede saberlo por su cuenta: quien
+// detecta que el proceso murió es el watcher.
+export type SessionClosedEvent = {
+  sessionId: number;
+  gameId: number;
+  gameTitle: string;
+  // Para que el aviso se vea como una ficha del juego y no como un mensaje de
+  // sistema: carátula a un lado y hero de fondo tras un velo (mismo lenguaje
+  // que GameBanner/HeroBanner).
+  coverUrl: string | null;
+  heroUrl: string | null;
+  durationSec: number;
+  // Total del juego TRAS esta sesión — el "llevas 43h" del aviso.
+  totalHours: number;
+  // Esta sesión ha sido la más larga de este juego. Es la clase de dato que
+  // convierte un registro en un pequeño momento.
+  isLongest: boolean;
+  // Solo cuando el evento viene de PULSAR la notificación de Windows: ahí no
+  // toca enseñar un toast, sino abrir la ficha del juego con esa sesión
+  // resaltada — que es lo que el clic estaba pidiendo.
+  openGame?: boolean;
 };
 
 // Referencia al evento que fija una fecha de borde del playthrough (modelo

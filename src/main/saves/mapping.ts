@@ -15,6 +15,33 @@ import type { BackupMapping, MappingBackupNode } from './types';
 
 export const MAPPING_FILE = 'mapping.yaml';
 
+// Cuándo se hizo un backup, leído de su propio nombre
+// ("backup-20260726T093552Z.zip" -> 2026-07-26T09:35:52Z). Hace falta para
+// decidir si un objeto del bucket es anterior a esta instalación (pruneFloor
+// en machine.ts) SIN tener que bajarse ni el mapping.yaml: el listado de R2
+// solo da claves y tamaños.
+//
+// null si el nombre no encaja, y quien llama lo trata como "no tocar": ante
+// un formato que no entendemos, no borrar es la única respuesta segura.
+const BACKUP_NAME_RE = /^backup-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/;
+
+export const backupTimestamp = (backupName: string): Date | null => {
+  const match = BACKUP_NAME_RE.exec(backupName);
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second] = match;
+  const parsed = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ),
+  );
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 export const readMapping = (gameBackupDir: string): BackupMapping | null => {
   const path = join(gameBackupDir, MAPPING_FILE);
   if (!existsSync(path)) return null;

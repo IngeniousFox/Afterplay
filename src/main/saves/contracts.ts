@@ -112,6 +112,86 @@ export type SavesBackupResult = {
   foundFiles: boolean;
 };
 
+// Una máquina que el BUCKET conoce (machines/<id>.json). Las dos banderas
+// de coincidencia se calculan en el main, que es quien sabe cómo se llama
+// este PC y cuál es su %USERPROFILE%.
+export type CloudMachine = {
+  machineId: string;
+  machineName: string;
+  home: string;
+  updatedAt: string | null;
+  sameName: boolean;
+  sameHome: boolean;
+};
+
+export type IdentityCheck = {
+  bucket: string;
+  currentMachineId: string;
+  // Ya hay backups subidos con el id actual: adoptar otra identidad los
+  // dejaría huérfanos, así que el cambio deja de ofrecerse sin más.
+  claimed: boolean;
+  // Esta máquina ya figura en machines/ — si no, una reinstalación futura no
+  // tendría con qué reconocerla.
+  published: boolean;
+  // Las demás máquinas del bucket (la propia se excluye).
+  machines: CloudMachine[];
+};
+
+// ── Inventario del bucket (lo que hay DE VERDAD ahí arriba) ───────────────
+// El índice local puede estar incompleto o vacío (reinstalación sin Turso),
+// así que esto se calcula listando R2 y no la tabla. Los tamaños vienen del
+// propio listado —ListObjectsV2 devuelve Size por objeto—, así que conocer el
+// total exacto no cuesta ni una lectura extra.
+
+// Una carpeta de juego de una máquina: saves/<igdbId>/<machineId>/
+export type CloudFolder = {
+  igdbId: number;
+  machineId: string;
+  // Título de la biblioteca si el igdbId casa con un juego; null si no está
+  // (juego borrado, o biblioteca aún sin recuperar).
+  gameTitle: string | null;
+  gameId: number | null;
+  backupCount: number;
+  totalBytes: number;
+  // Cuántas de esas versiones NO están en el índice local — o sea, lo que la
+  // app no sabe que existe y por tanto no puede ni restaurar ni borrar.
+  unknownCount: number;
+};
+
+export type CloudInventory = {
+  totalBytes: number;
+  objectCount: number;
+  // Bytes que el índice local desconoce por completo.
+  unknownBytes: number;
+  folders: CloudFolder[];
+  // Máquinas presentes en el bucket, con lo que ocupa cada una. Incluye las
+  // que no tienen manifiesto en machines/ (subidas antes de que existiera el
+  // registro, o por una instalación que nunca llegó a registrarse).
+  machines: {
+    machineId: string;
+    machineName: string | null;
+    home: string | null;
+    isCurrent: boolean;
+    totalBytes: number;
+    backupCount: number;
+  }[];
+};
+
+export type RecoveryResult = {
+  // Filas de índice creadas a partir de lo que había en el bucket.
+  recovered: number;
+  // Versiones que no se pudieron enganchar porque su juego no está en la
+  // biblioteca (hay que añadirlo primero y volver a recuperar).
+  skippedNoGame: number;
+  // Carpetas cuyo mapping.yaml no se pudo leer.
+  unreadableFolders: number;
+};
+
+// Cuánto ocupa Cloud saves en R2, para Ajustes (API & Sync) — ver
+// getSaveBackupsUsage: una SUM local sobre save_backups, cero llamadas al
+// bucket.
+export type SaveBackupsUsage = { totalBytes: number; backupCount: number };
+
 // Copia automática en marcha, para que la ficha abierta lo cuente en vivo
 // (§10.2). Las cuatro fases son las que un humano necesita distinguir:
 // "va a pasar", "está pasando", "ya está" y "no ha podido ser".
