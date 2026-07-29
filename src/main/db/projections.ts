@@ -1,4 +1,5 @@
 import {
+  curiositiesTable,
   emulatorsTable,
   gamesTable,
   iterationsTable,
@@ -45,6 +46,13 @@ export const gameColumns = {
   saveDetectionSource: gamesTable.saveDetectionSource,
   saveLudusaviName: gamesTable.saveLudusaviName,
   saveCustomPaths: gamesTable.saveCustomPaths,
+  curiositiesGeneratedAt: gamesTable.curiositiesGeneratedAt,
+};
+
+export const curiosityColumns = {
+  id: curiositiesTable.id,
+  gameId: curiositiesTable.gameId,
+  text: curiositiesTable.text,
 };
 
 export const saveBackupColumns = {

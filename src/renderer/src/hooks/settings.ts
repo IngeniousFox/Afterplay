@@ -54,6 +54,21 @@ export const useSetTimeFormat = (): UseMutationResult<void, Error, TimeFormat, u
     queryKeys.settings.timeFormat,
   );
 
+// Minutos sin tocar la app antes de que entre el modo ambiente. 0 = apagado
+// del todo, y ese caso lo trata AmbientMode (no monta ni el temporizador).
+export const useAmbientIdleMinutes = (): UseQueryResult<number, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.ambientIdleMinutes,
+    queryFn: () => window.api.settings.getAmbientIdleMinutes(),
+    staleTime: Infinity,
+  });
+
+export const useSetAmbientIdleMinutes = (): UseMutationResult<void, Error, number, unknown> =>
+  useSettingMutation(
+    (minutes: number) => window.api.settings.setAmbientIdleMinutes(minutes),
+    queryKeys.settings.ambientIdleMinutes,
+  );
+
 // Credenciales de servicios externos (ver main/config/credentials.ts) —
 // deciden qué funciona (búsqueda IGDB, carátulas SGDB, sync Turso) y guían
 // el primer arranque (NavRail abre Ajustes si falta IGDB).

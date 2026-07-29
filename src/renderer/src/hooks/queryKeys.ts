@@ -56,9 +56,16 @@ export const queryKeys = {
     // esta key a mano, igual que hace el aviso 'scan:changed'.
     results: ['scan', 'results'] as const,
   },
+  // Curiosidades de juego (modo ambiente). `status` bajo el mismo prefijo:
+  // invalidar curiosities.all refresca también la tarjeta de Ajustes.
+  curiosities: {
+    all: ['curiosities'] as const,
+    status: ['curiosities', 'status'] as const,
+  },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,
     timeFormat: ['settings', 'timeFormat'] as const,
+    ambientIdleMinutes: ['settings', 'ambientIdleMinutes'] as const,
     credentials: ['settings', 'credentials'] as const,
   },
 };

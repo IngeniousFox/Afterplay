@@ -1,4 +1,5 @@
 import { backupApi } from './backup';
+import { curiositiesApi } from './curiosities';
 import { dialogApi } from './dialog';
 import { emulatorsApi } from './emulators';
 import { gamesApi } from './games';
@@ -34,6 +35,7 @@ export const api = {
   scan: scanApi,
   watcher: watcherApi,
   settings: settingsApi,
+  curiosities: curiositiesApi,
 };
 
 export type Api = typeof api;

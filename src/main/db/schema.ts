@@ -19,6 +19,7 @@ export type StateEvent = typeof stateEventsTable.$inferSelect;
 export type SpendEvent = typeof spendEventsTable.$inferSelect;
 export type Emulator = typeof emulatorsTable.$inferSelect;
 export type SaveBackupRow = typeof saveBackupsTable.$inferSelect;
+export type CuriosityRow = typeof curiositiesTable.$inferSelect;
 
 // Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
 // columnas con default son opcionales. Son la base de los inputs de los
@@ -30,6 +31,7 @@ export type NewStateEvent = typeof stateEventsTable.$inferInsert;
 export type NewSpendEvent = typeof spendEventsTable.$inferInsert;
 export type NewEmulator = typeof emulatorsTable.$inferInsert;
 export type NewSaveBackup = typeof saveBackupsTable.$inferInsert;
+export type NewCuriosity = typeof curiositiesTable.$inferInsert;
 
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
@@ -89,6 +91,11 @@ export const gamesTable = sqliteTable('games', {
   // saves/paths.ts). En modo 'auto' es null a propósito — guardar la ruta ya
   // resuelta sería justo el error que crea el problema entre PCs.
   saveCustomPaths: text({ mode: 'json' }).$type<string[]>(),
+  // Curiosidades del modo ambiente: cuándo se generaron (main/curiosities).
+  // Null = pendiente. Se marca TAMBIÉN cuando la generación devuelve cero
+  // curiosidades — "una llamada por juego en la vida" incluye ese caso: mejor
+  // un juego callado que repagarle la pregunta a la API en cada backfill.
+  curiositiesGeneratedAt: int({ mode: 'timestamp_ms' }),
 });
 
 export const sessionsTable = sqliteTable('sessions', {
@@ -213,6 +220,18 @@ export const saveBackupsTable = sqliteTable('save_backups', {
   // nada para preguntar dónde restaurar (§10bis.5).
   locations: text({ mode: 'json' }).$type<string[]>(),
   hasRegistry: int({ mode: 'boolean' }).notNull().default(false),
+});
+
+// Curiosidades de juego para el modo ambiente: hechos reales generados UNA
+// vez por juego (Wikipedia como contexto + Claude, ver main/curiosities) y
+// guardados aquí para siempre — sincronizan por Turso, así que la llamada a
+// la API se paga una sola vez entre todas las máquinas.
+export const curiositiesTable = sqliteTable('curiosities', {
+  id: int().primaryKey({ autoIncrement: true }),
+  gameId: int()
+    .notNull()
+    .references(() => gamesTable.id, { onDelete: 'cascade' }),
+  text: text().notNull(),
 });
 
 export const spendEventsTable = sqliteTable('spend_events', {

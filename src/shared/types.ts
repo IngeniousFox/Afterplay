@@ -285,7 +285,41 @@ export type CredentialsValues = {
   r2Bucket: string | null;
   r2AccessKeyId: string | null;
   r2SecretAccessKey: string | null;
+  // Anthropic para las curiosidades de juegos del modo ambiente — una llamada
+  // por juego EN LA VIDA (quedan guardadas en la DB y sincronizan por Turso).
+  anthropicApiKey: string | null;
 };
+
+// ── Curiosidades de juego (modo ambiente) ──────────────────────────────────
+// Hechos reales generados una vez por juego (ver main/curiosities) que el
+// modo ambiente mezcla con sus frases de memoria personal.
+
+export type CuriositySummary = {
+  gameId: number;
+  text: string;
+};
+
+// Estado del backfill para la tarjeta de Ajustes: cuántos juegos tienen ya
+// sus curiosidades y si hay una pasada en marcha ahora mismo.
+export type CuriositiesStatus = {
+  totalGames: number;
+  generatedGames: number;
+  running: boolean;
+};
+
+// Avisos del main mientras genera: 'progress' va marcando la pasada del
+// backfill; 'generated' dice que un juego concreto acaba de recibir (o
+// re-confirmar) sus curiosidades — el renderer invalida y ya.
+export type CuriosityActivityEvent =
+  | {
+      kind: 'progress';
+      running: boolean;
+      done: number;
+      total: number;
+      failed: number;
+      currentTitle: string | null;
+    }
+  | { kind: 'generated'; gameId: number };
 
 // Cambio de estado suelto para el desglose "Status Changes" de Stats por
 // año (Bloque 5D) — ver getAllStateEvents.ts.

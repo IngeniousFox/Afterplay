@@ -27,6 +27,7 @@ const ENV_BY_KEY: Record<keyof CredentialsValues, string> = {
   r2Bucket: 'R2_BUCKET',
   r2AccessKeyId: 'R2_ACCESS_KEY_ID',
   r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
+  anthropicApiKey: 'ANTHROPIC_API_KEY',
 };
 
 const CREDENTIAL_KEYS = Object.keys(ENV_BY_KEY) as (keyof CredentialsValues)[];

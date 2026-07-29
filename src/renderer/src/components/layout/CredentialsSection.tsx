@@ -23,7 +23,7 @@ type FieldKey = keyof CredentialsValues;
 //
 // El nombre del servicio va en la cabecera del grupo, así que las etiquetas
 // de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
-type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2';
+type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2' | 'anthropic';
 
 type Service = {
   id: ServiceId;
@@ -85,6 +85,14 @@ const SERVICES: Service[] = [
       Boolean(
         creds.r2AccountId && creds.r2Bucket && creds.r2AccessKeyId && creds.r2SecretAccessKey,
       ),
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic',
+    detail: 'Game trivia · optional',
+    where: 'console.anthropic.com → API keys',
+    fields: [{ key: 'anthropicApiKey', label: 'API KEY' }],
+    isReady: (creds) => Boolean(creds.anthropicApiKey),
   },
 ];
 
@@ -149,14 +157,17 @@ export const CredentialsSection = ({
         // ScreenshotsCarousel con su -my-2 py-2).
         className="-mx-2 -my-1.5 flex w-[calc(100%+1rem)] items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-white/[0.03]"
       >
-        <div className="flex items-center gap-2">
+        {/* min-w-0: deja que la descripción envuelva en líneas normales (nada
+            de truncate, eso cortaría texto) en vez de exigir su ancho de una
+            sola línea y dejar a los servicios sin sitio donde repartirse. */}
+        <div className="flex min-w-0 items-center gap-2">
           <div
             className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
             style={{ background: `${BLUE}1f` }}
           >
             <KeyRound size={13} style={{ color: BLUE }} />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-[13.5px] font-semibold text-foreground">API & Sync</div>
             <div className="mt-0.25 text-xs text-muted-foreground">
               Keys for game search, artwork and cloud sync. The app works without them — locally and
@@ -164,19 +175,26 @@ export const CredentialsSection = ({
             </div>
           </div>
         </div>
-        <div className="flex flex-none items-center gap-2.5">
+        {/* flex-wrap: los servicios van seguidos en una línea y van saltando
+            a la siguiente según hagan falta, en vez de amontonarse uno por
+            fila. min-w-0 es lo que permite que esta columna ceda ancho al
+            texto de la izquierda en lugar de exigir el suyo entero. */}
+        <div className="flex min-w-0 items-center gap-2.5">
           {creds && (
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-1">
               {SERVICES.map((service) => ({ ...service, ready: service.isReady(creds) })).map(
                 (service) => (
                   <span
                     key={service.id}
                     title={service.detail}
-                    className="flex items-center gap-1 text-[10.5px] font-bold"
+                    // whitespace-nowrap: cada etiqueta es una unidad
+                    // ("Cloudflare R2" son dos palabras) — sin esto el texto
+                    // se parte a mitad en vez de saltar la etiqueta entera.
+                    className="flex items-center gap-1.5 whitespace-nowrap text-[10.5px] font-bold"
                     style={{ color: service.ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
                   >
                     <span
-                      className="h-1.5 w-1.5 rounded-full"
+                      className="h-1.5 w-1.5 flex-none rounded-full"
                       style={{
                         background: service.ready ? '#2fdc7e' : 'rgba(255,255,255,.22)',
                       }}
@@ -189,7 +207,7 @@ export const CredentialsSection = ({
           )}
           <ChevronDown
             size={15}
-            className="text-muted-foreground transition-transform duration-150"
+            className="flex-none text-muted-foreground transition-transform duration-150"
             style={open ? { transform: 'rotate(180deg)' } : undefined}
           />
         </div>

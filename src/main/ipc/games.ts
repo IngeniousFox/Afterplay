@@ -7,6 +7,7 @@ import type {
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
+import { generateCuriositiesInBackground } from '../curiosities/backfill';
 import { createGameWithDetails } from '../db/queries/games/createGameWithDetails';
 import { createPlannedGame } from '../db/queries/games/createPlannedGame';
 import { deleteGame } from '../db/queries/games/deleteGame';
@@ -49,6 +50,9 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
     const game = await createGameWithDetails(input);
     warmImageCache(game);
+    // Sus curiosidades del modo ambiente, de fondo (mismo espíritu que la
+    // caché de imágenes): el guardado no espera a Wikipedia ni a la API.
+    generateCuriositiesInBackground(game);
     return game;
   });
 
@@ -60,6 +64,7 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
     const game = await createPlannedGame(input);
     warmImageCache(game);
+    generateCuriositiesInBackground(game);
     return game;
   });
 

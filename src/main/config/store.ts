@@ -22,6 +22,11 @@ type AppConfig = {
   // entre PCs — el mismo motivo por el que las partidas guardadas tienen su
   // machine-saves.json (PARTIDAS-GUARDADAS.md §7.2).
   scanFolders: string[];
+  // Minutos sin tocar la app antes de que entre el modo ambiente, o 0 para
+  // no encenderlo nunca. En segundos sería más preciso pero el ajuste se
+  // elige en minutos y guardar la misma unidad que se enseña evita
+  // conversiones repartidas por el código.
+  ambientIdleMinutes: number;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -29,6 +34,7 @@ const DEFAULT_CONFIG: AppConfig = {
   windowBounds: null,
   windowMaximized: false,
   scanFolders: [],
+  ambientIdleMinutes: 3,
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

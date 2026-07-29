@@ -2,6 +2,7 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
+import { useCuriositiesActivity } from './hooks/curiosities';
 import { useWatcherSync } from './hooks/useWatcherSync';
 import { router } from './router';
 
@@ -12,6 +13,10 @@ const Afterplay = (): React.JSX.Element => {
   // del main detecta (arranques/cierres de juegos), una sola suscripción para
   // toda la app.
   useWatcherSync();
+  // Curiosidades generadas de fondo (alta de un juego, backfill): invalida
+  // sus queries en cuanto el main avisa — aquí y no solo en Ajustes, porque
+  // un juego recién añadido genera con el modal de Ajustes cerrado.
+  useCuriositiesActivity();
 
   return (
     <TooltipProvider>

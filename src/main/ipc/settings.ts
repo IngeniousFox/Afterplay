@@ -43,6 +43,13 @@ export const registerSettingsHandlers = (): void => {
     setConfigValue('timeFormat', format);
   });
 
+  // Modo ambiente: minutos sin tocar la app antes de que entre, 0 = apagado.
+  ipcMain.handle('settings:getAmbientIdleMinutes', () => getConfigValue('ambientIdleMinutes'));
+
+  ipcMain.handle('settings:setAmbientIdleMinutes', (_event, minutes: number) => {
+    setConfigValue('ambientIdleMinutes', minutes);
+  });
+
   // Credenciales de servicios externos (ver config/credentials.ts). Los
   // valores viajan al renderer para poder editarlos en Ajustes — app
   // personal, preload propio, sin contenido remoto: mismo perímetro de

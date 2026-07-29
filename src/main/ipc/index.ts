@@ -1,4 +1,5 @@
 import { registerBackupHandlers } from './backup';
+import { registerCuriositiesHandlers } from './curiosities';
 import { registerDialogHandlers } from './dialog';
 import { registerEmulatorsHandlers } from './emulators';
 import { registerGamesHandlers } from './games';
@@ -35,4 +36,5 @@ export const registerIpcHandlers = (): void => {
   registerSavesHandlers();
   registerScanHandlers();
   registerSettingsHandlers();
+  registerCuriositiesHandlers();
 };

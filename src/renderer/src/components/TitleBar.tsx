@@ -1,6 +1,7 @@
 import { Copy, Minus, Square, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { useFullscreen } from '../hooks/useFullscreen';
 import { cn } from '@/lib/utils';
 
 const controlButtonClass = cn(
@@ -8,10 +9,21 @@ const controlButtonClass = cn(
   'hover:bg-muted focus-visible:bg-muted',
 );
 
-const TitleBar = (): React.JSX.Element => {
+const TitleBar = (): React.JSX.Element | null => {
   const [isMaximized, setIsMaximized] = useState(false);
+  const fullscreen = useFullscreen();
 
   useEffect(() => window.api.window.onMaximizedChange(setIsMaximized), []);
+
+  // Marca en <html> el hueco de 2rem que #root le reserva a esta barra (ver
+  // main.css) para que se lo quede el contenido: sin esto, F11 quitaba el
+  // chrome del SO pero dejaba una franja vacía del tamaño de la TitleBar
+  // flotando en la parte de arriba — "pantalla completa" a medias.
+  useEffect(() => {
+    document.documentElement.classList.toggle('is-fullscreen', fullscreen);
+  }, [fullscreen]);
+
+  if (fullscreen) return null;
 
   return (
     <div

@@ -133,6 +133,12 @@
     overflow: hidden;
   }
 
+  /* En fullscreen real (F11) la TitleBar no se pinta (ver TitleBar.tsx) — el
+     hueco que le reservaba aquí arriba tiene que irse con ella. */
+  .is-fullscreen #root {
+    padding-top: 0;
+  }
+
   *::-webkit-scrollbar {
     width: 14px;
     height: 14px;

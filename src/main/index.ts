@@ -14,6 +14,8 @@ import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
+import { cleanupCiteTaggedCuriosities } from './curiosities/cleanupCiteTags';
+import { setCuriositiesNotifier } from './curiosities/notify';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
 import { setSessionClosedNotifier } from './watcher/notifySession';
@@ -132,6 +134,36 @@ function createWindow(): void {
     window.webContents.send('window:maximized-change', false);
   });
 
+  // F11 (o el menú por defecto de Electron, que ya lo trae aunque no se
+  // registre nada aquí) pone la ventana en fullscreen de VERDAD a nivel de
+  // SO — pero nuestra TitleBar sigue siendo contenido normal de la página, no
+  // chrome del sistema, así que sin este aviso se quedaba flotando encima de
+  // un fullscreen que se suponía sin nada alrededor.
+  window.on('enter-full-screen', () => {
+    window.webContents.send('window:fullscreen-change', true);
+  });
+
+  window.on('leave-full-screen', () => {
+    window.webContents.send('window:fullscreen-change', false);
+  });
+
+  // El modo ambiente no debe encenderse si no hay nadie delante de la
+  // pantalla para verlo: minimizada o mandada a la bandeja, la app sigue viva
+  // vigilando procesos (por eso sigue existiendo sin ventana), pero el
+  // renderer no tenía forma de saberlo — su temporizador de inactividad solo
+  // mira eventos de ratón/teclado, y sin ventana visible esos eventos
+  // simplemente no llegan nunca, así que contaba como "inactivo" igual. Se
+  // avisa en los cuatro eventos que pueden cambiar la visibilidad real: el
+  // botón _ minimiza, "Open" del tray restaura, y close/el propio tray
+  // ocultan/muestran sin pasar por minimizar.
+  const sendVisibility = (): void => {
+    window.webContents.send('window:visible-change', window.isVisible() && !window.isMinimized());
+  };
+  window.on('minimize', sendVisibility);
+  window.on('restore', sendVisibility);
+  window.on('hide', sendVisibility);
+  window.on('show', sendVisibility);
+
   // SPEC 3E — la X minimiza a la bandeja, no cierra la app (que sigue viva
   // vigilando procesos). isQuitting se marca en before-quit (cualquier vía de
   // cierre real: menú "Quit" del tray, apagado del sistema...) para dejar
@@ -220,6 +252,16 @@ app.whenReady().then(async () => {
     return;
   }
 
+  // ⚠️ TEMPORAL — quitar esta llamada (y borrar cleanupCiteTags.ts) tras
+  // el primer arranque que la corra: limpieza de una sola pasada de las
+  // curiosidades con <cite> pegado que Sonnet dejó antes del arreglo del
+  // prompt. Ver el porqué en curiosities/cleanupCiteTags.ts.
+  try {
+    await cleanupCiteTaggedCuriosities();
+  } catch (error) {
+    console.warn('[curiosities] fallo en la limpieza de <cite> (sigo igualmente):', error);
+  }
+
   try {
     await runDailyBackup();
   } catch (error) {
@@ -278,6 +320,14 @@ app.whenReady().then(async () => {
   setSavesNotifier((event) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('saves:activity', event);
+    }
+  });
+  // Generación de curiosidades (backfill de Ajustes y altas nuevas): el
+  // renderer necesita el progreso en vivo y el aviso de "este juego ya tiene
+  // las suyas" para refrescar sin sondear nada.
+  setCuriositiesNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('curiosities:activity', event);
     }
   });
 

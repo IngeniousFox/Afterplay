@@ -10,4 +10,16 @@ export const windowApi = {
     ipcRenderer.on('window:maximized-change', listener);
     return () => ipcRenderer.removeListener('window:maximized-change', listener);
   },
+  onFullscreenChange: (callback: (isFullscreen: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, isFullscreen: boolean): void =>
+      callback(isFullscreen);
+    ipcRenderer.on('window:fullscreen-change', listener);
+    return () => ipcRenderer.removeListener('window:fullscreen-change', listener);
+  },
+  onVisibleChange: (callback: (isVisible: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, isVisible: boolean): void =>
+      callback(isVisible);
+    ipcRenderer.on('window:visible-change', listener);
+    return () => ipcRenderer.removeListener('window:visible-change', listener);
+  },
 };

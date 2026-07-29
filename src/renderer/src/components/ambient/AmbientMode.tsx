@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
+import { useCuriosities } from '../../hooks/curiosities';
 import { useGames } from '../../hooks/games';
 import { useSessions } from '../../hooks/sessions';
+import { useAmbientIdleMinutes } from '../../hooks/settings';
 import { useSpendEvents } from '../../hooks/spend';
 import { useStateEvents } from '../../hooks/stateEvents';
 import { useIdle } from '../../hooks/useIdle';
 import { useImageSrc } from '../../hooks/useImageSrc';
+import { useWindowVisible } from '../../hooks/useWindowVisible';
 import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
 import { GREEN } from '../../lib/colors';
 
@@ -24,18 +27,26 @@ import { GREEN } from '../../lib/colors';
 //     fondo midiendo — taparla con un salvapantallas sería absurdo.
 //   · No aparece si hay algo abierto encima (un modal, un diálogo): tener a
 //     medias un formulario y que se te ponga esto delante sería agresivo.
+//   · No aparece si nadie puede verlo: minimizada o en la bandeja. La app
+//     sigue viva ahí (vigilando procesos, sin ventana), pero el contador de
+//     inactividad solo mira ratón/teclado — sin ventana visible esos eventos
+//     no llegan nunca, así que sin este freno contaba como inactivo igual y
+//     te encontrabas el modo ambiente encendido en cuanto reabrías desde el
+//     tray, aunque llevaras minutos trabajando en otra cosa.
 //   · Solo usa imágenes YA cacheadas en disco (userData/covers y /heroes).
 //     Cero red.
 //
-// Sobre la composición (hero desenfocado de fondo + carátula nítida delante):
-// no es solo estética, resuelve un problema de resolución real. Las carátulas
-// de IGDB vienen a 264x374 y los heroes de SteamGridDB a 1920x620. La primera
-// versión estiraba el hero a pantalla completa con zoom encima, lo que lo
-// escalaba hasta 2.1x y se veía blando y sucio. Con el fondo desenfocado esa
-// resolución deja de importar (nadie ve el detalle de algo borroso) y la
-// carátula se pinta por DEBAJO de su tamaño nativo, donde sí es nítida.
+// Sobre la composición: un panel de cristal con la carátula nítida a un lado
+// y el texto al otro, flotando sobre la propia app desenfocada.
+//
+// La regla que la sostiene es de resolución, no de gusto: las carátulas de
+// IGDB vienen a 264x374, así que TODA imagen que se vea con detalle se pinta
+// por DEBAJO de su tamaño nativo. La primera versión estiraba un hero de
+// SteamGridDB a pantalla completa con zoom encima (hasta 2.1x) y se veía
+// blanda y sucia. Lo que sí se amplía — el tinte de color del panel — va
+// desenfocado hasta dejar de ser una imagen, y ahí la resolución da igual
+// porque nadie ve el detalle de algo borroso.
 
-const IDLE_SECONDS = 180;
 const SLIDE_MS = 26_000;
 // Menos que los 264px nativos de una carátula de IGDB: pintarla por debajo
 // de su tamaño real es lo que la mantiene afilada. Subir de ahí es
@@ -73,15 +84,27 @@ const isDialogOpen = (): boolean =>
 
 export const AmbientMode = (): React.JSX.Element | null => {
   const { data: games = [] } = useGames();
+  // Sin respuesta todavía se asume el valor por defecto en vez de 0: con 0
+  // el hook arrancaría apagado y se encendería un instante después, y ese
+  // parpadeo de configuración no aporta nada.
+  const { data: idleMinutes = 3 } = useAmbientIdleMinutes();
 
-  // El filtro es por CARÁTULA, no por hero: la carátula es la pieza nítida
-  // que manda en la composición y sin ella la diapositiva es texto flotando.
-  // El hero solo pone el color de fondo, y si falta se queda el fondo oscuro
-  // — que sigue funcionando.
+  // Sin carátula no hay diapositiva: es la pieza nítida que manda en la
+  // composición Y de donde sale el color del panel. Sin ella quedaría texto
+  // flotando en una tarjeta gris.
   const candidates = games.filter((game) => game.coverUrl !== null);
   const anyLive = games.some((game) => game.isLive);
+  const windowVisible = useWindowVisible();
 
-  const idle = useIdle(IDLE_SECONDS, !anyLive && candidates.length > 0, isDialogOpen);
+  // 0 minutos = apagado en Ajustes: ni se monta el temporizador. Tampoco con
+  // la ventana oculta — al volver a mostrarla el efecto de useIdle arranca
+  // de cero (ver su comentario), así que no hace falta nada más para que no
+  // aparezca "de sopetón" recién reabierta.
+  const idle = useIdle(
+    idleMinutes * 60,
+    idleMinutes > 0 && !anyLive && candidates.length > 0 && windowVisible,
+    isDialogOpen,
+  );
 
   // Desmontar en cuanto `idle` baja cortaba el modo ambiente de golpe, como
   // si se apagara la tele. Aquí el desmontaje se RETRASA hasta que termina el
@@ -108,8 +131,16 @@ export const AmbientMode = (): React.JSX.Element | null => {
       // prisa) y al salir rápido, porque has vuelto y quieres tu app. Pero
       // rápido no es instantáneo — 420ms bastan para que se sienta como que
       // se aparta, no como un corte.
-      className="fixed inset-0 z-[60] bg-[#080908]"
+      //
+      // El fondo es TU PROPIA APP desenfocada, no una imagen: backdrop-filter
+      // difumina lo que hay detrás de esta capa (la pantalla en la que estabas)
+      // en vez de tapar con negro. Por eso el fondo va translúcido — con un
+      // color opaco no habría nada que desenfocar. Un desenfoque suave, además:
+      // se trata de que la app se aleje, no de esconderla.
+      className="fixed inset-0 z-[60]"
       style={{
+        background: 'rgba(8,9,8,.42)',
+        backdropFilter: 'blur(15px) saturate(0.95) brightness(0.78)',
         opacity: idle ? 1 : 0,
         transition: `opacity ${idle ? 1100 : 420}ms ${idle ? 'ease-out' : 'cubic-bezier(.4,0,1,1)'}`,
         pointerEvents: 'none',
@@ -127,6 +158,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
   const { data: sessions = [] } = useSessions();
   const { data: stateEvents = [] } = useStateEvents();
   const { data: spendEvents = [] } = useSpendEvents();
+  const { data: curiosityRows = [] } = useCuriosities();
 
   // Se lee UNA vez, al montar: el orden de la cola no puede rebarajarse en
   // cada repintado.
@@ -159,6 +191,13 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     const spendByGame = new Map<number, number>();
     for (const event of spendEvents) {
       spendByGame.set(event.gameId, (spendByGame.get(event.gameId) ?? 0) + event.amount);
+    }
+
+    const curiositiesByGame = new Map<number, string[]>();
+    for (const row of curiosityRows) {
+      const list = curiositiesByGame.get(row.gameId) ?? [];
+      list.push(row.text);
+      curiositiesByGame.set(row.gameId, list);
     }
 
     // Ranking por horas: da el "tu juego más jugado" y el "#3 de tu
@@ -213,6 +252,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       sessionsByGame,
       eventsByGame,
       spendByGame,
+      curiositiesByGame,
       rankByGame,
       libraryHours,
       oldestId,
@@ -220,7 +260,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       completedPerYear,
       previousTitleByGame,
     };
-  }, [games, sessions, stateEvents, spendEvents]);
+  }, [games, sessions, stateEvents, spendEvents, curiosityRows]);
 
   const queue = shuffled(games, seed);
   const game = queue[index % queue.length];
@@ -247,6 +287,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     isNewestInLibrary: indexes.newestId === game.id,
     completedSameYear,
     playedJustBefore: indexes.previousTitleByGame.get(game.id) ?? null,
+    curiosities: indexes.curiositiesByGame.get(game.id) ?? [],
   };
 
   return (
@@ -271,7 +312,6 @@ const AmbientSlide = ({
   context: AmbientContext;
   lineSeed: number;
 }): React.JSX.Element => {
-  const heroSrc = useImageSrc(game.heroUrl, 'heroes');
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
   // El reloj se lee al montar CADA diapositiva (cada una se remonta por su
   // key), no una vez al entrar en el modo: esto puede quedarse horas abierto
@@ -286,73 +326,158 @@ const AmbientSlide = ({
 
   return (
     <div className="afterplay-ambient-slide absolute inset-0">
-      {/* Fondo: el hero DESENFOCADO a lo bestia. A 64px de blur su resolución
-          real es irrelevante — solo aporta el color y el ambiente del juego,
-          que es justo lo que se le pide. */}
-      {heroSrc && (
-        <img
-          src={heroSrc}
-          alt=""
-          className="afterplay-ambient-backdrop absolute inset-0 h-full w-full object-cover"
-          style={{ ...slideVar, filter: 'blur(64px) saturate(1.25) brightness(0.62)' }}
-        />
-      )}
-      {/* Velo plano por encima del desenfoque: sin esto, un hero muy claro
-          deja el texto blanco ilegible. */}
-      <div className="absolute inset-0 bg-[#080908]/45" />
+      {/* Sin hero de fondo: el fondo ahora es la propia app desenfocada por la
+          capa de arriba (ver AmbientMode). Solo queda la viñeta, que apaga los
+          bordes para que la carátula y el texto del centro no compitan con lo
+          que se intuya detrás. */}
       <div
         className="absolute inset-0"
         style={{
-          background: 'radial-gradient(ellipse at center, transparent 30%, rgba(8,9,8,.82))',
+          background: 'radial-gradient(ellipse at center, transparent 35%, rgba(8,9,8,.55))',
         }}
       />
 
       {/* Composición centrada: carátula a la izquierda, texto a la derecha,
-          el conjunto centrado en la pantalla. */}
-      <div className="absolute inset-0 flex items-center justify-center gap-14 px-24">
-        {coverSrc && (
-          <div
-            className="afterplay-ambient-cover flex-none"
-            style={{ ...slideVar, width: COVER_WIDTH }}
-          >
+          el conjunto enmarcado en un panel de cristal.
+          Ahora que se ve la app de fondo (ver AmbientMode), el panel es lo
+          que separa "esto es el contenido" de "eso es lo que había detrás" —
+          sin él, texto y carátula competían con lo que se intuyera detrás. */}
+      <div className="absolute inset-0 flex items-center justify-center px-24">
+        <div
+          className="relative overflow-hidden rounded-[34px]"
+          style={{
+            background: 'rgba(9,10,9,.5)',
+            backdropFilter: 'blur(30px) saturate(1.15)',
+            // Tres sombras, cada una con su trabajo: la línea clara de arriba
+            // simula la luz que pega en el canto de un cristal, el contorno
+            // interior dibuja el borde sin la dureza de un `border`, y la
+            // grande de fuera despega el panel de la app.
+            boxShadow: [
+              'inset 0 1px 0 rgba(255,255,255,.18)',
+              'inset 0 0 0 1px rgba(255,255,255,.07)',
+              '0 44px 110px -24px rgba(0,0,0,.8)',
+            ].join(', '),
+          }}
+        >
+          {/* El color del panel SALE DE LA CARÁTULA: la misma imagen, ampliada
+              y desenfocada hasta ser solo color, deriva despacio por detrás
+              del contenido. Cada juego tiñe su propia tarjeta — es lo que
+              hace que no sean 300 diapositivas iguales con distinta foto.
+              Reaprovecha la animación del hero, que quedó libre al quitarlo. */}
+          {coverSrc && (
             <img
               src={coverSrc}
               alt=""
-              className="w-full rounded-[14px] border border-white/10 shadow-[0_30px_70px_rgba(0,0,0,.75)]"
+              aria-hidden
+              className="afterplay-ambient-backdrop absolute inset-0 h-full w-full object-cover"
+              style={{ ...slideVar, filter: 'blur(70px) saturate(1.9)', opacity: 0.55 }}
             />
-          </div>
-        )}
+          )}
 
-        <div className="min-w-0 max-w-2xl">
-          <div className="afterplay-ambient-text" style={{ animationDelay: '600ms' }}>
-            {game.isLive && (
-              <div className="mb-3.5 flex items-center gap-2">
-                <span
-                  className="afterplay-ambient-halo h-2 w-2 rounded-full"
-                  style={{ background: GREEN, boxShadow: `0 0 14px ${GREEN}` }}
+          {/* Encima del tinte: un velo en diagonal que devuelve el contraste
+              al texto, y un brillo suave en la esquina superior para que el
+              cristal tenga dirección de luz en vez de estar plano. */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: [
+                'linear-gradient(160deg, rgba(255,255,255,.10), transparent 38%)',
+                'linear-gradient(115deg, rgba(6,7,6,.58), rgba(6,7,6,.22) 45%, rgba(6,7,6,.62))',
+              ].join(', '),
+            }}
+          />
+
+          <div className="relative flex items-center gap-14 px-16 py-12">
+            {coverSrc && (
+              <div
+                className="afterplay-ambient-cover relative flex-none"
+                style={{ ...slideVar, width: COVER_WIDTH }}
+              >
+                {/* Copia desenfocada justo detrás: la carátula parece emitir
+                    su propia luz sobre el panel en vez de estar pegada. */}
+                <img
+                  src={coverSrc}
+                  alt=""
+                  aria-hidden
+                  className="absolute inset-0 w-full rounded-[16px]"
+                  style={{
+                    filter: 'blur(26px) saturate(1.7)',
+                    opacity: 0.65,
+                    transform: 'translateY(14px) scale(1.03)',
+                  }}
                 />
-                <span
-                  className="text-[11px] font-extrabold tracking-[.16em]"
-                  style={{ color: GREEN }}
-                >
-                  PLAYING RIGHT NOW
-                </span>
+                <img
+                  src={coverSrc}
+                  alt=""
+                  className="relative w-full rounded-[16px]"
+                  style={{
+                    boxShadow: [
+                      'inset 0 0 0 1px rgba(255,255,255,.14)',
+                      '0 28px 60px -12px rgba(0,0,0,.8)',
+                    ].join(', '),
+                  }}
+                />
               </div>
             )}
 
-            <h2 className="text-[46px] leading-[1.06] font-extrabold tracking-[-.02em] text-white drop-shadow-[0_2px_24px_rgba(0,0,0,.85)]">
-              {game.title}
-            </h2>
-          </div>
+            {/* Ancho FIJO, no `max-w`: con ancho máximo el panel se encogía
+                al contenido y un juego de título corto salía casi cuadrado
+                mientras el de al lado salía apaisado — el desfile parecía
+                descuadrado. Reservando siempre el mismo hueco, todas las
+                diapositivas tienen el mismo tamaño aunque sobre sitio a la
+                derecha. La ALTURA ya era constante de por sí: la marca la
+                carátula, que siempre mide igual.
+                `min-w-0` + encogible para que en una ventana estrecha ceda en
+                vez de desbordar. */}
+            <div className="w-[42rem] min-w-0">
+              <div className="afterplay-ambient-text" style={{ animationDelay: '600ms' }}>
+                {game.isLive && (
+                  <div className="mb-3.5 flex items-center gap-2">
+                    <span
+                      className="afterplay-ambient-halo h-2 w-2 rounded-full"
+                      style={{ background: GREEN, boxShadow: `0 0 14px ${GREEN}` }}
+                    />
+                    <span
+                      className="text-[11px] font-extrabold tracking-[.16em]"
+                      style={{ color: GREEN }}
+                    >
+                      PLAYING RIGHT NOW
+                    </span>
+                  </div>
+                )}
 
-          {line && (
-            <p
-              className="afterplay-ambient-text mt-4 text-[17px] leading-relaxed font-medium text-white/55"
-              style={{ animationDelay: '1400ms' }}
-            >
-              {line}
-            </p>
-          )}
+                {/* El título se apaga de arriba a abajo: el ojo entra por la
+                    primera línea y no por un bloque de blanco macizo. */}
+                <h2
+                  // leading-[1.06] cortaba la cola de las minúsculas con
+                  // descendente (g, y, p): el degradado de texto pinta el
+                  // glifo entero pero la CAJA de línea era más baja que la
+                  // letra. 1.2 le da aire de sobra sin que se note más
+                  // separado.
+                  className="text-[46px] leading-[1.2] font-extrabold tracking-[-.02em] drop-shadow-[0_2px_20px_rgba(0,0,0,.6)]"
+                  style={{
+                    backgroundImage: 'linear-gradient(180deg, #ffffff 25%, rgba(255,255,255,.72))',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  {game.title}
+                </h2>
+              </div>
+
+              {line && (
+                <div className="afterplay-ambient-text mt-6" style={{ animationDelay: '1400ms' }}>
+                  {/* Filete corto en el verde de la app: separa el dato del
+                      título y ata la diapositiva al resto de Afterplay. */}
+                  <div
+                    className="mb-4 h-px w-16"
+                    style={{ background: `linear-gradient(90deg, ${GREEN}, transparent)` }}
+                  />
+                  <p className="text-[17.5px] leading-relaxed font-medium text-white/72">{line}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
 import { revealClass, revealStyle } from '../../lib/styles';
 import { CheckboxRow } from '../library/add-game/CheckboxRow';
 import { ModalShell } from '../ui/modal-shell';
+import { AmbientSection } from './AmbientSection';
 import { BackupSection } from './BackupSection';
 import { CredentialsSection } from './CredentialsSection';
 import { EmulatorsSection } from './EmulatorsSection';
@@ -15,6 +16,7 @@ import { GameFoldersSection } from './GameFoldersSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
 import { TimeFormatSlider } from './TimeFormatSlider';
+import { TriviaSection } from './TriviaSection';
 
 const GREEN = '#2fdc7e';
 const AMBER = '#e3b24a';
@@ -89,6 +91,10 @@ export const SettingsModal = ({
       >
         <TimeFormatSlider value={timeFormat} onChange={(next) => setTimeFormat.mutate(next)} />
       </SettingsCard>
+
+      <AmbientSection />
+
+      <TriviaSection />
 
       <BackupSection />
 

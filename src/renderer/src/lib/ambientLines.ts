@@ -117,6 +117,10 @@ export type AmbientContext = {
   // Qué estabas jugando justo antes de empezar este. El detalle que convierte
   // una ficha en un recuerdo: "lo dejaste por esto".
   playedJustBefore: string | null;
+  // Curiosidades REALES del juego (generadas una vez con Wikipedia + Claude,
+  // ver main/curiosities). La otra mitad del modo ambiente: las frases de
+  // arriba hablan de TI con este juego; estas hablan del juego en sí.
+  curiosities: string[];
 };
 
 export const ambientLines = (
@@ -435,6 +439,12 @@ export const ambientLines = (
       lines.push('brand new to the library');
     }
   }
+
+  // ── Curiosidades del juego ─────────────────────────────────────────────
+  // Al mismo pozo que el resto, una entrada cada una: el sorteo ya reparte
+  // entre "tu historia con él" y "la historia del juego" sin más reglas. Un
+  // juego sin historia personal pero con curiosidades deja de estar mudo.
+  lines.push(...context.curiosities);
 
   return lines;
 };
