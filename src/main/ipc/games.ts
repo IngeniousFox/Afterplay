@@ -64,13 +64,20 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
     const game = await createPlannedGame(input);
     warmImageCache(game);
-    generateCuriositiesInBackground(game);
+    // Curiosidades NO aquí: un Plan to Play puede ser un juego que ni ha
+    // salido todavía, del que no se sabe nada — pedirle trivia al modelo en
+    // ese momento es pagar por un "no lo sé" seguro, y encima lo dejaría
+    // marcado como generado para siempre (una sola vez EN LA VIDA, ver
+    // generate.ts), así que ni al salir el juego de verdad se le volvería a
+    // preguntar. Se genera al pasar a la biblioteca (games:promote), que es
+    // cuando el juego es real de verdad.
     return game;
   });
 
   handleDb('games:promote', async (_event, input: PromotePlannedGameInput) => {
     const game = await promotePlannedGame(input);
     warmImageCache(game);
+    generateCuriositiesInBackground(game);
     return game;
   });
 

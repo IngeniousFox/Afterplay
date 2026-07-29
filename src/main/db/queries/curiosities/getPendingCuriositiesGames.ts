@@ -1,4 +1,4 @@
-import { count, isNotNull, isNull } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { CuriositiesStatus } from '../../../../shared/types';
 import { gamesTable } from '../../schema';
@@ -14,9 +14,11 @@ export type PendingCuriositiesGame = {
   developer: string | null;
 };
 
-// Juegos que todavía no han pasado por la generación — incluye los del Plan:
-// generar ahí también es una miseria de coste y así al pasarlos a la
-// biblioteca ya llegan con sus curiosidades puestas.
+// Juegos que todavía no han pasado por la generación — EXCLUYE los que
+// siguen en Plan to Play (games:promote los encola en cuanto pasan a la
+// biblioteca, ver ipc/games.ts). No se adelanta aquí por el mismo motivo:
+// muchos son juegos que ni han salido, y una generación "no lo sé" quedaría
+// marcada como hecha para siempre.
 export const getPendingCuriositiesGames = async (): Promise<PendingCuriositiesGame[]> => {
   const db = getDb();
   return db
@@ -28,7 +30,7 @@ export const getPendingCuriositiesGames = async (): Promise<PendingCuriositiesGa
       developer: gamesTable.developer,
     })
     .from(gamesTable)
-    .where(isNull(gamesTable.curiositiesGeneratedAt));
+    .where(and(isNull(gamesTable.curiositiesGeneratedAt), eq(gamesTable.planned, false)));
 };
 
 // Contadores para la tarjeta de Ajustes ("212 of 331 games have trivia").

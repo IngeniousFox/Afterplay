@@ -2,9 +2,10 @@ import type { PendingCuriositiesGame } from '../db/queries/curiosities/getPendin
 import { generateCuriositiesForGame } from './generate';
 import { notifyCuriositiesActivity } from './notify';
 
-// La ÚNICA puerta por la que se generan curiosidades. Los dos caminos que
-// existen (alta de un juego nuevo y la pasada de Ajustes) encolan aquí en vez
-// de generar por su cuenta, y esto lo resuelve de uno en uno.
+// La ÚNICA puerta por la que se generan curiosidades. Los caminos que existen
+// (alta directa en biblioteca, paso de Plan to Play a biblioteca, y la pasada
+// de Ajustes) encolan aquí en vez de generar por su cuenta, y esto lo
+// resuelve de uno en uno.
 //
 // Por qué una cola y no lanzar y ya:
 //   · Pagar dos veces el mismo juego. Una generación tarda entre medio minuto
