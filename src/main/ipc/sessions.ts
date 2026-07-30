@@ -1,5 +1,4 @@
 import { handleDb } from './dbHandle';
-import { closeSession } from '../db/queries/sessions/closeSession';
 import { deleteSession } from '../db/queries/sessions/deleteSession';
 import { getAllSessions } from '../db/queries/sessions/getAllSessions';
 import { assignSession } from '../db/queries/sessions/assignSession';
@@ -7,7 +6,11 @@ import { deletePendingSession } from '../db/queries/sessions/deletePendingSessio
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 import { updateSessionNote } from '../db/queries/sessions/updateSessionNote';
-import { scheduleSaveBackup } from '../saves/sessionHook';
+import {
+  applySessionFinalizationEffects,
+  describeFinalizedSession,
+  finalizeSession,
+} from '../sessions/finalizeSession';
 
 // Modelo v2: fuera sessions:add y sessions:updateMilestone*(...) — los
 // marcadores de borde ya no existen; las fechas y desenlaces de un
@@ -29,7 +32,9 @@ export const registerSessionsHandlers = (): void => {
   });
 
   handleDb('sessions:close', async (_event, id: number, endedAt: Date) => {
-    return closeSession(id, endedAt);
+    const result = await finalizeSession(id, endedAt, 'manual_stop');
+    if (result) await applySessionFinalizationEffects(result);
+    return result?.session ?? null;
   });
 
   // Borrar una sesión cerrada (vista de Sesiones / Session History del
@@ -52,7 +57,10 @@ export const registerSessionsHandlers = (): void => {
     // si la sesión ya terminó: si sigue en vivo, el backup lo disparará el
     // watcher al cerrarla (ya con el juego a bordo). scheduleSaveBackup solo
     // arma un timer, así que no anida withDbAccess dentro de este handler.
-    if (session && session.endedAt !== null) scheduleSaveBackup(gameId);
+    if (session && session.endedAt !== null) {
+      const result = await describeFinalizedSession(session, 'emulator_assignment', gameId);
+      await applySessionFinalizationEffects(result);
+    }
     return session;
   });
 

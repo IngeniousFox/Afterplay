@@ -2,6 +2,7 @@ import { createHashRouter, Navigate } from 'react-router-dom';
 import { RootLayout } from './components/layout/RootLayout';
 import { GameDetailRoute } from './screens/GameDetailRoute';
 import { Library } from './screens/Library';
+import { Now } from './screens/Now';
 import { PlanGameDetailRoute } from './screens/PlanGameDetailRoute';
 import { PlanToPlay } from './screens/PlanToPlay';
 import { Sessions } from './screens/Sessions';
@@ -12,7 +13,8 @@ export const router = createHashRouter([
     path: '/',
     element: <RootLayout />,
     children: [
-      { index: true, element: <Navigate to="/games" replace /> },
+      { index: true, element: <Navigate to="/now" replace /> },
+      { path: 'now', element: <Now /> },
       {
         path: 'games',
         children: [

@@ -2,15 +2,11 @@ import type { BrowserWindow } from 'electron';
 import { closeSync, openSync } from 'node:fs';
 import { withDbAccess } from '../db';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
-import { getIterationGameId } from '../db/queries/iterations/getIterationGameId';
-import { closeSession } from '../db/queries/sessions/closeSession';
 import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
 import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
-import { getSessionClosedInfo } from '../db/queries/sessions/getSessionClosedInfo';
 import { heartbeatSessions } from '../db/queries/sessions/heartbeatSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
-import { scheduleSaveBackup } from '../saves/sessionHook';
-import { notifySessionClosed } from './notifySession';
+import { applySessionFinalizationEffects, finalizeSession } from '../sessions/finalizeSession';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -113,10 +109,10 @@ export class ProcessWatcher {
   // sondeo) y deja de escanear hasta el resume/unlock. Cierra SIEMPRE que el
   // juego siga corriendo detrás del bloqueo — el tiempo con la pantalla
   // bloqueada no es tiempo jugado, esté el proceso vivo o no.
-  pause(): void {
+  pause(reason: 'lock' | 'suspend'): void {
     if (this.paused) return;
     this.paused = true;
-    void this.closeAllActive('pause');
+    void this.closeAllActive(reason);
   }
 
   // 'resume'/'unlock-screen': sondeo inmediato en vez de esperar el próximo
@@ -128,13 +124,14 @@ export class ProcessWatcher {
     void this.poll();
   }
 
-  private async closeAllActive(reason: string): Promise<void> {
+  private async closeAllActive(reason: 'lock' | 'suspend'): Promise<void> {
     if (this.active.size === 0) return;
 
     const endedAt = new Date();
     await withDbAccess(async () => {
       for (const [key, activeSession] of this.active) {
-        await closeSession(activeSession.sessionId, endedAt);
+        const result = await finalizeSession(activeSession.sessionId, endedAt, reason);
+        if (result) await applySessionFinalizationEffects(result);
         console.log(
           `[watcher] [${reason}] ${key} pausado -> sesion ${activeSession.sessionId} cerrada`,
         );
@@ -234,39 +231,13 @@ export class ProcessWatcher {
         for (const [key, activeSession] of this.active) {
           if (running.has(key)) continue;
 
-          const closed = await closeSession(activeSession.sessionId, new Date());
+          const result = await finalizeSession(activeSession.sessionId, new Date(), 'process_exit');
           this.active.delete(key);
           console.log(
             `[watcher] [stop] ${key} cerrado -> sesion ${activeSession.sessionId} cerrada`,
           );
           changed = true;
-
-          // El momento del cierre: es cuando el diario de sesión ("dónde lo
-          // dejé") se escribe en caliente. Solo con la sesión ya asignada a
-          // un juego — una de emulador sin asignar no tiene de qué hablar
-          // todavía, y su aviso saldría sin título.
-          if (closed && closed.iterationId !== null) {
-            const info = await getSessionClosedInfo(closed.id);
-            if (info) notifySessionClosed(info);
-          }
-
-          // Momento exacto en que la partida guardada ha cambiado y un
-          // backup vale algo (PARTIDAS-GUARDADAS.md §10.2). Se dispara sin
-          // esperar: la subida corre por su cuenta con su propio retardo y
-          // NUNCA lanza, así que un fallo de nube no puede tumbar el ciclo
-          // del watcher ni retrasar el cierre de sesión.
-          const gameId = Number(key.slice('game:'.length));
-          if (key.startsWith('game:') && Number.isFinite(gameId)) {
-            void scheduleSaveBackup(gameId);
-          } else if (closed && closed.iterationId !== null) {
-            // Sesión de EMULADOR ("emu:N") que el usuario asignó a un juego
-            // emulado mientras seguía jugando: la clave no sabe de juegos,
-            // pero la sesión ya sí. Sin esta rama, ese juego se quedaba sin
-            // backup automático SIEMPRE — la clave nunca empieza por "game:"
-            // y el disparador de arriba ni lo miraba.
-            const assignedGameId = await getIterationGameId(closed.iterationId);
-            if (assignedGameId !== null) void scheduleSaveBackup(assignedGameId);
-          }
+          if (result) await applySessionFinalizationEffects(result);
         }
 
         // Latido de las sesiones que siguen vivas: deja constancia en la DB de
@@ -319,7 +290,8 @@ export class ProcessWatcher {
         });
       } else {
         const endedAt = session.lastHeartbeatAt ?? session.startedAt;
-        await closeSession(session.sessionId, endedAt);
+        const result = await finalizeSession(session.sessionId, endedAt, 'startup_recovery');
+        if (result) await applySessionFinalizationEffects(result);
         console.log(
           `[watcher] [info] sesion ${session.sessionId} (${key ?? 'sin dueno'}) recuperada al arrancar - cerrada en su ultimo latido`,
         );

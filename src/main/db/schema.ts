@@ -20,6 +20,7 @@ export type SpendEvent = typeof spendEventsTable.$inferSelect;
 export type Emulator = typeof emulatorsTable.$inferSelect;
 export type SaveBackupRow = typeof saveBackupsTable.$inferSelect;
 export type CuriosityRow = typeof curiositiesTable.$inferSelect;
+export type SessionEpilogue = typeof sessionEpiloguesTable.$inferSelect;
 
 // Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
 // columnas con default son opcionales. Son la base de los inputs de los
@@ -32,6 +33,7 @@ export type NewSpendEvent = typeof spendEventsTable.$inferInsert;
 export type NewEmulator = typeof emulatorsTable.$inferInsert;
 export type NewSaveBackup = typeof saveBackupsTable.$inferInsert;
 export type NewCuriosity = typeof curiositiesTable.$inferInsert;
+export type NewSessionEpilogue = typeof sessionEpiloguesTable.$inferInsert;
 
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
@@ -135,6 +137,37 @@ export const sessionsTable = sqliteTable('sessions', {
   // iterations desaparecieron — las fechas de inicio/fin de un playthrough
   // viven en su log de state_events (única fuente de verdad) y se DERIVAN en
   // las queries de lectura (ver getGameById).
+});
+
+// AFTERPLAY-LOOP.md §16.1 — solo persiste la decisión de revisar/resolver.
+// Récords, regresos y otros Moments se derivan de los datos reales. UNIQUE
+// por sessionId hace idempotentes Stop, cambio terminal y process_exit.
+export const sessionEpiloguesTable = sqliteTable('session_epilogues', {
+  id: int().primaryKey({ autoIncrement: true }),
+  sessionId: int()
+    .notNull()
+    .unique()
+    .references(() => sessionsTable.id, { onDelete: 'cascade' }),
+  closeReason: text({
+    enum: [
+      'process_exit',
+      'manual_stop',
+      'terminal_state',
+      'lock',
+      'suspend',
+      'startup_recovery',
+      'emulator_assignment',
+    ],
+  }).notNull(),
+  status: text({ enum: ['pending', 'completed', 'dismissed'] })
+    .notNull()
+    .default('pending'),
+  tags: text({ mode: 'json' }).$type<string[]>(),
+  highlight: int({ mode: 'boolean' }).notNull().default(false),
+  createdAt: int({ mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  resolvedAt: int({ mode: 'timestamp_ms' }),
 });
 
 export const iterationsTable = sqliteTable('iterations', {

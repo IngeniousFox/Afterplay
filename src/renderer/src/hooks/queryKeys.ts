@@ -18,6 +18,11 @@ export const queryKeys = {
     // sessions.all (mutations, useWatcherSync) refresca también la bandeja.
     pending: ['sessions', 'pending'] as const,
   },
+  sessionEpilogues: {
+    all: ['sessionEpilogues'] as const,
+    pending: ['sessionEpilogues', 'pending'] as const,
+    detail: (id: number | null) => ['sessionEpilogues', id] as const,
+  },
   emulators: {
     all: ['emulators'] as const,
   },

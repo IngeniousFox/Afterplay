@@ -1,4 +1,4 @@
-import { Check, Flame, Timer } from 'lucide-react';
+import { BookOpen, Check, Flame, Timer } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { SessionClosedEvent } from '../../../shared/types';
@@ -28,6 +28,7 @@ type SessionClosedToastProps = {
   toastId: string | number;
   durationMs: number;
   onOpenGame: () => void;
+  onReview: () => void;
 };
 
 // "1h 47m" partido en número y unidad, para poder pintar la cifra grande y la
@@ -45,6 +46,7 @@ export const SessionClosedToast = ({
   toastId,
   durationMs,
   onOpenGame,
+  onReview,
 }: SessionClosedToastProps): React.JSX.Element => {
   const [note, setNote] = useState('');
   const [saved, setSaved] = useState(false);
@@ -127,6 +129,19 @@ export const SessionClosedToast = ({
             <Flame size={12} className="flex-none" />
             Your longest session with this game
           </div>
+        )}
+
+        {event.epilogueId !== null && (
+          <button
+            type="button"
+            onClick={onReview}
+            className="flex items-center justify-between rounded-[8px] border border-[#85a3d640] bg-[#85a3d610] px-2.5 py-1.75 text-[11.5px] font-bold text-[#85a3d6] hover:bg-[#85a3d619]"
+          >
+            <span className="flex items-center gap-1.5">
+              <BookOpen size={12} /> Review this session
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
         )}
 
         {saved ? (

@@ -7,6 +7,7 @@ import type {
   NewSpendEvent,
   NewStateEvent,
   Session,
+  SessionEpilogue,
   SpendEvent,
   StateEvent,
 } from '../main/db/schema';
@@ -17,6 +18,7 @@ export type {
   Iteration,
   SaveBackupRow,
   Session,
+  SessionEpilogue,
   SpendEvent,
   StateEvent,
 } from '../main/db/schema';
@@ -367,11 +369,93 @@ export type SessionWithGame = {
   coverUrl: string | null;
 };
 
+// AFTERPLAY-LOOP.md §9 — todos los caminos que pueden cerrar una sesión
+// comparten este vocabulario. La razón decide qué efectos secundarios son
+// válidos; no todos los cierres significan que el juego haya terminado.
+export type SessionCloseReason =
+  | 'process_exit'
+  | 'manual_stop'
+  | 'terminal_state'
+  | 'lock'
+  | 'suspend'
+  | 'startup_recovery'
+  | 'emulator_assignment';
+
+export type SessionFinalized = {
+  sessionId: number;
+  gameId: number | null;
+  iterationId: number | null;
+  startedAt: Date;
+  endedAt: Date;
+  durationSec: number;
+  reason: SessionCloseReason;
+  meaningful: boolean;
+};
+
+export type JourneyMomentType =
+  | 'first_session'
+  | 'return'
+  | 'hours_milestone'
+  | 'sessions_milestone'
+  | 'longest_session';
+
+export type JourneyMoment = {
+  key: string;
+  type: JourneyMomentType;
+  gameId: number;
+  sessionId: number;
+  iterationId: number | null;
+  occurredAt: Date;
+  precision: EventDatePrecision;
+  importance: number;
+  text: string;
+};
+
+export type LocalChapter = {
+  key: string;
+  kind: 'month' | 'year';
+  year: number;
+  month: number | null;
+  hours: number;
+  sessions: number;
+  games: number;
+  completed: number;
+  topGameTitle: string | null;
+  longestSessionSec: number;
+  moments: JourneyMoment[];
+  soFar: boolean;
+  narrative: string;
+};
+
+export type SessionEpilogueSummary = SessionEpilogue & {
+  gameId: number;
+  gameTitle: string;
+  coverUrl: string | null;
+  heroUrl: string | null;
+  iterationLabel: string;
+  endless: boolean;
+  startedAt: Date;
+  endedAt: Date;
+  durationSec: number;
+  note: string | null;
+  totalHours: number;
+  isLongest: boolean;
+  moments: JourneyMoment[];
+};
+
+export type ResolveSessionEpilogueInput = {
+  id: number;
+  status: 'completed' | 'dismissed';
+  tags: string[];
+  highlight: boolean;
+};
+
 // Un juego se acaba de cerrar y el watcher ha cerrado su sesión. Viaja del
 // main al renderer para levantar el aviso con la duración y el atajo de
 // escribir la nota — el renderer no puede saberlo por su cuenta: quien
 // detecta que el proceso murió es el watcher.
 export type SessionClosedEvent = {
+  epilogueId: number | null;
   sessionId: number;
   gameId: number;
   gameTitle: string;
@@ -390,6 +474,7 @@ export type SessionClosedEvent = {
   // toca enseñar un toast, sino abrir la ficha del juego con esa sesión
   // resaltada — que es lo que el clic estaba pidiendo.
   openGame?: boolean;
+  openEpilogue?: boolean;
 };
 
 // Referencia al evento que fija una fecha de borde del playthrough (modelo

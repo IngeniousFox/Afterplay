@@ -4,6 +4,7 @@ import {
   gamesTable,
   iterationsTable,
   saveBackupsTable,
+  sessionEpiloguesTable,
   sessionsTable,
   spendEventsTable,
   stateEventsTable,
@@ -95,6 +96,17 @@ export const sessionColumns = {
   lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
   datePrecision: sessionsTable.datePrecision,
   note: sessionsTable.note,
+};
+
+export const sessionEpilogueColumns = {
+  id: sessionEpiloguesTable.id,
+  sessionId: sessionEpiloguesTable.sessionId,
+  closeReason: sessionEpiloguesTable.closeReason,
+  status: sessionEpiloguesTable.status,
+  tags: sessionEpiloguesTable.tags,
+  highlight: sessionEpiloguesTable.highlight,
+  createdAt: sessionEpiloguesTable.createdAt,
+  resolvedAt: sessionEpiloguesTable.resolvedAt,
 };
 
 export const emulatorColumns = {

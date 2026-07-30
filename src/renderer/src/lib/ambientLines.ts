@@ -121,6 +121,9 @@ export type AmbientContext = {
   // ver main/curiosities). La otra mitad del modo ambiente: las frases de
   // arriba hablan de TI con este juego; estas hablan del juego en sí.
   curiosities: string[];
+  // Moments derivados del mismo motor que Epilogue/Journey. Nunca contienen
+  // notas del usuario: son hechos verificables de sesiones y regresos.
+  moments: string[];
 };
 
 export const ambientLines = (
@@ -141,10 +144,15 @@ export const ambientLines = (
     isNewestInLibrary,
     completedSameYear,
     playedJustBefore,
+    moments,
   } = context;
   // Las manuales tienen fecha imprecisa (un "marzo de 2021" no tiene hora),
   // así que quedan fuera de todo lo que hable de horarios o duraciones.
   const tracked = sessions.filter((session) => !session.isManual && session.durationSec !== null);
+
+  lines.push(
+    ...moments.map((moment) => moment.charAt(0).toLowerCase() + moment.slice(1)),
+  );
 
   // ── Aniversarios: lo más bonito que puede decir, porque es lo único que no
   // sabrías tú solo ──────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ export const useWatcherSync = (): void => {
       // El watcher también crea/cierra sesiones directo en la DB — la vista
       // de Sesiones (Bloque 5A) necesita el mismo aviso que games.all.
       queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessionEpilogues.all });
     });
   }, [queryClient]);
 };

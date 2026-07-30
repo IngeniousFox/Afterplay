@@ -6,6 +6,7 @@ import { MetricCard } from '../components/library/detail/MetricsRow';
 import { DeleteSessionDialog } from '../components/sessions/DeleteSessionDialog';
 import { Pager } from '../components/sessions/Pager';
 import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
+import { SessionEpiloguesSection } from '../components/sessions/SessionEpiloguesSection';
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
 import { useSessions } from '../hooks/sessions';
@@ -186,6 +187,7 @@ export const Sessions = (): React.JSX.Element => {
             solo en la vista global: una sesión pendiente no pertenece a
             ningún juego todavía, no pinta nada bajo un filtro de juego. */}
         {gameId === null && <PendingSessionsSection />}
+        {gameId === null && <SessionEpiloguesSection />}
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading sessions…</p>

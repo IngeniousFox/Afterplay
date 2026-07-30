@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SessionClosedToast } from '../components/SessionClosedToast';
 import { queryKeys } from './queryKeys';
+import { requestSessionEpilogueReview } from '../lib/sessionEpilogueReview';
 
 // Cuánto vive el aviso. Generoso a propósito: el toast trae un campo de texto
 // y escribir "me quedé en el jefe del castillo" lleva más que leer un mensaje.
@@ -67,6 +68,11 @@ export const useSessionClosedToast = (): void => {
 
   useEffect(() => {
     return window.api.sessions.onSessionClosed((event) => {
+      if (event.openEpilogue && event.epilogueId !== null) {
+        requestSessionEpilogueReview(event.epilogueId);
+        return;
+      }
+
       // El main manda esto también al pulsar la notificación de Windows: ahí
       // no toca enseñar un toast, sino llevar directo a la ficha con la
       // sesión resaltada, que es lo que el clic pedía.
@@ -80,6 +86,7 @@ export const useSessionClosedToast = (): void => {
       // ficha que ya tuvieras abierta no la vería.
       queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessionEpilogues.all });
 
       toast.custom(
         (id) => (
@@ -87,6 +94,10 @@ export const useSessionClosedToast = (): void => {
             event={event}
             toastId={id}
             durationMs={TOAST_DURATION_MS}
+            onReview={() => {
+              if (event.epilogueId !== null) requestSessionEpilogueReview(event.epilogueId);
+              toast.dismiss(id);
+            }}
             onOpenGame={() => {
               requestSessionFlash(event.sessionId);
               navigate(`/games/${event.gameId}`);

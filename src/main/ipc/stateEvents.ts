@@ -1,13 +1,22 @@
 import { handleDb } from './dbHandle';
 import type { AddStateEventInput, UpdateStateEventPatch } from '../../shared/types';
-import { addStateEvent } from '../db/queries/stateEvents/addStateEvent';
+import { addStateEventWithResult } from '../db/queries/stateEvents/addStateEvent';
 import { deleteStateEvent } from '../db/queries/stateEvents/deleteStateEvent';
 import { getAllStateEvents } from '../db/queries/stateEvents/getAllStateEvents';
 import { updateStateEvent } from '../db/queries/stateEvents/updateStateEvent';
+import {
+  applySessionFinalizationEffects,
+  describeFinalizedSession,
+} from '../sessions/finalizeSession';
 
 export const registerStateEventsHandlers = (): void => {
   handleDb('stateEvents:add', async (_event, input: AddStateEventInput) => {
-    return addStateEvent(input);
+    const result = await addStateEventWithResult(input);
+    if (result.closedSession) {
+      const finalization = await describeFinalizedSession(result.closedSession, 'terminal_state');
+      await applySessionFinalizationEffects(finalization);
+    }
+    return result.event;
   });
 
   handleDb('stateEvents:getAll', async () => {

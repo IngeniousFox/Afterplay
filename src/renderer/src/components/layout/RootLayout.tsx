@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { useSessionClosedToast } from '../../hooks/useSessionClosedToast';
+import { SessionEpilogueDialogHost } from '../sessions/SessionEpilogueDialog';
 import { MiddleColumn } from './MiddleColumn';
 import { NavRail } from './NavRail';
 
@@ -18,6 +19,7 @@ export const RootLayout = (): React.JSX.Element => {
       <div className="min-w-0 flex-1">
         <Outlet />
       </div>
+      <SessionEpilogueDialogHost />
     </div>
   );
 };

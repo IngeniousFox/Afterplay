@@ -37,7 +37,12 @@ export const useAssignSession = (): UseMutationResult<
   useInvalidatingMutation(
     ({ sessionId, gameId }: { sessionId: number; gameId: number }) =>
       window.api.sessions.assign(sessionId, gameId),
-    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
+    [
+      queryKeys.games.all,
+      queryKeys.sessions.all,
+      queryKeys.sessionEpilogues.all,
+      queryKeys.stateEvents.all,
+    ],
   );
 
 // Descartar una sesión de emulador sin asignar (se abrió el emulador solo
@@ -56,7 +61,7 @@ export const useDeletePendingSession = (): UseMutationResult<boolean, Error, num
 export const useDeleteSession = (): UseMutationResult<boolean, Error, number, unknown> =>
   useInvalidatingMutation(
     (id: number) => window.api.sessions.delete(id),
-    [queryKeys.games.all, queryKeys.sessions.all],
+    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.sessionEpilogues.all],
   );
 
 export const useCloseSession = (): UseMutationResult<
@@ -67,7 +72,7 @@ export const useCloseSession = (): UseMutationResult<
 > =>
   useInvalidatingMutation(
     ({ id, endedAt }: { id: number; endedAt: Date }) => window.api.sessions.close(id, endedAt),
-    [queryKeys.games.all, queryKeys.sessions.all],
+    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.sessionEpilogues.all],
   );
 
 // Botón Play (ActionBar) — misma función que el watcher (startGameSession),
@@ -97,5 +102,5 @@ export const useSetSessionNote = (): UseMutationResult<
 > =>
   useInvalidatingMutation(
     ({ id, note }: { id: number; note: string }) => window.api.sessions.setNote(id, note),
-    [queryKeys.games.all, queryKeys.sessions.all],
+    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.sessionEpilogues.all],
   );

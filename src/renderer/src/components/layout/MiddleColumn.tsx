@@ -14,6 +14,7 @@ import {
 } from '../../lib/gameFilters';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { filterByTitle } from '../../lib/search';
+import { buildRotation } from '../../lib/now';
 import { revealClass, revealStyle } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { StatusIcon } from '../StatusIcon';
@@ -467,6 +468,42 @@ const LibraryNavColumn = (): React.JSX.Element => {
   );
 };
 
+const NowNavColumn = (): React.JSX.Element => {
+  const navigate = useNavigate();
+  const { data: games = [] } = useGames();
+  const [search, setSearch] = useState('');
+  const rotation = buildRotation(games, new Date());
+  const visible = filterByTitle(rotation, search);
+
+  return (
+    <MiddleColumnShell
+      label="NOW"
+      sub={pluralize(rotation.length, 'game')}
+      search={search}
+      onSearchChange={setSearch}
+    >
+      <div className={revealClass} style={revealStyle(0)}>
+        <GroupHeader label="IN ROTATION" count={visible.length} />
+        {visible.map((game) => (
+          <GameRow
+            key={game.id}
+            game={game}
+            selected={false}
+            onClick={() => navigate(`/games/${game.id}`)}
+            subtitle={<StatusSubtitle game={game} />}
+            rightLabel={formatHours(game.totalHours)}
+          />
+        ))}
+        {visible.length === 0 && (
+          <div className="px-3 py-8 text-center text-xs text-muted-foreground">
+            Play something and it will appear here.
+          </div>
+        )}
+      </div>
+    </MiddleColumnShell>
+  );
+};
+
 // Sección Plan to Play — mismo patrón que LibraryNavColumn pero sobre la
 // lista de planeados (usePlannedGames): estos juegos no aparecen en ninguna
 // otra columna ni pantalla de la app. Sin horas a la derecha (un juego
@@ -704,6 +741,7 @@ const StatsNavColumn = (): React.JSX.Element => {
 // juego, que vive dentro de /games).
 export const MiddleColumn = (): React.JSX.Element => {
   const location = useLocation();
+  if (location.pathname === '/now') return <NowNavColumn />;
   if (location.pathname === '/sessions') return <SessionsNavColumn />;
   if (location.pathname === '/stats') return <StatsNavColumn />;
   if (location.pathname.startsWith('/plan')) return <PlanNavColumn />;

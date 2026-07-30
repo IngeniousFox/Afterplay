@@ -390,10 +390,16 @@ app.whenReady().then(async () => {
       // vacío. Con 'did-finish-load' ya hay quien escuche.
       if (target.webContents.isLoading()) {
         target.webContents.once('did-finish-load', () => {
-          target.webContents.send('sessions:closed', { ...event, openGame: true });
+          target.webContents.send('sessions:closed', {
+            ...event,
+            [event.epilogueId === null ? 'openGame' : 'openEpilogue']: true,
+          });
         });
       } else {
-        target.webContents.send('sessions:closed', { ...event, openGame: true });
+        target.webContents.send('sessions:closed', {
+          ...event,
+          [event.epilogueId === null ? 'openGame' : 'openEpilogue']: true,
+        });
       }
     });
     notification.show();
@@ -417,8 +423,8 @@ app.whenReady().then(async () => {
   // suspendido real de Windows. Los cuatro apuntan a pause()/resume(), que ya
   // son idempotentes (no pasa nada si se disparan los dos a la vez, ej. al
   // cerrar la tapa del portátil).
-  powerMonitor.on('suspend', () => watcher?.pause());
-  powerMonitor.on('lock-screen', () => watcher?.pause());
+  powerMonitor.on('suspend', () => watcher?.pause('suspend'));
+  powerMonitor.on('lock-screen', () => watcher?.pause('lock'));
   powerMonitor.on('resume', () => watcher?.resume());
   powerMonitor.on('unlock-screen', () => watcher?.resume());
 

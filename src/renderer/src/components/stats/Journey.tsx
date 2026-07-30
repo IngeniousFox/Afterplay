@@ -1,12 +1,15 @@
-import { CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
+import { CalendarRange, Clock3, Gamepad2, Route, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   EventDatePrecision,
   GameListItem,
+  JourneyMoment,
   SessionWithGame,
   StateEventSummary,
 } from '../../../../shared/types';
+import { buildJourneyMoments } from '../../../../shared/memory/moments';
+import { buildMonthChapters, buildYearChapters } from '../../../../shared/memory/chapters';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
@@ -546,6 +549,18 @@ const JourneyCover = ({
   );
 };
 
+const JourneyMomentNode = ({ moment }: { moment: JourneyMoment }): React.JSX.Element => (
+  <div className="flex items-center gap-2.5 py-1.25">
+    <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full border border-[#85a3d638] bg-[#85a3d612]">
+      <Sparkles size={10} color={BLUE} />
+    </span>
+    <span className="text-[11.5px] font-bold text-[#c8d7ef]">{moment.text}</span>
+    <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+      {moment.occurredAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+    </span>
+  </div>
+);
+
 export const Journey = ({
   games,
   sessions,
@@ -563,6 +578,31 @@ export const Journey = ({
     () => buildEntries(games, sessions, stateEvents),
     [games, sessions, stateEvents],
   );
+  const moments = useMemo(() => buildJourneyMoments(games, sessions), [games, sessions]);
+  const momentsByMonth = useMemo(() => {
+    const grouped = new Map<string, JourneyMoment[]>();
+    for (const moment of moments) {
+      const key = `${moment.occurredAt.getFullYear()}-${moment.occurredAt.getMonth()}`;
+      grouped.set(key, [...(grouped.get(key) ?? []), moment]);
+    }
+    return grouped;
+  }, [moments]);
+  const monthChapters = useMemo(
+    () => buildMonthChapters(games, sessions, stateEvents, moments, new Date()),
+    [games, sessions, stateEvents, moments],
+  );
+  const yearChapters = useMemo(
+    () => buildYearChapters(games, sessions, stateEvents, moments, new Date()),
+    [games, sessions, stateEvents, moments],
+  );
+  const monthChapterByKey = useMemo(
+    () => new Map(monthChapters.map((chapter) => [`${chapter.year}-${chapter.month}`, chapter])),
+    [monthChapters],
+  );
+  const yearChapterByYear = useMemo(
+    () => new Map(yearChapters.map((chapter) => [chapter.year, chapter])),
+    [yearChapters],
+  );
   const byYear = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -573,6 +613,13 @@ export const Journey = ({
       const month = entry.lastAt.getMonth();
       const months = grouped.get(year) ?? new Map<number, JourneyEntry[]>();
       months.set(month, [...(months.get(month) ?? []), entry]);
+      grouped.set(year, months);
+    }
+    for (const moment of moments) {
+      const year = moment.occurredAt.getFullYear();
+      const month = moment.occurredAt.getMonth();
+      const months = grouped.get(year) ?? new Map<number, JourneyEntry[]>();
+      if (!months.has(month)) months.set(month, []);
       grouped.set(year, months);
     }
     return [...grouped.entries()]
@@ -591,7 +638,7 @@ export const Journey = ({
           },
         ];
       });
-  }, [entries]);
+  }, [entries, moments]);
 
   useEffect(() => {
     const visibleYears = new Set<number>();
@@ -723,9 +770,28 @@ export const Journey = ({
               }}
               className="scroll-mt-6"
             >
-              <div className="mb-3 flex items-center gap-3">
-                <span className="text-xl font-extrabold text-foreground tabular-nums">{year}</span>
-                <span className="h-px flex-1 bg-border/75" />
+              <div className="mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-extrabold text-foreground tabular-nums">{year}</span>
+                  {yearChapterByYear.get(year)?.soFar && (
+                    <span className="text-[9px] font-extrabold tracking-[.11em] text-primary">
+                      SO FAR
+                    </span>
+                  )}
+                  <span className="h-px flex-1 bg-border/75" />
+                </div>
+                {yearChapterByYear.get(year) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
+                    <span className="font-bold text-foreground">
+                      {formatHours(yearChapterByYear.get(year)?.hours ?? 0)}
+                    </span>
+                    <span>{yearChapterByYear.get(year)?.sessions} sessions</span>
+                    <span>{yearChapterByYear.get(year)?.games} games</span>
+                    <span className="text-muted-foreground/65">
+                      {yearChapterByYear.get(year)?.narrative}
+                    </span>
+                  </div>
+                )}
               </div>
               {months.map(([month, monthEntries], monthIndex) => (
                 <div
@@ -746,7 +812,7 @@ export const Journey = ({
                     <span className="absolute top-2 -right-1 h-2 w-2 rounded-full border-2 border-[#0d0f0e] bg-white/20 transition-[background,box-shadow] duration-200 group-hover/month:bg-primary group-hover/month:shadow-[0_0_10px_rgba(47,220,126,.45)]" />
                   </div>
 
-                  <div className="min-h-45 pb-7">
+                  <div className={monthEntries.length > 0 ? 'min-h-45 pb-7' : 'pb-7'}>
                     <div className="mb-2.5 flex items-center gap-2">
                       <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
                       {monthEntries.length > 0 && (
@@ -756,6 +822,14 @@ export const Journey = ({
                         </span>
                       )}
                     </div>
+                    {monthChapterByKey.get(`${year}-${month}`) && (
+                      <div className="mb-3 text-[10.5px] leading-relaxed text-muted-foreground/70">
+                        {monthChapterByKey.get(`${year}-${month}`)?.soFar && (
+                          <span className="mr-1.5 font-bold text-primary">So far:</span>
+                        )}
+                        {monthChapterByKey.get(`${year}-${month}`)?.narrative}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-3 transition-opacity duration-200 has-[button:hover]:[&>button:not(:hover)]:opacity-45 has-[button:focus-visible]:[&>button:not(:focus-visible)]:opacity-45">
                       {monthEntries.map((entry) => (
                         <JourneyCover
@@ -765,6 +839,13 @@ export const Journey = ({
                         />
                       ))}
                     </div>
+                    {(momentsByMonth.get(`${year}-${month}`) ?? []).length > 0 && (
+                      <div className={monthEntries.length > 0 ? 'mt-3 border-t border-white/[0.06] pt-2' : ''}>
+                        {(momentsByMonth.get(`${year}-${month}`) ?? []).map((moment) => (
+                          <JourneyMomentNode key={moment.key} moment={moment} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

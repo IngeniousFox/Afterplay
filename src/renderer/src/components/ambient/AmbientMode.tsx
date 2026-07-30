@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
+import { buildJourneyMoments } from '../../../../shared/memory/moments';
 import { useCuriosities } from '../../hooks/curiosities';
 import { useGames } from '../../hooks/games';
 import { useSessions } from '../../hooks/sessions';
@@ -200,6 +201,13 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       curiositiesByGame.set(row.gameId, list);
     }
 
+    const momentsByGame = new Map<number, Set<string>>();
+    for (const moment of buildJourneyMoments(games, sessions)) {
+      const texts = momentsByGame.get(moment.gameId) ?? new Set<string>();
+      texts.add(moment.text);
+      momentsByGame.set(moment.gameId, texts);
+    }
+
     // Ranking por horas: da el "tu juego más jugado" y el "#3 de tu
     // biblioteca". Solo cuentan los que tienen horas — un juego a cero no
     // ocupa puesto.
@@ -253,6 +261,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       eventsByGame,
       spendByGame,
       curiositiesByGame,
+      momentsByGame,
       rankByGame,
       libraryHours,
       oldestId,
@@ -288,6 +297,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     completedSameYear,
     playedJustBefore: indexes.previousTitleByGame.get(game.id) ?? null,
     curiosities: indexes.curiositiesByGame.get(game.id) ?? [],
+    moments: [...(indexes.momentsByGame.get(game.id) ?? [])],
   };
 
   return (

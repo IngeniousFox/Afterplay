@@ -12,6 +12,7 @@ import { gamesTable, iterationsTable, sessionsTable } from '../../schema';
 // no las de este playthrough suelto.
 export const getSessionClosedInfo = async (
   sessionId: number,
+  epilogueId: number | null = null,
 ): Promise<SessionClosedEvent | null> => {
   const db = getDb();
 
@@ -46,6 +47,7 @@ export const getSessionClosedInfo = async (
     siblings.every((row) => row.id === session.id || (row.durationSec ?? 0) < durationSec);
 
   return {
+    epilogueId,
     sessionId: session.id,
     gameId: session.gameId,
     gameTitle: session.gameTitle,

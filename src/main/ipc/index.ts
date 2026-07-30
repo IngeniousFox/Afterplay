@@ -9,6 +9,7 @@ import { registerImagesHandlers } from './images';
 import { registerIterationsHandlers } from './iterations';
 import { registerSavesHandlers } from './saves';
 import { registerScanHandlers } from './scan';
+import { registerSessionEpiloguesHandlers } from './sessionEpilogues';
 import { registerSessionsHandlers } from './sessions';
 import { registerSettingsHandlers } from './settings';
 import { registerSgdbHandlers } from './sgdb';
@@ -27,6 +28,7 @@ export const registerIpcHandlers = (): void => {
   registerEmulatorsHandlers();
   registerIterationsHandlers();
   registerSessionsHandlers();
+  registerSessionEpiloguesHandlers();
   registerStateEventsHandlers();
   registerSpendHandlers();
   registerIgdbHandlers();

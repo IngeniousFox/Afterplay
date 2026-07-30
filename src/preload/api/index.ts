@@ -9,6 +9,7 @@ import { imagesApi } from './images';
 import { iterationsApi } from './iterations';
 import { savesApi } from './saves';
 import { scanApi } from './scan';
+import { sessionEpiloguesApi } from './sessionEpilogues';
 import { sessionsApi } from './sessions';
 import { settingsApi } from './settings';
 import { sgdbApi } from './sgdb';
@@ -25,6 +26,7 @@ export const api = {
   emulators: emulatorsApi,
   iterations: iterationsApi,
   sessions: sessionsApi,
+  sessionEpilogues: sessionEpiloguesApi,
   stateEvents: stateEventsApi,
   spend: spendApi,
   igdb: igdbApi,

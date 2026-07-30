@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { getDb } from '../..';
-import type { AddStateEventInput, StateEvent } from '../../../../shared/types';
-import { stateEventColumns } from '../../projections';
+import type { AddStateEventInput, Session, StateEvent } from '../../../../shared/types';
+import { sessionColumns, stateEventColumns } from '../../projections';
 import { iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
 import { computeDurationSec } from '../sessions/sessionDuration';
 import { latestRealStateEvent } from './latestRealStateEvent';
@@ -12,7 +12,14 @@ import { latestRealStateEvent } from './latestRealStateEvent';
 // propio evento (modelo v2, derivada al leer).
 const TERMINAL_TYPES = new Set(['completed', 'dropped', 'on_hold', 'resting']);
 
-export const addStateEvent = async (input: AddStateEventInput): Promise<StateEvent> => {
+export type AddStateEventResult = {
+  event: StateEvent;
+  closedSession: Session | null;
+};
+
+export const addStateEventWithResult = async (
+  input: AddStateEventInput,
+): Promise<AddStateEventResult> => {
   const db = getDb();
   // Resuelto una sola vez y reutilizado en todo lo demás (pausa de hermanos,
   // el propio evento, cierre de sesión) — si se dejara que cada sitio llamara
@@ -96,6 +103,7 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
       .values({ ...input, occurredAt })
       .returning(stateEventColumns);
 
+    let closedSession: Session | null = null;
     if (TERMINAL_TYPES.has(input.type)) {
       // Terminas mientras el juego sigue en marcha (sesión del watcher
       // todavía abierta): se cierra AQUÍ, en el instante del hito — si no,
@@ -111,13 +119,18 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
 
       if (openSession) {
         const durationSec = computeDurationSec(openSession.startedAt, occurredAt);
-        await tx
+        const [updated] = await tx
           .update(sessionsTable)
           .set({ endedAt: occurredAt, durationSec })
-          .where(eq(sessionsTable.id, openSession.id));
+          .where(eq(sessionsTable.id, openSession.id))
+          .returning(sessionColumns);
+        closedSession = updated ?? null;
       }
     }
 
-    return event;
+    return { event, closedSession };
   });
 };
+
+export const addStateEvent = async (input: AddStateEventInput): Promise<StateEvent> =>
+  (await addStateEventWithResult(input)).event;

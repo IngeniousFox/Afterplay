@@ -31,7 +31,12 @@ export const useAddStateEvent = (): UseMutationResult<
 > =>
   useInvalidatingMutation(
     (input: AddStateEventInput) => window.api.stateEvents.add(input),
-    [queryKeys.games.all, queryKeys.stateEvents.all],
+    [
+      queryKeys.games.all,
+      queryKeys.sessions.all,
+      queryKeys.sessionEpilogues.all,
+      queryKeys.stateEvents.all,
+    ],
   );
 
 // La fecha de un evento puede cambiar el orden del historial y hasta el
