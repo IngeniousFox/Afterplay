@@ -17,10 +17,7 @@ import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
 import { TimeFormatSlider } from './TimeFormatSlider';
 import { TriviaSection } from './TriviaSection';
-
-const GREEN = '#2fdc7e';
-const AMBER = '#e3b24a';
-const GRAY = '#8b93a3';
+import { AMBER, GRAY, GREEN } from '../../lib/colors';
 
 type SettingsModalProps = {
   open: boolean;

@@ -11,9 +11,7 @@ import type { CloudInventory } from '../../../../shared/types';
 import { useDeleteCloudMachine, useRecoverFromCloud, useScanBucket } from '../../hooks/saves';
 import { formatBytes, pluralize } from '../../lib/format';
 import { expandClass } from '../../lib/styles';
-
-const BLUE = '#85a3d6';
-const AMBER = '#e3b24a';
+import { AMBER, BLUE } from '../../lib/colors';
 
 // Qué hay DE VERDAD en el bucket, frente a lo que el índice local cree.
 //

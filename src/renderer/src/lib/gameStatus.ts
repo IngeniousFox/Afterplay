@@ -1,5 +1,6 @@
 import { Bookmark, Circle, Moon, Pause, Play, Trophy, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { leavesEndDate } from '../../../shared/playthroughState';
 import type { StateEvent } from '../../../shared/types';
 
 export type GameStatusMeta = {
@@ -60,13 +61,6 @@ export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'pla
 // también para endless (resting se añade, no sustituye a on_hold/dropped).
 export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting', 'dropped'];
 
-// Estados que dejan una fecha de salida ("Finished / left") — la misma terna
-// que puebla endEvent en el main (getGameById). OJO: no todos son finales.
-// Beaten/Dropped SÍ cierran el playthrough (isTerminal en iterations.ts);
-// On Hold solo lo deja aparcado con fecha — sigue siendo el mismo
-// playthrough y volver a Playing es retomarlo, no corregirlo.
-export const END_EVENT_STATUS_KEYS: PastStatusKey[] = ['beaten', 'dropped', 'on_hold'];
-
 // Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
 export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
   playing: 'started',
@@ -75,3 +69,16 @@ export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
   on_hold: 'on_hold',
   resting: 'resting',
 };
+
+// Estados que dejan una fecha de salida ("Finished / left") — los mismos que
+// pueblan endEvent en el main (getGameById). OJO: no todos son finales.
+// Beaten/Dropped SÍ cierran el playthrough (isTerminal en iterations.ts);
+// On Hold solo lo deja aparcado con fecha — sigue siendo el mismo playthrough
+// y volver a Playing es retomarlo, no corregirlo.
+//
+// DERIVADO de leavesEndDate en vez de escrito a mano: es la misma regla que
+// aplica el main, solo que traducida al vocabulario de la UI. Escrita aparte
+// eran dos listas que había que acordarse de tocar a la vez.
+export const END_EVENT_STATUS_KEYS: PastStatusKey[] = (
+  Object.keys(STATUS_TO_STATE_TYPE) as PastStatusKey[]
+).filter((key) => leavesEndDate(STATUS_TO_STATE_TYPE[key]));

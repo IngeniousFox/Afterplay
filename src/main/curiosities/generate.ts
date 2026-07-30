@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withDbAccess } from '../db';
 import type { PendingCuriositiesGame } from '../db/queries/curiosities/getPendingCuriositiesGames';
 import { storeCuriosities } from '../db/queries/curiosities/storeCuriosities';
+import { stripTags } from './stripTags';
 import { getWikipediaArticle } from './wikipedia';
 
 // La llamada al modelo. Una por juego EN LA VIDA: el resultado se guarda en
@@ -62,13 +63,6 @@ Style rules:
 Respond with ONLY a JSON array of strings. No other text before or after it.`;
 
 const curiositiesSchema = z.array(z.string());
-
-// Red de seguridad además de la regla del prompt: el modelo puede arrastrar la
-// costumbre de citar sus fuentes con marcado tipo <cite index="21-1">...</cite>
-// aunque nunca se le pidió — comprobado en curiosidades reales ya generadas.
-// Se quita cualquier etiqueta, dejando el texto de dentro intacto, en vez de
-// confiar solo en que el modelo obedezca la instrucción.
-const stripTags = (text: string): string => text.replace(/<\/?[a-z][^>]*>/gi, '').trim();
 
 // El modelo responde "solo el JSON", pero por si acaso envuelve el array en
 // texto o en un fence, se recorta al primer '[' y al último ']'.

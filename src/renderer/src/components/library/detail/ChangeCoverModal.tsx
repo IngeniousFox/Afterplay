@@ -7,8 +7,7 @@ import type { CoverPickerTarget } from '../add-game/CoverPicker';
 import { CoverPicker } from '../add-game/CoverPicker';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
 import { ImagesField } from '../add-game/ImagesField';
-
-const VIOLET = '#7c86c8';
+import { VIOLET } from '../../../lib/colors';
 
 type ChangeCoverModalProps = {
   game: GameDetail;

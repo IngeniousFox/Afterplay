@@ -64,9 +64,10 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
       })
       .where(eq(iterationsTable.id, iteration.id));
 
-    // De aquí para abajo: mismo guion que createGameWithDetails — sesiones
-    // marcadoras de borde para las fechas, gasto inicial y el log de estados
-    // (con 'started' por delante de un estado terminal, SPEC 4.5).
+    // De aquí para abajo: mismo guion que createGameWithDetails — gasto
+    // inicial y log de estados (con 'started' por delante de un estado
+    // terminal, SPEC 4.5). Las fechas del playthrough SON esos eventos:
+    // modelo v2, ya no se fabrican sesiones marcadoras de borde.
     await writeInitialPlaythrough(tx, game.id, iteration.id, input);
 
     return game;

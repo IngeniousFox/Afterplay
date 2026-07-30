@@ -111,6 +111,17 @@ export const sessionsTable = sqliteTable('sessions', {
   // NULL y no CASCADE: borrar un emulador no debe llevarse las sesiones ya
   // asignadas a juegos (deleteEmulator limpia las pendientes él mismo).
   emulatorId: int().references(() => emulatorsTable.id, { onDelete: 'set null' }),
+  // HISTÓRICO: hoy NINGÚN insert lo pone a true. Solo lo hacía
+  // `addManualSession`, la vía de registrar el pasado del modelo v1, y esa
+  // desapareció: el pasado ahora se registra como horas manuales en la
+  // iteración (manualTotalPlayed), no fabricando sesiones. Las dos únicas
+  // vías vivas (watcher/Play y emuladores) escriben false.
+  //
+  // La columna y los filtros `!isManual` de Stats se quedan por las filas
+  // ANTIGUAS, que sí pueden traerlo a true: quitarlos metería sesiones
+  // inventadas en el heatmap, las rachas y los histogramas, que solo quieren
+  // tiempo medido de verdad. Si alguna vez se confirma que no queda ninguna
+  // fila con true, esto se puede borrar entero con su migración.
   isManual: int({ mode: 'boolean' }).notNull().default(false),
   startedAt: int({ mode: 'timestamp_ms' })
     .notNull()

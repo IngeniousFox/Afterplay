@@ -1,8 +1,8 @@
 import { eq, sql } from 'drizzle-orm';
 import { getDb } from '../..';
+import { latestRealStateEvent, manualHoursAnchor } from '../../../../shared/playthroughState';
 import type { GameListItem, StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
-import { latestRealStateEvent } from '../stateEvents/latestRealStateEvent';
 import { resolveIterationHours } from './iterationHours';
 
 // Forma de una fila candidata a "evento de estado más reciente de este
@@ -68,7 +68,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
 
   // Todas las sesiones del juego (vía sus iteraciones), sin agregar. De aquí
   // salen CUATRO cosas a la vez en el mismo bucle de abajo: horas trackeadas
-  // (agrupadas por ITERACIÓN, para el reemplazo de arriba), nº de sesiones,
+  // (agrupadas por ITERACIÓN, para sumarlas a las manuales), nº de sesiones,
   // si hay alguna sesión abierta ahora mismo (LIVE), y desde cuándo (para el
   // contador en vivo de la card — SPEC 10.7 lo pide junto al badge PLAYING,
   // no basta con saber que está en marcha).
@@ -116,8 +116,8 @@ export const getGames = async (): Promise<GameListItem[]> => {
     }
   }
 
-  // Horas por juego = suma de las horas de cada una de sus iteraciones,
-  // cada una ya resuelta con la misma regla manual-o-trackeado-nunca-los-dos.
+  // Horas por juego = suma de las horas de cada una de sus iteraciones, cada
+  // una ya resuelta con la misma regla de siempre (manual + trackeado).
   const hoursByGame = new Map<number, number>();
   for (const iteration of iterations) {
     const trackedSeconds = trackedSecondsByIteration.get(iteration.id) ?? 0;
@@ -142,10 +142,9 @@ export const getGames = async (): Promise<GameListItem[]> => {
     .innerJoin(iterationsTable, eq(stateEventsTable.iterationId, iterationsTable.id));
 
   // Playthroughs con horas manuales, con el año al que atribuirlas para las
-  // vistas por año de Stats (modelo v2: la fecha sale del LOG de estados,
-  // no de sesiones ancla): el año del último evento terminal del playthrough
-  // (su fin), o el del primer 'started' si no terminó, o null sin fechas
-  // (solo cuenta en All Time).
+  // vistas por año de Stats (modelo v2: la fecha sale del LOG de estados, no
+  // de sesiones ancla). La regla de a qué fecha se cuelgan vive en
+  // manualHoursAnchor, compartida con el Journey del renderer.
   const eventsByIteration = new Map<number, StateEventCandidate[]>();
   for (const row of stateEventRows) {
     const list = eventsByIteration.get(row.iterationId) ?? [];
@@ -159,28 +158,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
   >();
   for (const iteration of iterations) {
     if (iteration.manualTotalPlayed === null) continue;
-    const events = eventsByIteration.get(iteration.id) ?? [];
-    let anchorDate: Date | null = null;
-    for (const event of events) {
-      const isTerminal =
-        event.type === 'completed' || event.type === 'dropped' || event.type === 'on_hold';
-      if (
-        isTerminal &&
-        (anchorDate === null || event.occurredAt.getTime() > anchorDate.getTime())
-      ) {
-        anchorDate = event.occurredAt;
-      }
-    }
-    if (anchorDate === null) {
-      for (const event of events) {
-        if (
-          event.type === 'started' &&
-          (anchorDate === null || event.occurredAt.getTime() < anchorDate.getTime())
-        ) {
-          anchorDate = event.occurredAt;
-        }
-      }
-    }
+    const anchorDate = manualHoursAnchor(eventsByIteration.get(iteration.id) ?? []);
     const list = manualIterationsByGame.get(iteration.gameId) ?? [];
     list.push({
       iterationId: iteration.id,

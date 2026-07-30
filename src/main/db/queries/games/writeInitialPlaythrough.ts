@@ -1,14 +1,11 @@
 import { getDb } from '../..';
+import { leavesEndDate } from '../../../../shared/playthroughState';
 import type { CreateGameWithDetailsInput } from '../../../../shared/types';
 import { spendEventsTable, stateEventsTable } from '../../schema';
 
 // El `tx` de una transacción de drizzle — mismo query builder que la
 // conexión, tipado desde ella para no importar internos de drizzle.
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
-
-// Estados que marcan un punto de FIN de playthrough. 'started' (sigue
-// jugándolo) y 'resting' (solo endless) quedan fuera: ninguno es un final.
-const TERMINAL_STATES = new Set(['completed', 'dropped', 'on_hold']);
 
 // Subconjunto de CreateGameWithDetailsInput/PromotePlannedGameInput que
 // describe el playthrough inicial (fechas de borde, gasto, log de estado) —
@@ -66,8 +63,7 @@ export const writeInitialPlaythrough = async (
     // "finished" con estado no terminal (p. ej. Playing) se ignora — no hay
     // final que registrar (el renderer ya no lo manda en ese caso; esto es
     // cinturón y tirantes).
-    const isTerminal = TERMINAL_STATES.has(input.initialStatus);
-    const finished = isTerminal ? input.finished : null;
+    const finished = leavesEndDate(input.initialStatus) ? input.finished : null;
     const occurredAt = finished?.date ?? input.started?.date ?? undefined;
     const datePrecision = finished?.precision ?? input.started?.precision ?? 'day';
     await tx.insert(stateEventsTable).values({

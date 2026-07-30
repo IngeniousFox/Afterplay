@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { useCreateManualBackup } from '../../hooks/backup';
 import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
-
-const TEAL = '#2bb6a6';
+import { TEAL } from '../../lib/colors';
 
 // Copia de seguridad a demanda, en la carpeta que elija el usuario — aparte
 // de la automática diaria (dailyBackup.ts, 5 rotando dentro de userData):

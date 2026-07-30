@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { GREEN } from '../../lib/colors';
 import { formatHours } from '../../lib/format';
+import { hasMeasuredDuration } from '../../lib/sessionStats';
 import { CategoryBarChart } from './CategoryBarChart';
 import type { Year } from './YearPicker';
 
@@ -25,7 +26,7 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // ¿Qué días de la semana juegas? — 7 barras con las horas totales por día,
 // mismas reglas de datos que el heatmap y Hours per month: solo sesiones
-// trackeadas de verdad (isManual false) y cerradas. "All Time" aquí es el
+// medidas y cerradas (ver sessionStats.ts). "All Time" aquí es el
 // histórico completo (es un perfil de costumbres, no una ventana de
 // actividad reciente); un año concreto, solo ese año.
 export const WhenDoYouPlayChart = ({
@@ -36,7 +37,7 @@ export const WhenDoYouPlayChart = ({
   const bars = useMemo(() => {
     const secondsByDay = Array.from({ length: 7 }, () => 0);
     for (const session of sessions) {
-      if (session.isManual || session.endedAt === null) continue;
+      if (!hasMeasuredDuration(session)) continue;
       if (year !== 'all' && session.startedAt.getFullYear() !== year) continue;
       const dayIndex = (session.startedAt.getDay() + 6) % 7;
       secondsByDay[dayIndex] += session.durationSec ?? 0;

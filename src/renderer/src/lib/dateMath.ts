@@ -68,6 +68,30 @@ export const humanizeSpanByPrecision = (
   return humanizeSpan(daysBetween(from, to));
 };
 
+// Clave de mes comparable y ordenable: año*12+mes. Un solo número por mes,
+// que además se puede restar para saber cuántos meses hay entre dos — y sin
+// el riesgo de confundir enero de 2025 con enero de 2024, que es lo que pasa
+// agrupando por getMonth() a secas.
+export const monthKey = (date: Date): number => date.getFullYear() * 12 + date.getMonth();
+
+// Los 12 meses que cubre una gráfica mensual de Stats: con "All Time", los
+// últimos doce terminando en el actual (actividad reciente, no toda la vida
+// apelotonada en doce barras); con un año concreto, sus enero-diciembre.
+//
+// Compartido por Hours per month y Spend per month a propósito: van una
+// encima de la otra en la misma pantalla, así que sus barras tienen que
+// caer en el mismo mes. Con la ventana calculada por separado en cada una,
+// bastaba tocar solo una para descuadrarlas sin que se notara.
+export const twelveMonthWindow = (year: number | 'all'): Date[] => {
+  const now = new Date();
+  const first =
+    year === 'all' ? new Date(now.getFullYear(), now.getMonth() - 11, 1) : new Date(year, 0, 1);
+  return Array.from(
+    { length: 12 },
+    (_, index) => new Date(first.getFullYear(), first.getMonth() + index, 1),
+  );
+};
+
 // Años (descendente) presentes en un conjunto de fechas — base del selector
 // de año en Stats.tsx/GameStats.tsx.
 export const yearsDesc = (dates: Date[]): number[] => {

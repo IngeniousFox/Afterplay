@@ -17,6 +17,12 @@ export const useWatcherSync = (): void => {
       // El watcher también crea/cierra sesiones directo en la DB — la vista
       // de Sesiones (Bloque 5A) necesita el mismo aviso que games.all.
       queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      // Y eventos de estado: detectar un arranque pasa por
+      // resolveIterationForPlay, que apila un 'started' (playthrough nuevo o
+      // reanudado). Sin esto, abrir un juego cambiaba su estado en la
+      // biblioteca pero el History de la ficha y el desglose de Stats seguían
+      // enseñando lo de antes hasta recargar.
+      queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
     });
   }, [queryClient]);
 };

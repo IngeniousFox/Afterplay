@@ -5,8 +5,7 @@ import { usePendingSessions } from '../../hooks/sessions';
 import { useCredentials } from '../../hooks/settings';
 import { AMBER } from '../../lib/colors';
 import { SettingsModal } from './SettingsModal';
-
-const GREEN = '#2fdc7e';
+import { GREEN } from '../../lib/colors';
 
 type NavItem = {
   to: string;

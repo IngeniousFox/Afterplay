@@ -1,6 +1,5 @@
 import { NumberInput } from '../../ui/number-input';
-
-const AMBER = '#e3b24a';
+import { AMBER } from '../../../lib/colors';
 
 type MoneyAmountFieldProps = {
   // 'MONEY SPENT (€)' en Add Game, 'AMOUNT (€)' en el popover de gasto del

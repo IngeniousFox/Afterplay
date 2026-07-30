@@ -18,10 +18,10 @@ import { useGame, useGames } from '../hooks/games';
 import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { useImageSrc } from '../hooks/useImageSrc';
-import { startOfDayMs, yearsDesc } from '../lib/dateMath';
+import { monthKey, startOfDayMs, yearsDesc } from '../lib/dateMath';
 import { formatDateOnly, formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
-import { sessionDurationStats } from '../lib/sessionStats';
+import { hasMeasuredDuration, sessionDurationStats } from '../lib/sessionStats';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
 import { longestStreak, playedDayKeys } from '../lib/streaks';
 
@@ -56,7 +56,7 @@ type WeekdaySession = {
 const topWeekdayIndex = (sessions: WeekdaySession[]): number | null => {
   const seconds = Array.from({ length: 7 }, () => 0);
   for (const session of sessions) {
-    if (session.isManual || session.endedAt === null) continue;
+    if (!hasMeasuredDuration(session)) continue;
     seconds[(session.startedAt.getDay() + 6) % 7] += session.durationSec ?? 0;
   }
   const max = Math.max(...seconds);
@@ -148,11 +148,8 @@ export const GameStats = ({
       if (session.endedAt === null) continue;
       const dayMs = startOfDayMs(session.startedAt);
       secondsByDay.set(dayMs, (secondsByDay.get(dayMs) ?? 0) + (session.durationSec ?? 0));
-      const monthKey = session.startedAt.getFullYear() * 12 + session.startedAt.getMonth();
-      secondsByMonth.set(
-        monthKey,
-        (secondsByMonth.get(monthKey) ?? 0) + (session.durationSec ?? 0),
-      );
+      const month = monthKey(session.startedAt);
+      secondsByMonth.set(month, (secondsByMonth.get(month) ?? 0) + (session.durationSec ?? 0));
     }
 
     let biggestDay: { dayMs: number; seconds: number } | null = null;
@@ -353,9 +350,9 @@ export const GameStats = ({
           <MetricCard
             Icon={SessionsIcon}
             label="SESSIONS"
-            // realSessions y no la suma cruda: los marcadores de borde no son
-            // sesiones jugadas, y la vista de Sesiones de este mismo juego
-            // tampoco los cuenta — mismo número en las dos pantallas.
+            // realSessions: las sesiones colgadas de las iteraciones del
+            // juego, las mismas que cuenta la vista de Sesiones — mismo
+            // número en las dos pantallas.
             value={String(Math.round(animatedSessions))}
             accent="#85a3d6"
           />

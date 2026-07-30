@@ -4,6 +4,7 @@ import { useIgdbDetails } from '../../../hooks/igdb';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { ScreenshotLightbox } from './ScreenshotLightbox';
 import { SectionLabel } from './SectionLabel';
+import { GREEN } from '../../../lib/colors';
 
 type ScreenshotsCarouselProps = {
   igdbId: number;
@@ -11,7 +12,6 @@ type ScreenshotsCarouselProps = {
 
 const SLIDE_WIDTH = 300;
 const SLIDE_GAP = 14;
-const GREEN = '#2fdc7e';
 // Cuántas placas de esqueleto mientras se resuelve el detalle de IGDB — no
 // se sabe todavía cuántas screenshots hay de verdad, así que es un número
 // fijo que llena la fila visible (mismo criterio que CoverPicker con sus 8/4

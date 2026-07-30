@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useState } from 'react';
 import { useImageSrc } from '../../../hooks/useImageSrc';
+import { GREEN } from '../../../lib/colors';
 
 // En ms — el mismo número gobierna la clase Tailwind (duration-200) de abajo
 // y el setTimeout que espera a que la animación de salida termine antes de
@@ -26,8 +27,6 @@ type ScreenshotLightboxProps = {
   onIndexChange: (index: number) => void;
   onClose: () => void;
 };
-
-const GREEN = '#2fdc7e';
 
 const LightboxImage = ({ url }: { url: string }): React.JSX.Element | null => {
   const src = useImageSrc(url, 'screenshots');

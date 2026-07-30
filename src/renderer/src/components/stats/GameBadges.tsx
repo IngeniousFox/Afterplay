@@ -73,6 +73,10 @@ export const GameBadges = ({
     if (day === 0 || day === 6) weekendSec += seconds;
   }
 
+  // `criteria` y `earned` son el mismo trato contado dos veces: uno para el
+  // usuario y otro para la máquina. Tocar el umbral sin tocar la frase deja
+  // un logro que dice una cosa y hace otra — pasó con Night Owl, que anunciaba
+  // "más de un tercio" mientras exigía el 35%. Van pegados por eso.
   const badges: Badge[] = [
     {
       key: 'beaten',
@@ -125,7 +129,7 @@ export const GameBadges = ({
     {
       key: 'night-owl',
       label: 'Night Owl',
-      criteria: 'Play over a third of your time starting between 22:00 and 06:00.',
+      criteria: 'Play 35% or more of your time starting between 22:00 and 06:00.',
       Icon: Moon,
       color: '#7c86c8',
       earned: totalSec > 0 && nightSec / totalSec >= 0.35,
@@ -133,7 +137,7 @@ export const GameBadges = ({
     {
       key: 'weekend-warrior',
       label: 'Weekend Warrior',
-      criteria: 'Play over 60% of your time on weekends.',
+      criteria: 'Play 60% or more of your time on weekends.',
       Icon: Swords,
       color: '#2fdc7e',
       earned: totalSec > 0 && weekendSec / totalSec >= 0.6,

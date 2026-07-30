@@ -52,7 +52,7 @@ const SAVOR_COLOR = '#e3b24a';
 // ÚLTIMO playthrough completado del juego — no las totales de todos los
 // playthroughs juntos: comparar la suma de tres partidas contra el tiempo de
 // UNA pasada no decía nada (petición explícita: "mira solo el último
-// Beaten"). Resueltas con la regla manual-reemplaza-trackeado de siempre.
+// Beaten"). Resueltas con la regla de horas de siempre: manual + trackeado.
 // Ordenado por ratio descendente, con paginación (mismo patrón de
 // Completed: flechas + deslizamiento sutil al cambiar de página).
 export const HltbCompareList = ({
@@ -96,13 +96,16 @@ export const HltbCompareList = ({
       .flatMap((game) => {
         const completed = lastCompletedByGame.get(game.id);
         if (!completed) return [];
-        // Horas de ESE playthrough — manual reemplaza a trackeado, misma
-        // regla que resolveIterationHours en el main.
+        // Horas de ESE playthrough — manual MÁS trackeado, la misma regla que
+        // resolveIterationHours en el main: son tiempos disjuntos (lo jugado
+        // fuera de la app y lo que midió el watcher), no dos versiones del
+        // mismo dato. Comparar contra HowLongToBeat solo con la parte manual
+        // dejaba fuera todo lo que el watcher hubiera medido después.
         const manual = game.manualIterations.find(
           (iteration) => iteration.iterationId === completed.iterationId,
         );
         const hours =
-          manual?.hours ?? (trackedSecondsByIteration.get(completed.iterationId) ?? 0) / 3600;
+          (manual?.hours ?? 0) + (trackedSecondsByIteration.get(completed.iterationId) ?? 0) / 3600;
         if (hours <= 0) return [];
         return [
           {

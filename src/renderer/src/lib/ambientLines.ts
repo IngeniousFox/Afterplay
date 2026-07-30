@@ -1,4 +1,5 @@
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../shared/types';
+import { DAY_MS } from './dateMath';
 import { formatElapsed, formatHours, formatMoney } from './format';
 
 // Lo que el modo ambiente susurra debajo del título.
@@ -21,8 +22,9 @@ import { formatElapsed, formatHours, formatMoney } from './format';
 // prioridades. Un juego con mucha historia puede tener quince cosas distintas
 // que contarte, y así las va soltando.
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
+// Propio y no el daysBetween de dateMath: aquel devuelve el tramo exacto en
+// decimales, y aquí siempre se va a redactar una frase ("hace 5 meses"), así
+// que interesan días enteros ya truncados.
 const daysBetween = (from: Date, to: number): number => Math.floor((to - from.getTime()) / DAY_MS);
 
 // "hace 3 años" / "hace 5 meses" / "la semana pasada". Nunca "hace 1096 días".

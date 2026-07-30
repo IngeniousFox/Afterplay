@@ -5,11 +5,14 @@
 export const AMBER = '#e3b24a';
 
 // Resto de la paleta de identidad de sección (FormSection/SettingsCard/
-// ModalShell/CheckboxRow) — antes redefinida byte a byte en AddGameModal.tsx,
-// EditGameModal.tsx, edit-game/IterationSection.tsx, edit-game/
-// EndlessSection.tsx y add-game/CheckboxRow.tsx, cada una con su propia
-// copia de los mismos hex. Mismo motivo que AMBER: tokens de UI aparte de
+// ModalShell/CheckboxRow). Mismo motivo que AMBER: tokens de UI aparte de
 // cualquier color de estado, aunque algunos coincidan de casualidad.
+//
+// Estos hex estaban copiados byte a byte en dos docenas de componentes, cada
+// uno con su `const GREEN = '#2fdc7e'` arriba del archivo. AQUÍ es donde se
+// tocan: si un día cambia el verde de la app, cambia en un sitio y no en
+// veinticuatro (que en la práctica significa cambiarlo en veinte y dejarse
+// cuatro sin que nadie lo note).
 export const GREEN = '#2fdc7e';
 export const VIOLET = '#7c86c8';
 export const BLUE = '#85a3d6';

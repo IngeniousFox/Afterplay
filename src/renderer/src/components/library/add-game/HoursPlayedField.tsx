@@ -1,7 +1,6 @@
 import { Clock } from 'lucide-react';
 import { NumberInput } from '../../ui/number-input';
-
-const GREEN = '#2fdc7e';
+import { GREEN } from '../../../lib/colors';
 
 // Mismo campo "HOURS PLAYED · outside the app" que se repite en
 // PlayedBeforePanel, ManualPlaythroughsField, EndlessSection e

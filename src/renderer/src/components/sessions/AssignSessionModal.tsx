@@ -9,8 +9,8 @@ import { filterByTitle } from '../../lib/search';
 import { accentGradientStyle, revealClass, revealStyle } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { ModalShell } from '../ui/modal-shell';
+import { BLUE } from '../../lib/colors';
 
-const BLUE = '#85a3d6';
 // Igual que SearchStep: como mucho un par de chips de género, o la fila se
 // convierte en un muro de píldoras.
 const MAX_GENRES = 2;
@@ -52,6 +52,9 @@ export const AssignSessionModal = ({
     setHighlighted(-1);
   }
 
+  // Cerrar queda bloqueado mientras la asignación está en vuelo: si se cerrara
+  // a medias, la sesión pendiente seguiría en la bandeja o no, según cuándo
+  // volviera la mutation, y sin nada en pantalla que lo contara.
   const handleClose = (): void => {
     if (assignSession.isPending) return;
     setSearch('');

@@ -167,6 +167,15 @@ export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React
   );
 };
 
+// Lo escaneado, repartido en tres montones según lo que puedes hacer con
+// cada carpeta — que es lo único que le importa a quien mira esta pantalla:
+//
+//   · reconocida y no la tienes  -> añadir de un clic (arriba, lo útil)
+//   · no se ha reconocido        -> buscarla tú (debajo, con su buscador)
+//   · ya está en la biblioteca   -> nada (al final, plegada)
+//
+// El tercer montón podría no enseñarse, pero entonces faltarían carpetas sin
+// explicación y parecería que el escaneo se las dejó.
 const Results = ({
   results,
   onSelect,
@@ -363,6 +372,10 @@ const CandidateRow = ({
 }): React.JSX.Element => {
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [executablePath, setExecutablePath] = useChosenExecutable(entry);
+  // El primero es la apuesta (el main los devuelve ordenados por parecido de
+  // título) y va grande, con carátula; los demás quedan escondidos tras "otro
+  // juego". Enseñarlos todos por igual obligaría a elegir en cada fila, y en
+  // la inmensa mayoría el primero acierta.
   const proposed = entry.matches[0];
   const alternatives = entry.matches.slice(1);
 

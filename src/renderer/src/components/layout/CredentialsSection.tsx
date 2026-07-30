@@ -4,8 +4,7 @@ import type { CredentialsValues } from '../../../../shared/types';
 import { useCredentials, useSetCredentials } from '../../hooks/settings';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
 import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../lib/styles';
-
-const BLUE = '#85a3d6';
+import { BLUE } from '../../lib/colors';
 
 type CredentialsSectionProps = {
   // Primer arranque sin credenciales de IGDB: la sección nace expandida con

@@ -4,8 +4,7 @@ import { useCreateEmulator, useDeleteEmulator, useEmulators } from '../../hooks/
 import { accentGradientStyle, revealClass, revealStyle } from '../../lib/styles';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
 import { SettingsCard } from './SettingsCard';
-
-const VIOLET = '#7c86c8';
+import { VIOLET } from '../../lib/colors';
 
 // EMULADORES.md §8 — "UI sencilla para registrar un emulador (nombre + ruta
 // del .exe)", viviendo en Ajustes. El watcher los vigila con el mismo

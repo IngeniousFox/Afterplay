@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours, formatTime, pluralize } from '../../lib/format';
+import { isMeasuredSession } from '../../lib/sessionStats';
 import { floatingPanelClass } from '../../lib/styles';
 import { useTimeFormat } from '../../hooks/settings';
 import { StatCard } from './StatCard';
@@ -115,7 +116,7 @@ export const ActivityHeatmap = ({
     // el ratón tiene sentido ver la que está en marcha).
     const sessionsByDay = new Map<number, HeatmapSession[]>();
     for (const session of sessions) {
-      if (session.isManual) continue;
+      if (!isMeasuredSession(session)) continue;
       const dayMs = startOfDayMs(session.startedAt);
       if (dayMs < rangeStart.getTime() || dayMs > rangeEnd.getTime()) continue;
       const daySessions = sessionsByDay.get(dayMs) ?? [];

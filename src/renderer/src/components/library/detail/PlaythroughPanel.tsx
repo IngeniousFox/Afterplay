@@ -20,8 +20,8 @@ import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { InfoChip } from './InfoChip';
 import { StatTile } from './StatTile';
+import { GREEN } from '../../../lib/colors';
 
-const GREEN = '#2fdc7e';
 // Píldoras por página — las que caben en el ancho del sidebar sin apretarse.
 const PER_PAGE = 4;
 // Mismo pager que CompletedGallery/HltbCompareList en Stats.

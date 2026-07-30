@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { StateEventSummary } from '../../../../shared/types';
+import { monthKey } from '../../lib/dateMath';
 import { floatingPanelClass } from '../../lib/styles';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
@@ -30,8 +31,6 @@ const PAD_RIGHT = 46;
 const PAD_TOP = 16;
 const PAD_BOTTOM = 24;
 
-const monthKey = (date: Date): number => date.getFullYear() * 12 + date.getMonth();
-
 const monthLabel = (key: number): string =>
   new Date(Math.floor(key / 12), key % 12, 1).toLocaleDateString('en-US', {
     month: 'short',
@@ -51,6 +50,14 @@ const countByMonth = (dates: number[]): Map<number, number> => {
 // pueden estirarlo años atrás — correcto, son parte de tu historia); con un
 // año concreto, sus 12 meses con los contadores arrancando de cero (lo
 // añadido/planeado/completado ESE año).
+//
+// OJO con la línea de Plan to Play: proyecta el estado de HOY hacia atrás.
+// `planned` es un booleano mutable (SPEC 4.3), no un log, así que un juego
+// que estuvo planeado y luego pasó a la biblioteca desaparece del histórico
+// entero de esa línea y aparece en la de biblioteca desde el mes en que se
+// añadió, como si nunca hubiera estado planeado. Es el precio de no guardar
+// cuándo se promovió: reconstruirlo pediría un evento de promoción con
+// fecha, que hoy no existe.
 export const BacklogFlowChart = ({
   games,
   plannedGames,

@@ -1,8 +1,8 @@
 import { asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../..';
+import { endsPlaythrough, latestRealStateEvent } from '../../../../shared/playthroughState';
 import type { StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, stateEventsTable } from '../../schema';
-import { latestRealStateEvent } from '../stateEvents/latestRealStateEvent';
 
 // El `tx` de una transacción de drizzle — mismo query builder que la
 // conexión, tipado desde ella para no importar internos de drizzle.
@@ -84,9 +84,8 @@ export const resolveIterationForPlay = async (
 
   const lastIteration = iterations[iterations.length - 1];
   const lastType = lastIteration ? latestTypeByIteration.get(lastIteration.id) : undefined;
-  const lastIsTerminal = lastType === 'completed' || lastType === 'dropped';
 
-  if (!lastIteration || lastIsTerminal) {
+  if (!lastIteration || endsPlaythrough(lastType)) {
     // Sin iteraciones o la última terminó (Beaten/Dropped): retomar es un
     // playthrough NUEVO (SPEC 4).
     const [game] = await tx

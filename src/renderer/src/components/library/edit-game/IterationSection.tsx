@@ -29,11 +29,15 @@ type IterationSectionProps = {
   game: GameDetail;
 };
 
-// SPEC 4.5 — dos modos del mismo formulario: 'existing' (fechas derivadas de
-// sus sesiones, solo lectura) y 'new' (pide fechas para generar las sesiones
-// de borde de un playthrough manual). Nunca se editan fechas de una
-// iteración que ya tiene sesiones — para eso haría falta poder editar
-// sesiones sueltas, que no existe todavía.
+// SPEC 4.5 — dos modos del mismo formulario: 'existing' (edita un
+// playthrough que ya está) y 'new' (registra uno del pasado a mano).
+//
+// Modelo v2: las fechas de borde de un playthrough SON eventos de su log, no
+// sesiones marcadoras, y por eso aquí sí se editan — el guardado parchea el
+// evento dueño de cada fecha. La única que se queda en solo lectura es la
+// que sale de una sesión MEDIDA (startedBySession): una medición no se
+// falsea. Corregirla de verdad pediría editar sesiones sueltas, que no
+// existe.
 export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Element => {
   const { control, setValue } = useFormContext<EditGameFormValues>();
   const iterationMode = useWatch({ control, name: 'iterationMode' });

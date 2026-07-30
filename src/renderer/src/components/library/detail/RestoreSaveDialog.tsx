@@ -20,9 +20,7 @@ import { formatByPrecision, formatBytes, pluralize } from '../../../lib/format';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../hooks/queryKeys';
 import { ModalShell } from '../../ui/modal-shell';
-
-const BLUE = '#85a3d6';
-const AMBER = '#e3b24a';
+import { AMBER, BLUE } from '../../../lib/colors';
 
 type RestoreSaveDialogProps = {
   gameId: number;

@@ -5,8 +5,7 @@ import { useUpdateGame } from '../../../hooks/games';
 import { useResetOnOpen } from '../../../hooks/useResetOnOpen';
 import { ModalFooter, ModalShell } from '../../ui/modal-shell';
 import { NotesEditor } from './NotesEditor';
-
-const GRAY = '#8b93a3';
+import { GRAY } from '../../../lib/colors';
 
 type EditNotesModalProps = {
   game: GameDetail;

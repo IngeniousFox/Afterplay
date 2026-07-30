@@ -27,9 +27,9 @@ const listBackups = (dir: string): string[] =>
 // Una copia física del .db local al día, sin tocar Turso para nada — para
 // el "se me ha ido la pinza con algo y quiero volver a ayer/anteayer" sin
 // depender de tener red ni de la ventana de retención de Turso. Corre justo
-// después de runMigrations() en el arranque, con el mismo criterio que el
-// seed: si falla, se avisa por consola y la app sigue igual — no es motivo
-// para no arrancar.
+// después de runMigrations() en el arranque, con el criterio de todo lo
+// accesorio del arranque: si falla, se avisa por consola y la app sigue
+// igual — no es motivo para no arrancar.
 export const runDailyBackup = async (): Promise<void> => {
   const dir = getBackupsDir();
   mkdirSync(dir, { recursive: true });

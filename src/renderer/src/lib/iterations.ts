@@ -1,3 +1,4 @@
+import { endsPlaythrough } from '../../../shared/playthroughState';
 import type { IterationDetail } from '../../../shared/types';
 
 // La iteración activa ahora mismo (SPEC 4: como mucho una por juego con
@@ -16,7 +17,7 @@ export const activeOrLastIteration = (iterations: IterationDetail[]): IterationD
   startedIteration(iterations) ?? lastIteration(iterations);
 
 // Completado o abandonado — un final, sin más estados posibles salvo un
-// nuevo playthrough.
+// nuevo playthrough. Misma regla exacta que usa el main en
+// resolveIterationForPlay para decidir si jugar abre uno nuevo.
 export const isTerminal = (iteration: IterationDetail | null): boolean =>
-  iteration != null &&
-  (iteration.currentState === 'completed' || iteration.currentState === 'dropped');
+  endsPlaythrough(iteration?.currentState);

@@ -1,5 +1,10 @@
 import { asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../..';
+import {
+  endsPlaythrough,
+  latestRealStateEvent,
+  leavesEndDate,
+} from '../../../../shared/playthroughState';
 import type { GameDetail, IterationDetail } from '../../../../shared/types';
 import {
   gameColumns,
@@ -15,9 +20,20 @@ import {
   spendEventsTable,
   stateEventsTable,
 } from '../../schema';
-import { latestRealStateEvent } from '../stateEvents/latestRealStateEvent';
 import { resolveIterationHours } from './iterationHours';
 
+// La ficha completa de un juego, y con ella el corazón de las derivaciones
+// (SPEC 4.4): aquí es donde el log de eventos se convierte en las fechas, el
+// estado y las horas que enseña la app. Nada de eso está almacenado.
+//
+// Cinco SELECTs y todo el trabajo en JS, igual que getGames y por el mismo
+// motivo: agrupar en memoria una vez es más simple y más barato que pelearse
+// con JOINs que repiten filas.
+//
+// Por iteración salen: las horas (manual + trackeado), la fecha de inicio (lo
+// más temprano entre su primera sesión y su primer 'started'), la de fin (el
+// último evento terminal, y SOLO si sigue en ese estado ahora — uno reabierto
+// no tiene fin), su estado actual y su parte del gasto.
 export const getGameById = async (id: number): Promise<GameDetail | null> => {
   const db = getDb();
 
@@ -35,8 +51,8 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     .orderBy(asc(iterationsTable.id));
   const iterationIds = iterations.map((iteration) => iteration.id);
 
-  // Si el juego no tiene iteraciones todavía (comprado pero sin tocar, como
-  // Hollow Knight en el seed), no hay nada que buscar en sessions/stateEvents
+  // Si el juego no tiene iteraciones todavía (añadido pero sin tocar), no
+  // hay nada que buscar en sessions/stateEvents:
   // evito el inArray con array vacío, que en SQL sería un "IN ()" inválido.
   const sessions = iterationIds.length
     ? await db
@@ -94,9 +110,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     const latest = events[events.length - 1];
     terminalAtByIteration.set(
       iteration.id,
-      latest && (latest.type === 'completed' || latest.type === 'dropped')
-        ? latest.occurredAt
-        : null,
+      latest && endsPlaythrough(latest.type) ? latest.occurredAt : null,
     );
   }
 
@@ -147,11 +161,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
       (startEventRow === null || firstSessionAt.getTime() < startEventRow.occurredAt.getTime());
     const startedAt = startedBySession ? firstSessionAt : (startEventRow?.occurredAt ?? null);
 
-    const currentIsTerminal =
-      latestEvent?.type === 'completed' ||
-      latestEvent?.type === 'dropped' ||
-      latestEvent?.type === 'on_hold';
-    const endEventRow = currentIsTerminal && latestEvent ? latestEvent : null;
+    const endEventRow = leavesEndDate(latestEvent?.type) ? latestEvent : null;
 
     return {
       ...iteration,

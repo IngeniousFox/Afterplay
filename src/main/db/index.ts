@@ -238,8 +238,8 @@ let queriesInFlight = 0;
 const idleWaiters: Array<() => void> = [];
 
 // Todo acceso a la DB desde fuera del arranque (handlers IPC de dominios con
-// DB, ciclo del watcher) entra por aquí. El seed y las migraciones corren en
-// el arranque, antes de que exista el timer de sync, así que no lo necesitan.
+// DB, ciclo del watcher) entra por aquí. Las migraciones corren en el
+// arranque, antes de que exista el timer de sync, así que no lo necesitan.
 export const withDbAccess = async <T>(fn: () => Promise<T>): Promise<T> => {
   while (swapGate) await swapGate;
   queriesInFlight++;

@@ -77,8 +77,10 @@ const entryPickerValue = (entry: Entry): PrecisionDateValue =>
 // SPEC 4.5/4.6 fusionado — un único "History" con estados y gastos
 // entrelazados por fecha, mismo estilo de timeline para los dos. El lápiz
 // de cada entrada abre un editor in-place: fecha + nota (estados) o
-// cantidad + fecha + nota (gastos) — el TIPO nunca se edita (SPEC 4.5,
-// corregir un estado es añadir un evento nuevo; esto es para erratas). Los
+// cantidad + fecha + nota (gastos) — el TIPO no se toca DESDE AQUÍ (SPEC
+// 4.5: cambiar de estado es apilar un evento nuevo, y esto es para erratas).
+// El único sitio que sí reescribe un tipo es la corrección de desenlace del
+// Edit modal, y solo para eso (SPEC 4.6). Los
 // gastos también se pueden borrar desde aquí — los iconos solo aparecen al
 // pasar el ratón para no ensuciar la lista en reposo.
 export const HistoryList = ({

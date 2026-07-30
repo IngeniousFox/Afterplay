@@ -8,9 +8,7 @@ import {
   useNeedsIdentityCheck,
 } from '../../hooks/saves';
 import { expandClass } from '../../lib/styles';
-
-const BLUE = '#85a3d6';
-const AMBER = '#e3b24a';
+import { AMBER, BLUE } from '../../lib/colors';
 
 // Reconocer la carpeta que este PC ya tenía en el bucket, antes de empezar a
 // subir a una nueva (PARTIDAS-GUARDADAS.md §7.2, ver saves/identity.ts).

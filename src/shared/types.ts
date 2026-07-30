@@ -122,9 +122,9 @@ export type UpdateSpendEventPatch = {
 // Input del guardado atómico del modal de añadir juego (Bloque 2F). Va en
 // una sola llamada porque el main resuelve TODO lo que hace falta de fuera
 // (detalle de IGDB, tiempos de HLTB, id de SteamGridDB) y escribe game +
-// iteration + sesiones de borde + spendEvent + stateEvent inicial dentro de
-// una única transacción — así no puede quedar un juego "a medias" si algo
-// falla a mitad de camino.
+// iteration + spendEvent + log de estados inicial dentro de una única
+// transacción — así no puede quedar un juego "a medias" si algo falla a
+// mitad de camino.
 export type CreateGameWithDetailsInput = {
   igdbId: number;
   endless: boolean;
@@ -246,10 +246,11 @@ export type GameListItem = {
   // que atribuirlas: el de su fecha de fin (o la de inicio si no hay fin), o
   // null si el playthrough no tiene ninguna fecha. Las vistas por año de
   // Stats las suman al año que toca — sin esto, esas horas solo existían
-  // dentro de totalHours y desaparecían al filtrar por año. El iterationId
-  // permite además EXCLUIR las sesiones trackeadas de esos playthroughs del
-  // conteo por año (manual reemplaza a trackeado, nunca se suman los dos —
-  // misma regla que resolveIterationHours).
+  // dentro de totalHours y desaparecían al filtrar por año. Se SUMAN a las
+  // sesiones trackeadas de ese mismo playthrough, nunca las reemplazan: son
+  // tiempos disjuntos (ver resolveIterationHours). El iterationId sirve para
+  // emparejar cada bloque de horas manuales con su playthrough — lo usa el
+  // "You vs HowLongToBeat", que compara UN playthrough concreto.
   manualIterations: { iterationId: number; hours: number; year: number | null }[];
   currentState: StateEvent['type'] | null;
   // Cuándo se tocó por última vez, para el orden "Last played" de las

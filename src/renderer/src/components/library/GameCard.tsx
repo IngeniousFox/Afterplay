@@ -6,14 +6,13 @@ import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { formatElapsed, formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { StatusIcon } from '../StatusIcon';
+import { BLUE, GREEN } from '../../lib/colors';
 
 type GameCardProps = {
   game: GameListItem;
   onSelect: () => void;
 };
 
-const GREEN = '#2fdc7e';
-const BLUE = '#85a3d6';
 const HLTB_MAIN = '#2bb6a6';
 
 // Las dos medidas de la cara trasera — mismo lenguaje que los MeasureTile

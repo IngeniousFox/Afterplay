@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { pluralize } from '../../lib/format';
+import { hasMeasuredDuration } from '../../lib/sessionStats';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
@@ -39,7 +40,7 @@ const LABEL_SPACE_PX = 20;
 // como barras verticales (mismo lenguaje que Hours per month / When do you
 // play: pista de fondo, degradado verde, etiqueta en el pico y bajo el
 // ratón — aquí con el % del total al lado). Mismas reglas de datos que el
-// resto de gráficos de sesiones: solo trackeadas de verdad y cerradas.
+// resto de gráficos de sesiones: solo medidas y cerradas.
 // "All Time" = histórico completo (es un perfil, no actividad reciente).
 export const SessionLengthHistogram = ({
   sessions,
@@ -50,7 +51,7 @@ export const SessionLengthHistogram = ({
   const { counts, total, peakIndex } = useMemo(() => {
     const counts = BUCKETS.map(() => 0);
     for (const session of sessions) {
-      if (session.isManual || session.endedAt === null) continue;
+      if (!hasMeasuredDuration(session)) continue;
       if (year !== 'all' && session.startedAt.getFullYear() !== year) continue;
       const seconds = session.durationSec ?? 0;
       const bucketIndex = BUCKETS.findIndex((bucket) => seconds < bucket.maxSec);

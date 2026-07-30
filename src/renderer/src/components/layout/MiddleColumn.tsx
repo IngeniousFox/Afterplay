@@ -19,8 +19,7 @@ import { GameCover } from '../GameCover';
 import { StatusIcon } from '../StatusIcon';
 import { GameFilterPanel } from './GameFilterPanel';
 import { NowPlayingCard } from './NowPlayingCard';
-
-const GREEN = '#2fdc7e';
+import { GREEN } from '../../lib/colors';
 
 // Mueve la selección `delta` posiciones dentro de `items`. Sin selección
 // previa (o si la actual ya no está en la lista filtrada) entra por el

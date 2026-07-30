@@ -14,9 +14,7 @@ import { expandClass, revealClass, revealStyle } from '../../lib/styles';
 import { CloudIdentitySection } from './CloudIdentitySection';
 import { CloudInventorySection } from './CloudInventorySection';
 import { SettingsCard } from './SettingsCard';
-
-const BLUE = '#85a3d6';
-const AMBER = '#e3b24a';
+import { AMBER, BLUE } from '../../lib/colors';
 
 // Escaneo completo de la biblioteca (PARTIDAS-GUARDADAS.md §10.1): BAJO
 // DEMANDA y con un botón, nunca al arrancar la app. Es una sola invocación

@@ -89,9 +89,9 @@ export const ActionBar = ({
     // startGameSession (misma función que usa el watcher al detectar un
     // arranque él solo) decide qué playthrough usar/crear y ancla su inicio
     // — toda la lógica que antes vivía aquí a mano, repartida en 2-3
-    // mutations sueltas (no atómicas entre sí, y con isManual:true SIEMPRE
-    // por venir de addManualSession — un Play que lanza el .exe de verdad es
-    // tan automático como lo que detecta el watcher).
+    // mutations sueltas (no atómicas entre sí, y que además marcaban la
+    // sesión como manual: un Play que lanza el .exe de verdad es tan
+    // automático como lo que detecta el watcher, y debe contar igual).
     await startGameSession.mutateAsync(game.id);
   };
 

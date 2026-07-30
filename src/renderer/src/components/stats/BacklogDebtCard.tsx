@@ -2,6 +2,7 @@ import { Hourglass, Info } from 'lucide-react';
 import { useState } from 'react';
 import type { GameListItem } from '../../../../shared/types';
 import { BLUE, GRAY, VIOLET } from '../../lib/colors';
+import { DAY_MS } from '../../lib/dateMath';
 import { formatHours, pluralize } from '../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { StatCard } from './StatCard';
@@ -35,8 +36,6 @@ const HOURS_PER_WEEK_MIN = 0.5;
 // tienen final que alcanzar (misma regla que el checkbox de Add/Edit Game).
 //
 // "200 juegos pendientes" no dice nada; "340 horas ≈ 7 meses a tu ritmo" sí.
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 type BacklogStats = {
   unplayedCount: number;
   plannedCount: number;

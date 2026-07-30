@@ -2,9 +2,11 @@
 // se ABRIÓ al menos una sesión trackeada de verdad — isManual false, mismo
 // criterio que el Activity heatmap: las sesiones manuales de "registrar el
 // pasado" pueden llevar precisión de solo mes/año, no representan un día
-// concreto jugado.
+// concreto jugado. Hoy ya no se crea ninguna, pero las filas viejas siguen
+// ahí (ver isManual en schema.ts).
 
 import { addDays, DAY_MS, startOfDay } from './dateMath';
+import { isMeasuredSession } from './sessionStats';
 
 type StreakSession = { startedAt: Date; isManual: boolean };
 
@@ -14,7 +16,7 @@ type StreakSession = { startedAt: Date; isManual: boolean };
 export const playedDayKeys = (sessions: StreakSession[]): Set<number> => {
   const keys = new Set<number>();
   for (const session of sessions) {
-    if (session.isManual) continue;
+    if (!isMeasuredSession(session)) continue;
     keys.add(startOfDay(session.startedAt).getTime());
   }
   return keys;

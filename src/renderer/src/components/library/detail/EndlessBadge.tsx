@@ -1,6 +1,5 @@
 import { Infinity as InfinityIcon } from 'lucide-react';
-
-const VIOLET = '#7c86c8';
+import { VIOLET } from '../../../lib/colors';
 
 // SPEC 10.7 / prototipo — sustituye la card "Playthrough" en el sidebar
 // cuando el juego es endless: no hay playthroughs que completar, solo

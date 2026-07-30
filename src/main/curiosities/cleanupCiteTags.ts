@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { curiositiesTable } from '../db/schema';
+import { stripTags } from './stripTags';
 
 // Limpieza de las curiosidades que Sonnet dejó con marcado de citas
 // (<cite index="22-1">...</cite>) antes de que el generador aprendiera a
@@ -15,8 +16,6 @@ import { curiositiesTable } from '../db/schema';
 //
 // Así es idempotente y barata: si no queda nada con etiquetas no toca nada, y
 // nunca provoca una llamada a la API.
-const stripTags = (text: string): string => text.replace(/<\/?[a-z][^>]*>/gi, '').trim();
-
 export const cleanupCiteTaggedCuriosities = async (): Promise<void> => {
   await withDbAccess(async () => {
     const db = getDb();

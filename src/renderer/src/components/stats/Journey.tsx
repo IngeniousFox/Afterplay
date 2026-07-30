@@ -7,14 +7,27 @@ import type {
   SessionWithGame,
   StateEventSummary,
 } from '../../../../shared/types';
+import { latestRealStateEvent, manualHoursAnchor } from '../../../../shared/playthroughState';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { revealClass, revealStyle } from '../../lib/styles';
+import { BLUE, GREEN } from '../../lib/colors';
 
-const GREEN = '#2fdc7e';
-const BLUE = '#85a3d6';
+// La otra vista de Stats: no cifras, sino el recorrido. Una línea temporal de
+// años y meses con las carátulas de lo que jugaste en cada uno.
+//
+// La decisión que lo explica casi todo: la unidad NO es el juego, es el
+// PLAYTHROUGH. Pasarte Hollow Knight tres veces son tres entradas en tres
+// momentos distintos de tu vida, no una carátula repetida — que es justo lo
+// que un historial debería enseñar. De ahí que se recorran las iteraciones y
+// no los juegos.
+//
+// Y cada entrada se coloca por su fecha de FIN (lastAt), no de inicio: un
+// playthrough que empezaste en diciembre y acabaste en marzo se recuerda como
+// "el de marzo", que es cuando lo dejaste.
 
+// Las dos cifras del panel flotante (horas y sesiones), teñidas de su color.
 const JourneyStatTile = ({
   color,
   label,
@@ -49,24 +62,37 @@ type JourneySession = Pick<
   'id' | 'startedAt' | 'durationSec' | 'datePrecision' | 'note'
 >;
 
+// Una carátula de la línea temporal, ya cocinada: todo lo que hace falta para
+// pintarla y para su panel flotante, sin volver a mirar los datos crudos.
 type JourneyEntry = {
   key: string;
+  // Los endless no tienen vueltas discretas y se trocean por mes (ver
+  // buildEntries), así que una misma partida infinita puede dar varias
+  // entradas. El resto son un playthrough cada una.
   kind: 'endless' | 'playthrough';
   iterationLabel: string;
   gameId: number;
   title: string;
   coverUrl: string | null;
   heroUrl: string | null;
+  // Los bordes del tramo. Van con su precisión al lado porque un playthrough
+  // registrado a mano puede saber solo el año ("2019"), y escribirlo como
+  // "1 de enero de 2019" sería inventarse un día que nadie dijo.
   firstAt: Date;
   firstPrecision: EventDatePrecision;
+  // lastAt manda: es la fecha por la que la entrada cae en un mes u otro.
   lastAt: Date;
   lastPrecision: EventDatePrecision;
   hours: number;
   sessions: JourneySession[];
+  // La última nota de sesión con texto — "dónde lo dejé", la frase que
+  // convierte una carátula en un recuerdo.
   note: string | null;
   state: StateEventSummary['type'] | null;
 };
 
+// Cualquier cosa fechada que demuestre que ESE tramo existió: una sesión o un
+// evento del log. De juntarlas todas y ordenarlas salen firstAt y lastAt.
 type ActivityPoint = {
   at: Date;
   precision: EventDatePrecision;
@@ -79,6 +105,8 @@ type JourneyMonthBucket = {
   manualHours: number;
 };
 
+// Sin año: se usa dentro del panel flotante, donde el año ya se ha dicho
+// arriba en el rango completo y repetirlo solo mete ruido.
 const shortDate = (date: Date, precision: EventDatePrecision): string => {
   if (precision === 'year') return String(date.getFullYear());
   if (precision === 'month') {
@@ -87,6 +115,10 @@ const shortDate = (date: Date, precision: EventDatePrecision): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+// El titular del panel: "Mar 3, 2024 - Apr 18, 2024". Con año SIEMPRE (aquí
+// sí, es la primera vez que se dice), y colapsado a una sola fecha cuando los
+// dos extremos caen igual — un playthrough de una tarde no debe leerse como
+// "3 de marzo - 3 de marzo".
 const dateRange = (entry: JourneyEntry): string => {
   const formatJourneyDate = (date: Date, precision: EventDatePrecision): string => {
     if (precision === 'year') return String(date.getFullYear());
@@ -110,26 +142,27 @@ const monthLabel = (month: number): string =>
 const monthShortLabel = (month: number): string =>
   new Date(2020, month, 1).toLocaleDateString('en-US', { month: 'short' });
 
+// La chapita "2"/"3" de la esquina de la carátula, para las rejugadas. El
+// número sale de la etiqueta ("Playthrough 2") y el 1 se calla a propósito:
+// marcar la primera vuelta no dice nada, y lo que importa señalar es
+// justamente que esa no lo es.
 const iterationBadge = (label: string): string | null => {
   const number = /\d+/.exec(label)?.[0];
   return number && number !== '1' ? number : null;
 };
 
-const latestRealEvent = (events: StateEventSummary[]): StateEventSummary | undefined => {
-  let latest: StateEventSummary | undefined;
-  for (const event of events) {
-    if (event.type === 'plan_to_play') continue;
-    if (
-      !latest ||
-      event.occurredAt.getTime() > latest.occurredAt.getTime() ||
-      (event.occurredAt.getTime() === latest.occurredAt.getTime() && event.id > latest.id)
-    ) {
-      latest = event;
-    }
-  }
-  return latest;
-};
-
+// Eventos que cuentan como "algo pasó de verdad aquí".
+//
+// Fuera 'plan_to_play', que es intención y no juego (ver schema.ts). Y fuera
+// también lo que caiga pegado al alta del juego: al añadir uno se escribe su
+// estado inicial en el mismo instante, así que ese evento no es un hito del
+// viaje, es un efecto secundario de darlo de alta. Sin este filtro, cada
+// juego de la biblioteca aparecía en el mes en que lo metiste aunque no lo
+// hubieras tocado nunca.
+//
+// 5 segundos y no una comparación exacta porque el alta y el evento son dos
+// escrituras distintas de la misma transacción: caen con unos milisegundos de
+// diferencia, nunca con el mismo timestamp.
 const meaningfulEvents = (events: StateEventSummary[], game: GameListItem): StateEventSummary[] =>
   events.filter(
     (event) =>
@@ -137,6 +170,9 @@ const meaningfulEvents = (events: StateEventSummary[], game: GameListItem): Stat
       Math.abs(event.occurredAt.getTime() - game.addedAt.getTime()) >= 5_000,
   );
 
+// De los datos crudos de Stats a las carátulas de la línea temporal. Dos
+// recorridos distintos porque hay dos clases de juego (ver más abajo): los
+// endless se trocean por mes, el resto va por playthrough.
 const buildEntries = (
   games: GameListItem[],
   sessions: SessionWithGame[],
@@ -157,6 +193,10 @@ const buildEntries = (
     eventsByIteration.set(event.iterationId, list);
   }
 
+  // Las tres formas que tiene un playthrough de haber existido: sesiones
+  // medidas, eventos del log, o solo unas horas apuntadas a mano. Las tres
+  // valen — un "me pasé esto en 2015, 60 horas" merece su carátula igual que
+  // uno que trackeó la app entera.
   const iterationIds = new Set<number>([
     ...sessionsByIteration.keys(),
     ...eventsByIteration.keys(),
@@ -164,6 +204,9 @@ const buildEntries = (
   ]);
   const entries: JourneyEntry[] = [];
 
+  // Cocina una entrada a partir de su material. Devuelve null cuando no hay
+  // NADA que enseñar (ni sesiones, ni eventos, ni horas): un playthrough
+  // vacío no es un recuerdo, es una fila de la base de datos.
   const makeEntry = ({
     key,
     game,
@@ -195,6 +238,10 @@ const buildEntries = (
       return null;
     }
 
+    // Sesiones y eventos revueltos y ordenados: los extremos de esa mezcla
+    // son el principio y el final del tramo. Da igual de cuál de las dos
+    // fuentes venga cada uno — un playthrough puede empezar por una sesión
+    // que el watcher pilló y terminar por un Beaten tecleado a mano.
     const activity: ActivityPoint[] = [
       ...allSessions.map((session) => ({
         at: session.startedAt,
@@ -205,6 +252,9 @@ const buildEntries = (
         precision: event.datePrecision,
       })),
     ];
+    // Solo horas manuales, sin una sola fecha: se cae al ancla que dé quien
+    // llama y, en última instancia, al alta del juego. Precisión 'year' para
+    // no fingir que se sabe el día.
     if (activity.length === 0) {
       activity.push({ at: fallbackAt ?? game.addedAt, precision: 'year' });
     }
@@ -213,6 +263,9 @@ const buildEntries = (
     const sortedSessions = [...allSessions].sort(
       (a, b) => a.startedAt.getTime() - b.startedAt.getTime(),
     );
+    // La nota MÁS RECIENTE con texto, no la primera: "dónde lo dejé" es por
+    // definición lo último que escribiste, y las sesiones sin nota se saltan
+    // en vez de dejar la entrada muda.
     const note = [...sortedSessions]
       .reverse()
       .find((session) => session.note?.trim())
@@ -267,32 +320,32 @@ const buildEntries = (
     for (const session of gameSessions) getMonthBucket(session.startedAt).sessions.push(session);
     for (const event of gameEvents) getMonthBucket(event.occurredAt).events.push(event);
 
+    // Las horas manuales no tienen fecha, así que se cuelgan del log de su
+    // playthrough con la misma regla que usa getGames para atribuirles año
+    // (manualHoursAnchor). Si el playthrough no tiene ninguna fecha caen a
+    // mitad del año que Stats les asignó, y de ahí a lo último que se sepa
+    // del juego — un mes cualquiera es mejor que perderlas.
     for (const manual of game.manualIterations) {
-      const iterationEvents = gameEvents.filter(
-        (event) => event.iterationId === manual.iterationId,
-      );
-      const terminalEvent = iterationEvents
-        .filter(
-          (event) =>
-            event.type === 'completed' || event.type === 'dropped' || event.type === 'on_hold',
-        )
-        .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
-      const startedEvent = iterationEvents
-        .filter((event) => event.type === 'started')
-        .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())[0];
       const anchor =
-        terminalEvent?.occurredAt ??
-        startedEvent?.occurredAt ??
+        manualHoursAnchor(gameEvents.filter((event) => event.iterationId === manual.iterationId)) ??
         (manual.year === null ? null : new Date(manual.year, 6, 1)) ??
         game.lastPlayedAt ??
         game.addedAt;
       getMonthBucket(anchor).manualHours += manual.hours;
     }
 
+    // Un endless con horas pero sin rastro fechado de dónde salieron (todo
+    // manual y sin log): se le abre un mes igualmente para que no desaparezca
+    // del viaje teniendo horas de verdad.
     if (monthBuckets.size === 0 && game.totalHours > 0) {
       getMonthBucket(game.lastPlayedAt ?? game.addedAt);
     }
 
+    // El total del juego es el canónico (game.totalHours, el mismo que
+    // enseñan Library y la ficha); lo repartido por meses puede quedarse
+    // corto si alguna hora no tenía dónde caer. El resto se echa al mes MÁS
+    // RECIENTE para que la suma de las entradas siga cuadrando con el total
+    // — de ahí que los buckets vayan ordenados de nuevo a viejo.
     const sortedBuckets = [...monthBuckets.entries()].sort(
       ([, a], [, b]) => b.at.getTime() - a.at.getTime(),
     );
@@ -321,6 +374,10 @@ const buildEntries = (
     }
   }
 
+  // El resto: una entrada por playthrough. El gameId se saca de sus propios
+  // eventos o sesiones porque una iteración puede llegar aquí solo por tener
+  // horas manuales, sin ninguna de las dos cosas — en ese caso no hay nada
+  // que colocar y se descarta.
   for (const iterationId of iterationIds) {
     const allSessions = sessionsByIteration.get(iterationId) ?? [];
     const allEvents = eventsByIteration.get(iterationId) ?? [];
@@ -331,6 +388,8 @@ const buildEntries = (
 
     const game = gameById.get(gameId);
     if (!game) continue;
+    // Los endless ya salieron arriba, troceados por mes: pasarlos otra vez
+    // aquí los duplicaría, una vez por mes y otra entera.
     if (game.endless) continue;
     const manual = game.manualIterations.find((entry) => entry.iterationId === iterationId);
     const entry = makeEntry({
@@ -341,14 +400,19 @@ const buildEntries = (
       allEvents,
       manualHours: manual?.hours ?? 0,
       fallbackAt: manual?.year ? new Date(manual.year, 6, 1) : game.lastPlayedAt,
-      state: latestRealEvent(allEvents)?.type ?? null,
+      state: latestRealStateEvent(allEvents)?.type ?? null,
     });
     if (entry) entries.push(entry);
   }
 
+  // De lo más reciente a lo más antiguo: el viaje se lee empezando por donde
+  // estás ahora y bajando hacia atrás.
   return entries.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
 };
 
+// El rastro de puntitos del panel: una bolita por sesión sobre una línea, con
+// su fecha y duración en el title. Cuenta de un vistazo si el playthrough fue
+// una sentada larga o goteo de meses.
 const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => {
   if (entry.sessions.length === 0) {
     return (
@@ -363,6 +427,12 @@ const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => 
   const first = entry.sessions[0].startedAt.getTime();
   const last = entry.sessions.at(-1)?.startedAt.getTime() ?? first;
   const span = Math.max(1, last - first);
+  // Las bolitas van en su sitio REAL del tramo (dos tardes seguidas salen
+  // pegadas, un regreso seis meses después sale al otro extremo). Pero si
+  // todas caen en el mismo instante — sesiones de un solo día, o manuales con
+  // precisión de mes — se repartirían todas encima de la misma, así que ahí
+  // se pasa a espaciarlas por igual: se pierde la escala temporal, que en ese
+  // caso no dice nada, y se gana poder contarlas.
 
   return (
     <div className="mt-3">
@@ -393,6 +463,12 @@ const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => 
   );
 };
 
+// La ficha flotante al pasar el ratón por una carátula: banner, fechas, las
+// dos cifras, el rastro de sesiones y la última nota.
+//
+// Va por portal a document.body y no dentro del botón porque la rejilla de
+// meses recorta y apila (overflow + z-index), y ahí dentro el panel salía
+// cortado por el mes de al lado.
 const HoverPanel = ({
   entry,
   anchor,
@@ -402,13 +478,19 @@ const HoverPanel = ({
 }): React.JSX.Element => {
   const heroSrc = useImageSrc(entry.heroUrl, 'heroes');
   const status = entry.state ? getGameStatusMeta(entry.state) : null;
+  // Medidas a mano en vez de medir el panel ya montado: se necesitan ANTES de
+  // pintarlo para decidir dónde ponerlo, y medir después significaría pintar
+  // en un sitio y saltar al otro.
   const panelWidth = 360;
   const panelHeight = 310;
   const gap = 12;
+  // Centrado sobre la carátula, pero sin salirse por ninguno de los dos lados
+  // — las carátulas de los bordes de la rejilla lo empujarían fuera.
   const left = Math.min(
     window.innerWidth - panelWidth / 2 - 14,
     Math.max(panelWidth / 2 + 14, anchor.left + anchor.width / 2),
   );
+  // Debajo por defecto; arriba solo si abajo no cabe Y arriba hay más sitio.
   const spaceAbove = anchor.top - gap;
   const spaceBelow = window.innerHeight - anchor.bottom - gap;
   const showAbove = spaceBelow < panelHeight && spaceAbove > spaceBelow;
@@ -489,6 +571,9 @@ const HoverPanel = ({
   );
 };
 
+// Una carátula de la rejilla. El panel se abre con ratón Y con teclado
+// (focus/blur además de enter/leave): navegando a tabuladores la ficha tiene
+// que salir igual, si no la información solo existe para quien usa ratón.
 const JourneyCover = ({
   entry,
   onOpen,
@@ -546,6 +631,9 @@ const JourneyCover = ({
   );
 };
 
+// La pantalla: línea temporal a la izquierda, índice de años y meses pegado a
+// la derecha. El índice se sincroniza con el scroll en los dos sentidos —
+// bajando se ilumina solo, y pulsando un año salta hasta él.
 export const Journey = ({
   games,
   sessions,
@@ -553,8 +641,11 @@ export const Journey = ({
   onOpenGame,
 }: JourneyProps): React.JSX.Element => {
   const topRef = useRef<HTMLDivElement>(null);
+  // Los nodos del DOM de cada año y cada mes, para poder hacerles scroll y
+  // para observarlos. En refs y no en estado: cambiarlos no repinta nada.
   const yearRefs = useRef(new Map<number, HTMLElement>());
   const monthRefs = useRef(new Map<string, HTMLElement>());
+  // El candado del scroll programático (ver los dos observers de abajo).
   const navigationTargetRef = useRef<{ year: number; month?: string } | null>(null);
   const navigationUnlockTimerRef = useRef<number | null>(null);
   const [activeYear, setActiveYear] = useState<number | null>(null);
@@ -563,6 +654,7 @@ export const Journey = ({
     () => buildEntries(games, sessions, stateEvents),
     [games, sessions, stateEvents],
   );
+  // Entradas agrupadas en año -> mes -> carátulas, todo de nuevo a viejo.
   const byYear = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -578,6 +670,10 @@ export const Journey = ({
     return [...grouped.entries()]
       .sort(([a], [b]) => b - a)
       .flatMap(([year, months]) => {
+        // Del año en curso solo se enseñan los meses que YA han pasado: la
+        // línea temporal es un historial, y dejar diciembre en blanco
+        // esperando parece que falta algo. (Un mes futuro puede tener
+        // entradas: una fecha del pasado mal tecleada.)
         const availableMonths = [...months.keys()].filter(
           (month) => year !== currentYear || month <= currentMonth,
         );
@@ -593,6 +689,21 @@ export const Journey = ({
       });
   }, [entries]);
 
+  // Scroll-spy del año: ilumina en el índice el año que se está mirando.
+  //
+  // El rootMargin recorta la ventana a una banda estrecha por arriba (72px de
+  // cabecera fuera, 62% de abajo fuera) en vez de usarla entera: si no, con
+  // tres años a la vez en pantalla los tres cuentan como visibles y el
+  // resaltado se vuelve loco. Así "el que estás mirando" es el que cruza la
+  // franja de arriba, que es donde de verdad mira uno al leer.
+  //
+  // EL CANDADO (navigationTargetRef): al pulsar un año del índice se hace
+  // scroll suave, y durante ese viaje el observer ve pasar todos los años
+  // intermedios y los iría iluminando uno a uno. Mientras hay destino fijado
+  // se ignora todo lo que informe el observer, y solo se suelta cuando el
+  // destino aparece de verdad en pantalla (o cuando salta el temporizador de
+  // seguridad, por si el scroll se queda a medias — ver los onClick del
+  // índice).
   useEffect(() => {
     const visibleYears = new Set<number>();
     const observer = new IntersectionObserver(
@@ -614,6 +725,9 @@ export const Journey = ({
           }
           return;
         }
+        // El PRIMERO de byYear que esté visible, no el último que avisó: así
+        // con dos años en la banda gana siempre el más reciente, que es el
+        // orden en que se leen.
         const visibleYear = byYear.find(({ year }) => visibleYears.has(year))?.year;
         if (visibleYear !== undefined) setActiveYear(visibleYear);
       },
@@ -622,6 +736,13 @@ export const Journey = ({
     for (const element of yearRefs.current.values()) observer.observe(element);
     return () => observer.disconnect();
   }, [byYear]);
+
+  // Lo resaltado no es directamente el estado: al arrancar todavía no hubo
+  // scroll (activeYear null) y, si cambian los datos, el año guardado puede
+  // haber dejado de existir. En los dos casos se cae al más reciente, para
+  // que el índice nunca aparezca sin nada iluminado. Igual con el mes, que
+  // además tiene que pertenecer al año resaltado — si no, se vería marcado un
+  // mes de otro año.
   const highlightedYear = byYear.some(({ year }) => year === activeYear)
     ? activeYear
     : (byYear[0]?.year ?? null);
@@ -633,6 +754,11 @@ export const Journey = ({
         ? `${highlightedYearData.year}-${highlightedYearData.months[0]?.[0]}`
         : null;
 
+  // El mismo scroll-spy pero para el mes, con su banda algo más estrecha
+  // (-72%): los meses son bloques más bajos que los años y con la del año
+  // entraban varios a la vez. Va aparte y no dentro del observer de arriba
+  // porque solo se observan los meses del año DESPLEGADO, que cambian cada
+  // vez que cambia el año resaltado.
   useEffect(() => {
     const visibleMonths = new Set<string>();
     const observer = new IntersectionObserver(
@@ -666,6 +792,9 @@ export const Journey = ({
     for (const element of monthRefs.current.values()) observer.observe(element);
     return () => observer.disconnect();
   }, [byYear]);
+  // La tira de resumen de arriba. gamesTouched cuenta JUEGOS distintos y no
+  // entradas: tres vueltas a Hollow Knight son tres carátulas en el viaje,
+  // pero un solo juego jugado.
   const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
   const totalSessions = entries.reduce((sum, entry) => sum + entry.sessions.length, 0);
   const gamesTouched = new Set(entries.map((entry) => entry.gameId)).size;
@@ -746,6 +875,10 @@ export const Journey = ({
                     <span className="absolute top-2 -right-1 h-2 w-2 rounded-full border-2 border-[#0d0f0e] bg-white/20 transition-[background,box-shadow] duration-200 group-hover/month:bg-primary group-hover/month:shadow-[0_0_10px_rgba(47,220,126,.45)]" />
                   </div>
 
+                  {/* min-h fija un alto mínimo por mes: sin él, un mes con
+                      una sola carátula y otro con doce daban un ritmo
+                      irregular al bajar. Con suelo, el recorrido respira
+                      parejo y se nota mejor cuánto tuvo cada mes. */}
                   <div className="min-h-45 pb-7">
                     <div className="mb-2.5 flex items-center gap-2">
                       <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
@@ -756,6 +889,11 @@ export const Journey = ({
                         </span>
                       )}
                     </div>
+                    {/* Al señalar una carátula, las demás del mes se apagan:
+                        con el panel flotante abierto encima, lo de alrededor
+                        estorba. En CSS puro (has-*) y no con estado de React
+                        — mover el ratón por una rejilla de carátulas no debe
+                        repintar el árbol. */}
                     <div className="flex flex-wrap gap-3 transition-opacity duration-200 has-[button:hover]:[&>button:not(:hover)]:opacity-45 has-[button:focus-visible]:[&>button:not(:focus-visible)]:opacity-45">
                       {monthEntries.map((entry) => (
                         <JourneyCover
@@ -772,6 +910,9 @@ export const Journey = ({
           ))}
         </div>
 
+        {/* El índice. Solo despliega los meses del año resaltado: con diez
+            años abiertos a la vez la columna se convertía en una lista de
+            120 entradas y dejaba de servir para orientarse. */}
         <nav aria-label="Journey date navigation" className="sticky top-5 py-1">
           <div className="mb-3 pl-4 text-[8.5px] font-extrabold tracking-[.16em] text-muted-foreground/50">
             JOURNEY
@@ -785,6 +926,13 @@ export const Journey = ({
                     type="button"
                     aria-current={active ? 'true' : undefined}
                     onClick={() => {
+                      // Se fija el destino ANTES de mover el scroll: a partir
+                      // de aquí el observer calla hasta llegar (ver el
+                      // candado arriba). El temporizador es la red de
+                      // seguridad — si el destino nunca llega a la banda (un
+                      // año al final del todo que no alcanza a subir), a los
+                      // 1,2 s se suelta el candado igualmente en vez de
+                      // dejar el resaltado congelado para siempre.
                       navigationTargetRef.current = { year };
                       if (navigationUnlockTimerRef.current !== null) {
                         window.clearTimeout(navigationUnlockTimerRef.current);

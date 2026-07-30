@@ -72,11 +72,10 @@ export const useCloseSession = (): UseMutationResult<
 
 // Botón Play (ActionBar) — misma función que el watcher (startGameSession),
 // vía IPC. Sustituye a la orquestación manual de addIteration/addStateEvent/
-// addSession que había antes en el propio ActionBar: aquella creaba la
-// sesión con addManualSession, que fuerza isManual:true SIEMPRE (pensado
-// para registrar el pasado) — pero un Play que ahora lanza el .exe de
-// verdad es tan automático como lo que detecta el watcher, así que debe
-// contar igual (fuera de la lista "sesión manual" del heatmap, etc.).
+// addSession que había antes en el propio ActionBar: aquella marcaba la
+// sesión como manual (era la vía de registrar el pasado) — pero un Play que
+// lanza el .exe de verdad es tan automático como lo que detecta el watcher,
+// así que debe contar igual (dentro del heatmap, las rachas, etc.).
 // Invalida las tres queries que tocaban las tres mutations por separado
 // (games: currentState/totalHours: sessions: la lista global; stateEvents:
 // el nuevo 'started' si tocó abrir/reanudar playthrough).

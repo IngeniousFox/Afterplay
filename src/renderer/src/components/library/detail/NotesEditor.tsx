@@ -25,6 +25,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { notesProseClass } from '../../../lib/styles';
+import { GREEN } from '../../../lib/colors';
 
 // tiptap-markdown registra su storage en tiempo de ejecución pero no amplía
 // los tipos de @tiptap/core, así que `editor.storage.markdown` no existe para
@@ -35,8 +36,6 @@ declare module '@tiptap/core' {
     markdown: MarkdownStorage;
   }
 }
-
-const GREEN = '#2fdc7e';
 
 type NotesEditorProps = {
   // Markdown. Solo se lee al MONTAR (ver `content` abajo) — el editor es la

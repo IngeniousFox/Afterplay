@@ -1,17 +1,26 @@
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { getDb } from '../..';
+import { closesOpenSession, latestRealStateEvent } from '../../../../shared/playthroughState';
 import type { AddStateEventInput, StateEvent } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
 import { iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
 import { computeDurationSec } from '../sessions/sessionDuration';
-import { latestRealStateEvent } from './latestRealStateEvent';
 
-// Hitos que cierran un playthrough (todo salvo 'started'). Al registrar uno,
-// si el juego sigue en marcha se cierra su sesión abierta en el instante del
-// hito (ver el bloque final) — la fecha de "fin" del playthrough es el
-// propio evento (modelo v2, derivada al leer).
-const TERMINAL_TYPES = new Set(['completed', 'dropped', 'on_hold', 'resting']);
-
+// Apilar un evento en el log de estados — la escritura por la que pasa todo
+// cambio de estado de la app, venga del menú Status, del Edit, del watcher o
+// de dar de alta un juego.
+//
+// Es una transacción de tres tramos, y los tres tienen que ir juntos o
+// ninguno:
+//
+//   1. Auto-pausa. Si esto es un 'started', cualquier playthrough hermano que
+//      siguiera activo recibe un 'on_hold' — el invariante de "como mucho uno
+//      activo por juego" (SPEC 4.5) se garantiza AQUÍ y no en la UI, para que
+//      se cumpla venga la orden de donde venga.
+//   2. El INSERT del evento.
+//   3. Cierre de la sesión abierta, si el estado nuevo lo pide
+//      (closesOpenSession). Sin esto, terminar un juego que sigue en marcha
+//      dejaba sus horas sin contar hasta que el watcher notara el cierre real.
 export const addStateEvent = async (input: AddStateEventInput): Promise<StateEvent> => {
   const db = getDb();
   // Resuelto una sola vez y reutilizado en todo lo demás (pausa de hermanos,
@@ -96,7 +105,7 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
       .values({ ...input, occurredAt })
       .returning(stateEventColumns);
 
-    if (TERMINAL_TYPES.has(input.type)) {
+    if (closesOpenSession(input.type)) {
       // Terminas mientras el juego sigue en marcha (sesión del watcher
       // todavía abierta): se cierra AQUÍ, en el instante del hito — si no,
       // sus horas se quedarían sin contar (durationSec null mientras está

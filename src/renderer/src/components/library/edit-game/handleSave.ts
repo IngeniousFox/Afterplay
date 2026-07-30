@@ -1,3 +1,4 @@
+import { endsPlaythrough } from '../../../../../shared/playthroughState';
 import type { GameDetail } from '../../../../../shared/types';
 // Imports de valor (no `import type`): estos hooks solo se usan aquí dentro
 // de `ReturnType<typeof ...>`, y TypeScript no permite `typeof` sobre un
@@ -250,7 +251,7 @@ export const saveExistingIteration = async (
       if (lastStartedIndex >= 0) {
         const doomed = iterationEvents
           .slice(lastStartedIndex + 1)
-          .filter((event) => event.type === 'completed' || event.type === 'dropped');
+          .filter((event) => endsPlaythrough(event.type));
         for (const event of doomed) {
           await deleteStateEvent.mutateAsync(event.id);
         }
