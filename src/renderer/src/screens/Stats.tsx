@@ -1,10 +1,11 @@
-import { Clock, DollarSign, Gamepad2, Gauge } from 'lucide-react';
+import { BarChart3, Clock, DollarSign, Gamepad2, Gauge, Route } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
 import { BacklogDebtCard } from '../components/stats/BacklogDebtCard';
 import { BacklogFlowChart } from '../components/stats/BacklogFlowChart';
+import { Journey } from '../components/stats/Journey';
 import { CompletedGallery } from '../components/stats/CompletedGallery';
 import { GameAgeDonut } from '../components/stats/GameAgeDonut';
 import { GenreRadar } from '../components/stats/GenreRadar';
@@ -41,6 +42,7 @@ export const Stats = (): React.JSX.Element => {
   const selectedGameId = gameParam ? Number(gameParam) : null;
 
   const [selectedYear, setSelectedYear] = useState<Year>('all');
+  const [view, setView] = useState<'overview' | 'journey'>('overview');
 
   const { data: games = [] } = useGames();
   // Solo para la línea "Plan to play" del Backlog flow — el resto de Stats
@@ -68,7 +70,6 @@ export const Stats = (): React.JSX.Element => {
       ]),
     [sessions, spendEvents, stateEvents, games],
   );
-
   // Playthroughs con horas manuales: sus sesiones trackeadas NO cuentan para
   // las horas (manual reemplaza a trackeado, misma regla que
   // resolveIterationHours en el main) — se excluyen del conteo por año.
@@ -238,142 +239,199 @@ export const Stats = (): React.JSX.Element => {
     <div className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
       {/* key por año: cambiar el filtro remonta el árbol — la cascada de
           entrada y los contadores vuelven a animar con los datos nuevos. */}
-      <div key={String(selectedYear)} className="mx-auto max-w-250">
+      <div
+        key={view === 'overview' ? `${view}-${String(selectedYear)}` : view}
+        className="mx-auto max-w-250"
+      >
         <div className="mb-6.5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
-              All games
+              {view === 'overview' ? 'All games' : 'Your gaming journey'}
             </h1>
             <p className="mt-1.25 text-[13.5px] text-muted-foreground">
-              Library-wide overview · select a game on the left for its own stats
+              {view === 'overview'
+                ? 'Library-wide overview · select a game on the left for its own stats'
+                : 'The games you played, the paths you took, and the ones you returned to'}
             </p>
           </div>
 
-          <YearPicker years={years} value={selectedYear} onChange={setSelectedYear} />
-        </div>
+          <div className="flex items-center gap-2.5">
+            <div className="flex rounded-[10px] border border-input bg-white/[0.025] p-1">
+              <button
+                type="button"
+                onClick={() => setView('overview')}
+                className="flex items-center gap-1.75 rounded-[7px] px-3 py-1.75 text-[12px] font-bold transition-[background-color,color,box-shadow] duration-150"
+                style={
+                  view === 'overview'
+                    ? {
+                        background: 'rgba(47,220,126,.12)',
+                        color: '#2fdc7e',
+                        boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.32)',
+                      }
+                    : { color: 'var(--muted-foreground)' }
+                }
+              >
+                <BarChart3 size={13} />
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('journey')}
+                className="flex items-center gap-1.75 rounded-[7px] px-3 py-1.75 text-[12px] font-bold transition-[background-color,color,box-shadow] duration-150"
+                style={
+                  view === 'journey'
+                    ? {
+                        background: 'rgba(133,163,214,.13)',
+                        color: '#85a3d6',
+                        boxShadow: 'inset 0 0 0 1px rgba(133,163,214,.34)',
+                      }
+                    : { color: 'var(--muted-foreground)' }
+                }
+              >
+                <Route size={13} />
+                Journey
+              </button>
+            </div>
 
-        <div
-          className={`grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
-          style={revealStyle(0)}
-        >
-          <MetricCard
-            Icon={Gamepad2}
-            label={gamesLabel}
-            value={String(Math.round(animatedGames))}
-            accent="#85a3d6"
-          />
-          <MetricCard
-            Icon={Clock}
-            label="TOTAL PLAYTIME"
-            value={formatHours(animatedHours)}
-            accent="#2fdc7e"
-          />
-          <MetricCard
-            Icon={DollarSign}
-            label={spentLabel}
-            value={formatMoney(animatedSpent)}
-            accent="#e3b24a"
-          />
-          <MetricCard
-            Icon={Gauge}
-            label="AVG COST / HOUR"
-            value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
-            accent="#7c86c8"
-          />
-        </div>
-
-        {showYearCompare && previousYear !== null && previousYearStats !== null && (
-          <div className={revealClass} style={revealStyle(1)}>
-            <YearOverYearCompare
-              current={{ totalGames, totalHours, totalSpent, costPerHour }}
-              previous={previousYearStats}
-              previousYear={previousYear}
-            />
+            {view === 'overview' && (
+              <YearPicker years={years} value={selectedYear} onChange={setSelectedYear} />
+            )}
           </div>
-        )}
-
-        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(2)}>
-          <ActivityHeatmap sessions={sessions} year={selectedYear} />
         </div>
 
-        <div
-          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
-          style={revealStyle(3)}
-        >
-          <HoursByMonthChart sessions={sessions} year={selectedYear} />
-          <StreakCard sessions={sessions} year={selectedYear} />
-        </div>
-
-        <div
-          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
-          style={revealStyle(4)}
-        >
-          <SpendByMonthChart spendEvents={spendEvents} year={selectedYear} />
-          <WhenDoYouPlayChart sessions={sessions} year={selectedYear} />
-        </div>
-
-        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(5)}>
-          <MostPlayedList entries={playedEntries} />
-        </div>
-
-        <div
-          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
-          style={revealStyle(6)}
-        >
-          {selectedYear === 'all' ? (
-            <StatusBreakdown mode="all-time" games={games} />
-          ) : (
-            <StatusBreakdown mode="year" stateEvents={stateEvents} year={selectedYear} />
-          )}
-          <GenreRadar minutesByAxis={minutesByAxis} />
-        </div>
-
-        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(7)}>
-          <CompletedGallery
-            stateEvents={stateEvents}
+        {view === 'journey' ? (
+          <Journey
             games={games}
-            year={selectedYear}
+            sessions={sessions}
+            stateEvents={stateEvents}
             onOpenGame={(gameId) => navigate(`/games/${gameId}`)}
           />
-        </div>
+        ) : (
+          <>
+            <div
+              className={`grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
+              style={revealStyle(0)}
+            >
+              <MetricCard
+                Icon={Gamepad2}
+                label={gamesLabel}
+                value={String(Math.round(animatedGames))}
+                accent="#85a3d6"
+              />
+              <MetricCard
+                Icon={Clock}
+                label="TOTAL PLAYTIME"
+                value={formatHours(animatedHours)}
+                accent="#2fdc7e"
+              />
+              <MetricCard
+                Icon={DollarSign}
+                label={spentLabel}
+                value={formatMoney(animatedSpent)}
+                accent="#e3b24a"
+              />
+              <MetricCard
+                Icon={Gauge}
+                label="AVG COST / HOUR"
+                value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
+                accent="#7c86c8"
+              />
+            </div>
 
-        <div
-          className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
-          style={revealStyle(8)}
-        >
-          <HltbCompareList
-            games={games}
-            stateEvents={stateEvents}
-            sessions={sessions}
-            year={selectedYear}
-          />
-          <SessionLengthHistogram sessions={sessions} year={selectedYear} />
-        </div>
+            {showYearCompare && previousYear !== null && previousYearStats !== null && (
+              <div className={revealClass} style={revealStyle(1)}>
+                <YearOverYearCompare
+                  current={{ totalGames, totalHours, totalSpent, costPerHour }}
+                  previous={previousYearStats}
+                  previousYear={previousYear}
+                />
+              </div>
+            )}
 
-        {/* Los dos van a lo ANCHO, uno encima del otro: el flujo es una línea
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(2)}>
+              <ActivityHeatmap sessions={sessions} year={selectedYear} />
+            </div>
+
+            <div
+              className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+              style={revealStyle(3)}
+            >
+              <HoursByMonthChart sessions={sessions} year={selectedYear} />
+              <StreakCard sessions={sessions} year={selectedYear} />
+            </div>
+
+            <div
+              className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+              style={revealStyle(4)}
+            >
+              <SpendByMonthChart spendEvents={spendEvents} year={selectedYear} />
+              <WhenDoYouPlayChart sessions={sessions} year={selectedYear} />
+            </div>
+
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(5)}>
+              <MostPlayedList entries={playedEntries} />
+            </div>
+
+            <div
+              className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+              style={revealStyle(6)}
+            >
+              {selectedYear === 'all' ? (
+                <StatusBreakdown mode="all-time" games={games} />
+              ) : (
+                <StatusBreakdown mode="year" stateEvents={stateEvents} year={selectedYear} />
+              )}
+              <GenreRadar minutesByAxis={minutesByAxis} />
+            </div>
+
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(7)}>
+              <CompletedGallery
+                stateEvents={stateEvents}
+                games={games}
+                year={selectedYear}
+                onOpenGame={(gameId) => navigate(`/games/${gameId}`)}
+              />
+            </div>
+
+            <div
+              className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
+              style={revealStyle(8)}
+            >
+              <HltbCompareList
+                games={games}
+                stateEvents={stateEvents}
+                sessions={sessions}
+                year={selectedYear}
+              />
+              <SessionLengthHistogram sessions={sessions} year={selectedYear} />
+            </div>
+
+            {/* Los dos van a lo ANCHO, uno encima del otro: el flujo es una línea
             temporal de meses y en media columna la línea se aplasta hasta no
             leerse, y la deuda es una cifra sola que a lo ancho se lee mejor
             en banda que en columna alta. */}
-        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(9)}>
-          <BacklogFlowChart
-            games={games}
-            plannedGames={plannedGames}
-            stateEvents={stateEvents}
-            year={selectedYear}
-          />
-        </div>
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(9)}>
+              <BacklogFlowChart
+                games={games}
+                plannedGames={plannedGames}
+                stateEvents={stateEvents}
+                year={selectedYear}
+              />
+            </div>
 
-        {/* La deuda es una foto de AHORA (lo que te queda y a qué ritmo vas),
+            {/* La deuda es una foto de AHORA (lo que te queda y a qué ritmo vas),
             así que no tiene lectura por año: con un año filtrado no se pinta. */}
-        {selectedYear === 'all' && (
-          <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
-            <BacklogDebtCard games={games} plannedGames={plannedGames} sessions={sessions} />
-          </div>
-        )}
+            {selectedYear === 'all' && (
+              <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
+                <BacklogDebtCard games={games} plannedGames={plannedGames} sessions={sessions} />
+              </div>
+            )}
 
-        <div className={`mt-4.5 ${revealClass}`} style={revealStyle(11)}>
-          <GameAgeDonut entries={ageEntries} year={selectedYear} />
-        </div>
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(11)}>
+              <GameAgeDonut entries={ageEntries} year={selectedYear} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
