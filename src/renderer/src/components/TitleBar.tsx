@@ -1,7 +1,8 @@
-import { Copy, Minus, Square, X } from 'lucide-react';
+import { Copy, Minus, Square, Tv2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useFullscreen } from '../hooks/useFullscreen';
+import { requestEnterBigPicture } from '../hooks/useBigPicture';
 import { cn } from '@/lib/utils';
 
 const controlButtonClass = cn(
@@ -32,6 +33,18 @@ const TitleBar = (): React.JSX.Element | null => {
     >
       <span className="text-sm font-semibold">Afterplay</span>
       <div className="flex h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        {/* Big Picture (BIG-PICTURE.md §2): el disparador descubrible sin
+            leer ningún manual — los otros tres (F11, --bigpicture, segunda
+            instancia) hay que conocerlos. */}
+        <button
+          type="button"
+          aria-label="Big Picture mode"
+          title="Big Picture (F11)"
+          onClick={() => requestEnterBigPicture()}
+          className={controlButtonClass}
+        >
+          <Tv2 className="size-3.5" strokeWidth={2.25} />
+        </button>
         <button
           type="button"
           aria-label="Minimize"

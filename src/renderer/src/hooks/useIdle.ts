@@ -14,7 +14,18 @@ import { useEffect, useRef, useState } from 'react';
 // que se crea y destruye en cada movimiento del ratón.
 const POLL_MS = 1000;
 
-const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'] as const;
+// 'afterplay:activity' es la actividad SINTÉTICA del mando en modo TV
+// (tv/gamepad.ts la despacha en cada pulsación): el gamepad no genera
+// eventos DOM, y sin esta vía el modo ambiente te taparía la pantalla
+// mientras navegas con el mando.
+const ACTIVITY_EVENTS = [
+  'mousemove',
+  'mousedown',
+  'keydown',
+  'wheel',
+  'touchstart',
+  'afterplay:activity',
+] as const;
 
 export const useIdle = (
   thresholdSeconds: number,

@@ -23,4 +23,22 @@ export const windowApi = {
     ipcRenderer.on('window:visible-change', listener);
     return () => ipcRenderer.removeListener('window:visible-change', listener);
   },
+  // ── Big Picture (BIG-PICTURE.md) ────────────────────────────────────────
+  // El estado vive en el main (argv/F11/second-instance nacen allí); aquí
+  // solo la consulta inicial + el aviso de cambios — mismo contrato que la
+  // visibilidad de arriba.
+  bigPicture: {
+    get: (): Promise<boolean> => ipcRenderer.invoke('bigpicture:get'),
+    enter: (): void => ipcRenderer.send('bigpicture:enter'),
+    exit: (): void => ipcRenderer.send('bigpicture:exit'),
+    onChange: (callback: (active: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, active: boolean): void =>
+        callback(active);
+      ipcRenderer.on('bigpicture:changed', listener);
+      return () => ipcRenderer.removeListener('bigpicture:changed', listener);
+    },
+  },
+  // El cierre REAL (menú del modo TV) — el close() de arriba solo esconde a
+  // la bandeja, por diseño.
+  quitApp: (): void => ipcRenderer.send('app:quit'),
 };

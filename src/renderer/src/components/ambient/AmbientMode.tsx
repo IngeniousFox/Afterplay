@@ -137,13 +137,20 @@ export const AmbientMode = (): React.JSX.Element | null => {
       // en vez de tapar con negro. Por eso el fondo va translúcido — con un
       // color opaco no habría nada que desenfocar. Un desenfoque suave, además:
       // se trata de que la app se aleje, no de esconderla.
+      // El atributo lo lee tv/gamepad.ts: la pulsación de mando que despierta
+      // este salvapantallas se consume y no llega al motor de foco.
+      data-afterplay-ambient=""
       className="fixed inset-0 z-[60]"
       style={{
         background: 'rgba(8,9,8,.42)',
         backdropFilter: 'blur(15px) saturate(0.95) brightness(0.78)',
         opacity: idle ? 1 : 0,
         transition: `opacity ${idle ? 1100 : 420}ms ${idle ? 'ease-out' : 'cubic-bezier(.4,0,1,1)'}`,
-        pointerEvents: 'none',
+        // Mientras el salvapantallas está puesto, el velo ABSORBE los clics:
+        // el mousedown que lo despierta no puede pulsar a la vez el botón que
+        // hubiera debajo (misma regla que el mando y el teclado — despertar
+        // se consume). En cuanto empieza a disolverse vuelve a dejar pasar.
+        pointerEvents: idle ? 'auto' : 'none',
       }}
       onTransitionEnd={() => {
         if (!idle) setMounted(false);

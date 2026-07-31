@@ -41,6 +41,9 @@ export const getPlannedGames = async (): Promise<GameListItem[]> => {
     totalHours: 0,
     addedAt: game.addedAt,
     hltbMain: game.hltbMain,
+    // Un planeado no tiene exe que lanzar — el campo existe para el Play
+    // del modo TV (que tampoco enseña juegos del Plan).
+    executablePath: null,
     manualIterations: [],
     currentState: 'plan_to_play' as const,
     // Un juego planeado no se ha jugado nunca, por definición — de ahí que

@@ -1,5 +1,14 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
-import { app, BrowserWindow, dialog, Notification, powerMonitor, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  Notification,
+  powerMonitor,
+  shell,
+} from 'electron';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 import { initCredentials } from './config/credentials';
@@ -69,6 +78,16 @@ let pendingMaximize = false;
 // objeto en cuanto el callback que lo creó termina, y con él sus manejadores
 // de eventos — el aviso aparecía pero pulsarlo no hacía nada.
 const liveNotifications = new Set<Notification>();
+// ── Big Picture (BIG-PICTURE.md) ─────────────────────────────────────────
+// El modo TV vive en el MAIN como fuente de verdad: tres de sus cuatro
+// disparadores nacen aquí (argv en frío, second-instance, F11) y el
+// fullscreen es cosa de este proceso. El renderer se suscribe
+// (bigpicture:changed) y consulta al montar (bigpicture:get) — mismo patrón
+// y misma lección de carreras que window:visible-change.
+let bigPictureMode = process.argv.includes('--bigpicture');
+// La foto de la ventana ANTES de entrar al modo, para devolverla igual al
+// salir (fullscreen pisa bounds y maximizado).
+let preBigPictureState: { bounds: Electron.Rectangle; isMaximized: boolean } | null = null;
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
@@ -80,11 +99,35 @@ app.setName('Afterplay');
 // registrar esquemas con privilegios (ver images/protocol.ts).
 registerImageProtocolScheme();
 
+// BIG-PICTURE.md §1 — instancia única, ANTES de tocar nada más. Sin esto,
+// un doble clic con la app viva en la bandeja arrancaba una segunda app
+// entera que moría contra el fichero de la DB con un error que culpaba a la
+// base de datos de lo que solo era "ya estabas abierta". La segunda
+// instancia ahora es un mensajero: entrega sus argv a la primera por
+// 'second-instance' y se va en milisegundos, sin ventana ni DB.
+const isPrimaryInstance = app.requestSingleInstanceLock();
+if (!isPrimaryInstance) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    // El caso Moonlight (BIG-PICTURE.md §2): `Afterplay.exe --bigpicture`
+    // con la app ya corriendo = la primera instancia se pone en modo TV.
+    // Sin el argumento, el clásico "doble clic": traerla delante y ya.
+    if (argv.includes('--bigpicture')) {
+      enterBigPicture();
+    } else {
+      showMainWindow();
+    }
+  });
+}
+
 function createWindow(): void {
   // Si Windows/macOS arrancó la app sola por el login item, no se enseña la
   // ventana — arranca directa a la bandeja (SPEC 3E). Ver lib/loginItem.ts
   // para el porqué esto no es tan simple como parece en Windows.
-  const wasOpenedAtLogin = wasOpenedHiddenAtLogin();
+  // `--bigpicture` GANA sobre el arranque oculto (BIG-PICTURE.md §2): si
+  // pediste el modo TV, lo que quieres es pantalla, no bandeja.
+  const wasOpenedAtLogin = wasOpenedHiddenAtLogin() && !bigPictureMode;
 
   // Mismo tamaño/posición que tenía al cerrarla la última vez (o el de
   // siempre si es la primera vez, o si el monitor de entonces ya no está
@@ -101,6 +144,10 @@ function createWindow(): void {
     minHeight: 700,
     show: false,
     frame: false,
+    // Arranque en frío con --bigpicture (o ventana recreada con el modo ya
+    // activo): nace directamente a pantalla completa, sin parpadeo de
+    // ventana normal por medio.
+    fullscreen: bigPictureMode,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' } : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -198,6 +245,18 @@ function createWindow(): void {
     mainWindow = null;
   });
 
+  // F11 = entrar/salir de Big Picture (BIG-PICTURE.md §2). El accelerator de
+  // fullscreen que regalaba el menú por defecto ya no existe (el menú se
+  // anula en whenReady), así que la tecla se captura aquí — y NO con
+  // globalShortcut: F11 solo debe actuar con Afterplay enfocada, no
+  // robarle la tecla al resto del sistema.
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') {
+      event.preventDefault();
+      toggleBigPicture();
+    }
+  });
+
   window.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: 'deny' };
@@ -214,16 +273,92 @@ function createWindow(): void {
   }
 }
 
+// Traer la app delante, venga de donde venga la petición: el "Open" del
+// tray, el clic en una notificación, o una segunda instancia (doble clic /
+// Moonlight). Antes esta lógica estaba duplicada en cada sitio, con el
+// pendingMaximize resuelto tres veces (BIG-PICTURE.md §1.1).
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (pendingMaximize) {
+    pendingMaximize = false;
+    mainWindow.maximize();
+  } else {
+    mainWindow.show();
+  }
+  mainWindow.focus();
+}
+
+// ── Big Picture: entrar / salir / avisar (BIG-PICTURE.md §2-§4) ──────────
+function sendBigPictureState(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('bigpicture:changed', bigPictureMode);
+  }
+}
+
+function enterBigPicture(): void {
+  bigPictureMode = true;
+  // Traerla delante ANTES de la foto: así lo que se guarda para restaurar
+  // es la ventana visible como estaba (maximizado del pendingMaximize
+  // incluido), no un estado a medias desde la bandeja.
+  showMainWindow();
+  const window = mainWindow;
+  if (window && !window.isDestroyed()) {
+    if (!window.isFullScreen()) {
+      preBigPictureState = { bounds: window.getBounds(), isMaximized: window.isMaximized() };
+      window.setFullScreen(true);
+    }
+  }
+  // Se avisa aunque el modo ya estuviera activo: un renderer recién cargado
+  // (ventana recreada) puede haberse perdido el aviso anterior, y repetirlo
+  // es inofensivo.
+  sendBigPictureState();
+}
+
+function exitBigPicture(): void {
+  if (!bigPictureMode) return;
+  bigPictureMode = false;
+  const window = mainWindow;
+  if (window && !window.isDestroyed()) {
+    window.setFullScreen(false);
+    const previous = preBigPictureState;
+    if (previous) {
+      if (previous.isMaximized) window.maximize();
+      else window.setBounds(previous.bounds);
+    }
+  }
+  preBigPictureState = null;
+  sendBigPictureState();
+}
+
+function toggleBigPicture(): void {
+  if (bigPictureMode) exitBigPicture();
+  else enterBigPicture();
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  // La instancia perdedora del candado (§1.1) ya pidió quit — no debe crear
+  // splash, ni migrar, ni nada: morir en silencio es todo su trabajo.
+  if (!isPrimaryInstance) return;
+
+  // Sin menú de aplicación: era invisible (frame:false + autoHideMenuBar)
+  // y solo aportaba accelerators fantasma — el F11 de fullscreen que ahora
+  // es el toggle de Big Picture (ver before-input-event en createWindow).
+  // F12/Ctrl+R de desarrollo no viven aquí (los pone watchWindowShortcuts).
+  Menu.setApplicationMenu(null);
+
   // Splash — tan pronto como Electron deja crear ventanas, antes de nada
   // más (migraciones, conexión con Turso, arranque del bundle del
   // renderer...). Si la app la abrió Windows sola al iniciar sesión, no
   // hay nada que enseñar todavía (arranca directa a la bandeja, SPEC 3E) —
-  // mismo chequeo que createWindow() usa para decidir si mostrarse.
-  if (!wasOpenedHiddenAtLogin()) splashWindow = createSplashWindow();
+  // mismo chequeo que createWindow() usa para decidir si mostrarse, con la
+  // misma excepción: --bigpicture quiere pantalla.
+  if (!wasOpenedHiddenAtLogin() || bigPictureMode) splashWindow = createSplashWindow();
 
   // Identidad de la app para Windows. TIENE que coincidir con el appId de
   // electron-builder.yml (com.afterplay.app): Windows resuelve el nombre que
@@ -262,9 +397,12 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.error('Database migration failed:', error);
     splashWindow?.close();
+    // Con la instancia única (§1.1), "la app ya estaba abierta" ha dejado de
+    // ser una causa posible de este error — el texto ya no la enmascara y
+    // puede señalar a los culpables reales que quedan.
     dialog.showErrorBox(
       'Afterplay',
-      'No se pudo preparar la base de datos. La app se va a cerrar.',
+      'No se pudo preparar la base de datos (¿otro programa está usando el archivo, o falló una migración?). La app se va a cerrar.',
     );
     app.quit();
     return;
@@ -289,27 +427,29 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
   registerImageProtocolHandler();
 
+  // IPC de Big Picture y del quit real, registrados AQUÍ y no en ipc/ — su
+  // estado (bigPictureMode, isQuitting) vive en este módulo, que es el dueño
+  // del ciclo de vida de la ventana.
+  ipcMain.handle('bigpicture:get', () => bigPictureMode);
+  ipcMain.on('bigpicture:enter', () => enterBigPicture());
+  ipcMain.on('bigpicture:exit', () => exitBigPicture());
+  // El "Quit Afterplay" del menú del modo TV: el MISMO cierre real que el
+  // "Quit" del tray — sin marcar isQuitting, el interceptor de la X lo
+  // convertiría en un simple esconderse a la bandeja.
+  ipcMain.on('app:quit', () => {
+    isQuitting = true;
+    app.quit();
+  });
+
   createWindow();
 
   // Bandeja del sistema (SPEC 3E): icono persistente con "Open"/"Quit" — la
   // app sigue vigilando procesos aunque la ventana esté oculta, y solo se
   // cierra de verdad desde aquí.
   tray = createAppTray({
-    onOpen: () => {
-      if (mainWindow) {
-        // Primera apertura tras un arranque a bandeja: recupera el
-        // maximizado que quedó pendiente (maximize() ya muestra la ventana).
-        if (pendingMaximize) {
-          pendingMaximize = false;
-          mainWindow.maximize();
-        } else {
-          mainWindow.show();
-        }
-        mainWindow.focus();
-      } else {
-        createWindow();
-      }
-    },
+    // La misma puerta que la segunda instancia y la notificación: traerla
+    // delante con el pendingMaximize resuelto (ver showMainWindow).
+    onOpen: showMainWindow,
     onQuit: () => {
       isQuitting = true;
       app.quit();
@@ -399,17 +539,9 @@ app.whenReady().then(async () => {
       // Traer la ventana Y llevarla a la ficha: llegar a la biblioteca
       // genérica obligaría a buscar el juego a mano justo cuando el aviso
       // acaba de decirte cuál es.
-      if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+      showMainWindow();
       const target = mainWindow;
       if (!target) return;
-
-      if (pendingMaximize) {
-        pendingMaximize = false;
-        target.maximize();
-      } else {
-        target.show();
-      }
-      target.focus();
 
       // La ventana puede acabar de crearse (app arrancada a bandeja y nunca
       // abierta): mandar el evento antes de que el renderer cargue lo tira al

@@ -44,6 +44,10 @@ export const getGames = async (): Promise<GameListItem[]> => {
       releaseYear: gamesTable.releaseYear,
       addedAt: gamesTable.addedAt,
       hltbMain: gamesTable.hltbMain,
+      // Para el botón Play del modo TV (BIG-PICTURE.md §5.1): el hero de
+      // TvHome lanza sin pasar por la ficha, y la lista era el único sitio
+      // donde la ruta no viajaba.
+      executablePath: gamesTable.executablePath,
     })
     .from(gamesTable)
     .where(eq(gamesTable.planned, false))
@@ -242,6 +246,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       totalHours: hoursByGame.get(game.id) ?? 0,
       addedAt: game.addedAt,
       hltbMain: game.hltbMain,
+      executablePath: game.executablePath,
       manualIterations: manualIterationsByGame.get(game.id) ?? [],
       currentState: latestStateEvent?.type ?? null,
       // Manda la sesión; si no hay ninguna, el último evento CON FECHA

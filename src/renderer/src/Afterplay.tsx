@@ -3,8 +3,10 @@ import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useCuriositiesActivity } from './hooks/curiosities';
+import { useBigPicture } from './hooks/useBigPicture';
 import { useWatcherSync } from './hooks/useWatcherSync';
 import { router } from './router';
+import { TvModeTransition } from './tv/TvModeTransition';
 
 // Shell raíz de la app — routing de verdad (Bloque 3A, SPEC 10.6): rail
 // lateral + Games/Sessions/Stats, ver router.tsx.
@@ -17,6 +19,9 @@ const Afterplay = (): React.JSX.Element => {
   // sus queries en cuanto el main avisa — aquí y no solo en Ajustes, porque
   // un juego recién añadido genera con el modal de Ajustes cerrado.
   useCuriositiesActivity();
+  // Modo TV: los toasts que sobrevivan en él (errores, conexión de mando) se
+  // escalan para leerse desde el sofá (BIG-PICTURE.md §4).
+  const bigPicture = useBigPicture();
 
   return (
     <TooltipProvider>
@@ -33,8 +38,12 @@ const Afterplay = (): React.JSX.Element => {
         position="bottom-right"
         // Más ancho que el de serie (356px): el aviso de cierre lleva
         // carátula, título, cifra y un campo de texto — apretado ahí dentro se
-        // veía estrecho y pobre.
-        style={{ width: 420 }}
+        // veía estrecho y pobre. En modo TV, escalado desde la esquina para
+        // leerse a distancia de sofá.
+        style={{
+          width: 420,
+          ...(bigPicture ? { transform: 'scale(1.35)', transformOrigin: 'bottom right' } : {}),
+        }}
         toastOptions={{ unstyled: true, classNames: { toast: 'w-full' } }}
       />
       {/* Lo último del árbol y por encima de todo: cuando dejas de tocar la
@@ -42,6 +51,11 @@ const Afterplay = (): React.JSX.Element => {
           no pertenece a ninguna pantalla — es la app entera la que se queda
           quieta, no una sección. */}
       <AmbientMode />
+      {/* La cortina de Big Picture: tapa la tramoya del cambio de modo
+          (fullscreen + salto de ruta). Fuera del router por lo mismo que el
+          ambiente — aparece en el mismo frame en que el main cambia el
+          estado, navegue lo que navegue por debajo. */}
+      <TvModeTransition />
     </TooltipProvider>
   );
 };

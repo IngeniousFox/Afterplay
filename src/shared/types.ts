@@ -242,6 +242,10 @@ export type GameListItem = {
   // frente al tiempo oficial en juegos completados). Null si HLTB no lo
   // tenía al enriquecer el juego.
   hltbMain: number | null;
+  // Para el botón Play del hero de TvHome (BIG-PICTURE.md §5.1) — lanzar el
+  // último juego sin pasar por la ficha. Null si no hay exe configurado (o
+  // es un juego emulado, que no tiene propio).
+  executablePath: string | null;
   // Playthroughs con horas manuales ("I played this before"), con el año al
   // que atribuirlas: el de su fecha de fin (o la de inicio si no hay fin), o
   // null si el playthrough no tiene ninguna fecha. Las vistas por año de
