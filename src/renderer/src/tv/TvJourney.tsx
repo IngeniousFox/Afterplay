@@ -13,7 +13,7 @@ import { BLUE, VIOLET } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
 import { useImageSrc } from '../hooks/useImageSrc';
-import { useTvBackdrop } from './backdropContext';
+import { useTvBackdrop, useTvSkyBackdrop } from './backdropContext';
 import { useTvButtons, useTvLegend } from './tvInput';
 import { useTvFocusable } from './focusContext';
 import { forgetJourneyPage, recallJourneyPage, rememberJourneyPage } from './screenMemory';
@@ -511,6 +511,11 @@ export const TvJourney = (): React.JSX.Element => {
   const featuredEntry = page?.kind === 'month' ? (page.entries[0] ?? null) : null;
   const featuredSrc = useImageSrc(featuredEntry?.heroUrl ?? null, 'heroes');
   useTvBackdrop(featuredSrc);
+  // LA CUBIERTA ES LA NOCHE: al abrir el libro se despeja el arte y el
+  // cielo de luciérnagas (el censo de tu biblioteca) sale a escena — es la
+  // única pantalla donde el enjambre es el protagonista, y el epígrafe de
+  // abajo cuenta por fin qué es.
+  useTvSkyBackdrop(page?.kind === 'intro');
 
   if (!page) {
     return (
@@ -672,9 +677,25 @@ export const TvJourney = (): React.JSX.Element => {
                 </div>
               ))}
             </div>
+            {/* EL SECRETO, DICHO UNA VEZ: el cielo de la cubierta es el
+                censo de la biblioteca (una luz por juego, la brasa de su
+                estado) y nadie podía saberlo. Esta línea lo convierte de
+                textura en detalle que cuentas a un amigo — y solo vive
+                aquí, en la única pantalla donde el cielo está a escena. */}
+            <div
+              className={`relative flex items-center gap-[0.55em] text-[0.68em] font-semibold text-foreground/55 italic ${tvRevealClass}`}
+              style={tvRevealStyle(5)}
+            >
+              <span
+                aria-hidden
+                className="afterplay-tv-glow h-[0.4em] w-[0.4em] flex-none rounded-full"
+                style={{ background: '#edd39a', boxShadow: '0 0 0.7em #edd39acc' }}
+              />
+              Every light in this sky is a game in your library.
+            </div>
             <div
               className={`relative text-[0.7em] font-semibold text-foreground/60 ${tvRevealClass}`}
-              style={tvRevealStyle(5)}
+              style={tvRevealStyle(6)}
             >
               Turn the page to begin →
             </div>

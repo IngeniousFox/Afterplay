@@ -493,7 +493,10 @@ const TvShell = (): React.JSX.Element => {
                 <img
                   src={backdrop.previous}
                   alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
+                  // Sin arte nuevo encima (la pantalla DESPEJÓ el fondo para
+                  // el cielo, useTvSkyBackdrop) el búfer viejo se funde a
+                  // negro — quedarse clavado debajo taparía la noche.
+                  className={`absolute inset-0 h-full w-full object-cover ${backdrop.current ? '' : 'afterplay-tv-backdrop-out'}`}
                   style={{
                     filter: 'blur(8px) saturate(1.4) brightness(.6) contrast(1.06)',
                     transform: 'scale(1.06)',
@@ -557,17 +560,18 @@ const TvShell = (): React.JSX.Element => {
                     'radial-gradient(closest-side, rgba(124,134,200,.15), rgba(124,134,200,.06) 55%, transparent 78%)',
                 }}
               />
-              {/* Las luciérnagas y los brillos-aurora vagando — tu
-                  biblioteca, contada en brasas de colores, pintada entera
-                  en UN canvas (ver FireflyCanvas). Con arte en pantalla se
-                  RETIRAN a un segundo plano (el juego manda); sin arte —
-                  la cubierta del Journey, el modo recién abierto — el cielo
-                  vuelve a ser el protagonista. */}
+              {/* Las luciérnagas y los brillos-aurora — tu biblioteca,
+                  contada en brasas de colores, pintada entera en UN canvas
+                  (ver FireflyCanvas). YA NO son empapelado: con arte en
+                  pantalla se apagan del todo (el juego manda, y 331 puntos
+                  encima del arte eran ruido), y solo en las pantallas-cielo
+                  (la cubierta del Journey, los estados vacíos) salen a
+                  escena a plena luz — la escasez es lo que las hace mágicas. */}
               <div
                 className="absolute inset-0 transition-opacity duration-700"
-                style={{ opacity: backdrop.current ? 0.35 : 1 }}
+                style={{ opacity: backdrop.current ? 0 : 1 }}
               >
-                <FireflyCanvas orbs={orbs} />
+                <FireflyCanvas orbs={orbs} active={!backdrop.current} />
               </div>
               {/* LA VIÑETA DE CINE: los bordes mueren en negro casi puro,
                 pero el centro queda más limpio que antes — el arte es el

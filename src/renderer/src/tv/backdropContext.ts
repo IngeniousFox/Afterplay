@@ -24,3 +24,17 @@ export const useTvBackdrop = (src: string | null): void => {
     setBackdrop(src);
   }, [setBackdrop, src]);
 };
+
+// EL CIELO A ESCENA: la pantalla que quiera la noche de luciérnagas como
+// protagonista (la cubierta del Journey) DESPEJA el arte del fondo — el
+// null aquí es intención, no "aún cargando", por eso es otro hook y no un
+// caso más de useTvBackdrop. El shell funde el arte saliente y devuelve el
+// enjambre a plena luz (ver FireflyCanvas.active).
+export const useTvSkyBackdrop = (active: boolean): void => {
+  const setBackdrop = useContext(TvBackdropContext);
+
+  useEffect(() => {
+    if (!setBackdrop || !active) return;
+    setBackdrop(null);
+  }, [setBackdrop, active]);
+};

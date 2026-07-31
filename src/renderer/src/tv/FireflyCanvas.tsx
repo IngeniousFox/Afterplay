@@ -37,7 +37,17 @@ export type FireflySpec = {
 const FRAME_MS = 1000 / 30;
 const SPRITE_SIZE = 128;
 
-export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Element => {
+export const FireflyCanvas = ({
+  orbs,
+  active = true,
+}: {
+  orbs: FireflySpec[];
+  // El cielo solo se PINTA cuando está a escena (sin arte de fondo). Con
+  // active=false el bucle deja de trabajar en cuanto acaba el fundido del
+  // wrapper (~700ms) — un canvas invisible dibujando 331 luces a 30fps era
+  // calefacción, no ambiente.
+  active?: boolean;
+}): React.JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Datos frescos sin reiniciar el bucle: la biblioteca puede refrescarse
   // (estados que cambian de color) y el cielo se actualiza al vuelo.
@@ -45,6 +55,12 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
   useEffect(() => {
     orbsRef.current = orbs;
   });
+  const activeRef = useRef(active);
+  const inactiveSinceRef = useRef(0);
+  useEffect(() => {
+    if (!active && activeRef.current) inactiveSinceRef.current = performance.now();
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -116,6 +132,10 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       // salvapantallas del modo ambiente encima.
       if (document.hidden) return;
       if (document.querySelector('[data-afterplay-ambient]') !== null) return;
+      // Fuera de escena (arte de fondo delante): se sigue pintando solo
+      // mientras dura el fundido de salida del wrapper, y después ni un
+      // ciclo más.
+      if (!activeRef.current && now - inactiveSinceRef.current > 900) return;
 
       const t = now / 1000;
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -145,32 +165,78 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       for (let i = 0; i < total; i++) {
         const orb = list[i];
         const isBig = orb.big && Math.floor(i / 10) % bigStride === 0;
+
+        // LOS CORRILLOS: las luciérnagas de verdad no se reparten uniformes
+        // por el prado — se juntan. Siete centros deterministas derivando
+        // muy despacio; ~2/3 de las luces se acercan al suyo a medio camino
+        // y el resto quedan libres entre corrillos. El censo sigue siendo
+        // exacto (una luz por juego); solo la geografía se vuelve orgánica.
+        // Multiplicadores DESCORRELACIONADOS a propósito (61/29): con la
+        // primera pareja (137/83) los siete centros caían en una diagonal —
+        // un solo enjambre en banda en vez de corrillos repartidos.
+        const k = i % 7;
+        const clusterLeft = ((k * 61 + 13) % 88) + 6 + Math.sin(t * 0.02 + k * 2.1) * 4;
+        const clusterTop = ((k * 29 + 37) % 70) + 12 + Math.cos(t * 0.016 + k * 1.4) * 3;
+        const pull = i % 10 < 7 ? 0.55 : 0;
+        const baseLeft = orb.left + (clusterLeft - orb.left) * pull;
+        const baseTop = orb.top + (clusterTop - orb.top) * pull;
+
+        // LA PROFUNDIDAD: cada luz vive en un plano (z 0.6 cerca de la
+        // lejanía → ~1.5 en primer término). Las cercanas son más grandes,
+        // más brillantes y derivan más (paralaje); las lejanas, chispitas
+        // lentas. Tres capas de noche en un solo canvas.
+        const z = 0.6 + ((i * 13) % 8) / 8;
+
         // La deriva: dos senos por eje con periodos coprimos-ish y fase
         // áurea (i * 2.399) — órbitas suaves que no se repiten entre luces.
-        const w1 = 0.045 + (i % 7) * 0.011;
-        const w2 = 0.03 + (i % 5) * 0.009;
+        const w1 = (0.045 + (i % 7) * 0.011) * (0.55 + z * 0.45);
+        const w2 = (0.03 + (i % 5) * 0.009) * (0.55 + z * 0.45);
         const p1 = i * 2.399;
         const p2 = i * 1.111;
-        const ax = (2.2 + (i % 4)) * (width / 100);
-        const ay = (2.6 + (i % 3)) * (height / 100);
+        const ax = (2.2 + (i % 4)) * (width / 100) * (0.45 + z * 0.55);
+        const ay = (2.6 + (i % 3)) * (height / 100) * (0.45 + z * 0.55);
         const x =
-          (orb.left / 100) * width +
+          (baseLeft / 100) * width +
           Math.sin(t * w1 + p1) * ax +
           Math.sin(t * w2 + p2 * 0.7) * ax * 0.4;
         const y =
-          (orb.top / 100) * height +
+          (baseTop / 100) * height +
           Math.cos(t * w2 + p2) * ay +
           Math.sin(t * w1 * 0.8 + p1 * 1.3) * ay * 0.35;
-        // El aliento: cada luz respira a su ritmo, sin apagarse del todo —
-        // valle a 0.3 (no 0.1): en cielos densos, el valle profundo hacía
-        // desaparecer media biblioteca a la vez.
-        const breath = 0.65 + 0.35 * Math.sin(t * (0.25 + (i % 6) * 0.05) + i);
-        // El radio del sprite incluye el halo del núcleo visual.
-        const radius = isBig ? width * 0.1 : orb.size * sizeScale * em * haloScale;
 
-        context.globalAlpha = ((isBig ? 0.55 : 0.62) * breath + 0.06) * damp;
+        if (isBig) {
+          // Las auroras siguen siendo nubes que respiran — sin parpadeo.
+          const breath = 0.65 + 0.35 * Math.sin(t * (0.25 + (i % 6) * 0.05) + i);
+          const radius = width * 0.1;
+          context.globalAlpha = (0.55 * breath + 0.06) * damp;
+          context.drawImage(
+            spriteFor(orb.color, true),
+            x - radius,
+            y - radius,
+            radius * 2,
+            radius * 2,
+          );
+          continue;
+        }
+
+        // EL PARPADEO: una luciérnaga pasa la mayor parte del tiempo en
+        // brasa tenue y DESTELLA — el destello es la firma de la especie,
+        // lo que el aliento sinusoidal de antes nunca tuvo. Ciclo propio
+        // por índice (5-11s), destello del ~14% del ciclo con subida y
+        // bajada en seno; entre destellos queda la brasa respirando bajito.
+        const period = 5 + ((i * 11) % 13) * 0.46;
+        const phase = ((t + i * 1.7) % period) / period;
+        const flash = phase < 0.14 ? Math.sin((phase / 0.14) * Math.PI) : 0;
+        const ember = 0.3 + 0.18 * Math.sin(t * (0.25 + (i % 6) * 0.05) + i);
+        const depthAlpha = 0.5 + z * 0.35;
+
+        // El destello también HINCHA la luz un punto — el pop se ve antes
+        // que el brillo a tres metros.
+        const radius = orb.size * sizeScale * em * haloScale * z * (1 + flash * 0.3);
+
+        context.globalAlpha = Math.min(1, (ember + flash * 0.85) * depthAlpha * damp);
         context.drawImage(
-          spriteFor(orb.color, isBig),
+          spriteFor(orb.color, false),
           x - radius,
           y - radius,
           radius * 2,

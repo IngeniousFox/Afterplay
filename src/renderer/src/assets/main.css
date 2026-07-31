@@ -712,6 +712,22 @@
     afterplay-tv-backdrop-drift 28s ease-in-out infinite alternate;
 }
 
+/* La salida del arte cuando una pantalla DESPEJA el fondo (useTvSkyBackdrop:
+   la cubierta del Journey quiere la noche de luciérnagas sola). El búfer
+   anterior se funde a negro en vez de quedarse clavado debajo. */
+@keyframes afterplay-tv-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.afterplay-tv-backdrop-out {
+  animation: afterplay-tv-backdrop-out 800ms ease-out both;
+}
+
 /* El barrido de luz sobre la carátula ENFOCADA: una franja clara cruza el
    arte una vez al recibir el foco — el "aquí" dicho con luz, no con un
    recuadro. Translate puro: nada que re-rasterice ni se recorte. */
