@@ -221,9 +221,17 @@ export const TvLibrary = (): React.JSX.Element => {
     [visible],
   );
 
-  // El fondo respira con el primer juego visible: estable dentro de un
-  // filtro, y cambia con intención al cambiar de filtro o buscar.
-  const backdropSrc = useImageSrc(visible[0]?.heroUrl ?? null, 'heroes');
+  // EL FOCO PINTA LA PANTALLA (mismo lenguaje que el Home): el fondo es el
+  // arte del juego ENFOCADO en la parrilla — moverte por la biblioteca es
+  // pasear la sala de juego en juego, con su luz (artGlow) cambiando de
+  // color contigo. Sin foco aún, o si el enfocado se filtró, el primer
+  // visible sostiene la luz.
+  const [spotId, setSpotId] = useState<number | null>(null);
+  const spotGame = useMemo(
+    () => visible.find((game) => game.id === spotId) ?? visible[0] ?? null,
+    [visible, spotId],
+  );
+  const backdropSrc = useImageSrc(spotGame?.heroUrl ?? null, 'heroes');
   useTvBackdrop(backdropSrc);
 
   const cycleFilter = (step: number): void => {
@@ -438,6 +446,7 @@ export const TvLibrary = (): React.JSX.Element => {
                     autoFocus={game.id === firstMatchId}
                     revealIndex={index}
                     onOpen={() => openGame(game.id)}
+                    onFocusSpot={() => setSpotId(game.id)}
                   />
                 </div>
               </div>

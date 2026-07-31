@@ -5,6 +5,7 @@ import type { SessionClosedEvent } from '../../../shared/types';
 import { useGames } from '../hooks/games';
 import { queryKeys } from '../hooks/queryKeys';
 import { BLUE, GREEN, TEAL, VIOLET } from '../lib/colors';
+import { extractArtGlow } from './artGlow';
 import { useTimeFormat } from '../hooks/settings';
 import { TvFocusProvider } from './focus';
 import { useTvFocusActions } from './focusContext';
@@ -114,11 +115,12 @@ const routeAccent = (pathname: string): string => {
   if (pathname.startsWith('/tv/game')) return TEAL;
   return GREEN;
 };
-// Las cuatro luces existen SIEMPRE montadas y solo se les funde la opacidad:
-// los gradientes de background no saben interpolar colores, pero la opacidad
-// sí sabe fundirse — así el cambio de habitación es un crossfade de luz de
-// verdad, no un repintado.
-const ROOM_ACCENTS = [GREEN, BLUE, VIOLET, TEAL] as const;
+// La forma de la luz ambiental: baño cenital + eco en la esquina opuesta.
+// La usan las DOS capas del doble búfer de luz (previous/current) — ver el
+// estado `glow` del shell: el color vivo sale del ARTE en pantalla (artGlow)
+// y solo cae al acento de ruta cuando no hay arte que escuchar.
+const glowWash = (color: string): string =>
+  `radial-gradient(85% 62% at 50% -8%, ${color}47, transparent 62%), radial-gradient(58% 44% at 88% 108%, ${color}29, transparent 70%)`;
 
 const PadGlyph = ({ label }: { label: string }): React.JSX.Element => (
   <span className="flex h-[1.4em] min-w-[1.4em] items-center justify-center rounded-full border border-white/20 bg-white/[0.05] px-[0.35em] text-[0.6em] font-extrabold tracking-[.04em] text-foreground/90">
@@ -403,8 +405,38 @@ const TvShell = (): React.JSX.Element => {
     });
   }, [queryClient]);
 
-  // La luz de la habitación actual (ver routeAccent arriba).
+  // La luz de la habitación actual (ver routeAccent arriba) — es el
+  // FALLBACK: cuando hay arte en el fondo, la luz la pone el arte (artGlow).
   const accent = routeAccent(location.pathname);
+
+  // EL COLOR DEL JUEGO (artGlow): la luz ambiental sale del arte que está en
+  // pantalla. Doble búfer como el propio backdrop — los gradientes no saben
+  // interpolar color, así que el anterior aguanta debajo mientras el nuevo
+  // entra en fundido. `alive` porque la extracción es async y el arte puede
+  // haber cambiado otra vez antes de que este resuelva.
+  const [glow, setGlow] = useState<{ previous: string | null; current: string }>({
+    previous: null,
+    current: GREEN,
+  });
+  const glowTarget = useRef<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const settle = (color: string): void => {
+      if (!alive || glowTarget.current === color) return;
+      glowTarget.current = color;
+      setGlow((state) =>
+        state.current === color ? state : { previous: state.current, current: color },
+      );
+    };
+    if (!backdrop.current) {
+      settle(accent);
+      return;
+    }
+    void extractArtGlow(backdrop.current).then((color) => settle(color ?? accent));
+    return () => {
+      alive = false;
+    };
+  }, [backdrop, accent]);
 
   const glyphs = device === 'gamepad' ? PAD_GLYPHS : KEY_GLYPHS;
   const baseHints: TvHint[] = [
@@ -451,19 +483,20 @@ const TvShell = (): React.JSX.Element => {
               las auroras de la casa. Es lo que separa "modo TV" de
               "rectángulo negro con botones". */}
             <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-              {/* El arte, VIVO: saturado por encima de sí mismo y con luz de
-                verdad (antes brightness .34 — todo acababa en la misma sopa
-                gris). El contraste que el brillo devuelve lo recupera la
-                VIÑETA de abajo, no el arte: el cuadro brilla en el centro y
-                la sala está a oscuras, que es como se ve el cine. */}
+              {/* EL JUEGO ES LA PANTALLA: el arte casi nítido (blur 8, no 24
+                — solo lo justo para alisar el reescalado) y con luz de
+                verdad. Ya no es "ambiente detrás de la UI": es el sujeto. La
+                legibilidad no se la roba un velo global al arte entero — la
+                ponen los SCRIMS direccionales de abajo, que oscurecen donde
+                vive el texto y dejan al arte el resto de la sala. */}
               {backdrop.previous && (
                 <img
                   src={backdrop.previous}
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover"
                   style={{
-                    filter: 'blur(24px) saturate(1.55) brightness(.44) contrast(1.12)',
-                    transform: 'scale(1.14)',
+                    filter: 'blur(8px) saturate(1.4) brightness(.6) contrast(1.06)',
+                    transform: 'scale(1.06)',
                   }}
                 />
               )}
@@ -473,32 +506,38 @@ const TvShell = (): React.JSX.Element => {
                   src={backdrop.current}
                   alt=""
                   className="afterplay-tv-backdrop absolute inset-0 h-full w-full object-cover"
-                  style={{ filter: 'blur(24px) saturate(1.55) brightness(.44) contrast(1.12)' }}
+                  style={{ filter: 'blur(8px) saturate(1.4) brightness(.6) contrast(1.06)' }}
                 />
               )}
-              {/* Velo de asiento: ancla arriba y abajo (títulos y leyenda) y
-                deja el centro casi limpio — ahí es donde el arte respira. */}
+              {/* Scrim vertical: ancla títulos arriba y leyenda abajo. */}
               <div
                 className="absolute inset-0"
                 style={{
                   background:
-                    'linear-gradient(180deg, rgba(8,10,9,.52) 0%, rgba(8,10,9,.26) 40%, rgba(8,10,9,.62) 100%)',
+                    'linear-gradient(180deg, rgba(6,8,7,.5) 0%, rgba(6,8,7,.16) 32%, rgba(6,8,7,.2) 60%, rgba(6,8,7,.68) 100%)',
                 }}
               />
-              {/* La luz de la habitación (routeAccent): un baño cenital del
-                color de la pantalla + su eco tenue en la esquina opuesta.
-                Las cuatro luces viven montadas a la vez y solo se funde la
-                opacidad — cambiar de pantalla es un crossfade de luz. */}
-              {ROOM_ACCENTS.map((color) => (
-                <div
-                  key={color}
-                  className="absolute inset-0 transition-opacity duration-1000"
-                  style={{
-                    opacity: color === accent ? 1 : 0,
-                    background: `radial-gradient(85% 62% at 50% -8%, ${color}42, transparent 62%), radial-gradient(58% 44% at 88% 108%, ${color}26, transparent 70%)`,
-                  }}
-                />
-              ))}
+              {/* Scrim lateral: el texto del modo vive a la izquierda (titular
+                del Home, cabeceras, fichas) — esta cuña le da fondo sin
+                apagar el arte del centro-derecha. */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(90deg, rgba(6,8,7,.6) 0%, rgba(6,8,7,.26) 36%, transparent 64%)',
+                }}
+              />
+              {/* La luz del JUEGO (artGlow, doble búfer como el arte): baño
+                cenital + eco de esquina del color vivo del arte en pantalla.
+                El anterior aguanta debajo; el nuevo entra en fundido. */}
+              {glow.previous && (
+                <div className="absolute inset-0" style={{ background: glowWash(glow.previous) }} />
+              )}
+              <div
+                key={glow.current}
+                className="animate-in fade-in-0 absolute inset-0 duration-1000"
+                style={{ background: glowWash(glow.current) }}
+              />
               {/* Degradado radial en vez de círculo sólido + blur: el blur
                   se recortaba de golpe contra el overflow-hidden del
                   viewport y las luces de esquina se veían CORTADAS. El
@@ -520,17 +559,24 @@ const TvShell = (): React.JSX.Element => {
               />
               {/* Las luciérnagas y los brillos-aurora vagando — tu
                   biblioteca, contada en brasas de colores, pintada entera
-                  en UN canvas (ver FireflyCanvas). */}
-              <FireflyCanvas orbs={orbs} />
-              {/* LA VIÑETA DE CINE: mucho más honda que antes — los bordes de
-                la pantalla mueren en negro casi puro. Aquí es donde vive el
-                contraste que le devolvimos al arte: centro encendido, sala a
-                oscuras. Sin negros de verdad no hay intensidad, solo gris. */}
+                  en UN canvas (ver FireflyCanvas). Con arte en pantalla se
+                  RETIRAN a un segundo plano (el juego manda); sin arte —
+                  la cubierta del Journey, el modo recién abierto — el cielo
+                  vuelve a ser el protagonista. */}
+              <div
+                className="absolute inset-0 transition-opacity duration-700"
+                style={{ opacity: backdrop.current ? 0.35 : 1 }}
+              >
+                <FireflyCanvas orbs={orbs} />
+              </div>
+              {/* LA VIÑETA DE CINE: los bordes mueren en negro casi puro,
+                pero el centro queda más limpio que antes — el arte es el
+                sujeto y la viñeta es su marco, no su mordaza. */}
               <div
                 className="absolute inset-0"
                 style={{
                   background:
-                    'radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(4,5,4,.55) 66%, rgba(2,3,2,.92) 100%)',
+                    'radial-gradient(ellipse at 50% 42%, transparent 42%, rgba(4,5,4,.42) 70%, rgba(2,3,2,.86) 100%)',
                 }}
               />
             </div>
@@ -547,15 +593,15 @@ const TvShell = (): React.JSX.Element => {
               que hablara último. El item de menú es un BOTÓN de verdad — el
               ratón también merece su puerta al menú. */}
             <div className="relative flex h-[2.7em] flex-none items-center gap-[1.5em] bg-black/45 px-[4vw] text-[0.72em] font-bold text-muted-foreground backdrop-blur-[10px]">
-              {/* Filete de luz en vez de un border plano — y del COLOR de la
-                habitación (routeAccent): la luz de la pantalla llega hasta
-                el pie. Cambia seco al navegar, pero un pelo de luz de 1px
-                bajo la transición de pantalla entera no se ve saltar. */}
+              {/* Filete de luz en vez de un border plano — y del COLOR del
+                juego en pantalla (artGlow): la luz del arte llega hasta el
+                pie. Cambia seco al fundir, pero un pelo de luz de 1px bajo
+                el crossfade del fondo entero no se ve saltar. */}
               <span
                 aria-hidden
                 className="absolute inset-x-0 top-0 h-px"
                 style={{
-                  background: `linear-gradient(90deg, transparent, ${accent}59 30%, ${accent}59 70%, transparent)`,
+                  background: `linear-gradient(90deg, transparent, ${glow.current}59 30%, ${glow.current}59 70%, transparent)`,
                 }}
               />
               {mergedHints.map((hint) => (

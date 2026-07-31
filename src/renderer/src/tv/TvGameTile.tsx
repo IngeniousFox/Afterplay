@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { GameListItem } from '../../../shared/types';
 import { GameCover } from '../components/GameCover';
 import { formatHours } from '../lib/format';
@@ -25,6 +26,7 @@ export const TvGameTile = ({
   fill = false,
   disabled = false,
   revealIndex,
+  onFocusSpot,
 }: {
   game: GameListItem;
   onOpen: () => void;
@@ -39,9 +41,21 @@ export const TvGameTile = ({
   // la carátula aparece sin animación (para listas que se refiltran en vivo,
   // donde re-animar cada letra marearía).
   revealIndex?: number;
+  // "El juego es la pantalla": la pantalla que quiera repintar su fondo con
+  // el juego ENFOCADO se suscribe aquí — se dispara al ganar el foco.
+  onFocusSpot?: () => void;
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({ onSelect: onOpen, autoFocus, disabled });
   const status = getGameStatusMeta(game.currentState);
+  // Ref-asentado para no re-disparar por identidad del callback (la misma
+  // doctrina que onSelect en useTvFocusable).
+  const onFocusSpotRef = useRef(onFocusSpot);
+  useEffect(() => {
+    onFocusSpotRef.current = onFocusSpot;
+  });
+  useEffect(() => {
+    if (focused) onFocusSpotRef.current?.();
+  }, [focused]);
 
   return (
     <button

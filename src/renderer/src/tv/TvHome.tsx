@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { GameListItem, GeneratedMemorySummary } from '../../../shared/types';
-import { GameCover } from '../components/GameCover';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
 import { useSessions } from '../hooks/sessions';
@@ -35,6 +34,7 @@ const HeroButton = ({
   autoFocus = false,
   primary = false,
   onSelect,
+  onFocusSpot,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -43,8 +43,18 @@ const HeroButton = ({
   // aterrizar ahí antes incluso de que el foco lo encienda.
   primary?: boolean;
   onSelect: () => void;
+  // Volver el foco a los botones devuelve el protagonismo al hero — el Home
+  // avisa por aquí (misma pareja que TvGameTile.onFocusSpot).
+  onFocusSpot?: () => void;
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({ onSelect, autoFocus });
+  const onFocusSpotRef = useRef(onFocusSpot);
+  useEffect(() => {
+    onFocusSpotRef.current = onFocusSpot;
+  });
+  useEffect(() => {
+    if (focused) onFocusSpotRef.current?.();
+  }, [focused]);
   return (
     // scroll-mt desmedido a propósito: estos botones viven al PIE del hero,
     // y el scrollIntoView 'nearest' del motor de foco paraba en cuanto el
@@ -122,6 +132,7 @@ const Shelf = ({
   live = false,
   autoFocusId = null,
   trailing,
+  onFocusGame,
 }: {
   title: string;
   accent: string;
@@ -133,6 +144,9 @@ const Shelf = ({
   // ver screenMemory) — null en una visita normal.
   autoFocusId?: number | null;
   trailing?: React.ReactNode;
+  // "El juego es la pantalla": el Home escucha qué carátula tiene el foco
+  // para repintar el fondo y el titular con ELLA.
+  onFocusGame?: (game: GameListItem) => void;
 }): React.JSX.Element | null => {
   if (games.length === 0 && !trailing) return null;
   return (
@@ -187,6 +201,7 @@ const Shelf = ({
             autoFocus={game.id === autoFocusId}
             revealIndex={index}
             onOpen={() => onOpen(game)}
+            onFocusSpot={onFocusGame ? () => onFocusGame(game) : undefined}
           />
         ))}
         {trailing}
@@ -412,20 +427,31 @@ export const TvHome = (): React.JSX.Element => {
       .sort((a, b) => (b.lastPlayedAt?.getTime() ?? 0) - (a.lastPlayedAt?.getTime() ?? 0))[0];
   }, [games]);
 
-  // La última nota de sesión del hero — "dónde lo dejé", dicho por ti.
-  const heroNote = useMemo(() => {
-    if (!hero) return null;
+  // EL FOCO PINTA LA PANTALLA: el protagonista ya no es fijo — es el juego
+  // bajo el foco de las estanterías (via onFocusSpot), y el hero de siempre
+  // cuando el foco está en los botones o acabas de entrar. Mover el d-pad
+  // repinta el fondo ENTERO, el titular y la nota: la sala es el juego que
+  // estás mirando, como en una consola de verdad.
+  const [spotId, setSpotId] = useState<number | null>(null);
+  const spot = useMemo(
+    () => games.find((game) => game.id === spotId) ?? hero,
+    [games, spotId, hero],
+  );
+
+  // La última nota de sesión del protagonista — "dónde lo dejé", dicho por ti.
+  const spotNote = useMemo(() => {
+    if (!spot) return null;
     const withNote = sessions
-      .filter((session) => session.gameId === hero.id && (session.note?.trim().length ?? 0) > 0)
+      .filter((session) => session.gameId === spot.id && (session.note?.trim().length ?? 0) > 0)
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
     return withNote?.note?.trim() ?? null;
-  }, [sessions, hero]);
+  }, [sessions, spot]);
 
-  const heroImage = useImageSrc(hero?.heroUrl ?? null, 'heroes');
-  const heroCoverBackdrop = useImageSrc(hero?.coverUrl ?? null, 'covers');
-  // El fondo del modo entero respira con el arte del protagonista.
-  useTvBackdrop(heroImage ?? heroCoverBackdrop);
-  const liveSeconds = useLiveTimer(hero?.isLive ? (hero.liveSince ?? null) : null);
+  const spotImage = useImageSrc(spot?.heroUrl ?? null, 'heroes');
+  const spotCoverBackdrop = useImageSrc(spot?.coverUrl ?? null, 'covers');
+  // El fondo del modo entero ES el arte del protagonista.
+  useTvBackdrop(spotImage ?? spotCoverBackdrop);
+  const liveSeconds = useLiveTimer(spot?.isLive ? (spot.liveSince ?? null) : null);
 
   const playing = useMemo(
     () =>
@@ -520,10 +546,10 @@ export const TvHome = (): React.JSX.Element => {
     void navigate(`/tv/game/${game.id}`);
   };
 
-  const launchHero = async (): Promise<void> => {
-    if (!hero?.executablePath || launching) return;
+  const launchSpot = async (): Promise<void> => {
+    if (!spot?.executablePath || launching) return;
     setLaunching(true);
-    const result = await window.api.games.launchExecutable(hero.executablePath);
+    const result = await window.api.games.launchExecutable(spot.executablePath);
     if (!result.ok) {
       toast.error(
         result.reason === 'missing'
@@ -574,316 +600,231 @@ export const TvHome = (): React.JSX.Element => {
     );
   }
 
-  const heroStatus = hero ? getGameStatusMeta(hero.currentState) : null;
+  const spotStatus = spot ? getGameStatusMeta(spot.currentState) : null;
 
   return (
-    // El -mx/px es el mismo truco que ShelfRow: este contenedor es quien
-    // RECORTA (overflow-y-auto también recorta en X), y con el clip justo en
-    // el borde del contenido los pilotos de las estanterías aparecían con el
-    // halo CORTADO por la izquierda. Empujar el clip 1em hacia fuera les da
-    // aire — el padding del layout (4vw) lo absorbe de sobra.
-    <div
-      ref={scrollRef}
-      className="-mx-[1em] flex h-full flex-col gap-[1.15em] overflow-y-auto px-[1em] pb-[1.5em]"
-      style={{ scrollbarWidth: 'none' }}
-    >
-      {hero && heroStatus && (
+    // Dos pisos: el TITULAR va clavado (el nombre del juego que es la
+    // pantalla no se va con el scroll — al bajar a la segunda estantería se
+    // decapitaba el chip) y solo las ESTANTERÍAS scrollean debajo.
+    <div className="flex h-full flex-col">
+      {spot && spotStatus && (
+        // EL TITULAR FLOTANTE: sin caja, sin marco, sin carátula al lado —
+        // el arte del protagonista ya ES la pantalla entera (lo pinta el
+        // backdrop del layout) y aquí solo flota su nombre a tamaño de
+        // cartel, con su estado y sus botones. Legibilidad: el scrim lateral
+        // del layout + las sombras del propio texto.
         <section
-          className={`relative min-h-[18em] flex-none overflow-hidden rounded-[0.85em] border border-white/[0.09] ${tvRevealClass}`}
-          style={{
-            ...tvRevealStyle(0),
-            // Hairline de luz arriba (cristal cogiendo la lámpara) y sombra
-            // profunda debajo: el hero es la pieza que más pesa en la sala.
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 1.6em 3.2em rgba(0,0,0,.45)',
-          }}
+          className={`flex min-h-[13.5em] flex-none flex-col justify-center gap-[0.55em] pt-[0.5em] ${tvRevealClass}`}
+          style={tvRevealStyle(0)}
         >
-          {/* Hero art con deriva Ken Burns; sin él, la carátula ampliada y
-              difuminada (el truco del modo ambiente: borrosa, la resolución
-              da igual). */}
-          {heroImage ? (
-            <img
-              src={heroImage}
-              alt=""
-              className="afterplay-tv-hero-art absolute inset-0 h-full w-full object-cover"
-              // Un punto de saturación y contraste extra: el arte del hero es
-              // la pieza de color más grande de la sala — que cante.
-              style={{ filter: 'saturate(1.2) contrast(1.05)' }}
-            />
-          ) : heroCoverBackdrop ? (
-            <img
-              src={heroCoverBackdrop}
-              alt=""
-              className="afterplay-tv-hero-art absolute inset-0 h-full w-full object-cover blur-lg brightness-[.55]"
-            />
-          ) : null}
-          {/* El scrim en VENTANA: opaco a la izquierda (texto), casi limpio
-              hacia el 70% (ahí es donde el arte luce) y anclado otra vez en
-              el borde derecho — sin ese remate, un arte de fondo claro
-              (Pragmata, Forza…) derramaba un bloque gris lavado que se comía
-              el panel entero. El arte brilla en su ventana; los bordes son
-              del panel. */}
+          {/* El contenido cambia con el foco: cada juego entra con un fundido
+              corto (key), no con la cascada entera — repintar no es re-entrar. */}
           <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(90deg, rgba(11,13,12,.97) 0%, rgba(11,13,12,.82) 40%, rgba(11,13,12,.12) 64%, rgba(11,13,12,.45) 85%, rgba(11,13,12,.88) 100%)',
-            }}
-          />
-          {/* Vignette vertical suave: asienta el titular arriba y los botones
-              abajo sin robarle color al arte. */}
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(11,13,12,.32), transparent 32%, transparent 68%, rgba(11,13,12,.5))',
-            }}
-          />
-          {/* La luz del estado con presencia de verdad: un baño ancho del
-              color respirando hacia el contenido, la barra en el canto y su
-              halo latiendo al mismo compás. */}
-          <div
-            aria-hidden
-            className="afterplay-tv-glow absolute inset-y-0 left-0 w-[38%]"
-            style={{ background: `linear-gradient(90deg, ${heroStatus.color}26, transparent)` }}
-          />
-          <div
-            aria-hidden
-            className="absolute inset-y-0 left-0 w-[0.3em]"
-            style={{ background: heroStatus.color }}
+            key={spot.id}
+            className="animate-in fade-in-0 flex flex-col gap-[0.55em] duration-400"
           >
-            <span
-              aria-hidden
-              className="afterplay-tv-glow absolute inset-0"
-              style={{ boxShadow: `0.25em 0 3em ${heroStatus.color}99` }}
-            />
-          </div>
-
-          <div className="relative flex h-full items-center gap-[1.8em] px-[2.2em] py-[1.6em]">
-            {/* La carátula como ficha física — nace con pop, flota sobre un
-                charco de luz del color del estado que se queda quieto: el
-                contraste entre ambos es lo que vende la levitación. */}
-            <div
-              className="afterplay-tv-pop relative w-[8.5em] flex-none"
-              style={{ animationDelay: '90ms' }}
-            >
-              <span
-                aria-hidden
-                className="afterplay-tv-glow absolute -bottom-[0.75em] left-1/2 h-[1.3em] w-[115%] -translate-x-1/2 rounded-[50%]"
-                style={{
-                  background: `radial-gradient(closest-side, ${heroStatus.color}4a, transparent 72%)`,
-                  filter: 'blur(6px)',
-                }}
-              />
+            {spot.isLive ? (
               <div
-                className="afterplay-tv-float relative"
-                style={{ filter: 'drop-shadow(0 1.2em 2.4em rgba(0,0,0,.6))' }}
+                className="flex items-center gap-[0.55em] self-start rounded-full px-[0.9em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] text-[#2fdc7e]"
+                style={{
+                  background: 'rgba(47,220,126,.12)',
+                  boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.4), 0 0 1.6em rgba(47,220,126,.15)',
+                }}
               >
-                <GameCover
-                  url={hero.coverUrl}
-                  className="aspect-[264/374] w-full overflow-hidden rounded-[0.5em] border border-white/20"
-                  iconSize={30}
-                />
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 bottom-0 h-[0.2em] rounded-b-[0.5em]"
-                  style={{
-                    background: heroStatus.color,
-                    boxShadow: `0 0 0.9em ${heroStatus.color}aa`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* La columna de texto entra en su propia cascada, línea a línea:
-                estado → título → cifras → nota → botones. Cine, no repintado. */}
-            <div className="flex min-w-0 flex-1 flex-col gap-[0.55em]">
-              {hero.isLive ? (
-                <div
-                  className={`flex items-center gap-[0.55em] self-start rounded-full px-[0.9em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] text-[#2fdc7e] ${tvRevealClass}`}
-                  style={{
-                    ...tvRevealStyle(1),
-                    background: 'rgba(47,220,126,.12)',
-                    boxShadow:
-                      'inset 0 0 0 1px rgba(47,220,126,.4), 0 0 1.6em rgba(47,220,126,.15)',
-                  }}
-                >
-                  {/* El punto late con DOS ritmos: el anillo (2.2s) y un halo
+                {/* El punto late con DOS ritmos: el anillo (2.2s) y un halo
                       que respira (2.6s) — desincronizados a propósito, como
                       un pulso de verdad. */}
-                  <span className="relative h-[0.6em] w-[0.6em] flex-none">
-                    <span
-                      aria-hidden
-                      className="afterplay-tv-glow absolute -inset-[0.4em] rounded-full"
-                      style={{
-                        background:
-                          'radial-gradient(closest-side, rgba(47,220,126,.6), transparent)',
-                      }}
-                    />
-                    <span className="afterplay-tv-ring absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.7em_#2fdc7e]" />
-                  </span>
-                  PLAYING NOW
-                  <span aria-hidden className="h-[0.9em] w-px bg-[#2fdc7e]/30" />
-                  <span className="tabular-nums">{formatElapsed(liveSeconds)}</span>
-                </div>
-              ) : (
-                <div
-                  className={`flex items-center gap-[0.5em] self-start rounded-full px-[0.85em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] ${tvRevealClass}`}
-                  style={{
-                    ...tvRevealStyle(1),
-                    color: heroStatus.color,
-                    background: `${heroStatus.color}14`,
-                    boxShadow: `inset 0 0 0 1px ${heroStatus.color}40`,
-                  }}
-                >
-                  <heroStatus.Icon className="h-[1.15em] w-[1.15em]" />
-                  {heroStatus.label.toUpperCase()}
-                </div>
-              )}
-              {/* El titular con gradiente de plata (clip al texto): coge luz
-                  arriba y se apaga un punto abajo — tipografía de cartel, no
-                  de formulario. La sombra va en filter, que sí funciona con
-                  texto transparente. */}
-              <h1
-                className={`max-w-[80%] text-[2.35em] leading-[1.05] font-extrabold tracking-[-.02em] ${tvRevealClass}`}
+                <span className="relative h-[0.6em] w-[0.6em] flex-none">
+                  <span
+                    aria-hidden
+                    className="afterplay-tv-glow absolute -inset-[0.4em] rounded-full"
+                    style={{
+                      background: 'radial-gradient(closest-side, rgba(47,220,126,.6), transparent)',
+                    }}
+                  />
+                  <span className="afterplay-tv-ring absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.7em_#2fdc7e]" />
+                </span>
+                PLAYING NOW
+                <span aria-hidden className="h-[0.9em] w-px bg-[#2fdc7e]/30" />
+                <span className="tabular-nums">{formatElapsed(liveSeconds)}</span>
+              </div>
+            ) : (
+              <div
+                className="flex items-center gap-[0.5em] self-start rounded-full px-[0.85em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em]"
                 style={{
-                  ...tvRevealStyle(1),
-                  backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(255,255,255,.66))',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  filter: 'drop-shadow(0 2px 18px rgba(0,0,0,.55))',
+                  color: spotStatus.color,
+                  background: `${spotStatus.color}1f`,
+                  boxShadow: `inset 0 0 0 1px ${spotStatus.color}4d`,
                 }}
               >
-                {hero.title}
-              </h1>
-
-              <div
-                className={`flex items-center gap-[1.1em] text-[0.74em] font-semibold text-white/70 ${tvRevealClass}`}
-                style={tvRevealStyle(2)}
-              >
-                {hero.totalHours > 0 && (
-                  <span className="flex items-center gap-[0.4em] tabular-nums">
-                    <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#2fdc7e' }} />
-                    {formatHours(hero.totalHours)}
-                  </span>
-                )}
-                {hero.sessionCount > 0 && (
-                  <span className="flex items-center gap-[0.4em] tabular-nums">
-                    <CalendarRange className="h-[1.05em] w-[1.05em]" style={{ color: '#85a3d6' }} />
-                    {hero.sessionCount} sessions
-                  </span>
-                )}
+                <spotStatus.Icon className="h-[1.15em] w-[1.15em]" />
+                {spotStatus.label.toUpperCase()}
               </div>
+            )}
+            {/* El titular a tamaño de CARTEL — la tipografía más grande de
+                toda la casa, porque este nombre es la pantalla entera. Plata
+                degradada con clip al texto; la sombra va en filter, que sí
+                funciona con texto transparente. */}
+            <h1
+              className="max-w-[12em] text-[3em] leading-[1.02] font-extrabold tracking-[-.02em]"
+              style={{
+                backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(255,255,255,.66))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                filter: 'drop-shadow(0 2px 20px rgba(0,0,0,.65))',
+              }}
+            >
+              {spot.title}
+            </h1>
 
-              {/* La nota con el filo del color del estado: es SU recuerdo,
-                  teñido de dónde está ese juego en tu vida. */}
-              {heroNote && (
-                <p
-                  className={`max-w-[60%] border-l-2 pl-[0.85em] text-[0.85em] leading-relaxed text-white/80 italic ${tvRevealClass}`}
-                  style={{ ...tvRevealStyle(2), borderColor: `${heroStatus.color}59` }}
-                >
-                  “{heroNote}”
-                </p>
+            <div className="flex items-center gap-[1.1em] text-[0.78em] font-semibold text-white/75">
+              {spot.totalHours > 0 && (
+                <span className="flex items-center gap-[0.4em] tabular-nums">
+                  <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#2fdc7e' }} />
+                  {formatHours(spot.totalHours)}
+                </span>
               )}
-
-              <div
-                className={`mt-[0.45em] flex items-center gap-[0.8em] ${tvRevealClass}`}
-                style={tvRevealStyle(3)}
-              >
-                {/* Con el juego CORRIENDO no hay botón de lanzar (el pill de
-                    PLAYING NOW de arriba ya cuenta la sesión en vivo): Play
-                    sobre un juego abierto lo relanzaría. */}
-                {hero.executablePath && !hero.isLive && (
-                  <HeroButton
-                    label={launching ? 'Launching…' : 'Play'}
-                    icon={<Play className="h-[1em] w-[1em]" fill="currentColor" />}
-                    autoFocus={!hasRestoredTile}
-                    primary
-                    onSelect={() => void launchHero()}
-                  />
-                )}
-                <HeroButton
-                  label="Details"
-                  autoFocus={(!hero.executablePath || hero.isLive) && !hasRestoredTile}
-                  onSelect={() => openGame(hero)}
-                />
-              </div>
+              {spot.sessionCount > 0 && (
+                <span className="flex items-center gap-[0.4em] tabular-nums">
+                  <CalendarRange className="h-[1.05em] w-[1.05em]" style={{ color: '#85a3d6' }} />
+                  {spot.sessionCount} sessions
+                </span>
+              )}
             </div>
+
+            {/* La nota con el filo del color del estado: es SU recuerdo,
+                teñido de dónde está ese juego en tu vida. */}
+            {spotNote && (
+              <p
+                className="max-w-[46%] border-l-2 pl-[0.85em] text-[0.85em] leading-relaxed text-white/85 italic"
+                style={{
+                  borderColor: `${spotStatus.color}66`,
+                  textShadow: '0 1px 12px rgba(0,0,0,.6)',
+                }}
+              >
+                “{spotNote}”
+              </p>
+            )}
+          </div>
+
+          {/* Los botones viven FUERA del bloque keyed: persisten entre
+              cambios de protagonista (remontarlos a cada golpe de d-pad
+              haría parpadear el foco) y actúan siempre sobre `spot`. */}
+          <div
+            className={`mt-[0.45em] flex items-center gap-[0.8em] ${tvRevealClass}`}
+            style={tvRevealStyle(2)}
+          >
+            {/* Con el juego CORRIENDO no hay botón de lanzar (el pill de
+                PLAYING NOW de arriba ya cuenta la sesión en vivo): Play
+                sobre un juego abierto lo relanzaría. */}
+            {spot.executablePath && !spot.isLive && (
+              <HeroButton
+                label={launching ? 'Launching…' : 'Play'}
+                icon={<Play className="h-[1em] w-[1em]" fill="currentColor" />}
+                autoFocus={!hasRestoredTile}
+                primary
+                onSelect={() => void launchSpot()}
+                onFocusSpot={() => setSpotId(null)}
+              />
+            )}
+            <HeroButton
+              label="Details"
+              autoFocus={(!spot.executablePath || spot.isLive) && !hasRestoredTile}
+              onSelect={() => openGame(spot)}
+              onFocusSpot={() => setSpotId(null)}
+            />
           </div>
         </section>
       )}
 
-      {/* Los números del mes: una línea de sala, no un panel de contables —
+      {/* El piso de las estanterías — el único que scrollea. El -mx/px es el
+          mismo truco que ShelfRow: este contenedor es quien RECORTA
+          (overflow-y-auto también recorta en X), y con el clip justo en el
+          borde los pilotos de las estanterías aparecían con el halo cortado
+          por la izquierda. */}
+      <div
+        ref={scrollRef}
+        className="-mx-[1em] flex min-h-0 flex-1 flex-col gap-[1.15em] overflow-y-auto px-[1em] pb-[1.5em]"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {/* Los números del mes: una línea de sala, no un panel de contables —
           solo aparece cuando el mes ya cuenta algo. */}
-      {monthStats.count > 0 && (
-        <div
-          className={`flex flex-none flex-wrap items-baseline gap-x-[0.9em] gap-y-[0.2em] px-[0.2em] text-[0.7em] font-semibold text-white/45 ${tvRevealClass}`}
-          style={tvRevealStyle(2)}
-        >
-          <span className="font-extrabold tracking-[.2em] text-white/35">
-            {monthStats.label} SO FAR
-          </span>
-          <span>
-            <span className="font-extrabold text-[#2fdc7e]">{formatHours(monthStats.hours)}</span>{' '}
-            played
-          </span>
-          <span className="text-white/25">·</span>
-          <span>
-            <span className="font-extrabold text-[#85a3d6] tabular-nums">{monthStats.count}</span>{' '}
-            {monthStats.count === 1 ? 'session' : 'sessions'}
-          </span>
-          <span className="text-white/25">·</span>
-          <span>
-            <span className="font-extrabold text-[#7c86c8] tabular-nums">{monthStats.games}</span>{' '}
-            {monthStats.games === 1 ? 'game' : 'games'}
-          </span>
-        </div>
-      )}
+        {monthStats.count > 0 && (
+          <div
+            className={`flex flex-none flex-wrap items-baseline gap-x-[0.9em] gap-y-[0.2em] px-[0.2em] text-[0.7em] font-semibold text-white/45 ${tvRevealClass}`}
+            style={tvRevealStyle(2)}
+          >
+            <span className="font-extrabold tracking-[.2em] text-white/35">
+              {monthStats.label} SO FAR
+            </span>
+            <span>
+              <span className="font-extrabold text-[#2fdc7e]">{formatHours(monthStats.hours)}</span>{' '}
+              played
+            </span>
+            <span className="text-white/25">·</span>
+            <span>
+              <span className="font-extrabold text-[#85a3d6] tabular-nums">{monthStats.count}</span>{' '}
+              {monthStats.count === 1 ? 'session' : 'sessions'}
+            </span>
+            <span className="text-white/25">·</span>
+            <span>
+              <span className="font-extrabold text-[#7c86c8] tabular-nums">{monthStats.games}</span>{' '}
+              {monthStats.games === 1 ? 'game' : 'games'}
+            </span>
+          </div>
+        )}
 
-      <Shelf
-        title="PLAYING NOW"
-        accent="#2fdc7e"
-        live
-        games={playing}
-        onOpen={openGame}
-        autoFocusId={restoredFocusId}
-        revealIndex={3}
-      />
-      <Shelf
-        title="RECENTLY PLAYED"
-        accent="#85a3d6"
-        games={recent}
-        onOpen={openGame}
-        autoFocusId={restoredFocusId}
-        revealIndex={4}
-      />
-      <Shelf
-        title="RECENTLY FINISHED"
-        accent="#e3b24a"
-        games={finished}
-        onOpen={openGame}
-        autoFocusId={restoredFocusId}
-        revealIndex={5}
-      />
-      <Shelf
-        title="YOUR LIBRARY"
-        accent="#7c86c8"
-        games={shelf}
-        onOpen={openGame}
-        autoFocusId={restoredFocusId}
-        revealIndex={6}
-        trailing={<SeeAllTile count={games.length} onSelect={() => void navigate('/tv/library')} />}
-      />
-
-      {/* La puerta al Journey: el último recap del Loop asomando en el
-          salón — la historia YA escrita invita a hojear el libro entero. */}
-      {latestRecap && recapLabel && (
-        <RecapDoor
-          recap={latestRecap}
-          label={recapLabel}
-          onSelect={() => void navigate('/tv/journey')}
+        <Shelf
+          title="PLAYING NOW"
+          accent="#2fdc7e"
+          live
+          games={playing}
+          onOpen={openGame}
+          autoFocusId={restoredFocusId}
+          revealIndex={3}
+          onFocusGame={(game) => setSpotId(game.id)}
         />
-      )}
+        <Shelf
+          title="RECENTLY PLAYED"
+          accent="#85a3d6"
+          games={recent}
+          onOpen={openGame}
+          autoFocusId={restoredFocusId}
+          revealIndex={4}
+          onFocusGame={(game) => setSpotId(game.id)}
+        />
+        <Shelf
+          title="RECENTLY FINISHED"
+          accent="#e3b24a"
+          games={finished}
+          onOpen={openGame}
+          autoFocusId={restoredFocusId}
+          revealIndex={5}
+          onFocusGame={(game) => setSpotId(game.id)}
+        />
+        <Shelf
+          title="YOUR LIBRARY"
+          accent="#7c86c8"
+          games={shelf}
+          onOpen={openGame}
+          autoFocusId={restoredFocusId}
+          revealIndex={6}
+          onFocusGame={(game) => setSpotId(game.id)}
+          trailing={
+            <SeeAllTile count={games.length} onSelect={() => void navigate('/tv/library')} />
+          }
+        />
+
+        {/* La puerta al Journey: el último recap del Loop asomando en el
+          salón — la historia YA escrita invita a hojear el libro entero. */}
+        {latestRecap && recapLabel && (
+          <RecapDoor
+            recap={latestRecap}
+            label={recapLabel}
+            onSelect={() => void navigate('/tv/journey')}
+          />
+        )}
+      </div>
     </div>
   );
 };
