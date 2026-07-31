@@ -596,8 +596,16 @@ const JourneyCover = ({
       onMouseLeave={() => setAnchor(null)}
       onFocus={(event) => setAnchor(event.currentTarget.getBoundingClientRect())}
       onBlur={() => setAnchor(null)}
-      className="group/cover relative h-37 w-26 flex-none cursor-pointer transition-[transform,filter,opacity] duration-250 ease-[cubic-bezier(.16,1,.3,1)] hover:z-5 hover:-translate-y-1.5 hover:scale-[1.045] focus-visible:z-5 focus-visible:-translate-y-1.5 focus-visible:scale-[1.045] focus-visible:outline-none"
+      className="group/cover relative h-42 w-30 flex-none cursor-pointer transition-transform duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform hover:z-5 hover:-translate-y-2 focus-visible:z-5 focus-visible:-translate-y-2 focus-visible:outline-none"
     >
+      {/* Halo del color de estado que se enciende al hover — primero en el
+          DOM para quedar DEBAJO de la carátula y que solo asome el borde
+          difuminado. */}
+      <span
+        aria-hidden
+        className="absolute -inset-1.5 rounded-[13px] opacity-0 blur-md transition-opacity duration-250 group-hover/cover:opacity-45"
+        style={{ background: accent }}
+      />
       <div
         className="absolute inset-0 overflow-hidden rounded-[9px] border bg-card shadow-[0_5px_16px_rgba(0,0,0,.26)] transition-[border-color,box-shadow] duration-250 group-hover/cover:shadow-[0_12px_28px_rgba(0,0,0,.48)]"
         style={{ borderColor: 'var(--border)' }}
@@ -611,12 +619,26 @@ const JourneyCover = ({
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-muted px-1.5 text-center">
-            <Gamepad2 size={18} className="text-muted-foreground/35" />
-            <span className="line-clamp-3 text-[8px] font-semibold text-muted-foreground">
+            <Gamepad2 size={20} className="text-muted-foreground/35" />
+            <span className="line-clamp-3 text-[8.5px] font-semibold text-muted-foreground">
               {entry.title}
             </span>
           </div>
         )}
+        {/* Las horas al pie, siempre visibles sobre su velo — mismo patrón
+            que el rótulo de MatchCardGrid: la carátula sigue siendo carátula
+            de esquina a esquina y aun así cuenta algo. */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-2 pt-6 pb-2 text-right">
+          <span className="text-[10.5px] font-extrabold text-white/90 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
+            {formatHours(entry.hours)}
+          </span>
+        </span>
+        {/* Brillo que barre la carátula al hover, como un reflejo — puro
+            transform, nada que repintar. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -translate-x-[140%] bg-[linear-gradient(105deg,transparent_42%,rgba(255,255,255,.16)_50%,transparent_58%)] transition-transform duration-700 ease-out group-hover/cover:translate-x-[140%]"
+        />
         <div className="absolute right-0 bottom-0 left-0 h-0.75" style={{ background: accent }} />
       </div>
 
@@ -627,6 +649,133 @@ const JourneyCover = ({
       )}
 
       {anchor && <HoverPanel entry={entry} anchor={anchor} />}
+    </button>
+  );
+};
+
+// El protagonista del mes: la entrada con más horas se pinta como tarjeta
+// ancha con su hero art de fondo, no como una carátula más. Es lo que
+// convierte la rejilla en un viaje — cada mes tiene SU juego, el que lo
+// define, y los demás lo acompañan. La información que las carátulas guardan
+// para el panel flotante (fechas, horas, estado, nota) aquí va a la vista:
+// el protagonista no se esconde detrás de un hover.
+// OJO con la lista de propiedades de la transición: en Tailwind v4,
+// `-translate-y-*` NO compila a `transform: translateY(…)` sino a la
+// propiedad CSS independiente `translate`. Una lista arbitraria que nombre
+// `transform` no la cubre, así que el desplazamiento se aplicaba de golpe —
+// el "tirón" al pasar el ratón. Por eso aquí se nombra `translate`.
+//
+// Y nada de escalar la tarjeta ni su hero: Chromium rasteriza la capa una vez
+// y estira ese mapa de bits mientras dura la transición, así que la imagen se
+// ve borrosa todo el trayecto y solo se enfoca al terminar. La elevación la
+// dan el desplazamiento y la sombra, que no tocan la rasterización.
+const FEATURED_CARD_CLASS =
+  'group/feat relative w-full cursor-pointer overflow-hidden rounded-[13px] border border-border text-left shadow-[0_8px_24px_rgba(0,0,0,.3)] transition-[translate,border-color,box-shadow] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-[0_14px_34px_rgba(0,0,0,.46)] focus-visible:border-white/25 focus-visible:outline-none';
+
+const FeaturedEntry = ({
+  entry,
+  onOpen,
+}: {
+  entry: JourneyEntry;
+  onOpen: () => void;
+}): React.JSX.Element => {
+  const heroSrc = useImageSrc(entry.heroUrl, 'heroes');
+  const coverSrc = useImageSrc(entry.coverUrl, 'covers');
+  const status = entry.state ? getGameStatusMeta(entry.state) : null;
+  const accent = status?.color ?? BLUE;
+  const badge = iterationBadge(entry.iterationLabel);
+
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${entry.title}, ${entry.iterationLabel}`}
+      onClick={onOpen}
+      className={FEATURED_CARD_CLASS}
+    >
+      {/* El hero de fondo, oscurecido para que el texto viva encima. Sin
+          hero: un lecho teñido del color de estado, que nunca se vea "roto". */}
+      {heroSrc ? (
+        <img
+          src={heroSrc}
+          loading="lazy"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover brightness-[.55] transition-[filter] duration-400 ease-[cubic-bezier(.16,1,.3,1)] group-hover/feat:brightness-[.68]"
+        />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{ background: `linear-gradient(120deg, ${accent}14, rgba(23,25,24,.9))` }}
+        />
+      )}
+      {/* De izquierda (legible) a derecha (arte visible) — el mismo velo
+          lateral que GameBanner, no el vertical del panel flotante. */}
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,12,11,.94)_0%,rgba(10,12,11,.72)_38%,rgba(10,12,11,.28)_70%,rgba(10,12,11,.12)_100%)]" />
+
+      <div className="relative flex items-center gap-3.5 px-4 py-3.5">
+        <div className="relative h-25 w-18 flex-none">
+          <div className="h-full w-full overflow-hidden rounded-[8px] border border-white/12 shadow-[0_6px_18px_rgba(0,0,0,.5)]">
+            {coverSrc ? (
+              <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center bg-muted">
+                <Gamepad2 size={16} className="text-muted-foreground/35" />
+              </div>
+            )}
+          </div>
+          {badge && (
+            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[8.5px] font-extrabold text-foreground shadow-md">
+              {badge}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div
+            className="text-[8.5px] font-extrabold tracking-[.16em]"
+            style={{ color: `${accent}d0` }}
+          >
+            MOST PLAYED
+          </div>
+          <div className="mt-0.75 truncate text-[17px] font-extrabold text-white">
+            {entry.title}
+          </div>
+          <div className="mt-0.5 truncate text-[11px] font-semibold text-white/55">
+            {entry.iterationLabel}
+            <span className="mx-1.5 text-white/25">·</span>
+            {dateRange(entry)}
+          </div>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1">
+            <span className="flex items-center gap-1.5 text-[12px] font-bold text-white/90 tabular-nums">
+              <Clock3 size={12.5} style={{ color: GREEN }} />
+              {formatHours(entry.hours)}
+            </span>
+            {entry.sessions.length > 0 && (
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-white/70 tabular-nums">
+                <CalendarRange size={12.5} style={{ color: BLUE }} />
+                {entry.sessions.length} {entry.sessions.length === 1 ? 'session' : 'sessions'}
+              </span>
+            )}
+            {status && (
+              <span
+                className="flex items-center gap-1.25 text-[10px] font-extrabold uppercase"
+                style={{ color: status.color }}
+              >
+                <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
+                {status.label}
+              </span>
+            )}
+          </div>
+
+          {entry.note && (
+            <div className="mt-2 line-clamp-1 max-w-130 text-[11px] leading-relaxed italic text-white/50">
+              “{entry.note}”
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="absolute right-0 bottom-0 left-0 h-0.75" style={{ background: accent }} />
     </button>
   );
 };
@@ -842,72 +991,130 @@ export const Journey = ({
 
       <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-start gap-10">
         <div className="flex min-w-0 flex-col gap-4">
-          {byYear.map(({ year, months }, yearIndex) => (
-            <section
-              key={year}
-              data-year={year}
-              ref={(element) => {
-                if (element) yearRefs.current.set(year, element);
-                else yearRefs.current.delete(year);
-              }}
-              className="scroll-mt-6"
-            >
-              <div className="mb-3 flex items-center gap-3">
-                <span className="text-xl font-extrabold text-foreground tabular-nums">{year}</span>
-                <span className="h-px flex-1 bg-border/75" />
-              </div>
-              {months.map(([month, monthEntries], monthIndex) => (
-                <div
-                  key={month}
-                  data-month-key={`${year}-${month}`}
-                  ref={(element) => {
-                    const key = `${year}-${month}`;
-                    if (element) monthRefs.current.set(key, element);
-                    else monthRefs.current.delete(key);
-                  }}
-                  className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 ${revealClass}`}
-                  style={revealStyle(yearIndex + monthIndex + 1)}
-                >
-                  <div className="relative border-r border-border/80 pr-4 text-right">
-                    <div className="sticky top-3 pt-1 text-[10px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
-                      {monthLabel(month)}
-                    </div>
-                    <span className="absolute top-2 -right-1 h-2 w-2 rounded-full border-2 border-[#0d0f0e] bg-white/20 transition-[background,box-shadow] duration-200 group-hover/month:bg-primary group-hover/month:shadow-[0_0_10px_rgba(47,220,126,.45)]" />
-                  </div>
+          {byYear.map(({ year, months }, yearIndex) => {
+            // Los totales del año, para su cabecera — de las entradas del
+            // propio año, no de Stats: así la cifra cuadra EXACTAMENTE con
+            // las carátulas que se ven debajo.
+            const yearEntries = months.flatMap(([, monthEntries]) => monthEntries);
+            const yearHours = yearEntries.reduce((sum, entry) => sum + entry.hours, 0);
+            const yearGames = new Set(yearEntries.map((entry) => entry.gameId)).size;
+            return (
+              <section
+                key={year}
+                data-year={year}
+                ref={(element) => {
+                  if (element) yearRefs.current.set(year, element);
+                  else yearRefs.current.delete(year);
+                }}
+                className="scroll-mt-6"
+              >
+                {/* El año como hito, no como rótulo: número grande, sus
+                    totales al lado y una regla que se desvanece — la línea
+                    temporal respira entre año y año. */}
+                <div className="mb-4 flex items-baseline gap-3.5">
+                  <span className="text-[30px] leading-none font-extrabold tracking-[-.02em] text-foreground tabular-nums">
+                    {year}
+                  </span>
+                  <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                    {yearGames} {yearGames === 1 ? 'game' : 'games'}
+                    <span className="mx-1.5 text-muted-foreground/40">·</span>
+                    {formatHours(yearHours)}
+                  </span>
+                  <span className="h-px flex-1 self-center bg-gradient-to-r from-border to-transparent" />
+                </div>
+                {months.map(([month, monthEntries], monthIndex) => {
+                  // El protagonista del mes: la entrada con más horas. El
+                  // resto acompaña como carátulas, en su orden temporal.
+                  const featured = monthEntries.reduce((best, candidate) =>
+                    candidate.hours > best.hours ? candidate : best,
+                  );
+                  const rest = monthEntries.filter((entry) => entry !== featured);
+                  const monthHours = monthEntries.reduce((sum, entry) => sum + entry.hours, 0);
+                  // El nodo de la columna se tiñe del estado del protagonista
+                  // — bajando la página, la vértebra cuenta el viaje en color.
+                  const nodeColor = featured.state
+                    ? getGameStatusMeta(featured.state).color
+                    : 'rgba(255,255,255,.22)';
+                  return (
+                    <div
+                      key={month}
+                      data-month-key={`${year}-${month}`}
+                      ref={(element) => {
+                        const key = `${year}-${month}`;
+                        if (element) monthRefs.current.set(key, element);
+                        else monthRefs.current.delete(key);
+                      }}
+                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 ${revealClass}`}
+                      style={revealStyle(yearIndex + monthIndex + 1)}
+                    >
+                      <div className="relative border-r border-border/80 pr-4 text-right">
+                        <div className="sticky top-3 pt-1">
+                          <div className="text-[10px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
+                            {monthLabel(month)}
+                          </div>
+                          <div className="mt-0.75 text-[9px] font-bold text-muted-foreground/50 tabular-nums">
+                            {formatHours(monthHours)}
+                          </div>
+                        </div>
+                        <span
+                          className="absolute top-2 -right-1.25 h-2.5 w-2.5 rounded-full border-2 border-[#0d0f0e] transition-[box-shadow,scale] duration-200 group-hover/month:scale-125"
+                          style={{ background: nodeColor, boxShadow: `0 0 9px ${nodeColor}59` }}
+                        />
+                      </div>
 
-                  {/* min-h fija un alto mínimo por mes: sin él, un mes con
+                      {/* min-h fija un alto mínimo por mes: sin él, un mes con
                       una sola carátula y otro con doce daban un ritmo
                       irregular al bajar. Con suelo, el recorrido respira
                       parejo y se nota mejor cuánto tuvo cada mes. */}
-                  <div className="min-h-45 pb-7">
-                    <div className="mb-2.5 flex items-center gap-2">
-                      <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
-                      {monthEntries.length > 0 && (
-                        <span className="text-[9.5px] font-bold text-muted-foreground/55 tabular-nums">
-                          {monthEntries.length}{' '}
-                          {monthEntries.length === 1 ? 'playthrough' : 'playthroughs'}
-                        </span>
-                      )}
-                    </div>
-                    {/* Al señalar una carátula, las demás del mes se apagan:
+                      <div className="min-h-45 pb-8">
+                        <div className="mb-2.5 flex items-center gap-2">
+                          <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
+                          {monthEntries.length > 1 && (
+                            <span className="text-[9.5px] font-bold text-muted-foreground/55 tabular-nums">
+                              {monthEntries.length} playthroughs
+                            </span>
+                          )}
+                        </div>
+
+                        <FeaturedEntry
+                          key={featured.key}
+                          entry={featured}
+                          onOpen={() => onOpenGame(featured.gameId)}
+                        />
+
+                        {/* Al señalar una carátula, las demás del mes se apagan:
                         con el panel flotante abierto encima, lo de alrededor
                         estorba. En CSS puro (has-*) y no con estado de React
                         — mover el ratón por una rejilla de carátulas no debe
                         repintar el árbol. */}
-                    <div className="flex flex-wrap gap-3 transition-opacity duration-200 has-[button:hover]:[&>button:not(:hover)]:opacity-45 has-[button:focus-visible]:[&>button:not(:focus-visible)]:opacity-45">
-                      {monthEntries.map((entry) => (
-                        <JourneyCover
-                          key={entry.key}
-                          entry={entry}
-                          onOpen={() => onOpenGame(entry.gameId)}
-                        />
-                      ))}
+                        {rest.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-3 transition-opacity duration-200 has-[button:hover]:[&>button:not(:hover)]:opacity-45 has-[button:focus-visible]:[&>button:not(:focus-visible)]:opacity-45">
+                            {rest.map((entry) => (
+                              <JourneyCover
+                                key={entry.key}
+                                entry={entry}
+                                onOpen={() => onOpenGame(entry.gameId)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </section>
-          ))}
+                  );
+                })}
+              </section>
+            );
+          })}
+
+          {/* El remate del recorrido: bajar hasta el final tiene premio.
+              Está DESPUÉS del último año, así que solo lo ve quien llega. */}
+          <div className="mb-4 flex flex-col items-center gap-2 pt-2">
+            <span className="h-10 w-px bg-gradient-to-b from-border/80 to-transparent" />
+            <span className="h-2 w-2 rounded-full bg-white/25" />
+            <span className="text-[9.5px] font-extrabold tracking-[.16em] text-muted-foreground/55">
+              WHERE IT ALL BEGAN
+            </span>
+          </div>
         </div>
 
         {/* El índice. Solo despliega los meses del año resaltado: con diez
@@ -952,7 +1159,7 @@ export const Journey = ({
                     style={{ color: active ? BLUE : 'var(--muted-foreground)' }}
                   >
                     <span
-                      className="absolute top-1/2 -left-[1.19rem] h-2.25 w-2.25 -translate-y-1/2 rounded-full border-2 border-[#0d0f0e] transition-[background,box-shadow,transform] duration-150 group-hover/year:scale-125"
+                      className="absolute top-1/2 -left-[1.19rem] h-2.25 w-2.25 -translate-y-1/2 rounded-full border-2 border-[#0d0f0e] transition-[background,box-shadow,scale] duration-150 group-hover/year:scale-125"
                       style={{
                         background: active ? BLUE : 'var(--muted-foreground)',
                         boxShadow: active ? `0 0 10px ${BLUE}80` : 'none',
