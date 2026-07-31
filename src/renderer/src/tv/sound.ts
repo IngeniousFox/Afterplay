@@ -18,7 +18,22 @@
 // modo). Nada de esto corre en render: solo manejadores de eventos y
 // efectos, así que el compilador de React ni se entera.
 
-const SFX_LEVEL = 0.5;
+// POR QUÉ LOS SFX NECESITAN MÁS QUE LA MÚSICA. En cascos se oía todo bien y
+// en altavoces los gestos casi desaparecían mientras la música seguía
+// perfecta — y no es cosa del volumen general, es física:
+//
+//   · El oído integra sonoridad en ~100-200ms: un blip de 30-55ms se PERCIBE
+//     mucho más flojo que una nota sostenida del mismo pico. La música son
+//     notas de 2.8s con eco encima; los SFX eran chispas de 30ms.
+//   · Los senos puros concentran toda su energía en UNA banda estrecha y sin
+//     transitorio. Un altavoz pequeño, a tres metros y con ruido de sala, se
+//     los come; unos cascos sellados y pegados a la oreja, no.
+//
+// Así que: más nivel de bus, ondas CON ARMÓNICOS (triangle) y envolventes un
+// pelo más largas en los sonidos cortísimos — más un realce de presencia en
+// el bus (ver ensure), que es la banda donde el oído y los altavoces
+// pequeños rinden mejor. La música se queda como está: ya se oía bien.
+const SFX_LEVEL = 0.82;
 // Notas sueltas, no un drone continuo: necesitan un punto más de presencia
 // para leerse — sigue siendo música de fondo, muy por debajo de los SFX.
 const AMBIENCE_LEVEL = 0.06;
@@ -31,7 +46,17 @@ const ensure = (): AudioContext => {
     context = new AudioContext();
     sfxBus = context.createGain();
     sfxBus.gain.value = SFX_LEVEL;
-    sfxBus.connect(context.destination);
+    // El realce de PRESENCIA de los gestos (solo el bus de SFX, la música no
+    // pasa por aquí): +6dB por encima de 2.2kHz. Ahí es donde el oído es más
+    // sensible y donde un altavoz pequeño rinde de verdad — es lo que hace
+    // que un tick se OIGA al otro lado del salón sin tener que subirlo hasta
+    // molestar en cascos. Sobre los armónicos de las ondas triangle de abajo
+    // tiene material que realzar; sobre un seno puro no habría nada.
+    const presence = context.createBiquadFilter();
+    presence.type = 'highshelf';
+    presence.frequency.value = 2200;
+    presence.gain.value = 6;
+    sfxBus.connect(presence).connect(context.destination);
   }
   if (context.state === 'suspended') void context.resume();
   return context;
@@ -249,8 +274,12 @@ const startAmbience = (): void => {
 export const tvSound = {
   // Mover el foco: un "tuk" mínimo con un pelo de caída — presente sin
   // taladrar aunque cruces la parrilla entera con el repeat a 130ms.
+  // Triangle y no seno, y 85ms en vez de 55: los armónicos le dan cuerpo
+  // para el altavoz y la duración le da sonoridad percibida (ver arriba).
+  // Sigue holgadamente por debajo del repeat, así que no se solapa consigo
+  // mismo al cruzar la parrilla de un tirón.
   move: (): void => {
-    tone(620, { duration: 0.055, gain: 0.035, glideTo: 540 });
+    tone(620, { type: 'triangle', duration: 0.085, gain: 0.04, glideTo: 540 });
   },
   // Confirmar: dos notas subiendo (Do5→Sol5) — la firma "adelante".
   select: (): void => {
@@ -264,7 +293,7 @@ export const tvSound = {
   // Un panel que se abre: barrido corto hacia arriba + una chispa arriba.
   open: (): void => {
     tone(300, { type: 'triangle', duration: 0.16, gain: 0.04, glideTo: 520 });
-    tone(1046.5, { duration: 0.09, gain: 0.02, delay: 0.06 });
+    tone(1046.5, { type: 'triangle', duration: 0.1, gain: 0.022, delay: 0.06 });
   },
   // Un panel que se cierra: el mismo barrido, de vuelta.
   close: (): void => {
@@ -293,8 +322,8 @@ export const tvSound = {
   // Una tecla del OSK: un clac cortísimo y discreto — escribir un título
   // entero no puede sonar a metralleta.
   key: (): void => {
-    tone(1180, { duration: 0.03, gain: 0.025 });
-    tone(340, { type: 'triangle', duration: 0.035, gain: 0.02 });
+    tone(1180, { type: 'triangle', duration: 0.045, gain: 0.028 });
+    tone(340, { type: 'triangle', duration: 0.05, gain: 0.022 });
   },
   startAmbience,
   stopAmbience: (): void => {

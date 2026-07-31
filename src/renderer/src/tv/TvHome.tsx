@@ -35,6 +35,7 @@ const HeroButton = ({
   autoFocus = false,
   primary = false,
   onSelect,
+  onFocusSpot,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -43,8 +44,17 @@ const HeroButton = ({
   // aterrizar ahí antes incluso de que el foco lo encienda.
   primary?: boolean;
   onSelect: () => void;
+  // Volver el foco aquí arriba devuelve el fondo al hero de la card.
+  onFocusSpot?: () => void;
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({ onSelect, autoFocus });
+  const onFocusSpotRef = useRef(onFocusSpot);
+  useEffect(() => {
+    onFocusSpotRef.current = onFocusSpot;
+  });
+  useEffect(() => {
+    if (focused) onFocusSpotRef.current?.();
+  }, [focused]);
   return (
     // scroll-mt desmedido a propósito: estos botones viven al PIE del hero,
     // y el scrollIntoView 'nearest' del motor de foco paraba en cuanto el
@@ -122,6 +132,7 @@ const Shelf = ({
   live = false,
   autoFocusId = null,
   trailing,
+  onFocusGame,
 }: {
   title: string;
   accent: string;
@@ -129,6 +140,8 @@ const Shelf = ({
   onOpen: (game: GameListItem) => void;
   revealIndex: number;
   live?: boolean;
+  // Qué carátula tiene el foco — el Home reparte con ella el fondo del modo.
+  onFocusGame?: (game: GameListItem) => void;
   // La carátula que debe heredar el foco al remontar (vuelta de una ficha,
   // ver screenMemory) — null en una visita normal.
   autoFocusId?: number | null;
@@ -187,6 +200,7 @@ const Shelf = ({
             autoFocus={game.id === autoFocusId}
             revealIndex={index}
             onOpen={() => onOpen(game)}
+            onFocusSpot={onFocusGame ? () => onFocusGame(game) : undefined}
           />
         ))}
         {trailing}
@@ -423,8 +437,20 @@ export const TvHome = (): React.JSX.Element => {
 
   const heroImage = useImageSrc(hero?.heroUrl ?? null, 'heroes');
   const heroCoverBackdrop = useImageSrc(hero?.coverUrl ?? null, 'covers');
-  // El fondo del modo entero respira con el arte del protagonista.
-  useTvBackdrop(heroImage ?? heroCoverBackdrop);
+
+  // EL FONDO SIGUE AL FOCO: el arte de pantalla completa es el del juego que
+  // estás SEÑALANDO en las estanterías, no el del protagonista fijo — mover
+  // el d-pad repinta la sala entera. La card de arriba no se mueve: sigue
+  // siendo el hero (el juego vivo o el último tocado). Al volver el foco a
+  // sus botones, el fondo vuelve con él (spotId a null).
+  const [spotId, setSpotId] = useState<number | null>(null);
+  const spotGame = useMemo(
+    () => games.find((game) => game.id === spotId) ?? hero,
+    [games, spotId, hero],
+  );
+  const spotHeroSrc = useImageSrc(spotGame?.heroUrl ?? null, 'heroes');
+  const spotCoverSrc = useImageSrc(spotGame?.coverUrl ?? null, 'covers');
+  useTvBackdrop(spotHeroSrc ?? spotCoverSrc);
   const liveSeconds = useLiveTimer(hero?.isLive ? (hero.liveSince ?? null) : null);
 
   const playing = useMemo(
@@ -605,9 +631,12 @@ export const TvHome = (): React.JSX.Element => {
               src={heroImage}
               alt=""
               className="afterplay-tv-hero-art absolute inset-0 h-full w-full object-cover"
-              // Un punto de saturación y contraste extra: el arte del hero es
-              // la pieza de color más grande de la sala — que cante.
-              style={{ filter: 'saturate(1.2) contrast(1.05)' }}
+              // El arte se oscurece EN ORIGEN, no con un velo encima: un
+              // negro translúcido sobre un arte claro (Pragmata, Forza) da
+              // gris lavado por definición — era el "fondo gris raro" de la
+              // card. Bajando el brillo de la propia imagen, el arte claro
+              // se vuelve arte oscuro y el color se conserva.
+              style={{ filter: 'saturate(1.28) contrast(1.08) brightness(.6)' }}
             />
           ) : heroCoverBackdrop ? (
             <img
@@ -616,17 +645,15 @@ export const TvHome = (): React.JSX.Element => {
               className="afterplay-tv-hero-art absolute inset-0 h-full w-full object-cover blur-lg brightness-[.55]"
             />
           ) : null}
-          {/* El scrim en VENTANA: opaco a la izquierda (texto), casi limpio
-              hacia el 70% (ahí es donde el arte luce) y anclado otra vez en
-              el borde derecho — sin ese remate, un arte de fondo claro
-              (Pragmata, Forza…) derramaba un bloque gris lavado que se comía
-              el panel entero. El arte brilla en su ventana; los bordes son
-              del panel. */}
+          {/* El scrim, ahora LIGERO: solo tiene que dar fondo al texto de la
+              izquierda y fundir el canto derecho. El trabajo pesado lo hace
+              el brightness del arte de arriba — apilar velo sobre velo era
+              lo que grisaba la card entera. */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(90deg, rgba(11,13,12,.97) 0%, rgba(11,13,12,.82) 40%, rgba(11,13,12,.12) 64%, rgba(11,13,12,.45) 85%, rgba(11,13,12,.88) 100%)',
+                'linear-gradient(90deg, rgba(9,11,10,.94) 0%, rgba(9,11,10,.66) 42%, rgba(9,11,10,0) 70%, rgba(9,11,10,.55) 100%)',
             }}
           />
           {/* Vignette vertical suave: asienta el titular arriba y los botones
@@ -639,25 +666,15 @@ export const TvHome = (): React.JSX.Element => {
                 'linear-gradient(180deg, rgba(11,13,12,.32), transparent 32%, transparent 68%, rgba(11,13,12,.5))',
             }}
           />
-          {/* La luz del estado con presencia de verdad: un baño ancho del
-              color respirando hacia el contenido, la barra en el canto y su
-              halo latiendo al mismo compás. */}
+          {/* La luz del estado, y SOLO la luz: un baño ancho del color
+              respirando hacia el contenido. La barra sólida del canto se
+              jubila — la card ya dice su estado tres veces (el chip, este
+              baño y la franja de la carátula); una cuarta era ruido. */}
           <div
             aria-hidden
             className="afterplay-tv-glow absolute inset-y-0 left-0 w-[38%]"
-            style={{ background: `linear-gradient(90deg, ${heroStatus.color}26, transparent)` }}
+            style={{ background: `linear-gradient(90deg, ${heroStatus.color}2e, transparent)` }}
           />
-          <div
-            aria-hidden
-            className="absolute inset-y-0 left-0 w-[0.3em]"
-            style={{ background: heroStatus.color }}
-          >
-            <span
-              aria-hidden
-              className="afterplay-tv-glow absolute inset-0"
-              style={{ boxShadow: `0.25em 0 3em ${heroStatus.color}99` }}
-            />
-          </div>
 
           <div className="relative flex h-full items-center gap-[1.8em] px-[2.2em] py-[1.6em]">
             {/* La carátula como ficha física — nace con pop, flota sobre un
@@ -744,8 +761,15 @@ export const TvHome = (): React.JSX.Element => {
                   arriba y se apaga un punto abajo — tipografía de cartel, no
                   de formulario. La sombra va en filter, que sí funciona con
                   texto transparente. */}
+              {/* El degradado va CLIPADO al texto, y ahí está la trampa: lo
+                  que se pinta es el fondo de la CAJA recortado por los
+                  glifos, así que todo lo que asome por debajo de la caja se
+                  queda sin pintar — la "g" de Pragmata salía cortada. Con
+                  leading apretado (1.05) el descendente caía justo fuera.
+                  El pb + un pelo más de interlineado meten la caja por
+                  debajo de la línea base y el rabito vuelve a existir. */}
               <h1
-                className={`max-w-[80%] text-[2.35em] leading-[1.05] font-extrabold tracking-[-.02em] ${tvRevealClass}`}
+                className={`max-w-[80%] pb-[0.14em] text-[2.35em] leading-[1.16] font-extrabold tracking-[-.02em] ${tvRevealClass}`}
                 style={{
                   ...tvRevealStyle(1),
                   backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(255,255,255,.66))',
@@ -800,12 +824,14 @@ export const TvHome = (): React.JSX.Element => {
                     autoFocus={!hasRestoredTile}
                     primary
                     onSelect={() => void launchHero()}
+                    onFocusSpot={() => setSpotId(null)}
                   />
                 )}
                 <HeroButton
                   label="Details"
                   autoFocus={(!hero.executablePath || hero.isLive) && !hasRestoredTile}
                   onSelect={() => openGame(hero)}
+                  onFocusSpot={() => setSpotId(null)}
                 />
               </div>
             </div>
@@ -846,6 +872,7 @@ export const TvHome = (): React.JSX.Element => {
         live
         games={playing}
         onOpen={openGame}
+        onFocusGame={(game) => setSpotId(game.id)}
         autoFocusId={restoredFocusId}
         revealIndex={3}
       />
@@ -854,6 +881,7 @@ export const TvHome = (): React.JSX.Element => {
         accent="#85a3d6"
         games={recent}
         onOpen={openGame}
+        onFocusGame={(game) => setSpotId(game.id)}
         autoFocusId={restoredFocusId}
         revealIndex={4}
       />
@@ -862,6 +890,7 @@ export const TvHome = (): React.JSX.Element => {
         accent="#e3b24a"
         games={finished}
         onOpen={openGame}
+        onFocusGame={(game) => setSpotId(game.id)}
         autoFocusId={restoredFocusId}
         revealIndex={5}
       />
@@ -870,6 +899,7 @@ export const TvHome = (): React.JSX.Element => {
         accent="#7c86c8"
         games={shelf}
         onOpen={openGame}
+        onFocusGame={(game) => setSpotId(game.id)}
         autoFocusId={restoredFocusId}
         revealIndex={6}
         trailing={<SeeAllTile count={games.length} onSelect={() => void navigate('/tv/library')} />}

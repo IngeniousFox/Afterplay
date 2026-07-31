@@ -26,8 +26,12 @@ export const TvScreenTitle = ({
       className="afterplay-tv-glow h-[0.4em] w-[0.4em] flex-none rounded-full"
       style={{ background: accent, boxShadow: `0 0 0.8em ${accent}cc` }}
     />
+    {/* pb + leading holgado por la misma razón que el titular del hero: con
+        background-clip:text se pinta el fondo de la CAJA recortado por los
+        glifos, y un descendente que asome por debajo (la "y" de Library, la
+        de January) se queda sin pintar. */}
     <h1
-      className="text-[1.5em] font-extrabold tracking-[-.015em]"
+      className="pb-[0.1em] text-[1.5em] leading-[1.18] font-extrabold tracking-[-.015em]"
       style={{
         backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(255,255,255,.66))',
         WebkitBackgroundClip: 'text',
