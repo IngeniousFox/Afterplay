@@ -13,6 +13,7 @@ import { BackupSection } from './BackupSection';
 import { CredentialsSection } from './CredentialsSection';
 import { EmulatorsSection } from './EmulatorsSection';
 import { GameFoldersSection } from './GameFoldersSection';
+import { MemoriesSection } from './MemoriesSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
 import { TimeFormatSlider } from './TimeFormatSlider';
@@ -92,6 +93,8 @@ export const SettingsModal = ({
       <AmbientSection />
 
       <TriviaSection />
+
+      <MemoriesSection />
 
       <BackupSection />
 

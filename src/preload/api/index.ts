@@ -7,6 +7,7 @@ import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
 import { imagesApi } from './images';
 import { iterationsApi } from './iterations';
+import { memoriesApi } from './memories';
 import { savesApi } from './saves';
 import { scanApi } from './scan';
 import { sessionsApi } from './sessions';
@@ -36,6 +37,7 @@ export const api = {
   watcher: watcherApi,
   settings: settingsApi,
   curiosities: curiositiesApi,
+  memories: memoriesApi,
 };
 
 export type Api = typeof api;

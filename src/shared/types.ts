@@ -322,6 +322,49 @@ export type CuriosityActivityEvent =
     }
   | { kind: 'generated'; gameId: number };
 
+// ── Recaps del Loop (AFTERPLAY-LOOP.md §3) ────────────────────────────────
+// La prosa de cada periodo cerrado, generada una vez y leída en el Journey y
+// en Sessions. La forma del payload vive en shared/memory/payload.ts (la
+// necesita también el esquema de la DB).
+
+export type { RecapPayload } from './memory/payload';
+import type { RecapPayload as MemoryRecapPayload } from './memory/payload';
+
+// El último recap de cada periodo — lo único que el renderer necesita leer
+// (el historial de regeneraciones se queda en la DB).
+export type GeneratedMemorySummary = {
+  scopeType: 'month' | 'year';
+  scopeKey: string;
+  payload: MemoryRecapPayload;
+  createdAt: Date;
+};
+
+// Estado para la tarjeta de Ajustes: cuántos periodos cerrados con actividad
+// están al día, cuántos sin recap y cuántos desactualizados (corregiste el
+// pasado y su sourceHash ya no casa — §7.2).
+export type MemoriesStatus = {
+  current: number;
+  missing: number;
+  stale: number;
+  running: boolean;
+};
+
+// Avisos del main mientras la cola trabaja. 'progress' marca la racha (misma
+// gramática que las curiosidades); 'generated' dice que un periodo concreto
+// acaba de recibir su recap — con el origen, porque solo los automáticos
+// levantan el toast de "Your June story is ready" (§3.3): una pasada de
+// backfill de 40 meses no puede disparar 40 toasts.
+export type MemoryActivityEvent =
+  | {
+      kind: 'progress';
+      running: boolean;
+      done: number;
+      total: number;
+      failed: number;
+      currentLabel: string | null;
+    }
+  | { kind: 'generated'; scopeType: 'month' | 'year'; scopeKey: string; origin: 'auto' | 'manual' };
+
 // Cambio de estado suelto para el desglose "Status Changes" de Stats por
 // año (Bloque 5D) — ver getAllStateEvents.ts.
 export type StateEventSummary = {
@@ -375,6 +418,13 @@ export type SessionWithGame = {
 export type SessionClosedEvent = {
   sessionId: number;
   gameId: number;
+  // Playthrough dueño de la sesión recién cerrada — es donde los botones de
+  // estado rápido del toast escriben su evento (AFTERPLAY-LOOP.md §6): la
+  // sesión acaba de registrarse ahí, así que ese ES el playthrough activo.
+  iterationId: number;
+  // Decide qué botones ofrece el toast: Beaten/Dropped para juegos normales,
+  // Resting para endless (un endless no se "termina").
+  endless: boolean;
   gameTitle: string;
   // Para que el aviso se vea como una ficha del juego y no como un mensaje de
   // sistema: carátula a un lado y hero de fondo tras un velo (mismo lenguaje

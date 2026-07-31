@@ -19,10 +19,15 @@ export const getSessionClosedInfo = async (
     .select({
       id: sessionsTable.id,
       durationSec: sessionsTable.durationSec,
+      // Desde la tabla JOINEADA y no sessions.iterationId: la columna de
+      // sessions es nullable (emulador sin asignar) y este inner join ya
+      // garantiza que aquí siempre hay playthrough — que el tipo lo diga.
+      iterationId: iterationsTable.id,
       gameId: iterationsTable.gameId,
       gameTitle: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
       heroUrl: gamesTable.heroUrl,
+      endless: gamesTable.endless,
     })
     .from(sessionsTable)
     .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id))
@@ -48,6 +53,8 @@ export const getSessionClosedInfo = async (
   return {
     sessionId: session.id,
     gameId: session.gameId,
+    iterationId: session.iterationId,
+    endless: session.endless,
     gameTitle: session.gameTitle,
     coverUrl: session.coverUrl,
     heroUrl: session.heroUrl,

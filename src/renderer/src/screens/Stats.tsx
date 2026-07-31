@@ -116,6 +116,17 @@ export const Stats = (): React.JSX.Element => {
 
   const [selectedYear, setSelectedYear] = useState<Year>('all');
   const [view, setView] = useState<'overview' | 'journey'>('overview');
+  // El toast de "Your June story is ready" llega con /stats?view=journey (y
+  // un ?month= que consume el propio Journey). El parámetro solo EMPUJA a la
+  // pestaña al aparecer — mismo patrón de "ajustar estado durante el render"
+  // que el reset de página de Sessions: el Journey lo borra de la URL después
+  // y la pestaña se queda donde estaba, como si la hubieras pulsado tú.
+  const viewParam = searchParams.get('view');
+  const [seenViewParam, setSeenViewParam] = useState<string | null>(null);
+  if (viewParam !== seenViewParam) {
+    setSeenViewParam(viewParam);
+    if (viewParam === 'journey') setView('journey');
+  }
 
   const { data: games = [] } = useGames();
   // Solo para la línea "Plan to play" del Backlog flow — el resto de Stats

@@ -7,6 +7,7 @@ import { registerHltbHandlers } from './hltb';
 import { registerIgdbHandlers } from './igdb';
 import { registerImagesHandlers } from './images';
 import { registerIterationsHandlers } from './iterations';
+import { registerMemoriesHandlers } from './memories';
 import { registerSavesHandlers } from './saves';
 import { registerScanHandlers } from './scan';
 import { registerSessionsHandlers } from './sessions';
@@ -37,4 +38,5 @@ export const registerIpcHandlers = (): void => {
   registerScanHandlers();
   registerSettingsHandlers();
   registerCuriositiesHandlers();
+  registerMemoriesHandlers();
 };

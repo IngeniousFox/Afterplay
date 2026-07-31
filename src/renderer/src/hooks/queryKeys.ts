@@ -62,6 +62,13 @@ export const queryKeys = {
     all: ['curiosities'] as const,
     status: ['curiosities', 'status'] as const,
   },
+  // Recaps del Loop (AFTERPLAY-LOOP.md §3) — misma gramática que curiosities:
+  // `status` bajo el prefijo para que invalidar memories.all refresque
+  // también la tarjeta de Ajustes.
+  memories: {
+    all: ['memories'] as const,
+    status: ['memories', 'status'] as const,
+  },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,
     timeFormat: ['settings', 'timeFormat'] as const,

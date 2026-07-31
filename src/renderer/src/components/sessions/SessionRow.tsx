@@ -1,7 +1,11 @@
-import { Flame, Trash2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Flame, Hourglass, Medal, Sparkles, Trash2, Undo2 } from 'lucide-react';
+import type { Moment } from '../../../../shared/memory/moments';
 import type { SessionWithGame } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
+import { AMBER, BLUE, GREEN, VIOLET } from '../../lib/colors';
+import { humanizeSpan } from '../../lib/dateMath';
 import {
   formatByPrecision,
   formatElapsed,
@@ -19,10 +23,32 @@ type SessionRowProps = {
   maxDurationSec?: number;
   // ¿Es LA sesión más larga del filtro? — llamita al lado de la duración.
   isRecord?: boolean;
+  // Los momentos señalados que esta sesión causó (AFTERPLAY-LOOP.md §5):
+  // récord, regreso, hito... Derivados al leer por la vista dueña (coste
+  // cero de almacenamiento) — la fila solo los viste de distintivo.
+  moments?: Moment[];
   // Papelera al pasar el ratón (abre la confirmación de la vista dueña).
   // Solo se pinta en sesiones CERRADAS — una en vivo se para con Stop, no
   // se borra (el watcher la reabriría al ciclo siguiente).
   onDelete?: () => void;
+};
+
+// Cada tipo de momento con su voz: icono, color y cómo se dice. La llama del
+// récord comparte rojo con la métrica LONGEST SESSION de arriba a propósito —
+// es la misma noticia en dos sitios.
+const momentBadge = (moment: Moment): { Icon: LucideIcon; color: string; label: string } => {
+  switch (moment.type) {
+    case 'first_session':
+      return { Icon: Sparkles, color: GREEN, label: 'First session' };
+    case 'return':
+      return { Icon: Undo2, color: BLUE, label: `Back after ${humanizeSpan(moment.awayDays)}` };
+    case 'longest_session':
+      return { Icon: Flame, color: '#e85d72', label: 'Longest session yet' };
+    case 'hours_milestone':
+      return { Icon: Hourglass, color: AMBER, label: `Crossed ${moment.hours}h total` };
+    case 'sessions_milestone':
+      return { Icon: Medal, color: VIOLET, label: `Session #${moment.count}` };
+  }
 };
 
 // Bloque 5A / prototipo (Backlog.html, panel "ALL SESSIONS") — carátula,
@@ -36,6 +62,7 @@ export const SessionRow = ({
   session,
   maxDurationSec = 0,
   isRecord = false,
+  moments = [],
   onDelete,
 }: SessionRowProps): React.JSX.Element => {
   const isLive = session.endedAt === null;
@@ -86,6 +113,29 @@ export const SessionRow = ({
         </div>
         {endTime && (
           <div className="mt-0.25 text-[12.5px] text-muted-foreground/70">→ {endTime}</div>
+        )}
+        {/* Los momentos de la sesión (§5): píldoras compactas y teñidas — la
+            fila cuenta qué pasó, no solo cuánto duró. */}
+        {moments.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {moments.map((moment) => {
+              const { Icon, color, label } = momentBadge(moment);
+              return (
+                <span
+                  key={`${moment.type}-${moment.sessionId}`}
+                  className="flex items-center gap-1 rounded-full px-2 py-0.75 text-[9.5px] font-bold tracking-[.02em]"
+                  style={{
+                    color,
+                    background: `${color}14`,
+                    boxShadow: `inset 0 0 0 1px ${color}33`,
+                  }}
+                >
+                  <Icon size={10} className="flex-none" />
+                  {label}
+                </span>
+              );
+            })}
+          </div>
         )}
         {/* Diario de sesión, igual que en la ficha del juego: si escribiste
             "dónde lo dejé" al cerrar, aquí se lee y se corrige. */}

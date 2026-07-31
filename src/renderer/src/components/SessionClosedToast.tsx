@@ -3,9 +3,13 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useSetSessionNote } from '../hooks/sessions';
+import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
+import { celebrateCompletion } from '../lib/celebrate';
 import { AMBER } from '../lib/colors';
 import { formatHours } from '../lib/format';
+import type { PastStatusKey } from '../lib/gameStatus';
+import { STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
 import { GameCover } from './GameCover';
 
 // El aviso de "acabas de cerrar X": duración, total acumulado y —lo que de
@@ -30,6 +34,14 @@ type SessionClosedToastProps = {
   onOpenGame: () => void;
 };
 
+// AFTERPLAY-LOOP.md §6 — el estado rápido vive AQUÍ y no en una bandeja de
+// pendientes: "sigo jugando" es el defecto y no necesita botón (no tocar nada
+// ya lo dice), y si el toast se va sin pulsar, no queda nada esperándote — el
+// estado se cambia desde la ficha como toda la vida. Juego normal ofrece
+// Beaten/Dropped; endless, Resting (un endless no se "termina").
+const quickStatusOptions = (endless: boolean): PastStatusKey[] =>
+  endless ? ['resting'] : ['beaten', 'dropped'];
+
 // "1h 47m" partido en número y unidad, para poder pintar la cifra grande y la
 // unidad pequeña sin que el conjunto parezca un texto plano.
 const splitDuration = (seconds: number): { value: string; unit: string } => {
@@ -48,7 +60,12 @@ export const SessionClosedToast = ({
 }: SessionClosedToastProps): React.JSX.Element => {
   const [note, setNote] = useState('');
   const [saved, setSaved] = useState(false);
+  // Estado rápido ya elegido en este toast (null = sin tocar). Se queda a la
+  // vista como acuse de recibo — el toast sigue su cuenta atrás normal, que
+  // marcar el desenlace no te roba el hueco de escribir la nota.
+  const [marked, setMarked] = useState<PastStatusKey | null>(null);
   const setSessionNote = useSetSessionNote();
+  const addStateEvent = useAddStateEvent();
   const heroSrc = useImageSrc(event.heroUrl, 'heroes');
   const duration = splitDuration(event.durationSec);
 
@@ -59,6 +76,28 @@ export const SessionClosedToast = ({
     // Un respiro para que se vea el acuse de recibo antes de irse — cerrar
     // en seco deja la duda de si se guardó.
     setTimeout(() => toast.dismiss(toastId), 900);
+  };
+
+  const markState = async (key: PastStatusKey): Promise<void> => {
+    if (marked !== null || addStateEvent.isPending) return;
+    try {
+      // La puerta de siempre (§6): addStateEvent garantiza el invariante de
+      // un-activo-por-juego, y su cierre de sesión abierta aquí no encuentra
+      // ninguna — la sesión acaba de cerrarse.
+      await addStateEvent.mutateAsync({
+        iterationId: event.iterationId,
+        type: STATUS_TO_STATE_TYPE[key],
+        occurredAt: new Date(),
+        datePrecision: 'datetime',
+      });
+    } catch {
+      // Fallo al escribir (DB ocupada, lo que sea): el botón sigue ahí y se
+      // puede reintentar — o marcarlo después desde la ficha, como siempre.
+      return;
+    }
+    setMarked(key);
+    // Terminarte un juego es EL momento del ciclo — el confeti está para esto.
+    if (key === 'beaten') celebrateCompletion();
   };
 
   return (
@@ -160,6 +199,41 @@ export const SessionClosedToast = ({
             >
               <Check size={14} />
             </button>
+          </div>
+        )}
+
+        {/* Estado rápido (AFTERPLAY-LOOP.md §6): "¿y cómo acabó?" como oferta,
+            no como pregunta que persigue. Tras pulsar, el acuse ocupa el sitio
+            de los botones con el color del estado — y el toast sigue su cuenta
+            atrás normal: marcar el desenlace no roba el hueco de la nota. */}
+        {marked !== null ? (
+          <div
+            className="flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold"
+            style={{
+              background: `${STATUS_META[marked].color}1a`,
+              color: STATUS_META[marked].color,
+            }}
+          >
+            <Check size={12} className="flex-none" />
+            Marked as {STATUS_META[marked].label}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            {quickStatusOptions(event.endless).map((key) => {
+              const meta = STATUS_META[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => void markState(key)}
+                  disabled={addStateEvent.isPending}
+                  className="flex items-center gap-1.5 rounded-full border border-white/12 bg-black/30 px-2.75 py-1.25 text-[11.5px] font-bold text-foreground/90 backdrop-blur-sm transition-colors duration-150 hover:border-white/28 hover:bg-white/[0.07] disabled:opacity-50"
+                >
+                  <meta.Icon size={12} className="flex-none" style={{ color: meta.color }} />
+                  {meta.label}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

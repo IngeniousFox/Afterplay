@@ -1,18 +1,21 @@
-import { CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
+import { BookOpen, CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import type {
   EventDatePrecision,
   GameListItem,
+  GeneratedMemorySummary,
   SessionWithGame,
   StateEventSummary,
 } from '../../../../shared/types';
 import { latestRealStateEvent, manualHoursAnchor } from '../../../../shared/playthroughState';
+import { useMemories } from '../../hooks/memories';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { revealClass, revealStyle } from '../../lib/styles';
-import { BLUE, GREEN } from '../../lib/colors';
+import { BLUE, GREEN, VIOLET } from '../../lib/colors';
 
 // La otra vista de Stats: no cifras, sino el recorrido. Una línea temporal de
 // años y meses con las carátulas de lo que jugaste en cada uno.
@@ -46,6 +49,131 @@ const JourneyStatTile = ({
     </div>
     <div className="mt-0.5 text-[14px] font-extrabold tabular-nums" style={{ color }}>
       {value}
+    </div>
+  </div>
+);
+
+// El recap del mes (AFTERPLAY-LOOP.md §4): el texto de ese capítulo, pintado
+// donde el capítulo ya vive. Un panel teñido del violeta de la memoria, con
+// lomo de libro a la izquierda — la señal de "esto es historia contada", no
+// otra tarjeta de datos. Sin recap, el mes queda exactamente como siempre:
+// las carátulas ya cuentan lo factual.
+const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Element => (
+  <div
+    className="relative mb-3.5 overflow-hidden rounded-[12px] border border-white/[0.08] px-4 py-3.5"
+    style={{
+      background:
+        'linear-gradient(125deg, rgba(124,134,200,.13), rgba(124,134,200,.05) 45%, rgba(124,134,200,.02))',
+    }}
+  >
+    <span
+      aria-hidden
+      className="absolute inset-y-0 left-0 w-0.75"
+      style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)` }}
+    />
+    <div
+      className="flex items-center gap-1.5 text-[8.5px] font-extrabold tracking-[.18em]"
+      style={{ color: `${VIOLET}d9` }}
+    >
+      <BookOpen size={10} strokeWidth={2.5} />
+      THE STORY
+    </div>
+    <div className="mt-1.5 text-[15px] font-extrabold tracking-[-.01em] text-foreground">
+      {recap.payload.headline}
+    </div>
+    <p className="mt-1.25 max-w-150 text-[12px] leading-relaxed text-muted-foreground">
+      {recap.payload.narrative}
+    </p>
+    {recap.payload.highlights.length > 0 && (
+      <div className="mt-2.5 flex flex-col gap-1">
+        {recap.payload.highlights.map((line) => (
+          <div
+            key={line}
+            className="flex items-start gap-2 text-[11px] font-semibold text-foreground/75"
+          >
+            <span
+              className="mt-1.25 h-1 w-1 flex-none rounded-full"
+              style={{ background: `${VIOLET}b3` }}
+            />
+            {line}
+          </div>
+        ))}
+      </div>
+    )}
+    {recap.payload.closingLine.length > 0 && (
+      <p className="mt-2.5 text-[11px] italic" style={{ color: `${VIOLET}a6` }}>
+        {recap.payload.closingLine}
+      </p>
+    )}
+  </div>
+);
+
+// El recap del año entero — el capítulo grande. Te recibe al entrar en el
+// año, antes del primer mes: mismo lenguaje que el panel mensual (violeta,
+// lomo de libro) pero con más presencia — tipografía mayor y el año en
+// filigrana al fondo, como el número de capítulo de un libro. Aquí se lee
+// TODO el payload anual (narrativa, highlights, cierre): generarlo para
+// enseñar solo una frase era pagar la historia y no contarla.
+const YearStory = ({
+  recap,
+  year,
+}: {
+  recap: GeneratedMemorySummary;
+  year: number;
+}): React.JSX.Element => (
+  <div
+    className="relative mb-5 overflow-hidden rounded-[14px] border border-white/[0.09] px-5 py-4"
+    style={{
+      background:
+        'linear-gradient(120deg, rgba(124,134,200,.15), rgba(124,134,200,.06) 45%, rgba(124,134,200,.02))',
+    }}
+  >
+    <span
+      aria-hidden
+      className="absolute inset-y-0 left-0 w-1"
+      style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}22)` }}
+    />
+    <span
+      aria-hidden
+      className="pointer-events-none absolute -top-4 right-3 text-[92px] leading-none font-extrabold tracking-[-.045em] text-white/[0.035] tabular-nums select-none"
+    >
+      {year}
+    </span>
+    <div className="relative">
+      <div
+        className="flex items-center gap-1.5 text-[9px] font-extrabold tracking-[.18em]"
+        style={{ color: `${VIOLET}d9` }}
+      >
+        <BookOpen size={11} strokeWidth={2.5} />
+        THE STORY OF {year}
+      </div>
+      <div className="mt-2 text-[19px] font-extrabold tracking-[-.015em] text-foreground">
+        {recap.payload.headline}
+      </div>
+      <p className="mt-1.5 max-w-170 text-[12.5px] leading-relaxed text-muted-foreground">
+        {recap.payload.narrative}
+      </p>
+      {recap.payload.highlights.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1.25">
+          {recap.payload.highlights.map((line) => (
+            <div
+              key={line}
+              className="flex items-start gap-2 text-[11.5px] font-semibold text-foreground/80"
+            >
+              <span
+                className="mt-1.5 h-1 w-1 flex-none rounded-full"
+                style={{ background: `${VIOLET}b3` }}
+              />
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
+      {recap.payload.closingLine.length > 0 && (
+        <p className="mt-3 text-[11.5px] italic" style={{ color: `${VIOLET}a6` }}>
+          {recap.payload.closingLine}
+        </p>
+      )}
     </div>
   </div>
 );
@@ -803,6 +931,16 @@ export const Journey = ({
     () => buildEntries(games, sessions, stateEvents),
     [games, sessions, stateEvents],
   );
+  // Los recaps del Loop (§4): el último por periodo, indexado por scope para
+  // colgar cada uno de su mes/año sin recorrer la lista en cada bloque.
+  const { data: memories = [] } = useMemories();
+  const recapByScope = useMemo(
+    () =>
+      new Map<string, GeneratedMemorySummary>(
+        memories.map((memory) => [`${memory.scopeType}:${memory.scopeKey}`, memory]),
+      ),
+    [memories],
+  );
   // Entradas agrupadas en año -> mes -> carátulas, todo de nuevo a viejo.
   const byYear = useMemo(() => {
     const now = new Date();
@@ -941,6 +1079,56 @@ export const Journey = ({
     for (const element of monthRefs.current.values()) observer.observe(element);
     return () => observer.disconnect();
   }, [byYear]);
+
+  // Aterrizaje desde el toast de "Your June story is ready" (§3.3): la URL
+  // trae ?month=2026-06 (o ?year=2026) y aquí se convierte en el mismo scroll
+  // con candado que usa el índice lateral. Los parámetros se consumen y se
+  // borran de la URL — volver a la pestaña Journey después no debe repetir el
+  // viaje. Si los datos aún no cargaron (byYear vacío), se espera al
+  // siguiente render sin consumir nada.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusMonthParam = searchParams.get('month');
+  const focusYearParam = searchParams.get('year');
+  useEffect(() => {
+    if (!focusMonthParam && !focusYearParam) return;
+    if (byYear.length === 0) return;
+
+    let year: number;
+    let monthKey: string | null = null;
+    if (focusMonthParam) {
+      const [rawYear, rawMonth] = focusMonthParam.split('-').map(Number);
+      year = rawYear;
+      // Las claves de monthRefs llevan el ÍNDICE de mes (0-11), no el número
+      // humano del scopeKey ('2026-06' → '2026-5').
+      if (Number.isFinite(rawMonth)) monthKey = `${rawYear}-${rawMonth - 1}`;
+    } else {
+      year = Number(focusYearParam);
+    }
+
+    const monthElement = monthKey ? monthRefs.current.get(monthKey) : undefined;
+    const yearElement = yearRefs.current.get(year);
+    const target = monthElement ?? yearElement;
+    if (target) {
+      navigationTargetRef.current = monthElement && monthKey ? { year, month: monthKey } : { year };
+      if (navigationUnlockTimerRef.current !== null) {
+        window.clearTimeout(navigationUnlockTimerRef.current);
+      }
+      navigationUnlockTimerRef.current = window.setTimeout(() => {
+        navigationTargetRef.current = null;
+        navigationUnlockTimerRef.current = null;
+      }, 1_200);
+      setActiveYear(year);
+      if (monthKey && monthElement) setActiveMonth(monthKey);
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('month');
+    next.delete('year');
+    next.delete('view');
+    setSearchParams(next, { replace: true });
+  }, [focusMonthParam, focusYearParam, byYear, searchParams, setSearchParams]);
+
   // La tira de resumen de arriba. gamesTouched cuenta JUEGOS distintos y no
   // entradas: tres vueltas a Hollow Knight son tres carátulas en el viaje,
   // pero un solo juego jugado.
@@ -998,6 +1186,9 @@ export const Journey = ({
             const yearEntries = months.flatMap(([, monthEntries]) => monthEntries);
             const yearHours = yearEntries.reduce((sum, entry) => sum + entry.hours, 0);
             const yearGames = new Set(yearEntries.map((entry) => entry.gameId)).size;
+            // El recap anual (§4): su titular junto al número del año — el
+            // año entero resumido en una frase, sin robarle sitio a nada.
+            const yearRecap = recapByScope.get(`year:${year}`);
             return (
               <section
                 key={year}
@@ -1020,8 +1211,13 @@ export const Journey = ({
                     <span className="mx-1.5 text-muted-foreground/40">·</span>
                     {formatHours(yearHours)}
                   </span>
-                  <span className="h-px flex-1 self-center bg-gradient-to-r from-border to-transparent" />
+                  <span className="h-px min-w-8 flex-1 self-center bg-gradient-to-r from-border to-transparent" />
                 </div>
+                {/* La historia del año completa, antes del primer mes. El
+                    titular vive AQUÍ dentro y ya no se repite en cursiva
+                    junto al número: dos veces el mismo texto a dos líneas de
+                    distancia era ruido, no énfasis. */}
+                {yearRecap && <YearStory recap={yearRecap} year={year} />}
                 {months.map(([month, monthEntries], monthIndex) => {
                   // El protagonista del mes: la entrada con más horas. El
                   // resto acompaña como carátulas, en su orden temporal.
@@ -1030,6 +1226,11 @@ export const Journey = ({
                   );
                   const rest = monthEntries.filter((entry) => entry !== featured);
                   const monthHours = monthEntries.reduce((sum, entry) => sum + entry.hours, 0);
+                  // El recap del mes, si ya se escribió — '2026-06' con el
+                  // mes en número humano, como manda el scopeKey (§3.1).
+                  const monthRecap = recapByScope.get(
+                    `month:${year}-${String(month + 1).padStart(2, '0')}`,
+                  );
                   // El nodo de la columna se tiñe del estado del protagonista
                   // — bajando la página, la vértebra cuenta el viaje en color.
                   const nodeColor = featured.state
@@ -1075,6 +1276,8 @@ export const Journey = ({
                             </span>
                           )}
                         </div>
+
+                        {monthRecap && <MonthStory recap={monthRecap} />}
 
                         <FeaturedEntry
                           key={featured.key}

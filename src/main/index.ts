@@ -16,6 +16,8 @@ import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { cleanupCiteTaggedCuriosities } from './curiosities/cleanupCiteTags';
 import { setCuriositiesNotifier } from './curiosities/notify';
+import { runMemoriesDailyTick } from './memories/detect';
+import { setMemoriesNotifier } from './memories/notify';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
 import { setSessionClosedNotifier } from './watcher/notifySession';
@@ -47,6 +49,12 @@ let syncTimer: ReturnType<typeof setInterval> | null = null;
 // Más espaciado que el watcher de procesos (5s) a propósito — sincronizar
 // con Turso es una llamada de red de verdad, no un sondeo local barato.
 const SYNC_INTERVAL_MS = 60_000;
+// El tic de la detección de recaps (AFTERPLAY-LOOP.md §3.3). Cada hora, pero
+// el trabajo real solo pasa una vez por día de calendario (ver
+// memories/detect.ts) — el intervalo corto es solo para no perder el cambio
+// de día por mucho que la app viva en la bandeja.
+let memoriesTimer: ReturnType<typeof setInterval> | null = null;
+const MEMORIES_TICK_MS = 60 * 60 * 1000;
 // SPEC 3E — el botón X de la ventana oculta, no cierra: solo "Quit" del tray
 // (o antes de la propia app.quit(), en before-quit) marca esto para dejar
 // pasar el cierre real. Sin esto, la app no podría cerrarse nunca de verdad.
@@ -156,13 +164,23 @@ function createWindow(): void {
   // avisa en los cuatro eventos que pueden cambiar la visibilidad real: el
   // botón _ minimiza, "Open" del tray restaura, y close/el propio tray
   // ocultan/muestran sin pasar por minimizar.
-  const sendVisibility = (): void => {
-    window.webContents.send('window:visible-change', window.isVisible() && !window.isMinimized());
+  //
+  // Cada evento manda el valor que ÉL MISMO significa, sin releer
+  // isMinimized()/isVisible() dentro del manejador: en Windows el evento
+  // 'minimize' puede dispararse ANTES de que el estado interno cambie, así
+  // que preguntarle a la ventana en ese instante respondía "no está
+  // minimizada" y el renderer se quedaba creyendo la ventana visible — con
+  // el modo ambiente encendiéndose de fondo con la app minimizada. Del eje
+  // que NO cambia en el evento sí se puede preguntar: ese no está en vuelo.
+  const sendVisibility = (visible: boolean): void => {
+    window.webContents.send('window:visible-change', visible);
   };
-  window.on('minimize', sendVisibility);
-  window.on('restore', sendVisibility);
-  window.on('hide', sendVisibility);
-  window.on('show', sendVisibility);
+  window.on('minimize', () => sendVisibility(false));
+  window.on('hide', () => sendVisibility(false));
+  // 'restore' des-minimiza: visible salvo que además estuviera oculta.
+  window.on('restore', () => sendVisibility(window.isVisible()));
+  // 'show' des-oculta: visible salvo que además estuviera minimizada.
+  window.on('show', () => sendVisibility(!window.isMinimized()));
 
   // SPEC 3E — la X minimiza a la bandeja, no cierra la app (que sigue viva
   // vigilando procesos). isQuitting se marca en before-quit (cualquier vía de
@@ -330,6 +348,14 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('curiosities:activity', event);
     }
   });
+  // Recaps del Loop (AFTERPLAY-LOOP.md §3): mismo canal de progreso que las
+  // curiosidades, y el aviso de "tu junio ya está contado" con el que el
+  // renderer levanta su toast de aterrizaje.
+  setMemoriesNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('memories:activity', event);
+    }
+  });
 
   // Cierre de un juego: el aviso va por una vía u otra según DÓNDE puedas
   // verlo. Con la ventana a la vista, un toast dentro de la app (Sonner);
@@ -428,8 +454,16 @@ app.whenReady().then(async () => {
   // db/index.ts); con sync activo, solo sube/baja cambios. El primer ciclo
   // se lanza ya mismo (sin esperar el intervalo) — "sync manual al
   // arrancar" — sin bloquear el resto del arranque.
-  void runSyncCycle();
+  // Detección automática de recaps pendientes (AFTERPLAY-LOOP.md §3.3): una
+  // pasada al arrancar y un tic horario que solo trabaja una vez por día de
+  // calendario — la app vive semanas en la bandeja sin reiniciarse y el
+  // cambio de mes tiene que notarse solo. Encadenada tras el PRIMER sync a
+  // propósito: si el otro PC ya generó junio, el sync lo baja y aquí ni se
+  // paga de nuevo. (Y si el sync falla, el tic horario la recoge — la
+  // carrera de dos PCs generando a la vez la absorbe el upsert, §7.1.)
+  void runSyncCycle().then(() => runMemoriesDailyTick());
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
+  memoriesTimer = setInterval(() => void runMemoriesDailyTick(), MEMORIES_TICK_MS);
 
   // Auto-actualización (solo app empaquetada — ver updater.ts). Al final del
   // arranque a propósito: comprobar una release jamás debe retrasar la
@@ -461,6 +495,7 @@ app.on('before-quit', () => {
   watcher?.stop();
   scanWatcher?.stop();
   if (syncTimer) clearInterval(syncTimer);
+  if (memoriesTimer) clearInterval(memoriesTimer);
 });
 
 // In this file you can include the rest of your app's specific main process

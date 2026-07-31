@@ -16,6 +16,7 @@ export const windowApi = {
     ipcRenderer.on('window:fullscreen-change', listener);
     return () => ipcRenderer.removeListener('window:fullscreen-change', listener);
   },
+  isVisible: (): Promise<boolean> => ipcRenderer.invoke('window:is-visible'),
   onVisibleChange: (callback: (isVisible: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, isVisible: boolean): void =>
       callback(isVisible);

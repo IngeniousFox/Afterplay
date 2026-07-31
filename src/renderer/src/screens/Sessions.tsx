@@ -1,13 +1,16 @@
 import { Activity, ArrowRight, Calendar, Clock, Flame } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { deriveMoments, momentsBySession } from '../../../shared/memory/moments';
 import type { SessionWithGame } from '../../../shared/types';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { DeleteSessionDialog } from '../components/sessions/DeleteSessionDialog';
+import { MonthStoryCard } from '../components/sessions/MonthStoryCard';
 import { Pager } from '../components/sessions/Pager';
 import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
 import { SessionRow } from '../components/sessions/SessionRow';
 import { useGames } from '../hooks/games';
+import { useMemories } from '../hooks/memories';
 import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { DAY_MS, startOfDayMs } from '../lib/dateMath';
@@ -22,46 +25,63 @@ const PAGE_SIZE = 20;
 // exacto de hace dos años, pero sí el de ayer). `now` se calcula UNA vez por
 // render (no una por sesión) para que todas las filas de la misma pasada
 // usen el mismo "hoy", sin desajustes de un milisegundo entre unas y otras.
-const getSessionGroupLabel = (date: Date, now: Date): string => {
+//
+// monthScopeKey acompaña al label solo cuando el cubo ES un mes cerrado
+// entero ("Last Month", "June", "March 2025"): es el gancho de la tarjeta de
+// recap del diario (AFTERPLAY-LOOP.md §5). Los cubos del presente (Today...
+// This Month) van a null — el mes en curso jamás se narra (§3.4), y un cubo
+// de semana no es un mes aunque alguna fila caiga en el anterior.
+const getSessionGroup = (
+  date: Date,
+  now: Date,
+): { label: string; monthScopeKey: string | null } => {
   const diffDays = Math.round((startOfDayMs(now) - startOfDayMs(date)) / DAY_MS);
 
-  if (diffDays <= 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays <= 7) return 'This Week';
-  if (diffDays <= 14) return 'Last Week';
+  if (diffDays <= 0) return { label: 'Today', monthScopeKey: null };
+  if (diffDays === 1) return { label: 'Yesterday', monthScopeKey: null };
+  if (diffDays <= 7) return { label: 'This Week', monthScopeKey: null };
+  if (diffDays <= 14) return { label: 'Last Week', monthScopeKey: null };
 
   if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
-    return 'This Month';
+    return { label: 'This Month', monthScopeKey: null };
   }
+
+  // '2026-06' — la clave con la que generated_memories conoce el periodo.
+  const monthScopeKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   if (date.getFullYear() === lastMonth.getFullYear() && date.getMonth() === lastMonth.getMonth()) {
-    return 'Last Month';
+    return { label: 'Last Month', monthScopeKey };
   }
 
   if (date.getFullYear() === now.getFullYear()) {
-    return date.toLocaleDateString('en-US', { month: 'long' });
+    return { label: date.toLocaleDateString('en-US', { month: 'long' }), monthScopeKey };
   }
 
   // Años anteriores: siempre desglosado por mes ("March 2025", "January
   // 2025"...), no un cubo único por año.
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return {
+    label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    monthScopeKey,
+  };
 };
 
-type SessionGroup = { label: string; sessions: SessionWithGame[] };
+type SessionGroup = { label: string; monthScopeKey: string | null; sessions: SessionWithGame[] };
 
 // Agrupa una PÁGINA de sesiones, no la lista entera — la cabecera del primer
 // registro de la página SIEMPRE se pinta, siga o no el mismo grupo que
 // terminaba la página anterior. Sin esto, cambiar de página podía dejar una
 // tanda de filas "This Week" arrancando a mitad, sin ningún titulito encima
 // (el grupo ya se había impreso en la página anterior y no volvía a salir).
+// (Y de regalo para el diario: un mes partido en dos páginas enseña su
+// tarjeta de recap en las dos, que es donde su cabecera vuelve a pintarse.)
 const groupPageByDate = (sessions: SessionWithGame[], now: Date): SessionGroup[] => {
   const groups: SessionGroup[] = [];
   for (const session of sessions) {
-    const label = getSessionGroupLabel(session.startedAt, now);
+    const { label, monthScopeKey } = getSessionGroup(session.startedAt, now);
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.sessions.push(session);
-    else groups.push({ label, sessions: [session] });
+    else groups.push({ label, monthScopeKey, sessions: [session] });
   }
   return groups;
 };
@@ -78,6 +98,33 @@ export const Sessions = (): React.JSX.Element => {
 
   const { data: sessions = [], isLoading, isError } = useSessions();
   const { data: games = [] } = useGames();
+  // Recaps de mes para las tarjetas del diario (§5), indexados por scopeKey.
+  const { data: memories = [] } = useMemories();
+  const recapByMonth = useMemo(
+    () =>
+      new Map(
+        memories
+          .filter((memory) => memory.scopeType === 'month')
+          .map((memory) => [memory.scopeKey, memory]),
+      ),
+    [memories],
+  );
+
+  // Los momentos señalados (§2.1), derivados sobre la historia COMPLETA — un
+  // récord no se puede saber mirando la página visible — e indexados por
+  // sesión para vestir cada fila. Con la lista global aunque haya filtro de
+  // juego: "tu sesión más larga de Hollow Knight" es la misma verdad se mire
+  // desde donde se mire. Las horas manuales de los playthroughs elevan la
+  // línea base de los hitos de horas, igual que en el main.
+  const momentsIndex = useMemo(() => {
+    const manualHoursByGame = new Map(
+      games.map((game) => [
+        game.id,
+        game.manualIterations.reduce((sum, manual) => sum + manual.hours, 0),
+      ]),
+    );
+    return momentsBySession(deriveMoments(sessions, manualHoursByGame));
+  }, [sessions, games]);
 
   const [page, setPage] = useState(1);
   // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
@@ -243,6 +290,13 @@ export const Sessions = (): React.JSX.Element => {
                     session.endedAt !== null ? sum + (session.durationSec ?? 0) : sum,
                   0,
                 );
+                // La tarjeta del recap (§5), solo en el diario global: bajo
+                // un filtro de juego el mes entero no es el tema. Y solo en
+                // cubos que son un mes cerrado — getSessionGroup ya decide.
+                const groupRecap =
+                  gameId === null && group.monthScopeKey !== null
+                    ? recapByMonth.get(group.monthScopeKey)
+                    : undefined;
                 return (
                   <div
                     key={`${group.label}-${index}`}
@@ -262,6 +316,12 @@ export const Sessions = (): React.JSX.Element => {
                         {groupSeconds > 0 && ` · ${formatHours(groupSeconds / 3600)}`}
                       </span>
                     </div>
+                    {groupRecap && (
+                      <MonthStoryCard
+                        recap={groupRecap}
+                        onOpen={() => navigate(`/stats?view=journey&month=${group.monthScopeKey}`)}
+                      />
+                    )}
                     <div className="flex flex-col gap-2.5">
                       {group.sessions.map((session) => (
                         <SessionRow
@@ -273,6 +333,7 @@ export const Sessions = (): React.JSX.Element => {
                             longestSessionSec > 0 &&
                             (session.durationSec ?? 0) === longestSessionSec
                           }
+                          moments={momentsIndex.get(session.id)}
                           onDelete={() => setPendingDelete(session)}
                         />
                       ))}

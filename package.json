@@ -1,6 +1,6 @@
 {
   "name": "Afterplay",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -11,6 +11,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "tsx --test src/shared/memory/__tests__/moments.test.ts src/shared/memory/__tests__/chapters.test.ts",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

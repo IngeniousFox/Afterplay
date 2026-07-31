@@ -1,4 +1,5 @@
-import { int, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { RecapPayload } from '../../shared/memory/payload';
 
 // Nada de `check()` SQL en columnas tipo-enum (type/milestone/datePrecision/
 // format) — a propósito, tras un incidente real. SQLite no permite ALTER un
@@ -20,6 +21,7 @@ export type SpendEvent = typeof spendEventsTable.$inferSelect;
 export type Emulator = typeof emulatorsTable.$inferSelect;
 export type SaveBackupRow = typeof saveBackupsTable.$inferSelect;
 export type CuriosityRow = typeof curiositiesTable.$inferSelect;
+export type GeneratedMemoryRow = typeof generatedMemoriesTable.$inferSelect;
 
 // Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
 // columnas con default son opcionales. Son la base de los inputs de los
@@ -32,6 +34,7 @@ export type NewSpendEvent = typeof spendEventsTable.$inferInsert;
 export type NewEmulator = typeof emulatorsTable.$inferInsert;
 export type NewSaveBackup = typeof saveBackupsTable.$inferInsert;
 export type NewCuriosity = typeof curiositiesTable.$inferInsert;
+export type NewGeneratedMemory = typeof generatedMemoriesTable.$inferInsert;
 
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
@@ -244,6 +247,41 @@ export const curiositiesTable = sqliteTable('curiosities', {
     .references(() => gamesTable.id, { onDelete: 'cascade' }),
   text: text().notNull(),
 });
+
+// Recaps del Loop (AFTERPLAY-LOOP.md §3.1): la prosa generada de cada periodo
+// cerrado — el texto de un mes o un año de tu vida jugando, escrito por
+// Sonnet a partir de los hechos locales (shared/memory/chapters.ts).
+//
+// UNA fila por periodo, con UNIQUE sobre (scopeType, scopeKey): regenerar
+// hace UPSERT (ver insertMemory) y pisa la prosa anterior. El primer diseño
+// era insert-only "y la última gana al leer", pero en la práctica cada
+// regeneración masiva (cambio de prompt, cambio de modelo) multiplicaba la
+// tabla entera — 366 filas para 100 periodos en un solo día de ajustes. El
+// historial de regeneraciones no vale ese crecimiento sin techo. El caso de
+// los dos PCs (§7.1) sigue resuelto: si ambos generan el mismo mes, el
+// segundo upsert pisa al primero — mismo "último gana", ahora en escritura.
+//
+// sourceHash (SHA-256 de los hechos canonicalizados del capítulo) da el
+// estado de cada periodo sin mirar la prosa: missing / stale (corregiste el
+// pasado y los hechos ya no son los narrados) / current.
+export const generatedMemoriesTable = sqliteTable(
+  'generated_memories',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    scopeType: text({ enum: ['month', 'year'] }).notNull(),
+    // '2026-06' para meses, '2026' para años (ver shared/memory/chapters.ts).
+    scopeKey: text().notNull(),
+    payload: text({ mode: 'json' }).$type<RecapPayload>().notNull(),
+    sourceHash: text().notNull(),
+    // Trazabilidad: con qué modelo y qué versión del prompt se escribió esto.
+    model: text().notNull(),
+    promptVersion: int().notNull(),
+    createdAt: int({ mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [uniqueIndex('generated_memories_scope_unique').on(table.scopeType, table.scopeKey)],
+);
 
 export const spendEventsTable = sqliteTable('spend_events', {
   id: int().primaryKey({ autoIncrement: true }),

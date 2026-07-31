@@ -217,6 +217,78 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     const byAdded = games.slice().sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
     const oldestId = byAdded[0]?.id ?? null;
     const newestId = byAdded[byAdded.length - 1]?.id ?? null;
+    const libraryStartYear = byAdded[0]?.addedAt.getFullYear() ?? null;
+
+    // Su sitio entre los de su género: cuántos comparten género principal y
+    // el ranking de horas dentro de esa familia ("your most played shooter").
+    const genreCounts = new Map<string, number>();
+    const gamesByGenre = new Map<string, GameListItem[]>();
+    for (const game of games) {
+      const genre = game.genres?.[0];
+      if (!genre) continue;
+      genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
+      const list = gamesByGenre.get(genre) ?? [];
+      list.push(game);
+      gamesByGenre.set(genre, list);
+    }
+    const genreRankByGame = new Map<number, number>();
+    for (const list of gamesByGenre.values()) {
+      list
+        .filter((game) => game.totalHours > 0)
+        .sort((a, b) => b.totalHours - a.totalHours)
+        .forEach((game, position) => genreRankByGame.set(game.id, position + 1));
+    }
+
+    // Juegos que llegaron el mismo día de calendario — pero solo en tandas
+    // PEQUEÑAS (2-3): "llegó con X" es un recuerdo cuando fueron un par, y
+    // puro ruido el día que importaste media biblioteca de golpe.
+    const byAddedDay = new Map<string, GameListItem[]>();
+    for (const game of games) {
+      const key = game.addedAt.toDateString();
+      const list = byAddedDay.get(key) ?? [];
+      list.push(game);
+      byAddedDay.set(key, list);
+    }
+    const addedSameDayByGame = new Map<number, string>();
+    for (const list of byAddedDay.values()) {
+      if (list.length < 2 || list.length > 3) continue;
+      for (const game of list) {
+        const companion = list.find((other) => other.id !== game.id);
+        if (companion) addedSameDayByGame.set(game.id, companion.title);
+      }
+    }
+
+    // Compañeros de quinta (mismo año de lanzamiento) y el decano absoluto.
+    const releaseYearCounts = new Map<number, number>();
+    let oldestReleaseId: number | null = null;
+    let oldestReleaseYear = Infinity;
+    for (const game of games) {
+      if (game.releaseYear === null) continue;
+      releaseYearCounts.set(game.releaseYear, (releaseYearCounts.get(game.releaseYear) ?? 0) + 1);
+      if (game.releaseYear < oldestReleaseYear) {
+        oldestReleaseYear = game.releaseYear;
+        oldestReleaseId = game.id;
+      }
+    }
+
+    // El primer y el último 'completed' de toda la biblioteca — dos frases
+    // exclusivas, como oldest/newest.
+    let firstCompletionGameId: number | null = null;
+    let latestCompletionGameId: number | null = null;
+    let firstCompletionAt = Infinity;
+    let latestCompletionAt = -Infinity;
+    for (const event of stateEvents) {
+      if (event.type !== 'completed') continue;
+      const at = event.occurredAt.getTime();
+      if (at < firstCompletionAt) {
+        firstCompletionAt = at;
+        firstCompletionGameId = event.gameId;
+      }
+      if (at > latestCompletionAt) {
+        latestCompletionAt = at;
+        latestCompletionGameId = event.gameId;
+      }
+    }
 
     // Cuántos juegos terminaste cada año, para el "uno de los 8 que acabaste
     // en 2024".
@@ -259,6 +331,14 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       newestId,
       completedPerYear,
       previousTitleByGame,
+      libraryStartYear,
+      genreCounts,
+      genreRankByGame,
+      addedSameDayByGame,
+      releaseYearCounts,
+      oldestReleaseId,
+      firstCompletionGameId,
+      latestCompletionGameId,
     };
   }, [games, sessions, stateEvents, spendEvents, curiosityRows]);
 
@@ -276,6 +356,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       ? 0
       : Math.max(0, (indexes.completedPerYear.get(completedYear) ?? 1) - 1);
 
+  const primaryGenre = game.genres?.[0];
   const context: AmbientContext = {
     sessions: indexes.sessionsByGame.get(game.id) ?? [],
     events: gameEvents,
@@ -287,6 +368,15 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     isNewestInLibrary: indexes.newestId === game.id,
     completedSameYear,
     playedJustBefore: indexes.previousTitleByGame.get(game.id) ?? null,
+    genrePeers: primaryGenre ? (indexes.genreCounts.get(primaryGenre) ?? 0) : 0,
+    genreRank: indexes.genreRankByGame.get(game.id) ?? null,
+    addedSameDayTitle: indexes.addedSameDayByGame.get(game.id) ?? null,
+    sameReleaseYearCount:
+      game.releaseYear !== null ? (indexes.releaseYearCounts.get(game.releaseYear) ?? 0) : 0,
+    isOldestRelease: indexes.oldestReleaseId === game.id,
+    isFirstCompletion: indexes.firstCompletionGameId === game.id,
+    isLatestCompletion: indexes.latestCompletionGameId === game.id,
+    libraryStartYear: indexes.libraryStartYear,
     curiosities: indexes.curiositiesByGame.get(game.id) ?? [],
   };
 
