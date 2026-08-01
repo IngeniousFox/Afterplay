@@ -8,3 +8,11 @@ import { canonicalChapterFacts } from '../../shared/memory/chapters';
 // que uno importe del otro montaría un ciclo.
 export const chapterHash = (chapter: Chapter): string =>
   createHash('sha256').update(canonicalChapterFacts(chapter)).digest('hex');
+
+// La MISMA llave, con la firma anterior a que las decisiones (empezar,
+// aparcar, soltar) fueran hechos del capítulo. Sirve para una sola cosa:
+// que un recap escrito antes de aquel cambio siga contando como vigente en
+// vez de aparecer obsoleto de la noche a la mañana (status.ts acepta las
+// dos). Los recaps nuevos se sellan siempre con chapterHash.
+export const legacyChapterHash = (chapter: Chapter): string =>
+  createHash('sha256').update(canonicalChapterFacts(chapter, false)).digest('hex');

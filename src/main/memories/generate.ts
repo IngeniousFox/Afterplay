@@ -186,6 +186,28 @@ const buildUserPrompt = (chapter: Chapter): string => {
     });
   }
 
+  if (chapter.stateChanges.length > 0) {
+    // Las DECISIONES del periodo: empezar, aparcar, soltar, dejar
+    // descansando, apuntar para más adelante. Para muchos meses antiguos
+    // (sin cronómetro) esto es TODO lo que hay — y es historia de sobra: un
+    // mes en el que empiezas tres cosas y sueltas dos cuenta algo. Los
+    // verbos van traducidos aquí para que el modelo no interprete los
+    // identificadores internos por su cuenta.
+    const VERBS: Record<string, string> = {
+      started: 'started',
+      dropped: 'dropped',
+      on_hold: 'put on hold',
+      resting: 'set aside to rest',
+      plan_to_play: 'added to the plan-to-play list',
+    };
+    lines.push('Decisions, in chronological order:');
+    for (const change of chapter.stateChanges) {
+      lines.push(
+        `- ${VERBS[change.type] ?? change.type} ${change.title} (${shortDate(change.occurredAt)})`,
+      );
+    }
+  }
+
   if (chapter.moments.length > 0) {
     lines.push('Notable moments:');
     for (const moment of chapter.moments) {

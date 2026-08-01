@@ -209,40 +209,25 @@ const Shelf = ({
   );
 };
 
-// La fila desplazable de una estantería. La rueda VERTICAL del ratón se
-// traduce a scroll horizontal: Chromium no desplaza un contenedor
-// solo-horizontal con la rueda, y sin esto un usuario de solo ratón no
-// llegaba a las carátulas de fuera del viewport (ni al "See all" del final).
-// Listener manual con passive:false — React registra wheel pasivo y el
-// preventDefault (que evita que la página entera se desplace) no funcionaría.
-const ShelfRow = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
-  const rowRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const element = rowRef.current;
-    if (!element) return;
-    const onWheel = (event: WheelEvent): void => {
-      // Un trackpad con desplazamiento horizontal de verdad ya funciona; solo
-      // se traduce la rueda vertical, y solo si hay recorrido que hacer.
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-      if (element.scrollWidth <= element.clientWidth) return;
-      element.scrollLeft += event.deltaY;
-      event.preventDefault();
-    };
-    element.addEventListener('wheel', onWheel, { passive: false });
-    return () => element.removeEventListener('wheel', onWheel);
-  }, []);
-
-  return (
-    <div
-      ref={rowRef}
-      className="-mx-[0.6em] flex gap-[0.85em] overflow-x-auto px-[0.6em] pt-[0.6em] pb-[0.95em]"
-      style={{ scrollbarWidth: 'none' }}
-    >
-      {children}
-    </div>
-  );
-};
+// La fila desplazable de una estantería.
+//
+// AQUÍ VIVÍA EL BUG DE LA RUEDA: esta fila capturaba la rueda VERTICAL y la
+// traducía a scroll horizontal (con preventDefault) para que un usuario de
+// ratón alcanzara las carátulas de fuera del viewport. El problema es que
+// casi TODO el Home son estanterías, así que el puntero siempre estaba sobre
+// una — y la página entera se quedaba inmóvil: con ratón no se podía bajar.
+// Se va: la rueda vertical es del scroll de la página, punto. Lo horizontal
+// sigue disponible y sin código nuestro — Chromium ya mapea Shift+rueda (y
+// el desplazamiento horizontal del trackpad) al contenedor horizontal que
+// haya bajo el cursor.
+const ShelfRow = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
+  <div
+    className="-mx-[0.6em] flex gap-[0.85em] overflow-x-auto px-[0.6em] pt-[0.6em] pb-[0.95em]"
+    style={{ scrollbarWidth: 'none' }}
+  >
+    {children}
+  </div>
+);
 
 // "See all →" al final de la estantería de biblioteca: la puerta a la
 // parrilla completa sin robarle el sitio a una carátula. Vestida como una
@@ -341,7 +326,11 @@ const RecapDoor = ({
       ref={ref}
       type="button"
       onClick={onSelect}
-      className={`relative w-full flex-none overflow-hidden rounded-[0.7em] px-[1.2em] py-[0.85em] text-left transition-[box-shadow,background-color,translate] duration-200 ease-[cubic-bezier(.22,1,.36,1)] ${tvRevealClass}`}
+      // scroll-my: el conductor de scroll respeta scroll-margin (ver
+      // glideIntoView), así que esta tarjeta nunca queda pegada al borde del
+      // clip — el levantamiento del foco cabe dentro del margen en vez de
+      // salirse por arriba.
+      className={`relative w-full flex-none scroll-my-[0.9em] overflow-hidden rounded-[0.7em] px-[1.2em] py-[0.85em] text-left transition-[box-shadow,background-color,translate] duration-200 ease-[cubic-bezier(.22,1,.36,1)] ${tvRevealClass}`}
       style={{
         ...tvRevealStyle(7),
         background: focused
@@ -610,7 +599,12 @@ export const TvHome = (): React.JSX.Element => {
     // aire — el padding del layout (4vw) lo absorbe de sobra.
     <div
       ref={scrollRef}
-      className="-mx-[1em] flex h-full flex-col gap-[1.15em] overflow-y-auto px-[1em] pb-[1.5em]"
+      // El pt/-mt es el COLCHÓN del clip: sin él, la card del hero se apoya
+      // en el borde exacto donde recorta el contenedor, y como el foco
+      // levanta lo enfocado unos píxeles (translate) el borde de arriba
+      // asomaba fuera y se veía cortado. El margen negativo devuelve el
+      // colchón para que la composición no baje.
+      className="-mx-[1em] -mt-[0.55em] flex h-full flex-col gap-[1.15em] overflow-y-auto px-[1em] pt-[0.55em] pb-[1.5em]"
       style={{ scrollbarWidth: 'none' }}
     >
       {hero && heroStatus && (
@@ -618,9 +612,12 @@ export const TvHome = (): React.JSX.Element => {
           className={`relative min-h-[18em] flex-none overflow-hidden rounded-[0.85em] border border-white/[0.09] ${tvRevealClass}`}
           style={{
             ...tvRevealStyle(0),
-            // Hairline de luz arriba (cristal cogiendo la lámpara) y sombra
-            // profunda debajo: el hero es la pieza que más pesa en la sala.
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 1.6em 3.2em rgba(0,0,0,.45)',
+            // Solo el hairline de luz de arriba. La sombra de elevación
+            // (0 1.6em 3.2em negro) se fue: es la MISMA lección que ya
+            // aprendieron las carátulas — una sombra negra muy difuminada
+            // sobre el backdrop no se lee como profundidad, se lee como una
+            // mancha gris rodeando la card. Fuera del marco, nada.
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)',
           }}
         >
           {/* Hero art con deriva Ken Burns; sin él, la carátula ampliada y
