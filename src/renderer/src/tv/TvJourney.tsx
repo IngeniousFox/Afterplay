@@ -672,9 +672,26 @@ export const TvJourney = (): React.JSX.Element => {
                 </div>
               ))}
             </div>
+            {/* EL SECRETO, DICHO UNA VEZ: el cielo de luciérnagas que respira
+                detrás de TODO el modo TV es el censo de tu biblioteca — una
+                luz por juego, la brasa de su estado — y nadie podía saberlo.
+                Aquí, en la única pantalla que habla de "tu biblioteca entera",
+                se convierte de textura ambiental en detalle que se cuenta a
+                un amigo. */}
+            <div
+              className={`relative flex items-center gap-[0.55em] text-[0.68em] font-semibold text-foreground/55 italic ${tvRevealClass}`}
+              style={tvRevealStyle(5)}
+            >
+              <span
+                aria-hidden
+                className="afterplay-tv-glow h-[0.4em] w-[0.4em] flex-none rounded-full"
+                style={{ background: '#edd39a', boxShadow: '0 0 0.7em #edd39acc' }}
+              />
+              Every light in this sky is a game in your library.
+            </div>
             <div
               className={`relative text-[0.7em] font-semibold text-foreground/60 ${tvRevealClass}`}
-              style={tvRevealStyle(5)}
+              style={tvRevealStyle(6)}
             >
               Turn the page to begin →
             </div>

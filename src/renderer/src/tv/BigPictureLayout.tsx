@@ -15,7 +15,13 @@ import { tvSound } from './sound';
 import type { TvInputAction } from './gamepad';
 import { startGamepadLoop } from './gamepad';
 import { TvBackdropContext } from './backdropContext';
-import { markRealPointerMove, setTvInputDevice, useTvInputDevice } from './inputDevice';
+import type { TvPadBrand } from './inputDevice';
+import {
+  markRealPointerMove,
+  setTvInputDevice,
+  useTvInputDevice,
+  useTvPadBrand,
+} from './inputDevice';
 import type { HandlersRef, TvContextButton, TvHint, TvHintAction } from './tvInput';
 import { TvButtonsContext, TvLegendContext } from './tvInput';
 import { TvSessionPanel } from './TvSessionPanel';
@@ -34,7 +40,14 @@ import { TvStartMenu } from './TvStartMenu';
 // Qué tecla/glifo enseña la leyenda para cada acción, por dispositivo. Las
 // mismas teclas que mapea el espejo de teclado de abajo — si esto y aquello
 // divergen, la leyenda miente.
-const PAD_GLYPHS: Record<TvHintAction, string> = {
+//
+// Y por MARCA de mando, que es la otra mitad de no mentir: el mapping del
+// W3C es posicional (el botón 0 es el de abajo, se llame como se llame), así
+// que el motor no distingue mandos — solo esta tabla. Fíjate en Nintendo:
+// lleva A/B y X/Y cruzados respecto a Xbox, y por eso la acción 'a' (botón
+// de abajo) se dibuja como B. Cruzarlo aquí es justamente lo que hace que la
+// leyenda coincida con lo que el usuario tiene bajo el pulgar.
+const XBOX_GLYPHS: Record<TvHintAction, string> = {
   a: 'A',
   b: 'B',
   x: 'X',
@@ -44,9 +57,48 @@ const PAD_GLYPHS: Record<TvHintAction, string> = {
   lt: 'LT',
   rt: 'RT',
   view: 'VIEW',
-  start: '≡',
+  // Con su nombre y no con el pictograma: el "≡" del serigrafiado, metido en
+  // una chapa de 1.4em, se leía como tres rayas sueltas y no como un botón.
+  // Microsoft lo llama Menu — y la palabra la entiende cualquiera.
+  start: 'MENU',
   lbrb: 'LB·RB',
   ltrt: 'LT·RT',
+};
+const PLAYSTATION_GLYPHS: Record<TvHintAction, string> = {
+  a: '✕',
+  b: '○',
+  x: '□',
+  y: '△',
+  lb: 'L1',
+  rb: 'R1',
+  lt: 'L2',
+  rt: 'R2',
+  // SHARE en DualShock 4 y CREATE en DualSense: el botón es el mismo sitio y
+  // la misma función, así que se dice con el nombre del mando que casi
+  // seguro tiene delante quien juega en PC.
+  view: 'SHARE',
+  start: 'OPTIONS',
+  lbrb: 'L1·R1',
+  ltrt: 'L2·R2',
+};
+const NINTENDO_GLYPHS: Record<TvHintAction, string> = {
+  a: 'B',
+  b: 'A',
+  x: 'Y',
+  y: 'X',
+  lb: 'L',
+  rb: 'R',
+  lt: 'ZL',
+  rt: 'ZR',
+  view: '−',
+  start: '+',
+  lbrb: 'L·R',
+  ltrt: 'ZL·ZR',
+};
+const PAD_GLYPHS: Record<TvPadBrand, Record<TvHintAction, string>> = {
+  xbox: XBOX_GLYPHS,
+  playstation: PLAYSTATION_GLYPHS,
+  nintendo: NINTENDO_GLYPHS,
 };
 const KEY_GLYPHS: Record<TvHintAction, string> = {
   a: 'Enter',
@@ -151,6 +203,9 @@ const TvShell = (): React.JSX.Element => {
   const queryClient = useQueryClient();
   const { move, select, isRootActive } = useTvFocusActions();
   const device = useTvInputDevice();
+  // Qué mando habló último (Xbox / DualShock / Pro Controller): la leyenda
+  // del pie se redibuja sola al cambiar de mando, sin reiniciar nada.
+  const padBrand = useTvPadBrand();
   const clock = useClock();
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: games = [], isFetched: gamesFetched } = useGames();
@@ -406,7 +461,7 @@ const TvShell = (): React.JSX.Element => {
   // La luz de la habitación actual (ver routeAccent arriba).
   const accent = routeAccent(location.pathname);
 
-  const glyphs = device === 'gamepad' ? PAD_GLYPHS : KEY_GLYPHS;
+  const glyphs = device === 'gamepad' ? PAD_GLYPHS[padBrand] : KEY_GLYPHS;
   const baseHints: TvHint[] = [
     { action: 'a', label: 'Select' },
     { action: 'b', label: 'Back' },

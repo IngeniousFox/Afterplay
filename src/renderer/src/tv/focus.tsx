@@ -122,8 +122,14 @@ const driveGlide = (container: HTMLElement): void => {
 
 const clampScroll = (value: number, max: number): number => Math.max(0, Math.min(max, value));
 
-// Alineación 'nearest' calculada a mano (respetando scroll-margin — el
-// truco del hero de Home depende de él) sobre CADA ancestro desplazable.
+// Alineación 'nearest' calculada a mano sobre CADA ancestro desplazable,
+// respetando las DOS reglas nativas de holgura: el scroll-margin del
+// elemento (el truco del hero de Home depende de él) y el scroll-padding del
+// contenedor — el colchón que impide que lo enfocado aterrice pegado al
+// borde donde recorta. Sin lo segundo, una parrilla alineaba su fila a ras
+// del clip y el levantamiento del foco (translate) asomaba por fuera: la
+// carátula se veía cortada por arriba.
+
 const glideIntoView = (element: HTMLElement, snappy: boolean): void => {
   const style = getComputedStyle(element);
   const marginTop = parseFloat(style.scrollMarginTop) || 0;
@@ -144,16 +150,23 @@ const glideIntoView = (element: HTMLElement, snappy: boolean): void => {
     let targetTop = glides.get(node)?.targetTop ?? node.scrollTop;
     let targetLeft = glides.get(node)?.targetLeft ?? node.scrollLeft;
 
+    // El colchón del contenedor. 'auto' (el valor inicial) no parsea a
+    // número y cae a 0, que es justo lo que significa: sin colchón.
+    const padTop = parseFloat(overflow.scrollPaddingTop) || 0;
+    const padBottom = parseFloat(overflow.scrollPaddingBottom) || 0;
+    const padLeft = parseFloat(overflow.scrollPaddingLeft) || 0;
+    const padRight = parseFloat(overflow.scrollPaddingRight) || 0;
+
     if (canY) {
-      const top = elementRect.top - containerRect.top - marginTop;
-      const bottom = elementRect.bottom - containerRect.top + marginBottom;
+      const top = elementRect.top - containerRect.top - marginTop - padTop;
+      const bottom = elementRect.bottom - containerRect.top + marginBottom + padBottom;
       if (top < 0) targetTop = node.scrollTop + top;
       else if (bottom > node.clientHeight) targetTop = node.scrollTop + bottom - node.clientHeight;
       targetTop = clampScroll(targetTop, node.scrollHeight - node.clientHeight);
     }
     if (canX) {
-      const left = elementRect.left - containerRect.left - marginLeft;
-      const right = elementRect.right - containerRect.left + marginRight;
+      const left = elementRect.left - containerRect.left - marginLeft - padLeft;
+      const right = elementRect.right - containerRect.left + marginRight + padRight;
       if (left < 0) targetLeft = node.scrollLeft + left;
       else if (right > node.clientWidth) targetLeft = node.scrollLeft + right - node.clientWidth;
       targetLeft = clampScroll(targetLeft, node.scrollWidth - node.clientWidth);

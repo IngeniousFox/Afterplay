@@ -663,14 +663,25 @@ export const TvHome = (): React.JSX.Element => {
                 'linear-gradient(180deg, rgba(11,13,12,.32), transparent 32%, transparent 68%, rgba(11,13,12,.5))',
             }}
           />
-          {/* La luz del estado, y SOLO la luz: un baño ancho del color
-              respirando hacia el contenido. La barra sólida del canto se
-              jubila — la card ya dice su estado tres veces (el chip, este
-              baño y la franja de la carátula); una cuarta era ruido. */}
+          {/* El estado de la tarjeta, dicho DOS veces y no cuatro: el baño
+              ancho de color respirando hacia el contenido, y el filo del
+              canto izquierdo. La franja que llevaba la carátula se jubiló —
+              la que tiene estado es la TARJETA entera, no la portada, y
+              marcar la portada aparte era repetir lo mismo en pequeño. El
+              filo va DENTRO del marco (la card recorta) para que las
+              esquinas redondeadas lo corten limpio. */}
           <div
             aria-hidden
             className="afterplay-tv-glow absolute inset-y-0 left-0 w-[38%]"
             style={{ background: `linear-gradient(90deg, ${heroStatus.color}2e, transparent)` }}
+          />
+          <div
+            aria-hidden
+            className="absolute inset-y-0 left-0 w-[0.28em]"
+            style={{
+              background: `linear-gradient(180deg, ${heroStatus.color}, ${heroStatus.color}b3)`,
+              boxShadow: `0 0 1.4em ${heroStatus.color}66`,
+            }}
           />
 
           <div className="relative flex h-full items-center gap-[1.8em] px-[2.2em] py-[1.6em]">
@@ -697,14 +708,6 @@ export const TvHome = (): React.JSX.Element => {
                   url={hero.coverUrl}
                   className="aspect-[264/374] w-full overflow-hidden rounded-[0.5em] border border-white/20"
                   iconSize={30}
-                />
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 bottom-0 h-[0.2em] rounded-b-[0.5em]"
-                  style={{
-                    background: heroStatus.color,
-                    boxShadow: `0 0 0.9em ${heroStatus.color}aa`,
-                  }}
                 />
               </div>
             </div>

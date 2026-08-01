@@ -404,7 +404,14 @@ export const TvLibrary = (): React.JSX.Element => {
             cada frame: el lag que se notaba al filtrar y al escribir. */}
         <div
           ref={gridRef}
-          className="-mx-[0.6em] flex h-full flex-wrap content-start gap-y-[1.1em] overflow-y-auto px-[0.6em] pt-[0.7em] pb-[1.5em]"
+          // scroll-py: el conductor de scroll respeta scroll-padding, así que
+          // la fila que entra a la vista aterriza SEPARADA del borde donde
+          // recorta este contenedor. Sin ese colchón, el foco levanta la
+          // carátula unos píxeles (translate) y el canto superior asomaba
+          // fuera del clip: la primera fila se veía cortada. Mismo arreglo
+          // que ya lleva el Home, aquí arriba y abajo porque la parrilla se
+          // recorre en las dos direcciones.
+          className="-mx-[0.6em] flex h-full scroll-py-[0.7em] flex-wrap content-start gap-y-[1.1em] overflow-y-auto px-[0.6em] pt-[0.7em] pb-[1.5em]"
           style={{ scrollbarWidth: 'none' }}
         >
           {games.map((game, index) => {
