@@ -67,6 +67,20 @@ export type ChapterCompletion = {
   occurredAt: Date;
 };
 
+// Los OTROS cambios de estado del periodo: empezaste algo, lo aparcaste, lo
+// dejaste, lo pusiste a descansar, lo apuntaste para jugar. Antes solo
+// contaban los 'completed' y el resto no existía para el Loop — y había 48
+// meses cerrados (los de "ese mes empecé tres cosas y no cronometré nada")
+// que no aparecían como generables en ningún sitio, aunque el Journey sí les
+// abría página. Un cambio de estado ES historia: decidir empezar o soltar un
+// juego dice tanto como las horas.
+export type ChapterStateChange = {
+  gameId: number;
+  title: string;
+  type: string;
+  occurredAt: Date;
+};
+
 // Evento de estado con lo mínimo que un capítulo necesita — estructural, para
 // que StateEventSummary (renderer) y las filas del main encajen sin adaptar.
 export type ChapterStateEvent = {
@@ -93,6 +107,9 @@ export type Chapter = {
   games: ChapterGameFacts[];
   dominant: ChapterGameFacts | null;
   completions: ChapterCompletion[];
+  // Los demás cambios de estado del periodo (ver ChapterStateChange), en
+  // orden cronológico. Los 'completed' NO se repiten aquí: ya están arriba.
+  stateChanges: ChapterStateChange[];
   // Los momentos que cayeron dentro del periodo. Se derivan FUERA (sobre la
   // historia completa, ver moments.ts) y aquí solo se filtran: un récord no
   // se puede calcular mirando un mes suelto.
@@ -172,7 +189,27 @@ export const buildChapter = (
       occurredAt: event.occurredAt,
     }));
 
-  if (sessionCount === 0 && completions.length === 0 && manualHours === 0) return null;
+  const stateChanges: ChapterStateChange[] = events
+    .filter((event) => event.type !== 'completed' && inRange(event.occurredAt, start, end))
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
+    .map((event) => ({
+      gameId: event.gameId,
+      title: titleOf(event.gameId),
+      type: event.type,
+      occurredAt: event.occurredAt,
+    }));
+
+  // Un mes en el que SOLO decidiste cosas (empezar, aparcar, soltar) también
+  // tiene capítulo: sin esto era invisible para el Loop y no había forma de
+  // pedirle su historia.
+  if (
+    sessionCount === 0 &&
+    completions.length === 0 &&
+    manualHours === 0 &&
+    stateChanges.length === 0
+  ) {
+    return null;
+  }
 
   const games = [...perGame.values()].sort(
     (a, b) => b.hours - a.hours || b.sessionCount - a.sessionCount || a.gameId - b.gameId,
@@ -190,6 +227,7 @@ export const buildChapter = (
     games,
     dominant: games[0] ?? null,
     completions,
+    stateChanges,
     moments: moments.filter((moment) => inRange(moment.occurredAt, start, end)),
   };
 };
@@ -210,8 +248,11 @@ export const listClosedPeriodsWithActivity = (
     if (!isMeasured(session)) continue;
     activityKeys.add(session.startedAt.getFullYear() * 12 + session.startedAt.getMonth());
   }
+  // CUALQUIER cambio de estado abre mes, no solo los completados: empezar,
+  // aparcar o soltar un juego es historia igual (ver ChapterStateChange), y
+  // es la misma vara que usa el Journey para abrir página — las dos
+  // pantallas tienen que estar de acuerdo en qué meses existen.
   for (const event of events) {
-    if (event.type !== 'completed') continue;
     activityKeys.add(event.occurredAt.getFullYear() * 12 + event.occurredAt.getMonth());
   }
   // Un mes cuyo único contenido son horas manuales también tiene historia
@@ -265,8 +306,31 @@ const localDate = (date: Date): string =>
 //     cambia la historia que se narra.
 //   · Arrays con orden fijo (ya vienen ordenados de buildChapter; aquí se
 //     reordenan por si acaso, que un hash no debe fiarse de nadie).
-export const canonicalChapterFacts = (chapter: Chapter): string => {
+//
+// El parámetro `withStateChanges` existe por COMPATIBILIDAD, no por gusto:
+// las decisiones (empezar/aparcar/soltar) se incorporaron a los hechos
+// después de que ya hubiera recaps escritos, y meterlas en el hash habría
+// marcado obsoletos de golpe todos los recaps anteriores — decenas de
+// regeneraciones que cuestan dinero para reescribir prosa que estaba bien.
+// Con esto, status.ts acepta también la firma ANTIGUA (ver ahí): lo viejo
+// sigue vigente, lo nuevo se sella con la firma completa. La firma sin
+// decisiones queda congelada para siempre — no se toca ni se "mejora".
+export const canonicalChapterFacts = (chapter: Chapter, withStateChanges = true): string => {
   const round = (value: number): number => Math.round(value * 100) / 100;
+
+  const stateChanges = chapter.stateChanges
+    .slice()
+    .sort(
+      (a, b) =>
+        a.occurredAt.getTime() - b.occurredAt.getTime() ||
+        a.gameId - b.gameId ||
+        a.type.localeCompare(b.type),
+    )
+    .map((change) => ({
+      id: change.gameId,
+      type: change.type,
+      on: localDate(change.occurredAt),
+    }));
 
   return JSON.stringify({
     scope: chapter.scopeKey,
@@ -286,6 +350,13 @@ export const canonicalChapterFacts = (chapter: Chapter): string => {
       .slice()
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.gameId - b.gameId)
       .map((completion) => ({ id: completion.gameId, on: localDate(completion.occurredAt) })),
+    // Las decisiones entran en el hash como cualquier otro hecho — salvo
+    // cuando se está reconstruyendo la firma ANTIGUA para comparar con un
+    // recap escrito antes de que existieran (ver la cabecera). La clave va
+    // aquí en medio a propósito: JSON.stringify respeta el orden de
+    // inserción y la firma antigua tiene que salir carácter por carácter
+    // como salía entonces.
+    ...(withStateChanges ? { stateChanges } : {}),
     moments: chapter.moments
       .slice()
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.sessionId - b.sessionId)

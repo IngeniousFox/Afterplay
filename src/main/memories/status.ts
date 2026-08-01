@@ -12,7 +12,7 @@ import { getLatestMemories } from '../db/queries/memories/getLatestMemories';
 import type { MemoryFacts } from '../db/queries/memories/getMemoryFacts';
 import { getMemoryFacts } from '../db/queries/memories/getMemoryFacts';
 import { MODEL, PROMPT_VERSION } from './generate';
-import { chapterHash } from './hash';
+import { chapterHash, legacyChapterHash } from './hash';
 
 // El estado del sistema de recaps: qué periodos cerrados con actividad están
 // al día, cuáles no tienen recap y cuáles quedaron desactualizados. Es la
@@ -94,11 +94,18 @@ export const computeMemoriesOverview = async (
     // Sin capítulo ya no hay hechos que narrar (se borró la actividad): el
     // recap guardado queda como recuerdo y no se cuenta en ningún cubo.
     if (!chapter) continue;
-    if (
-      chapterHash(chapter) === existing.sourceHash &&
-      existing.promptVersion === PROMPT_VERSION &&
-      existing.model === MODEL
-    ) {
+    // Vale CUALQUIERA de las dos firmas: la actual o la anterior a que las
+    // decisiones fueran hechos (ver legacyChapterHash). Sin esto, aquel
+    // cambio habría marcado obsoletos de golpe todos los recaps ya escritos
+    // — decenas de regeneraciones de pago para reescribir prosa correcta.
+    // El precio, dicho claro: mientras un recap viejo siga con su firma
+    // vieja, corregir SOLO una decisión suya no lo marca obsoleto (el resto
+    // de hechos sí). En cuanto se regenera por lo que sea, queda sellado con
+    // la firma nueva y recupera la detección completa.
+    const sealed =
+      chapterHash(chapter) === existing.sourceHash ||
+      legacyChapterHash(chapter) === existing.sourceHash;
+    if (sealed && existing.promptVersion === PROMPT_VERSION && existing.model === MODEL) {
       current++;
     } else {
       stale.push(scope);

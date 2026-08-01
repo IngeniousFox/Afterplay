@@ -35,12 +35,20 @@ export const getPendingCuriositiesGames = async (): Promise<PendingCuriositiesGa
 
 // Contadores para la tarjeta de Ajustes ("212 of 331 games have trivia").
 // `running` lo añade el que llama (es estado del proceso, no de la DB).
+//
+// Los dos cuentan sobre la biblioteca, sin los Plan to Play, porque es la
+// población que la generación de arriba puede tocar: contándolos, los que
+// nunca van a generarse dejaban un pendiente residual que no bajaba de ahí
+// —el botón se quedaba encendido para siempre y no encolaba nada—.
 export const getCuriositiesCounts = async (): Promise<Omit<CuriositiesStatus, 'running'>> => {
   const db = getDb();
-  const [totalRow] = await db.select({ value: count() }).from(gamesTable);
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(gamesTable)
+    .where(eq(gamesTable.planned, false));
   const [generatedRow] = await db
     .select({ value: count() })
     .from(gamesTable)
-    .where(isNotNull(gamesTable.curiositiesGeneratedAt));
+    .where(and(isNotNull(gamesTable.curiositiesGeneratedAt), eq(gamesTable.planned, false)));
   return { totalGames: totalRow?.value ?? 0, generatedGames: generatedRow?.value ?? 0 };
 };

@@ -368,7 +368,6 @@
   animation: afterplay-toast-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
-
 /* ── Modo ambiente ────────────────────────────────────────────────────────
    El salvapantallas que aparece cuando dejas de tocar la app.
 
@@ -488,5 +487,352 @@
   }
   .afterplay-ambient-text {
     animation-name: afterplay-ambient-fade-in;
+  }
+}
+
+/* ── Big Picture (BIG-PICTURE.md §5.7) ─────────────────────────────────────
+   El paso de página del Journey TV: cada página remonta con este deslizado
+   corto — pasar página se siente como pasar página, no como un repintado. */
+@keyframes afterplay-tv-page-in {
+  from {
+    opacity: 0;
+    translate: 2.5rem 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.afterplay-tv-page {
+  animation: afterplay-tv-page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* La entrada escalonada del modo TV: cada bloque aparece con un fundido y
+   una subida corta, en cascada — la pantalla se MONTA delante de ti en vez
+   de aparecer de golpe. Compañera TV del revealClass de escritorio. */
+@keyframes afterplay-tv-reveal-in {
+  from {
+    opacity: 0;
+    translate: 0 1.6em;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.afterplay-tv-reveal {
+  animation: afterplay-tv-reveal-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* El anillo del foco RESPIRA: un halo que late despacio alrededor del
+   elemento enfocado. Es lo que separa "esto está seleccionado" (frío) de
+   "esto te espera" (vivo). Solo opacidad — nada que re-rasterice. */
+@keyframes afterplay-tv-ring-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.afterplay-tv-ring {
+  animation: afterplay-tv-ring-breathe 2.2s ease-in-out infinite;
+}
+
+/* El cursor del OSK parpadea como un cursor DE VERDAD: encendido-apagado
+   seco (corte, no fundido — animate-pulse lo convertía en un brillo que
+   respiraba y no se leía como punto de inserción). */
+@keyframes afterplay-tv-caret-blink {
+  0%,
+  54% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.afterplay-tv-caret {
+  animation: afterplay-tv-caret-blink 1.06s step-end infinite;
+}
+
+/* Ken Burns lento para los heros del modo TV: el arte deriva y respira en
+   vez de quedarse clavado como un póster. Mismo espíritu que el backdrop
+   del modo ambiente. */
+@keyframes afterplay-tv-hero-drift {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.07) translate3d(-1.2%, -1%, 0);
+  }
+}
+
+.afterplay-tv-hero-art {
+  animation: afterplay-tv-hero-drift 24s ease-in-out infinite alternate;
+}
+
+/* Las auroras del fondo: dos manchas de color de la casa (verde y violeta)
+   desenfocadas hasta ser solo luz, derivando MUY despacio detrás de todo.
+   Son las que hacen que ninguna pantalla TV sea un rectángulo negro muerto. */
+@keyframes afterplay-tv-aurora-a {
+  0%,
+  100% {
+    transform: translate3d(-8%, -6%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, 8%, 0) scale(1.15);
+  }
+}
+
+@keyframes afterplay-tv-aurora-b {
+  0%,
+  100% {
+    transform: translate3d(6%, 8%, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-7%, -5%, 0) scale(0.95);
+  }
+}
+
+.afterplay-tv-aurora-a {
+  animation: afterplay-tv-aurora-a 26s ease-in-out infinite;
+}
+
+.afterplay-tv-aurora-b {
+  animation: afterplay-tv-aurora-b 32s ease-in-out infinite;
+}
+
+/* La cortina de entrada a Big Picture: cubre el cambio de modo entero (el
+   fullscreen del SO, el salto de ruta) con la marca respirando en negro, y
+   se disuelve cuando el modo ya está vestido. La salida es la misma cortina
+   en corto. */
+@keyframes afterplay-tv-intro-veil {
+  0%,
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes afterplay-tv-intro-mark {
+  0% {
+    opacity: 0;
+    letter-spacing: 0.34em;
+    filter: blur(6px);
+  }
+  35% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  62% {
+    opacity: 1;
+    letter-spacing: 0.42em;
+  }
+  100% {
+    opacity: 0;
+    letter-spacing: 0.46em;
+    filter: blur(3px);
+  }
+}
+
+@keyframes afterplay-tv-intro-line {
+  0%,
+  28% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  55% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes afterplay-tv-outro-veil {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Cambio de pantalla del modo TV: cada ruta entra con su fundido+subida.
+   Es lo que convierte "navegar" en "moverse por un sitio". */
+@keyframes afterplay-tv-screen-in {
+  from {
+    opacity: 0;
+    translate: 0 1.4em;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.afterplay-tv-screen {
+  animation: afterplay-tv-screen-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* El fondo VIVO del modo TV: el arte del juego que toque, difuminado a
+   pantalla completa, entrando con un fundido largo cada vez que cambia.
+   Deriva despacio para que ni el fondo esté nunca quieto del todo. */
+@keyframes afterplay-tv-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes afterplay-tv-backdrop-drift {
+  from {
+    transform: scale(1.12) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.18) translate3d(-1.5%, -1.2%, 0);
+  }
+}
+
+.afterplay-tv-backdrop {
+  animation:
+    afterplay-tv-backdrop-in 900ms ease-out both,
+    afterplay-tv-backdrop-drift 28s ease-in-out infinite alternate;
+}
+
+/* El barrido de luz sobre la carátula ENFOCADA: una franja clara cruza el
+   arte una vez al recibir el foco — el "aquí" dicho con luz, no con un
+   recuadro. Translate puro: nada que re-rasterice ni se recorte. */
+@keyframes afterplay-tv-sheen {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(230%) skewX(-18deg);
+  }
+}
+
+.afterplay-tv-sheen {
+  animation: afterplay-tv-sheen 850ms cubic-bezier(0.3, 0.6, 0.3, 1) 80ms both;
+}
+
+/* ── La librería de movimiento del modo TV (pasada de belleza) ──────────────
+   Material compartido para todas las pantallas TV: orbes flotantes del
+   fondo, pop de paneles, respiración de brillos, flotación suave y el paso
+   de página en 3D del Journey. Los agentes de sección usan ESTAS clases —
+   los keyframes viven aquí y solo aquí. */
+
+/* (Las rutas CSS de las luciérnagas se jubilaron: el enjambre entero se
+   pinta ahora en un canvas — ver tv/FireflyCanvas.tsx — con deriva
+   paramétrica por luz. Cero capas compuestas, cero blur por elemento.) */
+
+/* Pop de paneles y tarjetas: nace un pelín pequeño y sube — más orgánico
+   que un fade plano. (scale sobre CONTENEDORES, nunca sobre <img> sueltos.) */
+@keyframes afterplay-tv-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+    translate: 0 0.6em;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+  }
+}
+
+.afterplay-tv-pop {
+  animation: afterplay-tv-pop-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Respiración de un brillo (opacidad pura, para halos y acentos). */
+@keyframes afterplay-tv-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.afterplay-tv-glow {
+  animation: afterplay-tv-glow-breathe 2.6s ease-in-out infinite;
+}
+
+/* Flotación sutil para piezas destacadas (la carátula-ficha, iconos vacíos). */
+@keyframes afterplay-tv-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -0.35em;
+  }
+}
+
+.afterplay-tv-float {
+  animation: afterplay-tv-float 5.5s ease-in-out infinite;
+}
+
+/* El paso de página del Journey, en 3D de verdad: la página nueva entra
+   girando levemente desde el canto, como un libro. Perspectiva en el
+   transform del propio contenedor. */
+@keyframes afterplay-tv-page-turn-in {
+  from {
+    opacity: 0;
+    transform: perspective(1400px) rotateY(7deg) translateX(2.4em);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1400px) rotateY(0deg) translateX(0);
+  }
+}
+
+.afterplay-tv-page-turn {
+  transform-origin: left center;
+  animation: afterplay-tv-page-turn-in 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* La cortina de SALIDA del modo: más deliberada que un parpadeo — negro
+   pleno, la marca respira un instante y todo se disuelve ya con el
+   escritorio recolocado debajo. */
+@keyframes afterplay-tv-outro-mark {
+  0% {
+    opacity: 0;
+    letter-spacing: 0.34em;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.85;
+    letter-spacing: 0.4em;
+  }
+  100% {
+    opacity: 0;
+    letter-spacing: 0.44em;
+  }
+}
+
+@keyframes afterplay-tv-outro-veil-full {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }

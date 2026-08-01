@@ -36,6 +36,12 @@ const completed = (gameId: number, occurredAt: string): ChapterStateEvent => ({
   occurredAt: new Date(occurredAt),
 });
 
+const stateChange = (gameId: number, type: string, occurredAt: string): ChapterStateEvent => ({
+  gameId,
+  type,
+  occurredAt: new Date(occurredAt),
+});
+
 const TITLES = new Map([
   [1, 'Hollow Knight'],
   [2, 'Outer Wilds'],
@@ -136,6 +142,44 @@ describe('buildChapter', () => {
     );
     assert.equal(chapter, null);
   });
+
+  it('un mes de solo DECISIONES es historia (empezar y soltar, sin cronómetro)', () => {
+    const chapter = buildChapter(
+      { type: 'month', year: 2026, month: 2 },
+      [],
+      [
+        stateChange(1, 'started', '2026-03-04T20:00'),
+        stateChange(2, 'dropped', '2026-03-19T22:00'),
+      ],
+      TITLES,
+      [],
+      NOW,
+    );
+    assert.ok(chapter);
+    assert.equal(chapter.sessionCount, 0);
+    assert.equal(chapter.completions.length, 0);
+    assert.deepEqual(
+      chapter.stateChanges.map((change) => `${change.type}:${change.title}`),
+      ['started:Hollow Knight', 'dropped:Outer Wilds'],
+    );
+  });
+
+  it('los completados no se duplican como cambio de estado', () => {
+    const chapter = buildChapter(
+      { type: 'month', year: 2026, month: 2 },
+      [],
+      [completed(2, '2026-03-08T10:00'), stateChange(1, 'on_hold', '2026-03-09T10:00')],
+      TITLES,
+      [],
+      NOW,
+    );
+    assert.ok(chapter);
+    assert.equal(chapter.completions.length, 1);
+    assert.deepEqual(
+      chapter.stateChanges.map((change) => change.type),
+      ['on_hold'],
+    );
+  });
 });
 
 describe('listClosedPeriodsWithActivity', () => {
@@ -162,6 +206,24 @@ describe('listClosedPeriodsWithActivity', () => {
     assert.deepEqual(
       months.map((scope) => scopeKeyOf(scope)),
       ['2026-03'],
+    );
+  });
+
+  // La regresión que motivó el cambio: 48 meses cerrados solo tenían
+  // decisiones (empezar/aparcar/soltar) y eran invisibles para el Loop —
+  // el Journey les abría página y Ajustes no los ofrecía jamás.
+  it('un cambio de estado cualquiera también abre mes', () => {
+    const { months } = listClosedPeriodsWithActivity(
+      [],
+      [
+        stateChange(1, 'started', '2026-02-11T20:00'),
+        stateChange(2, 'dropped', '2026-04-02T20:00'),
+      ],
+      NOW,
+    );
+    assert.deepEqual(
+      months.map((scope) => scopeKeyOf(scope)),
+      ['2026-02', '2026-04'],
     );
   });
 });
@@ -192,6 +254,37 @@ describe('canonicalChapterFacts', () => {
     const after = build([{ ...a, durationSec: a.durationSec! + 1800 }]);
     assert.ok(before && after);
     assert.notEqual(canonicalChapterFacts(before), canonicalChapterFacts(after));
+  });
+
+  // La firma ANTIGUA (withStateChanges=false) existe para que los recaps
+  // escritos antes de que las decisiones fueran hechos no aparezcan
+  // obsoletos de golpe — status.ts acepta las dos. Queda congelada: si
+  // alguien la "mejora", cientos de recaps vigentes se marcan obsoletos.
+  it('la firma antigua ignora las decisiones; la nueva no', () => {
+    const withDecisions = buildChapter(
+      { type: 'month', year: 2026, month: 5 },
+      [session(1, '2026-06-05T18:00', 2)],
+      [stateChange(2, 'dropped', '2026-06-09T20:00')],
+      TITLES,
+      [],
+      NOW,
+    );
+    const withoutDecisions = buildChapter(
+      { type: 'month', year: 2026, month: 5 },
+      [session(1, '2026-06-05T18:00', 2)],
+      [],
+      TITLES,
+      [],
+      NOW,
+    );
+    assert.ok(withDecisions && withoutDecisions);
+    // Con la firma vieja, los mismos hechos de siempre dan lo mismo…
+    assert.equal(
+      canonicalChapterFacts(withDecisions, false),
+      canonicalChapterFacts(withoutDecisions, false),
+    );
+    // …y con la nueva, la decisión sí cuenta.
+    assert.notEqual(canonicalChapterFacts(withDecisions), canonicalChapterFacts(withoutDecisions));
   });
 
   it('el ruido flotante de sumar en otro orden no ensucia el hash', () => {
