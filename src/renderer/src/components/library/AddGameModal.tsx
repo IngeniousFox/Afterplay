@@ -41,6 +41,7 @@ import {
   savePromotedGame,
 } from './add-game/handleSave';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
+import { ScanAutofillRow } from './add-game/ScanAutofillRow';
 import { ManualPlaythroughsList } from './add-game/ManualPlaythroughsField';
 import { MoneyAmountField } from './add-game/MoneyAmountField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
@@ -614,6 +615,15 @@ export const AddGameModal = ({
                     className={revealClass}
                     style={revealStyle(3)}
                   >
+                    {/* El atajo primero: si el juego está en una carpeta
+                        vigilada, el escaneo ya sabe su ruta, tamaño y .exe —
+                        un clic rellena los dos campos de abajo. */}
+                    <ScanAutofillRow
+                      title={selected.title}
+                      igdbId={selected.igdbId}
+                      fillExecutable={!isEmulated}
+                    />
+
                     {/* Un juego emulado no tiene .exe propio que vigilar —
                           lo vigilado es el emulador (EMULADORES.md §5). */}
                     {!isEmulated && <ExecutablePathField />}

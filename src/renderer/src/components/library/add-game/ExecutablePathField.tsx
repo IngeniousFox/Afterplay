@@ -5,6 +5,11 @@ import { fieldLabelClass } from './styles';
 // Compartido por Add Game y Edit Game (mismo campo, dos formularios): el
 // tipado solo pide el subconjunto de campos que de verdad toca, así sirve
 // para AddGameFormValues y EditGameFormValues sin castear nada.
+//
+// Aquí no hay botón de "buscar el .exe por mí" a propósito: ese trabajo lo
+// hace el autorrelleno de arriba (ScanAutofillRow), que ya trae carpeta,
+// tamaño y ejecutable con su picker de candidatos — un segundo escáner en
+// este campo enseñaba el mismo resultado dos veces, uno encima del otro.
 export const ExecutablePathField = (): React.JSX.Element => {
   const { control, setValue } = useFormContext<{ executablePath: string }>();
 

@@ -30,6 +30,22 @@ export const useIdle = (
   // el momento en que empieza a contar de verdad.
   const lastActivityRef = useRef(0);
 
+  // RE-HABILITAR ARRANCA DESPIERTO — y tiene que ser SÍNCRONO. El estado
+  // `idle` sobrevive mientras enabled está a false (el efecto de abajo ni
+  // corre), y con solo el `enabled && idle` del return, al volver a true el
+  // hook devolvía el `idle=true` RANCIO de antes de deshabilitarse durante
+  // un render entero — hasta que el primer tick del intervalo (≤1s después)
+  // lo corregía. Un render basta: minimizar con el modo ambiente puesto y
+  // reabrir desde la bandeja enseñaba el salvapantallas entrando un segundo
+  // antes de retirarse. Ajuste durante el render (patrón react.dev, como
+  // AmbientMode.wasIdle), no en un efecto: un efecto pinta primero el
+  // fotograma con el estado viejo, que es justo el fogonazo a matar.
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+  if (wasEnabled !== enabled) {
+    setWasEnabled(enabled);
+    if (enabled && idle) setIdle(false);
+  }
+
   useEffect(() => {
     if (!enabled) return;
     lastActivityRef.current = Date.now();

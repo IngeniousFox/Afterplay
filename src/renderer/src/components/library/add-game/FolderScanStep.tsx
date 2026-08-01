@@ -7,7 +7,6 @@ import {
   FolderSearch,
   HardDrive,
   Loader2,
-  MonitorPlay,
   RefreshCw,
   Search,
   X,
@@ -20,6 +19,7 @@ import { AMBER, BLUE, GREEN } from '../../../lib/colors';
 import { formatBytes } from '../../../lib/format';
 import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
+import { ExecutablePicker } from './ExecutablePicker';
 
 // "hace 3 min" / "hace 2 h" / "ayer". Basta con el trazo gordo: el dato
 // solo está para saber si lo que se ve es de hace un momento o de otro día.
@@ -245,117 +245,8 @@ const useChosenExecutable = (entry: ScanCandidate): [string | null, (path: strin
   return [chosen, setChosen];
 };
 
-const fileName = (path: string): string => path.slice(path.lastIndexOf('\\') + 1);
-
-// El .exe adivinado, y —cuando hay más de un candidato— cuál de ellos.
-// Antes esto era un rótulo muerto que decía "best guess of 2" sin enseñar
-// cuál era el otro ni dejar cambiarlo: la única salida era guardar y editar
-// el juego a mano. Vive FUERA del botón de la ficha porque es otro botón.
-const ExecutablePicker = ({
-  entry,
-  value,
-  onChange,
-}: {
-  entry: ScanCandidate;
-  value: string | null;
-  onChange: (path: string) => void;
-}): React.JSX.Element => {
-  const [open, setOpen] = useState(false);
-  const candidates = entry.executableCandidates;
-
-  if (candidates.length === 0) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2.25">
-        <MonitorPlay size={13} className="flex-none text-muted-foreground/50" />
-        <span className="text-[12px] text-muted-foreground/60">
-          No executable found — set it later if you want the watcher.
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="flex items-center gap-2 px-3 py-2.25">
-        <MonitorPlay size={13} className="flex-none" style={{ color: GREEN }} />
-        <span
-          className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground"
-          title={value ?? undefined}
-        >
-          {value === null ? '—' : fileName(value)}
-        </span>
-
-        {candidates.length > 1 && (
-          <button
-            type="button"
-            onClick={() => setOpen((current) => !current)}
-            className="flex flex-none items-center gap-1 rounded-[7px] border border-input px-2 py-0.75 text-[11px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground"
-          >
-            <ChevronDown
-              size={11}
-              className="transition-transform duration-150"
-              style={open ? undefined : { transform: 'rotate(-90deg)' }}
-            />
-            {candidates.length} found
-          </button>
-        )}
-      </div>
-
-      {open && (
-        <div className={`border-t border-border bg-black/20 px-2 py-2 ${expandClass}`}>
-          <div className="mb-1.5 px-2 text-[10.5px] font-bold tracking-[.12em] text-muted-foreground">
-            WHICH ONE LAUNCHES THE GAME?
-          </div>
-          <div className="flex flex-col gap-1">
-            {candidates.map((candidate, position) => {
-              const active = candidate === value;
-              // Ruta RELATIVA a la carpeta del juego: es lo único que distingue
-              // `Binaries/Win64/X-Shipping.exe` de `X.exe`, que es exactamente
-              // el caso en el que hace falta elegir.
-              const relative = candidate.startsWith(entry.path)
-                ? candidate.slice(entry.path.length + 1)
-                : candidate;
-              const folder = relative.slice(0, relative.length - fileName(relative).length);
-
-              return (
-                <button
-                  key={candidate}
-                  type="button"
-                  onClick={() => {
-                    onChange(candidate);
-                    setOpen(false);
-                  }}
-                  title={candidate}
-                  className={`flex w-full items-center gap-2 rounded-[7px] px-2 py-1.75 text-left transition-colors duration-150 ${
-                    active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.035]'
-                  }`}
-                >
-                  <Check
-                    size={13}
-                    strokeWidth={3}
-                    className="flex-none"
-                    style={{ color: active ? GREEN : 'transparent' }}
-                  />
-                  <span className="min-w-0 flex-1 truncate font-mono text-[12px]">
-                    <span className="text-muted-foreground/45">{folder}</span>
-                    <span className={active ? 'text-foreground' : 'text-muted-foreground'}>
-                      {fileName(relative)}
-                    </span>
-                  </span>
-                  {position === 0 && (
-                    <span className="flex-none rounded-full bg-white/[0.06] px-1.75 py-0.75 text-[10px] font-semibold text-muted-foreground">
-                      best guess
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+// El picker de .exe vive ahora en ExecutablePicker.tsx (compartido con el
+// autorrelleno del formulario) — aquí solo quedan sus dos usos.
 
 // Fila de juego propuesto — el mismo lenguaje visual (y las mismas medidas)
 // que los resultados del buscador normal: carátula 72×100, título+año,
@@ -444,7 +335,12 @@ const CandidateRow = ({
           botón dentro de otro no es ni HTML válido ni clicable sin pelearse
           con el click del padre. */}
       <div className="mx-2 rounded-b-[9px] border border-t-0 border-border bg-white/[0.015]">
-        <ExecutablePicker entry={entry} value={executablePath} onChange={setExecutablePath} />
+        <ExecutablePicker
+          basePath={entry.path}
+          candidates={entry.executableCandidates}
+          value={executablePath}
+          onChange={setExecutablePath}
+        />
 
         {alternatives.length > 0 && (
           <>
@@ -561,7 +457,12 @@ const FixMatchRow = ({
           aquí es lo que hace que arreglar el match a mano no salga perdiendo
           frente a la ficha con propuesta. */}
       <div className="border-t border-border bg-white/[0.015]">
-        <ExecutablePicker entry={entry} value={executablePath} onChange={setExecutablePath} />
+        <ExecutablePicker
+          basePath={entry.path}
+          candidates={entry.executableCandidates}
+          value={executablePath}
+          onChange={setExecutablePath}
+        />
       </div>
 
       {open && (

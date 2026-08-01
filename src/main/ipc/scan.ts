@@ -4,7 +4,7 @@ import { getConfigValue, setConfigValue } from '../config/store';
 import { getSaveGames } from '../db/queries/saves/getSaveGames';
 
 import { getCachedEntries, getLastScanAt } from '../scan/cache';
-import type { ScanReport } from '../scan/contracts';
+import type { ScannedFolder, ScanReport } from '../scan/contracts';
 import { byFolderName } from '../scan/folders';
 import { findInLibrary } from '../scan/folderTitle';
 import { getScanWatcher } from '../scan/watcher';
@@ -75,4 +75,32 @@ export const registerScanHandlers = (): void => {
     await getScanWatcher()?.force();
     return buildReport();
   });
+
+  // El autorrelleno del formulario ("Find in my game folders"): dado el
+  // juego elegido en Add Game, ¿cuál de las carpetas ya escaneadas es la
+  // suya? Se responde ENTERO desde la caché del vigilante — cero disco, cero
+  // IGDB. Dos varas de medir, en orden de confianza:
+  //   1º identidad de catálogo — la carpeta se cruzó con IGDB al escanearla,
+  //      y si alguno de sus matches es EXACTAMENTE este igdbId, es él;
+  //   2º similitud de nombre — la misma maquinaria (findInLibrary: limpiar
+  //      edición/ruido + Dice ≥ 0.82) que ya decide "ya está en la
+  //      biblioteca", aquí con la pregunta del revés.
+  ipcMain.handle(
+    'scan:matchTitle',
+    (_event, query: { title: string; igdbId: number | null }): ScannedFolder | null => {
+      const entries = getCachedEntries(getConfigValue('scanFolders'));
+
+      if (query.igdbId !== null) {
+        const byId = entries.find((entry) =>
+          entry.matches.some((match) => match.igdbId === query.igdbId),
+        );
+        if (byId) return byId.folder;
+      }
+
+      const byName = entries.find(
+        (entry) => findInLibrary([entry.folder.folderName], [query.title]) !== null,
+      );
+      return byName?.folder ?? null;
+    },
+  );
 };

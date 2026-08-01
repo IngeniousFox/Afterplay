@@ -7,6 +7,7 @@ import { useAmbientIdleMinutes } from '../../hooks/settings';
 import { useSpendEvents } from '../../hooks/spend';
 import { useStateEvents } from '../../hooks/stateEvents';
 import { useIdle } from '../../hooks/useIdle';
+import { usePageVisible } from '../../hooks/usePageVisible';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useWindowVisible } from '../../hooks/useWindowVisible';
 import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
@@ -95,6 +96,13 @@ export const AmbientMode = (): React.JSX.Element | null => {
   const candidates = games.filter((game) => game.coverUrl !== null);
   const anyLive = games.some((game) => game.isLive);
   const windowVisible = useWindowVisible();
+  // La señal de pintado de Chromium, además del canal del main: cubre la
+  // ventana TOTALMENTE TAPADA por otras (oclusión nativa de Windows), que
+  // para el main sigue siendo "visible" — y era la rendija por la que el
+  // modo ambiente se encendía "estando la app de fondo". Parcialmente
+  // visible detrás de otra ventana sí sigue entrando: esa es la presencia
+  // buscada; a pantalla completamente invisible, no hay nadie que la vea.
+  const pageVisible = usePageVisible();
 
   // 0 minutos = apagado en Ajustes: ni se monta el temporizador. Tampoco con
   // la ventana oculta — al volver a mostrarla el efecto de useIdle arranca
@@ -102,7 +110,7 @@ export const AmbientMode = (): React.JSX.Element | null => {
   // aparezca "de sopetón" recién reabierta.
   const idle = useIdle(
     idleMinutes * 60,
-    idleMinutes > 0 && !anyLive && candidates.length > 0 && windowVisible,
+    idleMinutes > 0 && !anyLive && candidates.length > 0 && windowVisible && pageVisible,
     isDialogOpen,
   );
 
@@ -122,6 +130,21 @@ export const AmbientMode = (): React.JSX.Element | null => {
     // final de la transición.
     if (idle) setMounted(true);
   }
+
+  // LA RED DE SEGURIDAD del desmontaje. transitionend solo llega si la
+  // transición CORRE, y una ventana oculta no pinta: minimizar con el modo
+  // ambiente puesto dejaba el overlay montado PARA SIEMPRE — invisible
+  // (opacidad 0) pero con el pase de diapositivas girando de fondo,
+  // quemando ciclos con la app en la bandeja. Reproducido con cronología:
+  // idle→false estando oculta ⇒ mounted se quedaba en true tras restaurar.
+  // El temporizador desmonta pase lo que pase, algo después del fundido de
+  // salida (420ms); si transitionend llegó antes, el estado ya está en
+  // false y este set es un no-op.
+  useEffect(() => {
+    if (idle || !mounted) return;
+    const timer = setTimeout(() => setMounted(false), 600);
+    return () => clearTimeout(timer);
+  }, [idle, mounted]);
 
   if (!mounted || candidates.length === 0) return null;
 
