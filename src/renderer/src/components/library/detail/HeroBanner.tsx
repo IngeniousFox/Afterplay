@@ -35,10 +35,13 @@ type HeroBannerProps = {
   onBack: () => void;
   // La ficha de Plan to Play vuelve a /plan, no a la biblioteca.
   backLabel?: string;
-  // Solo la ficha normal de biblioteca lo pasa — la de Plan to Play ya tiene
-  // su propio call-to-action grande ("Add to library" para ESTE juego), un
-  // botón genérico de más aquí sería redundante y confuso ahí.
+  // Alta rápida sin volver a la lista. Las dos fichas lo pasan, pero cada
+  // una da de alta en SU sección: la de biblioteca un juego normal, la de
+  // Plan to Play un planeado (de ahí que el texto no pueda ser fijo — ver
+  // addGameLabel). No choca con el "Add to library" grande de la ficha
+  // planeada: aquel promociona ESTE juego, este añade uno nuevo.
   onAddGame?: () => void;
+  addGameLabel?: string;
 };
 
 // SPEC 10.6/10.7 + prototipo Backlog.html — hero 316px, degradado vertical
@@ -52,6 +55,7 @@ export const HeroBanner = ({
   onBack,
   backLabel = 'Back to library',
   onAddGame,
+  addGameLabel = 'Add game',
 }: HeroBannerProps): React.JSX.Element => {
   const heroSrc = useImageSrc(game.heroUrl, 'heroes');
   // Un juego planeado no tiene estado real (currentState deriva ignorando
@@ -99,7 +103,7 @@ export const HeroBanner = ({
         <div className="absolute top-5 right-6 flex items-center gap-2.5">
           {onAddGame && (
             <HeroGlassButton onClick={onAddGame} icon={Plus}>
-              Add game
+              {addGameLabel}
             </HeroGlassButton>
           )}
 

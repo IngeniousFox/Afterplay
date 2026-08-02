@@ -1,10 +1,10 @@
-import { ChevronDown, Eye, EyeOff, KeyRound, Save } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Eye, EyeOff, KeyRound, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { CredentialsValues } from '../../../../shared/types';
-import { useCredentials, useSetCredentials } from '../../hooks/settings';
+import { useCredentials, useSetCredentials, useSyncFailure } from '../../hooks/settings';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
 import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../lib/styles';
-import { BLUE } from '../../lib/colors';
+import { AMBER, BLUE } from '../../lib/colors';
 
 type CredentialsSectionProps = {
   // Primer arranque sin credenciales de IGDB: la sección nace expandida con
@@ -22,7 +22,7 @@ type FieldKey = keyof CredentialsValues;
 //
 // El nombre del servicio va en la cabecera del grupo, así que las etiquetas
 // de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
-type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2' | 'anthropic';
+type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2' | 'anthropic' | 'steam';
 
 type Service = {
   id: ServiceId;
@@ -93,6 +93,21 @@ const SERVICES: Service[] = [
     fields: [{ key: 'anthropicApiKey', label: 'API KEY' }],
     isReady: (creds) => Boolean(creds.anthropicApiKey),
   },
+  {
+    id: 'steam',
+    label: 'Steam',
+    detail: 'Achievements · optional',
+    where: 'steamcommunity.com/dev/apikey',
+    // El SteamID64 es opcional dentro del opcional: la key sola ya trae el
+    // catálogo de logros de cualquier juego; el ID solo hace falta para leer
+    // TUS desbloqueos de juegos de tu cuenta (y exige perfil con "detalles
+    // de juego" en público). isReady con la key basta.
+    fields: [
+      { key: 'steamApiKey', label: 'API KEY' },
+      { key: 'steamUserId64', label: 'STEAMID64 (FOR YOUR UNLOCKS)' },
+    ],
+    isReady: (creds) => Boolean(creds.steamApiKey),
+  },
 ];
 
 // Derivado de SERVICES y no escrito a mano: con cuatro servicios y nueve
@@ -113,6 +128,7 @@ export const CredentialsSection = ({
   initiallyOpen,
 }: CredentialsSectionProps): React.JSX.Element => {
   const { data: creds } = useCredentials();
+  const { data: syncFailure } = useSyncFailure();
   const setCredentials = useSetCredentials();
 
   const [open, setOpen] = useState(initiallyOpen);
@@ -211,6 +227,38 @@ export const CredentialsSection = ({
           />
         </div>
       </button>
+
+      {/* FUERA del `open`: un sync roto tiene que verse con la sección
+          plegada, que es como está el 99% del tiempo. Antes esto solo salía
+          por consola y un desajuste de esquema estuvo horas fallando cada
+          minuto sin que nada lo dijera. */}
+      {syncFailure && (
+        <div
+          className="mt-2.5 flex items-start gap-2 rounded-[9px] border px-2.75 py-2"
+          style={{ borderColor: `${AMBER}44`, background: `${AMBER}0f` }}
+        >
+          <AlertTriangle size={13} className="mt-0.5 flex-none" style={{ color: AMBER }} />
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold" style={{ color: AMBER }}>
+              {syncFailure.schemaMismatch
+                ? "Cloud sync is stuck — the remote database doesn't match this one"
+                : 'Cloud sync is failing'}
+              {syncFailure.consecutive > 1 && ` · ${syncFailure.consecutive} tries`}
+            </div>
+            <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              {/* Un desajuste de esquema NO se cura reintentando: hay que
+                  aplicar la migración que falta en el remoto. Decirlo evita
+                  esperar en vano a que "ya se arreglará". */}
+              {syncFailure.schemaMismatch
+                ? 'A table or column is missing on Turso, so nothing new is being uploaded. Retrying will not fix it — the pending migration has to be applied there. Your data is safe locally.'
+                : 'Your data is safe locally and will upload once the connection recovers.'}
+            </div>
+            <div className="mt-1 font-mono text-[10px] break-all text-muted-foreground/60">
+              {syncFailure.message}
+            </div>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div className={`mt-3 flex flex-col gap-2.5 border-t border-border pt-3 ${expandClass}`}>

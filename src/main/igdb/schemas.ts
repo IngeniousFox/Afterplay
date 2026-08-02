@@ -28,6 +28,11 @@ export const igdbSearchResponseSchema = z.array(igdbSearchGameSchema);
 export const igdbDetailGameSchema = igdbSearchGameSchema.extend({
   artworks: z.array(imageSchema).optional(),
   screenshots: z.array(imageSchema).optional(),
+  // Identidades del juego en tiendas externas — de aquí sale el appid de
+  // Steam, filtrando por external_game_source (ver el porqué en igdb/api.ts).
+  external_games: z
+    .array(z.object({ uid: z.string(), external_game_source: z.number().optional() }))
+    .optional(),
   involved_companies: z
     .array(
       z.object({
@@ -40,3 +45,16 @@ export const igdbDetailGameSchema = igdbSearchGameSchema.extend({
 });
 
 export const igdbDetailResponseSchema = z.array(igdbDetailGameSchema);
+
+// Respuesta del endpoint external_games para el backfill por lotes: una fila
+// por (juego, tienda), ya filtrada a Steam en la propia query.
+export const igdbExternalGamesResponseSchema = z.array(
+  z.object({ game: z.number(), uid: z.string() }),
+);
+
+// Ediciones de un juego (version_parent apunta al juego base) — el respaldo
+// para encontrar el appid cuando el puerto de PC salió como "Complete
+// Edition" y es la edición, no el juego base, la que lleva el enlace a Steam.
+export const igdbGameVersionsResponseSchema = z.array(
+  z.object({ id: z.number(), version_parent: z.number() }),
+);

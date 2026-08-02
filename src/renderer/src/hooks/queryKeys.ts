@@ -69,10 +69,18 @@ export const queryKeys = {
     all: ['memories'] as const,
     status: ['memories', 'status'] as const,
   },
+  // Logros (LOGROS.md) — misma gramática: `game(id)` y `status` cuelgan del
+  // prefijo para que invalidar achievements.all los refresque de una vez.
+  achievements: {
+    all: ['achievements'] as const,
+    status: ['achievements', 'status'] as const,
+    game: (gameId: number) => ['achievements', 'game', gameId] as const,
+  },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,
     timeFormat: ['settings', 'timeFormat'] as const,
     ambientIdleMinutes: ['settings', 'ambientIdleMinutes'] as const,
     credentials: ['settings', 'credentials'] as const,
+    syncFailure: ['settings', 'syncFailure'] as const,
   },
 };

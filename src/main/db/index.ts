@@ -339,6 +339,35 @@ const attemptSyncUpgrade = async (): Promise<void> => {
 // alarga (el intervalo es de 60s, pero un swap + pull puede tardar).
 let syncCycleRunning = false;
 
+// El último fallo de sync, para que Ajustes pueda ENSEÑARLO. Antes esto solo
+// salía por consola, y ahí murió durante horas un desajuste de esquema entre
+// local y Turso: la app reintentaba cada minuto en silencio, fallando siempre
+// igual, mientras la interfaz decía que todo iba bien.
+export type SyncFailure = {
+  message: string;
+  at: Date;
+  // Un desajuste de ESQUEMA (una tabla o columna que no cuadra con el remoto)
+  // no se arregla reintentando, a diferencia de un corte de red: hay que
+  // aplicar la migración que falta. La UI lo dice con otras palabras.
+  schemaMismatch: boolean;
+  consecutive: number;
+};
+
+let lastSyncFailure: SyncFailure | null = null;
+
+export const getLastSyncFailure = (): SyncFailure | null => lastSyncFailure;
+
+// Firma de los errores del motor cuando el esquema remoto no cuadra: el
+// replicador va por posición de columna, así que un desajuste sale como un
+// tipo que no encaja o una tabla que no existe, nunca como un error de red.
+const SCHEMA_MISMATCH_HINTS = [
+  'type mismatch',
+  'no such table',
+  'no such column',
+  'has no column named',
+  'database tape error',
+];
+
 export const runSyncCycle = async (): Promise<void> => {
   if (syncCycleRunning) return;
   syncCycleRunning = true;
@@ -350,8 +379,22 @@ export const runSyncCycle = async (): Promise<void> => {
     const db = getDb();
     await db.$client.pull();
     await db.$client.push();
+    lastSyncFailure = null;
   } catch (error) {
-    console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
+    const message = error instanceof Error ? error.message : String(error);
+    const lower = message.toLowerCase();
+    lastSyncFailure = {
+      message,
+      at: new Date(),
+      schemaMismatch: SCHEMA_MISMATCH_HINTS.some((hint) => lower.includes(hint)),
+      consecutive: (lastSyncFailure?.consecutive ?? 0) + 1,
+    };
+    // Solo el PRIMERO de una racha va a consola: este ciclo corre cada minuto
+    // y un fallo persistente llenaba el log de la misma línea repetida, que
+    // es justo lo que hace que se deje de leer.
+    if (lastSyncFailure.consecutive === 1) {
+      console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
+    }
   } finally {
     syncCycleRunning = false;
   }

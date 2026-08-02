@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
 import { getConfigValue, setConfigValue } from '../config/store';
-import { getSaveGames } from '../db/queries/saves/getSaveGames';
+import { getOwnedGames } from '../db/queries/games/getOwnedGames';
 
 import { getCachedEntries, getLastScanAt } from '../scan/cache';
 import type { ScannedFolder, ScanReport } from '../scan/contracts';
@@ -25,25 +25,44 @@ const buildReport = async (): Promise<ScanReport> => {
   const roots = getConfigValue('scanFolders');
   const entries = getCachedEntries(roots);
 
-  // Los títulos que ya están en la biblioteca, tal cual: findInLibrary se
-  // encarga de normalizarlos y limpiarlos.
-  const games = await getSaveGames();
-  const libraryTitles = games.map((game) => game.title);
+  // Tu colección entera —biblioteca y plan— de la consulta PROPIA del
+  // escaneo (getOwnedGames, ver su porqué allí). Los títulos van tal cual:
+  // findInLibrary se encarga de normalizarlos y limpiarlos.
+  const owned = await getOwnedGames();
+  const libraryTitles = owned.filter((game) => !game.planned).map((game) => game.title);
+  const planned = owned.filter((game) => game.planned);
+  const plannedTitles = planned.map((game) => game.title);
 
   const candidates = entries
     .map((entry) => {
-      // "Ya está en la biblioteca" se comprueba con el juego propuesto Y con
-      // el nombre de la carpeta, y por SIMILITUD (ver findInLibrary). La
-      // comparación exacta fallaba justo donde más molesta: teniendo
-      // "Horizon Forbidden West" añadido, la carpeta "…Complete Edition"
-      // salía como juego nuevo.
+      // "Ya lo tienes" se comprueba con el juego propuesto Y con el nombre
+      // de la carpeta, y por SIMILITUD (ver findInLibrary). La comparación
+      // exacta fallaba justo donde más molesta: teniendo "Horizon Forbidden
+      // West" añadido, la carpeta "…Complete Edition" salía como juego nuevo.
       const proposed = entry.matches[0];
-      const owned = findInLibrary(
-        [...(proposed ? [proposed.title] : []), entry.folder.folderName],
-        libraryTitles,
-      );
+      const titles = [...(proposed ? [proposed.title] : []), entry.folder.folderName];
+      const inLibrary = findInLibrary(titles, libraryTitles);
 
-      return { ...entry.folder, matches: entry.matches, alreadyInLibrary: owned !== null };
+      // Y contra el plan, con dos varas de medir en orden de confianza:
+      // identidad de catálogo del PROPUESTO (solo del propuesto — que un
+      // planeado aparezca entre las fichas ALTERNATIVAS de una carpeta no
+      // convierte la carpeta en ese juego), y si no, similitud de nombre.
+      //
+      // findInLibrary UNA vez por carpeta, fuera de todo bucle: no es barata
+      // (limpia y compara contra la lista entera, construyendo sus regex al
+      // vuelo) — llamarla por cada juego planeado congelaba el main con un
+      // plan grande. Bug real: la app entera colgada al abrir el escaneo.
+      const plannedTitle = findInLibrary(titles, plannedTitles);
+      const plannedGame =
+        planned.find((game) => game.igdbId === proposed?.igdbId) ??
+        (plannedTitle !== null ? planned.find((game) => game.title === plannedTitle) : undefined);
+
+      return {
+        ...entry.folder,
+        matches: entry.matches,
+        alreadyInLibrary: inLibrary !== null,
+        plannedGameId: plannedGame?.id ?? null,
+      };
     })
     .sort(byFolderName);
 

@@ -20,6 +20,7 @@ import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
 import { cacheImage } from '../images/cache';
 import { openPathResult } from '../lib/openPath';
+import { queueAchievementsRefreshForGame } from '../steam/backfill';
 
 // Fire-and-forget a propósito: crear/editar un juego no debe esperar a que
 // termine de bajar la imagen de un CDN externo, eso haría el guardado lento
@@ -53,6 +54,10 @@ export const registerGamesHandlers = (): void => {
     // Sus curiosidades del modo ambiente, de fondo (mismo espíritu que la
     // caché de imágenes): el guardado no espera a Wikipedia ni a la API.
     generateCuriositiesInBackground(game);
+    // Y sus logros (LOGROS.md): el alta ya trae appid, carpeta y exe, así que
+    // el juego puede tener su catálogo —y sus desbloqueos de emulador— sin
+    // esperar al próximo arranque.
+    void queueAchievementsRefreshForGame(game.id);
     return game;
   });
 
@@ -78,12 +83,25 @@ export const registerGamesHandlers = (): void => {
     const game = await promotePlannedGame(input);
     warmImageCache(game);
     generateCuriositiesInBackground(game);
+    // Pasar de plan a biblioteca es cuando el juego estrena carpeta y exe —
+    // el momento exacto en que su fuente de emuladores empieza a existir.
+    void queueAchievementsRefreshForGame(game.id);
     return game;
   });
 
   handleDb('games:update', async (_event, id: number, patch: UpdateGamePatch) => {
     const game = await updateGame(id, patch);
     if (game) warmImageCache(game);
+
+    // Señalar dónde está instalado un juego es JUSTO lo que le faltaba a la
+    // fuente de emuladores (LOGROS.md §7): sin carpeta no se le puede escribir
+    // el catálogo a Goldberg, y sin ruta del exe no se miran las dos fuentes
+    // que viven junto a él. Encolar aquí evita la espera tonta de "pon la
+    // ruta y reinicia" — solo cuando el patch toca esas dos claves, no en cada
+    // cambio de notas o de carátula.
+    if (game && ('installDirectory' in patch || 'executablePath' in patch)) {
+      void queueAchievementsRefreshForGame(id);
+    }
     return game;
   });
 

@@ -15,6 +15,7 @@ export const getPlannedGames = async (): Promise<GameListItem[]> => {
   const games = await db
     .select({
       id: gamesTable.id,
+      igdbId: gamesTable.igdbId,
       title: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
       heroUrl: gamesTable.heroUrl,
@@ -31,6 +32,7 @@ export const getPlannedGames = async (): Promise<GameListItem[]> => {
 
   return games.map((game) => ({
     id: game.id,
+    igdbId: game.igdbId,
     title: game.title,
     coverUrl: game.coverUrl,
     heroUrl: game.heroUrl,

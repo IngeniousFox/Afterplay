@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AchievementsSection } from '../components/library/detail/AchievementsSection';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { ActionBar } from '../components/library/detail/ActionBar';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
@@ -128,6 +129,12 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
 
             <div className={revealClass} style={revealStyle(5)}>
               <SessionHistoryList sessions={allSessions} gameId={gameId} />
+            </div>
+
+            {/* Logros (LOGROS.md §5) — se pinta sola solo si el juego tiene
+                catálogo traído; en un emulado de consola no aparece nada. */}
+            <div className={revealClass} style={revealStyle(6)}>
+              <AchievementsSection gameId={gameId} />
             </div>
           </div>
 

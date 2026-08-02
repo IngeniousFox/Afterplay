@@ -15,6 +15,9 @@ export type IgdbSearchResult = {
 
 export type IgdbGameDetail = {
   igdbId: number;
+  // Appid de Steam (external_games de IGDB) — null si el juego no está en
+  // Steam. El puente hacia los logros (LOGROS.md).
+  steamAppId: number | null;
   title: string;
   coverUrl: string | null; // cover_big, para detalle/biblioteca
   releaseYear: number | null;

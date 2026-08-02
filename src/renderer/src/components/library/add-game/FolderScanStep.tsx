@@ -20,6 +20,7 @@ import { formatBytes } from '../../../lib/format';
 import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
 import { ExecutablePicker } from './ExecutablePicker';
+import type { OwnedGameMatch } from './SearchStep';
 
 // "hace 3 min" / "hace 2 h" / "ayer". Basta con el trazo gordo: el dato
 // solo está para saber si lo que se ve es de hace un momento o de otro día.
@@ -41,13 +42,27 @@ type FolderScanStepProps = {
   // llevándose lo que el escaneo YA sabe del disco: carpeta, tamaño y .exe.
   // Ese es todo el valor de escanear frente a buscar a mano.
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
+  // Lo mismo para uno que ya estaba en tu plan: no se da de alta, se
+  // promociona — y se lleva igual la carpeta y el .exe encontrados. Sin él
+  // (alta con una sesión pendiente esperando, donde promocionar dejaría la
+  // sesión huérfana) esas filas se marcan pero se apagan.
+  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  // Lo que ya tienes, por igdbId — el mismo mapa que usa el buscador. Aquí
+  // hace falta para las fichas ALTERNATIVAS y para el buscador de las
+  // carpetas sin match, que no pasan por la comprobación del main.
+  ownedByIgdbId: Map<number, OwnedGameMatch>;
 };
 
 // Modo "Scan your folders" de Add Game. La idea: señalas dónde tienes los
 // juegos, se lee UN nivel de subcarpetas (sin recursividad — un nivel es
 // como organiza la gente sus juegos), cada nombre de carpeta se busca en
 // IGDB y tú eliges. No añade nada solo: propone.
-export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React.JSX.Element => {
+export const FolderScanStep = ({
+  onBack,
+  onSelect,
+  onPromotePlanned,
+  ownedByIgdbId,
+}: FolderScanStepProps): React.JSX.Element => {
   const { data: folders = [] } = useScanFolders();
   const setFolders = useSetScanFolders();
   // Los resultados llegan ya hechos: el main los guarda entre cierres y los
@@ -144,7 +159,12 @@ export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React
           juego" — volver a la pantalla de bienvenida tras escanear cero
           carpetas escondía justo la pista que explica el porqué. */}
       {results && (results.length > 0 || report?.scannedAt) && !isRescanning && (
-        <Results results={results} onSelect={onSelect} />
+        <Results
+          results={results}
+          onSelect={onSelect}
+          onPromotePlanned={onPromotePlanned}
+          ownedByIgdbId={ownedByIgdbId}
+        />
       )}
 
       {!isLoading && !isRescanning && !results?.length && !report?.scannedAt && (
@@ -167,23 +187,41 @@ export const FolderScanStep = ({ onBack, onSelect }: FolderScanStepProps): React
   );
 };
 
-// Lo escaneado, repartido en tres montones según lo que puedes hacer con
+// Lo escaneado, repartido en cuatro montones según lo que puedes hacer con
 // cada carpeta — que es lo único que le importa a quien mira esta pantalla:
 //
-//   · reconocida y no la tienes  -> añadir de un clic (arriba, lo útil)
-//   · no se ha reconocido        -> buscarla tú (debajo, con su buscador)
-//   · ya está en la biblioteca   -> nada (al final, plegada)
+//   · estaba en tu plan y la tienes instalada -> pasarla a la biblioteca
+//   · reconocida y no la tienes               -> añadir de un clic
+//   · no se ha reconocido                     -> buscarla tú, con su buscador
+//   · ya está en la biblioteca                -> nada (al final, plegada)
 //
-// El tercer montón podría no enseñarse, pero entonces faltarían carpetas sin
+// El último montón podría no enseñarse, pero entonces faltarían carpetas sin
 // explicación y parecería que el escaneo se las dejó.
+//
+// Los planeados van PRIMEROS: son pocos y son la mejor noticia que este
+// escaneo puede darte — el juego que ya querías jugar resulta que ya lo
+// tienes instalado.
 const Results = ({
   results,
   onSelect,
+  onPromotePlanned,
+  ownedByIgdbId,
 }: {
   results: ScanCandidate[];
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => {
-  const addable = results.filter((entry) => !entry.alreadyInLibrary && entry.matches.length > 0);
+  // Con matches > 0 en los planeados a propósito: la fila se pinta con la
+  // ficha propuesta (carátula, año…), así que sin ninguna no habría qué
+  // enseñar. Los planeados que el main reconoció solo por parecido de nombre
+  // caen a "unmatched", y ahí su buscador los vuelve a marcar por igdbId.
+  const planned = results.filter(
+    (entry) => !entry.alreadyInLibrary && entry.plannedGameId !== null && entry.matches.length > 0,
+  );
+  const addable = results.filter(
+    (entry) => !entry.alreadyInLibrary && entry.plannedGameId === null && entry.matches.length > 0,
+  );
   const unmatched = results.filter(
     (entry) => !entry.alreadyInLibrary && entry.matches.length === 0,
   );
@@ -203,16 +241,41 @@ const Results = ({
         <span className="text-[11px] font-bold tracking-[.11em] text-muted-foreground">
           {addable.length} {addable.length === 1 ? 'GAME' : 'GAMES'} TO ADD
         </span>
-        {unmatched.length > 0 && (
-          <span className="text-[10.5px]" style={{ color: AMBER }}>
-            {unmatched.length} to match by hand
-          </span>
-        )}
+        <span className="flex items-center gap-2.5">
+          {planned.length > 0 && (
+            <span className="text-[10.5px]" style={{ color: BLUE }}>
+              {planned.length} from your plan
+            </span>
+          )}
+          {unmatched.length > 0 && (
+            <span className="text-[10.5px]" style={{ color: AMBER }}>
+              {unmatched.length} to match by hand
+            </span>
+          )}
+        </span>
       </div>
 
       <div className="flex flex-col gap-2">
+        {planned.map((entry, index) => (
+          <CandidateRow
+            key={entry.path}
+            entry={entry}
+            index={index}
+            onSelect={onSelect}
+            onPromotePlanned={onPromotePlanned}
+            ownedByIgdbId={ownedByIgdbId}
+          />
+        ))}
+
         {addable.map((entry, index) => (
-          <CandidateRow key={entry.path} entry={entry} index={index} onSelect={onSelect} />
+          <CandidateRow
+            key={entry.path}
+            entry={entry}
+            index={planned.length + index}
+            onSelect={onSelect}
+            onPromotePlanned={onPromotePlanned}
+            ownedByIgdbId={ownedByIgdbId}
+          />
         ))}
 
         {/* Sin match automático, pero no callejón sin salida: cada una lleva
@@ -220,7 +283,13 @@ const Results = ({
             conserva la carpeta y el .exe encontrados, que es justo lo que se
             perdería yéndose al buscador normal. */}
         {unmatched.map((entry) => (
-          <FixMatchRow key={entry.path} entry={entry} onSelect={onSelect} />
+          <FixMatchRow
+            key={entry.path}
+            entry={entry}
+            onSelect={onSelect}
+            onPromotePlanned={onPromotePlanned}
+            ownedByIgdbId={ownedByIgdbId}
+          />
         ))}
       </div>
 
@@ -256,13 +325,21 @@ const CandidateRow = ({
   entry,
   index,
   onSelect,
+  onPromotePlanned,
+  ownedByIgdbId,
 }: {
   entry: ScanCandidate;
   index: number;
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => {
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [executablePath, setExecutablePath] = useChosenExecutable(entry);
+  const plannedGameId = entry.plannedGameId;
+  // Planeado pero sin sitio al que llevarlo: se marca y se apaga, igual que
+  // en el buscador — darlo de alta reventaría contra el UNIQUE de igdbId.
+  const isLocked = plannedGameId !== null && onPromotePlanned === undefined;
   // El primero es la apuesta (el main los devuelve ordenados por parecido de
   // título) y va grande, con carátula; los demás quedan escondidos tras "otro
   // juego". Enseñarlos todos por igual obligaría a elegir en cada fila, y en
@@ -274,8 +351,20 @@ const CandidateRow = ({
     <div className={revealClass} style={revealStyle(Math.min(index, 6))}>
       <button
         type="button"
-        onClick={() => onSelect(proposed, { ...entry, executablePath })}
-        className="group/result flex w-full items-start gap-3.25 rounded-[11px] border border-border bg-white/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)]"
+        disabled={isLocked}
+        onClick={() =>
+          plannedGameId === null
+            ? onSelect(proposed, { ...entry, executablePath })
+            : onPromotePlanned?.(plannedGameId, { ...entry, executablePath })
+        }
+        className={`group/result flex w-full items-start gap-3.25 rounded-[11px] border bg-white/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+          isLocked
+            ? 'cursor-default border-border opacity-55'
+            : `hover:-translate-y-0.5 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)] ${
+                plannedGameId === null ? 'border-border hover:border-primary/35' : ''
+              }`
+        }`}
+        style={plannedGameId === null || isLocked ? undefined : { borderColor: `${BLUE}55` }}
       >
         <div className="h-25 w-18 flex-none overflow-hidden rounded-[8px] border border-border bg-muted">
           <CoverThumb
@@ -291,6 +380,14 @@ const CandidateRow = ({
             {proposed.releaseYear !== null && (
               <span className="flex-none text-[12px] font-semibold text-muted-foreground/80 tabular-nums">
                 {proposed.releaseYear}
+              </span>
+            )}
+            {plannedGameId !== null && (
+              <span
+                className="flex-none rounded-md px-1.75 py-0.5 text-[10px] font-bold tracking-[.08em]"
+                style={{ background: `${BLUE}22`, color: BLUE }}
+              >
+                IN YOUR PLAN
               </span>
             )}
           </div>
@@ -322,6 +419,17 @@ const CandidateRow = ({
               {formatBytes(entry.sizeBytes)}
             </span>
           </div>
+
+          {/* El escaneo acaba de juntar las dos mitades: lo tenías fichado y
+              resulta que ya está instalado. Se dice explícitamente porque el
+              clic NO hace lo mismo que en las demás filas. */}
+          {plannedGameId !== null && (
+            <p className="mt-1.5 text-[11px] leading-relaxed" style={{ color: BLUE }}>
+              {isLocked
+                ? 'Already in your plan.'
+                : 'Planned and already installed — move it into your library.'}
+            </p>
+          )}
         </div>
 
         <ArrowRight
@@ -392,6 +500,12 @@ const CandidateRow = ({
                 <MatchCardGrid
                   matches={alternatives}
                   onPick={(match) => onSelect(match, { ...entry, executablePath })}
+                  onPickPlanned={
+                    onPromotePlanned
+                      ? (gameId) => onPromotePlanned(gameId, { ...entry, executablePath })
+                      : undefined
+                  }
+                  ownedByIgdbId={ownedByIgdbId}
                 />
               </div>
             )}
@@ -407,9 +521,13 @@ const CandidateRow = ({
 const FixMatchRow = ({
   entry,
   onSelect,
+  onPromotePlanned,
+  ownedByIgdbId,
 }: {
   entry: ScanCandidate;
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => {
   const [open, setOpen] = useState(false);
   // Vacío hasta abrir: useIgdbSearch dispara en cuanto hay texto, y una
@@ -495,6 +613,12 @@ const FixMatchRow = ({
               <MatchCardGrid
                 matches={search.data.slice(0, 8)}
                 onPick={(match) => onSelect(match, { ...entry, executablePath })}
+                onPickPlanned={
+                  onPromotePlanned
+                    ? (gameId) => onPromotePlanned(gameId, { ...entry, executablePath })
+                    : undefined
+                }
+                ownedByIgdbId={ownedByIgdbId}
               />
             ) : null}
           </div>
@@ -512,61 +636,93 @@ const FixMatchRow = ({
 const MatchCardGrid = ({
   matches,
   onPick,
+  onPickPlanned,
+  ownedByIgdbId,
 }: {
   matches: IgdbSearchResult[];
   onPick: (match: IgdbSearchResult) => void;
+  // Elegir aquí uno que ya está en tu plan lo promociona, no lo da de alta.
+  onPickPlanned?: (gameId: number) => void;
+  ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => (
   <div className="grid grid-cols-4 gap-2.5">
-    {matches.map((match, index) => (
-      <button
-        key={match.igdbId}
-        type="button"
-        onClick={() => onPick(match)}
-        className={`group/alt relative overflow-hidden rounded-[10px] border border-border bg-muted text-left outline-none transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_12px_28px_rgba(0,0,0,.5)] focus-visible:border-primary/60 ${revealClass}`}
-        // La proporción EXACTA de cover_big de IGDB (264×374): con aspect-[3/4]
-        // el object-cover recortaba la carátula por los lados — en portadas
-        // con texto (dotAge y sus expansiones) se comía letras enteras.
-        style={{ aspectRatio: '264 / 374', ...revealStyle(Math.min(index, 6)) }}
-      >
-        <CoverThumb
-          url={match.coverUrl}
-          alt=""
-          className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/alt:scale-105"
-        />
+    {matches.map((match, index) => {
+      const owned = ownedByIgdbId.get(match.igdbId);
+      const canPromote = owned?.where === 'plan' && onPickPlanned !== undefined;
+      // Lo que ya está en la biblioteca no tiene segunda alta posible; lo
+      // planeado sin promoción a mano tampoco. En los dos casos se enseña —
+      // esconderlo dejaría un hueco sin explicar en la rejilla.
+      const isLocked = owned !== undefined && !canPromote;
+      return (
+        <button
+          key={match.igdbId}
+          type="button"
+          disabled={isLocked}
+          onClick={() => (owned && canPromote ? onPickPlanned?.(owned.gameId) : onPick(match))}
+          className={`group/alt relative overflow-hidden rounded-[10px] border border-border bg-muted text-left outline-none transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] ${
+            isLocked
+              ? 'cursor-default opacity-45'
+              : 'hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_12px_28px_rgba(0,0,0,.5)] focus-visible:border-primary/60'
+          } ${revealClass}`}
+          // La proporción EXACTA de cover_big de IGDB (264×374): con aspect-[3/4]
+          // el object-cover recortaba la carátula por los lados — en portadas
+          // con texto (dotAge y sus expansiones) se comía letras enteras.
+          style={{ aspectRatio: '264 / 374', ...revealStyle(Math.min(index, 6)) }}
+        >
+          <CoverThumb
+            url={match.coverUrl}
+            alt=""
+            className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/alt:scale-105"
+          />
 
-        {/* El año SOBRE la carátula: entre cinco juegos homónimos es el dato
-            que desempata, y aquí no puede perderse por truncado. */}
-        {match.releaseYear !== null && (
-          <span className="absolute top-1.5 right-1.5 rounded-[6px] bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums shadow-[0_2px_6px_rgba(0,0,0,.4)] backdrop-blur-sm">
-            {match.releaseYear}
-          </span>
-        )}
+          {/* El año SOBRE la carátula: entre cinco juegos homónimos es el dato
+              que desempata, y aquí no puede perderse por truncado. */}
+          {match.releaseYear !== null && (
+            <span className="absolute top-1.5 right-1.5 rounded-[6px] bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums shadow-[0_2px_6px_rgba(0,0,0,.4)] backdrop-blur-sm">
+              {match.releaseYear}
+            </span>
+          )}
 
-        {/* Título como rótulo al pie de la propia carátula, sobre un degradado
-            que SIEMPRE está (no solo al hover): así la card es carátula pura
-            de esquina a esquina y aun así se puede leer qué juego es. */}
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2 pt-5 pb-1.75">
-          <span
-            className="line-clamp-2 text-[10.5px] leading-tight font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]"
-            title={match.title}
-          >
-            {match.title}
-          </span>
-        </span>
+          {/* Ya es tuyo: se dice sobre la propia carátula, que es donde está
+              mirando el ojo al elegir de una rejilla. */}
+          {owned && (
+            <span
+              className="absolute top-1.5 left-1.5 rounded-[6px] px-1.5 py-0.5 text-[9px] font-bold tracking-[.06em] shadow-[0_2px_6px_rgba(0,0,0,.4)] backdrop-blur-sm"
+              style={{ background: 'rgba(8,12,10,.82)', color: owned.color }}
+            >
+              {owned.label}
+            </span>
+          )}
 
-        {/* Al hover, el rótulo cede el sitio a la acción: píldora verde con
-            el mismo acento que el botón principal de la app. */}
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[opacity,background-color] duration-150 group-hover/alt:bg-black/35 group-hover/alt:opacity-100">
-          <span
-            className="flex items-center gap-1.25 rounded-full px-2.75 py-1.25 text-[10.5px] font-bold"
-            style={accentGradientStyle}
-          >
-            <Check size={11} strokeWidth={3} />
-            Use this
+          {/* Título como rótulo al pie de la propia carátula, sobre un degradado
+              que SIEMPRE está (no solo al hover): así la card es carátula pura
+              de esquina a esquina y aun así se puede leer qué juego es. */}
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2 pt-5 pb-1.75">
+            <span
+              className="line-clamp-2 text-[10.5px] leading-tight font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]"
+              title={match.title}
+            >
+              {match.title}
+            </span>
           </span>
-        </span>
-      </button>
-    ))}
+
+          {/* Al hover, el rótulo cede el sitio a la acción: píldora verde con
+              el mismo acento que el botón principal de la app. En los apagados
+              no aparece — no hay acción que ofrecer. */}
+          {!isLocked && (
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[opacity,background-color] duration-150 group-hover/alt:bg-black/35 group-hover/alt:opacity-100">
+              <span
+                className="flex items-center gap-1.25 rounded-full px-2.75 py-1.25 text-[10.5px] font-bold"
+                style={accentGradientStyle}
+              >
+                <Check size={11} strokeWidth={3} />
+                {canPromote ? 'To library' : 'Use this'}
+              </span>
+            </span>
+          )}
+        </button>
+      );
+    })}
   </div>
 );
 

@@ -15,6 +15,27 @@ type SearchStepProps = {
   // planeado (mode='plan') no lo ofrece — ahí no hay nada instalado que
   // escanear todavía.
   onScanFolders?: () => void;
+  // Juegos que YA tienes, por igdbId. El catálogo de IGDB no sabe nada de tu
+  // biblioteca ni de tu plan, así que sin esto salían como un resultado más
+  // y darlos de alta reventaba contra el UNIQUE de igdbId al guardar.
+  ownedByIgdbId: Map<number, OwnedGameMatch>;
+};
+
+// Un juego que ya tienes, tal como lo ven los dos pasos de alta (este y el
+// escaneo). Lo monta el modal, que es quien sabe en qué flujo estamos: aquí
+// no se decide nada, solo se pinta.
+//
+// `hint` y `onPick` son de ESTE paso — el escaneo escribe los suyos, porque
+// desde una carpeta recién encontrada la frase y el destino no son los
+// mismos. Sin onPick la fila se marca pero se apaga: es lo que toca cuando no
+// hay ningún sitio sensato al que llevarte (ya está donde tiene que estar).
+export type OwnedGameMatch = {
+  gameId: number;
+  where: 'plan' | 'library';
+  label: string;
+  color: string;
+  hint: string;
+  onPick?: () => void;
 };
 
 // Cuántos géneros se pintan como chip antes de cortar — con más, la fila se
@@ -49,6 +70,7 @@ export const SearchStep = ({
   results,
   onSelect,
   onScanFolders,
+  ownedByIgdbId,
 }: SearchStepProps): React.JSX.Element => {
   // Índice resaltado por TECLADO — a propósito separado del :hover del ratón
   // (que se queda en CSS puro): si el hover moviera este índice, el
@@ -66,6 +88,18 @@ export const SearchStep = ({
   const trimmed = query.trim();
   const hasResults = results !== undefined && results.length > 0;
 
+  // Un juego que ya tienes no se da de alta otra vez: o lleva a donde ya
+  // vive, o no se puede elegir. Centralizado aquí para que el ratón y el
+  // teclado (Enter) no puedan divergir.
+  const pick = (result: IgdbSearchResult): void => {
+    const owned = ownedByIgdbId.get(result.igdbId);
+    if (owned === undefined) {
+      onSelect(result);
+      return;
+    }
+    owned.onPick?.();
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     if (!results || results.length === 0) return;
     if (event.key === 'ArrowDown') {
@@ -76,7 +110,7 @@ export const SearchStep = ({
       setHighlighted((current) => Math.max(0, current - 1));
     } else if (event.key === 'Enter' && highlighted >= 0) {
       event.preventDefault();
-      onSelect(results[highlighted]);
+      pick(results[highlighted]);
     }
   };
 
@@ -194,19 +228,29 @@ export const SearchStep = ({
           // eso solo ya relanza animate-in, sin necesitar un key de más.
           results?.map((result, index) => {
             const isHighlighted = index === highlighted;
+            const owned = ownedByIgdbId.get(result.igdbId);
+            // Ya es tuyo y no hay sitio al que llevarte: se enseña marcado
+            // pero apagado, en vez de dejar que lo elijas para estrellarte
+            // luego contra el UNIQUE al guardar.
+            const isLocked = owned !== undefined && owned.onPick === undefined;
             return (
               <button
                 key={result.igdbId}
                 type="button"
-                onClick={() => onSelect(result)}
+                disabled={isLocked}
+                onClick={() => pick(result)}
                 // block:'nearest' es idempotente (no hace nada si la fila ya
                 // se ve entera), así que vale con llamarlo al pintar la fila
                 // resaltada — sin efectos ni refs que mantener.
                 ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-                className={`group/result flex items-start gap-3.25 rounded-[11px] border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)] ${
-                  isHighlighted
-                    ? 'border-primary/45 bg-white/[0.06] shadow-[0_8px_20px_rgba(0,0,0,.35)]'
-                    : 'border-border bg-white/[0.02]'
+                className={`group/result flex items-start gap-3.25 rounded-[11px] border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+                  isLocked
+                    ? 'cursor-default border-border bg-white/[0.02] opacity-55'
+                    : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)] ${
+                        isHighlighted
+                          ? 'border-primary/45 bg-white/[0.06] shadow-[0_8px_20px_rgba(0,0,0,.35)]'
+                          : 'border-border bg-white/[0.02]'
+                      }`
                 } ${revealClass}`}
                 style={revealStyle(Math.min(index, 6))}
               >
@@ -227,6 +271,14 @@ export const SearchStep = ({
                         {result.releaseYear}
                       </span>
                     )}
+                    {owned && (
+                      <span
+                        className="flex-none rounded-md px-1.75 py-0.5 text-[10px] font-bold tracking-[.08em]"
+                        style={{ background: `${owned.color}22`, color: owned.color }}
+                      >
+                        {owned.label}
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-1.25 flex flex-wrap items-center gap-1.25">
@@ -245,22 +297,35 @@ export const SearchStep = ({
                     )}
                   </div>
 
-                  {/* El summary ya venía de IGDB y no se pintaba en ninguna
-                      parte — es justo lo que desempata entre dos juegos del
-                      mismo nombre (remakes, colecciones, spin-offs). */}
-                  {result.summary && (
-                    <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground/75">
-                      {result.summary}
+                  {/* Uno que ya tienes dice a dónde lleva en vez de su
+                      sinopsis: lo que hay que decidir aquí ya no es "¿es este
+                      juego?" (eso lo zanja el tenerlo ya) sino qué va a pasar
+                      al pincharlo — que no es dar de alta nada nuevo. */}
+                  {owned ? (
+                    <p
+                      className="mt-1.5 text-[11.5px] leading-relaxed"
+                      style={{ color: owned.color }}
+                    >
+                      {owned.hint}
                     </p>
+                  ) : (
+                    result.summary && (
+                      <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground/75">
+                        {result.summary}
+                      </p>
+                    )
                   )}
                 </div>
 
-                <ArrowRight
-                  size={15}
-                  className={`mt-1 flex-none transition-[transform,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary ${
-                    isHighlighted ? 'translate-x-0.75 text-primary' : 'text-muted-foreground'
-                  }`}
-                />
+                {/* Sin flecha en los apagados: no llevan a ningún sitio. */}
+                {!isLocked && (
+                  <ArrowRight
+                    size={15}
+                    className={`mt-1 flex-none transition-[transform,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary ${
+                      isHighlighted ? 'translate-x-0.75 text-primary' : 'text-muted-foreground'
+                    }`}
+                  />
+                )}
               </button>
             );
           })

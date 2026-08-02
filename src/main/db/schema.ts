@@ -22,6 +22,8 @@ export type Emulator = typeof emulatorsTable.$inferSelect;
 export type SaveBackupRow = typeof saveBackupsTable.$inferSelect;
 export type CuriosityRow = typeof curiositiesTable.$inferSelect;
 export type GeneratedMemoryRow = typeof generatedMemoriesTable.$inferSelect;
+export type AchievementRow = typeof achievementsTable.$inferSelect;
+export type AchievementUnlockRow = typeof achievementUnlocksTable.$inferSelect;
 
 // Formas de INSERT ($inferInsert): distintas de las de SELECT — aquí id y las
 // columnas con default son opcionales. Son la base de los inputs de los
@@ -35,6 +37,8 @@ export type NewEmulator = typeof emulatorsTable.$inferInsert;
 export type NewSaveBackup = typeof saveBackupsTable.$inferInsert;
 export type NewCuriosity = typeof curiositiesTable.$inferInsert;
 export type NewGeneratedMemory = typeof generatedMemoriesTable.$inferInsert;
+export type NewAchievement = typeof achievementsTable.$inferInsert;
+export type NewAchievementUnlock = typeof achievementUnlocksTable.$inferInsert;
 
 export const gamesTable = sqliteTable('games', {
   id: int().primaryKey({ autoIncrement: true }),
@@ -99,6 +103,28 @@ export const gamesTable = sqliteTable('games', {
   // curiosidades — "una llamada por juego en la vida" incluye ese caso: mejor
   // un juego callado que repagarle la pregunta a la API en cada backfill.
   curiositiesGeneratedAt: int({ mode: 'timestamp_ms' }),
+  // ── Logros (LOGROS.md) ───────────────────────────────────────────────────
+  // El appid de Steam de este juego — el puente hacia todo el mundo Steam:
+  // el schema de logros, tus desbloqueos por API, los ficheros de los
+  // emuladores de Steam. Sale de IGDB (external_games) al crear el juego y
+  // de un backfill para los que ya existían; null = no está en Steam (juegos
+  // de consola emulados, por ejemplo). Sin UNIQUE a propósito: dos fichas de
+  // IGDB (juego y edición) pueden apuntar al mismo appid.
+  steamAppId: int(),
+  // Cuándo se le preguntó a IGDB por el appid, haya salido o no — misma
+  // convención que curiositiesGeneratedAt: null = pendiente (el backfill lo
+  // reintentará), con fecha = preguntado, aunque la respuesta fuera "no está
+  // en Steam". Sin esto, los ~cientos de juegos sin appid se repreguntarían
+  // en cada arranque.
+  steamAppIdCheckedAt: int({ mode: 'timestamp_ms' }),
+  // Cuándo se trajo por última vez el CATÁLOGO de logros de este juego (los
+  // que existen, no los tuyos). Misma convención: se marca aunque el juego no
+  // tenga ninguno — hay juegos en Steam sin logros, y eso es una respuesta.
+  achievementsSyncedAt: int({ mode: 'timestamp_ms' }),
+  // Y cuándo se leyeron TUS desbloqueos de la API de Steam. Separado del
+  // anterior a propósito: el catálogo no cambia casi nunca (se pide una vez),
+  // pero tus desbloqueos cambian cada vez que juegas.
+  achievementsUnlocksSyncedAt: int({ mode: 'timestamp_ms' }),
 });
 
 export const sessionsTable = sqliteTable('sessions', {
@@ -247,6 +273,88 @@ export const curiositiesTable = sqliteTable('curiosities', {
     .references(() => gamesTable.id, { onDelete: 'cascade' }),
   text: text().notNull(),
 });
+
+// ── Logros (LOGROS.md) ─────────────────────────────────────────────────────
+// El CATÁLOGO: qué logros existen en un juego. Sale del schema público de
+// Steam (GetSchemaForGame), que responde para CUALQUIER appid tengas el juego
+// o no — así que esto se rellena igual en un juego comprado, uno pirata o uno
+// que solo tienes planeado. Es información del juego, no tuya.
+export const achievementsTable = sqliteTable(
+  'achievements',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    gameId: int()
+      .notNull()
+      .references(() => gamesTable.id, { onDelete: 'cascade' }),
+    // El nombre INTERNO del logro ("DREAM_FK"), no el visible. Es la clave
+    // con la que hablan todas las fuentes: la API de Steam y los ficheros de
+    // los emuladores de Steam usan este mismo identificador.
+    apiName: text().notNull(),
+    displayName: text().notNull(),
+    // Ausente en los logros ocultos — Steam no manda la descripción hasta
+    // que lo desbloqueas, y eso es parte de la gracia.
+    description: text(),
+    iconUrl: text(),
+    iconGrayUrl: text(),
+    hidden: int({ mode: 'boolean' }).notNull().default(false),
+    // Porcentaje global de jugadores que lo tienen (rareza real, medida por
+    // Steam). Null si no se pudo traer. Es lo que separa "lo tiene todo el
+    // mundo" de "esto lo tiene el 2%".
+    globalPercent: real(),
+    // El orden en el que Steam los devuelve — el mismo que ves en su web.
+    sortIndex: int().notNull(),
+  },
+  // Un logro por (juego, nombre interno): resincronizar hace UPSERT sobre
+  // esta clave en vez de duplicar el catálogo entero, igual que los recaps.
+  (table) => [uniqueIndex('achievements_game_api_unique').on(table.gameId, table.apiName)],
+);
+
+// Y los DESBLOQUEOS: cuáles has sacado tú, cuándo, y por dónde nos enteramos.
+//
+// Diseño clave (LOGROS.md §2): un desbloqueo es un HECHO CON ORIGEN, no un
+// booleano. El mismo logro puede constar por Steam y por el fichero de un
+// emulador de Steam — jugaste una vuelta pirata y luego lo compraste — y las
+// dos cosas son ciertas a la vez. Se guardan por separado y la ficha los
+// funde al leer, quedándose con la fecha más temprana como "la primera vez
+// que lo hiciste". Así ninguna fuente pisa a la otra ni hay que elegir.
+export const achievementUnlocksTable = sqliteTable(
+  'achievement_unlocks',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    achievementId: int()
+      .notNull()
+      .references(() => achievementsTable.id, { onDelete: 'cascade' }),
+    unlockedAt: int({ mode: 'timestamp_ms' }).notNull(),
+    // ¿Se puede tratar esta fecha como un MOMENTO real?
+    //
+    // Casi siempre sí. Pero hay un caso que la falsea en bloque, y pasó de
+    // verdad: al darle a Goldberg el catálogo que le faltaba, el juego volvió
+    // a reportar los 25 logros que ya tenías guardados en su partida, y el
+    // emulador los selló todos con el segundo exacto en que los recibió. No
+    // se perdieron —aparecieron, que es la buena noticia— pero su fecha es la
+    // del rescate, no la de la hazaña.
+    //
+    // Marcarlos evita que el Journey y los recaps cuenten que una tarde
+    // hiciste veinticinco logros de James Bond en el mismo segundo. Sigue
+    // siendo cierto que los tienes; lo que no se sabe es cuándo.
+    dateReliable: int({ mode: 'boolean' }).notNull().default(true),
+    source: text({ enum: ['steam', 'emu'] }).notNull(),
+    // El playthrough y la sesión en los que caiste — se resuelven cruzando la
+    // fecha del desbloqueo con tus sesiones (ver steam/matchSessions.ts).
+    // Nullables porque un logro puede caer fuera de toda sesión trackeada
+    // (lo sacaste antes de usar Afterplay, o jugando sin que la app mirara):
+    // el desbloqueo sigue siendo cierto aunque no sepamos a qué rato pegarlo.
+    // SET NULL y no CASCADE: borrar una sesión no puede borrar el hecho de
+    // que sacaste el logro.
+    iterationId: int().references(() => iterationsTable.id, { onDelete: 'set null' }),
+    sessionId: int().references(() => sessionsTable.id, { onDelete: 'set null' }),
+  },
+  // Un desbloqueo por (logro, fuente): resincronizar con Steam actualiza la
+  // fila en vez de acumular una nueva en cada pasada.
+  (table) => [
+    uniqueIndex('achievement_unlocks_source_unique').on(table.achievementId, table.source),
+  ],
+);
 
 // Recaps del Loop (AFTERPLAY-LOOP.md §3.1): la prosa generada de cada periodo
 // cerrado — el texto de un mes o un año de tu vida jugando, escrito por

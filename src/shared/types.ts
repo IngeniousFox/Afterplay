@@ -217,6 +217,10 @@ export type { ImageCacheType } from '../main/images/cache';
 
 export type GameListItem = {
   id: number;
+  // Identidad en el catálogo de IGDB — aquí para que el buscador de Add Game
+  // reconozca qué resultados ya están en tu Plan to play y te lleve a
+  // promocionarlos en vez de darlos de alta por segunda vez.
+  igdbId: number;
   title: string;
   coverUrl: string | null;
   // Para la cara trasera de la card de la biblioteca (flip al pasar el
@@ -293,6 +297,13 @@ export type CredentialsValues = {
   // Anthropic para las curiosidades de juegos del modo ambiente — una llamada
   // por juego EN LA VIDA (quedan guardadas en la DB y sincronizan por Turso).
   anthropicApiKey: string | null;
+  // Steam Web API para los logros (LOGROS.md): la key trae el catálogo de
+  // logros de CUALQUIER juego (tenerlo o no); el SteamID64 hace falta solo
+  // para leer TUS desbloqueos en los juegos de tu cuenta — y la API respeta
+  // la privacidad del perfil: los "detalles de juego" tienen que ser
+  // públicos, la key no se lo salta.
+  steamApiKey: string | null;
+  steamUserId64: string | null;
 };
 
 // ── Curiosidades de juego (modo ambiente) ──────────────────────────────────
@@ -325,6 +336,88 @@ export type CuriosityActivityEvent =
       currentTitle: string | null;
     }
   | { kind: 'generated'; gameId: number };
+
+// ── Logros (LOGROS.md) ─────────────────────────────────────────────────────
+// El catálogo de un juego más TUS desbloqueos, ya fundidos por la query de
+// lectura: la ficha no tiene que saber si un logro llegó por la API de Steam
+// o por el fichero de un emulador.
+
+// De dónde nos consta el desbloqueo. Un mismo logro puede constar por las
+// dos: jugaste una vuelta pirata y luego lo compraste en Steam.
+export type AchievementSource = 'steam' | 'emu';
+
+export type AchievementEntry = {
+  id: number;
+  apiName: string;
+  displayName: string;
+  // null en los ocultos que aún no has desbloqueado — Steam guarda el
+  // secreto y nosotros también.
+  description: string | null;
+  iconUrl: string | null;
+  iconGrayUrl: string | null;
+  hidden: boolean;
+  // % de jugadores que lo tienen (rareza real de Steam). Null si no consta.
+  globalPercent: number | null;
+  // null = no lo tienes. Con fecha = la MÁS TEMPRANA de todas las fuentes:
+  // "la primera vez que lo hiciste".
+  unlockedAt: Date | null;
+  // false cuando la fecha es la del rescate y no la de la hazaña — pasa
+  // cuando un juego re-reporta su historial entero de golpe (ver
+  // dateReliable en db/schema.ts). Lo tienes; no se sabe cuándo.
+  dateReliable: boolean;
+  sources: AchievementSource[];
+  // El rato en el que caiste, si se pudo cruzar con tus sesiones. Null es
+  // normal y honesto: lo sacaste antes de usar Afterplay, o en otro PC.
+  sessionId: number | null;
+  iterationId: number | null;
+};
+
+export type GameAchievements = {
+  gameId: number;
+  // null si el juego no está en Steam (no hay de dónde sacarlos).
+  steamAppId: number | null;
+  // Cuándo se trajo el catálogo y cuándo tus desbloqueos. Null = nunca.
+  syncedAt: Date | null;
+  unlocksSyncedAt: Date | null;
+  entries: AchievementEntry[];
+};
+
+// Estado de la pasada de logros para la tarjeta de Ajustes.
+export type AchievementsStatus = {
+  // Juegos con appid de Steam — los únicos que pueden tener logros.
+  eligibleGames: number;
+  syncedGames: number;
+  totalAchievements: number;
+  unlockedAchievements: number;
+  running: boolean;
+  // Sin esto no se puede ni empezar; sin steamUserId hay catálogo pero no
+  // desbloqueos tuyos.
+  hasApiKey: boolean;
+  hasUserId: boolean;
+  // Juegos que fallaron en la última pasada y se pueden reintentar solos, sin
+  // repetir las 300 y pico.
+  failedGames: number;
+};
+
+// Último fallo de sincronización con Turso, para enseñarlo en Ajustes. Un
+// desajuste de esquema no se cura reintentando, así que se distingue.
+export type SyncFailureInfo = {
+  message: string;
+  at: Date;
+  schemaMismatch: boolean;
+  consecutive: number;
+};
+
+export type AchievementActivityEvent =
+  | {
+      kind: 'progress';
+      running: boolean;
+      done: number;
+      total: number;
+      failed: number;
+      currentTitle: string | null;
+    }
+  | { kind: 'synced'; gameId: number; catalogCount: number; unlockedCount: number };
 
 // ── Recaps del Loop (AFTERPLAY-LOOP.md §3) ────────────────────────────────
 // La prosa de cada periodo cerrado, generada una vez y leída en el Journey y

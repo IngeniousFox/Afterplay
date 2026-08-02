@@ -28,6 +28,8 @@ const ENV_BY_KEY: Record<keyof CredentialsValues, string> = {
   r2AccessKeyId: 'R2_ACCESS_KEY_ID',
   r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
   anthropicApiKey: 'ANTHROPIC_API_KEY',
+  steamApiKey: 'STEAM_API_KEY',
+  steamUserId64: 'STEAM_USER_ID64',
 };
 
 const CREDENTIAL_KEYS = Object.keys(ENV_BY_KEY) as (keyof CredentialsValues)[];

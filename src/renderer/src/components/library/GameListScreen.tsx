@@ -20,6 +20,10 @@ type GameListScreenProps = {
   // Modo del AddGameModal — 'plan' para Plan to Play, sin especificar
   // (default 'library') para la biblioteca normal.
   modalMode?: 'library' | 'plan';
+  // Texto del botón de alta. Por defecto "Add game" (biblioteca); Plan to
+  // Play dice lo suyo, porque desde ahí NO se añade a la biblioteca — dos
+  // botones idénticos que hacen cosas distintas es justo lo que confunde.
+  addLabel?: string;
   // Clave de memoria de scroll — entrar al detalle de un juego y volver
   // restaura el punto exacto de la lista (ver useScrollMemory). Distinta por
   // pantalla para que Library y Plan no se pisen la posición.
@@ -50,6 +54,7 @@ export const GameListScreen = ({
   isLoading,
   isError,
   modalMode,
+  addLabel = 'Add game',
   scrollKey,
   onSelectGame,
 }: GameListScreenProps): React.JSX.Element => {
@@ -90,17 +95,22 @@ export const GameListScreen = ({
           style={{ background: accentGradientStyle.background }}
         >
           <Plus size={16} />
-          Add game
+          {addLabel}
         </Button>
       </div>
 
       {/* onCreated = onSelectGame: el juego recién añadido queda
-          seleccionado (su ficha abierta) en vez de volver a la lista. */}
+          seleccionado (su ficha abierta) en vez de volver a la lista. Y lo
+          mismo para uno que ya tenías y buscaste sin acordarte: en vez de
+          dejarte darlo de alta dos veces, te lleva a su ficha. El modal solo
+          usa onOpenExisting en el alta de biblioteca, así que a Plan to Play
+          (donde onSelectGame va a /plan/:id) no le afecta. */}
       <AddGameModal
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         mode={modalMode}
         onCreated={onSelectGame}
+        onOpenExisting={onSelectGame}
       />
 
       {isLoading ? (

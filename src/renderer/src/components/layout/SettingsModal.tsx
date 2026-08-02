@@ -13,6 +13,7 @@ import { BackupSection } from './BackupSection';
 import { CredentialsSection } from './CredentialsSection';
 import { EmulatorsSection } from './EmulatorsSection';
 import { GameFoldersSection } from './GameFoldersSection';
+import { AchievementsSettingsSection } from './AchievementsSettingsSection';
 import { MemoriesSection } from './MemoriesSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
@@ -95,6 +96,8 @@ export const SettingsModal = ({
       <TriviaSection />
 
       <MemoriesSection />
+
+      <AchievementsSettingsSection />
 
       <BackupSection />
 

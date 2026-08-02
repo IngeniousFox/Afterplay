@@ -1,6 +1,6 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CredentialsValues, TimeFormat } from '../../../shared/types';
+import type { CredentialsValues, SyncFailureInfo, TimeFormat } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 // Ajustes del sistema operativo (arrancar con Windows, formato de hora) que
@@ -68,6 +68,17 @@ export const useSetAmbientIdleMinutes = (): UseMutationResult<void, Error, numbe
     (minutes: number) => window.api.settings.setAmbientIdleMinutes(minutes),
     queryKeys.settings.ambientIdleMinutes,
   );
+
+// Estado del sync con Turso. A diferencia del resto de esta familia SÍ se
+// refresca sola cada medio minuto: es lo único de Ajustes que cambia por su
+// cuenta (el ciclo de sync corre en el main cada 60s) y la gracia es
+// enterarse de un fallo persistente sin tener que reabrir nada.
+export const useSyncFailure = (): UseQueryResult<SyncFailureInfo | null, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.syncFailure,
+    queryFn: () => window.api.settings.getSyncFailure(),
+    refetchInterval: 30_000,
+  });
 
 // Credenciales de servicios externos (ver main/config/credentials.ts) —
 // deciden qué funciona (búsqueda IGDB, carátulas SGDB, sync Turso) y guían

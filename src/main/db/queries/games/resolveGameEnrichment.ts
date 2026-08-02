@@ -34,6 +34,12 @@ export type GameEnrichment = {
   hltbMain: number | null;
   hltbMainExtras: number | null;
   hltbCompletionist: number | null;
+  // Appid de Steam + su marca de "ya preguntado" (LOGROS.md). Van juntos en
+  // el enrichment porque salen de la MISMA respuesta de IGDB que el resto:
+  // un juego dado de alta nace ya comprobado, y el backfill de arranque no
+  // tiene que volver a preguntar por él.
+  steamAppId: number | null;
+  steamAppIdCheckedAt: Date;
 };
 
 export const resolveGameEnrichment = async (
@@ -73,5 +79,7 @@ export const resolveGameEnrichment = async (
     hltbMain: hltb?.hltbMain ?? null,
     hltbMainExtras: hltb?.hltbMainExtras ?? null,
     hltbCompletionist: hltb?.hltbCompletionist ?? null,
+    steamAppId: detail.steamAppId,
+    steamAppIdCheckedAt: new Date(),
   };
 };
