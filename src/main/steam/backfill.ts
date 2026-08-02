@@ -99,7 +99,14 @@ export const runEmuUnlocksSweep = async (): Promise<void> => {
 // justo cuando pueden haber cambiado. Encola la sync completa (Steam + emu)
 // por la misma cola de siempre — si el juego no está en Steam, no hay appid y
 // no hay nada que hacer.
-export const queueAchievementsRefreshForGame = async (gameId: number): Promise<void> => {
+//
+// notify=false para las altas: dar de alta un juego que ya jugaste haría
+// saltar el aviso flotante por logros de hace años, que es justo lo que la
+// pasada masiva evita. Solo avisa lo que acaba de pasar.
+export const queueAchievementsRefreshForGame = async (
+  gameId: number,
+  { notify = true }: { notify?: boolean } = {},
+): Promise<void> => {
   if (!hasSteamKey()) return;
 
   try {
@@ -111,6 +118,7 @@ export const queueAchievementsRefreshForGame = async (gameId: number): Promise<v
           steamAppId: gamesTable.steamAppId,
           executablePath: gamesTable.executablePath,
           installDirectory: gamesTable.installDirectory,
+          heroUrl: gamesTable.heroUrl,
         })
         .from(gamesTable)
         .where(and(eq(gamesTable.id, gameId), isNotNull(gamesTable.steamAppId)))
@@ -125,9 +133,8 @@ export const queueAchievementsRefreshForGame = async (gameId: number): Promise<v
         steamAppId: game.steamAppId,
         executablePath: game.executablePath,
         installDirectory: game.installDirectory,
-        // Este SÍ avisa en pantalla: viene de cerrar el juego o de tocarle la
-        // ruta, o sea de algo que acabas de hacer tú.
-        notify: true,
+        heroUrl: game.heroUrl,
+        notify,
       },
     ]);
   } catch (error) {

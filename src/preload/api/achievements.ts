@@ -16,6 +16,10 @@ export const achievementsApi = {
   stop: (): Promise<void> => ipcRenderer.invoke('achievements:stop'),
   // Reintenta solo los juegos que fallaron; devuelve cuántos se encolaron.
   retryFailed: (): Promise<number> => ipcRenderer.invoke('achievements:retryFailed'),
+  // ⚠️ TEMPORAL — enciende/apaga el modo de prueba del aviso flotante y
+  // devuelve si quedó encendido. Quitar con su botón cuando el diseño esté
+  // cerrado (ver main/steam/notifications/overlay.ts).
+  toggleDemo: (): Promise<boolean> => ipcRenderer.invoke('achievements:toggleDemo'),
   replacePlacements: (gameId: number): Promise<number> =>
     ipcRenderer.invoke('achievements:replacePlacements', gameId),
   // Mismo contrato que curiosities.onActivity: devuelve la función de

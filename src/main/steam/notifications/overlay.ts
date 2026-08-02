@@ -31,6 +31,9 @@ export type AchievementToast = {
   iconUrl: string | null;
   globalPercent: number | null;
   gameTitle: string;
+  // Hero del juego, de fondo tras el velo — el mismo recurso que usa el aviso
+  // de sesión cerrada, para que los dos avisos hablen el mismo idioma.
+  gameHeroUrl: string | null;
 };
 
 const GREEN = '#2fdc7e';
@@ -68,10 +71,13 @@ const accentFor = (percent: number | null): string => {
 // afterplay-image:// ni al CDN de Steam. Convertirlo aquí deja la ventana
 // sin ninguna dependencia externa — y el fichero ya está en la caché de
 // imágenes, así que es leer del disco.
-const toDataUri = async (url: string | null): Promise<string | null> => {
+const toDataUri = async (
+  url: string | null,
+  type: 'achievements' | 'heroes' = 'achievements',
+): Promise<string | null> => {
   if (!url) return null;
   try {
-    const localPath = await cacheImage(url, 'achievements');
+    const localPath = await cacheImage(url, type);
     const buffer = await readFile(localPath);
     const ext = extname(localPath).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
@@ -109,8 +115,20 @@ const ensureWindow = async (): Promise<BrowserWindow> => {
     focusable: false,
     skipTaskbar: true,
     hasShadow: false,
-    webPreferences: { sandbox: false },
+    webPreferences: {
+      sandbox: false,
+      // CLAVE para que el sonido suene con un juego en primer plano. Por
+      // defecto Chromium estrangula timers y audio de las ventanas que
+      // considera de fondo — y esta lo está SIEMPRE por definición: nunca
+      // tiene el foco (focusable:false) y encima suele haber un juego a
+      // pantalla completa delante. Sin esto, el aviso se veía pero no sonaba
+      // justo en el único momento en el que importa: mientras juegas.
+      backgroundThrottling: false,
+    },
   });
+
+  // Y que nada de fuera pueda silenciarla por error.
+  created.webContents.setAudioMuted(false);
 
   created.setIgnoreMouseEvents(true);
   created.setAlwaysOnTop(true, 'screen-saver', 1);
@@ -180,7 +198,9 @@ const drain = async (): Promise<void> => {
           token: `c${Date.now()}`,
           title: `${batch.length} achievements unlocked`,
           subtitle: game,
+          gameTitle: game,
           iconDataUri: await toDataUri(batch[0].iconUrl),
+          heroDataUri: await toDataUri(batch[0].gameHeroUrl, 'heroes'),
           accent: GREEN,
           rarity: null,
           durationMs: COMBINED_MS,
@@ -195,7 +215,9 @@ const drain = async (): Promise<void> => {
           token: `s${Date.now()}-${toast.displayName}`,
           title: toast.displayName,
           subtitle: 'Achievement unlocked',
+          gameTitle: toast.gameTitle,
           iconDataUri: await toDataUri(toast.iconUrl),
+          heroDataUri: await toDataUri(toast.gameHeroUrl, 'heroes'),
           accent,
           rarity:
             toast.globalPercent !== null && toast.globalPercent < RARE
@@ -231,7 +253,51 @@ export const enqueueAchievementToasts = (toasts: AchievementToast[]): void => {
   }, 400);
 };
 
+// ⚠️ TEMPORAL — modo de prueba del aviso (quitar esto, su handler IPC, su
+// método de preload/hook y el botón de Ajustes cuando el diseño esté fijado).
+//
+// Va y viene enseñando tarjetas de tu propia biblioteca cada pocos segundos,
+// para poder mirar la ventana en distintos momentos de su animación y con
+// contenidos distintos —logro común, raro, ultra raro, combinado— sin tener
+// que ponerse a jugar y desbloquear cosas de verdad.
+let demoTimer: ReturnType<typeof setTimeout> | null = null;
+
+export const isAchievementDemoRunning = (): boolean => demoTimer !== null;
+
+export const stopAchievementDemo = (): void => {
+  if (demoTimer) clearTimeout(demoTimer);
+  demoTimer = null;
+};
+
+// Enseña una tarjeta al azar y se reprograma. Recibe los candidatos ya
+// resueltos (los pide el handler IPC a la DB) para que este módulo siga sin
+// saber nada de tablas.
+export const startAchievementDemo = (pool: AchievementToast[]): void => {
+  stopAchievementDemo();
+  if (pool.length === 0) return;
+
+  const tick = (): void => {
+    // Una de cada cinco veces, una tanda para ver el aviso COMBINADO — que
+    // es el que más cuesta pillar en la vida real.
+    const roll = Math.random();
+    const count = roll < 0.2 ? Math.min(pool.length, 4 + Math.floor(Math.random() * 20)) : 1;
+
+    const picked: AchievementToast[] = [];
+    for (let i = 0; i < count; i++) {
+      picked.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
+    enqueueAchievementToasts(picked);
+
+    // Hueco variable: así se ven encadenadas y sueltas, no siempre al mismo
+    // ritmo.
+    demoTimer = setTimeout(tick, 5500 + Math.random() * 3500);
+  };
+
+  tick();
+};
+
 export const closeAchievementOverlay = (): void => {
+  stopAchievementDemo();
   if (flushTimer) clearTimeout(flushTimer);
   queue = [];
   if (window && !window.isDestroyed()) window.destroy();

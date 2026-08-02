@@ -14,11 +14,16 @@ import { enqueueAchievementToasts } from './notifications/overlay';
 import type { AchievementToast } from './notifications/overlay';
 import type { PendingAchievementsGame } from './queue';
 
-// El nombre del juego solo se conoce aquí, no dentro de storeUnlocks (que
-// trabaja por gameId) — se rellena al encolar.
-const toastFresh = (gameTitle: string, fresh: AchievementToast[]): void => {
+// El juego (nombre y hero) solo se conoce aquí, no dentro de storeUnlocks
+// (que trabaja por gameId) — se rellena al encolar.
+const toastFresh = (
+  game: Pick<PendingAchievementsGame, 'title' | 'heroUrl'>,
+  fresh: AchievementToast[],
+): void => {
   if (fresh.length === 0) return;
-  enqueueAchievementToasts(fresh.map((toast) => ({ ...toast, gameTitle })));
+  enqueueAchievementToasts(
+    fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
+  );
 };
 
 // Sincronizar los logros de UN juego (LOGROS.md §3-4): el catálogo (qué
@@ -153,11 +158,14 @@ export const storeUnlocks = async (
           });
 
         if (!already.has(definition.id)) {
+          // gameTitle/gameHeroUrl los rellena quien encola (toastFresh): aquí
+          // solo se trabaja por gameId.
           fresh.push({
             displayName: definition.displayName,
             iconUrl: definition.iconUrl,
             globalPercent: definition.globalPercent,
             gameTitle: '',
+            gameHeroUrl: null,
           });
         }
       }
@@ -245,7 +253,7 @@ export const syncGameAchievements = async (
 
   // ── Tus desbloqueos por la API ──────────────────────────────────────────
   if (!getSteamUserId()) {
-    if (notify) toastFresh(game.title, fresh);
+    if (notify) toastFresh(game, fresh);
     return {
       catalogCount: definitions.length,
       unlockedCount: emu.unlocks.length,
@@ -258,7 +266,7 @@ export const syncGameAchievements = async (
     // Steam no contestó sobre este juego (no lo tienes, perfil privado…). NO
     // se marca la fecha: no saber nada no es lo mismo que saber que no tienes
     // ninguno, y marcarlo daría por bueno un vacío que no hemos comprobado.
-    if (notify) toastFresh(game.title, fresh);
+    if (notify) toastFresh(game, fresh);
     return {
       catalogCount: definitions.length,
       unlockedCount: emu.unlocks.length,
@@ -275,7 +283,7 @@ export const syncGameAchievements = async (
       .where(eq(gamesTable.id, gameId)),
   );
 
-  if (notify) toastFresh(game.title, fresh);
+  if (notify) toastFresh(game, fresh);
 
   return {
     catalogCount: definitions.length,

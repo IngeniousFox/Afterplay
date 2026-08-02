@@ -1,12 +1,14 @@
-import { RefreshCw, RotateCcw, Trophy } from 'lucide-react';
+import { Play, RefreshCw, RotateCcw, Trophy } from 'lucide-react';
+import { useState } from 'react';
 import {
   useAchievementsActivity,
   useAchievementsStatus,
   useRetryFailedAchievements,
   useStopAchievements,
   useSyncAchievements,
+  useToggleAchievementDemo,
 } from '../../hooks/achievements';
-import { AMBER } from '../../lib/colors';
+import { AMBER, VIOLET } from '../../lib/colors';
 import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
 
@@ -23,6 +25,9 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
   const stop = useStopAchievements();
   const retry = useRetryFailedAchievements();
   const progress = useAchievementsActivity();
+  // ⚠️ TEMPORAL — estado del modo de prueba del aviso (ver el botón abajo).
+  const demo = useToggleAchievementDemo();
+  const [demoOn, setDemoOn] = useState(false);
 
   // El evento en vivo manda sobre la query: la pasada puede llevar minutos y
   // el status solo se refetchea con cada invalidación.
@@ -72,6 +77,30 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
       style={revealStyle(8)}
     >
       <div className="flex flex-none items-center gap-2">
+        {/* ⚠️ TEMPORAL — enciende una ronda de avisos de prueba con logros
+            reales de la biblioteca, para poder mirar la tarjeta flotante en
+            distintos momentos sin ponerse a jugar. Quitar este botón (y su
+            hook, su método de preload y su handler) cuando el diseño del
+            aviso esté cerrado. */}
+        <button
+          type="button"
+          onClick={() => demo.mutate(undefined, { onSuccess: setDemoOn })}
+          title="Preview the in-game achievement popup"
+          className="flex flex-none items-center gap-1.75 rounded-[9px] border px-3.25 py-2 text-[12.5px] font-semibold transition-colors duration-150"
+          style={
+            demoOn
+              ? { borderColor: `${VIOLET}66`, color: VIOLET, background: `${VIOLET}14` }
+              : {
+                  borderColor: 'var(--input)',
+                  color: 'var(--muted-foreground)',
+                  background: 'rgba(255,255,255,.03)',
+                }
+          }
+        >
+          <Play size={13} />
+          {demoOn ? 'Stop preview' : 'Preview'}
+        </button>
+
         {/* Reintentar solo los fallidos: repetir los 300 y pico por 3 que
             fallaron es minutos de espera para nada. */}
         {!running && (status?.failedGames ?? 0) > 0 && (

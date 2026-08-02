@@ -103,8 +103,21 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 // dbInstance ni el fichero local — así el remoto queda al día sin depender
 // de que el CDC replique DDL. Nunca bloquea el arranque: sin red o sin
 // Turso configurado, simplemente no hace nada y sigue el flujo normal.
-const pushMigrationsToRemote = async (): Promise<void> => {
-  if (!hasRemoteConfigured()) return;
+// ¿Se quedó el remoto sin comprobar en el arranque? Entonces NO se sabe si le
+// falta alguna migración — y eso hay que resolverlo, no dejarlo hasta el
+// próximo arranque. Lo reintenta runSyncCycle, ya sin prisa ni límite de
+// tiempo: para entonces la ventana está abierta y nada le corre detrás.
+let migrationPushPending = false;
+
+// El arranque no puede quedarse esperando a la red, así que esta comprobación
+// tiene un límite corto. Pero OJO con leer mal su fallo: el mensaje aparece
+// también cuando NO hay ninguna migración pendiente, porque el límite cubre
+// toda la operación —abrir conexión, crear la tabla de control, leer qué hay
+// aplicado— y una base de Turso que estaba dormida tarda lo suyo en
+// despertar. O sea que casi siempre significa "no me dio tiempo a
+// PREGUNTAR", no "no pude aplicar nada".
+const pushMigrationsToRemote = async (timeoutMs: number | null): Promise<boolean> => {
+  if (!hasRemoteConfigured()) return true;
 
   const client = createClient({
     url: process.env.DATABASE_URL as string,
@@ -112,18 +125,18 @@ const pushMigrationsToRemote = async (): Promise<void> => {
   });
 
   try {
-    const { applied } = await withTimeout(
-      pushPendingMigrations(client, join(__dirname, '../../drizzle')),
-      CONNECT_TIMEOUT_MS,
-    );
+    const push = pushPendingMigrations(client, join(__dirname, '../../drizzle'));
+    const { applied } = timeoutMs === null ? await push : await withTimeout(push, timeoutMs);
     if (applied.length > 0) {
       console.log(`[db] migraciones aplicadas directamente en Turso: ${applied.join(', ')}`);
     }
+    return true;
   } catch (error) {
     console.warn(
-      '[db] no se pudo empujar migraciones directamente a Turso, sigo igualmente:',
+      '[db] no se pudo comprobar las migraciones de Turso en el arranque, se reintentara en segundo plano:',
       error,
     );
+    return false;
   } finally {
     client.close();
   }
@@ -218,8 +231,10 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 export const runMigrations = async (): Promise<void> => {
   // Conexión aparte, antes de tocar la de verdad: deja el remoto al día por
   // su cuenta (ver pushMigrationsToRemote) para que el CDC nunca tenga que
-  // cargar con el DDL de esta migración.
-  await pushMigrationsToRemote();
+  // cargar con el DDL de esta migración. Va en secuencia y no en paralelo con
+  // la conexión de abajo A PROPÓSITO: la de sync no debe engancharse a Turso
+  // mientras el DDL está a medias.
+  migrationPushPending = !(await pushMigrationsToRemote(CONNECT_TIMEOUT_MS));
 
   const { db, capable } = await attemptInitialConnect();
   dbInstance = db;
@@ -295,8 +310,9 @@ const attemptSyncUpgrade = async (): Promise<void> => {
   // pero sin red no llegó a nada). Este es el primer momento en que hay
   // conexión otra vez — aprovecharlo para dejar el remoto al día por la vía
   // directa, ANTES de reconectar con sync, para que el CDC no sea quien
-  // tenga que cargar con ese DDL al hacer push() más abajo.
-  await pushMigrationsToRemote();
+  // tenga que cargar con ese DDL al hacer push() más abajo. Sin límite de
+  // tiempo: aquí la ventana ya está abierta y nadie espera.
+  migrationPushPending = !(await pushMigrationsToRemote(null));
 
   swapGate = new Promise((resolve) => {
     releaseSwapGate = resolve;
@@ -373,6 +389,15 @@ export const runSyncCycle = async (): Promise<void> => {
   syncCycleRunning = true;
 
   try {
+    // Lo que no dio tiempo a comprobar en el arranque se resuelve aquí, sin
+    // límite de tiempo: ya no hay nadie esperando a que abra la ventana. Va
+    // ANTES del pull/push por lo de siempre — el DDL primero, y solo después
+    // el sync de filas.
+    if (migrationPushPending) {
+      migrationPushPending = !(await pushMigrationsToRemote(null));
+      if (!migrationPushPending) console.log('[db] migraciones de Turso comprobadas al fin');
+    }
+
     if (!syncCapable) await attemptSyncUpgrade();
     if (!syncCapable) return;
 

@@ -209,9 +209,17 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
         </span>
       </div>
 
+      {/* El mismo par de colchones que la pestaña de logros: padding mayor
+          que el fundido (1.4em) para que la última fila pueda salir de
+          debajo, y scroll-padding para que el conductor de scroll del foco
+          no la alinee a ras del borde — justo bajo el degradado. */}
       <div
-        className="relative min-h-0 flex-1 overflow-y-auto pb-[1.2em]"
-        style={{ scrollbarWidth: 'none' }}
+        className="relative min-h-0 flex-1 overflow-y-auto pb-[1.8em]"
+        style={{
+          scrollbarWidth: 'none',
+          scrollPaddingTop: '0.35em',
+          scrollPaddingBottom: '1.6em',
+        }}
       >
         <div className="flex flex-col gap-[0.2em]">
           {sessions.map((session, index) => (

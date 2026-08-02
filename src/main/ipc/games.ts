@@ -76,6 +76,15 @@ export const registerGamesHandlers = (): void => {
     // generate.ts), así que ni al salir el juego de verdad se le volvería a
     // preguntar. Se genera al pasar a la biblioteca (games:promote), que es
     // cuando el juego es real de verdad.
+    //
+    // Los logros SÍ, y aquí no hay ninguna de esas pegas: el catálogo de
+    // Steam contesta tengas el juego o no, el alta ya trae el appid (viene
+    // en el mismo enriquecimiento de IGDB) y la ficha de un planeado ya
+    // pinta su sección de logros. Sin esto el juego se quedaba con appid
+    // pero sin catálogo hasta el siguiente arranque de la app, que es la
+    // única pasada que recogía a los planeados. Sin aviso en pantalla:
+    // planear un juego no es haberlo jugado.
+    void queueAchievementsRefreshForGame(game.id, { notify: false });
     return game;
   });
 

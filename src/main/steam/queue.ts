@@ -30,6 +30,9 @@ export type PendingAchievementsGame = {
   // instalación. Nullables: sin ellos esa fuente simplemente mira menos sitios.
   executablePath: string | null;
   installDirectory: string | null;
+  // Para el fondo del aviso flotante — el mismo hero que usa el aviso de
+  // sesión cerrada.
+  heroUrl: string | null;
 };
 
 const queue: PendingAchievementsGame[] = [];

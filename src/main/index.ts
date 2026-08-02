@@ -103,6 +103,12 @@ let preBigPictureState: { bounds: Electron.Rectangle; isMaximized: boolean } | n
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
 
+// El aviso de logros suena SIN que nadie haya pulsado nada en su ventana — y
+// no puede pulsarse, porque ignora el ratón a propósito (LOGROS.md §8). Sin
+// esto, la política de autoreproducción de Chromium deja su AudioContext
+// suspendido y el aviso sale mudo. Tiene que ir antes de whenReady().
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 // También tiene que ir antes de whenReady() — Electron lo exige para poder
 // registrar esquemas con privilegios (ver images/protocol.ts).
 registerImageProtocolScheme();

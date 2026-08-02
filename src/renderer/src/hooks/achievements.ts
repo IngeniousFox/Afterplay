@@ -37,23 +37,47 @@ export const useStopAchievements = (): UseMutationResult<void, Error, void, unkn
 export const useRetryFailedAchievements = (): UseMutationResult<number, Error, void, unknown> =>
   useMutation({ mutationFn: () => window.api.achievements.retryFailed() });
 
+// ⚠️ TEMPORAL — modo de prueba del aviso flotante. Devuelve si quedó
+// encendido. Quitar con su botón cuando el diseño esté cerrado.
+export const useToggleAchievementDemo = (): UseMutationResult<boolean, Error, void, unknown> =>
+  useMutation({ mutationFn: () => window.api.achievements.toggleDemo() });
+
 type AchievementsProgress = Extract<AchievementActivityEvent, { kind: 'progress' }>;
 
-// Progreso en vivo + refresco automático de las queries. Doble papel a
-// propósito (mismo patrón que useCuriositiesActivity): quien lo monta ve
-// avanzar la pasada, y de paso cada juego sincronizado invalida los logros —
-// la ficha abierta y la tarjeta de Ajustes se actualizan solas.
-export const useAchievementsActivity = (): AchievementsProgress | null => {
+// EL refresco de las queries de logros, montado UNA vez en la raíz de la app
+// (Afterplay.tsx) — igual que useCuriositiesActivity y por el mismo motivo
+// escrito allí: la sincronización ocurre de fondo estés donde estés, y quien
+// la escuchaba antes era solo la tarjeta de Ajustes. Con el modal cerrado,
+// nadie invalidaba nada; y como las queries de logros son staleTime Infinity,
+// una ficha visitada ANTES de que su catálogo llegara se quedaba con la
+// respuesta vacía cacheada para siempre — ni navegando fuera y volviendo se
+// arreglaba, solo reiniciando la app.
+//
+// Sin estado a propósito (a diferencia del hook de abajo): una pasada de 300
+// juegos emite 300 eventos, y guardar progreso aquí re-renderizaría el árbol
+// entero con cada uno.
+export const useAchievementsActivitySync = (): void => {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    return window.api.achievements.onActivity(() => {
+      // Invalidar el prefijo entero cubre el status y todas las fichas.
+      queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+    });
+  }, [queryClient]);
+};
+
+// El progreso en vivo, para quien lo quiera pintar (la tarjeta de Ajustes).
+// Solo estado: la invalidación la lleva el hook de arriba desde la raíz, y
+// duplicarla aquí sería invalidar dos veces cada evento.
+export const useAchievementsActivity = (): AchievementsProgress | null => {
   const [progress, setProgress] = useState<AchievementsProgress | null>(null);
 
   useEffect(() => {
     return window.api.achievements.onActivity((event) => {
-      // Invalidar el prefijo entero cubre el status y todas las fichas.
-      queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
       if (event.kind === 'progress') setProgress(event);
     });
-  }, [queryClient]);
+  }, []);
 
   return progress;
 };

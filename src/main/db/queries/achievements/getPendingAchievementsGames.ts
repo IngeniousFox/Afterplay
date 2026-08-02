@@ -30,6 +30,7 @@ export const getPendingAchievementsGames = async (
       steamAppId: gamesTable.steamAppId,
       executablePath: gamesTable.executablePath,
       installDirectory: gamesTable.installDirectory,
+      heroUrl: gamesTable.heroUrl,
     })
     .from(gamesTable)
     .where(
@@ -51,6 +52,7 @@ export const getPendingAchievementsGames = async (
             steamAppId: row.steamAppId,
             executablePath: row.executablePath,
             installDirectory: row.installDirectory,
+            heroUrl: row.heroUrl,
           },
         ],
   );

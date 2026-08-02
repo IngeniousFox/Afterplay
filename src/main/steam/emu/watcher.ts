@@ -59,6 +59,7 @@ const flush = async (): Promise<void> => {
           title: gamesTable.title,
           steamAppId: gamesTable.steamAppId,
           executablePath: gamesTable.executablePath,
+          heroUrl: gamesTable.heroUrl,
         })
         .from(gamesTable)
         .where(and(isNotNull(gamesTable.steamAppId), isNotNull(gamesTable.achievementsSyncedAt))),
@@ -78,7 +79,9 @@ const flush = async (): Promise<void> => {
 
       // Solo ASCII en los console.log, misma convencion que watcher/watcher.ts.
       console.log(`[steam] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
-      enqueueAchievementToasts(fresh.map((toast) => ({ ...toast, gameTitle: game.title })));
+      enqueueAchievementToasts(
+        fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
+      );
       // Y que la ficha abierta se entere sin recargar nada.
       notifyAchievementsActivity({
         kind: 'synced',

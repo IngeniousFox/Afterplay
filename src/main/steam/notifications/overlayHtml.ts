@@ -12,8 +12,15 @@
 export type OverlayPayload = {
   title: string;
   subtitle: string;
+  // El juego, en gris bajo el logro. Se omite si ya es el subtítulo.
+  gameTitle: string;
   // Data URI del icono; null = se pinta el trofeo de reserva.
   iconDataUri: string | null;
+  // Data URI del hero del JUEGO, de fondo tras un velo — el mismo recurso y
+  // el mismo velo que usa el aviso de sesión cerrada (SessionClosedToast).
+  // Es lo que hace que el aviso se lea como una ficha del juego y no como un
+  // mensaje de sistema. null = fondo liso.
+  heroDataUri: string | null;
   // Color del acento (verde normal, ámbar/violeta si es raro).
   accent: string;
   // "2.4% of players" — solo si aporta.
@@ -24,8 +31,8 @@ export type OverlayPayload = {
   rare: boolean;
 };
 
-export const OVERLAY_WIDTH = 380;
-export const OVERLAY_HEIGHT = 104;
+export const OVERLAY_WIDTH = 392;
+export const OVERLAY_HEIGHT = 108;
 
 // El sonido va SINTETIZADO con WebAudio, no como fichero: mismo criterio que
 // el modo TV (sound.ts). Dos ventajas concretas — cero peso en el
@@ -33,9 +40,27 @@ export const OVERLAY_HEIGHT = 104;
 // wav. Es un arpegio corto ascendente con una quinta arriba: suena a
 // "conseguido" sin el estruendo de una fanfarria.
 const SOUND_SCRIPT = `
+// UN solo AudioContext para toda la vida de la ventana, no uno por aviso.
+// Con un juego en primer plano, crear y cerrar contextos de audio a cada rato
+// es justo lo que acaba en silencio: el navegador puede dejarlo 'suspended'
+// (no hubo gesto del usuario en esta ventana, y nunca lo habrá porque ignora
+// el raton) y cerrarlo despues no deja rastro de por que no sono.
+var sharedCtx = null;
+
+function getCtx() {
+  if (!sharedCtx) {
+    sharedCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Reanudar SIEMPRE antes de sonar: basta con que el sistema cambie de
+  // dispositivo de audio, o que el navegador decida suspenderlo en segundo
+  // plano, para que se quede parado sin avisar.
+  if (sharedCtx.state === 'suspended') sharedCtx.resume();
+  return sharedCtx;
+}
+
 function playChime(rare) {
   try {
-    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var ctx = getCtx();
     var now = ctx.currentTime;
     var master = ctx.createGain();
     master.gain.value = 0.16;
@@ -59,7 +84,8 @@ function playChime(rare) {
       osc.start(t);
       osc.stop(t + 0.45);
     });
-    setTimeout(function () { ctx.close(); }, 1200);
+    // Sin ctx.close(): el contexto se reutiliza (ver getCtx). Cerrarlo era lo
+    // que obligaba a crear uno nuevo en cada aviso.
   } catch (e) {}
 }
 `;
@@ -83,9 +109,10 @@ export const buildOverlayHtml = (): string => `<!doctype html>
     display:flex; align-items:center; gap:13px;
     padding:0 16px 0 14px;
     border-radius:14px;
-    background:linear-gradient(135deg, rgba(20,23,21,.97), rgba(13,15,14,.97));
+    overflow:hidden;
+    background:#141614;
     border:1px solid rgba(255,255,255,.09);
-    box-shadow:0 12px 40px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.07);
+    box-shadow:0 20px 55px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.07);
     /* Entra deslizando desde la derecha. translateX y opacity solamente:
        las dos son propiedades que el compositor anima sin repintar. */
     transform:translateX(120%);
@@ -94,11 +121,12 @@ export const buildOverlayHtml = (): string => `<!doctype html>
   }
   #card.in { transform:translateX(0); opacity:1; }
   #card.out { transform:translateX(120%); opacity:0; }
-  /* Filo de color a la izquierda: la misma gramática que las filas de la
-     ficha y la tarjeta del modo TV. */
-  #edge {
-    position:absolute; left:0; top:0; bottom:0; width:3px;
-    border-radius:14px 0 0 14px;
+  /* Hero del juego de fondo con el velo de izquierda a derecha — copiado del
+     aviso de sesión cerrada: da identidad de FICHA sin comerse el texto. */
+  #hero { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  #veil {
+    position:absolute; inset:0;
+    background:linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.93) 45%, rgba(18,20,19,.68) 100%);
   }
   #iconwrap { position:relative; flex:none; width:52px; height:52px; }
   #glow {
@@ -117,8 +145,9 @@ export const buildOverlayHtml = (): string => `<!doctype html>
     display:flex; align-items:center; justify-content:center;
     font-size:24px;
   }
-  #text { min-width:0; flex:1; }
+  #text { position:relative; min-width:0; flex:1; }
   #sub {
+    display:flex; align-items:center; gap:5px;
     font-size:10px; font-weight:800; letter-spacing:.13em; text-transform:uppercase;
     opacity:.95;
   }
@@ -127,21 +156,33 @@ export const buildOverlayHtml = (): string => `<!doctype html>
     font-size:14.5px; font-weight:800; color:#f2f5f3;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  #rarity { margin-top:2px; font-size:10.5px; font-weight:700; opacity:.72; }
+  #rarity { margin-top:2px; font-size:10.5px; font-weight:700; opacity:.8; }
+  #game {
+    margin-top:2px; font-size:10.5px; color:rgba(255,255,255,.42);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  /* Cuenta atrás abajo, igual que el aviso de sesión cerrada: dice cuánto le
+     queda en pantalla en vez de desaparecer de golpe. */
+  #countdown { position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(255,255,255,.08); }
+  #bar { height:100%; width:100%; transform-origin:left center; }
+  #bar.run { transition:transform linear; transform:scaleX(0); }
 </style></head>
 <body>
   <div id="card">
-    <div id="edge"></div>
+    <img id="hero" style="display:none" />
+    <div id="veil"></div>
     <div id="iconwrap">
       <div id="glow"></div>
       <img id="icon" style="display:none" />
       <div id="fallback">🏆</div>
     </div>
     <div id="text">
-      <div id="sub"></div>
+      <div id="sub"><span id="subdot"></span><span id="subtext"></span></div>
       <div id="title"></div>
       <div id="rarity"></div>
+      <div id="game"></div>
     </div>
+    <div id="countdown"><div id="bar"></div></div>
   </div>
 <script>
 ${SOUND_SCRIPT}
@@ -156,9 +197,8 @@ window.showAchievement = function (data) {
   clearTimeout(hideTimer);
   card.classList.remove('out');
 
-  document.getElementById('sub').textContent = data.subtitle;
+  document.getElementById('subtext').textContent = data.subtitle;
   document.getElementById('sub').style.color = data.accent;
-  document.getElementById('edge').style.background = data.accent;
   document.getElementById('glow').style.background = data.accent;
   document.getElementById('title').textContent = data.title;
 
@@ -166,6 +206,22 @@ window.showAchievement = function (data) {
   rarity.textContent = data.rarity || '';
   rarity.style.display = data.rarity ? 'block' : 'none';
   rarity.style.color = data.accent;
+
+  // El juego, en gris y pequeño: contexto sin robarle protagonismo al logro.
+  // No se repite cuando el subtítulo YA es el nombre del juego (el aviso
+  // combinado lo usa de titular).
+  var game = document.getElementById('game');
+  var showGame = data.gameTitle && data.gameTitle !== data.subtitle;
+  game.textContent = showGame ? data.gameTitle : '';
+  game.style.display = showGame ? 'block' : 'none';
+
+  var hero = document.getElementById('hero');
+  if (data.heroDataUri) {
+    hero.src = data.heroDataUri;
+    hero.style.display = 'block';
+  } else {
+    hero.style.display = 'none';
+  }
 
   var img = document.getElementById('icon');
   var fallback = document.getElementById('fallback');
@@ -177,6 +233,18 @@ window.showAchievement = function (data) {
     img.style.display = 'none';
     fallback.style.display = 'flex';
   }
+
+  // La cuenta atrás se reinicia a mano: quitar la clase, forzar un reflow y
+  // volver a ponerla. Sin el reflow el navegador agrupa los dos cambios y la
+  // animación no vuelve a arrancar en el segundo aviso.
+  var bar = document.getElementById('bar');
+  bar.className = '';
+  bar.style.background = data.accent;
+  bar.style.opacity = '.55';
+  bar.style.transitionDuration = '0s';
+  void bar.offsetWidth;
+  bar.style.transitionDuration = data.durationMs + 'ms';
+  bar.className = 'run';
 
   // Un frame de margen para que el navegador vea el estado inicial y la
   // transición de entrada se dispare de verdad (sin esto salta ya puesta).
