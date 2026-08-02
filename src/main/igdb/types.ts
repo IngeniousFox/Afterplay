@@ -15,9 +15,16 @@ export type IgdbSearchResult = {
 
 export type IgdbGameDetail = {
   igdbId: number;
-  // Appid de Steam (external_games de IGDB) — null si el juego no está en
-  // Steam. El puente hacia los logros (LOGROS.md).
-  steamAppId: number | null;
+  // Appid de Steam tal cual viene ATADO a este juego en la misma respuesta
+  // (external_games) — gratis, sin petición extra. Puede no ser el appid con
+  // el que se piden los logros: cuando el juego tiene un `parentIgdbId`,
+  // manda el del juego base (ver resolveAchievementsSteamAppId en api.ts).
+  // Por eso se llama "direct" y no "steamAppId" a secas: quien quiera EL
+  // appid de los logros tiene que resolverlo, no leer este campo.
+  directSteamAppId: number | null;
+  // El juego BASE del que este cuelga, si IGDB lo declara — la pista para
+  // resolver el appid de los logros. null si este es el juego base.
+  parentIgdbId: number | null;
   title: string;
   coverUrl: string | null; // cover_big, para detalle/biblioteca
   releaseYear: number | null;

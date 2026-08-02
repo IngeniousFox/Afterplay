@@ -45,6 +45,16 @@ const toReleaseYear = (unixSeconds: number | undefined): number | null =>
 // a cero algún día, lo primero que hay que mirar es si ese id ha cambiado.
 const STEAM_SOURCE_ID = 1;
 
+// Primer intento de este arreglo: filtrar por `category` (dlc_addon/
+// expansion/standalone_expansion) para decidir cuándo un `parent_game` debe
+// GANARLE al appid propio. Comprobado en vivo contra la API y descartado: la
+// entrada real de "The Binding of Isaac: Repentance" (igdbId 109241) viene
+// con category = 0 (main_game) pese a ser, a todos los efectos de Steam, el
+// contenido de una expansión — la categoría la rellena la comunidad y aquí
+// no es de fiar. Lo que SÍ es de fiar es la relación en sí: `parent_game` es
+// justo el campo con el que IGDB documenta "el juego base de esta versión",
+// así que ahora se sigue siempre que exista, sin mirar la categoría.
+
 // El parseo defensivo es a propósito: el uid viaja como string por contrato
 // (otras tiendas meten ahí slugs y ASINs de Amazon), y un appid no numérico
 // sería un dato corrupto que no debe colarse en la DB.
@@ -146,23 +156,18 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
 
   const companies = game.involved_companies ?? [];
 
-  // La expansión anidada trae TODAS las tiendas (Amazon, GOG, YouTube…), sin
-  // poder filtrarlas en la propia query — el filtro por Steam se hace aquí
-  // sobre la lista ya recibida, y no cuesta ninguna petición de más. Solo si
-  // no hay nada se paga el respaldo por ediciones (ver allí el porqué).
-  const directSteamAppId = steamAppIdFromExternals(game.external_games);
-  const steamAppId =
-    directSteamAppId ??
-    (await getSteamAppIdViaEditions(igdbId).catch((error) => {
-      // El appid es un extra para los logros, no un requisito del alta: si
-      // esta consulta falla, el juego se da de alta igual y el backfill lo
-      // recogerá luego.
-      console.warn('[steam] fallo buscando el appid por ediciones (sigo sin el):', error);
-      return null;
-    }));
-
+  // AQUÍ NO SE RESUELVE EL APPID DE LOS LOGROS, a propósito. La expansión
+  // anidada de external_games ya viene en esta misma respuesta (gratis), pero
+  // el appid definitivo puede necesitar 1-3 peticiones más si hay juego base
+  // de por medio — y encadenarlas aquí las metía en la ruta crítica del alta,
+  // que es justo lo que la volvió lenta al pulsar "Add". Se devuelven los dos
+  // ingredientes crudos y quien los necesite llama a
+  // resolveAchievementsSteamAppId(), que en el alta corre EN PARALELO con
+  // HowLongToBeat y SteamGridDB (ver resolveGameEnrichment) — o sea, gratis
+  // en tiempo de reloj. El renderer no usa el appid para nada.
   return {
-    steamAppId,
+    directSteamAppId: steamAppIdFromExternals(game.external_games),
+    parentIgdbId: game.parent_game ?? null,
     igdbId: game.id,
     title: game.name,
     coverUrl: game.cover ? igdbImageUrl(game.cover.image_id, 'cover_big') : null,
@@ -288,4 +293,41 @@ export const getSteamAppIds = async (igdbIds: number[]): Promise<Map<number, num
 export const getSteamAppIdViaEditions = async (igdbId: number): Promise<number | null> => {
   assertIntegerIds([igdbId]);
   return (await fetchSteamAppIdsViaEditions([igdbId])).get(igdbId) ?? null;
+};
+
+// EL appid con el que se piden los logros de un juego — el que acaba en la
+// columna steamAppId. No siempre es el suyo propio, y ese es todo el asunto:
+//
+//   · Sin juego base: el propio si consta y, si no, el de alguna edición
+//     (Horizon Zero Dawn, cuyo puerto de PC vive en la "Complete Edition").
+//   · CON juego base: manda el del base. Comprobado en vivo con "The Binding
+//     of Isaac: Repentance" (igdbId 109241) — su propio appid (1426300)
+//     existe pero GetSchemaForGame lo devuelve VACÍO; los logros están todos
+//     en "Rebirth" (250900), que es su parent_game. Un appid con catálogo
+//     vacío es peor que ninguno: parece "comprobado y sin logros" en vez de
+//     "hay que mirar en otro sitio".
+//
+// El orden importa para el RELOJ, no solo para el resultado: con juego base
+// se prueba primero su vía directa, que es UNA petición (~180ms medidos) y
+// resuelve el caso normal. Los respaldos, que son los caros, solo se pagan si
+// aquello falla — y se piden A LA VEZ, porque son independientes entre sí.
+export const resolveAchievementsSteamAppId = async (
+  igdbId: number,
+  parentIgdbId: number | null,
+  directSteamAppId: number | null,
+): Promise<number | null> => {
+  if (parentIgdbId === null) {
+    return directSteamAppId ?? (await getSteamAppIdViaEditions(igdbId));
+  }
+
+  const parentDirect = (await fetchSteamAppIdsDirect([parentIgdbId])).get(parentIgdbId);
+  if (parentDirect !== undefined) return parentDirect;
+
+  const [parentViaEditions, ownViaEditions] = await Promise.all([
+    getSteamAppIdViaEditions(parentIgdbId),
+    // Solo si el propio no constaba ya: pedirlo teniéndolo sería una
+    // petición tirada.
+    directSteamAppId === null ? getSteamAppIdViaEditions(igdbId) : Promise.resolve(null),
+  ]);
+  return parentViaEditions ?? directSteamAppId ?? ownViaEditions;
 };
