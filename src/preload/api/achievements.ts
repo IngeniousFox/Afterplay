@@ -16,6 +16,11 @@ export const achievementsApi = {
   stop: (): Promise<void> => ipcRenderer.invoke('achievements:stop'),
   // Reintenta solo los juegos que fallaron; devuelve cuántos se encolaron.
   retryFailed: (): Promise<number> => ipcRenderer.invoke('achievements:retryFailed'),
+  // Vuelve a traer catálogo y desbloqueos de UN juego. Devuelve si entró en
+  // la cola (false = sin clave de Steam, o el juego no está en Steam); el
+  // resultado llega por onActivity con kind:'synced' y ese gameId.
+  refreshGame: (gameId: number): Promise<boolean> =>
+    ipcRenderer.invoke('achievements:refreshGame', gameId),
   // ⚠️ TEMPORAL — enciende/apaga el modo de prueba del aviso flotante y
   // devuelve si quedó encendido. Quitar con su botón cuando el diseño esté
   // cerrado (ver main/steam/notifications/overlay.ts).

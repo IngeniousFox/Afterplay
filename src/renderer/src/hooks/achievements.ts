@@ -42,6 +42,61 @@ export const useRetryFailedAchievements = (): UseMutationResult<number, Error, v
 export const useToggleAchievementDemo = (): UseMutationResult<boolean, Error, void, unknown> =>
   useMutation({ mutationFn: () => window.api.achievements.toggleDemo() });
 
+// Cuánto se espera como mucho a que la cola llegue a NUESTRO juego antes de
+// dejar de girar. La cola es serial y puede tener 300 juegos por delante: sin
+// este tope, pulsar refrescar en mitad de una pasada dejaría la ruedecita
+// dando vueltas varios minutos. El refresco se completa igual — solo se deja
+// de fingir que se está esperando por él.
+const REFRESH_SPIN_TIMEOUT_MS = 45_000;
+
+// Refrescar los logros de UN juego desde su ficha.
+//
+// El "cuándo ha terminado" no puede salir de la mutación: encolar devuelve al
+// instante y el trabajo real lo hace la cola del main. Así que se escucha el
+// evento 'synced' de ESE gameId, que es exactamente la señal de "este juego
+// ya está". Si el juego ni siquiera entró en la cola (sin clave de Steam, o
+// no está en Steam), se para en seco en vez de esperar a nadie.
+export const useRefreshGameAchievements = (
+  gameId: number,
+): { refresh: () => void; refreshing: boolean } => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Cambiar de juego con un refresco en vuelo (navegar de una ficha a otra)
+  // dejaría la ruedecita girando sobre un juego que no es el suyo. Ajuste
+  // DURANTE EL RENDER y no en un efecto (el patrón de react.dev, y la regla
+  // de la casa): así el render nuevo ya sale correcto, sin un primer frame
+  // mintiendo y un re-render detrás para corregirlo.
+  const [trackedGameId, setTrackedGameId] = useState(gameId);
+  if (trackedGameId !== gameId) {
+    setTrackedGameId(gameId);
+    setRefreshing(false);
+  }
+
+  useEffect(() => {
+    if (!refreshing) return;
+
+    const stopListening = window.api.achievements.onActivity((event) => {
+      if (event.kind === 'synced' && event.gameId === gameId) setRefreshing(false);
+    });
+    const guard = setTimeout(() => setRefreshing(false), REFRESH_SPIN_TIMEOUT_MS);
+
+    return () => {
+      stopListening();
+      clearTimeout(guard);
+    };
+  }, [refreshing, gameId]);
+
+  const refresh = (): void => {
+    if (refreshing) return;
+    setRefreshing(true);
+    void window.api.achievements.refreshGame(gameId).then((queued) => {
+      if (!queued) setRefreshing(false);
+    });
+  };
+
+  return { refresh, refreshing };
+};
+
 type AchievementsProgress = Extract<AchievementActivityEvent, { kind: 'progress' }>;
 
 // EL refresco de las queries de logros, montado UNA vez en la raíz de la app

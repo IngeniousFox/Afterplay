@@ -1,7 +1,7 @@
-import { ChevronDown, Eye, EyeOff, Lock, Sparkles, Trophy } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, Lock, RefreshCw, Sparkles, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import type { AchievementEntry, TimeFormat } from '../../../../../shared/types';
-import { useGameAchievements } from '../../../hooks/achievements';
+import { useGameAchievements, useRefreshGameAchievements } from '../../../hooks/achievements';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { useTimeFormat } from '../../../hooks/settings';
 import {
@@ -143,6 +143,8 @@ const TrophyCase = ({
   rareCount,
   ultraCount,
   medals,
+  onRefresh,
+  refreshing,
 }: {
   unlockedCount: number;
   total: number;
@@ -150,6 +152,8 @@ const TrophyCase = ({
   rareCount: number;
   ultraCount: number;
   medals: AchievementEntry[];
+  onRefresh: () => void;
+  refreshing: boolean;
 }): React.JSX.Element => {
   const complete = percent === 100;
   return (
@@ -175,8 +179,30 @@ const TrophyCase = ({
         <ProgressRing percent={percent} complete={complete} />
 
         <div className="min-w-0">
-          <div className="text-[10.5px] font-extrabold tracking-[.2em] text-muted-foreground">
-            ACHIEVEMENTS
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10.5px] font-extrabold tracking-[.2em] text-muted-foreground">
+              ACHIEVEMENTS
+            </span>
+            {/* Volver a preguntarle a Steam por ESTE juego. Vive junto al
+                rótulo y no como acción destacada porque casi nunca hace
+                falta: los juegos que juegas se refrescan solos al cerrar la
+                sesión. Es para lo que no se refresca solo — un endless o un
+                early access que ha añadido logros en un parche, o un juego
+                que no lanzas desde aquí. */}
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              title={
+                refreshing
+                  ? 'Checking Steam for new achievements…'
+                  : 'Re-fetch this game’s achievements from Steam'
+              }
+              aria-label="Refresh achievements"
+              className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            >
+              <RefreshCw size={11} className={refreshing ? 'animate-spin' : undefined} />
+            </button>
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="text-[27px] leading-none font-extrabold tabular-nums text-foreground">
@@ -487,6 +513,7 @@ export const AchievementsSection = ({
 }: AchievementsSectionProps): React.JSX.Element | null => {
   const { data } = useGameAchievements(gameId);
   const { data: timeFormat = '24h' } = useTimeFormat();
+  const { refresh, refreshing } = useRefreshGameAchievements(gameId);
   const [expanded, setExpanded] = useState(false);
 
   if (!data || data.entries.length === 0) return null;
@@ -523,6 +550,8 @@ export const AchievementsSection = ({
           rareCount={rareUnlocked.length - ultraCount}
           ultraCount={ultraCount}
           medals={medals}
+          onRefresh={refresh}
+          refreshing={refreshing}
         />
       </div>
 

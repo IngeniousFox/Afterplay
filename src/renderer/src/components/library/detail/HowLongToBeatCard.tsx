@@ -1,6 +1,8 @@
-import { Check, Info, PartyPopper } from 'lucide-react';
+import { Check, Info, PartyPopper, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import type { GameDetail } from '../../../../../shared/types';
+import { useRefreshGameHltb } from '../../../hooks/hltb';
 import { formatHours } from '../../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 
@@ -114,6 +116,7 @@ export const HowLongToBeatCard = ({
 }: HowLongToBeatCardProps): React.JSX.Element | null => {
   // Antes del early return de abajo: un hook nunca puede ser condicional.
   const [hoveredTier, setHoveredTier] = useState<TierKey | null>(null);
+  const refresh = useRefreshGameHltb();
 
   const main = game.hltbMain ?? 0;
   const extra = game.hltbMainExtras ?? 0;
@@ -179,7 +182,33 @@ export const HowLongToBeatCard = ({
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[13.5px] font-bold text-foreground">How long to beat</div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13.5px] font-bold text-foreground">How long to beat</span>
+          {/* Volver a preguntarle a HLTB por este juego. Estos tiempos se
+              piden UNA vez, en el alta, y no los refresca nada más — y sí se
+              mueven: la media de un juego recién salido se asienta con los
+              meses, y sube cuando el juego recibe contenido grande. Discreto
+              porque casi nunca hace falta; imprescindible cuando sí. */}
+          <button
+            type="button"
+            disabled={refresh.isPending}
+            onClick={() => {
+              refresh.mutate(game.id, {
+                onSuccess: (times) => {
+                  if (times) toast.success('Times updated from HowLongToBeat.');
+                  else
+                    toast.info('HowLongToBeat has no confident match — times kept as they were.');
+                },
+                onError: () => toast.error('Could not reach HowLongToBeat.'),
+              });
+            }}
+            title="Re-fetch times from HowLongToBeat"
+            aria-label="Refresh times"
+            className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+          >
+            <RefreshCw size={11} className={refresh.isPending ? 'animate-spin' : undefined} />
+          </button>
+        </div>
 
         {/* Cabecera de la derecha: por defecto adelanta cuánto falta para el
             próximo hito (o el aplauso final si ya te pasaste el 100%); al

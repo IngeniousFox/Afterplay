@@ -10,7 +10,11 @@ import {
 } from '../steam/notifications/overlay';
 import { getGameAchievements } from '../db/queries/achievements/getGameAchievements';
 import { getHiddenDescriptions } from '../steam/hiddenDescriptions';
-import { getSteamAchievementsStatus, runAchievementsBackfill } from '../steam/backfill';
+import {
+  getSteamAchievementsStatus,
+  queueAchievementsRefreshForGame,
+  runAchievementsBackfill,
+} from '../steam/backfill';
 import { requestAchievementsStop, retryFailedAchievements } from '../steam/queue';
 import { replaceUnlockPlacements } from '../steam/syncAchievements';
 
@@ -54,6 +58,19 @@ export const registerAchievementsHandlers = (): void => {
 
   // Reintentar solo los que fallaron, sin repetir la pasada entera.
   ipcMain.handle('achievements:retryFailed', () => retryFailedAchievements());
+
+  // Refrescar UN juego desde su ficha. Existe porque el catálogo, una vez
+  // traído, no se vuelve a pedir nunca por su cuenta: la pasada del arranque
+  // solo mira los que no tienen ninguno, y el "Sync now" de Ajustes son 300 y
+  // pico juegos y varios minutos. Un juego vivo (un endless que sigue
+  // recibiendo parches, un early access) le añade logros al catálogo con el
+  // tiempo, y hasta ahora la única forma de verlos era resincronizarlo todo.
+  //
+  // Sin aviso flotante a propósito: lo has pedido tú mirando la lista, y la
+  // lista se actualiza sola delante de ti — una tarjeta encima sobraría.
+  ipcMain.handle('achievements:refreshGame', (_event, gameId: number) =>
+    queueAchievementsRefreshForGame(gameId, { notify: false }),
+  );
 
   // ⚠️ TEMPORAL — modo de prueba del aviso flotante (ver overlay.ts). Alterna
   // encendido/apagado y devuelve el estado nuevo. Quitar esto y su botón

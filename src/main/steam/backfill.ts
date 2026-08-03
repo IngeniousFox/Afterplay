@@ -103,11 +103,16 @@ export const runEmuUnlocksSweep = async (): Promise<void> => {
 // notify=false para las altas: dar de alta un juego que ya jugaste haría
 // saltar el aviso flotante por logros de hace años, que es justo lo que la
 // pasada masiva evita. Solo avisa lo que acaba de pasar.
+//
+// Devuelve si el juego llegó a entrar en la cola: false cuando no hay clave
+// de Steam o el juego no está en Steam. Los disparadores automáticos lo
+// ignoran, pero el botón de refrescar de la ficha lo necesita para no
+// quedarse girando eternamente esperando algo que nunca va a pasar.
 export const queueAchievementsRefreshForGame = async (
   gameId: number,
   { notify = true }: { notify?: boolean } = {},
-): Promise<void> => {
-  if (!hasSteamKey()) return;
+): Promise<boolean> => {
+  if (!hasSteamKey()) return false;
 
   try {
     const [game] = await withDbAccess(async () =>
@@ -124,7 +129,7 @@ export const queueAchievementsRefreshForGame = async (
         .where(and(eq(gamesTable.id, gameId), isNotNull(gamesTable.steamAppId)))
         .limit(1),
     );
-    if (!game || game.steamAppId === null) return;
+    if (!game || game.steamAppId === null) return false;
 
     enqueueAchievements([
       {
@@ -137,7 +142,9 @@ export const queueAchievementsRefreshForGame = async (
         notify,
       },
     ]);
+    return true;
   } catch (error) {
     console.warn('[steam] fallo encolando el refresco tras la sesion:', error);
+    return false;
   }
 };
