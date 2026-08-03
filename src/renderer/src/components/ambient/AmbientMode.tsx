@@ -10,6 +10,7 @@ import { useIdle } from '../../hooks/useIdle';
 import { usePageVisible } from '../../hooks/usePageVisible';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useWindowVisible } from '../../hooks/useWindowVisible';
+import { useAchievementsOverview } from '../../hooks/achievements';
 import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
 import { GREEN } from '../../lib/colors';
 
@@ -189,6 +190,9 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
   const { data: stateEvents = [] } = useStateEvents();
   const { data: spendEvents = [] } = useSpendEvents();
   const { data: curiosityRows = [] } = useCuriosities();
+  // Para las frases de trofeos (LOGROS-IDEAS.md §2.7): el salón de la fama y
+  // los 100% ya vienen calculados del main — aquí solo se consultan por juego.
+  const { data: achievementsOverview } = useAchievementsOverview();
 
   // Se lee UNA vez, al montar: el orden de la cola no puede rebarajarse en
   // cada repintado.
@@ -408,6 +412,28 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     isLatestCompletion: indexes.latestCompletionGameId === game.id,
     libraryStartYear: indexes.libraryStartYear,
     curiosities: indexes.curiositiesByGame.get(game.id) ?? [],
+    achievements: (() => {
+      if (!achievementsOverview) return null;
+      const fameIndex = achievementsOverview.hallOfFame.findIndex(
+        (entry) => entry.gameId === game.id,
+      );
+      const fame = fameIndex >= 0 ? achievementsOverview.hallOfFame[fameIndex] : null;
+      const perfect =
+        achievementsOverview.perfectGames.find((entry) => entry.gameId === game.id) ?? null;
+      if (!fame && !perfect) return null;
+      return {
+        rarest: fame
+          ? {
+              name: fame.displayName,
+              percent: fame.globalPercent,
+              unlockedAt: fame.unlockedAt,
+              fameRank: fameIndex + 1,
+            }
+          : null,
+        isPerfect: perfect !== null,
+        perfectTotal: perfect?.total ?? 0,
+      };
+    })(),
   };
 
   return (

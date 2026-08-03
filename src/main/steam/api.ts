@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { z } from 'zod';
+import { normalizeSteamCommunityImageUrl } from '../images/steamCdn';
 
 // Cliente de la Steam Web API para los logros (LOGROS.md §3).
 //
@@ -76,6 +77,12 @@ const playerAchievementsResponse = z.object({
   }),
 });
 
+// Los iconos que da GetSchemaForGame apuntan a una ubicación que Steam ya no
+// sirve para buena parte del catálogo — el porqué completo, en images/
+// steamCdn.ts. Se traducen AQUÍ para que lo que se guarde nazca ya bien.
+const normalizeIconUrl = (url: string | undefined): string | null =>
+  url ? normalizeSteamCommunityImageUrl(url) : null;
+
 export type SteamAchievementDef = {
   apiName: string;
   displayName: string;
@@ -145,8 +152,8 @@ export const getAchievementSchema = async (appId: number): Promise<SteamAchievem
     apiName: achievement.name,
     displayName: achievement.displayName,
     description: achievement.description ?? null,
-    iconUrl: achievement.icon ?? null,
-    iconGrayUrl: achievement.icongray ?? null,
+    iconUrl: normalizeIconUrl(achievement.icon),
+    iconGrayUrl: normalizeIconUrl(achievement.icongray),
     hidden: achievement.hidden === 1,
     sortIndex: index,
   }));

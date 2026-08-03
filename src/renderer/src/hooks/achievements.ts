@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type {
   AchievementActivityEvent,
+  AchievementsOverview,
   AchievementsStatus,
   GameAchievements,
+  SessionUnlock,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
@@ -25,6 +27,19 @@ export const useAchievementsStatus = (): UseQueryResult<AchievementsStatus, Erro
     staleTime: Infinity,
   });
 
+// La vista global del bloque de trofeos de Stats, acotable al filtro de año
+// de la pantalla ('all' = toda la vida). Mismo contrato de frescura que el
+// resto de queries de logros: staleTime Infinity + invalidación por el
+// prefijo entero desde la raíz (useAchievementsActivitySync).
+export const useAchievementsOverview = (
+  year: number | 'all' = 'all',
+): UseQueryResult<AchievementsOverview, Error> =>
+  useQuery({
+    queryKey: queryKeys.achievements.overview(year),
+    queryFn: () => window.api.achievements.getOverview(year === 'all' ? null : year),
+    staleTime: Infinity,
+  });
+
 // Devuelve cuántos juegos entraron en la cola — el progreso llega por
 // useAchievementsActivity, no por esta respuesta.
 export const useSyncAchievements = (): UseMutationResult<number, Error, boolean, unknown> =>
@@ -37,10 +52,15 @@ export const useStopAchievements = (): UseMutationResult<void, Error, void, unkn
 export const useRetryFailedAchievements = (): UseMutationResult<number, Error, void, unknown> =>
   useMutation({ mutationFn: () => window.api.achievements.retryFailed() });
 
-// ⚠️ TEMPORAL — modo de prueba del aviso flotante. Devuelve si quedó
-// encendido. Quitar con su botón cuando el diseño esté cerrado.
-export const useToggleAchievementDemo = (): UseMutationResult<boolean, Error, void, unknown> =>
-  useMutation({ mutationFn: () => window.api.achievements.toggleDemo() });
+// Los desbloqueos colgados de sesiones, para las filas de la pantalla de
+// Sesiones. Mismo contrato de frescura que el resto: staleTime Infinity +
+// invalidación por el prefijo entero desde la raíz.
+export const useSessionUnlocks = (): UseQueryResult<SessionUnlock[], Error> =>
+  useQuery({
+    queryKey: queryKeys.achievements.sessionUnlocks,
+    queryFn: () => window.api.achievements.getSessionUnlocks(),
+    staleTime: Infinity,
+  });
 
 // Cuánto se espera como mucho a que la cola llegue a NUESTRO juego antes de
 // dejar de girar. La cola es serial y puede tener 300 juegos por delante: sin

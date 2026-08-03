@@ -2,6 +2,7 @@ import { BarChart3, Clock, DollarSign, Gamepad2, Gauge, Route } from 'lucide-rea
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MetricCard } from '../components/library/detail/MetricsRow';
+import { AchievementsShowcase } from '../components/stats/AchievementsShowcase';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
 import { BacklogDebtCard } from '../components/stats/BacklogDebtCard';
 import { BacklogFlowChart } from '../components/stats/BacklogFlowChart';
@@ -327,6 +328,17 @@ export const Stats = (): React.JSX.Element => {
               />
             </div>
 
+            {/* El bloque de trofeos (LOGROS-IDEAS.md), año-consciente: con un
+                año elegido enseña la fama, la rareza y los 100% DE ese año;
+                lo que es foto de ahora (almost there, gráfica de años) solo
+                sale en All Time. */}
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(8)}>
+              <AchievementsShowcase
+                year={selectedYear}
+                onOpenGame={(gameId) => navigate(`/games/${gameId}`)}
+              />
+            </div>
+
             <div
               className={`mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 ${revealClass}`}
               style={revealStyle(8)}
@@ -353,13 +365,27 @@ export const Stats = (): React.JSX.Element => {
               />
             </div>
 
-            {/* La deuda es una foto de AHORA (lo que te queda y a qué ritmo vas),
-            así que no tiene lectura por año: con un año filtrado no se pinta. */}
-            {selectedYear === 'all' && (
-              <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
-                <BacklogDebtCard games={games} plannedGames={plannedGames} sessions={sessions} />
-              </div>
-            )}
+            {/* Dos preguntas distintas según el filtro, como StatusBreakdown:
+            All Time es el BALANCE (lo que debes y a qué ritmo vas) y un año
+            concreto es su MOVIMIENTO (qué asumiste, qué liquidaste, neto). */}
+            <div className={`mt-4.5 ${revealClass}`} style={revealStyle(10)}>
+              {selectedYear === 'all' ? (
+                <BacklogDebtCard
+                  mode="all-time"
+                  games={games}
+                  plannedGames={plannedGames}
+                  sessions={sessions}
+                />
+              ) : (
+                <BacklogDebtCard
+                  mode="year"
+                  games={games}
+                  plannedGames={plannedGames}
+                  stateEvents={stateEvents}
+                  year={selectedYear}
+                />
+              )}
+            </div>
 
             <div className={`mt-4.5 ${revealClass}`} style={revealStyle(11)}>
               <GameAgeDonut entries={ageEntries} year={selectedYear} />

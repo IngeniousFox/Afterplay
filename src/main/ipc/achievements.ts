@@ -1,20 +1,15 @@
 import { ipcMain } from 'electron';
-import { eq } from 'drizzle-orm';
 import { handleDb } from './dbHandle';
-import { getDb } from '../db';
-import { achievementsTable, gamesTable } from '../db/schema';
-import {
-  isAchievementDemoRunning,
-  startAchievementDemo,
-  stopAchievementDemo,
-} from '../steam/notifications/overlay';
+import { getAchievementsOverview } from '../db/queries/achievements/getAchievementsOverview';
 import { getGameAchievements } from '../db/queries/achievements/getGameAchievements';
+import { getSessionUnlocks } from '../db/queries/achievements/getSessionUnlocks';
 import { getHiddenDescriptions } from '../steam/hiddenDescriptions';
 import {
   getSteamAchievementsStatus,
   queueAchievementsRefreshForGame,
   runAchievementsBackfill,
 } from '../steam/backfill';
+import { runRaFullResync } from '../ra/backfill';
 import { requestAchievementsStop, retryFailedAchievements } from '../steam/queue';
 import { replaceUnlockPlacements } from '../steam/syncAchievements';
 
@@ -46,11 +41,27 @@ export const registerAchievementsHandlers = (): void => {
 
   handleDb('achievements:getStatus', async () => getSteamAchievementsStatus());
 
+  // La vista global para el bloque de trofeos de Stats (LOGROS-IDEAS.md).
+  // year=null → All Time; con año, las piezas temporales se acotan a él.
+  handleDb('achievements:getOverview', async (_event, year: number | null) =>
+    getAchievementsOverview(year),
+  );
+
+  // Los desbloqueos colgados de sesiones, para las filas de la pantalla de
+  // Sesiones — una consulta para todas en vez de una por juego.
+  handleDb('achievements:getSessionUnlocks', async () => getSessionUnlocks());
+
   // Encola y devuelve cuántos juegos entraron: la sincronización va de uno en
   // uno por la cola (steam/queue.ts) y su progreso viaja por el canal de
   // eventos 'achievements:activity', no por esta respuesta — una pasada de
   // 300 juegos tarda minutos y ningún invoke debe colgarse tanto.
-  ipcMain.handle('achievements:sync', (_event, full: boolean) => runAchievementsBackfill(full));
+  // El full arrastra también a RetroAchievements: "Sync now" re-sincroniza
+  // las DOS fuentes, o el botón mentiría a medias.
+  ipcMain.handle('achievements:sync', async (_event, full: boolean) => {
+    const steamQueued = await runAchievementsBackfill(full);
+    const raQueued = full ? await runRaFullResync() : 0;
+    return steamQueued + raQueued;
+  });
 
   ipcMain.handle('achievements:stop', () => {
     requestAchievementsStop();
@@ -68,38 +79,11 @@ export const registerAchievementsHandlers = (): void => {
   //
   // Sin aviso flotante a propósito: lo has pedido tú mirando la lista, y la
   // lista se actualiza sola delante de ti — una tarjeta encima sobraría.
+  // forceRaRematch: el botón es el "hoy le han publicado set y lo quiero YA"
+  // — re-intenta el emparejado de RA aunque ya se hubiera preguntado.
   ipcMain.handle('achievements:refreshGame', (_event, gameId: number) =>
-    queueAchievementsRefreshForGame(gameId, { notify: false }),
+    queueAchievementsRefreshForGame(gameId, { notify: false, forceRaRematch: true }),
   );
-
-  // ⚠️ TEMPORAL — modo de prueba del aviso flotante (ver overlay.ts). Alterna
-  // encendido/apagado y devuelve el estado nuevo. Quitar esto y su botón
-  // cuando el diseño de la tarjeta esté cerrado.
-  handleDb('achievements:toggleDemo', async () => {
-    if (isAchievementDemoRunning()) {
-      stopAchievementDemo();
-      return false;
-    }
-
-    // Se tiran logros REALES de la biblioteca, con sus iconos y su rareza:
-    // probar con datos inventados no enseña cómo queda de verdad (un título
-    // largo, un icono oscuro, un 0.4% morado...).
-    const pool = await getDb()
-      .select({
-        displayName: achievementsTable.displayName,
-        iconUrl: achievementsTable.iconUrl,
-        globalPercent: achievementsTable.globalPercent,
-        gameTitle: gamesTable.title,
-        gameHeroUrl: gamesTable.heroUrl,
-      })
-      .from(achievementsTable)
-      .innerJoin(gamesTable, eq(achievementsTable.gameId, gamesTable.id))
-      .limit(400);
-
-    if (pool.length === 0) return false;
-    startAchievementDemo(pool);
-    return true;
-  });
 
   // Recolocar los desbloqueos ya guardados sobre las sesiones actuales, sin
   // tocar la red — para cuando se corrigen fechas o se asigna a mano una

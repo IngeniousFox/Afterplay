@@ -304,6 +304,12 @@ export type CredentialsValues = {
   // públicos, la key no se lo salta.
   steamApiKey: string | null;
   steamUserId64: string | null;
+  // RetroAchievements (RETROACHIEVEMENTS.md) para los logros de lo emulado
+  // retro. La API se autentica solo con la key; el usuario dice DE QUIÉN son
+  // los desbloqueos que se leen — hacen falta los dos para que la fuente
+  // funcione.
+  raUsername: string | null;
+  raApiKey: string | null;
 };
 
 // ── Curiosidades de juego (modo ambiente) ──────────────────────────────────
@@ -342,9 +348,10 @@ export type CuriosityActivityEvent =
 // lectura: la ficha no tiene que saber si un logro llegó por la API de Steam
 // o por el fichero de un emulador.
 
-// De dónde nos consta el desbloqueo. Un mismo logro puede constar por las
-// dos: jugaste una vuelta pirata y luego lo compraste en Steam.
-export type AchievementSource = 'steam' | 'emu';
+// De dónde nos consta el desbloqueo. Un mismo logro puede constar por
+// varias: jugaste una vuelta pirata y luego lo compraste en Steam. 'ra' =
+// RetroAchievements (RETROACHIEVEMENTS.md), la fuente de lo emulado retro.
+export type AchievementSource = 'steam' | 'emu' | 'ra';
 
 export type AchievementEntry = {
   id: number;
@@ -390,13 +397,85 @@ export type AchievementsStatus = {
   totalAchievements: number;
   unlockedAchievements: number;
   running: boolean;
-  // Sin esto no se puede ni empezar; sin steamUserId hay catálogo pero no
-  // desbloqueos tuyos.
+  // Sin esto no se puede ni empezar (por la vía Steam); sin steamUserId hay
+  // catálogo pero no desbloqueos tuyos.
   hasApiKey: boolean;
   hasUserId: boolean;
+  // La otra fuente: usuario + key de RetroAchievements configurados.
+  hasRaCredentials: boolean;
   // Juegos que fallaron en la última pasada y se pueden reintentar solos, sin
   // repetir las 300 y pico.
   failedGames: number;
+};
+
+// Un desbloqueo colgado de su sesión, con lo mínimo para pintarlo en una
+// fila de sesión (pantalla de Sesiones, historial de la ficha, toast).
+export type SessionUnlock = {
+  sessionId: number;
+  achievementId: number;
+  displayName: string;
+  iconUrl: string | null;
+  globalPercent: number | null;
+};
+
+// La vista GLOBAL de los logros para el bloque de trofeos de Stats
+// (LOGROS-IDEAS.md §3-4). La calcula el main en una pasada
+// (getAchievementsOverview) y el renderer solo pinta.
+export type AchievementsOverview = {
+  // Totales de SIEMPRE (no cambian con el filtro de año).
+  totalUnlocked: number;
+  totalCatalog: number;
+  // Con año filtrado: cuántos cayeron ESE año (solo fechas fiables). null en
+  // All Time.
+  yearTotals: { total: number; rare: number } | null;
+  // Solo fechas FIABLES (regla 1 del documento): los rescates de cracks no
+  // fabrican años.
+  unlockedByYear: { year: number; total: number; rare: number }[];
+  // El año elegido desglosado por mes (0-11, los 12 siempre — los ceros
+  // también cuentan la forma del año), con los tres cubos de rareza para la
+  // barra apilada. null en All Time.
+  unlockedByMonth:
+    { month: number; total: number; common: number; rare: number; ultra: number }[] | null;
+  // Los juegos del año por desbloqueos (todos los que tengan alguno, orden
+  // descendente). null en All Time.
+  topGames:
+    | { gameId: number; title: string; coverUrl: string | null; total: number; rare: number }[]
+    | null;
+  // Tus conseguidos más raros de toda la biblioteca, rareza ascendente.
+  hallOfFame: {
+    gameId: number;
+    gameTitle: string;
+    displayName: string;
+    iconUrl: string | null;
+    globalPercent: number;
+    // null si la fecha no es fiable — se enseña el logro, no el momento.
+    unlockedAt: Date | null;
+  }[];
+  // Juegos al 100% (solo con desbloqueos conocidos — regla 2). completedAt =
+  // la fecha del ÚLTIMO logro, y solo si todas las del juego son fiables.
+  perfectGames: {
+    gameId: number;
+    title: string;
+    coverUrl: string | null;
+    total: number;
+    completedAt: Date | null;
+  }[];
+  // A un empujón del 100%: qué juegos y qué falta (sin descripciones de
+  // ocultos — regla 3).
+  almostThere: {
+    gameId: number;
+    title: string;
+    coverUrl: string | null;
+    unlocked: number;
+    total: number;
+    missing: {
+      displayName: string;
+      iconUrl: string | null;
+      globalPercent: number | null;
+      hidden: boolean;
+    }[];
+  }[];
+  rarityProfile: { common: number; rare: number; ultra: number };
 };
 
 // Último fallo de sincronización con Turso, para enseñarlo en Ajustes. Un

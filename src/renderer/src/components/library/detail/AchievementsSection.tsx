@@ -489,13 +489,15 @@ const AchievementRow = ({
               ? formatByPrecision(entry.unlockedAt, 'datetime', timeFormat)
               : 'Unlocked · date unknown'}
             {/* De dónde nos consta. Solo cuando NO es la vía normal: que un
-                logro venga de Steam no es noticia, que venga del emulador de
-                un juego pirata sí explica por qué está ahí. */}
-            {!entry.sources.includes('steam') && entry.sources.includes('emu') && (
-              <span className="ml-0.5 rounded px-1 py-0.5 text-[9px] font-bold tracking-[.06em] text-muted-foreground/60 uppercase">
-                local
-              </span>
-            )}
+                logro venga de Steam no es noticia; que venga del emulador de
+                un juego pirata ('local') o de RetroAchievements ('RA') sí
+                explica por qué está ahí. */}
+            {!entry.sources.includes('steam') &&
+              (entry.sources.includes('emu') || entry.sources.includes('ra')) && (
+                <span className="ml-0.5 rounded px-1 py-0.5 text-[9px] font-bold tracking-[.06em] text-muted-foreground/60 uppercase">
+                  {entry.sources.includes('emu') ? 'local' : 'RA'}
+                </span>
+              )}
           </div>
         )}
       </div>

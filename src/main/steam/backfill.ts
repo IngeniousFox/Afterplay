@@ -4,6 +4,7 @@ import { getAchievementsStatus } from '../db/queries/achievements/getAchievement
 import { getPendingAchievementsGames } from '../db/queries/achievements/getPendingAchievementsGames';
 import { gamesTable } from '../db/schema';
 import type { AchievementsStatus } from '../../shared/types';
+import { refreshRaForGame } from '../ra/backfill';
 import { hasSteamKey } from './api';
 import { ensureGoldbergCatalog } from './emu/goldbergCatalog';
 import { readEmuUnlocksForGame } from './emu/readUnlocks';
@@ -96,55 +97,66 @@ export const runEmuUnlocksSweep = async (): Promise<void> => {
 };
 
 // Al cerrar una sesión de juego: refrescar los logros de ESE juego, que es
-// justo cuando pueden haber cambiado. Encola la sync completa (Steam + emu)
-// por la misma cola de siempre — si el juego no está en Steam, no hay appid y
-// no hay nada que hacer.
+// justo cuando pueden haber cambiado. Es el punto ÚNICO de refresco por
+// juego, con sus dos patas: Steam (por la cola de siempre) y
+// RetroAchievements (directa — es una petición, no trescientas).
 //
 // notify=false para las altas: dar de alta un juego que ya jugaste haría
 // saltar el aviso flotante por logros de hace años, que es justo lo que la
 // pasada masiva evita. Solo avisa lo que acaba de pasar.
 //
-// Devuelve si el juego llegó a entrar en la cola: false cuando no hay clave
-// de Steam o el juego no está en Steam. Los disparadores automáticos lo
-// ignoran, pero el botón de refrescar de la ficha lo necesita para no
-// quedarse girando eternamente esperando algo que nunca va a pasar.
+// forceRaRematch: solo el botón de la ficha — re-intenta el emparejado de RA
+// aunque ya se hubiera preguntado (ver refreshRaForGame).
+//
+// Devuelve si ALGUNA pata hizo trabajo: false = ni Steam ni RA tienen nada
+// que decir de este juego. El botón de la ficha lo necesita para no quedarse
+// girando eternamente esperando algo que nunca va a pasar.
 export const queueAchievementsRefreshForGame = async (
   gameId: number,
-  { notify = true }: { notify?: boolean } = {},
+  { notify = true, forceRaRematch = false }: { notify?: boolean; forceRaRematch?: boolean } = {},
 ): Promise<boolean> => {
-  if (!hasSteamKey()) return false;
+  let steamQueued = false;
 
-  try {
-    const [game] = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          steamAppId: gamesTable.steamAppId,
-          executablePath: gamesTable.executablePath,
-          installDirectory: gamesTable.installDirectory,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(and(eq(gamesTable.id, gameId), isNotNull(gamesTable.steamAppId)))
-        .limit(1),
-    );
-    if (!game || game.steamAppId === null) return false;
-
-    enqueueAchievements([
-      {
-        id: game.id,
-        title: game.title,
-        steamAppId: game.steamAppId,
-        executablePath: game.executablePath,
-        installDirectory: game.installDirectory,
-        heroUrl: game.heroUrl,
-        notify,
-      },
-    ]);
-    return true;
-  } catch (error) {
-    console.warn('[steam] fallo encolando el refresco tras la sesion:', error);
-    return false;
+  if (hasSteamKey()) {
+    try {
+      const [game] = await withDbAccess(async () =>
+        getDb()
+          .select({
+            id: gamesTable.id,
+            title: gamesTable.title,
+            steamAppId: gamesTable.steamAppId,
+            executablePath: gamesTable.executablePath,
+            installDirectory: gamesTable.installDirectory,
+            heroUrl: gamesTable.heroUrl,
+          })
+          .from(gamesTable)
+          .where(and(eq(gamesTable.id, gameId), isNotNull(gamesTable.steamAppId)))
+          .limit(1),
+      );
+      if (game && game.steamAppId !== null) {
+        enqueueAchievements([
+          {
+            id: game.id,
+            title: game.title,
+            steamAppId: game.steamAppId,
+            executablePath: game.executablePath,
+            installDirectory: game.installDirectory,
+            heroUrl: game.heroUrl,
+            notify,
+          },
+        ]);
+        steamQueued = true;
+      }
+    } catch (error) {
+      console.warn('[steam] fallo encolando el refresco tras la sesion:', error);
+    }
   }
+
+  // La pata de RA — no exclusiva con la de Steam a propósito: son fuentes
+  // distintas y un juego podría tener las dos (un clásico con puerto en
+  // Steam y set en RA). refreshRaForGame ya se auto-descarta sin
+  // credenciales o sin emparejar.
+  const raSynced = await refreshRaForGame(gameId, notify, forceRaRematch).catch(() => false);
+
+  return steamQueued || raSynced;
 };

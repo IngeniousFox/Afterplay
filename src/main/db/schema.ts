@@ -125,6 +125,16 @@ export const gamesTable = sqliteTable('games', {
   // anterior a propósito: el catálogo no cambia casi nunca (se pide una vez),
   // pero tus desbloqueos cambian cada vez que juegas.
   achievementsUnlocksSyncedAt: int({ mode: 'timestamp_ms' }),
+  // El juego en RetroAchievements (RETROACHIEVEMENTS.md §4-5) — la otra
+  // fuente de logros, para lo emulado de consola que Steam no cubre. null =
+  // sin emparejar (la consola no está en RA, el juego no tiene set todavía,
+  // o el matching no encontró nada con confianza).
+  raGameId: int(),
+  // Cuándo se intentó el emparejado por última vez, saliera o no. La regla
+  // de oro de RETROACHIEVEMENTS.md §6, aprendida con Isaac: ningún "no" de
+  // una fuente externa se graba en piedra — se graba CON FECHA y el barrido
+  // periódico lo vuelve a preguntar (los sets se publican cada semana).
+  raCheckedAt: int({ mode: 'timestamp_ms' }),
 });
 
 export const sessionsTable = sqliteTable('sessions', {
@@ -338,7 +348,9 @@ export const achievementUnlocksTable = sqliteTable(
     // hiciste veinticinco logros de James Bond en el mismo segundo. Sigue
     // siendo cierto que los tienes; lo que no se sabe es cuándo.
     dateReliable: int({ mode: 'boolean' }).notNull().default(true),
-    source: text({ enum: ['steam', 'emu'] }).notNull(),
+    // 'ra' = RetroAchievements (RETROACHIEVEMENTS.md). El enum es solo de
+    // TypeScript (SQLite no lleva CHECK aquí): añadir una fuente no es DDL.
+    source: text({ enum: ['steam', 'emu', 'ra'] }).notNull(),
     // El playthrough y la sesión en los que caiste — se resuelven cruzando la
     // fecha del desbloqueo con tus sesiones (ver steam/matchSessions.ts).
     // Nullables porque un logro puede caer fuera de toda sesión trackeada

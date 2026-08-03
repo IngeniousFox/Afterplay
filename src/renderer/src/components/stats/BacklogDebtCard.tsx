@@ -1,7 +1,7 @@
-import { Hourglass, Info } from 'lucide-react';
+import { Hourglass, Info, TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
-import type { GameListItem } from '../../../../shared/types';
-import { BLUE, GRAY, VIOLET } from '../../lib/colors';
+import type { GameListItem, StateEventSummary } from '../../../../shared/types';
+import { BLUE, GRAY, GREEN, VIOLET } from '../../lib/colors';
 import { DAY_MS } from '../../lib/dateMath';
 import { formatHours, pluralize } from '../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
@@ -9,11 +9,26 @@ import { StatCard } from './StatCard';
 
 type BacklogSession = { startedAt: Date; durationSec: number | null };
 
-type BacklogDebtCardProps = {
-  games: GameListItem[];
-  plannedGames: GameListItem[];
-  sessions: BacklogSession[];
-};
+// Dos preguntas distintas según el filtro de año, igual que StatusBreakdown:
+// "All Time" es un BALANCE (cuánto debes ahora mismo y cuánto tardarías), y
+// un año concreto es el MOVIMIENTO de ese año (qué entró, qué salió, neto).
+// Trasladar el balance a un año pasado daba un número hueco: lo que hace
+// valiosa esta tarjeta es la proyección hacia delante, y una proyección
+// desde 2024 es una profecía cuyo final ya conocemos.
+type BacklogDebtCardProps =
+  | {
+      mode: 'all-time';
+      games: GameListItem[];
+      plannedGames: GameListItem[];
+      sessions: BacklogSession[];
+    }
+  | {
+      mode: 'year';
+      games: GameListItem[];
+      plannedGames: GameListItem[];
+      stateEvents: StateEventSummary[];
+      year: number;
+    };
 
 // Ventana para calcular el ritmo. El histórico completo miente cuando tu vida
 // cambia: si llevas un año jugando la mitad, "a tu ritmo" tiene que ser el
@@ -117,16 +132,293 @@ const computeBacklog = (
   };
 };
 
-export const BacklogDebtCard = ({
+// ── El movimiento de un año ────────────────────────────────────────────────
+//
+// Cada juego tiene una VENTANA DE DEUDA: entra cuando llega a Afterplay
+// (addedAt — da igual si por Plan to Play o directo a la biblioteca sin
+// jugar: las dos cosas son deuda por las mismas horas) y sale con el primer
+// evento que lo pone en marcha o lo cierra (started/completed/dropped). Con
+// esas dos fechas se sabe qué debía cada juego en cualquier instante, y por
+// tanto qué entró y qué salió en un año concreto.
+//
+// La guarda que hace falta con una biblioteca llena de historial retroactivo
+// como esta: un juego añadido en 2026 con un "completado en 2015" tiene la
+// salida ANTES que la entrada. Ese nunca fue backlog — se descarta entero en
+// vez de contarlo como un movimiento negativo imposible.
+const TERMINAL_TYPES = new Set(['started', 'completed', 'dropped']);
+
+type DebtWindow = { hours: number; enteredAt: number; leftAt: number | null };
+
+type BacklogMovement = {
+  addedHours: number;
+  addedCount: number;
+  clearedHours: number;
+  clearedCount: number;
+  netHours: number;
+  // Saldo al terminar el año (o AHORA, si es el año en curso).
+  endBalanceHours: number;
+  balanceIsNow: boolean;
+  withoutEstimate: number;
+  // El año en que la biblioteca empezó a existir: todo lo que se importó
+  // hacia atrás entra como deuda ESE año aunque el juego lleve en tu cuenta
+  // desde 2018, así que su cifra no es comparable con la de los demás.
+  isFirstYear: boolean;
+};
+
+const computeMovement = (
+  games: GameListItem[],
+  plannedGames: GameListItem[],
+  stateEvents: StateEventSummary[],
+  year: number,
+  now: number,
+): BacklogMovement => {
+  // Primer evento que saca a cada juego de la deuda. Los replays no
+  // molestan: quedarse con el MÁS TEMPRANO ya da el momento en que dejó de
+  // estar pendiente por primera vez.
+  const exitByGame = new Map<number, number>();
+  for (const event of stateEvents) {
+    if (!TERMINAL_TYPES.has(event.type)) continue;
+    const time = event.occurredAt.getTime();
+    const current = exitByGame.get(event.gameId);
+    if (current === undefined || time < current) exitByGame.set(event.gameId, time);
+  }
+
+  // Los endless fuera, misma regla que el balance: no tienen final que
+  // alcanzar, así que nunca son una deuda que se pueda saldar.
+  const all = [...games, ...plannedGames].filter((game) => !game.endless);
+
+  const windows: DebtWindow[] = [];
+  let withoutEstimate = 0;
+  for (const game of all) {
+    const enteredAt = game.addedAt.getTime();
+    const leftAt = exitByGame.get(game.id) ?? null;
+    // Nunca fue backlog: se añadió ya jugado o ya terminado (la salida no es
+    // posterior a la entrada).
+    if (leftAt !== null && leftAt <= enteredAt) continue;
+
+    const touchesYear =
+      new Date(enteredAt).getFullYear() === year ||
+      (leftAt !== null && new Date(leftAt).getFullYear() === year);
+    if (game.hltbMain === null) {
+      if (touchesYear) withoutEstimate++;
+      continue;
+    }
+    windows.push({ hours: game.hltbMain, enteredAt, leftAt });
+  }
+
+  const yearStart = new Date(year, 0, 1).getTime();
+  const yearEnd = new Date(year + 1, 0, 1).getTime();
+  const inYear = (time: number): boolean => time >= yearStart && time < yearEnd;
+
+  let addedHours = 0;
+  let addedCount = 0;
+  let clearedHours = 0;
+  let clearedCount = 0;
+  let endBalanceHours = 0;
+  // El saldo se corta a HOY si el año todavía no ha terminado: decir "al
+  // cerrar 2026" en agosto de 2026 sería inventarse un cierre.
+  const balanceAt = Math.min(yearEnd, now);
+  const balanceIsNow = now < yearEnd;
+
+  for (const window of windows) {
+    if (inYear(window.enteredAt)) {
+      addedHours += window.hours;
+      addedCount++;
+    }
+    if (window.leftAt !== null && inYear(window.leftAt)) {
+      clearedHours += window.hours;
+      clearedCount++;
+    }
+    // Pendiente en el instante de corte: entró antes y aún no había salido.
+    if (window.enteredAt <= balanceAt && (window.leftAt === null || window.leftAt > balanceAt)) {
+      endBalanceHours += window.hours;
+    }
+  }
+
+  const firstAddedAt = all.reduce<number | null>(
+    (earliest, game) =>
+      earliest === null || game.addedAt.getTime() < earliest ? game.addedAt.getTime() : earliest,
+    null,
+  );
+
+  return {
+    addedHours,
+    addedCount,
+    clearedHours,
+    clearedCount,
+    netHours: addedHours - clearedHours,
+    endBalanceHours,
+    balanceIsNow,
+    withoutEstimate,
+    isFirstYear: firstAddedAt !== null && new Date(firstAddedAt).getFullYear() === year,
+  };
+};
+
+export const BacklogDebtCard = (props: BacklogDebtCardProps): React.JSX.Element => {
+  // El reloj se lee UNA vez al montar — impuro leerlo en cada render, y el
+  // dato no cambia entre repintados (misma razón que abajo).
+  const [now] = useState(() => Date.now());
+
+  if (props.mode === 'year') {
+    return <MovementCard {...props} now={now} />;
+  }
+  return <BalanceCard {...props} now={now} />;
+};
+
+// ── El movimiento del año ──────────────────────────────────────────────────
+
+const MovementCard = ({
+  games,
+  plannedGames,
+  stateEvents,
+  year,
+  now,
+}: Extract<BacklogDebtCardProps, { mode: 'year' }> & { now: number }): React.JSX.Element => {
+  const stats = computeMovement(games, plannedGames, stateEvents, year, now);
+  const grew = stats.netHours > 0;
+  // Crecer viste el violeta de la deuda; encoger, el verde de la casa — es
+  // LA lectura de la tarjeta y tiene que verse antes de leer el número.
+  const netColor = grew ? VIOLET : GREEN;
+  const moved = stats.addedCount > 0 || stats.clearedCount > 0;
+  const maxSide = Math.max(stats.addedHours, stats.clearedHours, 1);
+
+  return (
+    <StatCard className="flex h-full flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[14px] font-bold text-foreground">Backlog movement</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            What you took on versus what you cleared in {year}
+          </div>
+        </div>
+        <Tooltip>
+          <TooltipTrigger className="flex-none text-muted-foreground/60 hover:text-foreground">
+            <Info size={13} />
+          </TooltipTrigger>
+          <TooltipContent>
+            Main Story times from HowLongToBeat. A game joins your backlog when it enters Afterplay
+            and leaves it the moment you start, finish or drop it — games added already played never
+            count. Endless games are left out, and these are today&apos;s HowLongToBeat estimates,
+            not the ones from back then.
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
+      {!moved ? (
+        <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
+          <Hourglass size={26} className="text-muted-foreground/40" />
+          <div className="mt-2.5 text-[13px] font-semibold text-foreground">
+            Your backlog didn&apos;t move in {year}.
+          </div>
+          <div className="mt-1 max-w-64 text-[11.5px] text-muted-foreground">
+            Nothing new took it on, nothing came off it.
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3.5 flex flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:gap-7">
+          <div className="flex-none sm:w-64">
+            <div className="flex items-baseline gap-2.5">
+              {grew ? (
+                <TrendingUp size={26} color={netColor} className="self-center" />
+              ) : (
+                <TrendingDown size={26} color={netColor} className="self-center" />
+              )}
+              <span className="text-[42px] font-extrabold tabular-nums" style={{ color: netColor }}>
+                {grew ? '+' : '−'}
+                {Math.abs(Math.round(stats.netHours))}
+              </span>
+              <span className="text-[14px] text-muted-foreground">hours</span>
+            </div>
+            <div className="mt-0.5 text-[12.5px] font-semibold text-muted-foreground">
+              {stats.netHours === 0
+                ? 'you broke even'
+                : grew
+                  ? 'your backlog grew'
+                  : 'you gained ground on it'}
+            </div>
+            {stats.withoutEstimate > 0 && (
+              <div className="mt-1.5 text-[11px] text-muted-foreground/70">
+                + {pluralize(stats.withoutEstimate, 'game')} with no HowLongToBeat estimate
+              </div>
+            )}
+            {/* El aviso que hace honesta la comparación entre años: el año en
+                que empezaste a usar Afterplay se lleva de golpe todo lo que
+                importaste hacia atrás y sigue pendiente. */}
+            {stats.isFirstYear && (
+              <div className="mt-1.5 text-[11px] text-muted-foreground/70">
+                Your first year here — everything you imported counts as taken on now
+              </div>
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-col gap-2 border-white/5 sm:border-l sm:pl-7">
+            <MovementSide
+              label="Took on"
+              hours={stats.addedHours}
+              count={stats.addedCount}
+              max={maxSide}
+              color={VIOLET}
+            />
+            <MovementSide
+              label="Cleared"
+              hours={stats.clearedHours}
+              count={stats.clearedCount}
+              max={maxSide}
+              color={GREEN}
+            />
+            <div className="mt-0.5 flex items-center justify-between text-[11.5px]">
+              <span className="text-muted-foreground">
+                {stats.balanceIsNow ? `${year} so far` : `Ended ${year} owing`}
+              </span>
+              <span className="font-semibold tabular-nums" style={{ color: GRAY }}>
+                {formatHours(stats.endBalanceHours)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </StatCard>
+  );
+};
+
+// Un lado del movimiento (lo que entró / lo que salió), con su barra
+// proporcional al lado mayor — el desequilibrio entre los dos ES la noticia.
+const MovementSide = ({
+  label,
+  hours,
+  count,
+  max,
+  color,
+}: {
+  label: string;
+  hours: number;
+  count: number;
+  max: number;
+  color: string;
+}): React.JSX.Element => (
+  <div className="flex items-center gap-2.5">
+    <span className="w-27 flex-none text-[12px] text-muted-foreground">{label}</span>
+    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/6">
+      <div
+        className="h-full rounded-full transition-[width] duration-500 ease-[cubic-bezier(.16,1,.3,1)]"
+        style={{ width: `${(hours / max) * 100}%`, background: color }}
+      />
+    </div>
+    <span className="w-30 flex-none text-right text-[12px] font-bold tabular-nums text-foreground">
+      {formatHours(hours)}
+      <span className="ml-1 font-normal text-muted-foreground">· {count}</span>
+    </span>
+  </div>
+);
+
+// ── El balance de siempre (All Time) ───────────────────────────────────────
+
+const BalanceCard = ({
   games,
   plannedGames,
   sessions,
-}: BacklogDebtCardProps): React.JSX.Element => {
-  // El reloj se lee UNA vez al montar y se queda fijo: leerlo en cada render
-  // es impuro (react-hooks/purity) y además no aporta nada — el plazo del
-  // backlog no cambia entre dos repintados. Cambiar de año remonta el árbol
-  // (key en Stats.tsx), así que tampoco se queda rancio en la práctica.
-  const [now] = useState(() => Date.now());
+  now,
+}: Extract<BacklogDebtCardProps, { mode: 'all-time' }> & { now: number }): React.JSX.Element => {
   const stats = computeBacklog(games, plannedGames, sessions, now);
 
   return (

@@ -74,8 +74,15 @@ const steamAppIdFromExternals = (
   return null;
 };
 
+// Tope de la búsqueda. Ningún título real se acerca (el más largo del mundo
+// ronda los 130 caracteres); lo que sí llega más largo es un accidente — el
+// caso real: un log de error pegado en la caja de búsqueda mandó 13KB de
+// stack trace como query e IGDB lo devolvió con un 400 que parecía un fallo
+// de la app. Se recorta y se busca lo que quepa, en vez de fallar.
+const MAX_QUERY_LENGTH = 150;
+
 export const searchGames = async (query: string): Promise<IgdbSearchResult[]> => {
-  const escaped = escapeQuery(query);
+  const escaped = escapeQuery(query.slice(0, MAX_QUERY_LENGTH));
 
   // IGDB's "search" pondera relevancia de texto y no hace bien el "a medio
   // escribir" — comprobado en vivo, buscar "pragmat" no encontraba

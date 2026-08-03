@@ -34,6 +34,9 @@ export type AchievementToast = {
   // Hero del juego, de fondo tras el velo — el mismo recurso que usa el aviso
   // de sesión cerrada, para que los dos avisos hablen el mismo idioma.
   gameHeroUrl: string | null;
+  // La tarjeta del 100% (LOGROS-IDEAS.md §3.6): dorada, con su propia línea
+  // — se dispara al completar el último logro de un juego, no por rareza.
+  celebration?: boolean;
 };
 
 const GREEN = '#2fdc7e';
@@ -210,21 +213,25 @@ const drain = async (): Promise<void> => {
       }
 
       for (const toast of batch) {
-        const accent = accentFor(toast.globalPercent);
+        // El 100% viste ORO fijo y su propia letra — es el final de una
+        // cacería, no un logro más.
+        const celebration = toast.celebration === true;
+        const accent = celebration ? AMBER : accentFor(toast.globalPercent);
         await present({
           token: `s${Date.now()}-${toast.displayName}`,
           title: toast.displayName,
-          subtitle: 'Achievement unlocked',
+          subtitle: celebration ? '100% complete' : 'Achievement unlocked',
           gameTitle: toast.gameTitle,
           iconDataUri: await toDataUri(toast.iconUrl),
           heroDataUri: await toDataUri(toast.gameHeroUrl, 'heroes'),
           accent,
-          rarity:
-            toast.globalPercent !== null && toast.globalPercent < RARE
+          rarity: celebration
+            ? 'Every achievement unlocked'
+            : toast.globalPercent !== null && toast.globalPercent < RARE
               ? `Only ${toast.globalPercent.toFixed(1)}% of players have this`
               : null,
-          durationMs: SINGLE_MS,
-          rare: accent !== GREEN,
+          durationMs: celebration ? COMBINED_MS : SINGLE_MS,
+          rare: celebration || accent !== GREEN,
         });
         if (queue.length > 0 || batch.indexOf(toast) < batch.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, GAP_MS));
@@ -253,51 +260,7 @@ export const enqueueAchievementToasts = (toasts: AchievementToast[]): void => {
   }, 400);
 };
 
-// ⚠️ TEMPORAL — modo de prueba del aviso (quitar esto, su handler IPC, su
-// método de preload/hook y el botón de Ajustes cuando el diseño esté fijado).
-//
-// Va y viene enseñando tarjetas de tu propia biblioteca cada pocos segundos,
-// para poder mirar la ventana en distintos momentos de su animación y con
-// contenidos distintos —logro común, raro, ultra raro, combinado— sin tener
-// que ponerse a jugar y desbloquear cosas de verdad.
-let demoTimer: ReturnType<typeof setTimeout> | null = null;
-
-export const isAchievementDemoRunning = (): boolean => demoTimer !== null;
-
-export const stopAchievementDemo = (): void => {
-  if (demoTimer) clearTimeout(demoTimer);
-  demoTimer = null;
-};
-
-// Enseña una tarjeta al azar y se reprograma. Recibe los candidatos ya
-// resueltos (los pide el handler IPC a la DB) para que este módulo siga sin
-// saber nada de tablas.
-export const startAchievementDemo = (pool: AchievementToast[]): void => {
-  stopAchievementDemo();
-  if (pool.length === 0) return;
-
-  const tick = (): void => {
-    // Una de cada cinco veces, una tanda para ver el aviso COMBINADO — que
-    // es el que más cuesta pillar en la vida real.
-    const roll = Math.random();
-    const count = roll < 0.2 ? Math.min(pool.length, 4 + Math.floor(Math.random() * 20)) : 1;
-
-    const picked: AchievementToast[] = [];
-    for (let i = 0; i < count; i++) {
-      picked.push(pool[Math.floor(Math.random() * pool.length)]);
-    }
-    enqueueAchievementToasts(picked);
-
-    // Hueco variable: así se ven encadenadas y sueltas, no siempre al mismo
-    // ritmo.
-    demoTimer = setTimeout(tick, 5500 + Math.random() * 3500);
-  };
-
-  tick();
-};
-
 export const closeAchievementOverlay = (): void => {
-  stopAchievementDemo();
   if (flushTimer) clearTimeout(flushTimer);
   queue = [];
   if (window && !window.isDestroyed()) window.destroy();

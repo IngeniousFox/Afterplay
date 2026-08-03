@@ -30,6 +30,27 @@ const getDbPath = (): string => join(app.getPath('userData'), 'Afterplay.db');
 const hasRemoteConfigured = (): boolean =>
   Boolean(process.env.DATABASE_URL && process.env.DATABASE_AUTH_TOKEN);
 
+// QUÉ base de datos remota es esta, para decirlo en cada log de conexión.
+//
+// No es cosmético: el 3-ago-2026 una prueba en un sandbox aislado acabó
+// conectada a la base de datos REAL (arrancó sin credentials.json, así que
+// importó el .env del proyecto, que entonces tenía la de producción activa)
+// y le empujó una migración. El log decía solo "conectado con Turso", así
+// que el error tardó seis segundos en verse en vez de uno.
+//
+// Solo el nombre del host, nunca el token: esto va a una consola que se pega
+// en informes de error (hoy mismo ha pasado varias veces).
+const remoteLabel = (): string => {
+  const url = process.env.DATABASE_URL;
+  if (!url) return 'sin remota';
+  try {
+    // libsql://afterplay-test-xxx.turso.io -> afterplay-test-xxx
+    return new URL(url).hostname.split('.')[0];
+  } catch {
+    return 'remota desconocida';
+  }
+};
+
 // getDb() sigue siendo síncrono a propósito — lo llaman decenas de queries
 // existentes sin esperar nada. Solo es seguro llamarlo después de
 // runMigrations(), que es lo primero que toca la DB en el arranque (SPEC
@@ -199,7 +220,7 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 
   try {
     const db = await connectWithSync();
-    console.log('[db] conectado con Turso - sync activado');
+    console.log(`[db] conectado con Turso [${remoteLabel()}] - sync activado`);
     return { db, capable: true };
   } catch (error) {
     if (isStaleMetadataError(error)) {
@@ -209,7 +230,9 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
       clearOrphanedSyncSidecars();
       try {
         const db = await connectWithSync();
-        console.log('[db] conectado con Turso tras limpiar metadatos huerfanos - sync activado');
+        console.log(
+          `[db] conectado con Turso [${remoteLabel()}] tras limpiar metadatos huerfanos - sync activado`,
+        );
         return { db, capable: true };
       } catch (retryError) {
         console.warn(
@@ -336,7 +359,7 @@ const attemptSyncUpgrade = async (): Promise<void> => {
       const db = await connectWithSync();
       dbInstance = db;
       syncCapable = true;
-      console.log('[db] conexion con Turso restablecida - sync activado');
+      console.log(`[db] conexion con Turso [${remoteLabel()}] restablecida - sync activado`);
     } catch (error) {
       console.warn('[db] reintento de conexion con Turso fallido, sigo en local:', error);
       dbInstance = await connectLocalOnly();

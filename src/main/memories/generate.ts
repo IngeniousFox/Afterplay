@@ -56,7 +56,17 @@ const MAX_TOKENS = 4_096;
 // volvió a fallar — esta vez CONTANDO la lista mal ("eighteen" en vez de
 // 19). El total ahora también va precalculado (§ "Total finishes"), y el
 // esfuerzo sube a 'medium' (ver la llamada más abajo).
-export const PROMPT_VERSION = 4;
+//
+// v5 (2026-08-03): los LOGROS entran al guion (LOGROS-IDEAS.md §2.3), y con
+// ellos el color narrativo que faltaba: hasta ahora el recap no tenía ni un
+// hecho verificado sobre qué pasa DENTRO de los juegos — solo cifras — y no
+// podía decir "pasaste el mes escalando la montaña" sin inventar. El nombre
+// y la descripción de un logro desbloqueado son exactamente ese hecho. Van
+// CURADOS en código (totales precalculados + un puñado de citables, jamás la
+// lista entera — las lecciones v3/v4 sobre listas largas), y las dos mejoras
+// entran JUNTAS en una sola versión a propósito: una tanda de regeneración,
+// no dos.
+export const PROMPT_VERSION = 5;
 
 // Mismo truco de cliente reutilizado que curiosities/generate.ts: el backfill
 // encadena decenas de llamadas y renegociar TLS en cada una es tirar tiempo.
@@ -82,6 +92,8 @@ Accuracy rules — these outrank everything else:
 - State the facts plainly. Never question them, never speculate about why a number is what it is, never guess at feelings or reasons.
 - Never derive orderings yourself: no "first", "last", "earliest", "latest", "busiest" or streak claims unless the fact list labels that exact thing explicitly. If a fact is labeled (for example "the period's last finish"), you may use it as labeled.
 - If the period has little to tell, write less. Short and modest always beats filler.
+
+Achievements, when provided, are your window into what happened INSIDE the games: an unlocked achievement's name and description are verified facts about something the player actually did there. Use them as color — "you fought your way to the summit" beats "you played 19 hours" — but only ever describe what a listed achievement literally says. Rarity percentages, when present, mean the share of all players who have it; below 10% is genuinely rare and worth a nod. Use the given totals verbatim, never count the highlight list yourself, and never treat the highlights as the complete set.
 
 Style rules:
 - English. Warm, concrete and plain — a friend who remembers, not a year-in-review ad.
@@ -205,6 +217,28 @@ const buildUserPrompt = (chapter: Chapter): string => {
       lines.push(
         `- ${VERBS[change.type] ?? change.type} ${change.title} (${shortDate(change.occurredAt)})`,
       );
+    }
+  }
+
+  if (chapter.achievements !== null) {
+    // Curados en el capítulo (LOGROS-IDEAS.md §2.3): totales cerrados y un
+    // puñado de citables — el modelo redacta, jamás cuenta ni completa.
+    const { total, rareCount, highlights } = chapter.achievements;
+    lines.push(
+      `Achievements unlocked this period: ${total} total${
+        rareCount > 0 ? `, ${rareCount} of them rare (under 10% of players)` : ''
+      }. Use these exact numbers if you state a count — the list below is only a partial selection of highlights, never count it.`,
+    );
+    if (highlights.length > 0) {
+      lines.push('Standout achievements (rarest first):');
+      for (const highlight of highlights) {
+        const rarity =
+          highlight.globalPercent !== null
+            ? ` — held by ${highlight.globalPercent}% of players`
+            : '';
+        const description = highlight.description ? `: "${highlight.description}"` : '';
+        lines.push(`- "${highlight.name}" in ${highlight.gameTitle}${description}${rarity}`);
+      }
     }
   }
 

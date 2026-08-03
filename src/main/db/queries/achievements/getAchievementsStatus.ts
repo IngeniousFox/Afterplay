@@ -1,12 +1,14 @@
-import { isNotNull, sql } from 'drizzle-orm';
+import { isNotNull, or, sql } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { AchievementsStatus } from '../../../../shared/types';
 import { achievementsTable, achievementUnlocksTable, gamesTable } from '../../schema';
 
 // Números de la tarjeta de Ajustes. Cuenta juegos ELEGIBLES (con appid de
-// Steam) y no todos: los emulados de consola no pueden tener logros por esta
-// vía, y meterlos en el denominador daría un "300/333" permanentemente
-// incompleto que parecería un fallo.
+// Steam O emparejados con RetroAchievements) y no todos: un juego sin
+// ninguna de las dos vías no puede tener logros, y meterlo en el denominador
+// daría un "300/333" permanentemente incompleto que parecería un fallo. El
+// caso real que obligó a sumar RA: la tarjeta llegó a decir "541 de 527" —
+// juegos de RA sincronizados que el denominador solo-Steam no contaba.
 export const getAchievementsStatus = async (
   running: boolean,
   failedGames: number,
@@ -16,7 +18,7 @@ export const getAchievementsStatus = async (
   const [eligible] = await db
     .select({ n: sql<number>`count(*)` })
     .from(gamesTable)
-    .where(isNotNull(gamesTable.steamAppId));
+    .where(or(isNotNull(gamesTable.steamAppId), isNotNull(gamesTable.raGameId)));
 
   const [synced] = await db
     .select({ n: sql<number>`count(*)` })
@@ -37,6 +39,7 @@ export const getAchievementsStatus = async (
     running,
     hasApiKey: Boolean(process.env.STEAM_API_KEY),
     hasUserId: Boolean(process.env.STEAM_USER_ID64),
+    hasRaCredentials: Boolean(process.env.RA_USERNAME && process.env.RA_API_KEY),
     failedGames,
   };
 };

@@ -75,6 +75,11 @@ export const queryKeys = {
     all: ['achievements'] as const,
     status: ['achievements', 'status'] as const,
     game: (gameId: number) => ['achievements', 'game', gameId] as const,
+    // Bajo el prefijo ['achievements'] a propósito: la invalidación de la
+    // raíz (useAchievementsActivitySync) la refresca sin saber que existe.
+    // El año en la key: cada filtro de Stats es su propia consulta cacheada.
+    overview: (year: number | 'all') => ['achievements', 'overview', year] as const,
+    sessionUnlocks: ['achievements', 'sessionUnlocks'] as const,
   },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,

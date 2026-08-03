@@ -1,9 +1,20 @@
 import { eq, isNotNull } from 'drizzle-orm';
 import { getDb } from '../..';
-import type { ChapterStateEvent, ManualBlock } from '../../../../shared/memory/chapters';
+import type {
+  ChapterStateEvent,
+  ChapterUnlock,
+  ManualBlock,
+} from '../../../../shared/memory/chapters';
 import type { MemorySession } from '../../../../shared/memory/moments';
 import { manualHoursAnchor } from '../../../../shared/playthroughState';
-import { gamesTable, iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
+import {
+  achievementsTable,
+  achievementUnlocksTable,
+  gamesTable,
+  iterationsTable,
+  sessionsTable,
+  stateEventsTable,
+} from '../../schema';
 
 // La materia prima de los capítulos del Loop (shared/memory) leída de la DB
 // en una pasada: sesiones con su juego resuelto, eventos de estado, títulos,
@@ -26,6 +37,11 @@ export type MemoryFacts = {
   // Suma por juego de esos bloques — la línea base de los hitos de horas de
   // deriveMoments (ahí no importa el ancla, solo cuánto había ya jugado).
   manualHoursByGame: Map<number, number>;
+  // Los desbloqueos de logros con fecha FIABLE, ya fundidos por logro entre
+  // fuentes (LOGROS-IDEAS.md §2.3) — la materia del bloque de logros de cada
+  // capítulo. Los de fecha no fiable ni salen de aquí: una fecha de rescate
+  // no puede fabricar historia en ningún mes.
+  unlocks: ChapterUnlock[];
 };
 
 export const getMemoryFacts = async (): Promise<MemoryFacts> => {
@@ -88,5 +104,47 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     manualHoursByGame.set(row.gameId, (manualHoursByGame.get(row.gameId) ?? 0) + hours);
   }
 
-  return { sessions, events: eventRows, titlesByGame, manualBlocks, manualHoursByGame };
+  // Desbloqueos con su definición, para fundirlos por logro con la MISMA
+  // regla que getGameAchievements: fecha fiable gana; empatadas, la más
+  // temprana. Al capítulo solo viajan los que quedan con fecha fiable.
+  const unlockRows = await db
+    .select({
+      achievementId: achievementUnlocksTable.achievementId,
+      gameId: achievementsTable.gameId,
+      name: achievementsTable.displayName,
+      description: achievementsTable.description,
+      globalPercent: achievementsTable.globalPercent,
+      unlockedAt: achievementUnlocksTable.unlockedAt,
+      dateReliable: achievementUnlocksTable.dateReliable,
+    })
+    .from(achievementUnlocksTable)
+    .innerJoin(achievementsTable, eq(achievementUnlocksTable.achievementId, achievementsTable.id));
+
+  const mergedUnlocks = new Map<number, (typeof unlockRows)[number]>();
+  for (const row of unlockRows) {
+    const existing = mergedUnlocks.get(row.achievementId);
+    if (!existing) {
+      mergedUnlocks.set(row.achievementId, row);
+      continue;
+    }
+    if (row.dateReliable && !existing.dateReliable) {
+      mergedUnlocks.set(row.achievementId, row);
+      continue;
+    }
+    if (!row.dateReliable && existing.dateReliable) continue;
+    if (row.unlockedAt.getTime() < existing.unlockedAt.getTime()) {
+      mergedUnlocks.set(row.achievementId, row);
+    }
+  }
+  const unlocks: ChapterUnlock[] = [...mergedUnlocks.values()]
+    .filter((row) => row.dateReliable)
+    .map((row) => ({
+      gameId: row.gameId,
+      name: row.name,
+      description: row.description,
+      globalPercent: row.globalPercent,
+      unlockedAt: row.unlockedAt,
+    }));
+
+  return { sessions, events: eventRows, titlesByGame, manualBlocks, manualHoursByGame, unlocks };
 };

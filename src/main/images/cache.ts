@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { app } from 'electron';
 import axios from 'axios';
 import { extname, join } from 'path';
+import { normalizeSteamCommunityImageUrl } from './steamCdn';
 
 // El nombre coincide con el de la carpeta dentro de userData, así no hace
 // falta mapear uno a otro. 'screenshots' se añade en el Bloque 2H para el
@@ -56,6 +57,20 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 const ATTEMPTS = 3;
 
+// Un 404 no es contención: es una respuesta definitiva. Reintentarlo tres
+// veces con espera era triplicar peticiones muertas por cada imagen que ya
+// no existe — y con un juego entero de iconos rotos, cientos de ellas.
+const isDefinitive = (error: unknown): boolean => {
+  const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+  return status !== undefined && status >= 400 && status < 500;
+};
+
+// Y las que ya fallaron así NO se vuelven a pedir mientras la app viva: la
+// caché solo guarda éxitos (si no hay fichero, se reintenta la descarga), así
+// que sin esto cada repintado de esa lista repetía el ciclo entero. Mismo
+// recurso que el `failed` de steam/hiddenDescriptions.ts.
+const permanentlyFailed = new Set<string>();
+
 const downloadWithRetry = async (url: string): Promise<Buffer> => {
   let lastError: unknown;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
@@ -67,6 +82,10 @@ const downloadWithRetry = async (url: string): Promise<Buffer> => {
       return Buffer.from(response.data);
     } catch (error) {
       lastError = error;
+      if (isDefinitive(error)) {
+        permanentlyFailed.add(url);
+        throw error;
+      }
       // Backoff corto — casi siempre es contención momentánea del CDN por la
       // ráfaga de descargas simultáneas, no un fallo real de la URL.
       if (attempt < ATTEMPTS) await sleep(attempt * 400);
@@ -87,10 +106,21 @@ const inFlight = new Map<string, Promise<string>>();
 // antemano) como "al mostrarla" (lazy, ver images/api.ts) — no hace falta
 // una función distinta para cada momento, cachear ya es de por sí "usa lo
 // que haya, descarga si no hay nada".
-export const cacheImage = async (url: string, type: ImageCacheType): Promise<string> => {
+export const cacheImage = async (rawUrl: string, type: ImageCacheType): Promise<string> => {
+  // Se traduce ANTES de nada, incluido el nombre del fichero en caché: así
+  // las decenas de miles de URLs de logro YA guardadas con la ubicación
+  // vieja de Steam funcionan sin resincronizar nada, y la vieja y la nueva
+  // comparten el mismo fichero en vez de descargarse dos veces.
+  const url = normalizeSteamCommunityImageUrl(rawUrl);
   const dir = getImageCacheDir(type);
   const filePath = join(dir, filenameForUrl(url));
   if (existsSync(filePath)) return filePath;
+
+  // Ya se sabe que esta no existe: fallar rápido y en silencio, sin volver a
+  // salir a la red en cada repintado.
+  if (permanentlyFailed.has(url)) {
+    throw new Error(`Imagen no disponible (fallo definitivo previo): ${url}`);
+  }
 
   const key = `${type}:${url}`;
   const existing = inFlight.get(key);

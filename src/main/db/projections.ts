@@ -51,6 +51,8 @@ export const gameColumns = {
   steamAppIdCheckedAt: gamesTable.steamAppIdCheckedAt,
   achievementsSyncedAt: gamesTable.achievementsSyncedAt,
   achievementsUnlocksSyncedAt: gamesTable.achievementsUnlocksSyncedAt,
+  raGameId: gamesTable.raGameId,
+  raCheckedAt: gamesTable.raCheckedAt,
 };
 
 export const curiosityColumns = {

@@ -6,6 +6,7 @@ import { gamesTable } from '../../db/schema';
 import { existingEmuBases } from './locations';
 import { readEmuUnlocksForGame } from './readUnlocks';
 import { storeUnlocks } from '../syncAchievements';
+import { maybeCelebrateCompletion } from '../notifications/complete';
 import { enqueueAchievementToasts } from '../notifications/overlay';
 import { notifyAchievementsActivity } from '../notify';
 
@@ -82,6 +83,8 @@ const flush = async (): Promise<void> => {
       enqueueAchievementToasts(
         fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
       );
+      // ¿Acaba de caer el último? El broche dorado del 100%.
+      maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
       // Y que la ficha abierta se entere sin recargar nada.
       notifyAchievementsActivity({
         kind: 'synced',

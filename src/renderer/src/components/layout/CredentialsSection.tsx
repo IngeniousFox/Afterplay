@@ -22,7 +22,7 @@ type FieldKey = keyof CredentialsValues;
 //
 // El nombre del servicio va en la cabecera del grupo, así que las etiquetas
 // de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
-type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2' | 'anthropic' | 'steam';
+type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2' | 'anthropic' | 'steam' | 'ra';
 
 type Service = {
   id: ServiceId;
@@ -107,6 +107,19 @@ const SERVICES: Service[] = [
       { key: 'steamUserId64', label: 'STEAMID64 (FOR YOUR UNLOCKS)' },
     ],
     isReady: (creds) => Boolean(creds.steamApiKey),
+  },
+  {
+    id: 'ra',
+    label: 'RetroAchievements',
+    detail: 'Retro console achievements · optional',
+    where: 'retroachievements.org/settings (Keys)',
+    // Los dos o nada: la key autentica la API, pero sin usuario no se sabe
+    // DE QUIÉN leer los desbloqueos — media configuración no trae nada.
+    fields: [
+      { key: 'raUsername', label: 'USERNAME' },
+      { key: 'raApiKey', label: 'WEB API KEY' },
+    ],
+    isReady: (creds) => Boolean(creds.raUsername && creds.raApiKey),
   },
 ];
 

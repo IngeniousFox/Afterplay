@@ -10,20 +10,24 @@ import {
 import { ensureGoldbergCatalog } from './emu/goldbergCatalog';
 import { readEmuUnlocksForGame } from './emu/readUnlocks';
 import { getSessionWindows, placeUnlock } from './matchSessions';
+import { maybeCelebrateCompletion } from './notifications/complete';
 import { enqueueAchievementToasts } from './notifications/overlay';
 import type { AchievementToast } from './notifications/overlay';
 import type { PendingAchievementsGame } from './queue';
 
 // El juego (nombre y hero) solo se conoce aquí, no dentro de storeUnlocks
-// (que trabaja por gameId) — se rellena al encolar.
+// (que trabaja por gameId) — se rellena al encolar. Y tras la tanda, la
+// comprobación del 100%: si estos desbloqueos acaban de cerrar el juego, cae
+// el broche dorado (notifications/complete.ts).
 const toastFresh = (
-  game: Pick<PendingAchievementsGame, 'title' | 'heroUrl'>,
+  game: Pick<PendingAchievementsGame, 'id' | 'title' | 'heroUrl'>,
   fresh: AchievementToast[],
 ): void => {
   if (fresh.length === 0) return;
   enqueueAchievementToasts(
     fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
   );
+  maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
 };
 
 // Sincronizar los logros de UN juego (LOGROS.md §3-4): el catálogo (qué
@@ -75,7 +79,7 @@ const unreliableTimestamps = (unlocks: UnlockInput[]): Set<number> => {
 // sin esa distinción, la primera pasada por 300 juegos dispararía miles.
 export const storeUnlocks = async (
   gameId: number,
-  source: 'steam' | 'emu',
+  source: 'steam' | 'emu' | 'ra',
   unlocks: UnlockInput[],
   // Para los desbloqueos sin fecha propia (Steam la perdió, o el crack no la
   // guardó): sí lo tienes, y perderlo sería peor que fecharlo hoy.

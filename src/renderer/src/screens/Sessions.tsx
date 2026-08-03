@@ -2,13 +2,14 @@ import { Activity, ArrowRight, Calendar, Clock, Flame } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { deriveMoments, momentsBySession } from '../../../shared/memory/moments';
-import type { SessionWithGame } from '../../../shared/types';
+import type { SessionUnlock, SessionWithGame } from '../../../shared/types';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { DeleteSessionDialog } from '../components/sessions/DeleteSessionDialog';
 import { MonthStoryCard } from '../components/sessions/MonthStoryCard';
 import { Pager } from '../components/sessions/Pager';
 import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
 import { SessionRow } from '../components/sessions/SessionRow';
+import { useSessionUnlocks } from '../hooks/achievements';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
 import { useSessions } from '../hooks/sessions';
@@ -125,6 +126,20 @@ export const Sessions = (): React.JSX.Element => {
     );
     return momentsBySession(deriveMoments(sessions, manualHoursByGame));
   }, [sessions, games]);
+
+  // Los trofeos de cada sesión (LOGROS-IDEAS.md §2.1), de UNA consulta
+  // global — indexados aquí por sesión para vestir las filas, igual que los
+  // momentos de arriba.
+  const { data: sessionUnlocks = [] } = useSessionUnlocks();
+  const unlocksBySession = useMemo(() => {
+    const map = new Map<number, SessionUnlock[]>();
+    for (const unlock of sessionUnlocks) {
+      const list = map.get(unlock.sessionId) ?? [];
+      list.push(unlock);
+      map.set(unlock.sessionId, list);
+    }
+    return map;
+  }, [sessionUnlocks]);
 
   const [page, setPage] = useState(1);
   // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
@@ -334,6 +349,7 @@ export const Sessions = (): React.JSX.Element => {
                             (session.durationSec ?? 0) === longestSessionSec
                           }
                           moments={momentsIndex.get(session.id)}
+                          achievements={unlocksBySession.get(session.id)}
                           onDelete={() => setPendingDelete(session)}
                         />
                       ))}

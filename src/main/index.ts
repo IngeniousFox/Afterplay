@@ -34,6 +34,8 @@ import {
 import { setAchievementsNotifier } from './steam/notify';
 import { closeAchievementOverlay } from './steam/notifications/overlay';
 import { startEmuWatcher, stopEmuWatcher } from './steam/emu/watcher';
+import { runRaStartupPass } from './ra/backfill';
+import { startRaLivePoll, stopRaLivePoll } from './ra/livePoll';
 import { setMemoriesNotifier } from './memories/notify';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
@@ -624,6 +626,11 @@ app.whenReady().then(async () => {
     // vigilancia en vivo, que es la que los pilla mientras juegas.
     await runEmuUnlocksSweep();
     startEmuWatcher();
+    // RetroAchievements (RETROACHIEVEMENTS.md): emparejado + catálogos de lo
+    // emulado retro, y su sondeo en vivo — que solo pregunta mientras el
+    // watcher vea un emulador corriendo.
+    void runRaStartupPass();
+    startRaLivePoll(() => watcher?.hasActiveEmulator() ?? false);
   });
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
   memoriesTimer = setInterval(() => void runMemoriesDailyTick(), MEMORIES_TICK_MS);
@@ -661,6 +668,7 @@ app.on('before-quit', () => {
   // esto, una tarjeta en pantalla al salir mantendría el proceso vivo.
   closeAchievementOverlay();
   stopEmuWatcher();
+  stopRaLivePoll();
   if (syncTimer) clearInterval(syncTimer);
   if (memoriesTimer) clearInterval(memoriesTimer);
 });
