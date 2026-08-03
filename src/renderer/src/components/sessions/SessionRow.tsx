@@ -13,6 +13,7 @@ import {
   formatSessionEndTime,
 } from '../../lib/format';
 import { GameCover } from '../GameCover';
+import { SessionAchievements, type SessionAchievementEntry } from './SessionAchievements';
 import { SessionNote } from './SessionNote';
 
 type SessionRowProps = {
@@ -27,6 +28,9 @@ type SessionRowProps = {
   // récord, regreso, hito... Derivados al leer por la vista dueña (coste
   // cero de almacenamiento) — la fila solo los viste de distintivo.
   moments?: Moment[];
+  // Los trofeos que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1) — la vista
+  // dueña los trae de una sola consulta global (useSessionUnlocks).
+  achievements?: SessionAchievementEntry[];
   // Papelera al pasar el ratón (abre la confirmación de la vista dueña).
   // Solo se pinta en sesiones CERRADAS — una en vivo se para con Stop, no
   // se borra (el watcher la reabriría al ciclo siguiente).
@@ -63,6 +67,7 @@ export const SessionRow = ({
   maxDurationSec = 0,
   isRecord = false,
   moments = [],
+  achievements = [],
   onDelete,
 }: SessionRowProps): React.JSX.Element => {
   const isLive = session.endedAt === null;
@@ -137,6 +142,9 @@ export const SessionRow = ({
             })}
           </div>
         )}
+        {/* Los trofeos de la noche (LOGROS-IDEAS.md §2.1): píldora + iconos,
+            el mismo lenguaje de distintivos que los momentos de arriba. */}
+        <SessionAchievements entries={achievements} />
         {/* Diario de sesión, igual que en la ficha del juego: si escribiste
             "dónde lo dejé" al cerrar, aquí se lee y se corrige. */}
         <SessionNote sessionId={session.id} note={session.note} />

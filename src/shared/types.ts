@@ -217,6 +217,10 @@ export type { ImageCacheType } from '../main/images/cache';
 
 export type GameListItem = {
   id: number;
+  // Identidad en el catálogo de IGDB — aquí para que el buscador de Add Game
+  // reconozca qué resultados ya están en tu Plan to play y te lleve a
+  // promocionarlos en vez de darlos de alta por segunda vez.
+  igdbId: number;
   title: string;
   coverUrl: string | null;
   // Para la cara trasera de la card de la biblioteca (flip al pasar el
@@ -293,6 +297,19 @@ export type CredentialsValues = {
   // Anthropic para las curiosidades de juegos del modo ambiente — una llamada
   // por juego EN LA VIDA (quedan guardadas en la DB y sincronizan por Turso).
   anthropicApiKey: string | null;
+  // Steam Web API para los logros (LOGROS.md): la key trae el catálogo de
+  // logros de CUALQUIER juego (tenerlo o no); el SteamID64 hace falta solo
+  // para leer TUS desbloqueos en los juegos de tu cuenta — y la API respeta
+  // la privacidad del perfil: los "detalles de juego" tienen que ser
+  // públicos, la key no se lo salta.
+  steamApiKey: string | null;
+  steamUserId64: string | null;
+  // RetroAchievements (RETROACHIEVEMENTS.md) para los logros de lo emulado
+  // retro. La API se autentica solo con la key; el usuario dice DE QUIÉN son
+  // los desbloqueos que se leen — hacen falta los dos para que la fuente
+  // funcione.
+  raUsername: string | null;
+  raApiKey: string | null;
 };
 
 // ── Curiosidades de juego (modo ambiente) ──────────────────────────────────
@@ -325,6 +342,161 @@ export type CuriosityActivityEvent =
       currentTitle: string | null;
     }
   | { kind: 'generated'; gameId: number };
+
+// ── Logros (LOGROS.md) ─────────────────────────────────────────────────────
+// El catálogo de un juego más TUS desbloqueos, ya fundidos por la query de
+// lectura: la ficha no tiene que saber si un logro llegó por la API de Steam
+// o por el fichero de un emulador.
+
+// De dónde nos consta el desbloqueo. Un mismo logro puede constar por
+// varias: jugaste una vuelta pirata y luego lo compraste en Steam. 'ra' =
+// RetroAchievements (RETROACHIEVEMENTS.md), la fuente de lo emulado retro.
+export type AchievementSource = 'steam' | 'emu' | 'ra';
+
+export type AchievementEntry = {
+  id: number;
+  apiName: string;
+  displayName: string;
+  // null en los ocultos que aún no has desbloqueado — Steam guarda el
+  // secreto y nosotros también.
+  description: string | null;
+  iconUrl: string | null;
+  iconGrayUrl: string | null;
+  hidden: boolean;
+  // % de jugadores que lo tienen (rareza real de Steam). Null si no consta.
+  globalPercent: number | null;
+  // null = no lo tienes. Con fecha = la MÁS TEMPRANA de todas las fuentes:
+  // "la primera vez que lo hiciste".
+  unlockedAt: Date | null;
+  // false cuando la fecha es la del rescate y no la de la hazaña — pasa
+  // cuando un juego re-reporta su historial entero de golpe (ver
+  // dateReliable en db/schema.ts). Lo tienes; no se sabe cuándo.
+  dateReliable: boolean;
+  sources: AchievementSource[];
+  // El rato en el que caiste, si se pudo cruzar con tus sesiones. Null es
+  // normal y honesto: lo sacaste antes de usar Afterplay, o en otro PC.
+  sessionId: number | null;
+  iterationId: number | null;
+};
+
+export type GameAchievements = {
+  gameId: number;
+  // null si el juego no está en Steam (no hay de dónde sacarlos).
+  steamAppId: number | null;
+  // Cuándo se trajo el catálogo y cuándo tus desbloqueos. Null = nunca.
+  syncedAt: Date | null;
+  unlocksSyncedAt: Date | null;
+  entries: AchievementEntry[];
+};
+
+// Estado de la pasada de logros para la tarjeta de Ajustes.
+export type AchievementsStatus = {
+  // Juegos con appid de Steam — los únicos que pueden tener logros.
+  eligibleGames: number;
+  syncedGames: number;
+  totalAchievements: number;
+  unlockedAchievements: number;
+  running: boolean;
+  // Sin esto no se puede ni empezar (por la vía Steam); sin steamUserId hay
+  // catálogo pero no desbloqueos tuyos.
+  hasApiKey: boolean;
+  hasUserId: boolean;
+  // La otra fuente: usuario + key de RetroAchievements configurados.
+  hasRaCredentials: boolean;
+  // Juegos que fallaron en la última pasada y se pueden reintentar solos, sin
+  // repetir las 300 y pico.
+  failedGames: number;
+};
+
+// Un desbloqueo colgado de su sesión, con lo mínimo para pintarlo en una
+// fila de sesión (pantalla de Sesiones, historial de la ficha, toast).
+export type SessionUnlock = {
+  sessionId: number;
+  achievementId: number;
+  displayName: string;
+  iconUrl: string | null;
+  globalPercent: number | null;
+};
+
+// La vista GLOBAL de los logros para el bloque de trofeos de Stats
+// (LOGROS-IDEAS.md §3-4). La calcula el main en una pasada
+// (getAchievementsOverview) y el renderer solo pinta.
+export type AchievementsOverview = {
+  // Totales de SIEMPRE (no cambian con el filtro de año).
+  totalUnlocked: number;
+  totalCatalog: number;
+  // Con año filtrado: cuántos cayeron ESE año (solo fechas fiables). null en
+  // All Time.
+  yearTotals: { total: number; rare: number } | null;
+  // Solo fechas FIABLES (regla 1 del documento): los rescates de cracks no
+  // fabrican años.
+  unlockedByYear: { year: number; total: number; rare: number }[];
+  // El año elegido desglosado por mes (0-11, los 12 siempre — los ceros
+  // también cuentan la forma del año), con los tres cubos de rareza para la
+  // barra apilada. null en All Time.
+  unlockedByMonth:
+    { month: number; total: number; common: number; rare: number; ultra: number }[] | null;
+  // Los juegos del año por desbloqueos (todos los que tengan alguno, orden
+  // descendente). null en All Time.
+  topGames:
+    | { gameId: number; title: string; coverUrl: string | null; total: number; rare: number }[]
+    | null;
+  // Tus conseguidos más raros de toda la biblioteca, rareza ascendente.
+  hallOfFame: {
+    gameId: number;
+    gameTitle: string;
+    displayName: string;
+    iconUrl: string | null;
+    globalPercent: number;
+    // null si la fecha no es fiable — se enseña el logro, no el momento.
+    unlockedAt: Date | null;
+  }[];
+  // Juegos al 100% (solo con desbloqueos conocidos — regla 2). completedAt =
+  // la fecha del ÚLTIMO logro, y solo si todas las del juego son fiables.
+  perfectGames: {
+    gameId: number;
+    title: string;
+    coverUrl: string | null;
+    total: number;
+    completedAt: Date | null;
+  }[];
+  // A un empujón del 100%: qué juegos y qué falta (sin descripciones de
+  // ocultos — regla 3).
+  almostThere: {
+    gameId: number;
+    title: string;
+    coverUrl: string | null;
+    unlocked: number;
+    total: number;
+    missing: {
+      displayName: string;
+      iconUrl: string | null;
+      globalPercent: number | null;
+      hidden: boolean;
+    }[];
+  }[];
+  rarityProfile: { common: number; rare: number; ultra: number };
+};
+
+// Último fallo de sincronización con Turso, para enseñarlo en Ajustes. Un
+// desajuste de esquema no se cura reintentando, así que se distingue.
+export type SyncFailureInfo = {
+  message: string;
+  at: Date;
+  schemaMismatch: boolean;
+  consecutive: number;
+};
+
+export type AchievementActivityEvent =
+  | {
+      kind: 'progress';
+      running: boolean;
+      done: number;
+      total: number;
+      failed: number;
+      currentTitle: string | null;
+    }
+  | { kind: 'synced'; gameId: number; catalogCount: number; unlockedCount: number };
 
 // ── Recaps del Loop (AFTERPLAY-LOOP.md §3) ────────────────────────────────
 // La prosa de cada periodo cerrado, generada una vez y leída en el Journey y

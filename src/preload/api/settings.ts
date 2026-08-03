@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import type { CredentialsValues, TimeFormat } from '../../shared/types';
+import type { CredentialsValues, SyncFailureInfo, TimeFormat } from '../../shared/types';
 
 export const settingsApi = {
   getOpenAtLogin: (): Promise<boolean> => ipcRenderer.invoke('settings:getOpenAtLogin'),
@@ -13,6 +13,9 @@ export const settingsApi = {
     ipcRenderer.invoke('settings:getAmbientIdleMinutes'),
   setAmbientIdleMinutes: (minutes: number): Promise<void> =>
     ipcRenderer.invoke('settings:setAmbientIdleMinutes', minutes),
+  // null = el último ciclo de sync fue bien (o todavía no hubo ninguno).
+  getSyncFailure: (): Promise<SyncFailureInfo | null> =>
+    ipcRenderer.invoke('settings:getSyncFailure'),
   getCredentials: (): Promise<CredentialsValues> => ipcRenderer.invoke('settings:getCredentials'),
   // Devuelve los valores ya guardados (normalizados: '' pasa a null).
   setCredentials: (input: CredentialsValues): Promise<CredentialsValues> =>

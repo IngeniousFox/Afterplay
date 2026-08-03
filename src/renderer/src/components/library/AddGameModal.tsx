@@ -14,6 +14,9 @@ import type { GameDetail, IgdbSearchResult } from '../../../../shared/types';
 import {
   useCreateGameWithDetails,
   useCreatePlannedGame,
+  useGame,
+  useGames,
+  usePlannedGames,
   usePromotePlannedGame,
 } from '../../hooks/games';
 import { useIgdbSearch } from '../../hooks/igdb';
@@ -47,6 +50,7 @@ import { MoneyAmountField } from './add-game/MoneyAmountField';
 import { PlayedBeforePanel } from './add-game/PlayedBeforePanel';
 import { todayValue } from './add-game/precisionDate';
 import { useCredentials } from '../../hooks/settings';
+import type { OwnedGameMatch } from './add-game/SearchStep';
 import { SearchStep } from './add-game/SearchStep';
 import { SegmentedButtonGroup } from './add-game/SegmentedButtonGroup';
 import { SelectedGameSummary } from './add-game/SelectedGameSummary';
@@ -80,6 +84,11 @@ type AddGameModalProps = {
   // navega a su ficha, para que lo recién añadido quede seleccionado en vez
   // de volver a la lista sin más.
   onCreated?: (gameId: number) => void;
+  // Buscar algo que YA está en la biblioteca no da de alta nada: lleva a su
+  // ficha. Sin esto, el resultado sale marcado pero apagado — que es lo que
+  // toca donde abrir una ficha no tendría sentido (dentro de Sesiones) o
+  // llevaría a la sección equivocada (el alta de un planeado).
+  onOpenExisting?: (gameId: number) => void;
   // EMULADORES.md §6 — flujo "+ Add new game" desde el modal de asignación:
   // el checkbox de emulado arranca premarcado…
   defaultEmulated?: boolean;
@@ -89,16 +98,37 @@ type AddGameModalProps = {
   assignSessionId?: number;
 };
 
-export const AddGameModal = ({
+// Lo que el escaneo ya sabe del disco. Promocionar desde ahí no tiene por qué
+// volver a preguntarlo: la carpeta acaba de aparecer en la lista.
+export type PromoteDisk = {
+  installDirectory: string;
+  installSizeBytes: number | null;
+  executablePath: string | null;
+};
+
+type AddGameModalBodyProps = AddGameModalProps & {
+  // Elegir un juego que YA está en el plan (en el buscador o en el escaneo)
+  // no da de alta nada: avisa al envoltorio, que vuelve a montar este mismo
+  // cuerpo en modo promote. Hace falta montarlo de cero porque todo el
+  // prellenado vive en los inicializadores de useState/useForm (ver
+  // promoteGame) — y por eso el disco viaja como argumento y no por setValue.
+  onPickPlanned?: (gameId: number, disk?: PromoteDisk) => void;
+  promoteDisk?: PromoteDisk;
+};
+
+const AddGameModalBody = ({
   open,
   onOpenChange,
   mode = 'library',
   promoteGame,
   onPromoted,
   onCreated,
+  onOpenExisting,
   defaultEmulated = false,
   assignSessionId,
-}: AddGameModalProps): React.JSX.Element => {
+  onPickPlanned,
+  promoteDisk,
+}: AddGameModalBodyProps): React.JSX.Element => {
   const isPlan = mode === 'plan';
   const isPromote = promoteGame != null;
   // El playthrough por defecto que createPlannedGame dejó creado — de él
@@ -148,9 +178,11 @@ export const AddGameModal = ({
           format: promoteIteration?.format ?? DEFAULT_FORM_VALUES.format,
           endless: promoteGame.endless,
           isEmulated: promoteGame.isEmulated,
-          executablePath: promoteGame.executablePath ?? '',
-          installDirectory: promoteGame.installDirectory ?? '',
-          installSizeBytes: promoteGame.installSizeBytes,
+          // El disco que trae el escaneo manda sobre lo guardado: si se llegó
+          // aquí desde una carpeta recién encontrada, ESA es la buena.
+          executablePath: promoteDisk?.executablePath ?? promoteGame.executablePath ?? '',
+          installDirectory: promoteDisk?.installDirectory ?? promoteGame.installDirectory ?? '',
+          installSizeBytes: promoteDisk?.installSizeBytes ?? promoteGame.installSizeBytes,
           gameNotes: promoteGame.notes ?? '',
           coverUrl: promoteGame.coverUrl,
           heroUrl: promoteGame.heroUrl,
@@ -177,6 +209,11 @@ export const AddGameModal = ({
   const heroUrl = useWatch({ control, name: 'heroUrl' });
 
   const search = useIgdbSearch(query);
+  // Lo que ya tienes, para que el buscador lo reconozca: IGDB devuelve su
+  // catálogo entero sin saber nada de tu biblioteca ni de tu plan, así que un
+  // juego que ya tenías salía como un resultado más.
+  const { data: plannedGames } = usePlannedGames();
+  const { data: libraryGames } = useGames();
   const createGame = useCreateGameWithDetails();
   const createPlanned = useCreatePlannedGame();
   const promote = usePromotePlannedGame();
@@ -214,6 +251,45 @@ export const AddGameModal = ({
     resetAll();
     onOpenChange(false);
   };
+
+  // Los dos atajos se apagan a la vez en el alta de un planeado (desde el
+  // Plan no se entra a la biblioteca por la puerta de atrás) y con una sesión
+  // pendiente esperando (EMULADORES.md §6): ahí el modal existe para crear el
+  // juego al que colgar esa sesión, y ni promocionar ni abrir una ficha la
+  // asignan — irse por cualquiera de los dos la dejaría huérfana.
+  const canLeaveForOwned = !isPlan && assignSessionId === undefined;
+  const ownedByIgdbId = new Map<number, OwnedGameMatch>();
+  for (const game of libraryGames ?? []) {
+    const reachable = canLeaveForOwned && onOpenExisting !== undefined;
+    ownedByIgdbId.set(game.igdbId, {
+      gameId: game.id,
+      where: 'library',
+      label: 'IN YOUR LIBRARY',
+      color: GREEN,
+      hint: reachable
+        ? 'Already in your library — pick it to open its page.'
+        : 'Already in your library.',
+      onPick: reachable
+        ? () => {
+            handleClose();
+            onOpenExisting(game.id);
+          }
+        : undefined,
+    });
+  }
+  for (const game of plannedGames ?? []) {
+    const reachable = canLeaveForOwned && onPickPlanned !== undefined;
+    ownedByIgdbId.set(game.igdbId, {
+      gameId: game.id,
+      where: 'plan',
+      label: 'IN YOUR PLAN',
+      color: BLUE,
+      hint: reachable
+        ? 'Already in your plan — pick it to move it into your library.'
+        : 'Already in your plan.',
+      onPick: reachable ? () => onPickPlanned(game.id) : undefined,
+    });
+  }
 
   // Cambiar endless puede dejar pastStatus apuntando a una opción que ya no
   // existe en el dropdown (ej. "Beaten" al activar endless) — se corrige aquí
@@ -371,6 +447,22 @@ export const AddGameModal = ({
               setStepDirection(1);
               setSelected(match);
             }}
+            // Un planeado que aparece en el escaneo es el mejor caso posible:
+            // ya lo querías jugar y resulta que ya está instalado. En vez de
+            // darlo de alta otra vez, se promociona — llevándose la carpeta y
+            // el .exe que el escaneo acaba de encontrar, que es justo lo que
+            // el formulario de promoción tendría que preguntar.
+            onPromotePlanned={
+              canLeaveForOwned && onPickPlanned
+                ? (gameId, folder) =>
+                    onPickPlanned(gameId, {
+                      installDirectory: folder.path,
+                      installSizeBytes: folder.sizeBytes,
+                      executablePath: folder.executablePath,
+                    })
+                : undefined
+            }
+            ownedByIgdbId={ownedByIgdbId}
           />
         </div>
       ) : selected === null ? (
@@ -388,6 +480,7 @@ export const AddGameModal = ({
               setStepDirection(1);
               setSelected(result);
             }}
+            ownedByIgdbId={ownedByIgdbId}
           />
         </div>
       ) : pickerTarget !== null ? (
@@ -694,5 +787,69 @@ export const AddGameModal = ({
         </FormProvider>
       )}
     </ModalShell>
+  );
+};
+
+// Puente para promocionar un planeado elegido desde el buscador. El cuerpo
+// del modal necesita el juego ENTERO (GameDetail: notas, iteración, exe…) ya
+// cargado en el instante de montarse, y la lista del plan solo trae la forma
+// corta — así que aquí se espera a tenerlo antes de dárselo.
+const PromotePickedGame = ({
+  gameId,
+  ...props
+}: AddGameModalProps & { gameId: number; promoteDisk?: PromoteDisk }): React.JSX.Element => {
+  const { data: game, isError } = useGame(gameId);
+
+  if (!game) {
+    return (
+      <ModalShell
+        open
+        onClose={() => props.onOpenChange(false)}
+        title="Add to library"
+        icon={Gamepad2}
+        color={GREEN}
+        widthClass="w-160"
+      >
+        <p className="py-10 text-center text-[13px] text-muted-foreground">
+          {isError ? 'Couldn’t load this game.' : 'Loading…'}
+        </p>
+      </ModalShell>
+    );
+  }
+
+  return (
+    <AddGameModalBody
+      {...props}
+      promoteGame={game}
+      // Al promocionar deja de estar en el plan, así que se avisa por la
+      // misma puerta que un alta normal: la pantalla dueña navega a su ficha
+      // de biblioteca en vez de dejarte mirando la lista.
+      onPromoted={() => props.onCreated?.(game.id)}
+    />
+  );
+};
+
+// Envoltorio con el único estado que sobrevive a cambiar de "modo": qué
+// juego del plan se eligió en el buscador. El cuerpo se monta de cero al
+// pasar a promote (su prellenado vive en los inicializadores), y por eso
+// vive aquí fuera y no dentro.
+export const AddGameModal = (props: AddGameModalProps): React.JSX.Element => {
+  const [picked, setPicked] = useState<{ gameId: number; disk?: PromoteDisk } | null>(null);
+
+  // Cerrar el modal descarta la elección: la próxima apertura vuelve a
+  // empezar por el buscador y no en la ficha del último planeado. Ajuste
+  // durante el render (react.dev), sin useEffect, como el resto de la app.
+  const [seenOpen, setSeenOpen] = useState(props.open);
+  if (props.open !== seenOpen) {
+    setSeenOpen(props.open);
+    if (!props.open) setPicked(null);
+  }
+
+  if (picked !== null) {
+    return <PromotePickedGame {...props} gameId={picked.gameId} promoteDisk={picked.disk} />;
+  }
+
+  return (
+    <AddGameModalBody {...props} onPickPlanned={(gameId, disk) => setPicked({ gameId, disk })} />
   );
 };

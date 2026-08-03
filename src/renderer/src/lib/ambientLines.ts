@@ -148,6 +148,15 @@ export type AmbientContext = {
   // ver main/curiosities). La otra mitad del modo ambiente: las frases de
   // arriba hablan de TI con este juego; estas hablan del juego en sí.
   curiosities: string[];
+  // Lo que los LOGROS pueden susurrar de este juego (LOGROS-IDEAS.md §2.7),
+  // derivado del overview global: si guarda alguno de tus trofeos más raros
+  // (con su puesto en el salón de la fama), y si está al 100%. null = nada
+  // que contar por esta vía.
+  achievements: {
+    rarest: { name: string; percent: number; unlockedAt: Date | null; fameRank: number } | null;
+    isPerfect: boolean;
+    perfectTotal: number;
+  } | null;
 };
 
 export const ambientLines = (
@@ -189,6 +198,43 @@ export const ambientLines = (
   let flavorSalt = 0;
   const say = (...phrasings: string[]): string =>
     phrasings[(flavorBase + flavorSalt++) % phrasings.length];
+
+  // ── Los logros: trofeos raros, aniversarios de hazañas y el 100% ────────
+  const achievements = context.achievements;
+  if (achievements?.rarest) {
+    const { name, percent, unlockedAt, fameRank } = achievements.rarest;
+    const percentText = percent >= 10 ? `${Math.round(percent)}%` : `${percent.toFixed(1)}%`;
+    lines.push(
+      fameRank === 1
+        ? say(
+            `your rarest trophy lives here: "${name}" — only ${percentText} of players have it`,
+            `"${name}" — the rarest thing you've ever unlocked, held by just ${percentText} of players`,
+          )
+        : say(
+            `"${name}" is one of your rarest unlocks — only ${percentText} of players have it`,
+            `few people have "${name}": ${percentText} of players, and you're one of them`,
+          ),
+    );
+    // El aniversario de la hazaña — la fecha solo viaja si era fiable.
+    if (unlockedAt) {
+      const years = anniversaryYears(unlockedAt, now);
+      if (years !== null) {
+        lines.push(
+          years === 1
+            ? `a year ago today, you unlocked "${name}" here`
+            : `${years} years ago today, you unlocked "${name}" here`,
+        );
+      }
+    }
+  }
+  if (achievements?.isPerfect) {
+    lines.push(
+      say(
+        `you did everything here — all ${achievements.perfectTotal} achievements`,
+        `a perfect game: every single achievement, yours`,
+      ),
+    );
+  }
 
   // ── Aniversarios: lo más bonito que puede decir, porque es lo único que no
   // sabrías tú solo ──────────────────────────────────────────────────────

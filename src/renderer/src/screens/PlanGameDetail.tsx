@@ -1,5 +1,6 @@
 import { ArrowRight, ImagePlus, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { AchievementsSection } from '../components/library/detail/AchievementsSection';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
 import { DetailsCard } from '../components/library/detail/DetailsCard';
@@ -43,6 +44,7 @@ export const PlanGameDetail = ({
 }: PlanGameDetailProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [addPlannedOpen, setAddPlannedOpen] = useState(false);
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editNotesOpen, setEditNotesOpen] = useState(false);
@@ -60,7 +62,14 @@ export const PlanGameDetail = ({
 
   return (
     <div className="h-full overflow-y-auto">
-      <HeroBanner game={game} liveSince={null} onBack={onBack} backLabel="Back to plan" />
+      <HeroBanner
+        game={game}
+        liveSince={null}
+        onBack={onBack}
+        backLabel="Back to plan"
+        onAddGame={() => setAddPlannedOpen(true)}
+        addGameLabel="Plan a game"
+      />
 
       <div key={game.id} className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
         <div className="flex items-start gap-6">
@@ -120,6 +129,13 @@ export const PlanGameDetail = ({
             <div className={`mt-7.5 ${revealClass}`} style={revealStyle(3)}>
               <HistoryList stateHistory={game.stateHistory} spendHistory={game.spendHistory} />
             </div>
+
+            {/* Sí, también en un planeado: el catálogo de Steam responde
+                tengas el juego o no, así que "esto tiene 34 logros" es
+                información válida de algo que aún no has jugado. */}
+            <div className={revealClass} style={revealStyle(4)}>
+              <AchievementsSection gameId={gameId} />
+            </div>
           </div>
 
           <div className="flex w-92 min-w-70 flex-none flex-col gap-4.5">
@@ -149,6 +165,10 @@ export const PlanGameDetail = ({
           onPromoted={onPromoted}
         />
       )}
+      {/* Alta desde la propia ficha, en modo 'plan': lo que se añade aquí
+          nace planeado, igual que el botón de la lista — desde Plan to Play
+          no se entra nunca a la biblioteca por la puerta de atrás. */}
+      <AddGameModal open={addPlannedOpen} onOpenChange={setAddPlannedOpen} mode="plan" />
       <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
       <EditNotesModal game={game} open={editNotesOpen} onOpenChange={setEditNotesOpen} />
       <DeleteGameDialog

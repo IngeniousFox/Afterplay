@@ -2,7 +2,12 @@ import { unixSecondsToUtcYear } from '../lib/titleMatch';
 import { igdbRequest } from './client';
 import { igdbImageUrl } from './images';
 import { filterAndRankGames } from './rank';
-import { igdbDetailResponseSchema, igdbSearchResponseSchema } from './schemas';
+import {
+  igdbDetailResponseSchema,
+  igdbExternalGamesResponseSchema,
+  igdbGameVersionsResponseSchema,
+  igdbSearchResponseSchema,
+} from './schemas';
 import type { IgdbGameDetail, IgdbSearchResult } from './types';
 
 const SEARCH_FIELDS =
@@ -24,8 +29,60 @@ const escapeQuery = (query: string): string => query.replace(/\\/g, '\\\\').repl
 const toReleaseYear = (unixSeconds: number | undefined): number | null =>
   unixSeconds === undefined ? null : unixSecondsToUtcYear(unixSeconds);
 
+// El appid de Steam de un juego sale de external_games, filtrando por la
+// FUENTE. Dos avisos que costaron un rato averiguar, los dos comprobados
+// contra la API en vivo:
+//
+//  1. `external_games.category` (el campo viejo) está DEPRECADO y ya no
+//     devuelve nada: `where category = 1` responde 200 con lista VACÍA, no
+//     con un error. Un fallo perfectamente mudo — el backfill terminaba
+//     "bien" marcando 333 juegos como comprobados y cero encontrados.
+//  2. `external.steam`, que el changelog de IGDB anuncia como su sustituto,
+//     NO EXISTE en la API v4: responde 400 "Invalid field name".
+//
+// Lo que sí funciona es `external_game_source`, cuyo id para Steam es 1
+// (comprobado contra /v4/external_game_sources). Si esto vuelve a quedarse
+// a cero algún día, lo primero que hay que mirar es si ese id ha cambiado.
+const STEAM_SOURCE_ID = 1;
+
+// Primer intento de este arreglo: filtrar por `category` (dlc_addon/
+// expansion/standalone_expansion) para decidir cuándo un `parent_game` debe
+// GANARLE al appid propio. Comprobado en vivo contra la API y descartado: la
+// entrada real de "The Binding of Isaac: Repentance" (igdbId 109241) viene
+// con category = 0 (main_game) pese a ser, a todos los efectos de Steam, el
+// contenido de una expansión — la categoría la rellena la comunidad y aquí
+// no es de fiar. Lo que SÍ es de fiar es la relación en sí: `parent_game` es
+// justo el campo con el que IGDB documenta "el juego base de esta versión",
+// así que ahora se sigue siempre que exista, sin mirar la categoría.
+
+// El parseo defensivo es a propósito: el uid viaja como string por contrato
+// (otras tiendas meten ahí slugs y ASINs de Amazon), y un appid no numérico
+// sería un dato corrupto que no debe colarse en la DB.
+const parseSteamUid = (uid: string): number | null => {
+  const appId = Number(uid);
+  return Number.isInteger(appId) && appId > 0 ? appId : null;
+};
+
+const steamAppIdFromExternals = (
+  externals: { uid: string; external_game_source?: number }[] | undefined,
+): number | null => {
+  for (const external of externals ?? []) {
+    if (external.external_game_source !== STEAM_SOURCE_ID) continue;
+    const appId = parseSteamUid(external.uid);
+    if (appId !== null) return appId;
+  }
+  return null;
+};
+
+// Tope de la búsqueda. Ningún título real se acerca (el más largo del mundo
+// ronda los 130 caracteres); lo que sí llega más largo es un accidente — el
+// caso real: un log de error pegado en la caja de búsqueda mandó 13KB de
+// stack trace como query e IGDB lo devolvió con un 400 que parecía un fallo
+// de la app. Se recorta y se busca lo que quepa, en vez de fallar.
+const MAX_QUERY_LENGTH = 150;
+
 export const searchGames = async (query: string): Promise<IgdbSearchResult[]> => {
-  const escaped = escapeQuery(query);
+  const escaped = escapeQuery(query.slice(0, MAX_QUERY_LENGTH));
 
   // IGDB's "search" pondera relevancia de texto y no hace bien el "a medio
   // escribir" — comprobado en vivo, buscar "pragmat" no encontraba
@@ -98,14 +155,26 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
 
   const body =
     `fields ${SEARCH_FIELDS}, artworks.image_id, screenshots.image_id, ` +
-    `involved_companies.company.name, involved_companies.developer, involved_companies.publisher; ` +
+    `involved_companies.company.name, involved_companies.developer, involved_companies.publisher, ` +
+    `external_games.uid, external_games.external_game_source; ` +
     `where id = ${igdbId};`;
   const [game] = igdbDetailResponseSchema.parse(await igdbRequest('games', body));
   if (!game) return null;
 
   const companies = game.involved_companies ?? [];
 
+  // AQUÍ NO SE RESUELVE EL APPID DE LOS LOGROS, a propósito. La expansión
+  // anidada de external_games ya viene en esta misma respuesta (gratis), pero
+  // el appid definitivo puede necesitar 1-3 peticiones más si hay juego base
+  // de por medio — y encadenarlas aquí las metía en la ruta crítica del alta,
+  // que es justo lo que la volvió lenta al pulsar "Add". Se devuelven los dos
+  // ingredientes crudos y quien los necesite llama a
+  // resolveAchievementsSteamAppId(), que en el alta corre EN PARALELO con
+  // HowLongToBeat y SteamGridDB (ver resolveGameEnrichment) — o sea, gratis
+  // en tiempo de reloj. El renderer no usa el appid para nada.
   return {
+    directSteamAppId: steamAppIdFromExternals(game.external_games),
+    parentIgdbId: game.parent_game ?? null,
     igdbId: game.id,
     title: game.name,
     coverUrl: game.cover ? igdbImageUrl(game.cover.image_id, 'cover_big') : null,
@@ -124,4 +193,148 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     // arriba en vez de fallar — nunca peor que el tamaño de antes.
     screenshots: game.screenshots?.map((shot) => igdbImageUrl(shot.image_id, '1080p')) ?? [],
   };
+};
+
+// Tope de filas que IGDB devuelve por respuesta. Importa de verdad: un juego
+// puede tener VARIAS entradas de Steam (ediciones, paquetes regionales), así
+// que el número de filas no es el de juegos pedidos — el que llama trocea en
+// lotes bastante menores que esto para dejar margen de sobra.
+const EXTERNAL_GAMES_PAGE_LIMIT = 500;
+
+const assertIntegerIds = (igdbIds: number[]): void => {
+  for (const igdbId of igdbIds) {
+    if (!Number.isInteger(igdbId)) throw new Error(`igdbId inválido: ${igdbId}`);
+  }
+};
+
+// Los appids de Steam ATADOS DIRECTAMENTE a estos juegos.
+const fetchSteamAppIdsDirect = async (igdbIds: number[]): Promise<Map<number, number>> => {
+  const result = new Map<number, number>();
+  if (igdbIds.length === 0) return result;
+
+  const body =
+    `fields game, uid; ` +
+    `where game = (${igdbIds.join(',')}) & external_game_source = ${STEAM_SOURCE_ID}; ` +
+    `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`;
+  const rows = igdbExternalGamesResponseSchema.parse(await igdbRequest('external_games', body));
+
+  // Tocar techo significa que la respuesta viene CORTADA y hay juegos que se
+  // quedarían fuera en silencio (marcados como "preguntados, no está en
+  // Steam" sin haberlo estado nunca) — justo el fallo mudo que ya nos comió
+  // una tarde. Se avisa fuerte en vez de dejarlo pasar.
+  if (rows.length === EXTERNAL_GAMES_PAGE_LIMIT) {
+    // Solo ASCII, misma convención que watcher/watcher.ts: la consola de
+    // Windows no siempre usa UTF-8 y los acentos salen ilegibles.
+    console.warn(
+      `[steam] la respuesta de external_games toco el limite de ${EXTERNAL_GAMES_PAGE_LIMIT} filas - hay appids sin leer, baja el tamano de lote`,
+    );
+  }
+
+  for (const row of rows) {
+    // El primero gana: con varias entradas de Steam para el mismo juego
+    // (paquetes regionales), cualquiera sirve de puente a los logros.
+    if (result.has(row.game)) continue;
+    const appId = parseSteamUid(row.uid);
+    if (appId !== null) result.set(row.game, appId);
+  }
+  return result;
+};
+
+// Respaldo: el appid que lleva alguna EDICIÓN del juego.
+//
+// IGDB modela las ediciones como juegos aparte enlazados con version_parent,
+// y el puerto de PC a menudo vive ahí en vez de en la ficha base — el caso
+// real que lo destapó: "Horizon Zero Dawn" (base, PS4) no tiene Steam, pero
+// "Horizon Zero Dawn: Complete Edition" sí (appid 1151640). Lo mismo con
+// Forbidden West, Dark Souls (Prepare to Die) y Dead Island (GOTY).
+//
+// Se sigue SOLO version_parent, que es "esta es una edición de aquel juego".
+// A propósito NO se usa parent_game (DLC, expansiones y remasters cuelgan de
+// ahí: un remaster es otro producto con otros logros) ni el emparejado por
+// nombre, que es justo como se cuelan juegos equivocados.
+const fetchSteamAppIdsViaEditions = async (igdbIds: number[]): Promise<Map<number, number>> => {
+  const result = new Map<number, number>();
+  if (igdbIds.length === 0) return result;
+
+  const versions = igdbGameVersionsResponseSchema.parse(
+    await igdbRequest(
+      'games',
+      `fields id, version_parent; where version_parent = (${igdbIds.join(',')}); limit ${EXTERNAL_GAMES_PAGE_LIMIT};`,
+    ),
+  );
+  if (versions.length === 0) return result;
+
+  const appIdByVersion = await fetchSteamAppIdsDirect(versions.map((version) => version.id));
+
+  for (const version of versions) {
+    if (result.has(version.version_parent)) continue;
+    const appId = appIdByVersion.get(version.id);
+    if (appId !== undefined) result.set(version.version_parent, appId);
+  }
+  return result;
+};
+
+// Appids de Steam de un LOTE de juegos (el backfill de logros). Devuelve
+// igdbId -> appid solo para los que están en Steam; los ausentes del mapa
+// simplemente no están (consolas, exclusivas de otras tiendas).
+export const getSteamAppIds = async (igdbIds: number[]): Promise<Map<number, number>> => {
+  if (igdbIds.length === 0) return new Map();
+  assertIntegerIds(igdbIds);
+
+  const direct = await fetchSteamAppIdsDirect(igdbIds);
+
+  // El respaldo solo se paga por los que fallaron — en una biblioteca normal
+  // son un puñado, así que es una petición extra pequeña, no otra ronda.
+  const missing = igdbIds.filter((igdbId) => !direct.has(igdbId));
+  if (missing.length === 0) return direct;
+
+  for (const [igdbId, appId] of await fetchSteamAppIdsViaEditions(missing)) {
+    direct.set(igdbId, appId);
+  }
+  return direct;
+};
+
+// El appid de UN juego a través de sus ediciones — para el alta, donde la
+// consulta directa ya viajó gratis dentro del detalle (getGameDetails) y solo
+// hace falta el respaldo si aquella no encontró nada.
+export const getSteamAppIdViaEditions = async (igdbId: number): Promise<number | null> => {
+  assertIntegerIds([igdbId]);
+  return (await fetchSteamAppIdsViaEditions([igdbId])).get(igdbId) ?? null;
+};
+
+// EL appid con el que se piden los logros de un juego — el que acaba en la
+// columna steamAppId. No siempre es el suyo propio, y ese es todo el asunto:
+//
+//   · Sin juego base: el propio si consta y, si no, el de alguna edición
+//     (Horizon Zero Dawn, cuyo puerto de PC vive en la "Complete Edition").
+//   · CON juego base: manda el del base. Comprobado en vivo con "The Binding
+//     of Isaac: Repentance" (igdbId 109241) — su propio appid (1426300)
+//     existe pero GetSchemaForGame lo devuelve VACÍO; los logros están todos
+//     en "Rebirth" (250900), que es su parent_game. Un appid con catálogo
+//     vacío es peor que ninguno: parece "comprobado y sin logros" en vez de
+//     "hay que mirar en otro sitio".
+//
+// El orden importa para el RELOJ, no solo para el resultado: con juego base
+// se prueba primero su vía directa, que es UNA petición (~180ms medidos) y
+// resuelve el caso normal. Los respaldos, que son los caros, solo se pagan si
+// aquello falla — y se piden A LA VEZ, porque son independientes entre sí.
+export const resolveAchievementsSteamAppId = async (
+  igdbId: number,
+  parentIgdbId: number | null,
+  directSteamAppId: number | null,
+): Promise<number | null> => {
+  if (parentIgdbId === null) {
+    return directSteamAppId ?? (await getSteamAppIdViaEditions(igdbId));
+  }
+
+  const parentDirect = (await fetchSteamAppIdsDirect([parentIgdbId])).get(parentIgdbId);
+  if (parentDirect !== undefined) return parentDirect;
+
+  const [parentViaEditions, ownViaEditions] = await Promise.all([
+    getSteamAppIdViaEditions(parentIgdbId),
+    // Solo si el propio no constaba ya: pedirlo teniéndolo sería una
+    // petición tirada.
+    directSteamAppId === null ? getSteamAppIdViaEditions(igdbId) : Promise.resolve(null),
+  ]);
+  return parentViaEditions ?? directSteamAppId ?? ownViaEditions;
 };

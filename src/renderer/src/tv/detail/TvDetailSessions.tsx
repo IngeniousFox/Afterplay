@@ -1,6 +1,8 @@
-import { Clock3, Flame, ScrollText, Timer } from 'lucide-react';
+import { Clock3, Flame, ScrollText, Timer, Trophy } from 'lucide-react';
 import { useMemo } from 'react';
-import type { GameDetail, Session, TimeFormat } from '../../../../shared/types';
+import type { AchievementEntry, GameDetail, Session, TimeFormat } from '../../../../shared/types';
+import { useGameAchievements } from '../../hooks/achievements';
+import { rarityAccent } from '../../lib/achievements';
 import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import {
@@ -32,6 +34,7 @@ const DetailSessionRow = ({
   liveSeconds,
   maxDurationSec,
   timeFormat,
+  achievements,
 }: {
   session: Session;
   index: number;
@@ -40,6 +43,8 @@ const DetailSessionRow = ({
   liveSeconds: number;
   maxDurationSec: number;
   timeFormat: TimeFormat;
+  // Los logros que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1).
+  achievements: AchievementEntry[];
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({});
   const live = session.endedAt === null;
@@ -121,6 +126,28 @@ const DetailSessionRow = ({
       >
         {live ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
       </div>
+      {/* Los logros de la noche, con el color del más raro de la tanda. */}
+      {achievements.length > 0 && (
+        <div
+          className="relative mt-[0.15em] flex items-center gap-[0.4em] text-[0.55em] font-semibold"
+          style={{
+            color: rarityAccent(
+              achievements.reduce<number | null>(
+                (rarest, entry) =>
+                  entry.globalPercent !== null && (rarest === null || entry.globalPercent < rarest)
+                    ? entry.globalPercent
+                    : rarest,
+                null,
+              ),
+            ),
+          }}
+        >
+          <Trophy className="h-[1em] w-[1em] flex-none" />
+          {achievements.length === 1
+            ? achievements[0].displayName
+            : `${achievements.length} achievements`}
+        </div>
+      )}
       {/* La nota en su color de recuerdo, con el lomo ámbar como hairline de
           boxShadow (la regla de la casa: nada de px fuera de ahí). */}
       {note.length > 0 && (
@@ -137,6 +164,21 @@ const DetailSessionRow = ({
 
 export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Element => {
   const { data: timeFormat = '24h' } = useTimeFormat();
+
+  // Los logros por sesión (LOGROS-IDEAS.md §2.1) — mismo cruce que el
+  // historial de escritorio: el main ya los colgó de su sesión, aquí solo se
+  // indexan por sessionId.
+  const { data: achievementsData } = useGameAchievements(game.id);
+  const achievementsBySession = useMemo(() => {
+    const map = new Map<number, AchievementEntry[]>();
+    for (const entry of achievementsData?.entries ?? []) {
+      if (entry.sessionId === null || entry.unlockedAt === null) continue;
+      const list = map.get(entry.sessionId) ?? [];
+      list.push(entry);
+      map.set(entry.sessionId, list);
+    }
+    return map;
+  }, [achievementsData]);
 
   // TODAS las sesiones de todas las vueltas, de nueva a vieja — también la
   // abierta: en el sofá es justo la que más interesa ver correr.
@@ -209,9 +251,17 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
         </span>
       </div>
 
+      {/* El mismo par de colchones que la pestaña de logros: padding mayor
+          que el fundido (1.4em) para que la última fila pueda salir de
+          debajo, y scroll-padding para que el conductor de scroll del foco
+          no la alinee a ras del borde — justo bajo el degradado. */}
       <div
-        className="relative min-h-0 flex-1 overflow-y-auto pb-[1.2em]"
-        style={{ scrollbarWidth: 'none' }}
+        className="relative min-h-0 flex-1 overflow-y-auto pb-[1.8em]"
+        style={{
+          scrollbarWidth: 'none',
+          scrollPaddingTop: '0.35em',
+          scrollPaddingBottom: '1.6em',
+        }}
       >
         <div className="flex flex-col gap-[0.2em]">
           {sessions.map((session, index) => (
@@ -222,6 +272,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
               liveSeconds={liveSeconds}
               maxDurationSec={maxDurationSec}
               timeFormat={timeFormat}
+              achievements={achievementsBySession.get(session.id) ?? []}
             />
           ))}
         </div>

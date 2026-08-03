@@ -23,9 +23,19 @@ import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
-import { cleanupCiteTaggedCuriosities } from './curiosities/cleanupCiteTags';
 import { setCuriositiesNotifier } from './curiosities/notify';
 import { runMemoriesDailyTick } from './memories/detect';
+import { runSteamAppIdBackfill } from './steam/appIdBackfill';
+import {
+  queueAchievementsRefreshForGame,
+  runAchievementsStartupPass,
+  runEmuUnlocksSweep,
+} from './steam/backfill';
+import { setAchievementsNotifier } from './steam/notify';
+import { closeAchievementOverlay } from './steam/notifications/overlay';
+import { startEmuWatcher, stopEmuWatcher } from './steam/emu/watcher';
+import { runRaStartupPass } from './ra/backfill';
+import { startRaLivePoll, stopRaLivePoll } from './ra/livePoll';
 import { setMemoriesNotifier } from './memories/notify';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
@@ -94,6 +104,12 @@ let preBigPictureState: { bounds: Electron.Rectangle; isMaximized: boolean } | n
 // call — including the lazy one inside getDb() — so it's the very first thing
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
+
+// El aviso de logros suena SIN que nadie haya pulsado nada en su ventana — y
+// no puede pulsarse, porque ignora el ratón a propósito (LOGROS.md §8). Sin
+// esto, la política de autoreproducción de Chromium deja su AudioContext
+// suspendido y el aviso sale mudo. Tiene que ir antes de whenReady().
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 // También tiene que ir antes de whenReady() — Electron lo exige para poder
 // registrar esquemas con privilegios (ver images/protocol.ts).
@@ -408,16 +424,6 @@ app.whenReady().then(async () => {
     return;
   }
 
-  // ⚠️ TEMPORAL — quitar esta llamada (y borrar cleanupCiteTags.ts) tras
-  // el primer arranque que la corra: limpieza de una sola pasada de las
-  // curiosidades con <cite> pegado que Sonnet dejó antes del arreglo del
-  // prompt. Ver el porqué en curiosities/cleanupCiteTags.ts.
-  try {
-    await cleanupCiteTaggedCuriosities();
-  } catch (error) {
-    console.warn('[curiosities] fallo en la limpieza de <cite> (sigo igualmente):', error);
-  }
-
   try {
     await runDailyBackup();
   } catch (error) {
@@ -496,6 +502,13 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('memories:activity', event);
     }
   });
+  // Logros (LOGROS.md): mismo canal de progreso que las curiosidades y los
+  // recaps — la ficha abierta y la tarjeta de Ajustes se refrescan solas.
+  setAchievementsNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('achievements:activity', event);
+    }
+  });
 
   // Cierre de un juego: el aviso va por una vía u otra según DÓNDE puedas
   // verlo. Con la ventana a la vista, un toast dentro de la app (Sonner);
@@ -504,6 +517,11 @@ app.whenReady().then(async () => {
   // lo vería nadie. Las dos llevan al mismo sitio: la ficha del juego con su
   // última sesión resaltada.
   setSessionClosedNotifier((event) => {
+    // Acabas de cerrar el juego: sus logros son lo único que puede haber
+    // cambiado, y este es el momento de recogerlos (LOGROS.md §4) — tanto de
+    // la API de Steam como de los ficheros que el crack acabe de escribir.
+    void queueAchievementsRefreshForGame(event.gameId);
+
     const window = mainWindow;
     if (window && !window.isDestroyed() && window.isVisible()) {
       window.webContents.send('sessions:closed', event);
@@ -593,7 +611,27 @@ app.whenReady().then(async () => {
   // propósito: si el otro PC ya generó junio, el sync lo baja y aquí ni se
   // paga de nuevo. (Y si el sync falla, el tic horario la recoge — la
   // carrera de dos PCs generando a la vez la absorbe el upsert, §7.1.)
-  void runSyncCycle().then(() => runMemoriesDailyTick());
+  // El backfill de appids de Steam (LOGROS.md) cuelga del mismo primer sync
+  // que los recaps, por el mismo motivo: si el otro PC ya lo hizo, aquí no
+  // queda nada que preguntar. Tras la primera pasada es un no-op.
+  void runSyncCycle().then(async () => {
+    void runMemoriesDailyTick();
+    // El catálogo de logros necesita el appid, así que va DESPUÉS del
+    // backfill de appids y no en paralelo: un juego cuyo appid acaba de
+    // llegar entra en la misma pasada en vez de esperar al próximo arranque.
+    await runSteamAppIdBackfill();
+    void runAchievementsStartupPass();
+    // Y el barrido de emuladores (LOGROS.md §7): disco local puro, recoge lo
+    // que los cracks apuntaron con la app cerrada. Después queda la
+    // vigilancia en vivo, que es la que los pilla mientras juegas.
+    await runEmuUnlocksSweep();
+    startEmuWatcher();
+    // RetroAchievements (RETROACHIEVEMENTS.md): emparejado + catálogos de lo
+    // emulado retro, y su sondeo en vivo — que solo pregunta mientras el
+    // watcher vea un emulador corriendo.
+    void runRaStartupPass();
+    startRaLivePoll(() => watcher?.hasActiveEmulator() ?? false);
+  });
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
   memoriesTimer = setInterval(() => void runMemoriesDailyTick(), MEMORIES_TICK_MS);
 
@@ -626,6 +664,11 @@ app.on('before-quit', () => {
   isQuitting = true;
   watcher?.stop();
   scanWatcher?.stop();
+  // La ventana del aviso de logros vive fuera del ciclo de la principal: sin
+  // esto, una tarjeta en pantalla al salir mantendría el proceso vivo.
+  closeAchievementOverlay();
+  stopEmuWatcher();
+  stopRaLivePoll();
   if (syncTimer) clearInterval(syncTimer);
   if (memoriesTimer) clearInterval(memoriesTimer);
 });

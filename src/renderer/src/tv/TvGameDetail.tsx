@@ -10,12 +10,14 @@ import {
   Lightbulb,
   Play,
   Repeat,
+  Trophy,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { GameDetail } from '../../../shared/types';
 import { GameCover } from '../components/GameCover';
+import { useGameAchievements } from '../hooks/achievements';
 import { useGame } from '../hooks/games';
 import { useCuriosities } from '../hooks/curiosities';
 import { useCreateIteration } from '../hooks/iterations';
@@ -41,6 +43,7 @@ import { TvFocusLayer } from './focus';
 import { useTvFocusable } from './focusContext';
 import { tvSound } from './sound';
 import { tvRevealClass, tvRevealStyle } from './styles';
+import { TvDetailAchievements } from './detail/TvDetailAchievements';
 import { TvDetailHistory } from './detail/TvDetailHistory';
 import { TvDetailNotes } from './detail/TvDetailNotes';
 import { TvDetailSaves } from './detail/TvDetailSaves';
@@ -67,6 +70,9 @@ const monthYear = (date: Date): string =>
 // ciclan con LB/RB y también son botones de verdad.
 const DETAIL_TABS = [
   { key: 'overview', label: 'Overview' },
+  // Solo aparece si el juego tiene catálogo de logros traído — en un emulado
+  // de consola la pestaña entera sería un "0 logros" que no informa de nada.
+  { key: 'achievements', label: 'Achievements' },
   { key: 'sessions', label: 'Sessions' },
   { key: 'history', label: 'History' },
   { key: 'notes', label: 'Notes' },
@@ -404,21 +410,32 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const gameId = Number(id);
   const { data: game } = useGame(gameId);
   const { data: curiosityRows = [] } = useCuriosities();
+  const { data: achievements } = useGameAchievements(gameId);
   const [statusOpen, setStatusOpen] = useState(false);
   const [tab, setTab] = useState<DetailTabKey>('overview');
   const [launching, setLaunching] = useState(false);
+
+  // Los totales de logros alimentan la pestaña condicional y la ficha de
+  // vitales del Overview. Cero entries = juego sin catálogo = ni rastro.
+  const achievementsTotal = achievements?.entries.length ?? 0;
+  const achievementsUnlocked =
+    achievements?.entries.filter((entry) => entry.unlockedAt !== null).length ?? 0;
+  const tabs = DETAIL_TABS.filter((entry) => entry.key !== 'achievements' || achievementsTotal > 0);
+  // Si la pestaña activa desaparece (una invalidación deja los logros en
+  // cero a mitad de visita), se cae al Overview sin tocar estado.
+  const activeTab = tabs.some((entry) => entry.key === tab) ? tab : 'overview';
 
   // Cambiar de sección: LB/RB cicla (con vuelta), los pills seleccionan
   // directo. El sonido es el tick de moverse — cambiar de pestaña es
   // desplazarse, no confirmar.
   const cycleTab = (step: number): void => {
-    const index = DETAIL_TABS.findIndex((entry) => entry.key === tab);
-    const next = DETAIL_TABS[(index + step + DETAIL_TABS.length) % DETAIL_TABS.length].key;
+    const index = tabs.findIndex((entry) => entry.key === activeTab);
+    const next = tabs[(index + step + tabs.length) % tabs.length].key;
     tvSound.move();
     setTab(next);
   };
   const selectTab = (key: DetailTabKey): void => {
-    if (key === tab) return;
+    if (key === activeTab) return;
     tvSound.move();
     setTab(key);
   };
@@ -728,11 +745,11 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             className={`mt-[0.7em] flex items-center gap-[0.4em] ${tvRevealClass}`}
             style={tvRevealStyle(4)}
           >
-            {DETAIL_TABS.map((entry) => (
+            {tabs.map((entry) => (
               <TabPill
                 key={entry.key}
                 label={entry.label}
-                active={tab === entry.key}
+                active={activeTab === entry.key}
                 onSelect={() => selectTab(entry.key)}
               />
             ))}
@@ -748,10 +765,10 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           {/* El contenido de la sección activa: remonta con key para que
               cada llegada tenga su pequeña entrada. */}
           <div
-            key={tab}
+            key={activeTab}
             className="animate-in fade-in-0 slide-in-from-bottom-2 mt-[0.85em] min-h-0 flex-1 duration-300"
           >
-            {tab === 'overview' ? (
+            {activeTab === 'overview' ? (
               <div
                 className="flex h-full flex-col gap-[0.95em] overflow-y-auto pr-[0.3em] pt-[0.15em]"
                 style={{ scrollbarWidth: 'none' }}
@@ -777,6 +794,20 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                         accent: '#85a3d6',
                         Icon: CalendarRange,
                       },
+                      // Los trofeos entre los vitales: el "cuánto es tuyo" en
+                      // un vistazo, con la invitación implícita de RB para
+                      // llegar a la pestaña con el detalle.
+                      ...(achievementsTotal > 0
+                        ? [
+                            {
+                              label: 'TROPHIES',
+                              value: `${achievementsUnlocked}/${achievementsTotal}`,
+                              sub: `${Math.round((achievementsUnlocked / achievementsTotal) * 100)}%`,
+                              accent: '#e3b24a',
+                              Icon: Trophy,
+                            },
+                          ]
+                        : []),
                       ...(lastPlayed
                         ? [
                             {
@@ -1022,17 +1053,24 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   </p>
                 )}
               </div>
-            ) : tab === 'sessions' ? (
+            ) : activeTab === 'achievements' ? (
               // El cristal se lo pone el shell: la pestaña trae contenido.
+              <div
+                className="relative h-full overflow-hidden rounded-[0.7em] border border-white/[0.09] bg-black/75 px-[1em] py-[0.8em]"
+                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.10)' }}
+              >
+                <TvDetailAchievements gameId={game.id} />
+              </div>
+            ) : activeTab === 'sessions' ? (
               <div
                 className="relative h-full overflow-hidden rounded-[0.7em] border border-white/[0.09] bg-black/75 px-[1em] py-[0.8em]"
                 style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.10)' }}
               >
                 <TvDetailSessions game={game} />
               </div>
-            ) : tab === 'history' ? (
+            ) : activeTab === 'history' ? (
               <TvDetailHistory game={game} />
-            ) : tab === 'notes' ? (
+            ) : activeTab === 'notes' ? (
               <TvDetailNotes game={game} />
             ) : (
               <TvDetailSaves gameId={game.id} />

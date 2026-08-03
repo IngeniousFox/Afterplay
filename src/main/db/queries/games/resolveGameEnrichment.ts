@@ -1,4 +1,4 @@
-import { getGameDetails } from '../../../igdb/api';
+import { getGameDetails, resolveAchievementsSteamAppId } from '../../../igdb/api';
 import { getHltbTimes } from '../../../hltb/api';
 import { sgdbSearch } from '../../../sgdb/api';
 
@@ -34,6 +34,12 @@ export type GameEnrichment = {
   hltbMain: number | null;
   hltbMainExtras: number | null;
   hltbCompletionist: number | null;
+  // Appid de Steam + su marca de "ya preguntado" (LOGROS.md). Van juntos en
+  // el enrichment porque salen de la MISMA respuesta de IGDB que el resto:
+  // un juego dado de alta nace ya comprobado, y el backfill de arranque no
+  // tiene que volver a preguntar por él.
+  steamAppId: number | null;
+  steamAppIdCheckedAt: Date;
 };
 
 export const resolveGameEnrichment = async (
@@ -49,7 +55,12 @@ export const resolveGameEnrichment = async (
   // pierde steamGridDbId (menos candidatas de carátula), pero el alta del
   // juego NO debe fallar — IGDB es la única fuente imprescindible aquí. Si
   // el usuario ya escribió un id a mano, ni se busca: se usa ese.
-  const [hltb, steamGridDbId] = await Promise.all([
+  //
+  // El appid de Steam viaja en el MISMO lote a propósito: no depende de HLTB
+  // ni de SGDB, y encadenarlo detrás del detalle (que es donde estaba)
+  // sumaba su latencia entera a la espera del botón "Add". Aquí se esconde
+  // detrás de HowLongToBeat, que siempre es el más lento de los tres.
+  const [hltb, steamGridDbId, steamAppId] = await Promise.all([
     getHltbTimes(detail.title, detail.releaseYear),
     overrides.steamGridDbId !== null
       ? Promise.resolve(overrides.steamGridDbId)
@@ -57,6 +68,16 @@ export const resolveGameEnrichment = async (
           console.warn('[sgdb] sin id de SteamGridDB para este alta (sigo sin él):', error);
           return null;
         }),
+    resolveAchievementsSteamAppId(
+      detail.igdbId,
+      detail.parentIgdbId,
+      detail.directSteamAppId,
+    ).catch((error) => {
+      // El appid es un extra para los logros, no un requisito del alta: si
+      // esto falla, el juego se da de alta igual y el backfill lo recogerá.
+      console.warn('[steam] fallo resolviendo el appid en el alta (sigo sin el):', error);
+      return null;
+    }),
   ]);
 
   return {
@@ -73,5 +94,7 @@ export const resolveGameEnrichment = async (
     hltbMain: hltb?.hltbMain ?? null,
     hltbMainExtras: hltb?.hltbMainExtras ?? null,
     hltbCompletionist: hltb?.hltbCompletionist ?? null,
+    steamAppId,
+    steamAppIdCheckedAt: new Date(),
   };
 };

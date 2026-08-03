@@ -1,7 +1,7 @@
 import { app, ipcMain } from 'electron';
 import { getCredentials, setCredentials } from '../config/credentials';
 import { getConfigValue, setConfigValue } from '../config/store';
-import { runSyncCycle } from '../db';
+import { getLastSyncFailure, runSyncCycle } from '../db';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
 import { resetR2Client } from '../saves/r2';
@@ -49,6 +49,11 @@ export const registerSettingsHandlers = (): void => {
   ipcMain.handle('settings:setAmbientIdleMinutes', (_event, minutes: number) => {
     setConfigValue('ambientIdleMinutes', minutes);
   });
+
+  // Estado del sync con Turso — para que un fallo persistente (sobre todo un
+  // desajuste de esquema, que NO se cura reintentando) se vea en Ajustes en
+  // vez de morir en la consola.
+  ipcMain.handle('settings:getSyncFailure', () => getLastSyncFailure());
 
   // Credenciales de servicios externos (ver config/credentials.ts). Los
   // valores viajan al renderer para poder editarlos en Ajustes — app

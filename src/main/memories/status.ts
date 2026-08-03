@@ -50,6 +50,7 @@ export const chapterFor = (
     snapshot.moments,
     now,
     snapshot.facts.manualBlocks,
+    snapshot.facts.unlocks,
   );
 
 export type MemoriesOverview = {

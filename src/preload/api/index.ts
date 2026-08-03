@@ -1,3 +1,4 @@
+import { achievementsApi } from './achievements';
 import { backupApi } from './backup';
 import { curiositiesApi } from './curiosities';
 import { dialogApi } from './dialog';
@@ -38,6 +39,7 @@ export const api = {
   settings: settingsApi,
   curiosities: curiositiesApi,
   memories: memoriesApi,
+  achievements: achievementsApi,
 };
 
 export type Api = typeof api;

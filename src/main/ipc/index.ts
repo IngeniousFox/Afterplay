@@ -1,3 +1,4 @@
+import { registerAchievementsHandlers } from './achievements';
 import { registerBackupHandlers } from './backup';
 import { registerCuriositiesHandlers } from './curiosities';
 import { registerDialogHandlers } from './dialog';
@@ -39,4 +40,5 @@ export const registerIpcHandlers = (): void => {
   registerSettingsHandlers();
   registerCuriositiesHandlers();
   registerMemoriesHandlers();
+  registerAchievementsHandlers();
 };

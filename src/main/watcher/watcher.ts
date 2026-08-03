@@ -410,6 +410,16 @@ export class ProcessWatcher {
     return this.active.has(`game:${gameId}`);
   }
 
+  // ¿Hay ALGÚN emulador en marcha? Lo consume el sondeo en vivo de
+  // RetroAchievements (ra/livePoll.ts): sin emulador no puede estar cayendo
+  // ningún logro retro, y sondear en vacío sería ruido de red perpetuo.
+  hasActiveEmulator(): boolean {
+    for (const key of this.active.keys()) {
+      if (key.startsWith('emu:')) return true;
+    }
+    return false;
+  }
+
   private getActiveTitles(): string[] {
     return Array.from(this.active.values(), (session) => session.title);
   }

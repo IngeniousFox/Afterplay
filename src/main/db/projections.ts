@@ -47,6 +47,12 @@ export const gameColumns = {
   saveLudusaviName: gamesTable.saveLudusaviName,
   saveCustomPaths: gamesTable.saveCustomPaths,
   curiositiesGeneratedAt: gamesTable.curiositiesGeneratedAt,
+  steamAppId: gamesTable.steamAppId,
+  steamAppIdCheckedAt: gamesTable.steamAppIdCheckedAt,
+  achievementsSyncedAt: gamesTable.achievementsSyncedAt,
+  achievementsUnlocksSyncedAt: gamesTable.achievementsUnlocksSyncedAt,
+  raGameId: gamesTable.raGameId,
+  raCheckedAt: gamesTable.raCheckedAt,
 };
 
 export const curiosityColumns = {

@@ -2,6 +2,7 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
+import { useAchievementsActivitySync } from './hooks/achievements';
 import { useCuriositiesActivity } from './hooks/curiosities';
 import { useBigPicture } from './hooks/useBigPicture';
 import { useWatcherSync } from './hooks/useWatcherSync';
@@ -19,6 +20,11 @@ const Afterplay = (): React.JSX.Element => {
   // sus queries en cuanto el main avisa — aquí y no solo en Ajustes, porque
   // un juego recién añadido genera con el modal de Ajustes cerrado.
   useCuriositiesActivity();
+  // Y los logros, por lo mismo: se sincronizan de fondo (alta de un juego,
+  // cierre de sesión, vigilancia de emuladores) estés en la pantalla que
+  // estés, y sus queries son staleTime Infinity — sin este aviso, una ficha
+  // abierta antes de que llegara su catálogo se quedaba vacía hasta reiniciar.
+  useAchievementsActivitySync();
   // Modo TV: los toasts que sobrevivan en él (errores, conexión de mando) se
   // escalan para leerse desde el sofá (BIG-PICTURE.md §4).
   const bigPicture = useBigPicture();

@@ -32,6 +32,12 @@ export type ScanCandidate = ScannedFolder & {
   // añadir, pero se sigue enseñando para que no parezca que el escaneo se lo
   // ha dejado.
   alreadyInLibrary: boolean;
+  // Id del juego de Plan to Play que es ESTA carpeta, o null. Distinto de
+  // alreadyInLibrary a propósito, porque el final es otro: un planeado que
+  // acabas de instalar no es un juego "ya añadido" que estorbe, es justo el
+  // que querías pasar a la biblioteca — y el escaneo acaba de encontrarle la
+  // carpeta y el .exe, que es lo que hay que rellenar para hacerlo.
+  plannedGameId: number | null;
 };
 
 // Lo que ve la pantalla de escaneo. Ya no es solo la lista: como el

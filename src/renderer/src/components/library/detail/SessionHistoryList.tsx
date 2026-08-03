@@ -1,7 +1,9 @@
 import { ArrowRight, Flame, Timer, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Session } from '../../../../../shared/types';
+import type { AchievementEntry, Session } from '../../../../../shared/types';
+import { useGameAchievements } from '../../../hooks/achievements';
+import { SessionAchievements } from '../../sessions/SessionAchievements';
 import { useTimeFormat } from '../../../hooks/settings';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import {
@@ -34,6 +36,7 @@ const SessionRow = ({
   maxDurationSec,
   isRecord,
   flash,
+  achievements,
   onDelete,
 }: {
   session: Session;
@@ -42,6 +45,9 @@ const SessionRow = ({
   // Parpadeo dorado al llegar desde el aviso de cierre: "esta es la sesión de
   // la que te hablaba". Dos pulsos y se acaba (ver main.css).
   flash: boolean;
+  // Los logros que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1) — ya
+  // cruzados por el main (sessionId en cada desbloqueo); aquí solo se pintan.
+  achievements: AchievementEntry[];
   // Solo llega para sesiones CERRADAS — una viva se para con Stop, no se
   // borra (el watcher la reabriría al ciclo siguiente).
   onDelete?: () => void;
@@ -116,6 +122,11 @@ const SessionRow = ({
           {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
         </div>
 
+        {/* Los trofeos de la noche (LOGROS-IDEAS.md §2.1): la misma pieza
+            que las filas de la pantalla de Sesiones y el aviso de cierre —
+            píldora teñida del más raro + los iconos de verdad. */}
+        <SessionAchievements entries={achievements} />
+
         {/* Diario de sesión: "dónde lo dejé" — ver SessionNote. */}
         <SessionNote sessionId={session.id} note={session.note} />
       </div>
@@ -157,6 +168,20 @@ export const SessionHistoryList = ({
   // en cuanto arranca el parpadeo.
   const flashSessionId = useSyncExternalStore(subscribeSessionFlash, getPendingSessionFlash);
 
+  // Los logros del juego, agrupados por la sesión en la que cayeron — el
+  // cruce ya viene hecho del main (placeUnlock); esto solo lo indexa. Los
+  // que no cayeron en ninguna sesión trackeada (sessionId null: anteriores a
+  // la app, u otro PC) simplemente no aparecen en ninguna fila — regla 3 de
+  // LOGROS-IDEAS.md: lo sesional solo cuenta lo sesional.
+  const { data: achievementsData } = useGameAchievements(gameId);
+  const achievementsBySession = new Map<number, AchievementEntry[]>();
+  for (const entry of achievementsData?.entries ?? []) {
+    if (entry.sessionId === null || entry.unlockedAt === null) continue;
+    const list = achievementsBySession.get(entry.sessionId) ?? [];
+    list.push(entry);
+    achievementsBySession.set(entry.sessionId, list);
+  }
+
   if (sessions.length === 0) return null;
 
   const maxDurationSec = Math.max(
@@ -182,6 +207,7 @@ export const SessionHistoryList = ({
                 session.durationSec === maxDurationSec
               }
               flash={session.id === flashSessionId}
+              achievements={achievementsBySession.get(session.id) ?? []}
               onDelete={session.endedAt !== null ? () => setPendingDelete(session) : undefined}
             />
           </div>

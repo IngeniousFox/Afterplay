@@ -282,6 +282,17 @@
   }
 }
 
+/* El anillo de progreso de logros dibujándose al entrar: arranca vacío
+   (offset = circunferencia completa, que el componente inyecta en
+   --afterplay-ring-c) y se cierra hasta el valor que dejó puesto inline.
+   Solo `from`: el `to` es el estado real del elemento, así el mismo keyframe
+   sirve para cualquier porcentaje. */
+@keyframes afterplay-ring-in {
+  from {
+    stroke-dashoffset: var(--afterplay-ring-c);
+  }
+}
+
 @keyframes afterplay-glow-card {
   0%,
   100% {

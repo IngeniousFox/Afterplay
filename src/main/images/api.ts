@@ -1,6 +1,8 @@
+import axios from 'axios';
 import { cacheImage } from './cache';
 import type { ImageCacheType } from './cache';
 import { toImageProtocolUrl } from './protocol';
+import { normalizeSteamCommunityImageUrl } from './steamCdn';
 
 // Lo que de verdad necesita el renderer: algo que poner directo en un
 // <img src>. Si el cacheo sale bien, una afterplay-image:// a la ruta local
@@ -14,7 +16,14 @@ export const getImageSrc = async (url: string, type: ImageCacheType): Promise<st
     const localPath = await cacheImage(url, type);
     return toImageProtocolUrl(localPath);
   } catch (error) {
-    console.error('[images] fallo cacheando, uso la URL remota:', error);
-    return url;
+    // Una LÍNEA, no el objeto de axios entero: volcarlo imprimía cientos de
+    // líneas por imagen (cabeceras, sockets, la petición completa) y una
+    // tanda de iconos rotos ahogaba la consola hasta hacerla inútil.
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    const reason = status ?? (error instanceof Error ? error.message : 'error desconocido');
+    console.warn(`[images] sin cachear (${reason}), uso la URL remota: ${url}`);
+    // La normalizada: si la vieja de Steam ya no existe, devolverla haría que
+    // el <img> reintentara el 404 desde el renderer.
+    return normalizeSteamCommunityImageUrl(url);
   }
 };

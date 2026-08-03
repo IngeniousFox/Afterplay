@@ -89,6 +89,39 @@ export type ChapterStateEvent = {
   occurredAt: Date;
 };
 
+// Un desbloqueo tal como llega del main (getMemoryFacts): ya FUNDIDO por
+// logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de
+// LOGROS-IDEAS.md: una fecha de rescate no fabrica historia en un mes.
+export type ChapterUnlock = {
+  gameId: number;
+  name: string;
+  // La descripción es el hecho NARRATIVO: "Reached the summit" cuenta la
+  // escalada. Puede faltar (ocultos sin fuente de descripción).
+  description: string | null;
+  globalPercent: number | null;
+  unlockedAt: Date;
+};
+
+// Los logros del periodo, YA CURADOS (LOGROS-IDEAS.md §2.3): totales como
+// hechos cerrados y un puñado de destacados citables — jamás la lista entera
+// (las lecciones v3/v4 del prompt: sobre listas largas el modelo cuenta y
+// deriva mal).
+export type ChapterAchievements = {
+  total: number;
+  rareCount: number;
+  // Hasta media docena, los más raros primero — cada uno con lo que el
+  // modelo puede citar tal cual. El título del juego viaja resuelto: el
+  // logro puede ser de un juego SIN sesiones en el periodo (desbloqueado en
+  // otro PC, o jugando sin la app) y entonces no está en chapter.games.
+  highlights: {
+    gameId: number;
+    gameTitle: string;
+    name: string;
+    description: string | null;
+    globalPercent: number | null;
+  }[];
+};
+
 export type Chapter = {
   scopeType: 'month' | 'year';
   scopeKey: string;
@@ -114,6 +147,11 @@ export type Chapter = {
   // historia completa, ver moments.ts) y aquí solo se filtran: un récord no
   // se puede calcular mirando un mes suelto.
   moments: Moment[];
+  // Los logros del periodo, curados (ver ChapterAchievements). null = ninguno
+  // con fecha fiable dentro del rango. Entra en el sourceHash como todo lo
+  // demás: un desbloqueo nuevo en un mes viejo deja su recap 'stale', que es
+  // exactamente lo que significa "los hechos cambiaron".
+  achievements: ChapterAchievements | null;
 };
 
 const isMeasured = (session: MemorySession): boolean =>
@@ -133,6 +171,7 @@ export const buildChapter = (
   moments: Moment[],
   now: Date,
   manualBlocks: ManualBlock[] = [],
+  unlocks: ChapterUnlock[] = [],
 ): Chapter | null => {
   const { start, end } = scopeRange(scope);
   const titleOf = (gameId: number): string => titlesByGame.get(gameId) ?? 'an untitled game';
@@ -215,6 +254,38 @@ export const buildChapter = (
     (a, b) => b.hours - a.hours || b.sessionCount - a.sessionCount || a.gameId - b.gameId,
   );
 
+  // Los logros del periodo, curados aquí (el código deriva, la IA redacta):
+  // total y cuenta de raros como hechos cerrados, y como citables solo los
+  // más raros — un tope corto a propósito, la lista entera es justo lo que
+  // el modelo maneja mal. Los logros NO abren capítulo por sí solos (la
+  // guarda de "mes vacío" de arriba no los mira): un desbloqueo suelto de un
+  // mes sin sesiones ni decisiones no sostiene una historia.
+  const periodUnlocks = unlocks.filter((unlock) => inRange(unlock.unlockedAt, start, end));
+  const rareUnlocks = periodUnlocks.filter(
+    (unlock) => unlock.globalPercent !== null && unlock.globalPercent < 10,
+  );
+  const achievements: ChapterAchievements | null =
+    periodUnlocks.length === 0
+      ? null
+      : {
+          total: periodUnlocks.length,
+          rareCount: rareUnlocks.length,
+          highlights: [...periodUnlocks]
+            .sort(
+              (a, b) =>
+                (a.globalPercent ?? Number.POSITIVE_INFINITY) -
+                (b.globalPercent ?? Number.POSITIVE_INFINITY),
+            )
+            .slice(0, 6)
+            .map((unlock) => ({
+              gameId: unlock.gameId,
+              gameTitle: titleOf(unlock.gameId),
+              name: unlock.name,
+              description: unlock.description,
+              globalPercent: unlock.globalPercent,
+            })),
+        };
+
   return {
     scopeType: scope.type,
     scopeKey: scopeKeyOf(scope),
@@ -229,6 +300,7 @@ export const buildChapter = (
     completions,
     stateChanges,
     moments: moments.filter((moment) => inRange(moment.occurredAt, start, end)),
+    achievements,
   };
 };
 

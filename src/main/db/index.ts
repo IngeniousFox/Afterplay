@@ -30,6 +30,27 @@ const getDbPath = (): string => join(app.getPath('userData'), 'Afterplay.db');
 const hasRemoteConfigured = (): boolean =>
   Boolean(process.env.DATABASE_URL && process.env.DATABASE_AUTH_TOKEN);
 
+// QUÉ base de datos remota es esta, para decirlo en cada log de conexión.
+//
+// No es cosmético: el 3-ago-2026 una prueba en un sandbox aislado acabó
+// conectada a la base de datos REAL (arrancó sin credentials.json, así que
+// importó el .env del proyecto, que entonces tenía la de producción activa)
+// y le empujó una migración. El log decía solo "conectado con Turso", así
+// que el error tardó seis segundos en verse en vez de uno.
+//
+// Solo el nombre del host, nunca el token: esto va a una consola que se pega
+// en informes de error (hoy mismo ha pasado varias veces).
+const remoteLabel = (): string => {
+  const url = process.env.DATABASE_URL;
+  if (!url) return 'sin remota';
+  try {
+    // libsql://afterplay-test-xxx.turso.io -> afterplay-test-xxx
+    return new URL(url).hostname.split('.')[0];
+  } catch {
+    return 'remota desconocida';
+  }
+};
+
 // getDb() sigue siendo síncrono a propósito — lo llaman decenas de queries
 // existentes sin esperar nada. Solo es seguro llamarlo después de
 // runMigrations(), que es lo primero que toca la DB en el arranque (SPEC
@@ -103,8 +124,21 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 // dbInstance ni el fichero local — así el remoto queda al día sin depender
 // de que el CDC replique DDL. Nunca bloquea el arranque: sin red o sin
 // Turso configurado, simplemente no hace nada y sigue el flujo normal.
-const pushMigrationsToRemote = async (): Promise<void> => {
-  if (!hasRemoteConfigured()) return;
+// ¿Se quedó el remoto sin comprobar en el arranque? Entonces NO se sabe si le
+// falta alguna migración — y eso hay que resolverlo, no dejarlo hasta el
+// próximo arranque. Lo reintenta runSyncCycle, ya sin prisa ni límite de
+// tiempo: para entonces la ventana está abierta y nada le corre detrás.
+let migrationPushPending = false;
+
+// El arranque no puede quedarse esperando a la red, así que esta comprobación
+// tiene un límite corto. Pero OJO con leer mal su fallo: el mensaje aparece
+// también cuando NO hay ninguna migración pendiente, porque el límite cubre
+// toda la operación —abrir conexión, crear la tabla de control, leer qué hay
+// aplicado— y una base de Turso que estaba dormida tarda lo suyo en
+// despertar. O sea que casi siempre significa "no me dio tiempo a
+// PREGUNTAR", no "no pude aplicar nada".
+const pushMigrationsToRemote = async (timeoutMs: number | null): Promise<boolean> => {
+  if (!hasRemoteConfigured()) return true;
 
   const client = createClient({
     url: process.env.DATABASE_URL as string,
@@ -112,18 +146,18 @@ const pushMigrationsToRemote = async (): Promise<void> => {
   });
 
   try {
-    const { applied } = await withTimeout(
-      pushPendingMigrations(client, join(__dirname, '../../drizzle')),
-      CONNECT_TIMEOUT_MS,
-    );
+    const push = pushPendingMigrations(client, join(__dirname, '../../drizzle'));
+    const { applied } = timeoutMs === null ? await push : await withTimeout(push, timeoutMs);
     if (applied.length > 0) {
       console.log(`[db] migraciones aplicadas directamente en Turso: ${applied.join(', ')}`);
     }
+    return true;
   } catch (error) {
     console.warn(
-      '[db] no se pudo empujar migraciones directamente a Turso, sigo igualmente:',
+      '[db] no se pudo comprobar las migraciones de Turso en el arranque, se reintentara en segundo plano:',
       error,
     );
+    return false;
   } finally {
     client.close();
   }
@@ -186,7 +220,7 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 
   try {
     const db = await connectWithSync();
-    console.log('[db] conectado con Turso - sync activado');
+    console.log(`[db] conectado con Turso [${remoteLabel()}] - sync activado`);
     return { db, capable: true };
   } catch (error) {
     if (isStaleMetadataError(error)) {
@@ -196,7 +230,9 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
       clearOrphanedSyncSidecars();
       try {
         const db = await connectWithSync();
-        console.log('[db] conectado con Turso tras limpiar metadatos huerfanos - sync activado');
+        console.log(
+          `[db] conectado con Turso [${remoteLabel()}] tras limpiar metadatos huerfanos - sync activado`,
+        );
         return { db, capable: true };
       } catch (retryError) {
         console.warn(
@@ -218,8 +254,10 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 export const runMigrations = async (): Promise<void> => {
   // Conexión aparte, antes de tocar la de verdad: deja el remoto al día por
   // su cuenta (ver pushMigrationsToRemote) para que el CDC nunca tenga que
-  // cargar con el DDL de esta migración.
-  await pushMigrationsToRemote();
+  // cargar con el DDL de esta migración. Va en secuencia y no en paralelo con
+  // la conexión de abajo A PROPÓSITO: la de sync no debe engancharse a Turso
+  // mientras el DDL está a medias.
+  migrationPushPending = !(await pushMigrationsToRemote(CONNECT_TIMEOUT_MS));
 
   const { db, capable } = await attemptInitialConnect();
   dbInstance = db;
@@ -295,8 +333,9 @@ const attemptSyncUpgrade = async (): Promise<void> => {
   // pero sin red no llegó a nada). Este es el primer momento en que hay
   // conexión otra vez — aprovecharlo para dejar el remoto al día por la vía
   // directa, ANTES de reconectar con sync, para que el CDC no sea quien
-  // tenga que cargar con ese DDL al hacer push() más abajo.
-  await pushMigrationsToRemote();
+  // tenga que cargar con ese DDL al hacer push() más abajo. Sin límite de
+  // tiempo: aquí la ventana ya está abierta y nadie espera.
+  migrationPushPending = !(await pushMigrationsToRemote(null));
 
   swapGate = new Promise((resolve) => {
     releaseSwapGate = resolve;
@@ -320,7 +359,7 @@ const attemptSyncUpgrade = async (): Promise<void> => {
       const db = await connectWithSync();
       dbInstance = db;
       syncCapable = true;
-      console.log('[db] conexion con Turso restablecida - sync activado');
+      console.log(`[db] conexion con Turso [${remoteLabel()}] restablecida - sync activado`);
     } catch (error) {
       console.warn('[db] reintento de conexion con Turso fallido, sigo en local:', error);
       dbInstance = await connectLocalOnly();
@@ -339,19 +378,71 @@ const attemptSyncUpgrade = async (): Promise<void> => {
 // alarga (el intervalo es de 60s, pero un swap + pull puede tardar).
 let syncCycleRunning = false;
 
+// El último fallo de sync, para que Ajustes pueda ENSEÑARLO. Antes esto solo
+// salía por consola, y ahí murió durante horas un desajuste de esquema entre
+// local y Turso: la app reintentaba cada minuto en silencio, fallando siempre
+// igual, mientras la interfaz decía que todo iba bien.
+export type SyncFailure = {
+  message: string;
+  at: Date;
+  // Un desajuste de ESQUEMA (una tabla o columna que no cuadra con el remoto)
+  // no se arregla reintentando, a diferencia de un corte de red: hay que
+  // aplicar la migración que falta. La UI lo dice con otras palabras.
+  schemaMismatch: boolean;
+  consecutive: number;
+};
+
+let lastSyncFailure: SyncFailure | null = null;
+
+export const getLastSyncFailure = (): SyncFailure | null => lastSyncFailure;
+
+// Firma de los errores del motor cuando el esquema remoto no cuadra: el
+// replicador va por posición de columna, así que un desajuste sale como un
+// tipo que no encaja o una tabla que no existe, nunca como un error de red.
+const SCHEMA_MISMATCH_HINTS = [
+  'type mismatch',
+  'no such table',
+  'no such column',
+  'has no column named',
+  'database tape error',
+];
+
 export const runSyncCycle = async (): Promise<void> => {
   if (syncCycleRunning) return;
   syncCycleRunning = true;
 
   try {
+    // Lo que no dio tiempo a comprobar en el arranque se resuelve aquí, sin
+    // límite de tiempo: ya no hay nadie esperando a que abra la ventana. Va
+    // ANTES del pull/push por lo de siempre — el DDL primero, y solo después
+    // el sync de filas.
+    if (migrationPushPending) {
+      migrationPushPending = !(await pushMigrationsToRemote(null));
+      if (!migrationPushPending) console.log('[db] migraciones de Turso comprobadas al fin');
+    }
+
     if (!syncCapable) await attemptSyncUpgrade();
     if (!syncCapable) return;
 
     const db = getDb();
     await db.$client.pull();
     await db.$client.push();
+    lastSyncFailure = null;
   } catch (error) {
-    console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
+    const message = error instanceof Error ? error.message : String(error);
+    const lower = message.toLowerCase();
+    lastSyncFailure = {
+      message,
+      at: new Date(),
+      schemaMismatch: SCHEMA_MISMATCH_HINTS.some((hint) => lower.includes(hint)),
+      consecutive: (lastSyncFailure?.consecutive ?? 0) + 1,
+    };
+    // Solo el PRIMERO de una racha va a consola: este ciclo corre cada minuto
+    // y un fallo persistente llenaba el log de la misma línea repetida, que
+    // es justo lo que hace que se deje de leer.
+    if (lastSyncFailure.consecutive === 1) {
+      console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
+    }
   } finally {
     syncCycleRunning = false;
   }

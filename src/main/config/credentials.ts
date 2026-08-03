@@ -28,6 +28,10 @@ const ENV_BY_KEY: Record<keyof CredentialsValues, string> = {
   r2AccessKeyId: 'R2_ACCESS_KEY_ID',
   r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
   anthropicApiKey: 'ANTHROPIC_API_KEY',
+  steamApiKey: 'STEAM_API_KEY',
+  steamUserId64: 'STEAM_USER_ID64',
+  raUsername: 'RA_USERNAME',
+  raApiKey: 'RA_API_KEY',
 };
 
 const CREDENTIAL_KEYS = Object.keys(ENV_BY_KEY) as (keyof CredentialsValues)[];
@@ -140,7 +144,22 @@ const importLegacyEnv = (): void => {
       if (Object.keys(values).length === 0) continue;
 
       writeValues(values);
-      console.log(`[credentials] importadas del .env legado (${envPath})`);
+      // Se dice QUÉ base remota traen, no solo de dónde vienen. Este es el
+      // punto exacto donde un .env decide con qué base habla la app, y el
+      // 3-ago-2026 nos costó un susto: una instancia de prueba con carpeta de
+      // datos nueva importó el .env del proyecto —que entonces tenía la base
+      // REAL activa— y acabó empujándole una migración a producción. Solo el
+      // host, jamás el token: esto acaba pegado en informes de error.
+      const remote = values.databaseUrl
+        ? (() => {
+            try {
+              return new URL(values.databaseUrl).hostname.split('.')[0];
+            } catch {
+              return 'remota desconocida';
+            }
+          })()
+        : 'sin remota';
+      console.log(`[credentials] importadas del .env legado (${envPath}) -> DB [${remote}]`);
       if (envPath === userDataEnvPath) {
         // Solo se retira el de userData — el del proyecto es la fuente del
         // tooling de desarrollo (drizzle-kit/scripts) y no se toca.

@@ -1,16 +1,20 @@
-import { Check, Flame, Timer } from 'lucide-react';
+import { Check, Flame, Timer, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { SessionClosedEvent } from '../../../shared/types';
+import { useGameAchievements } from '../hooks/achievements';
 import { useSetSessionNote } from '../hooks/sessions';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
+import { rarityAccent } from '../lib/achievements';
 import { celebrateCompletion } from '../lib/celebrate';
 import { AMBER } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
 import { STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
+import { expandClass } from '../lib/styles';
 import { GameCover } from './GameCover';
+import { AchievementMiniIcon } from './sessions/SessionAchievements';
 
 // El aviso de "acabas de cerrar X": duración, total acumulado y —lo que de
 // verdad importa— el sitio donde escribir el diario de sesión EN CALIENTE.
@@ -68,6 +72,24 @@ export const SessionClosedToast = ({
   const addStateEvent = useAddStateEvent();
   const heroSrc = useImageSrc(event.heroUrl, 'heroes');
   const duration = splitDuration(event.durationSec);
+
+  // Los trofeos de ESTA sesión, llegando EN VIVO al aviso (LOGROS-IDEAS.md
+  // §2.2): el cierre dispara la sincronización del juego, que tarda un par
+  // de segundos — menos de lo que vive el toast. La query es la misma de la
+  // ficha (cacheada, invalidada desde la raíz con cada 'synced'), así que
+  // cuando el main termina, la banda aparece sola debajo de la duración: el
+  // resumen de la noche completándose delante de ti.
+  const { data: achievementsData } = useGameAchievements(event.gameId);
+  const sessionAchievements = (achievementsData?.entries ?? []).filter(
+    (entry) => entry.sessionId === event.sessionId && entry.unlockedAt !== null,
+  );
+  const rarestPercent = sessionAchievements.reduce<number | null>(
+    (rarest, entry) =>
+      entry.globalPercent !== null && (rarest === null || entry.globalPercent < rarest)
+        ? entry.globalPercent
+        : rarest,
+    null,
+  );
 
   const save = async (): Promise<void> => {
     if (!note.trim() || setSessionNote.isPending) return;
@@ -165,6 +187,40 @@ export const SessionClosedToast = ({
           >
             <Flame size={12} className="flex-none" />
             Your longest session with this game
+          </div>
+        )}
+
+        {/* Los trofeos de la noche, en la MISMA banda que el récord — y
+            llegando EN VIVO: la sync corre al cerrar y esta banda aparece
+            (expandClass) en cuanto el main los cuelga de la sesión, mientras
+            el toast sigue en pantalla. Teñida del más raro de la tanda; los
+            iconos son la pieza compartida de las filas de sesión. */}
+        {sessionAchievements.length > 0 && (
+          <div
+            className={`flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 ${expandClass}`}
+            style={{
+              background: `${rarityAccent(rarestPercent)}1a`,
+              color: rarityAccent(rarestPercent),
+            }}
+          >
+            <Trophy size={12} className="flex-none" />
+            <span className="flex-none text-[11.5px] font-bold">
+              {sessionAchievements.length === 1
+                ? 'Achievement unlocked'
+                : `${sessionAchievements.length} achievements`}
+            </span>
+            <span className="ml-0.5 flex min-w-0 items-center gap-1">
+              {[...sessionAchievements]
+                .sort(
+                  (a, b) =>
+                    (a.globalPercent ?? Number.POSITIVE_INFINITY) -
+                    (b.globalPercent ?? Number.POSITIVE_INFINITY),
+                )
+                .slice(0, 6)
+                .map((entry) => (
+                  <AchievementMiniIcon key={entry.id} entry={entry} />
+                ))}
+            </span>
           </div>
         )}
 
