@@ -32,6 +32,7 @@ import {
   runEmuUnlocksSweep,
 } from './steam/backfill';
 import { setAchievementsNotifier } from './steam/notify';
+import { setImagesNotifier } from './images/maintenance';
 import { closeAchievementOverlay } from './steam/notifications/overlay';
 import { startEmuWatcher, stopEmuWatcher } from './steam/emu/watcher';
 import { runRaStartupPass } from './ra/backfill';
@@ -507,6 +508,13 @@ app.whenReady().then(async () => {
   setAchievementsNotifier((event) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('achievements:activity', event);
+    }
+  });
+  // Redescarga de la caché de imágenes (Ajustes → Images): miles de ficheros
+  // en una pasada, así que el progreso va por evento como todo lo largo.
+  setImagesNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('images:activity', event);
     }
   });
 

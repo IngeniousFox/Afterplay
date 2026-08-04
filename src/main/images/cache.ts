@@ -12,9 +12,20 @@ import { normalizeSteamCommunityImageUrl } from './steamCdn';
 // (que son remotos, y el CSP de index.html solo deja pasar afterplay-image:).
 export type ImageCacheType = 'covers' | 'heroes' | 'screenshots' | 'achievements';
 
+// Todos los tipos, para recorrer las carpetas de caché una a una desde
+// maintenance.ts sin repetir la lista (y que añadir uno nuevo arriba lo
+// incluya solo en el mantenimiento).
+export const IMAGE_CACHE_TYPES: ImageCacheType[] = [
+  'covers',
+  'heroes',
+  'screenshots',
+  'achievements',
+];
+
 // Sin cachear el resultado (a diferencia de getDb()): app.getPath() es
 // barato de llamar cada vez, y así no hay que preocuparse de invalidar nada.
-const getImageCacheDir = (type: ImageCacheType): string => join(app.getPath('userData'), type);
+export const getImageCacheDir = (type: ImageCacheType): string =>
+  join(app.getPath('userData'), type);
 
 // Mismo hash siempre para la misma URL → mismo nombre de fichero. Así
 // "cachear" es idempotente sin más: si el fichero ya existe, ni se descarga.
@@ -70,6 +81,18 @@ const isDefinitive = (error: unknown): boolean => {
 // que sin esto cada repintado de esa lista repetía el ciclo entero. Mismo
 // recurso que el `failed` de steam/hiddenDescriptions.ts.
 const permanentlyFailed = new Set<string>();
+
+// El "Redownload" de Ajustes es justo el gesto de "olvida lo que sabías y
+// vuelve a intentarlo": sin esto, las URLs que dieron 404 en esta sesión se
+// saltarían la descarga y el botón mentiría sobre lo que ha hecho.
+export const forgetPermanentFailures = (): void => permanentlyFailed.clear();
+
+// El fichero en el que se cachea (o se cachearía) una URL. Público porque el
+// mantenimiento necesita exactamente la MISMA cuenta que la descarga —
+// incluida la traducción del CDN viejo de Steam— para saber qué fichero de
+// la carpeta corresponde a qué URL de la base de datos.
+export const cachedFilePathFor = (rawUrl: string, type: ImageCacheType): string =>
+  join(getImageCacheDir(type), filenameForUrl(normalizeSteamCommunityImageUrl(rawUrl)));
 
 const downloadWithRetry = async (url: string): Promise<Buffer> => {
   let lastError: unknown;

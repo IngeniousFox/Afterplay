@@ -214,6 +214,31 @@ export type { GetSgdbImagesInput, SgdbImages } from '../main/sgdb/types';
 
 // Caché local de imágenes (Bloque 2C-quater) — la fuente es main/images/cache.ts.
 export type { ImageCacheType } from '../main/images/cache';
+import type { ImageCacheType as ImageCacheFolder } from '../main/images/cache';
+
+// Lo que ocupa esa caché en tu disco, para la tarjeta de Ajustes. "Unused" =
+// ficheros a los que ya no apunta ninguna carátula, hero ni icono de logro
+// de la base de datos (más las capturas al completo, que se rehacen solas al
+// abrir una ficha y no dejan rastro por el que reconocerlas).
+export type ImageCacheUsage = {
+  totalBytes: number;
+  totalFiles: number;
+  unusedBytes: number;
+  unusedFiles: number;
+  // Cuántas imágenes distintas usa la biblioteca — el tamaño de la pasada
+  // que hará el botón de redescargar.
+  usedImages: number;
+  byType: { type: ImageCacheFolder; bytes: number; files: number }[];
+};
+
+// Progreso de la redescarga. Mismo contrato que el resto de pasadas largas
+// de la app: eventos por un canal aparte, no la respuesta del invoke.
+export type ImageRedownloadEvent = {
+  running: boolean;
+  done: number;
+  total: number;
+  failed: number;
+};
 
 export type GameListItem = {
   id: number;

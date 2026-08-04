@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { vacuumInto } from './backupCore';
+import { removeSidecars, sweepStraySidecars } from './sidecars';
 
 const MAX_BACKUPS = 5;
 const BACKUP_PREFIX = 'Afterplay-';
@@ -34,6 +35,11 @@ export const runDailyBackup = async (): Promise<void> => {
   const dir = getBackupsDir();
   mkdirSync(dir, { recursive: true });
 
+  // Antes del "¿ya está la de hoy?": la limpieza tiene que correr aunque hoy
+  // no toque copia, o el día que la app se abre por segunda vez no se barre
+  // nada — y hay días en que se abre veinte veces y ninguna es la primera.
+  sweepStraySidecars(dir, BACKUP_PREFIX);
+
   const filePath = todaysBackupPath();
   if (existsSync(filePath)) return;
 
@@ -48,10 +54,13 @@ export const runDailyBackup = async (): Promise<void> => {
   const backups = listBackups(dir);
   const toDelete = backups.slice(0, Math.max(0, backups.length - MAX_BACKUPS));
   for (const name of toDelete) {
+    const backupPath = join(dir, name);
     try {
-      unlinkSync(join(dir, name));
+      unlinkSync(backupPath);
     } catch (error) {
       console.warn(`[backup] no se pudo borrar la copia antigua ${name}:`, error);
     }
+    // Y sus acompañantes: si la copia se va, lo que iba con ella no pinta nada.
+    removeSidecars(backupPath);
   }
 };

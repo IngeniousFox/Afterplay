@@ -74,13 +74,18 @@ export const formatSessionEndTime = (
   return formatTime(endedAt, timeFormat);
 };
 
-// GB si llega a 1024MB, MB si llega a 1, y KB por debajo. Los KB entraron
+// GB si llega a 1000MB, MB si llega a 1, y KB por debajo. Los KB entraron
 // con las partidas guardadas: una carpeta de instalación nunca baja de 1 MB,
 // pero la MEDIANA de una partida guardada son 322 KB (medido sobre la
 // biblioteca real), y "0 MB" no es una talla, es un error de redondeo.
+//
+// El salto a GB es a los 1000 y no a los 1024 exactos: el valor sigue siendo
+// en base 1024 (0.99 GB, no 1.01), solo se cambia CUÁNDO se cambia de unidad.
+// Los 24 MB de tierra de nadie salían como "1009 MB", que nadie lee como una
+// talla — se lee como un número suelto.
 export const formatBytes = (bytes: number): string => {
   const mb = bytes / (1024 * 1024);
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
   if (mb >= 1) return `${mb.toFixed(0)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };

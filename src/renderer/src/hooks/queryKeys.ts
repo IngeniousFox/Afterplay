@@ -81,6 +81,11 @@ export const queryKeys = {
     overview: (year: number | 'all') => ['achievements', 'overview', year] as const,
     sessionUnlocks: ['achievements', 'sessionUnlocks'] as const,
   },
+  // Caché local de imágenes (Ajustes → Images). Solo el peso en disco: las
+  // imágenes en sí no pasan por TanStack Query, las resuelve useImageSrc.
+  images: {
+    usage: ['images', 'usage'] as const,
+  },
   settings: {
     openAtLogin: ['settings', 'openAtLogin'] as const,
     timeFormat: ['settings', 'timeFormat'] as const,
