@@ -336,9 +336,18 @@ export const CredentialsSection = ({
                         <input
                           type={showValues ? 'text' : 'password'}
                           value={draft[field.key]}
-                          onChange={(event) =>
-                            setDraft((current) => ({ ...current, [field.key]: event.target.value }))
-                          }
+                          onChange={(event) => {
+                            setDraft((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }));
+                            // Antes savedFlash solo se apagaba al volver a
+                            // guardar: tocar OTRO campo después de guardar
+                            // uno (sin pulsar Save de nuevo) dejaba el "Saved
+                            // — applied immediately" puesto, dando a entender
+                            // que la clave sin guardar ya estaba activa.
+                            setSavedFlash(false);
+                          }}
                           autoComplete="off"
                           spellCheck={false}
                           className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}

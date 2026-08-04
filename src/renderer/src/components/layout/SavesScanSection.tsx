@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, CloudUpload, FileText, Loader2, Radar, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import type { SavesScanEntry } from '../../../../shared/types';
 import { queryKeys } from '../../hooks/queryKeys';
 import {
+  useSavesScanResults,
   useSavesStatus,
   useSavesUsage,
   useScanSaves,
@@ -28,24 +29,39 @@ export const SavesScanSection = (): React.JSX.Element => {
   const { data: status } = useSavesStatus();
   const scan = useScanSaves();
   const setEnabled = useSetSaveBackupEnabled();
-  const [results, setResults] = useState<SavesScanEntry[] | null>(null);
+  const queryClient = useQueryClient();
+  // Respaldado por query (useSavesScanResults), no por useState: Ajustes es
+  // un Dialog de Radix que desmonta su contenido al cerrarse, así que un
+  // useState tiraba a la basura una pasada de ~9s en cuanto cerrabas la
+  // ventana — aunque nada en la biblioteca hubiera cambiado desde entonces.
+  const { data: results } = useSavesScanResults();
   // Qué fila está guardándose ahora mismo. Sin esto, activar un juego no
   // daba NINGUNA señal hasta cerrar y reabrir Ajustes: la lista es una foto
   // del escaneo, y una mutation que invalida queries no la toca.
-  const [busyGameId, setBusyGameId] = useState<number | null>(null);
+  // Un Set y no un solo id: dos filas distintas alternadas a la vez
+  // compartían el único busyGameId, y el finally de la primera lo ponía a
+  // null mientras la segunda seguía en vuelo — su spinner desaparecía y su
+  // botón se reactivaba a media petición, dejando colar un doble envío.
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
 
   const ready = status?.ready ?? false;
+
+  const setResults = (next: SavesScanEntry[] | null): void => {
+    queryClient.setQueryData(queryKeys.savesLibraryScan.results, next);
+  };
 
   const handleScan = async (): Promise<void> => {
     setResults(null);
     setResults(await scan.mutateAsync());
   };
 
-  const patchEntry = (gameId: number, enabled: boolean): void =>
-    setResults(
-      (current) =>
+  const patchEntry = (gameId: number, enabled: boolean): void => {
+    queryClient.setQueryData(
+      queryKeys.savesLibraryScan.results,
+      (current: SavesScanEntry[] | null | undefined) =>
         current?.map((entry) => (entry.gameId === gameId ? { ...entry, enabled } : entry)) ?? null,
     );
+  };
 
   // Optimista: la fila cambia YA y se revierte si el guardado falla. Es una
   // preferencia de una columna booleana, no una operación de riesgo — esperar
@@ -56,7 +72,7 @@ export const SavesScanSection = (): React.JSX.Element => {
     ludusaviName: string,
   ): Promise<void> => {
     patchEntry(gameId, enabled);
-    setBusyGameId(gameId);
+    setBusyIds((prev) => new Set(prev).add(gameId));
     try {
       // El nombre de ludusavi viaja con el toggle: el escaneo ya sabe con
       // qué juego casó esta fila, y sin guardarlo el juego quedaría marcado
@@ -66,7 +82,11 @@ export const SavesScanSection = (): React.JSX.Element => {
     } catch {
       patchEntry(gameId, !enabled);
     } finally {
-      setBusyGameId(null);
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(gameId);
+        return next;
+      });
     }
   };
 
@@ -105,7 +125,7 @@ export const SavesScanSection = (): React.JSX.Element => {
       {scan.isError && (
         <div className="text-[11px] text-destructive">The scan failed — {scan.error.message}</div>
       )}
-      {results && <ScanResults results={results} busyGameId={busyGameId} onToggle={handleToggle} />}
+      {results && <ScanResults results={results} busyIds={busyIds} onToggle={handleToggle} />}
       <LegalLinks />
     </SettingsCard>
   );
@@ -203,11 +223,11 @@ const LegalLinks = (): React.JSX.Element | null => {
 
 const ScanResults = ({
   results,
-  busyGameId,
+  busyIds,
   onToggle,
 }: {
   results: SavesScanEntry[];
-  busyGameId: number | null;
+  busyIds: Set<number>;
   onToggle: (gameId: number, enabled: boolean, ludusaviName: string) => void;
 }): React.JSX.Element => {
   // Los que han casado con un juego de la biblioteca van primero: son los
@@ -278,14 +298,14 @@ const ScanResults = ({
             <button
               type="button"
               onClick={() => onToggle(entry.gameId as number, !entry.enabled, entry.ludusaviName)}
-              disabled={busyGameId === entry.gameId}
+              disabled={entry.gameId !== null && busyIds.has(entry.gameId)}
               className={`flex flex-none items-center gap-1.25 rounded-[7px] border px-2.25 py-1 text-[11px] font-bold transition-colors duration-150 disabled:opacity-70 ${
                 entry.enabled
                   ? 'border-[#85a3d6]/50 bg-[#85a3d6]/12 text-[#85a3d6] enabled:hover:border-[#85a3d6]/80 enabled:hover:bg-[#85a3d6]/22'
                   : 'border-input text-muted-foreground enabled:hover:border-primary/45 enabled:hover:bg-white/[0.06] enabled:hover:text-foreground'
               }`}
             >
-              {busyGameId === entry.gameId ? (
+              {entry.gameId !== null && busyIds.has(entry.gameId) ? (
                 <Loader2 size={11} className="animate-spin" />
               ) : entry.enabled ? (
                 <Check size={11} />

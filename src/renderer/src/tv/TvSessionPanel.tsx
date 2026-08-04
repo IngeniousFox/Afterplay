@@ -1,5 +1,6 @@
 import { Check, Flame, Timer } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
@@ -113,6 +114,11 @@ export const TvSessionPanel = ({
         datePrecision: 'datetime',
       });
     } catch {
+      // Mismo aviso que el StatusPicker de TvGameDetail: `marked` sigue en
+      // null (no se miente diciendo que se guardó), pero antes el botón se
+      // quedaba sin hacer nada visible. Un panel de cierre de sesión es un
+      // sitio típico para "marcar como pasado".
+      toast.error('Could not save the status.');
       return;
     }
     setMarked(key);

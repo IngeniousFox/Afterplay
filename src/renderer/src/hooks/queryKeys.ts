@@ -35,8 +35,18 @@ export const queryKeys = {
     status: ['saves', 'status'] as const,
     legal: ['saves', 'legal'] as const,
     usage: ['saves', 'usage'] as const,
+    localUsage: ['saves', 'localUsage'] as const,
     identityNeeded: ['saves', 'identityNeeded'] as const,
     game: (gameId: number) => ['saves', 'game', gameId] as const,
+  },
+  // El resultado del escaneo de "Game saves" en Ajustes — FUERA del árbol de
+  // saves.* a propósito: no tiene queryFn de verdad (no hay "dame el último
+  // escaneo" en el main, ver useSavesScanResults), así que si viviera bajo
+  // saves.all, cualquiera de las muchas mutations que invalidan ese prefijo
+  // entero (backup, detect, restore...) lo marcaría "stale" y el próximo
+  // remount lo pisaría con el hueco vacío en vez de conservar el escaneo.
+  savesLibraryScan: {
+    results: ['savesLibraryScan', 'results'] as const,
   },
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,

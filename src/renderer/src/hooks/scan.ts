@@ -35,9 +35,11 @@ export const useSetScanFolders = (): UseMutationResult<string[], Error, string[]
 export const useScanResults = (): UseQueryResult<ScanReport, Error> & {
   rescan: () => void;
   isRescanning: boolean;
+  rescanError: Error | null;
 } => {
   const queryClient = useQueryClient();
   const [isRescanning, setIsRescanning] = useState(false);
+  const [rescanError, setRescanError] = useState<Error | null>(null);
 
   const query = useQuery({
     queryKey: queryKeys.scan.results,
@@ -68,12 +70,18 @@ export const useScanResults = (): UseQueryResult<ScanReport, Error> & {
   const rescan = (): void => {
     if (isRescanning) return;
     setIsRescanning(true);
+    setRescanError(null);
     void window.api.scan
       .run()
       .then((report) => queryClient.setQueryData(queryKeys.scan.results, report))
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        // No tragarse el fallo en silencio: un disco desenchufado o un permiso
+        // retirado dejaba el spinner parado con la foto vieja, indistinguible
+        // de "no encontre nada". La pantalla lo enseña.
+        setRescanError(error instanceof Error ? error : new Error(String(error)));
+      })
       .finally(() => setIsRescanning(false));
   };
 
-  return { ...query, rescan, isRescanning };
+  return { ...query, rescan, isRescanning, rescanError };
 };

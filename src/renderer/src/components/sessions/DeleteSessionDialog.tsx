@@ -38,7 +38,16 @@ export const DeleteSessionDialog = ({
 
   const handleClose = (next: boolean): void => {
     if (del.isPending) return;
-    if (!next) onClose();
+    if (!next) {
+      // El diálogo NO se desmonta entre sesiones — el dueño solo cambia qué
+      // `session` le pasa — así que sin esto el banner de un borrado
+      // fallido sobrevivía a cerrar y reaparecía sobre la SIGUIENTE sesión
+      // que se abriera aquí, antes incluso de haber pulsado Delete para
+      // ella. Mismo motivo por el que AssignSessionModal ya hace lo mismo.
+      deleteReal.reset();
+      deletePending.reset();
+      onClose();
+    }
   };
 
   const handleDelete = async (): Promise<void> => {

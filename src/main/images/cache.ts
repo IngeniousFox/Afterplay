@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
-import { existsSync } from 'fs';
-import { mkdir, writeFile } from 'fs/promises';
+import { access, mkdir } from 'fs/promises';
+import { writeFileAtomic } from '../lib/atomicWrite';
 import { app } from 'electron';
 import axios from 'axios';
 import { extname, join } from 'path';
@@ -65,6 +65,25 @@ const releaseDownloadSlot = (): void => {
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Comprobar si existe un fichero SIN bloquear. cacheImage() se llama una vez
+// por carátula visible —una parrilla de 300 juegos dispara 300 IPC casi a la
+// vez— y en el caso normal (ya cacheada) esto era TODO el trabajo: nada
+// async detrás que disimulara el coste. Un existsSync síncrono en el proceso
+// main bloquea el hilo ÚNICO de Electron mientras dura, así que 300 de ellos
+// seguidos (uno por cada llamada, en serie) congelaban brevemente TODO —
+// otras respuestas IPC, el vigilante de procesos, la ventana— justo al abrir
+// la biblioteca o volver a ella. Async dentro de un proceso de un solo hilo
+// no lo hace más rápido, pero SÍ deja que otras cosas respiren entre una
+// comprobación y la siguiente.
+const fileExists = async (path: string): Promise<boolean> => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const ATTEMPTS = 3;
 
@@ -137,7 +156,7 @@ export const cacheImage = async (rawUrl: string, type: ImageCacheType): Promise<
   const url = normalizeSteamCommunityImageUrl(rawUrl);
   const dir = getImageCacheDir(type);
   const filePath = join(dir, filenameForUrl(url));
-  if (existsSync(filePath)) return filePath;
+  if (await fileExists(filePath)) return filePath;
 
   // Ya se sabe que esta no existe: fallar rápido y en silencio, sin volver a
   // salir a la red en cada repintado.
@@ -154,10 +173,14 @@ export const cacheImage = async (rawUrl: string, type: ImageCacheType): Promise<
     try {
       // Puede que otra petición haya terminado de escribirlo mientras
       // esperábamos turno en la cola.
-      if (existsSync(filePath)) return filePath;
+      if (await fileExists(filePath)) return filePath;
       await mkdir(dir, { recursive: true });
       const buffer = await downloadWithRetry(url);
-      await writeFile(filePath, buffer);
+      // Atómico (temporal + rename): un corte a mitad de escritura dejaba un
+      // .webp parcial que la comprobación de arriba tomaba por cacheado
+      // válido para siempre — se renderizaba roto en cada arranque y solo el
+      // Redownload (que borra antes) lo recuperaba.
+      await writeFileAtomic(filePath, buffer);
       return filePath;
     } finally {
       releaseDownloadSlot();

@@ -219,11 +219,24 @@ export const deleteKeys = async (keys: string[]): Promise<void> => {
   // nunca se llega ni de lejos, pero trocear es una línea y evita un fallo
   // sorpresa el día que alguien limpie un bucket entero.
   for (let index = 0; index < keys.length; index += 1000) {
-    await client.send(
+    const response = await client.send(
       new DeleteObjectsCommand({
         Bucket: bucket,
         Delete: { Objects: keys.slice(index, index + 1000).map((key) => ({ Key: key })) },
       }),
     );
+    // DeleteObjects responde HTTP 200 aunque claves concretas fallen: los
+    // fallos van en response.Errors, no en el status. Sin mirarlos, un borrado
+    // fallido pasaba por bueno y el llamador soltaba la fila del índice — el
+    // zip se quedaba en el bucket, ya sin índice: invisible, imposible de
+    // restaurar y cobrándose igual, justo el huérfano que el orden
+    // "borra-objeto-antes-que-índice" existe para evitar. Al lanzar, el
+    // llamador conserva la fila y lo reintenta en la próxima pasada.
+    if (response.Errors && response.Errors.length > 0) {
+      const first = response.Errors[0];
+      throw new Error(
+        `R2 no pudo borrar ${response.Errors.length} objeto(s): ${first.Key ?? '?'} (${first.Code ?? 'sin código'})`,
+      );
+    }
   }
 };

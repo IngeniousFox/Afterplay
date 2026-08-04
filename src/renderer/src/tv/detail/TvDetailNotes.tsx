@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import type { EventDatePrecision, GameDetail, TimeFormat } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
 import { formatByPrecision } from '../../lib/format';
+import { allSessions } from '../../lib/sessions';
 import { notesProseClass } from '../../lib/styles';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
@@ -68,11 +69,7 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
   // El diario, de nuevo a viejo: toda sesión con nota, venga de la vuelta
   // que venga — el "dónde lo dejé" no entiende de playthroughs.
   const sessionNotes = useMemo(
-    () =>
-      game.iterations
-        .flatMap((iteration) => iteration.sessions)
-        .filter((session) => (session.note?.trim().length ?? 0) > 0)
-        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()),
+    () => allSessions(game).filter((session) => (session.note?.trim().length ?? 0) > 0),
     [game],
   );
 

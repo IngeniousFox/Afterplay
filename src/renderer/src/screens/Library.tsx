@@ -4,7 +4,7 @@ import { useGames } from '../hooks/games';
 
 export const Library = (): React.JSX.Element => {
   const navigate = useNavigate();
-  const { data: games = [], isLoading, isError } = useGames();
+  const { data: games = [], isLoading, isError, refetch } = useGames();
 
   return (
     <GameListScreen
@@ -17,6 +17,7 @@ export const Library = (): React.JSX.Element => {
       games={games}
       isLoading={isLoading}
       isError={isError}
+      onRetry={() => void refetch()}
       scrollKey="library"
       onSelectGame={(id) => navigate(`/games/${id}`)}
     />

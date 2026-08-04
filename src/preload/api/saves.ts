@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron';
 import type {
   CloudInventory,
   IdentityCheck,
+  LocalBackupsUsage,
   RecoveryResult,
   RestoreRequestInput,
   RestoreResult,
@@ -9,6 +10,7 @@ import type {
   SavesActivityEvent,
   SavesBackupResult,
   SavesGameState,
+  SavesQueuedEvent,
   SavesScanEntry,
   SavesStatus,
 } from '../../main/saves/contracts';
@@ -19,6 +21,11 @@ export const savesApi = {
     ipcRenderer.invoke('saves:getLegalFiles'),
   openPath: (path: string): Promise<void> => ipcRenderer.invoke('saves:openPath', path),
   getUsage: (): Promise<SaveBackupsUsage> => ipcRenderer.invoke('saves:getUsage'),
+  // Mantenimiento de la carpeta LOCAL de backups (Ajustes) — no confundir
+  // con getUsage, que es el mismo dato pero en R2.
+  getLocalUsage: (): Promise<LocalBackupsUsage> => ipcRenderer.invoke('saves:getLocalUsage'),
+  cleanLocalBackups: (): Promise<{ files: number; bytes: number; folders: number }> =>
+    ipcRenderer.invoke('saves:cleanLocalBackups'),
 
   // Identidad de esta máquina en el bucket. needsIdentityCheck es local y
   // gratis; checkIdentity es la que va a la red (solo a petición).
@@ -43,6 +50,11 @@ export const savesApi = {
   setEnabled: (gameId: number, enabled: boolean, ludusaviName?: string): Promise<boolean> =>
     ipcRenderer.invoke('saves:setEnabled', gameId, enabled, ludusaviName),
   detect: (gameId: number): Promise<string | null> => ipcRenderer.invoke('saves:detect', gameId),
+  // Deshacer un emparejado automático (§4: ludusavi puede casar con el juego
+  // equivocado, o con uno sin un solo archivo local) — devuelve a "sin
+  // detectar" sin tocar las carpetas propias.
+  clearDetection: (gameId: number): Promise<boolean> =>
+    ipcRenderer.invoke('saves:clearDetection', gameId),
   addFolder: (gameId: number, folder: string): Promise<string | null> =>
     ipcRenderer.invoke('saves:addFolder', gameId, folder),
   removeFolder: (gameId: number, folder: string): Promise<boolean> =>
@@ -64,5 +76,14 @@ export const savesApi = {
     const listener = (_event: unknown, payload: SavesActivityEvent): void => callback(payload);
     ipcRenderer.on('saves:activity', listener);
     return () => ipcRenderer.removeListener('saves:activity', listener);
+  },
+
+  // Aviso de "tu --preview va a esperar detrás de otra operación" — enviado
+  // por saves:getGameState en el instante en que se pide el estado, antes de
+  // que la promesa resuelva (ver ipc/saves.ts). Mismo contrato que onActivity.
+  onQueued: (callback: (event: SavesQueuedEvent) => void): (() => void) => {
+    const listener = (_event: unknown, payload: SavesQueuedEvent): void => callback(payload);
+    ipcRenderer.on('saves:queued', listener);
+    return () => ipcRenderer.removeListener('saves:queued', listener);
   },
 };

@@ -62,7 +62,21 @@ type RunOptions = {
   // que la cola existía para impedir. Config y comando tienen que ser una
   // sola unidad atómica.
   configure?: () => void;
+  // Para peekLudusaviQueueLabel() de más abajo — nada más lo usa. Un
+  // "Detect" o un preview de ficha que cae detrás de un escaneo global
+  // (8-15s en una biblioteca real) se veía como un spinner mudo sin decir
+  // por qué tardaba; con esto la sección Saves puede enseñar "Waiting
+  // behind: scanning your library…" mientras espera su turno.
+  label?: string;
 };
+
+// Qué operación de ludusavi está EJECUTÁNDOSE ahora mismo, si alguna — no la
+// cola entera (con lo poco profunda que suele quedar en esta app, "lo que
+// hay corriendo ya" es lo único que de verdad se nota esperando). Se lee
+// desde ipc/saves.ts con una llamada instantánea, sin pasar por la cola ni
+// tocar el binario — es solo una variable en memoria.
+let runningLabel: string | null = null;
+export const peekLudusaviQueueLabel = (): string | null => runningLabel;
 
 const execLudusavi = (args: string[], timeoutMs: number): Promise<{ stdout: string }> =>
   new Promise((resolve, reject) => {
@@ -121,14 +135,19 @@ export const runLudusavi = async <T>(args: string[], options: RunOptions = {}): 
   const fullArgs = ['--config', getConfigDir(), '--no-manifest-update', ...args];
 
   return enqueue(async () => {
-    options.configure?.();
-    const { stdout } = await execLudusavi(fullArgs, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    runningLabel = options.label ?? null;
     try {
-      return JSON.parse(stdout) as T;
-    } catch {
-      throw new Error(
-        `ludusavi no devolvió JSON válido (${args[0]}): ${stdout.slice(0, 400) || '(salida vacía)'}`,
-      );
+      options.configure?.();
+      const { stdout } = await execLudusavi(fullArgs, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      try {
+        return JSON.parse(stdout) as T;
+      } catch {
+        throw new Error(
+          `ludusavi no devolvió JSON válido (${args[0]}): ${stdout.slice(0, 400) || '(salida vacía)'}`,
+        );
+      }
+    } finally {
+      runningLabel = null;
     }
   });
 };
@@ -183,6 +202,14 @@ const prepare = async (): Promise<void> => {
 // llamadas reusan la misma promesa, también si aún está en vuelo).
 export const ensureLudusaviReady = async (): Promise<void> => {
   if (!isLudusaviAvailable()) throw new LudusaviUnavailableError();
-  readyOnce ??= prepare();
+  // Si prepare() falla (un EPERM transitorio del antivirus sobre el mkdir, un
+  // corte al bajar el manifest), la promesa rechazada NO se puede quedar
+  // memoizada: con `??=` no se reasigna nunca, así que TODA operación de
+  // saves de la sesión rechazaría con ese error caduco hasta reiniciar. Al
+  // limpiar la caché en el fallo, el siguiente intento vuelve a probar.
+  readyOnce ??= prepare().catch((error) => {
+    readyOnce = null;
+    throw error;
+  });
   await readyOnce;
 };

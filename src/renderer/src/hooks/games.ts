@@ -112,12 +112,20 @@ export const useDeleteGame = (): UseMutationResult<boolean, Error, number, unkno
     // saves.all incluida porque save_backups cuelga de games con ON DELETE
     // CASCADE: sin esto quedaría en caché el índice de partidas de un juego
     // que ya no existe — el mismo bug que ya pasó con sessions/spend.
+    //
+    // achievements y curiosities cuelgan IGUAL de games por cascada, pero son
+    // staleTime:Infinity y solo se refrescan cuando el main emite su evento —
+    // que un borrado desde el renderer nunca dispara. Sin invalidarlas, Stats
+    // seguía contando los trofeos del juego borrado y la tarjeta de curiosidad
+    // lo seguía enseñando hasta reiniciar (mismo bug, dos tablas que faltaban).
     [
       queryKeys.games.all,
       queryKeys.sessions.all,
       queryKeys.spend.all,
       queryKeys.stateEvents.all,
       queryKeys.saves.all,
+      queryKeys.achievements.all,
+      queryKeys.curiosities.all,
     ],
   );
 

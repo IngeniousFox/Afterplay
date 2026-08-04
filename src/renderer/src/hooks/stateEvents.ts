@@ -49,9 +49,10 @@ export const useUpdateStateEvent = (): UseMutationResult<
     [queryKeys.games.all, queryKeys.stateEvents.all],
   );
 
-// Borrar un evento solo pasa en la corrección de playthrough del Edit modal
-// (Beaten/Dropped → Playing, ver saveExistingIteration): el estado derivado
-// del juego cambia igual que con update, mismas invalidaciones.
+// Borrar un evento: la corrección de playthrough del Edit modal
+// (Beaten/Dropped → Playing, ver saveExistingIteration) y la papelera del
+// History de la ficha. El estado derivado del juego cambia igual que con
+// update, mismas invalidaciones.
 export const useDeleteStateEvent = (): UseMutationResult<boolean, Error, number, unknown> =>
   useInvalidatingMutation(
     (id: number) => window.api.stateEvents.delete(id),

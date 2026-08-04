@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, Calendar, Clock, Flame } from 'lucide-react';
+import { Activity, ArrowRight, Calendar, Clock, Flame, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { deriveMoments, momentsBySession } from '../../../shared/memory/moments';
@@ -97,7 +97,7 @@ export const Sessions = (): React.JSX.Element => {
   const gameParam = searchParams.get('game');
   const gameId = gameParam ? Number(gameParam) : null;
 
-  const { data: sessions = [], isLoading, isError } = useSessions();
+  const { data: sessions = [], isLoading, isError, refetch } = useSessions();
   const { data: games = [] } = useGames();
   // Recaps de mes para las tarjetas del diario (§5), indexados por scopeKey.
   const { data: memories = [] } = useMemories();
@@ -179,7 +179,15 @@ export const Sessions = (): React.JSX.Element => {
     ? selectedGame.totalHours
     : games.reduce((sum, game) => sum + game.totalHours, 0);
 
-  const { longestSec: longestSessionSec, avgSec: avgSessionSec } = sessionDurationStats(filtered);
+  // Memoizado: los 4 contadores de abajo (useCountUp) reprintan el
+  // componente en cada frame de su animación (~700ms, ~40 veces) mientras
+  // suben — sin esto, cada uno de esos frames recorría `filtered` entero
+  // (puede ser toda la historia de sesiones) para recalcular exactamente lo
+  // mismo que el frame anterior.
+  const { longestSec: longestSessionSec, avgSec: avgSessionSec } = useMemo(
+    () => sessionDurationStats(filtered),
+    [filtered],
+  );
 
   // Contadores animados de las 4 métricas — mismo count-up que Stats; al
   // cambiar de filtro los targets cambian y vuelven a subir solos.
@@ -252,9 +260,19 @@ export const Sessions = (): React.JSX.Element => {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading sessions…</p>
         ) : isError ? (
-          <p className="text-sm text-destructive">
-            Something went wrong loading your sessions. Try again in a moment.
-          </p>
+          <div className="flex flex-col items-start gap-2.5">
+            <p className="text-sm text-destructive">
+              Something went wrong loading your sessions. Try again in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className={`${outlineButtonClass} border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]`}
+            >
+              <RefreshCw size={14} />
+              <span>Try again</span>
+            </button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-24 text-center">
             <p className="text-sm font-semibold text-foreground">No sessions yet</p>

@@ -7,7 +7,9 @@ import type {
   UpdateStateEventPatch,
 } from '../../../../../shared/types';
 import { useUpdateStateEvent } from '../../../hooks/stateEvents';
-import { useDeleteSpendEvent, useUpdateSpendEvent } from '../../../hooks/spend';
+import { DeleteHistoryEntryDialog } from './DeleteHistoryEntryDialog';
+import type { DeletableHistoryEntry } from './DeleteHistoryEntryDialog';
+import { useUpdateSpendEvent } from '../../../hooks/spend';
 import { AMBER } from '../../../lib/colors';
 import { formatDateOnly, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
@@ -80,9 +82,19 @@ const entryPickerValue = (entry: Entry): PrecisionDateValue =>
 // cantidad + fecha + nota (gastos) — el TIPO no se toca DESDE AQUÍ (SPEC
 // 4.5: cambiar de estado es apilar un evento nuevo, y esto es para erratas).
 // El único sitio que sí reescribe un tipo es la corrección de desenlace del
-// Edit modal, y solo para eso (SPEC 4.6). Los
-// gastos también se pueden borrar desde aquí — los iconos solo aparecen al
-// pasar el ratón para no ensuciar la lista en reposo.
+// Edit modal, y solo para eso (SPEC 4.6).
+//
+// BORRAR sí se puede, y para los dos tipos de entrada: un evento apuntado
+// por error (un Playing que no fue, un Resting de un despiste) es una errata
+// igual que una fecha mal puesta, y la única corrección posible para "esto
+// nunca pasó" es quitarlo. Es seguro por el modelo v2: TODO lo derivado
+// (estado actual, fechas de inicio/fin del playthrough) se recalcula del log
+// al leer, así que no queda ningún ancla colgando. Ojo con lo que NO hace a
+// propósito: borrar un 'started' no arrastra el "Pausado automáticamente"
+// que aquel disparó en otro playthrough — cada entrada se borra sola, un
+// gesto = un efecto, y ese evento sigue a la vista para borrarlo también si
+// sobra. Los iconos solo aparecen al pasar el ratón para no ensuciar la
+// lista en reposo.
 export const HistoryList = ({
   stateHistory,
   spendHistory,
@@ -90,11 +102,22 @@ export const HistoryList = ({
 }: HistoryListProps): React.JSX.Element | null => {
   const updateStateEvent = useUpdateStateEvent();
   const updateSpendEvent = useUpdateSpendEvent();
-  const deleteSpend = useDeleteSpendEvent();
+  // La entrada (estado O gasto) pendiente de confirmar su borrado (null =
+  // ninguna). El aviso de la casa: la papelera abre el diálogo, nunca borra
+  // a pelo — mismo flujo que sesiones, juegos y copias de partidas. Las
+  // mutaciones de borrado viven en el diálogo, como en sus hermanos.
+  const [deletingEntry, setDeletingEntry] = useState<DeletableHistoryEntry | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
   const [draftAmount, setDraftAmount] = useState('');
   const [draftDate, setDraftDate] = useState<PrecisionDateValue | null>(null);
+  // Antes save() disparaba .mutate() (sin esperar) y cerraba el editor en la
+  // línea siguiente SIN mirar si había ido bien — un fallo (la DB en pleno
+  // swap de conexión, por ejemplo) volvía la fila a sus valores viejos con
+  // cero indicio de que la edición se había perdido. Se guarda aquí para
+  // enseñarlo dentro del propio editor, que sigue abierto hasta que sí
+  // funcione.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Con la entrada "Added to Afterplay" en la línea temporal, el evento
   // 'plan_to_play' es redundante (misma fecha, misma información: "entró en
@@ -150,9 +173,10 @@ export const HistoryList = ({
     setDraftNote(entry.note ?? '');
     setDraftAmount(entry.kind === 'spend' ? String(entry.event.amount) : '');
     setDraftDate(entryPickerValue(entry));
+    setSaveError(null);
   };
 
-  const save = (entry: Entry): void => {
+  const save = async (entry: Entry): Promise<void> => {
     // La fecha solo entra al patch si CAMBIÓ respecto a la guardada — así un
     // evento con precisión 'datetime' (hora real) que solo edita la nota no
     // pierde su hora por el simple hecho de pasar por el picker de días.
@@ -168,22 +192,30 @@ export const HistoryList = ({
       : {};
 
     const note = draftNote.trim() || null;
+    setSaveError(null);
 
-    if (entry.kind === 'status') {
-      const patch: UpdateStateEventPatch = { note, ...datePatch };
-      updateStateEvent.mutate({ id: entry.id, patch });
-    } else if (entry.kind === 'spend') {
-      const parsedAmount = Number(draftAmount);
-      const amountValid =
-        draftAmount.trim() !== '' && !Number.isNaN(parsedAmount) && parsedAmount > 0;
-      const patch: UpdateSpendEventPatch = {
-        note,
-        ...datePatch,
-        // Cantidad inválida (vacía/0/no numérica): se conserva la guardada
-        // en vez de romper el gasto.
-        ...(amountValid && parsedAmount !== entry.event.amount ? { amount: parsedAmount } : {}),
-      };
-      updateSpendEvent.mutate({ id: entry.id, patch });
+    try {
+      if (entry.kind === 'status') {
+        const patch: UpdateStateEventPatch = { note, ...datePatch };
+        await updateStateEvent.mutateAsync({ id: entry.id, patch });
+      } else if (entry.kind === 'spend') {
+        const parsedAmount = Number(draftAmount);
+        const amountValid =
+          draftAmount.trim() !== '' && !Number.isNaN(parsedAmount) && parsedAmount > 0;
+        const patch: UpdateSpendEventPatch = {
+          note,
+          ...datePatch,
+          // Cantidad inválida (vacía/0/no numérica): se conserva la guardada
+          // en vez de romper el gasto.
+          ...(amountValid && parsedAmount !== entry.event.amount ? { amount: parsedAmount } : {}),
+        };
+        await updateSpendEvent.mutateAsync({ id: entry.id, patch });
+      }
+    } catch (error) {
+      // El editor se queda ABIERTO con lo que habías escrito: cerrarlo aquí
+      // habría sido la misma pérdida silenciosa que esto viene a arreglar.
+      setSaveError(error instanceof Error ? error.message : String(error));
+      return;
     }
     setEditingKey(null);
   };
@@ -295,7 +327,7 @@ export const HistoryList = ({
                                 value={draftAmount}
                                 onChange={(event) => setDraftAmount(event.target.value)}
                                 onKeyDown={(event) => {
-                                  if (event.key === 'Enter') save(entry);
+                                  if (event.key === 'Enter') void save(entry);
                                   if (event.key === 'Escape') setEditingKey(null);
                                 }}
                                 min={0}
@@ -322,7 +354,7 @@ export const HistoryList = ({
                             value={draftNote}
                             onChange={(event) => setDraftNote(event.target.value)}
                             onKeyDown={(event) => {
-                              if (event.key === 'Enter') save(entry);
+                              if (event.key === 'Enter') void save(entry);
                               if (event.key === 'Escape') setEditingKey(null);
                             }}
                             placeholder="Note…"
@@ -330,7 +362,7 @@ export const HistoryList = ({
                           />
                           <button
                             type="button"
-                            onClick={() => save(entry)}
+                            onClick={() => void save(entry)}
                             className="flex-none rounded-md p-1.5 text-primary hover:bg-primary/10"
                             aria-label="Save changes"
                           >
@@ -345,6 +377,11 @@ export const HistoryList = ({
                             <X size={14} />
                           </button>
                         </div>
+                        {saveError && (
+                          <div className="text-[11px] text-destructive">
+                            Couldn&apos;t save — {saveError}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       entry.note && (
@@ -387,13 +424,31 @@ export const HistoryList = ({
                           <Pencil size={13} />
                         </button>
                       )}
-                      {entry.kind === 'spend' && (
+                      {entry.kind !== 'added' && (
                         <button
                           type="button"
-                          onClick={() => deleteSpend.mutate(entry.id)}
-                          disabled={deleteSpend.isPending}
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                          aria-label="Delete spend entry"
+                          onClick={() =>
+                            // Tal y como se ve en la fila (estado + fecha, o
+                            // importe + tipo + fecha) — lo justo para
+                            // reconocer QUÉ se va a borrar.
+                            setDeletingEntry(
+                              entry.kind === 'status'
+                                ? {
+                                    kind: 'status',
+                                    id: entry.id,
+                                    label: `${getGameStatusMeta(entry.event.type).label} · ${dateLabel}`,
+                                  }
+                                : {
+                                    kind: 'spend',
+                                    id: entry.id,
+                                    label: `${formatMoney(entry.event.amount)} · ${SPEND_TYPE_LABEL[entry.event.type]} · ${dateLabel}`,
+                                  },
+                            )
+                          }
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={
+                            entry.kind === 'status' ? 'Delete status entry' : 'Delete spend entry'
+                          }
                         >
                           <Trash2 size={13} />
                         </button>
@@ -406,6 +461,8 @@ export const HistoryList = ({
           );
         })}
       </StatCard>
+
+      <DeleteHistoryEntryDialog entry={deletingEntry} onClose={() => setDeletingEntry(null)} />
     </div>
   );
 };

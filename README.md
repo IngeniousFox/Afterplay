@@ -119,11 +119,11 @@ counter and a stop button, on every screen.
 Three levels, because most of what you'd want to record isn't a fact about the
 game. It's a fact about the time you played it.
 
-| Level | What it holds |
-|---|---|
-| **Game** | Title, artwork, IGDB metadata, HowLongToBeat times, install path, notes |
+| Level           | What it holds                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| **Game**        | Title, artwork, IGDB metadata, HowLongToBeat times, install path, notes                      |
 | **Playthrough** | Where you played it, digital or physical, how you got it, hours, rating, spend, how it ended |
-| **Session** | An actual stretch of playing: start, end, duration, and a note if you want one |
+| **Session**     | An actual stretch of playing: start, end, duration, and a note if you want one               |
 
 A game's status isn't a field you overwrite. It's worked out from its event log
 every time it's read. Marking something as beaten adds an event; the status is
@@ -283,7 +283,7 @@ no restart.
 
 ![API keys](docs/screenshots/settings-keys.png)
 
-#### IGDB, for game search and metadata *(recommended)*
+#### IGDB, for game search and metadata _(recommended)_
 
 This is what makes searching for a game work, and what fills in the artwork,
 developer, publisher, year and genres. IGDB authenticates through Twitch, which
@@ -298,7 +298,7 @@ is why you need a Twitch account.
    Secret**.
 5. Paste both into Settings → API & Sync → IGDB.
 
-#### SteamGridDB, for covers and banners *(recommended)*
+#### SteamGridDB, for covers and banners _(recommended)_
 
 For when IGDB's cover isn't the one you wanted.
 
@@ -306,7 +306,7 @@ For when IGDB's cover isn't the one you wanted.
 2. Open [Preferences → API](https://www.steamgriddb.com/profile/preferences/api).
 3. Generate a key, paste it into Settings → API & Sync → SteamGridDB.
 
-#### Turso, for syncing across PCs *(optional)*
+#### Turso, for syncing across PCs _(optional)_
 
 Only worth setting up if you use more than one computer. Skip it otherwise,
 everything works locally.
@@ -322,7 +322,7 @@ everything works locally.
    Sync → Turso.
 4. Do the same on your other machine, pointing at the same database.
 
-#### Cloudflare R2, for save backups *(optional)*
+#### Cloudflare R2, for save backups _(optional)_
 
 Where the save backups end up. R2 charges nothing for downloads, which matters
 because restoring is the part that downloads.
@@ -356,15 +356,15 @@ Sync and save backups are properly optional and off until you turn them on.
 
 All of it sits in `%APPDATA%\Afterplay`:
 
-| File | What it is |
-|---|---|
-| `Afterplay.db` | The database. Games, playthroughs, sessions, events, spending |
-| `credentials.json` | Your API keys, encrypted with DPAPI |
-| `config.json` | Preferences: time format, window size, scanned folders |
-| `machine-saves.json` | Things true of *this* PC only: its id, its home folder, per-game restore targets. Never synced |
-| `save-backups/` | Local working copy of the save backups |
-| `scan-cache.json` | Cache for the folder scanner |
-| `backups/` | Daily rotating copies of the database |
+| File                 | What it is                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| `Afterplay.db`       | The database. Games, playthroughs, sessions, events, spending                                  |
+| `credentials.json`   | Your API keys, encrypted with DPAPI                                                            |
+| `config.json`        | Preferences: time format, window size, scanned folders                                         |
+| `machine-saves.json` | Things true of _this_ PC only: its id, its home folder, per-game restore targets. Never synced |
+| `save-backups/`      | Local working copy of the save backups                                                         |
+| `scan-cache.json`    | Cache for the folder scanner                                                                   |
+| `backups/`           | Daily rotating copies of the database                                                          |
 
 The database backs itself up once a day, and you can drop an extra copy anywhere
 you like from **Settings → Backups**.
@@ -386,15 +386,15 @@ npm install
 npm run dev
 ```
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | Development with hot reload |
-| `npm run typecheck` | Type-check main and renderer |
-| `npm run lint` | ESLint, cached |
-| `npm run build` | Type-check and build |
-| `npm run build:win` | Full Windows installer |
-| `npm run build:unpack` | Unpacked build, for checking packaging |
-| `npm run ludusavi:fetch` | Download the pinned ludusavi binary |
+| Command                  | What it does                              |
+| ------------------------ | ----------------------------------------- |
+| `npm run dev`            | Development with hot reload               |
+| `npm run typecheck`      | Type-check main and renderer              |
+| `npm run lint`           | ESLint, cached                            |
+| `npm run build`          | Type-check and build                      |
+| `npm run build:win`      | Full Windows installer                    |
+| `npm run build:unpack`   | Unpacked build, for checking packaging    |
+| `npm run ludusavi:fetch` | Download the pinned ludusavi binary       |
 | `npm run db:push:remote` | Push pending migrations straight to Turso |
 
 The ludusavi binary isn't in the repo. It's 33 MB and Git would hang on to every

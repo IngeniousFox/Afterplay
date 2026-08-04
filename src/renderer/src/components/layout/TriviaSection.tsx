@@ -48,14 +48,25 @@ export const TriviaSection = (): React.JSX.Element => {
       description="Real stories about your games — written once from each game's Wikipedia article and mixed into ambient mode, next to your own memories."
       textClassName="min-w-0 flex-1"
       extra={
-        statusLine && (
-          <div
-            className="mt-1 text-[11px] font-semibold"
-            style={{ color: running ? TEAL : 'var(--muted-foreground)' }}
-          >
-            {statusLine}
-          </div>
-        )
+        <>
+          {statusLine && (
+            <div
+              className="mt-1 text-[11px] font-semibold"
+              style={{ color: running ? TEAL : 'var(--muted-foreground)' }}
+            >
+              {statusLine}
+            </div>
+          )}
+          {/* Antes runBackfill.isError no se miraba en ningún sitio: un
+              rechazo ANTES del primer evento de progreso (clave mala, sin
+              red) devolvía el botón a su reposo con statusLine sin cambiar
+              — parecía que el clic no había hecho nada. */}
+          {runBackfill.isError && (
+            <div className="mt-1 text-[11px] font-semibold text-destructive">
+              Couldn&apos;t start — {runBackfill.error.message}
+            </div>
+          )}
+        </>
       }
       icon={Lightbulb}
       color={TEAL}

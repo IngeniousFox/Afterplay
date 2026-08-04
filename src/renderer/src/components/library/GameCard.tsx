@@ -49,13 +49,17 @@ const lastPlayedLabel = (lastPlayedAt: Date): string => {
 const CardBack = ({
   game,
   elapsedSeconds,
+  coverSrc,
 }: {
   game: GameListItem;
   elapsedSeconds: number;
+  // Resuelta por el FRENTE (GameCard, siempre montado) y pasada aquí en vez
+  // de que la trasera vuelva a llamar a useImageSrc con la misma url+type:
+  // eran dos resoluciones de la misma carátula por card, una por cada hover.
+  coverSrc: string | null;
 }): React.JSX.Element => {
   const status = getGameStatusMeta(game.currentState);
   const heroSrc = useImageSrc(game.heroUrl, 'heroes');
-  const coverSrc = useImageSrc(game.coverUrl, 'covers');
 
   const hltbPct =
     game.hltbMain !== null && game.hltbMain > 0 && game.totalHours > 0
@@ -323,7 +327,7 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
             queda mirando al frente. Mismo tamaño que la card, sin crecido. */}
         {everFlipped && (
           <div className="absolute inset-0 overflow-hidden rounded-[13px] border border-white/14 bg-[#151716] [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <CardBack game={game} elapsedSeconds={elapsedSeconds} />
+            <CardBack game={game} elapsedSeconds={elapsedSeconds} coverSrc={coverSrc} />
           </div>
         )}
       </div>

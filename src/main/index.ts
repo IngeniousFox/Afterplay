@@ -425,11 +425,14 @@ app.whenReady().then(async () => {
     return;
   }
 
-  try {
-    await runDailyBackup();
-  } catch (error) {
+  // Sin await: VACUUM INTO copia el fichero .db entero y con una biblioteca
+  // grande puede tardar un buen puñado de segundos — nada de lo que sigue
+  // (handlers IPC, la ventana) depende de que esta copia exista ya, así que
+  // esperarla aquí solo retrasaba el primer pintado sin ganar nada. Ahora
+  // corre en paralelo, gateada por su propio withDbAccess (ver dailyBackup.ts).
+  void runDailyBackup().catch((error: unknown) => {
     console.warn('[backup] fallo inesperado en la copia diaria (sigo igualmente):', error);
-  }
+  });
 
   registerIpcHandlers();
   registerImageProtocolHandler();

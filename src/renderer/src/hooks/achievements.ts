@@ -109,9 +109,15 @@ export const useRefreshGameAchievements = (
   const refresh = (): void => {
     if (refreshing) return;
     setRefreshing(true);
-    void window.api.achievements.refreshGame(gameId).then((queued) => {
-      if (!queued) setRefreshing(false);
-    });
+    void window.api.achievements
+      .refreshGame(gameId)
+      .then((queued) => {
+        if (!queued) setRefreshing(false);
+      })
+      // Si el invoke rechaza (el main lanza antes de encolar), sin este catch
+      // setRefreshing(false) no corría por esa vía y la ruedecita giraba hasta
+      // el guard de 45s. Se apaga ya.
+      .catch(() => setRefreshing(false));
   };
 
   return { refresh, refreshing };

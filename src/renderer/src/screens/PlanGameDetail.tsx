@@ -1,5 +1,6 @@
 import { ArrowRight, ImagePlus, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { AchievementsSection } from '../components/library/detail/AchievementsSection';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
@@ -167,8 +168,19 @@ export const PlanGameDetail = ({
       )}
       {/* Alta desde la propia ficha, en modo 'plan': lo que se añade aquí
           nace planeado, igual que el botón de la lista — desde Plan to Play
-          no se entra nunca a la biblioteca por la puerta de atrás. */}
-      <AddGameModal open={addPlannedOpen} onOpenChange={setAddPlannedOpen} mode="plan" />
+          no se entra nunca a la biblioteca por la puerta de atrás.
+          onCreated con un toast y no una navegación (a diferencia de
+          GameListScreen, que sí navega a la ficha nueva): aquí el usuario
+          está viendo OTRO juego planeado, y llevárselo de golpe al que
+          acaba de añadir sería más confuso que útil. Sin ningún onCreated
+          antes, el modal se cerraba sin dejar ni rastro de que el alta
+          hubiera funcionado — había que ir a /plan a comprobarlo a ciegas. */}
+      <AddGameModal
+        open={addPlannedOpen}
+        onOpenChange={setAddPlannedOpen}
+        mode="plan"
+        onCreated={() => toast.success('Added to your Plan to play')}
+      />
       <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
       <EditNotesModal game={game} open={editNotesOpen} onOpenChange={setEditNotesOpen} />
       <DeleteGameDialog

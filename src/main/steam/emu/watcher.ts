@@ -32,6 +32,11 @@ const DEBOUNCE_MS = 900;
 
 let watchers: FSWatcher[] = [];
 let debounce: ReturnType<typeof setTimeout> | null = null;
+// true mientras flush() está en vuelo. Sin esto, un segundo flush del debounce
+// podía arrancar mientras el primero aún esperaba en la DB o en la red, y —vía
+// el snapshot no atómico de storeUnlocks— los dos daban el mismo logro por
+// "nuevo": doble toast y doble tarjeta del 100%.
+let flushing = false;
 // Los appid tocados desde el último vaciado. Se acumulan a propósito: sacar
 // varios logros seguidos toca el mismo fichero varias veces, y lo que
 // interesa es releerlo UNA vez cuando pare.
@@ -48,10 +53,18 @@ const appIdFromEvent = (relativePath: string | null): number | null => {
 };
 
 const flush = async (): Promise<void> => {
+  // Ya hay un vaciado en curso: reprograma y sal, sin tocar dirtyAppIds — que
+  // el que está corriendo lo procese, o esta re-programación lo recoja luego.
+  if (flushing) {
+    schedule();
+    return;
+  }
+
   const appIds = [...dirtyAppIds];
   dirtyAppIds.clear();
   if (appIds.length === 0) return;
 
+  flushing = true;
   try {
     const games = await withDbAccess(async () =>
       getDb()
@@ -67,34 +80,56 @@ const flush = async (): Promise<void> => {
     );
 
     for (const appId of appIds) {
-      const game = games.find((candidate) => candidate.steamAppId === appId);
-      // Un appid que no está en la biblioteca (o cuyo catálogo aún no se ha
-      // traído): no hay dónde colgar sus logros. Se ignora en silencio.
-      if (!game) continue;
+      // Cada appid en su try/catch. Antes, un solo fallo (la DB en pleno swap,
+      // un fichero a medio escribir) abortaba el lote ENTERO — y como
+      // dirtyAppIds ya se vació arriba y el vigilante es puramente por-evento
+      // (un crack que ya terminó de escribir no genera más eventos), esos
+      // logros se perdían hasta un sync manual completo. Ahora el que falla se
+      // re-encola para el próximo debounce y los demás siguen.
+      try {
+        const game = games.find((candidate) => candidate.steamAppId === appId);
+        // Un appid que no está en la biblioteca (o cuyo catálogo aún no se ha
+        // traído): no hay dónde colgar sus logros. Se ignora en silencio.
+        if (!game) continue;
 
-      const emu = readEmuUnlocksForGame(appId, game.executablePath);
-      if (emu.unlocks.length === 0) continue;
+        const emu = readEmuUnlocksForGame(appId, game.executablePath);
+        if (emu.unlocks.length === 0) continue;
 
-      const fresh = await storeUnlocks(game.id, 'emu', emu.unlocks, new Date());
-      if (fresh.length === 0) continue;
+        const fresh = await storeUnlocks(game.id, 'emu', emu.unlocks, new Date());
+        if (fresh.length === 0) continue;
 
-      // Solo ASCII en los console.log, misma convencion que watcher/watcher.ts.
-      console.log(`[steam] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
-      enqueueAchievementToasts(
-        fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
-      );
-      // ¿Acaba de caer el último? El broche dorado del 100%.
-      maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
-      // Y que la ficha abierta se entere sin recargar nada.
-      notifyAchievementsActivity({
-        kind: 'synced',
-        gameId: game.id,
-        catalogCount: 0,
-        unlockedCount: fresh.length,
-      });
+        // Solo ASCII en los console.log, misma convencion que watcher/watcher.ts.
+        console.log(`[steam] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
+        enqueueAchievementToasts(
+          fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
+        );
+        // ¿Acaba de caer el último? El broche dorado del 100%.
+        maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
+        // Y que la ficha abierta se entere sin recargar nada.
+        notifyAchievementsActivity({
+          kind: 'synced',
+          gameId: game.id,
+          catalogCount: 0,
+          unlockedCount: fresh.length,
+        });
+      } catch (error) {
+        console.warn(
+          `[steam] fallo leyendo logros en vivo del appid ${appId} (se reintenta):`,
+          error,
+        );
+        dirtyAppIds.add(appId);
+      }
     }
   } catch (error) {
+    // Un fallo ANTES del bucle (la lectura de la lista de juegos): se re-encola
+    // todo lo que había, que si no se perdería igual que arriba.
     console.warn('[steam] fallo leyendo logros en vivo:', error);
+    for (const appId of appIds) dirtyAppIds.add(appId);
+  } finally {
+    flushing = false;
+    // Llegaron eventos nuevos mientras vaciábamos, o quedaron appids
+    // re-encolados por un fallo: otra pasada cuando amaine.
+    if (dirtyAppIds.size > 0) schedule();
   }
 };
 

@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { applyLudusaviConfig } from './config';
 import type { RestorePlanFile } from './contracts';
@@ -79,7 +80,11 @@ export const scanLibrary = async (
 
   const output = await runLudusavi<LudusaviOperationOutput>(
     ['backup', '--preview', '--api', '--force', '--no-cloud-sync'],
-    { timeoutMs: ESCANEO_TIMEOUT_MS, configure: () => applyLudusaviConfig({ customGames }) },
+    {
+      timeoutMs: ESCANEO_TIMEOUT_MS,
+      configure: () => applyLudusaviConfig({ customGames }),
+      label: 'scanning your library',
+    },
   );
 
   return (
@@ -105,6 +110,7 @@ export const findLudusaviName = async (title: string): Promise<string | null> =>
   ]) {
     const output = await runLudusavi<LudusaviFindOutput>(args, {
       configure: () => applyLudusaviConfig(),
+      label: `detecting ${title}`,
     }).catch(() => null);
     const [match] = Object.keys(output?.games ?? {});
     if (match) return match;
@@ -123,7 +129,7 @@ export const previewGame = async (
 
   const output = await runLudusavi<LudusaviOperationOutput>(
     ['backup', '--preview', '--api', '--force', '--no-cloud-sync', ludusaviName],
-    { configure: () => applyLudusaviConfig({ customGames }) },
+    { configure: () => applyLudusaviConfig({ customGames }), label: `checking ${ludusaviName}` },
   );
 
   const entry = output.games?.[ludusaviName];
@@ -151,7 +157,7 @@ export const backupGame = async (
 
   const output = await runLudusavi<LudusaviOperationOutput>(
     ['backup', '--api', '--force', '--no-cloud-sync', ludusaviName],
-    { configure: () => applyLudusaviConfig({ customGames }) },
+    { configure: () => applyLudusaviConfig({ customGames }), label: `backing up ${ludusaviName}` },
   );
 
   const entry = output.games?.[ludusaviName];
@@ -272,6 +278,7 @@ export const restoreGame = async (options: RestoreOptions): Promise<RestorePlan>
             ? { [ludusaviName]: Object.fromEntries(skipRegistryKeys.map((key) => [key, false])) }
             : {},
         }),
+      label: `restoring ${ludusaviName}`,
     },
   );
 
@@ -292,23 +299,50 @@ export const restoreGame = async (options: RestoreOptions): Promise<RestorePlan>
 };
 
 // Carpeta temporal donde se materializa lo bajado de R2 antes de restaurar.
-// Se borra siempre al terminar: es material de un solo uso.
-// FUERA de la carpeta de backups a propósito: ahí dentro, cada subcarpeta es
-// un juego para ludusavi, y un directorio temporal se colaría como uno más
-// en cualquier operación que mire la carpeta entera.
-// Con nombre saneado: un juego con ":" en el título ni siquiera dejaba CREAR
-// la carpeta (mkdir con dos puntos falla en Windows), y además ludusavi
-// busca dentro del root la carpeta con SU esquema de nombres — tiene que
-// coincidir o el restore no encuentra el backup recién descargado.
+// Cada restauración vive en su propio subdirectorio con nombre único.
+// Material de un solo uso que se borra al terminar (clearRestoreWorkspace,
+// con SU ruta). FUERA de la carpeta de backups a propósito: ahí dentro, cada
+// subcarpeta es un juego para ludusavi, y un directorio temporal se colaría
+// como uno más en cualquier operación que mire la carpeta entera. El nombre
+// del juego va saneado: un ":" en el título ni siquiera dejaba CREAR la
+// carpeta (mkdir con dos puntos falla en Windows), y ludusavi busca dentro
+// del root la carpeta con SU esquema de nombres — tiene que coincidir o el
+// restore no encuentra el backup recién descargado.
+const activeWorkspaces = new Set<string>();
+
 export const createRestoreWorkspace = (ludusaviName: string): string => {
   ensureSavesDirs();
   const root = getRestoreWorkspaceDir();
-  rmSync(root, { recursive: true, force: true });
-  mkdirSync(join(root, sanitizeLudusaviFolder(ludusaviName)), { recursive: true });
-  return root;
+  // Antes esto era UN solo directorio compartido que se borraba y recreaba en
+  // cada restauración: dos a la vez (la automática de un cierre de sesión y
+  // un clic manual, o dos clics) compartían la carpeta, y el finally de una
+  // borraba los zips que la otra acababa de bajar — restauración silenciosa
+  // vacía o cruzada de una operación destructiva. Ahora cada una tiene su
+  // UUID. Al crear una nueva se barren SOLO los restos que ya no están vivos
+  // (un cierre brusco a mitad), nunca el directorio de una en curso.
+  if (existsSync(root)) {
+    for (const child of readdirSync(root)) {
+      const childPath = join(root, child);
+      if (!activeWorkspaces.has(childPath)) rmSync(childPath, { recursive: true, force: true });
+    }
+  }
+  const workspace = join(root, randomUUID());
+  activeWorkspaces.add(workspace);
+  mkdirSync(join(workspace, sanitizeLudusaviFolder(ludusaviName)), { recursive: true });
+  return workspace;
 };
 
-export const clearRestoreWorkspace = (): void => {
+export const clearRestoreWorkspace = (workspace: string): void => {
+  activeWorkspaces.delete(workspace);
+  rmSync(workspace, { recursive: true, force: true });
+};
+
+// Barrido de arranque: la app murió a mitad de una restauración y quedó su
+// carpeta temporal (el finally que la borra nunca corrió). Al arrancar no hay
+// ninguna restauración viva, así que se puede tirar el root entero — no como
+// el borrado por-workspace de en medio de una sesión, que solo toca el suyo.
+export const clearAllRestoreWorkspaces = (): void => {
+  activeWorkspaces.clear();
   rmSync(getRestoreWorkspaceDir(), { recursive: true, force: true });
 };
 

@@ -186,6 +186,14 @@ export const AmbientMode = (): React.JSX.Element | null => {
 };
 
 const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element => {
+  // `games` (el prop) son solo los que TIENEN carátula: es lo que se puede
+  // pintar en una diapositiva. Pero los HECHOS de la biblioteca (tu #3, cuántos
+  // juegos tienes, el más viejo, tu género nº1) tienen que salir de la
+  // biblioteca ENTERA — si no, un juego sin carátula (habitual en emulados y
+  // encontrados por escaneo) quedaba fuera y el ambiente afirmaba falsedades:
+  // recuento equivocado, "donde empezó todo" equivocado, ranking equivocado.
+  // La diapositiva se elige de `games`; los índices se construyen sobre todos.
+  const { data: allGames = [] } = useGames();
   const { data: sessions = [] } = useSessions();
   const { data: stateEvents = [] } = useStateEvents();
   const { data: spendEvents = [] } = useSpendEvents();
@@ -238,17 +246,17 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     // biblioteca". Solo cuentan los que tienen horas — un juego a cero no
     // ocupa puesto.
     const rankByGame = new Map<number, number>();
-    games
+    allGames
       .filter((game) => game.totalHours > 0)
       .sort((a, b) => b.totalHours - a.totalHours)
       .forEach((game, position) => rankByGame.set(game.id, position + 1));
 
-    const libraryHours = games.reduce((sum, game) => sum + game.totalHours, 0);
+    const libraryHours = allGames.reduce((sum, game) => sum + game.totalHours, 0);
 
     // Los extremos de la biblioteca: el primero que añadiste y el último.
     // Cada frase la puede decir un solo juego, que es justo lo que las hace
     // especiales cuando salen.
-    const byAdded = games.slice().sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
+    const byAdded = allGames.slice().sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
     const oldestId = byAdded[0]?.id ?? null;
     const newestId = byAdded[byAdded.length - 1]?.id ?? null;
     const libraryStartYear = byAdded[0]?.addedAt.getFullYear() ?? null;
@@ -257,7 +265,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     // el ranking de horas dentro de esa familia ("your most played shooter").
     const genreCounts = new Map<string, number>();
     const gamesByGenre = new Map<string, GameListItem[]>();
-    for (const game of games) {
+    for (const game of allGames) {
       const genre = game.genres?.[0];
       if (!genre) continue;
       genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
@@ -277,7 +285,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     // PEQUEÑAS (2-3): "llegó con X" es un recuerdo cuando fueron un par, y
     // puro ruido el día que importaste media biblioteca de golpe.
     const byAddedDay = new Map<string, GameListItem[]>();
-    for (const game of games) {
+    for (const game of allGames) {
       const key = game.addedAt.toDateString();
       const list = byAddedDay.get(key) ?? [];
       list.push(game);
@@ -296,7 +304,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     const releaseYearCounts = new Map<number, number>();
     let oldestReleaseId: number | null = null;
     let oldestReleaseYear = Infinity;
-    for (const game of games) {
+    for (const game of allGames) {
       if (game.releaseYear === null) continue;
       releaseYearCounts.set(game.releaseYear, (releaseYearCounts.get(game.releaseYear) ?? 0) + 1);
       if (game.releaseYear < oldestReleaseYear) {
@@ -374,7 +382,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       firstCompletionGameId,
       latestCompletionGameId,
     };
-  }, [games, sessions, stateEvents, spendEvents, curiosityRows]);
+  }, [allGames, sessions, stateEvents, spendEvents, curiosityRows]);
 
   const queue = shuffled(games, seed);
   const game = queue[index % queue.length];
@@ -397,7 +405,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     rank: indexes.rankByGame.get(game.id) ?? null,
     libraryHours: indexes.libraryHours,
     spend: indexes.spendByGame.get(game.id) ?? 0,
-    libraryGames: games.length,
+    libraryGames: allGames.length,
     isOldestInLibrary: indexes.oldestId === game.id,
     isNewestInLibrary: indexes.newestId === game.id,
     completedSameYear,

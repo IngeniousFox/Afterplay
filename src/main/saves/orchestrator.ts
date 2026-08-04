@@ -211,6 +211,30 @@ const fileSize = (path: string): number => {
   }
 };
 
+// Serializa las copias a la nube POR JUEGO. syncGameToR2 hace un
+// lee-modifica-escribe sobre save_backups (getSaveBackups -> createSaveBackup)
+// fuera de la cola de ludusavi de run.ts, y withDbAccess es un contador, no un
+// mutex: dos copias del MISMO juego a la vez (el backup automático del cierre
+// de sesión y un "Backup now" a mano) leían el mismo snapshot, ninguna veía la
+// fila de la otra, y las dos insertaban el mismo backupName -> filas
+// duplicadas en la lista de versiones y una colgando tras la siguiente poda.
+// Juegos DISTINTOS siguen en paralelo: no comparten prefijo de R2 ni filas.
+const gameBackupChains = new Map<number, Promise<unknown>>();
+
+const serializeGameBackup = <T>(gameId: number, task: () => Promise<T>): Promise<T> => {
+  const prev = gameBackupChains.get(gameId) ?? Promise.resolve();
+  const result = prev.then(task, task);
+  // La cadena nunca se rompe por un fallo (mismo callback en los dos brazos).
+  const settled = result.catch(() => undefined);
+  gameBackupChains.set(gameId, settled);
+  // Limpia la entrada cuando esta era la última de su juego: si no, el Map
+  // acumularía una entrada por cada juego respaldado en toda la sesión.
+  void settled.then(() => {
+    if (gameBackupChains.get(gameId) === settled) gameBackupChains.delete(gameId);
+  });
+  return result;
+};
+
 export const backupGameToCloud = async (
   game: SaveGame,
   allGames: SaveGame[],
@@ -218,23 +242,25 @@ export const backupGameToCloud = async (
   const ludusaviName = game.saveLudusaviName;
   if (!ludusaviName) return null;
 
-  const result = await backupGame(ludusaviName, buildCustomGames(allGames));
-  // Sin archivos no hay nada que subir. Pasa en dos situaciones MUY
-  // distintas que hay que devolver distinguidas (ver foundFiles): un juego
-  // detectado que todavía no ha generado partida, y una ruta que ya no
-  // existe porque el juego se movió o se desinstaló.
-  if (!result || (result.files.length === 0 && result.registryKeys.length === 0)) {
-    return { uploaded: 0, ludusaviName, foundFiles: false };
-  }
+  return serializeGameBackup(game.id, async () => {
+    const result = await backupGame(ludusaviName, buildCustomGames(allGames));
+    // Sin archivos no hay nada que subir. Pasa en dos situaciones MUY
+    // distintas que hay que devolver distinguidas (ver foundFiles): un juego
+    // detectado que todavía no ha generado partida, y una ruta que ya no
+    // existe porque el juego se movió o se desinstaló.
+    if (!result || (result.files.length === 0 && result.registryKeys.length === 0)) {
+      return { uploaded: 0, ludusaviName, foundFiles: false };
+    }
 
-  // ANTES de escribir nada en el bucket: si esta instalación nunca lo ha
-  // mirado, esta es la última ventana en la que reclamar la carpeta de una
-  // instalación anterior sale gratis — en cuanto subamos un objeto bajo el
-  // id actual, cambiarlo dejaría ese objeto huérfano (ver identity.ts).
-  await ensureIdentityBeforeUpload();
+    // ANTES de escribir nada en el bucket: si esta instalación nunca lo ha
+    // mirado, esta es la última ventana en la que reclamar la carpeta de una
+    // instalación anterior sale gratis — en cuanto subamos un objeto bajo el
+    // id actual, cambiarlo dejaría ese objeto huérfano (ver identity.ts).
+    await ensureIdentityBeforeUpload();
 
-  const created = await syncGameToR2(game, ludusaviName);
-  return { uploaded: created.length, ludusaviName, foundFiles: true };
+    const created = await syncGameToR2(game, ludusaviName);
+    return { uploaded: created.length, ludusaviName, foundFiles: true };
+  });
 };
 
 // Todo lo que un juego tenga de partidas guardadas, fuera: los objetos de su
@@ -451,9 +477,10 @@ export const runRestore = async (
       registrySkipped: skipRegistryKeys.length > 0,
     };
   } finally {
-    // Material de un solo uso: se limpia pase lo que pase, también si el
-    // restore falló a mitad.
-    clearRestoreWorkspace();
+    // Material de un solo uso: se limpia SU workspace pase lo que pase,
+    // también si el restore falló a mitad. Solo el suyo — otra restauración
+    // en paralelo tiene el propio y no debe tocarse.
+    clearRestoreWorkspace(workspace);
   }
 };
 

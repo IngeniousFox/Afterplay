@@ -1,3 +1,4 @@
+import { CircleCheck, Info, TriangleAlert } from 'lucide-react';
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
@@ -6,8 +7,44 @@ import { useAchievementsActivitySync } from './hooks/achievements';
 import { useCuriositiesActivity } from './hooks/curiosities';
 import { useBigPicture } from './hooks/useBigPicture';
 import { useWatcherSync } from './hooks/useWatcherSync';
+import { BLUE, GREEN, RED } from './lib/colors';
 import { router } from './router';
 import { TvModeTransition } from './tv/TvModeTransition';
+
+// Icono con chip de color — mismo lenguaje que el aviso de recap
+// (useMemoryArrivalToast) y las cards de la ficha (SavesSection y
+// compañía): un cuadro redondeado con el acento al 24 de alpha detrás del
+// icono. Hacía falta: con el Toaster en unstyled (más abajo), un
+// toast.success/error/info de una sola línea no tenía NINGÚN estilo propio
+// — nada de fondo, borde ni icono a color, solo texto suelto flotando en la
+// esquina, indistinguible de cualquier otra cosa en pantalla.
+const ToastIconChip = ({
+  icon: Icon,
+  color,
+}: {
+  icon: typeof CircleCheck;
+  color: string;
+}): React.JSX.Element => (
+  <span
+    className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]"
+    style={{ background: `${color}24` }}
+  >
+    <Icon size={16} style={{ color }} />
+  </span>
+);
+
+// Mismo trío borde/fondo/sombra que los avisos hechos a medida
+// (SessionClosedToast, useMemoryArrivalToast) — así un básico y uno a
+// medida se sienten de la MISMA familia si coinciden apilados, en vez de
+// que uno luzca y el otro parezca un aviso del sistema operativo.
+const toastClassNames = {
+  toast:
+    'flex w-full items-center gap-3 rounded-[14px] border border-input bg-[#141614] px-3.5 py-3 shadow-[0_20px_55px_rgba(0,0,0,.6)]',
+  icon: 'flex-none',
+  content: 'flex min-w-0 flex-1 flex-col justify-center gap-0.5',
+  title: 'text-[13px] font-bold leading-snug text-foreground',
+  description: 'text-[11.5px] font-semibold text-muted-foreground',
+};
 
 // Shell raíz de la app — routing de verdad (Bloque 3A, SPEC 10.6): rail
 // lateral + Games/Sessions/Stats, ver router.tsx.
@@ -39,7 +76,16 @@ const Afterplay = (): React.JSX.Element => {
           navigate. */}
       {/* unstyled: los toasts de la app se pintan enteros con sus propias
           clases (mismo lenguaje de panel flotante que dropdowns y popovers),
-          en vez de pelearse con el CSS por defecto de Sonner. */}
+          en vez de pelearse con el CSS por defecto de Sonner. Los "a medida"
+          (toast.custom: SessionClosedToast, el recap) ya traían su propio
+          panel completo y no les toca nada de esto. Los básicos
+          (toast.success/error/info, un mensaje de una línea) SÍ vivían sin
+          ningún estilo — toastOptions.classNames + icons de abajo es su
+          panel, coherente con el resto de la familia. Solo success/error/
+          info llevan icono a color: son los tres tipos que la app usa de
+          verdad hoy (ver toast.success/error/info en el código) — warning y
+          loading, sin ninguna llamada todavía, se quedan con el icono de
+          serie de Sonner en vez de inventarles un color de antemano. */}
       <Toaster
         position="bottom-right"
         // Más ancho que el de serie (356px): el aviso de cierre lleva
@@ -50,7 +96,12 @@ const Afterplay = (): React.JSX.Element => {
           width: 420,
           ...(bigPicture ? { transform: 'scale(1.35)', transformOrigin: 'bottom right' } : {}),
         }}
-        toastOptions={{ unstyled: true, classNames: { toast: 'w-full' } }}
+        toastOptions={{ unstyled: true, classNames: toastClassNames }}
+        icons={{
+          success: <ToastIconChip icon={CircleCheck} color={GREEN} />,
+          error: <ToastIconChip icon={TriangleAlert} color={RED} />,
+          info: <ToastIconChip icon={Info} color={BLUE} />,
+        }}
       />
       {/* Lo último del árbol y por encima de todo: cuando dejas de tocar la
           app, la biblioteca se pone a desfilar sola. Fuera del router porque

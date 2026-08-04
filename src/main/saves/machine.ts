@@ -146,8 +146,21 @@ export const getPruneFloor = (): Date | null => {
 // borraría por "caducadas".
 export const setPruneFloor = (when: Date): void => {
   const file = read();
-  if (!file.identity) return;
-  write({ ...file, identity: { ...file.identity, pruneFloor: when.toISOString() } });
+  const floor = when.toISOString();
+  write({
+    ...file,
+    // Recuperar el índice desde la nube puede pasar ANTES de reconciliar la
+    // identidad (una reinstalación que pulsa "recuperar de la nube" sin haber
+    // pasado aún por el flujo de identidad). Antes, con identity === null,
+    // esto salía sin hacer nada: el suelo no se ponía y el siguiente backup
+    // podaba justo lo recién recuperado — la pérdida irreversible que el
+    // pruneFloor existe para impedir. Se crea una identidad mínima con
+    // reconciledBucket vacío, que nunca casa con un bucket real, así que
+    // needsIdentityCheck sigue pidiendo la reconciliación de verdad después.
+    identity: file.identity
+      ? { ...file.identity, pruneFloor: floor }
+      : { reconciledBucket: '', reconciledAt: floor, pruneFloor: floor },
+  });
 };
 
 // "Ya he mirado este bucket y me quedo como estoy" — PC nuevo de verdad, o
@@ -156,7 +169,15 @@ export const markIdentityReconciled = (bucket: string): void => {
   const file = read();
   write({
     ...file,
-    identity: { reconciledBucket: bucket, reconciledAt: new Date().toISOString() },
+    identity: {
+      reconciledBucket: bucket,
+      reconciledAt: new Date().toISOString(),
+      // Conserva el suelo de poda: reconciliar ("ninguna es esta" / PC nuevo)
+      // NO es motivo para desproteger versiones ya recuperadas. Sin esto, un
+      // recover que puso el suelo y luego una reconciliación lo borraba, y el
+      // siguiente backup podaba el bucket entero.
+      pruneFloor: file.identity?.pruneFloor ?? null,
+    },
   });
 };
 

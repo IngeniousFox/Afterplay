@@ -8,7 +8,7 @@ import { usePlannedGames } from '../hooks/games';
 // aparece en ninguna otra parte de la app hasta pasarlo a la biblioteca.
 export const PlanToPlay = (): React.JSX.Element => {
   const navigate = useNavigate();
-  const { data: games = [], isLoading, isError } = usePlannedGames();
+  const { data: games = [], isLoading, isError, refetch } = usePlannedGames();
 
   return (
     <GameListScreen
@@ -21,6 +21,7 @@ export const PlanToPlay = (): React.JSX.Element => {
       games={games}
       isLoading={isLoading}
       isError={isError}
+      onRetry={() => void refetch()}
       modalMode="plan"
       addLabel="Plan a game"
       scrollKey="plan"

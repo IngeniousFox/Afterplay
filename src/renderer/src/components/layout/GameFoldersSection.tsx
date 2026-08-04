@@ -42,6 +42,15 @@ export const GameFoldersSection = (): React.JSX.Element => {
         </button>
       }
     >
+      {/* setFolders.isError no se miraba antes en ningún sitio (a diferencia
+          de EmulatorsSection/CredentialsSection en esta misma pantalla) —
+          una escritura fallida (fichero bloqueado, permisos) dejaba la fila
+          tal cual, como si añadir o quitar la carpeta hubiera funcionado. */}
+      {setFolders.isError && (
+        <div className="mb-2 text-[11.5px] text-destructive">
+          Couldn&apos;t update your folders — {setFolders.error.message}
+        </div>
+      )}
       {folders.length === 0 ? (
         <div className="text-[11.5px] text-muted-foreground">
           No folders yet. Point at the folder that <em>contains</em> your games — each subfolder

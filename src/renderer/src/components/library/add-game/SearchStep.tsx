@@ -1,4 +1,4 @@
-import { ArrowRight, FolderSearch, Gamepad2, Search, X } from 'lucide-react';
+import { ArrowRight, FolderSearch, Gamepad2, Search, TriangleAlert, X } from 'lucide-react';
 import { useState } from 'react';
 import type { IgdbSearchResult } from '../../../../../shared/types';
 import { BLUE } from '../../../lib/colors';
@@ -10,6 +10,11 @@ type SearchStepProps = {
   onQueryChange: (query: string) => void;
   isLoading: boolean;
   results: IgdbSearchResult[] | undefined;
+  // Antes no llegaba hasta aquí: con la búsqueda caída, `results` se queda
+  // undefined — ni entra en la rama "sin resultados" (que exige length===0),
+  // ni en ninguna otra — y el área se queda visualmente en blanco, idéntica
+  // a como se ve una app colgada.
+  isError?: boolean;
   onSelect: (result: IgdbSearchResult) => void;
   // Cambia al modo "escanear mis carpetas". Opcional: el alta de un juego
   // planeado (mode='plan') no lo ofrece — ahí no hay nada instalado que
@@ -68,6 +73,7 @@ export const SearchStep = ({
   onQueryChange,
   isLoading,
   results,
+  isError = false,
   onSelect,
   onScanFolders,
   ownedByIgdbId,
@@ -200,6 +206,20 @@ export const SearchStep = ({
               </div>
             </div>
           ))
+        ) : isError ? (
+          // Antes de esto, una búsqueda caída (sin red, token de IGDB
+          // caducado, 429) llegaba con `results` en undefined — que no
+          // encaja en NINGUNA de las otras ramas (ni "vacío" exige
+          // length===0, ni la de resultados tiene qué pintar) — y el área se
+          // quedaba en blanco, indistinguible de una app colgada.
+          <div className="flex flex-col items-center gap-2.5 px-4 py-8 text-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10">
+              <TriangleAlert size={18} strokeWidth={1.5} className="text-destructive/70" />
+            </div>
+            <p className="text-[13px] text-muted-foreground">
+              Couldn&apos;t reach the catalog — check your connection and try again.
+            </p>
+          </div>
         ) : trimmed === '' ? (
           // Antes esto era un hueco en blanco: el modal abría sin decir nada
           // hasta que escribías. Ahora explica de dónde salen los resultados.

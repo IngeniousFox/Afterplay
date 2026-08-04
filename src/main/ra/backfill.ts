@@ -67,6 +67,31 @@ const matchAgainstLists = (
   return similarity >= MIN_RA_SIMILARITY ? best.raGameId : null;
 };
 
+// Un único hilo de sincronización RA a la vez. Las dos pasadas que encadenan
+// syncRaGame con BREATHE_MS de respiro —el nivel 3 del arranque y el "Sync
+// now" de Ajustes— comparten este candado: dos corriendo a la vez partirían
+// el respiro por la mitad y provocarían justo el 429 que BREATHE_MS existe
+// para evitar, además de sincronizar el mismo juego dos veces en paralelo.
+let raSyncChainRunning = false;
+
+// El bucle común de las dos: sincroniza en cadena, un fallo de uno no corta
+// los demás, y respira entre cada uno. Antes estaba copiado en los dos sitios.
+// El tipo es justo lo que pide syncRaGame — no MatchCandidate, que trae
+// releaseYear/officialPlatforms que aquí ya no hacen falta (el emparejado ya
+// pasó).
+type SyncableRaGame = { id: number; title: string; raGameId: number; heroUrl: string | null };
+
+const runRaSyncChain = async (games: SyncableRaGame[]): Promise<void> => {
+  for (const game of games) {
+    try {
+      await syncRaGame(game, false);
+    } catch (error) {
+      console.warn(`[ra] fallo sincronizando "${game.title}":`, error);
+    }
+    await sleep(BREATHE_MS);
+  }
+};
+
 // La pasada de arranque (encadenada tras el primer sync en main/index.ts):
 //
 //   1. Detectar consolas NUEVAS en RA (nivel 1 de §6): si aparece una, los
@@ -195,16 +220,18 @@ export const runRaStartupPass = async (): Promise<void> => {
     const toSync = pendingSync.filter(
       (game): game is typeof game & { raGameId: number } => game.raGameId !== null,
     );
-    for (const game of toSync) {
+    // Si un "Sync now" ya está sincronizando en cadena, este nivel 3 sobra
+    // (aquel cubre TODOS los emparejados, estos incluidos) y correrlo a la
+    // vez es justo lo que el candado evita. Se salta sin más: no hay nada que
+    // reintentar que el otro no vaya a tocar.
+    if (toSync.length > 0 && !raSyncChainRunning) {
+      raSyncChainRunning = true;
       try {
-        await syncRaGame(game, false);
-      } catch (error) {
-        console.warn(`[ra] fallo sincronizando "${game.title}":`, error);
+        await runRaSyncChain(toSync);
+        console.log(`[ra] catalogos traidos para ${toSync.length} juego(s)`);
+      } finally {
+        raSyncChainRunning = false;
       }
-      await sleep(BREATHE_MS);
-    }
-    if (toSync.length > 0) {
-      console.log(`[ra] catalogos traidos para ${toSync.length} juego(s)`);
     }
   } catch (error) {
     // RA caído o sin red: nada queda a medias (raCheckedAt solo se marca con
@@ -217,6 +244,9 @@ export const runRaStartupPass = async (): Promise<void> => {
 // uno en uno. Devuelve cuántos entraron.
 export const runRaFullResync = async (): Promise<number> => {
   if (!hasRaCredentials()) return 0;
+  // Ya hay una cadena de sync en marcha (otro "Sync now", o el nivel 3 del
+  // arranque): no arrancar una segunda o se solapan y disparan el 429.
+  if (raSyncChainRunning) return 0;
 
   const games = await withDbAccess(async () =>
     getDb()
@@ -231,15 +261,17 @@ export const runRaFullResync = async (): Promise<number> => {
   const matched = games.filter(
     (game): game is typeof game & { raGameId: number } => game.raGameId !== null,
   );
+  if (matched.length === 0) return 0;
 
+  raSyncChainRunning = true;
+  // Desligado a propósito: encolar devuelve el conteo al instante y la cadena
+  // (un minuto largo de biblioteca retro) corre por detrás. El flag se libera
+  // pase lo que pase para no dejar el candado echado toda la sesión.
   void (async () => {
-    for (const game of matched) {
-      try {
-        await syncRaGame(game, false);
-      } catch (error) {
-        console.warn(`[ra] fallo resincronizando "${game.title}":`, error);
-      }
-      await sleep(BREATHE_MS);
+    try {
+      await runRaSyncChain(matched);
+    } finally {
+      raSyncChainRunning = false;
     }
   })();
 

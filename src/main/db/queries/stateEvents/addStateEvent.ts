@@ -3,7 +3,7 @@ import { getDb } from '../..';
 import { closesOpenSession, latestRealStateEvent } from '../../../../shared/playthroughState';
 import type { AddStateEventInput, StateEvent } from '../../../../shared/types';
 import { stateEventColumns } from '../../projections';
-import { iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
+import { gamesTable, iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
 import { computeDurationSec } from '../sessions/sessionDuration';
 
 // Apilar un evento en el log de estados — la escritura por la que pasa todo
@@ -35,8 +35,9 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
     // que el invariante se cumpla venga de donde venga la orden.
     if (input.type === 'started') {
       const [iteration] = await tx
-        .select({ gameId: iterationsTable.gameId })
+        .select({ gameId: iterationsTable.gameId, endless: gamesTable.endless })
         .from(iterationsTable)
+        .innerJoin(gamesTable, eq(gamesTable.id, iterationsTable.gameId))
         .where(eq(iterationsTable.id, input.iterationId))
         .limit(1);
 
@@ -87,12 +88,20 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
             const newEventIsMoreRecent = latest.occurredAt.getTime() <= occurredAt.getTime();
 
             if (siblingIsActive && newEventIsMoreRecent) {
+              // La pausa habla el vocabulario del juego: 'on_hold' es de los
+              // playthroughs discretos, y un ENDLESS no los tiene — su pausa
+              // es 'resting' (ENDLESS_STATUS_OPTIONS). Sin esta distinción, un
+              // endless con más de un contenedor (una conversión desde normal
+              // los conserva todos) recibía un On Hold que su propio selector
+              // de estados ni ofrece.
               await tx.insert(stateEventsTable).values({
                 iterationId: siblingId,
-                type: 'on_hold',
+                type: iteration.endless ? 'resting' : 'on_hold',
                 occurredAt,
                 datePrecision: input.datePrecision,
-                note: 'Pausado automáticamente al empezar otro playthrough.',
+                note: iteration.endless
+                  ? 'Puesto a descansar automáticamente.'
+                  : 'Pausado automáticamente al empezar otro playthrough.',
               });
             }
           }

@@ -148,6 +148,13 @@ export const ImagesSection = (): React.JSX.Element => {
   // sobra, o lo que va la pasada en marcha — el dato vivo de la tarjeta en un
   // solo renglón, en vez de una frase distinta cada vez.
   const badge = ((): { text: string; color: string; icon?: LucideIcon } | null => {
+    // Antes ni clean.isError ni redownload.isError se miraban: un fallo (el
+    // fichero bloqueado por el antivirus, disco lleno) devolvía el badge a
+    // "reclaimable" como si nada hubiera pasado — parecía que el clic no
+    // había servido de nada.
+    const mutationError = clean.error ?? redownload.error;
+    if (mutationError)
+      return { text: `Failed — ${mutationError.message}`, color: 'var(--destructive)' };
     if (running && progress) {
       return { text: `${progress.done} / ${progress.total}`, color: AMBER };
     }

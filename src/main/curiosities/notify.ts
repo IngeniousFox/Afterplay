@@ -1,21 +1,11 @@
 import type { CuriosityActivityEvent } from '../../shared/types';
+import { makeNotifier } from '../lib/makeNotifier';
 
 // Aviso al renderer de que la generación de curiosidades avanza (el backfill
-// de Ajustes) o de que un juego concreto acaba de recibir las suyas. Mismo
-// patrón que saves/notify.ts: función inyectada desde main/index.ts, que es
-// quien tiene la ventana — este módulo no depende de Electron.
+// de Ajustes) o de que un juego concreto acaba de recibir las suyas. El patrón
+// (función inyectada desde main/index.ts, que es quien tiene la ventana) vive
+// en lib/makeNotifier.
+const notifier = makeNotifier<CuriosityActivityEvent>();
 
-let send: (event: CuriosityActivityEvent) => void = () => {};
-
-export const setCuriositiesNotifier = (notifier: (event: CuriosityActivityEvent) => void): void => {
-  send = notifier;
-};
-
-export const notifyCuriositiesActivity = (event: CuriosityActivityEvent): void => {
-  try {
-    send(event);
-  } catch {
-    // La ventana puede estar cerrándose. Un aviso perdido no rompe nada: las
-    // curiosidades ya están en la DB y la próxima carga las verá igual.
-  }
-};
+export const setCuriositiesNotifier = notifier.set;
+export const notifyCuriositiesActivity = notifier.notify;

@@ -1,7 +1,8 @@
 import { app } from 'electron';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { TimeFormat } from '../../shared/types';
+import { writeFileAtomicSync } from '../lib/atomicWrite';
 
 // Preferencias de la app que NO son ajustes del sistema operativo (a
 // diferencia de "iniciar con Windows", que vive en el registro vía
@@ -48,12 +49,21 @@ const readConfig = (): AppConfig => {
   if (cached) return cached;
 
   let next: AppConfig;
-  try {
-    const raw = readFileSync(getConfigPath(), 'utf-8');
-    next = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-  } catch {
-    // No existe todavía (primer arranque) o está corrupto — se arranca con
-    // los valores por defecto; el próximo setConfigValue() lo crea/arregla.
+  if (existsSync(getConfigPath())) {
+    try {
+      next = { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(getConfigPath(), 'utf-8')) };
+    } catch (error) {
+      // Existe pero no parsea (un corte a mitad de escritura): antes esto
+      // reseteaba a DEFAULT_CONFIG en SILENCIO y el usuario perdía carpetas de
+      // escaneo, posición de ventana y formato de hora sin enterarse de nada.
+      // El writeFileAtomicSync de abajo ya casi lo impide, pero si aún pasa,
+      // que al menos quede constancia en el log.
+      console.warn('[config] config.json ilegible, arranco con los valores por defecto:', error);
+      next = { ...DEFAULT_CONFIG };
+    }
+  } else {
+    // No existe todavía: primer arranque, sin ruido. El próximo
+    // setConfigValue() lo crea.
     next = { ...DEFAULT_CONFIG };
   }
   cached = next;
@@ -66,5 +76,5 @@ export const getConfigValue = <K extends keyof AppConfig>(key: K): AppConfig[K] 
 export const setConfigValue = <K extends keyof AppConfig>(key: K, value: AppConfig[K]): void => {
   const config = { ...readConfig(), [key]: value };
   cached = config;
-  writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+  writeFileAtomicSync(getConfigPath(), JSON.stringify(config, null, 2));
 };

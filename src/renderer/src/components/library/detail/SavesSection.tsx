@@ -24,12 +24,14 @@ import type {
 import { AMBER, BLUE, GRAY, GREEN, TEAL } from '../../../lib/colors';
 import {
   useBackupNow,
+  useClearSaveDetection,
   useDetectSaves,
   useGameSaves,
   useSaveBackupActivity,
   useSavesStatus,
   useAddSaveFolder,
   useRemoveSaveFolder,
+  useSavesQueuedBehind,
   useSetRestoreTarget,
   useSetSaveBackupEnabled,
 } from '../../../hooks/saves';
@@ -63,6 +65,7 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
   // de lo que hace falta — lo primero que uno quiere saber es si sus
   // partidas siguen ahí.
   const { data: state, isLoading } = useGameSaves(gameId, Boolean(status));
+  const queuedBehind = useSavesQueuedBehind(gameId);
 
   const detect = useDetectSaves();
   const addFolder = useAddSaveFolder();
@@ -131,16 +134,34 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
         ) : isLoading ? (
           <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
             <Loader2 size={13} className="animate-spin" />
-            Checking…
+            {queuedBehind ? `Waiting behind: ${queuedBehind}…` : 'Checking…'}
           </div>
         ) : !state?.ludusaviName ? (
-          <NotDetected
-            detecting={detect.isPending}
-            picking={addFolder.isPending}
-            notFound={detect.isSuccess && detect.data === null}
-            onDetect={() => detect.mutate(gameId)}
-            onPickFolder={handlePickFolder}
-          />
+          <div className="flex flex-col gap-3.5">
+            <NotDetected
+              detecting={detect.isPending}
+              picking={addFolder.isPending}
+              notFound={detect.isSuccess && detect.data === null}
+              onDetect={() => detect.mutate(gameId)}
+              onPickFolder={handlePickFolder}
+            />
+            {/* Un juego puede llegar aquí YA con versiones en la nube — quitar
+                la última carpeta manual de un emparejamiento 'manual' lo
+                devuelve a "sin detectar" (ver saves:removeFolder), pero las
+                filas de save_backups siguen colgando del mismo gameId, no del
+                ludusaviName que se acaba de soltar. Sin esto se volvían
+                invisibles: ni restaurar, ni borrar, ni siquiera ver cuántas
+                había — igual que ya hace la rama de arriba (!ready) cuando el
+                motor no está listo. */}
+            {state && state.cloud.length > 0 && (
+              <VersionList
+                gameId={gameId}
+                versions={state.cloud}
+                blockedReason={null}
+                onRestore={setRestoring}
+              />
+            )}
+          </div>
         ) : (
           <Detected
             gameId={gameId}
@@ -290,6 +311,7 @@ const Detected = ({
 }): React.JSX.Element => {
   const setEnabled = useSetSaveBackupEnabled();
   const backupNow = useBackupNow();
+  const clearDetection = useClearSaveDetection();
   const activity = useSaveBackupActivity(gameId);
   const [flash, setFlash] = useState<{ text: string; color: string } | null>(null);
 
@@ -329,6 +351,33 @@ const Detected = ({
             {state.detectionSource === 'manual' ? 'manual' : 'auto'}
           </span>
         </div>
+
+        {/* Vía de escape de un emparejado automático equivocado (o de uno
+            correcto pero sin nada que enseñar aún — jugar el título casó
+            con otro juego del manifest de ludusavi, verificado en la
+            biblioteca real: "Nuts", "Nidhogg"... casaban sin ser el juego).
+            Sin esto no había forma de volver a "sin detectar": ni un botón
+            que quitase la carpeta AUTO, ni un camino de vuelta desde aquí. */}
+        {state.detectionSource === 'auto' && (
+          <>
+            <button
+              type="button"
+              onClick={() => clearDetection.mutate(gameId)}
+              disabled={clearDetection.isPending}
+              className="mt-1 text-[10.5px] font-semibold text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground disabled:opacity-50"
+            >
+              {clearDetection.isPending ? 'Resetting…' : 'Not the right game? Reset detection'}
+            </button>
+            {/* Es la vía de escape de un atasco — si ESTA falla en silencio,
+                el usuario se queda atrapado en el mismo sitio del que
+                intentaba salir, sin saber siquiera que lo intentó. */}
+            {clearDetection.isError && (
+              <div className="mt-1 text-[10.5px] font-semibold text-destructive">
+                Couldn&apos;t reset it — {clearDetection.error.message}
+              </div>
+            )}
+          </>
+        )}
 
         {state.local ? (
           <div className="mt-2.5">

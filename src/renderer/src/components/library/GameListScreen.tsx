@@ -1,9 +1,14 @@
 import { Button } from '@/components/ui/button';
-import { Gamepad2, Plus } from 'lucide-react';
+import { Gamepad2, Plus, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import type { GameListItem } from '../../../../shared/types';
 import { useScrollMemory } from '../../hooks/useScrollMemory';
-import { accentGradientStyle, revealClass, revealStyle } from '../../lib/styles';
+import {
+  accentGradientStyle,
+  outlineButtonClass,
+  revealClass,
+  revealStyle,
+} from '../../lib/styles';
 import { AddGameModal } from './AddGameModal';
 import { GameGrid } from './GameGrid';
 
@@ -17,6 +22,11 @@ type GameListScreenProps = {
   games: GameListItem[];
   isLoading: boolean;
   isError: boolean;
+  // Sin esto, un fallo (red, DB de arranque a medias) dejaba al usuario
+  // atascado leyendo el mismo error para siempre — la única salida real era
+  // cerrar y reabrir la app. useGames()/usePlannedGames() ya traen refetch
+  // de fábrica (son useQuery); esto solo lo expone en un botón.
+  onRetry: () => void;
   // Modo del AddGameModal — 'plan' para Plan to Play, sin especificar
   // (default 'library') para la biblioteca normal.
   modalMode?: 'library' | 'plan';
@@ -53,6 +63,7 @@ export const GameListScreen = ({
   games,
   isLoading,
   isError,
+  onRetry,
   modalMode,
   addLabel = 'Add game',
   scrollKey,
@@ -118,9 +129,17 @@ export const GameListScreen = ({
           {loadingText}
         </p>
       ) : isError ? (
-        <p className={`text-sm text-destructive ${revealClass}`} style={revealStyle(1)}>
-          {errorText}
-        </p>
+        <div className={`flex flex-col items-start gap-2.5 ${revealClass}`} style={revealStyle(1)}>
+          <p className="text-sm text-destructive">{errorText}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className={`${outlineButtonClass} border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]`}
+          >
+            <RefreshCw size={14} />
+            <span>Try again</span>
+          </button>
+        </div>
       ) : games.length === 0 ? (
         <div
           className={`flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-24 text-center ${revealClass}`}

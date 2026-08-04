@@ -2,6 +2,7 @@ import { Check, NotebookPen, X } from 'lucide-react';
 import { useState } from 'react';
 import { useSetSessionNote } from '../../hooks/sessions';
 import { AMBER } from '../../lib/colors';
+import { toast } from 'sonner';
 
 type SessionNoteProps = {
   sessionId: number;
@@ -26,9 +27,23 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
   const [draft, setDraft] = useState(note ?? '');
 
   const save = async (): Promise<void> => {
+    if ((draft.trim() || null) === note) {
+      setEditing(false);
+      return;
+    }
+    // Antes esto cerraba el editor ANTES de que la mutación ni empezara: un
+    // fallo (DB en pleno swap, IPC caído) hacía que el input desapareciera y
+    // la fila volviera a la nota vieja del prop — lo que acababas de
+    // escribir se perdía sin un solo indicio. Ahora el editor se queda
+    // abierto con el borrador intacto hasta que se confirme de verdad.
+    try {
+      await setSessionNote.mutateAsync({ id: sessionId, note: draft });
+    } catch (error) {
+      console.error('[sessions] fallo guardando la nota:', error);
+      toast.error('Could not save the note — try again.');
+      return;
+    }
     setEditing(false);
-    if ((draft.trim() || null) === note) return;
-    await setSessionNote.mutateAsync({ id: sessionId, note: draft });
   };
 
   const cancel = (): void => {

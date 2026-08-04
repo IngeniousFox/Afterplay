@@ -15,19 +15,28 @@ export type WindowStartOptions = {
   isMaximized: boolean;
 };
 
-// ¿La posición guardada sigue cayendo dentro de algún monitor conectado
+// Trozo mínimo de ventana que tiene que quedar visible en ALGÚN monitor para
+// darla por alcanzable — lo justo para verla y agarrarla con el ratón.
+const MIN_VISIBLE_WIDTH = 120;
+const MIN_VISIBLE_HEIGHT = 80;
+
+// ¿La posición guardada sigue siendo alcanzable en algún monitor conectado
 // AHORA MISMO? Si se guardó con un segundo monitor que ya no está enchufado,
-// o cambió la resolución, restaurarla tal cual dejaría la ventana fuera de
-// la pantalla — invisible e inalcanzable sin adivinar Win+flecha a ciegas.
+// o cambió la resolución, restaurarla tal cual dejaría la ventana fuera de la
+// pantalla — invisible e inalcanzable sin adivinar Win+flecha a ciegas.
+//
+// Antes se exigía CONTENCIÓN COMPLETA en un único monitor, y eso reseteaba a
+// centrada 1280x768 en cada arranque cualquier ventana a caballo entre dos
+// pantallas: no cabía entera en ninguna, aunque su posición fuera perfectamente
+// visible. Ahora basta con que un trozo agarrable solape con algún monitor.
 const isOnScreen = (bounds: WindowBounds): boolean =>
   screen.getAllDisplays().some((display) => {
     const area = display.workArea;
-    return (
-      bounds.x >= area.x &&
-      bounds.y >= area.y &&
-      bounds.x + bounds.width <= area.x + area.width &&
-      bounds.y + bounds.height <= area.y + area.height
-    );
+    const overlapWidth =
+      Math.min(bounds.x + bounds.width, area.x + area.width) - Math.max(bounds.x, area.x);
+    const overlapHeight =
+      Math.min(bounds.y + bounds.height, area.y + area.height) - Math.max(bounds.y, area.y);
+    return overlapWidth >= MIN_VISIBLE_WIDTH && overlapHeight >= MIN_VISIBLE_HEIGHT;
   });
 
 // Llamar al crear la ventana — mismo tamaño/posición que tenía al cerrarla

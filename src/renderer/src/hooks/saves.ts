@@ -1,9 +1,10 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type {
   CloudInventory,
   IdentityCheck,
+  LocalBackupsUsage,
   RecoveryResult,
   RestoreRequestInput,
   RestoreResult,
@@ -33,13 +34,49 @@ export const useSavesStatus = (): UseQueryResult<SavesStatus, Error> =>
 // Espacio ocupado en R2 (Ajustes → API & Sync) — una SUM local, cero
 // llamadas al bucket (ver getSaveBackupsUsage). Invalidada por cualquier
 // mutation que toque saves.all (backup manual, borrado, restauración) y por
-// el 'done' de una copia automática (useSaveBackupActivity, más abajo).
+// el 'done' de una copia automática — PERO esa segunda vía solo dispara si
+// useSaveBackupActivity(gameId) sigue montado cuando llega el evento
+// (SavesSection de ESE juego abierta), y el disparador automático de verdad
+// (cerrar sesión) tarda ~8s y normalmente te has ido de esa ficha para
+// entonces. staleTime acotado y no Infinity: sin esto, la cifra de Ajustes
+// se quedaba clavada para siempre tras la PRIMERA copia automática que
+// ocurriera con la ficha cerrada — que es el caso normal, no la excepción.
 export const useSavesUsage = (): UseQueryResult<SaveBackupsUsage, Error> =>
   useQuery({
     queryKey: queryKeys.saves.usage,
     queryFn: () => window.api.saves.getUsage(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+// Espacio ocupado en DISCO por save-backups/ (Ajustes) — no confundir con
+// useSavesUsage, que es el mismo dato pero en R2. Se recalcula recorriendo
+// la carpeta, así que no es gratis como la de arriba — por eso, a diferencia
+// de esa, no se invalida con cada mutation de saves.all: solo cuando algo
+// puede haberla cambiado de verdad (el propio Clean up, más abajo).
+export const useLocalBackupsUsage = (): UseQueryResult<LocalBackupsUsage, Error> =>
+  useQuery({
+    queryKey: queryKeys.saves.localUsage,
+    queryFn: () => window.api.saves.getLocalUsage(),
     staleTime: Infinity,
   });
+
+// Borra lo prescindible de save-backups/ (ya sincronizado, o huérfano). La
+// respuesta trae los conteos, no el estado nuevo — a diferencia de la caché
+// de imágenes (que puede recalcular su uso barato, un stat por fichero), esto
+// recorre mapping.yaml de cada carpeta: más barato refetchear una vez que
+// arrastrar ese cálculo dentro de cada mutation.
+export const useCleanLocalBackups = (): UseMutationResult<
+  { files: number; bytes: number; folders: number },
+  Error,
+  void,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => window.api.saves.cleanLocalBackups(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.saves.localUsage }),
+  });
+};
 
 // ¿Hace falta contrastar la identidad de esta máquina con el bucket? Es una
 // comparación de cadenas en el main, sin una sola llamada a R2 — por eso se
@@ -102,6 +139,33 @@ export const useGameSaves = (
     staleTime: 30_000,
   });
 
+// Detrás de qué operación ajena queda esperando el --preview de useGameSaves
+// (§4.1: puede caer detrás de un escaneo global de 8-15s) — sin esto, esa
+// espera se veía como un spinner mudo sin decir por qué tardaba tanto. El
+// aviso lo empuja saves:getGameState (ver ipc/saves.ts) en el instante en
+// que pide el estado, ANTES de que su promesa resuelva — por construcción
+// nunca puede ser la propia petición la que se reporte aquí (ver el
+// comentario de SavesQueuedEvent). Mismo patrón que useSaveBackupActivity:
+// estado local con reset al cambiar de juego.
+export const useSavesQueuedBehind = (gameId: number): string | null => {
+  const [label, setLabel] = useState<string | null>(null);
+  const [seenGameId, setSeenGameId] = useState(gameId);
+  if (seenGameId !== gameId) {
+    setSeenGameId(gameId);
+    setLabel(null);
+  }
+
+  useEffect(
+    () =>
+      window.api.saves.onQueued((event) => {
+        if (event.gameId === gameId) setLabel(event.label);
+      }),
+    [gameId],
+  );
+
+  return label;
+};
+
 // Escaneo completo: caro (segundos) y bajo demanda. Sin caché entre
 // aperturas — enseñar resultados de hace una semana como si fueran de ahora
 // sería peor que no enseñar nada.
@@ -114,6 +178,26 @@ export const useScanSaves = (): UseMutationResult<SavesScanEntry[], Error, void,
     () => window.api.saves.scanLibrary(),
     [queryKeys.games.all, queryKeys.saves.all],
   );
+
+// El resultado de la última pasada de "Scan my games", respaldado por query
+// en vez de vivir como useState en SavesScanSection: Ajustes es un Dialog de
+// Radix, que DESMONTA su contenido al cerrarse — un useState se perdía sin
+// más al cerrar y reabrir la ventana, tirando a la basura una pasada de ~9s
+// aunque nada en la biblioteca hubiera cambiado. Sin queryFn de verdad (no
+// hay "dame el último escaneo" en el main: escanear es bajo demanda, nunca
+// de fondo, PARTIDAS-GUARDADAS.md §10.1) — el único que escribe aquí es
+// SavesScanSection, con setQueryData tras cada scanLibrary() y tras cada
+// toggle de una fila.
+export const useSavesScanResults = (): UseQueryResult<SavesScanEntry[] | null, Error> =>
+  useQuery({
+    queryKey: queryKeys.savesLibraryScan.results,
+    queryFn: () => Promise.resolve(null),
+    // Nunca se dispara sola — con enabled:true, un remount con datos ya
+    // frescos igual disparaba este queryFn vacío y los pisaba con nada.
+    enabled: false,
+    staleTime: Infinity,
+    initialData: null,
+  });
 
 export const useSetSaveBackupEnabled = (): UseMutationResult<
   boolean,
@@ -139,6 +223,15 @@ export const useSetSaveBackupEnabled = (): UseMutationResult<
 export const useDetectSaves = (): UseMutationResult<string | null, Error, number, unknown> =>
   useInvalidatingMutation(
     (gameId: number) => window.api.saves.detect(gameId),
+    [queryKeys.games.all, queryKeys.saves.all],
+  );
+
+// Deshacer un emparejado automático — la vía de escape que faltaba cuando
+// ludusavi casa con el juego equivocado, o con uno sin partidas locales que
+// enseñar (ver SavesSection: el botón "Not the right game?").
+export const useClearSaveDetection = (): UseMutationResult<boolean, Error, number, unknown> =>
+  useInvalidatingMutation(
+    (gameId: number) => window.api.saves.clearDetection(gameId),
     [queryKeys.games.all, queryKeys.saves.all],
   );
 
@@ -233,6 +326,10 @@ export const useSaveBackupActivity = (gameId: number): SavesActivityEvent | null
 
     const unsubscribe = window.api.saves.onActivity((event) => {
       if (event.gameId !== gameId) return;
+      // Cancela un flash de "hecho" pendiente antes de pintar nada: si empieza
+      // una segunda copia antes de que dispare el flash de la primera, ese
+      // timer heredado borraría el progreso de la segunda a media subida.
+      clearTimeout(flashTimer);
       setActivity(event);
 
       if (event.phase === 'done') {

@@ -15,6 +15,7 @@ import { EmulatorsSection } from './EmulatorsSection';
 import { GameFoldersSection } from './GameFoldersSection';
 import { ImagesSection } from './ImagesSection';
 import { AchievementsSettingsSection } from './AchievementsSettingsSection';
+import { LocalSaveBackupsSection } from './LocalSaveBackupsSection';
 import { MemoriesSection } from './MemoriesSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
@@ -107,6 +108,8 @@ export const SettingsModal = ({
       <GameFoldersSection />
 
       <SavesScanSection />
+
+      <LocalSaveBackupsSection />
 
       <EmulatorsSection />
     </ModalShell>

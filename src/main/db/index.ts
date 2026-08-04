@@ -172,7 +172,21 @@ const connectWithSync = async (): Promise<Db> => {
       clientName: 'afterplay',
     },
   });
-  await withTimeout(db.$client.connect(), CONNECT_TIMEOUT_MS);
+  // withTimeout es un Promise.race: al saltar el límite RECHAZA, pero el
+  // connect() de dentro sigue vivo — nadie lo cancela. Si Turso estaba
+  // dormido y despierta a los 5s (>4s del timeout), el catch de los llamadores
+  // ya habrá abierto una conexión LOCAL al mismo fichero; cuando el connect de
+  // sync resuelve tarde, quedan DOS conexiones vivas sobre Afterplay.db — el
+  // caso exacto que el comentario del bug #1 (más abajo) documenta como el que
+  // corrompió la base real. Así que si vamos a abandonar este connect, lo
+  // cerramos en cuanto (y si) resuelva, antes de que otra lo pise.
+  const connecting = db.$client.connect();
+  try {
+    await withTimeout(connecting, CONNECT_TIMEOUT_MS);
+  } catch (error) {
+    void connecting.then(() => db.$client.close()).catch(() => {});
+    throw error;
+  }
   await enableForeignKeys(db);
   return db;
 };
@@ -252,14 +266,29 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 // in the packaged app (electron-builder includes the folder by default; it's
 // plain text read via fs, so it doesn't need asarUnpack).
 export const runMigrations = async (): Promise<void> => {
+  const remoteConfigured = hasRemoteConfigured();
+  // Sondeo barato ANTES de pagar dos timeouts de red completos (push de
+  // migraciones + connectWithSync, 4s cada uno de CONNECT_TIMEOUT_MS): sin
+  // adaptador de red (avión, sin cable) ninguno de los dos va a responder
+  // nunca, así que arrancar en local directamente ahorra hasta 8s de espera
+  // muerta. Mismo sondeo que isTursoReachable() usa más abajo para el ciclo
+  // de ascenso en caliente — no sustituye al timeout real (con wifi pero sin
+  // Turso alcanzable, ese caso sigue necesitando la espera de verdad para
+  // saberlo), solo el caso "no hay red en absoluto".
+  const online = !remoteConfigured || net.isOnline();
+
   // Conexión aparte, antes de tocar la de verdad: deja el remoto al día por
   // su cuenta (ver pushMigrationsToRemote) para que el CDC nunca tenga que
   // cargar con el DDL de esta migración. Va en secuencia y no en paralelo con
   // la conexión de abajo A PROPÓSITO: la de sync no debe engancharse a Turso
   // mientras el DDL está a medias.
-  migrationPushPending = !(await pushMigrationsToRemote(CONNECT_TIMEOUT_MS));
+  migrationPushPending =
+    remoteConfigured && !(online && (await pushMigrationsToRemote(CONNECT_TIMEOUT_MS)));
 
-  const { db, capable } = await attemptInitialConnect();
+  const { db, capable } =
+    remoteConfigured && !online
+      ? { db: await connectLocalOnly(), capable: false }
+      : await attemptInitialConnect();
   dbInstance = db;
   syncCapable = capable;
 
@@ -416,7 +445,13 @@ export const runSyncCycle = async (): Promise<void> => {
     // límite de tiempo: ya no hay nadie esperando a que abra la ventana. Va
     // ANTES del pull/push por lo de siempre — el DDL primero, y solo después
     // el sync de filas.
-    if (migrationPushPending) {
+    //
+    // Solo cuando YA hay sync: si la sesión sigue en local, attemptSyncUpgrade
+    // (abajo) hace este mismo push justo antes de reconectar. Sin la guarda de
+    // syncCapable, el caso "arranqué sin red + hay migración pendiente"
+    // empujaba a Turso DOS veces en el mismo ciclo (aquí y en el upgrade),
+    // pagando dos round-trips completos justo cuando la red acaba de volver.
+    if (syncCapable && migrationPushPending) {
       migrationPushPending = !(await pushMigrationsToRemote(null));
       if (!migrationPushPending) console.log('[db] migraciones de Turso comprobadas al fin');
     }
