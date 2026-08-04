@@ -85,18 +85,26 @@ export const resolveIterationForPlay = async (
   const lastIteration = iterations[iterations.length - 1];
   const lastType = lastIteration ? latestTypeByIteration.get(lastIteration.id) : undefined;
 
-  if (!lastIteration || endsPlaythrough(lastType)) {
+  // Se lee ANTES de decidir la rama (no solo dentro del "crear") porque el
+  // flag endless también decide: un ENDLESS no tiene playthroughs discretos,
+  // así que retomarlo — aunque su último evento fuera un Dropped, que en un
+  // juego normal significa "el próximo es un playthrough nuevo" — es SIEMPRE
+  // volver a su contenedor único. Sin esto, jugar a un endless abandonado le
+  // creaba un "Playthrough 2": un contenedor duplicado en un juego cuyo
+  // modelo entero es que solo hay uno.
+  const [game] = await tx
+    .select({
+      officialPlatforms: gamesTable.officialPlatforms,
+      isEmulated: gamesTable.isEmulated,
+      endless: gamesTable.endless,
+    })
+    .from(gamesTable)
+    .where(eq(gamesTable.id, gameId))
+    .limit(1);
+
+  if (!lastIteration || (endsPlaythrough(lastType) && !game?.endless)) {
     // Sin iteraciones o la última terminó (Beaten/Dropped): retomar es un
     // playthrough NUEVO (SPEC 4).
-    const [game] = await tx
-      .select({
-        officialPlatforms: gamesTable.officialPlatforms,
-        isEmulated: gamesTable.isEmulated,
-      })
-      .from(gamesTable)
-      .where(eq(gamesTable.id, gameId))
-      .limit(1);
-
     const [created] = await tx
       .insert(iterationsTable)
       .values({
@@ -109,8 +117,9 @@ export const resolveIterationForPlay = async (
       .returning({ id: iterationsTable.id });
     targetIterationId = created.id;
   } else {
-    // Reanudar la última iteración: un on_hold/resting, o un Playthrough
-    // recién creado por Add Game que nunca se tocó.
+    // Reanudar la última iteración: un on_hold/resting, un Playthrough
+    // recién creado por Add Game que nunca se tocó, o el contenedor único de
+    // un endless (venga del estado que venga — ver arriba).
     targetIterationId = lastIteration.id;
   }
 

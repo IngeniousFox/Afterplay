@@ -81,8 +81,14 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
     // SPEC 4 — retomar "Playing" después de un final (Beaten/Dropped) es un
     // playthrough nuevo, no una reapertura del anterior; on_hold/resting sí
     // reutilizan la misma iteración, solo estaba en pausa.
+    //
+    // Salvo en un ENDLESS: no tiene playthroughs discretos, así que volver a
+    // jugar tras un Dropped (opción válida de endless) retoma SIEMPRE su
+    // contenedor único — sin esto se le creaba una segunda iteración a un
+    // juego cuyo modelo entero es que solo hay una. Misma regla que
+    // resolveIterationForPlay en el main (el camino del watcher/Play).
     const needsNewIteration =
-      !activeIteration && (!lastIt || (lastIsTerminal && pending === 'playing'));
+      !activeIteration && (!lastIt || (lastIsTerminal && pending === 'playing' && !game.endless));
 
     let iterationId = needsNewIteration ? undefined : (activeIteration?.id ?? lastIt?.id);
 

@@ -7,7 +7,9 @@ import type {
   UpdateStateEventPatch,
 } from '../../../../../shared/types';
 import { useUpdateStateEvent } from '../../../hooks/stateEvents';
-import { useDeleteSpendEvent, useUpdateSpendEvent } from '../../../hooks/spend';
+import { DeleteHistoryEntryDialog } from './DeleteHistoryEntryDialog';
+import type { DeletableHistoryEntry } from './DeleteHistoryEntryDialog';
+import { useUpdateSpendEvent } from '../../../hooks/spend';
 import { AMBER } from '../../../lib/colors';
 import { formatDateOnly, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
@@ -80,9 +82,19 @@ const entryPickerValue = (entry: Entry): PrecisionDateValue =>
 // cantidad + fecha + nota (gastos) — el TIPO no se toca DESDE AQUÍ (SPEC
 // 4.5: cambiar de estado es apilar un evento nuevo, y esto es para erratas).
 // El único sitio que sí reescribe un tipo es la corrección de desenlace del
-// Edit modal, y solo para eso (SPEC 4.6). Los
-// gastos también se pueden borrar desde aquí — los iconos solo aparecen al
-// pasar el ratón para no ensuciar la lista en reposo.
+// Edit modal, y solo para eso (SPEC 4.6).
+//
+// BORRAR sí se puede, y para los dos tipos de entrada: un evento apuntado
+// por error (un Playing que no fue, un Resting de un despiste) es una errata
+// igual que una fecha mal puesta, y la única corrección posible para "esto
+// nunca pasó" es quitarlo. Es seguro por el modelo v2: TODO lo derivado
+// (estado actual, fechas de inicio/fin del playthrough) se recalcula del log
+// al leer, así que no queda ningún ancla colgando. Ojo con lo que NO hace a
+// propósito: borrar un 'started' no arrastra el "Pausado automáticamente"
+// que aquel disparó en otro playthrough — cada entrada se borra sola, un
+// gesto = un efecto, y ese evento sigue a la vista para borrarlo también si
+// sobra. Los iconos solo aparecen al pasar el ratón para no ensuciar la
+// lista en reposo.
 export const HistoryList = ({
   stateHistory,
   spendHistory,
@@ -90,7 +102,11 @@ export const HistoryList = ({
 }: HistoryListProps): React.JSX.Element | null => {
   const updateStateEvent = useUpdateStateEvent();
   const updateSpendEvent = useUpdateSpendEvent();
-  const deleteSpend = useDeleteSpendEvent();
+  // La entrada (estado O gasto) pendiente de confirmar su borrado (null =
+  // ninguna). El aviso de la casa: la papelera abre el diálogo, nunca borra
+  // a pelo — mismo flujo que sesiones, juegos y copias de partidas. Las
+  // mutaciones de borrado viven en el diálogo, como en sus hermanos.
+  const [deletingEntry, setDeletingEntry] = useState<DeletableHistoryEntry | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
   const [draftAmount, setDraftAmount] = useState('');
@@ -387,13 +403,31 @@ export const HistoryList = ({
                           <Pencil size={13} />
                         </button>
                       )}
-                      {entry.kind === 'spend' && (
+                      {entry.kind !== 'added' && (
                         <button
                           type="button"
-                          onClick={() => deleteSpend.mutate(entry.id)}
-                          disabled={deleteSpend.isPending}
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                          aria-label="Delete spend entry"
+                          onClick={() =>
+                            // Tal y como se ve en la fila (estado + fecha, o
+                            // importe + tipo + fecha) — lo justo para
+                            // reconocer QUÉ se va a borrar.
+                            setDeletingEntry(
+                              entry.kind === 'status'
+                                ? {
+                                    kind: 'status',
+                                    id: entry.id,
+                                    label: `${getGameStatusMeta(entry.event.type).label} · ${dateLabel}`,
+                                  }
+                                : {
+                                    kind: 'spend',
+                                    id: entry.id,
+                                    label: `${formatMoney(entry.event.amount)} · ${SPEND_TYPE_LABEL[entry.event.type]} · ${dateLabel}`,
+                                  },
+                            )
+                          }
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={
+                            entry.kind === 'status' ? 'Delete status entry' : 'Delete spend entry'
+                          }
                         >
                           <Trash2 size={13} />
                         </button>
@@ -406,6 +440,8 @@ export const HistoryList = ({
           );
         })}
       </StatCard>
+
+      <DeleteHistoryEntryDialog entry={deletingEntry} onClose={() => setDeletingEntry(null)} />
     </div>
   );
 };
