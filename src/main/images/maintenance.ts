@@ -162,40 +162,48 @@ export const redownloadUsedImages = async (): Promise<number> => {
   if (redownloading) return 0;
   redownloading = true;
 
-  // Las que fallaron con un 4xx están vetadas en memoria hasta reiniciar la
-  // app, y este botón es precisamente el "vuelve a intentarlo todo".
-  forgetPermanentFailures();
-
-  const pending = await collectUsedImages();
-  const total = pending.length;
+  // TODO lo que puede fallar va dentro del try, incluido collectUsedImages()
+  // (que lee la DB y puede rechazar en pleno swap de conexión): si reventaba
+  // ANTES del try, redownloading se quedaba en true para siempre y el botón
+  // parecía muerto —cada clic devolvía 0 sin emitir nada— hasta reiniciar.
+  let total = 0;
   let done = 0;
   let failed = 0;
-  emit({ running: true, done: 0, total, failed: 0 });
-
-  const worker = async (): Promise<void> => {
-    for (;;) {
-      const image = pending.pop();
-      if (!image) return;
-      try {
-        await rm(cachedFilePathFor(image.url, image.type), { force: true });
-        await cacheImage(image.url, image.type);
-      } catch {
-        // Una imagen que ya no exista en origen no debe abortar la pasada:
-        // getImageSrc ya sabe apañárselas cuando falta el fichero.
-        failed++;
-      }
-      done++;
-      // Un evento por imagen serían miles de mensajes por el puente IPC para
-      // mover una barra que avanza de píxel en píxel.
-      if (done % 25 === 0 || done === total) emit({ running: true, done, total, failed });
-    }
-  };
-
   try {
+    // Las que fallaron con un 4xx están vetadas en memoria hasta reiniciar la
+    // app, y este botón es precisamente el "vuelve a intentarlo todo".
+    forgetPermanentFailures();
+
+    const pending = await collectUsedImages();
+    total = pending.length;
+    emit({ running: true, done: 0, total, failed: 0 });
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const image = pending.pop();
+        if (!image) return;
+        try {
+          await rm(cachedFilePathFor(image.url, image.type), { force: true });
+          await cacheImage(image.url, image.type);
+        } catch {
+          // Una imagen que ya no exista en origen no debe abortar la pasada:
+          // getImageSrc ya sabe apañárselas cuando falta el fichero.
+          failed++;
+        }
+        done++;
+        // Un evento por imagen serían miles de mensajes por el puente IPC para
+        // mover una barra que avanza de píxel en píxel.
+        if (done % 25 === 0 || done === total) emit({ running: true, done, total, failed });
+      }
+    };
+
     await Promise.all(
       Array.from({ length: Math.min(REDOWNLOAD_CONCURRENCY, total) }, () => worker()),
     );
   } finally {
+    // Siempre: libera el candado y avisa al renderer de que la pasada acabó
+    // (aunque acabara por un fallo temprano, con total=0) para que la tarjeta
+    // deje de mostrarse ocupada.
     redownloading = false;
     emit({ running: false, done, total, failed });
     console.log(`[images] redescarga: ${done - failed} de ${total} al día (${failed} fallidas)`);

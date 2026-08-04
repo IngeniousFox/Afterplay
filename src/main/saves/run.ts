@@ -183,6 +183,14 @@ const prepare = async (): Promise<void> => {
 // llamadas reusan la misma promesa, también si aún está en vuelo).
 export const ensureLudusaviReady = async (): Promise<void> => {
   if (!isLudusaviAvailable()) throw new LudusaviUnavailableError();
-  readyOnce ??= prepare();
+  // Si prepare() falla (un EPERM transitorio del antivirus sobre el mkdir, un
+  // corte al bajar el manifest), la promesa rechazada NO se puede quedar
+  // memoizada: con `??=` no se reasigna nunca, así que TODA operación de
+  // saves de la sesión rechazaría con ese error caduco hasta reiniciar. Al
+  // limpiar la caché en el fallo, el siguiente intento vuelve a probar.
+  readyOnce ??= prepare().catch((error) => {
+    readyOnce = null;
+    throw error;
+  });
   await readyOnce;
 };

@@ -1,4 +1,4 @@
-import { count, countDistinct, eq } from 'drizzle-orm';
+import { countDistinct, eq } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../../db';
 import { achievementsTable, achievementUnlocksTable } from '../../db/schema';
 import { enqueueAchievementToasts } from './overlay';
@@ -25,7 +25,13 @@ export const maybeCelebrateCompletion = (
         const [row] = await withDbAccess(async () =>
           getDb()
             .select({
-              total: count(achievementsTable.id),
+              // countDistinct, no count: el leftJoin saca una fila por cada
+              // (logro, fuente de desbloqueo), así que un logro sacado por
+              // Steam Y por emulador contaba DOBLE en el total. total>unlocked
+              // se quedaba true incluso al 100% real y la tarjeta dorada no
+              // salía nunca — justo en la instalación de doble fuente para la
+              // que existe.
+              total: countDistinct(achievementsTable.id),
               unlocked: countDistinct(achievementUnlocksTable.achievementId),
             })
             .from(achievementsTable)

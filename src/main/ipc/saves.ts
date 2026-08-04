@@ -40,7 +40,7 @@ import {
 } from '../saves/paths';
 import { isR2Configured, deleteKeys } from '../saves/r2';
 import {
-  clearRestoreWorkspace,
+  clearAllRestoreWorkspaces,
   deleteLocalBackups,
   findLudusaviName,
   isDirectoryNonEmpty,
@@ -58,7 +58,7 @@ export const registerSavesHandlers = (): void => {
   // carpeta temporal con lo bajado de R2 se queda huérfana (el finally que
   // la borra nunca corrió). Es pequeña, pero es basura que nadie más va a
   // recoger — el propio flujo la recrea desde cero en cada restore.
-  clearRestoreWorkspace();
+  clearAllRestoreWorkspaces();
 
   ipcMain.handle('saves:getStatus', (): SavesStatus => {
     const binaryAvailable = isLudusaviAvailable();

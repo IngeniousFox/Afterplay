@@ -37,6 +37,7 @@ import {
   STATUS_TO_STATE_TYPE,
 } from '../lib/gameStatus';
 import { isTerminal, lastIteration, startedIteration } from '../lib/iterations';
+import { closedSessions, liveSession } from '../lib/sessions';
 import { useTvBackdrop } from './backdropContext';
 import { TV_MODAL_SWALLOW, useTvButtons, useTvLegend } from './tvInput';
 import { TvFocusLayer } from './focus';
@@ -451,24 +452,13 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   // solo queda lo que importa: la carátula y la información.
   useTvBackdrop(heroSrc ?? coverSrc);
 
-  // Todas las sesiones del juego (todas sus vueltas), de nueva a vieja.
-  const sessions = useMemo(
-    () =>
-      (game?.iterations ?? [])
-        .flatMap((iteration) => iteration.sessions)
-        .filter((session) => session.endedAt !== null)
-        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()),
-    [game],
-  );
+  // Todas las sesiones cerradas del juego (todas sus vueltas), de nueva a vieja.
+  const sessions = useMemo(() => closedSessions(game), [game]);
   // La sesión ABIERTA (si el watcher tiene al juego en marcha): su inicio
   // alimenta el contador en vivo del botón de estado.
   const liveSince = useMemo(() => {
     if (!game?.isLive) return null;
-    return (
-      (game.iterations ?? [])
-        .flatMap((iteration) => iteration.sessions)
-        .find((session) => session.endedAt === null)?.startedAt ?? null
-    );
+    return liveSession(game)?.startedAt ?? null;
   }, [game]);
   const liveSeconds = useLiveTimer(liveSince);
   const lastNote = useMemo(

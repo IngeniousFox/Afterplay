@@ -2,9 +2,7 @@
   "version": "7",
   "dialect": "sqlite",
   "id": "763b0653-6bf2-4a01-84e1-81c5d3ede227",
-  "prevIds": [
-    "de446948-9773-49f8-b6ab-4cdb0485576c"
-  ],
+  "prevIds": ["de446948-9773-49f8-b6ab-4cdb0485576c"],
   "ddl": [
     {
       "name": "emulators",
@@ -591,13 +589,9 @@
       "table": "state_events"
     },
     {
-      "columns": [
-        "gameId"
-      ],
+      "columns": ["gameId"],
       "tableTo": "games",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -606,13 +600,9 @@
       "table": "iterations"
     },
     {
-      "columns": [
-        "iterationId"
-      ],
+      "columns": ["iterationId"],
       "tableTo": "iterations",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -621,13 +611,9 @@
       "table": "sessions"
     },
     {
-      "columns": [
-        "emulatorId"
-      ],
+      "columns": ["emulatorId"],
       "tableTo": "emulators",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -636,13 +622,9 @@
       "table": "sessions"
     },
     {
-      "columns": [
-        "gameId"
-      ],
+      "columns": ["gameId"],
       "tableTo": "games",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -651,13 +633,9 @@
       "table": "spend_events"
     },
     {
-      "columns": [
-        "iterationId"
-      ],
+      "columns": ["iterationId"],
       "tableTo": "iterations",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -666,72 +644,56 @@
       "table": "state_events"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "emulators_pk",
       "table": "emulators",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "games_pk",
       "table": "games",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "iterations_pk",
       "table": "iterations",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sessions_pk",
       "table": "sessions",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "spend_events_pk",
       "table": "spend_events",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "state_events_pk",
       "table": "state_events",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "igdbId"
-      ],
+      "columns": ["igdbId"],
       "nameExplicit": false,
       "name": "games_igdbId_unique",
       "entityType": "uniques",
       "table": "games"
     },
     {
-      "columns": [
-        "steamGridDbId"
-      ],
+      "columns": ["steamGridDbId"],
       "nameExplicit": false,
       "name": "games_steamGridDbId_unique",
       "entityType": "uniques",

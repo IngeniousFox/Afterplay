@@ -354,12 +354,31 @@ export const TvFocusProvider = ({ children }: { children: React.ReactNode }): Re
         if (!wasTop) return;
         if (!isEcho(pushedAt, key)) tvSound.close();
         poppedAt.set(key, performance.now());
-        const restored =
-          focusMemoryRef.current.get(layerStackRef.current[layerStackRef.current.length - 1]) ??
-          null;
+        const revealed = layerStackRef.current[layerStackRef.current.length - 1];
+        const restored = focusMemoryRef.current.get(revealed) ?? null;
         // El recordado puede haberse desmontado mientras el panel estaba
         // abierto — se comprueba que siga vivo antes de devolvérselo.
-        setFocused(restored && entriesRef.current.has(restored) ? restored : null);
+        if (restored && entriesRef.current.has(restored)) {
+          setFocused(restored);
+          return;
+        }
+        // Sin foco recordado válido: en vez de dejarlo en null hasta la primera
+        // pulsación de mando (una pantalla de 3 metros SIN nada resaltado — el
+        // caso de navegar desde el menú Start, que cierra la capa y monta la
+        // pantalla nueva en el mismo commit, así que su autoFocus se saltó al
+        // ver la capa vieja todavía activa), se difiere el defecto de la capa
+        // revelada al siguiente tick, igual que hace pushLayer con sus hijos.
+        setFocused(null);
+        setTimeout(() => {
+          // Solo si esa capa sigue siendo la cima y nadie tomó el foco entre
+          // medias (un autoFocus que sí llegó a dispararse, el ratón...).
+          if (activeLayer() !== revealed || focusedIdRef.current !== null) return;
+          const target = defaultId(revealed);
+          if (target) {
+            setFocused(target);
+            scrollTo(target);
+          }
+        }, 0);
       },
     };
     // Estable para siempre: todo lo variable se lee por ref.

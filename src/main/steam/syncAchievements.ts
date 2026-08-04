@@ -101,29 +101,35 @@ export const storeUnlocks = async (
   );
   const byApiName = new Map(stored.map((row) => [row.apiName, row]));
 
-  // Qué logros YA constaban desbloqueados (de cualquier fuente) antes de
-  // tocar nada: la foto de "antes" contra la que se decide qué es nuevo.
-  const already = new Set(
-    (
-      await withDbAccess(async () =>
-        getDb()
-          .select({ achievementId: achievementUnlocksTable.achievementId })
-          .from(achievementUnlocksTable)
-          .innerJoin(
-            achievementsTable,
-            eq(achievementUnlocksTable.achievementId, achievementsTable.id),
-          )
-          .where(eq(achievementsTable.gameId, gameId)),
-      )
-    ).map((row) => row.achievementId),
-  );
-
   const windows = await withDbAccess(async () => getSessionWindows(gameId));
   const bulkTimes = unreliableTimestamps(unlocks);
   const fresh: AchievementToast[] = [];
 
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
+      // Qué logros YA constaban desbloqueados (de cualquier fuente) — la foto
+      // de "antes" contra la que se decide qué es nuevo. Se lee DENTRO de la
+      // transacción que inserta, con el mismo tx: "decidir qué es nuevo" y
+      // "escribirlo" quedan atómicos. Fuera (como antes) dos storeUnlocks
+      // solapados del mismo juego —cierre de sesión vs. vigilante de emulador,
+      // o livePoll de RA vs. refresco— leían la misma foto sin el insert del
+      // otro y daban el mismo logro por nuevo: toast y tarjeta del 100%
+      // duplicados. SQLite serializa las transacciones de una misma conexión,
+      // así que la segunda ya ve el insert de la primera. (withDbAccess es un
+      // contador, no un mutex — por eso no bastaba con envolver por fuera.)
+      const already = new Set(
+        (
+          await tx
+            .select({ achievementId: achievementUnlocksTable.achievementId })
+            .from(achievementUnlocksTable)
+            .innerJoin(
+              achievementsTable,
+              eq(achievementUnlocksTable.achievementId, achievementsTable.id),
+            )
+            .where(eq(achievementsTable.gameId, gameId))
+        ).map((row) => row.achievementId),
+      );
+
       for (const unlock of unlocks) {
         const definition = byApiName.get(unlock.apiName);
         // Un desbloqueo de un logro que no está en el catálogo: logros

@@ -63,6 +63,12 @@ export class ProcessWatcher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
   private reconciled = false;
+  // true tras stop() (cierre de la app). Los oyentes de powerMonitor
+  // (main/index.ts) siguen vivos y un unlock/resume durante el apagado
+  // llamaría a resume() -> poll() con la DB desmontándose, abriendo una
+  // sesión fantasma. El ScanWatcher hermano ya se blinda con un flag igual;
+  // este no lo tenía.
+  private stopped = false;
   // true mientras el PC está bloqueado o suspendido (powerMonitor, ver
   // main/index.ts). El sondeo se salta entero mientras tanto — nada de
   // escanear procesos ni de abrir sesiones nuevas — para que un juego que
@@ -91,6 +97,7 @@ export class ProcessWatcher {
 
   start(): void {
     if (this.timer) return;
+    this.stopped = false;
     // Solo ASCII en los console.log de este archivo a propósito — la consola
     // de VS Code en Windows no siempre usa la página de códigos UTF-8, y
     // cualquier acento o símbolo especial (▶, →, í...) sale con la
@@ -102,6 +109,7 @@ export class ProcessWatcher {
   }
 
   stop(): void {
+    this.stopped = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -114,16 +122,19 @@ export class ProcessWatcher {
   // juego siga corriendo detrás del bloqueo — el tiempo con la pantalla
   // bloqueada no es tiempo jugado, esté el proceso vivo o no.
   pause(): void {
-    if (this.paused) return;
+    if (this.stopped || this.paused) return;
     this.paused = true;
-    void this.closeAllActive('pause');
+    // closeAllActive nunca rechaza (envuelve cada cierre en su try/catch),
+    // pero el .catch queda por si acaso: un void sin red de seguridad sería
+    // una promesa rechazada sin dueño si eso cambiara.
+    void this.closeAllActive('pause').catch(() => {});
   }
 
   // 'resume'/'unlock-screen': sondeo inmediato en vez de esperar el próximo
   // tick (hasta 5s) — si el juego seguía corriendo detrás del bloqueo, se
   // retoma con una sesión nueva sin ese hueco de espera.
   resume(): void {
-    if (!this.paused) return;
+    if (this.stopped || !this.paused) return;
     this.paused = false;
     void this.poll();
   }
@@ -133,13 +144,25 @@ export class ProcessWatcher {
 
     const endedAt = new Date();
     await withDbAccess(async () => {
-      for (const [key, activeSession] of this.active) {
-        await closeSession(activeSession.sessionId, endedAt);
-        console.log(
-          `[watcher] [${reason}] ${key} pausado -> sesion ${activeSession.sessionId} cerrada`,
-        );
+      // Cada cierre en su try/catch: si uno falla (la DB justo en un swap, un
+      // corte), los demás se cierran igual y `active` se vacía pase lo que
+      // pase (finally). Sin esto, un solo rechazo dejaba `active` intacto —
+      // sesiones fantasma vivas y la bandeja mostrando juegos "en marcha"
+      // tras un bloqueo — y propagaba una promesa sin dueño desde pause().
+      try {
+        for (const [key, activeSession] of this.active) {
+          try {
+            await closeSession(activeSession.sessionId, endedAt);
+            console.log(
+              `[watcher] [${reason}] ${key} pausado -> sesion ${activeSession.sessionId} cerrada`,
+            );
+          } catch (error) {
+            console.error(`[watcher] [${reason}] no se pudo cerrar ${key}:`, error);
+          }
+        }
+      } finally {
+        this.active.clear();
       }
-      this.active.clear();
     });
 
     this.notifyRenderer();
@@ -147,9 +170,10 @@ export class ProcessWatcher {
   }
 
   private async poll(): Promise<void> {
-    // Nada que hacer con el PC bloqueado/suspendido — pause() ya cerró todo
-    // lo que hubiera; escanear ahora solo reabriría sesiones sin querer.
-    if (this.paused) return;
+    // Nada que hacer con el PC bloqueado/suspendido, ni con la app apagándose
+    // — pause() ya cerró todo lo que hubiera; escanear ahora solo reabriría
+    // sesiones sin querer.
+    if (this.paused || this.stopped) return;
     // Un ciclo puede tardar más que el intervalo si find-process va lento (o
     // el sistema tiene muchos procesos) — evito que dos ciclos se solapen.
     if (this.polling) return;
@@ -162,6 +186,15 @@ export class ProcessWatcher {
       // tardar segundos y no toca la DB — no debe retener el candado.
       const targets = await withDbAccess(() => getWatchTargets());
       const running = await this.scan(targets);
+
+      // scan() puede tardar segundos, y en ese hueco el PC ha podido
+      // bloquearse (pause() cerró y vació `active`) o la app apagarse. Sin
+      // este segundo control, seguiríamos con la foto PRE-pausa: todo lo que
+      // corría se vería "sin seguir", abriríamos sesiones NUEVAS y las
+      // latiríamos durante todo el bloqueo — justo lo que la pausa evita.
+      // withDbAccess es un contador, no un mutex: no serializa, hay que
+      // releer el flag aquí.
+      if (this.paused || this.stopped) return;
 
       const changed = await withDbAccess(async () => {
         let changed = false;

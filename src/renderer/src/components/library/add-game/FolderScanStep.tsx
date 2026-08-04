@@ -68,7 +68,7 @@ export const FolderScanStep = ({
   // Los resultados llegan ya hechos: el main los guarda entre cierres y los
   // refresca solo cuando aparece o desaparece una carpeta. Aquí no se pide
   // nada, se lee lo que ya hay — y `rescan` queda para forzarlo a mano.
-  const { data: report, isLoading, rescan, isRescanning } = useScanResults();
+  const { data: report, isLoading, rescan, isRescanning, rescanError } = useScanResults();
   const results = report?.candidates;
 
   const handleAddFolder = async (): Promise<void> => {
@@ -142,6 +142,15 @@ export const FolderScanStep = ({
             de escape — rehacerlo TODO ignorando lo que ya se sabía. */}
         {isRescanning ? 'Scanning your folders…' : results?.length ? 'Rescan' : 'Scan'}
       </button>
+
+      {/* Un fallo del reescaneo (un disco desenchufado, un permiso retirado) ya
+          no se traga en silencio: sin esto, el spinner paraba con la foto
+          vieja y no había forma de distinguirlo de "no encontre nada". */}
+      {rescanError && !isRescanning && (
+        <div className="mt-2 text-center text-[11.5px] font-semibold text-destructive">
+          Couldn&apos;t scan your folders — {rescanError.message}
+        </div>
+      )}
 
       {/* De cuándo es lo que se está viendo. Con una lista que se refresca
           sola en segundo plano, no decirlo dejaría al usuario sin saber si

@@ -1,6 +1,7 @@
 import { app, safeStorage } from 'electron';
 import { parse } from 'dotenv';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, renameSync } from 'fs';
+import { writeFileAtomicSync } from '../lib/atomicWrite';
 import { join } from 'path';
 import type { CredentialsValues } from '../../shared/types';
 
@@ -82,7 +83,11 @@ const writeValues = (values: Partial<Record<keyof CredentialsValues, string>>): 
     if (!encrypted) anyPlaintext = true;
   }
   const file: CredentialsFile = { version: 1, encrypted: !anyPlaintext, values: stored };
-  writeFileSync(getFilePath(), JSON.stringify(file, null, 2));
+  // Atómico: un credentials.json truncado por un cierre a mitad de escritura
+  // es justo lo que dispara la reimportación del .env legado en el arranque
+  // (ver initCredentials) — y en desarrollo eso puede acabar apuntando a la
+  // base de producción. Mejor que no exista a que exista a medias.
+  writeFileAtomicSync(getFilePath(), JSON.stringify(file, null, 2));
 };
 
 // Los valores en claro actuales (descifrados). null = sin configurar.
@@ -180,6 +185,21 @@ const importLegacyEnv = (): void => {
 // y ANTES de runMigrations() — la conexión con Turso y el push de
 // migraciones leen process.env en ese momento.
 export const initCredentials = (): void => {
-  if (!readFile()) importLegacyEnv();
+  // Gatear por PRESENCIA del fichero, no por readFile(): readFile() devuelve
+  // null tanto si falta como si está corrupto, y un credentials.json truncado
+  // (un cierre a mitad de escritura) disparaba importLegacyEnv() — que en
+  // desarrollo relee el .env del PROYECTO y puede adoptar la DATABASE_URL de
+  // producción (el incidente del 3-ago-2026). Si existe pero no parsea, se
+  // avisa fuerte y NO se importa: mejor arrancar sin credenciales (se
+  // re-teclean en Ajustes) que hablar con la base equivocada.
+  if (existsSync(getFilePath())) {
+    if (!readFile()) {
+      console.error(
+        '[credentials] credentials.json existe pero no se pudo leer/parsear — NO se importa el .env legado. Re-introduce las claves en Ajustes.',
+      );
+    }
+  } else {
+    importLegacyEnv();
+  }
   applyToEnv(getCredentials());
 };

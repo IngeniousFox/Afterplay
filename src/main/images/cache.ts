@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { existsSync } from 'fs';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir } from 'fs/promises';
+import { writeFileAtomic } from '../lib/atomicWrite';
 import { app } from 'electron';
 import axios from 'axios';
 import { extname, join } from 'path';
@@ -157,7 +158,11 @@ export const cacheImage = async (rawUrl: string, type: ImageCacheType): Promise<
       if (existsSync(filePath)) return filePath;
       await mkdir(dir, { recursive: true });
       const buffer = await downloadWithRetry(url);
-      await writeFile(filePath, buffer);
+      // Atómico (temporal + rename): un corte a mitad de escritura dejaba un
+      // .webp parcial que el existsSync de arriba tomaba por cacheado válido
+      // para siempre — se renderizaba roto en cada arranque y solo el
+      // Redownload (que borra antes) lo recuperaba.
+      await writeFileAtomic(filePath, buffer);
       return filePath;
     } finally {
       releaseDownloadSlot();

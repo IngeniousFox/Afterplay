@@ -526,6 +526,23 @@ export const TvHome = (): React.JSX.Element => {
       list.some((game) => game.id === restoredFocusId),
     );
 
+  // Sin hero (un backlog recién estrenado: nada vivo, nada jugado) los botones
+  // del hero no se renderizan, así que su autoFocus nunca corre; y las baldas
+  // solo autoenfocan el tile restaurado, que aquí es null. Resultado: una
+  // pantalla de 3 metros sin NADA resaltado hasta la primera pulsación de
+  // mando. Se cae al primer tile de la primera balda no vacía (mismo orden
+  // visual que abajo). Solo cuando no hay hero ni tile restaurado: si el hero
+  // existe, es él quien reclama el foco inicial y no hay que competir.
+  const fallbackFocusId = useMemo(() => {
+    if (hero || hasRestoredTile) return null;
+    for (const list of [playing, recent, finished, shelf]) {
+      if (list.length > 0) return list[0].id;
+    }
+    return null;
+  }, [hero, hasRestoredTile, playing, recent, finished, shelf]);
+
+  const shelfAutoFocusId = restoredFocusId ?? fallbackFocusId;
+
   const openGame = (game: GameListItem): void => {
     // El billete de vuelta: solo el viaje a la ficha guarda el sitio.
     rememberHome({
@@ -873,7 +890,7 @@ export const TvHome = (): React.JSX.Element => {
         games={playing}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
-        autoFocusId={restoredFocusId}
+        autoFocusId={shelfAutoFocusId}
         revealIndex={3}
       />
       <Shelf
@@ -882,7 +899,7 @@ export const TvHome = (): React.JSX.Element => {
         games={recent}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
-        autoFocusId={restoredFocusId}
+        autoFocusId={shelfAutoFocusId}
         revealIndex={4}
       />
       <Shelf
@@ -891,7 +908,7 @@ export const TvHome = (): React.JSX.Element => {
         games={finished}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
-        autoFocusId={restoredFocusId}
+        autoFocusId={shelfAutoFocusId}
         revealIndex={5}
       />
       <Shelf
@@ -900,7 +917,7 @@ export const TvHome = (): React.JSX.Element => {
         games={shelf}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
-        autoFocusId={restoredFocusId}
+        autoFocusId={shelfAutoFocusId}
         revealIndex={6}
         trailing={<SeeAllTile count={games.length} onSelect={() => void navigate('/tv/library')} />}
       />

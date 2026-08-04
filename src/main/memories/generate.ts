@@ -324,6 +324,19 @@ export const generateMemoryForChapter = async (chapter: Chapter): Promise<void> 
     messages: [{ role: 'user', content: buildUserPrompt(chapter) }],
   });
 
+  // El modelo se niega a generar (rarísimo con un recap de tu propio historial,
+  // pero posible). Igual que el gemelo de curiosidades (curiosities/generate.ts):
+  // NO es un error de parseo — se reconoce y se sale limpio, sin lanzar el
+  // "no se pudo interpretar" que ensuciaba el log y disparaba el flujo de
+  // fallo. (El periodo queda sin recap; un rechazo aquí sería casi seguro
+  // transitorio, así que dejarlo pendiente para un reintento futuro es lo
+  // correcto — a diferencia de curiosidades, aquí no hay marcador de "hecho
+  // vacío" que persista, y no se añade uno en este pase.)
+  if (response.stop_reason === 'refusal') {
+    console.warn('[memories] el modelo rechazo generar el recap, se omite este periodo');
+    return;
+  }
+
   if (response.stop_reason === 'max_tokens') {
     throw new Error('respuesta truncada por max_tokens');
   }

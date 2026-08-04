@@ -233,6 +233,10 @@ export const useSaveBackupActivity = (gameId: number): SavesActivityEvent | null
 
     const unsubscribe = window.api.saves.onActivity((event) => {
       if (event.gameId !== gameId) return;
+      // Cancela un flash de "hecho" pendiente antes de pintar nada: si empieza
+      // una segunda copia antes de que dispare el flash de la primera, ese
+      // timer heredado borraría el progreso de la segunda a media subida.
+      clearTimeout(flashTimer);
       setActivity(event);
 
       if (event.phase === 'done') {

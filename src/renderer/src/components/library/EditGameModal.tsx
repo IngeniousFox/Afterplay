@@ -130,6 +130,19 @@ export const EditGameModal = ({
     updateStateEvent.isPending ||
     deleteStateEvent.isPending;
 
+  // El error de la primera mutación que haya fallado, para el banner. Cada
+  // mutation limpia su error al reintentar, así que esto refleja el último
+  // intento, no un fallo viejo.
+  const saveError =
+    updateGame.error ??
+    addIteration.error ??
+    updateIteration.error ??
+    resetEndlessState.error ??
+    addStateEvent.error ??
+    updateStateEvent.error ??
+    deleteStateEvent.error ??
+    null;
+
   const handleClose = (): void => {
     if (isSaving) return;
     onOpenChange(false);
@@ -138,32 +151,43 @@ export const EditGameModal = ({
   const handleSave = async (): Promise<void> => {
     const values = getValues();
 
-    await saveBaseGamePatch(game, values, updateGame);
+    // Cadena de mutaciones independientes: si una de en medio falla (p. ej.
+    // una conversión a endless donde resetEndlessState ya confirmó y luego
+    // addStateEvent revienta), antes el modal se cerraba igual, SIN mensaje,
+    // dejando el juego a medio convertir. Ahora solo se cierra si TODO fue
+    // bien; si algo falla, se queda abierto con el banner de error (sale del
+    // saveError de abajo) para que se pueda reintentar. El try/catch también
+    // evita la promesa rechazada sin dueño del onClick del footer.
+    try {
+      await saveBaseGamePatch(game, values, updateGame);
 
-    if (values.endless) {
-      await saveEndlessIteration(game, values, {
-        resetEndlessState,
-        updateIteration,
-        addIteration,
-        addStateEvent,
-      });
-    } else if (values.iterationMode === 'existing' && values.selectedIterationId) {
-      await saveExistingIteration(game, values, values.selectedIterationId, {
-        updateIteration,
-        updateStateEvent,
-        addStateEvent,
-        deleteStateEvent,
-      });
+      if (values.endless) {
+        await saveEndlessIteration(game, values, {
+          resetEndlessState,
+          updateIteration,
+          addIteration,
+          addStateEvent,
+        });
+      } else if (values.iterationMode === 'existing' && values.selectedIterationId) {
+        await saveExistingIteration(game, values, values.selectedIterationId, {
+          updateIteration,
+          updateStateEvent,
+          addStateEvent,
+          deleteStateEvent,
+        });
+      }
+
+      // Los pendientes se crean SIEMPRE (salvo endless, que no tiene
+      // playthroughs discretos) y después de tocar el existente: el orden
+      // importa porque cada 'started' nuevo puede auto-pausar al anterior.
+      if (!values.endless) {
+        await saveNewPlaythroughs(game, values, { addIteration, addStateEvent });
+      }
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error('[edit-game] fallo guardando cambios:', error);
     }
-
-    // Los pendientes se crean SIEMPRE (salvo endless, que no tiene
-    // playthroughs discretos) y después de tocar el existente: el orden
-    // importa porque cada 'started' nuevo puede auto-pausar al anterior.
-    if (!values.endless) {
-      await saveNewPlaythroughs(game, values, { addIteration, addStateEvent });
-    }
-
-    onOpenChange(false);
   };
 
   return (
@@ -318,6 +342,14 @@ export const EditGameModal = ({
               )}
             />
           </FormSection>
+
+          {/* Un fallo a mitad de guardado ya no cierra el modal en silencio:
+              mismo banner que Add Game, con el detalle del error. */}
+          {saveError && !isSaving && (
+            <div className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+              Couldn&apos;t save your changes — {saveError.message}
+            </div>
+          )}
         </div>
       </FormProvider>
     </ModalShell>

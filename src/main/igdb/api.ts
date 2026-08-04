@@ -262,6 +262,15 @@ const fetchSteamAppIdsViaEditions = async (igdbIds: number[]): Promise<Map<numbe
       `fields id, version_parent; where version_parent = (${igdbIds.join(',')}); limit ${EXTERNAL_GAMES_PAGE_LIMIT};`,
     ),
   );
+  // Mismo aviso que el camino directo (fetchSteamAppIdsDirect): al tocar el
+  // límite, hay ediciones sin leer y esos juegos quedan marcados como "no está
+  // en Steam" sin estarlo — sin logros y sin pista de por qué. Solo ASCII, que
+  // la consola de Windows no siempre usa UTF-8.
+  if (versions.length === EXTERNAL_GAMES_PAGE_LIMIT) {
+    console.warn(
+      `[steam] la respuesta de ediciones toco el limite de ${EXTERNAL_GAMES_PAGE_LIMIT} filas - hay appids de ediciones sin leer, baja el tamano de lote`,
+    );
+  }
   if (versions.length === 0) return result;
 
   const appIdByVersion = await fetchSteamAppIdsDirect(versions.map((version) => version.id));

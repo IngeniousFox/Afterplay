@@ -157,11 +157,21 @@ export const keepCurrentIdentity = async (): Promise<void> => {
 // AHORA, que es la última ventana en la que cambiar de id sale gratis —
 // todavía no hemos escrito nada bajo él, así que no hay nada que huerfanar.
 //
-// Solo adopta sola cuando no hay ambigüedad posible: exactamente UNA máquina
-// en el bucket que coincide en nombre y en home, y nada escrito aún con el
-// id actual. Cualquier otra cosa (varias candidatas, coincidencia parcial)
-// se deja para que la decida el usuario en Ajustes; aquí no hay UI a la que
-// preguntar y equivocarse en silencio sería peor que no hacer nada.
+// NUNCA adopta sola, ni siquiera con una única coincidencia exacta de
+// nombre+home. Ese caso es indistinguible entre dos cosas opuestas:
+//   - una REINSTALACIÓN (reclamar la carpeta es lo correcto), y
+//   - un PC CLONADO todavía vivo (mismo nombre de equipo y misma cuenta), donde
+//     reclamar hace que las DOS máquinas escriban en el mismo prefijo y se
+//     poden mutuamente los backups — "el desastre exacto" que documenta
+//     adoptMachine, y pérdida de datos irreversible entre máquinas.
+// Y no hay señal local fiable para separarlos: el manifiesto casi nunca se
+// re-publica (solo al renombrar el PC/cuenta, ver publishMachineManifest), así
+// que su updatedAt no dice si la máquina sigue viva. Por eso adoptar es
+// SIEMPRE una decisión explícita del usuario en Ajustes (needsIdentityCheck
+// destapa el aviso -> checkIdentity -> adoptMachine). Aquí solo se publica el
+// manifiesto para que esta máquina sea reconocible desde el otro PC. El coste
+// de no auto-adoptar es un clic manual tras reinstalar; el de auto-adoptar mal
+// es perder partidas de otro ordenador sin vuelta atrás.
 export const ensureIdentityBeforeUpload = async (): Promise<void> => {
   if (!needsIdentityCheck()) return;
 
@@ -169,19 +179,13 @@ export const ensureIdentityBeforeUpload = async (): Promise<void> => {
     const check = await checkIdentity();
     if (!check) return;
 
-    const exactMatches = check.machines.filter((machine) => machine.sameName && machine.sameHome);
-    if (!check.claimed && exactMatches.length === 1) {
-      console.log(
-        `[saves] reinstalacion detectada: reclamando la carpeta de ${exactMatches[0].machineName}`,
-      );
-      await adoptMachine(exactMatches[0].machineId);
-      return;
-    }
-
-    // Ambiguo (o PC nuevo de verdad): no se toca el id, pero sí se publica
-    // el manifiesto — sin él, la SIGUIENTE reinstalación tendría el mismo
-    // problema y sin nada con lo que reconocerse.
+    // Sin tocar el id: se publica el manifiesto — sin él, la SIGUIENTE
+    // reinstalación tendría el mismo problema y sin nada con lo que
+    // reconocerse.
     await publishMachineManifest();
+    // Bucket sin otras máquinas: no hay a quién confundirse con, se marca
+    // visto para no volver a preguntar. Con otras presentes se deja sin marcar
+    // para que Ajustes ofrezca la reconciliación explícita.
     if (check.machines.length === 0) markIdentityReconciled(check.bucket);
   } catch (error) {
     // Nunca puede tumbar un backup: sin identidad reconciliada se sube con

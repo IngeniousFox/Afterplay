@@ -172,7 +172,21 @@ const connectWithSync = async (): Promise<Db> => {
       clientName: 'afterplay',
     },
   });
-  await withTimeout(db.$client.connect(), CONNECT_TIMEOUT_MS);
+  // withTimeout es un Promise.race: al saltar el límite RECHAZA, pero el
+  // connect() de dentro sigue vivo — nadie lo cancela. Si Turso estaba
+  // dormido y despierta a los 5s (>4s del timeout), el catch de los llamadores
+  // ya habrá abierto una conexión LOCAL al mismo fichero; cuando el connect de
+  // sync resuelve tarde, quedan DOS conexiones vivas sobre Afterplay.db — el
+  // caso exacto que el comentario del bug #1 (más abajo) documenta como el que
+  // corrompió la base real. Así que si vamos a abandonar este connect, lo
+  // cerramos en cuanto (y si) resuelva, antes de que otra lo pise.
+  const connecting = db.$client.connect();
+  try {
+    await withTimeout(connecting, CONNECT_TIMEOUT_MS);
+  } catch (error) {
+    void connecting.then(() => db.$client.close()).catch(() => {});
+    throw error;
+  }
   await enableForeignKeys(db);
   return db;
 };
@@ -416,7 +430,13 @@ export const runSyncCycle = async (): Promise<void> => {
     // límite de tiempo: ya no hay nadie esperando a que abra la ventana. Va
     // ANTES del pull/push por lo de siempre — el DDL primero, y solo después
     // el sync de filas.
-    if (migrationPushPending) {
+    //
+    // Solo cuando YA hay sync: si la sesión sigue en local, attemptSyncUpgrade
+    // (abajo) hace este mismo push justo antes de reconectar. Sin la guarda de
+    // syncCapable, el caso "arranqué sin red + hay migración pendiente"
+    // empujaba a Turso DOS veces en el mismo ciclo (aquí y en el upgrade),
+    // pagando dos round-trips completos justo cuando la red acaba de volver.
+    if (syncCapable && migrationPushPending) {
       migrationPushPending = !(await pushMigrationsToRemote(null));
       if (!migrationPushPending) console.log('[db] migraciones de Turso comprobadas al fin');
     }

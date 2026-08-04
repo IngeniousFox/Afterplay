@@ -12,6 +12,7 @@ import {
   formatSessionEndTime,
   pluralize,
 } from '../../lib/format';
+import { allSessions } from '../../lib/sessions';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
 
@@ -182,13 +183,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
 
   // TODAS las sesiones de todas las vueltas, de nueva a vieja — también la
   // abierta: en el sofá es justo la que más interesa ver correr.
-  const sessions = useMemo(
-    () =>
-      game.iterations
-        .flatMap((iteration) => iteration.sessions)
-        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()),
-    [game],
-  );
+  const sessions = useMemo(() => allSessions(game), [game]);
   // Solo las CERRADAS opinan en las métricas: la viva aún no tiene duración
   // honesta que sumar ni con la que competir.
   const closed = useMemo(() => sessions.filter((session) => session.endedAt !== null), [sessions]);

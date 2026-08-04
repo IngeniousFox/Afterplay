@@ -191,7 +191,14 @@ export class ScanWatcher {
     // usuario hubiera desinstalado la biblioteca entera — y re-enchufarlo
     // costaba reescanearla y volver a pedírsela a IGDB.
     const readableRoots = roots.filter((root) => !unreadableRoots.includes(root));
-    const live = new Set(refs.map((ref) => pathKey(ref.path)));
+    // "Sigue en disco" se decide con el listado COMPLETO, no con `refs` (que
+    // está recortado a MAX_FOLDERS). El tope acota cuánto se procesa por
+    // IGDB, nunca qué se considera presente: una carpeta real que caiga más
+    // allá de la 300ª se veía como "desaparecida", se echaba de la caché y —
+    // como nunca vuelve a entrar en refs— no se reescaneaba jamás. Las
+    // carpetas de la cola se esfumaban de Add Game > Scan con el contador aún
+    // por encima del tope.
+    const live = new Set(listed.map((ref) => pathKey(ref.path)));
     const gone = getCachedEntries(readableRoots).filter(
       (entry) => !live.has(pathKey(entry.folder.path)),
     );

@@ -16,6 +16,14 @@ type TwitchTokenResponse = z.infer<typeof tokenResponseSchema>;
 // no toca el disco.
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// La petición de token EN VUELO, si la hay. En un arranque en frío (sin token
+// cacheado) media docena de llamadas a IGDB concurrentes —la biblioteca
+// pidiendo detalles de varios juegos— pasaban todas el check de frescura de
+// abajo y cada una lanzaba su propio POST a Twitch, pisándose cachedToken.
+// Compartiendo la misma promesa, solo se pide uno. Mismo patrón inFlight que
+// images/cache.ts.
+let inFlight: Promise<string> | null = null;
+
 const getCredentials = (): { clientId: string; clientSecret: string } => {
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
@@ -33,24 +41,36 @@ export const getValidToken = async (): Promise<string> => {
   if (cachedToken && Date.now() < cachedToken.expiresAt - 300_000) {
     return cachedToken.token;
   }
+  // Ya hay una petición en vuelo: reusarla en vez de lanzar otra en paralelo.
+  if (inFlight) return inFlight;
 
-  const { clientId, clientSecret } = getCredentials();
-  const response = await axios.post<TwitchTokenResponse>(
-    'https://id.twitch.tv/oauth2/token',
-    new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'client_credentials',
-    }),
-    { timeout: 10_000 },
-  );
+  inFlight = (async () => {
+    const { clientId, clientSecret } = getCredentials();
+    const response = await axios.post<TwitchTokenResponse>(
+      'https://id.twitch.tv/oauth2/token',
+      new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'client_credentials',
+      }),
+      { timeout: 10_000 },
+    );
 
-  const parsed = tokenResponseSchema.parse(response.data);
-  cachedToken = {
-    token: parsed.access_token,
-    expiresAt: Date.now() + parsed.expires_in * 1000,
-  };
-  return cachedToken.token;
+    const parsed = tokenResponseSchema.parse(response.data);
+    cachedToken = {
+      token: parsed.access_token,
+      expiresAt: Date.now() + parsed.expires_in * 1000,
+    };
+    return cachedToken.token;
+  })();
+
+  try {
+    return await inFlight;
+  } finally {
+    // Se limpia salga bien o mal: un fallo (sin red, credenciales malas) no
+    // debe dejar la siguiente llamada esperando una promesa ya rechazada.
+    inFlight = null;
+  }
 };
 
 // Para el reintento tras un 401: Twitch puede revocar el token antes de su
