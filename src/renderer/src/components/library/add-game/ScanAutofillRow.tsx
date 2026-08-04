@@ -35,10 +35,15 @@ export const ScanAutofillRow = ({
   const [searching, setSearching] = useState(false);
   // undefined = aún no se ha pulsado; null = pulsado y sin suerte.
   const [found, setFound] = useState<ScannedFolder | null | undefined>(undefined);
+  // Sin esto un fallo de la búsqueda (IPC caído, disco raro) dejaba `found`
+  // en undefined — el mismo estado que "todavía no se ha pulsado" — así que
+  // el spinner paraba y el botón parecía no haber hecho nada.
+  const [failed, setFailed] = useState(false);
 
   const handleFind = async (): Promise<void> => {
     if (searching) return;
     setSearching(true);
+    setFailed(false);
     try {
       const folder = await window.api.scan.matchTitle({ title, igdbId });
       setFound(folder);
@@ -48,6 +53,9 @@ export const ScanAutofillRow = ({
       if (fillExecutable && folder.executablePath) {
         setValue('executablePath', folder.executablePath);
       }
+    } catch (error) {
+      console.error('[add-game] fallo buscando en las carpetas vigiladas:', error);
+      setFailed(true);
     } finally {
       setSearching(false);
     }
@@ -98,6 +106,12 @@ export const ScanAutofillRow = ({
         <div className={`mt-1.5 text-[11.5px] text-muted-foreground ${expandClass}`}>
           Nothing matching in your game folders — add or scan them from the search step, or fill the
           paths below by hand.
+        </div>
+      )}
+
+      {failed && (
+        <div className={`mt-1.5 text-[11.5px] text-destructive ${expandClass}`}>
+          Couldn&apos;t search your game folders — try again, or fill the paths below by hand.
         </div>
       )}
     </div>

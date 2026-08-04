@@ -62,14 +62,24 @@ export const MemoriesSection = (): React.JSX.Element => {
       description="Each month and year of your playing, told back to you in a few lines — written when the period closes and kept in your Journey."
       textClassName="min-w-0 flex-1"
       extra={
-        statusLine && (
-          <div
-            className="mt-1 text-[11px] font-semibold"
-            style={{ color: running ? VIOLET : 'var(--muted-foreground)' }}
-          >
-            {statusLine}
-          </div>
-        )
+        <>
+          {statusLine && (
+            <div
+              className="mt-1 text-[11px] font-semibold"
+              style={{ color: running ? VIOLET : 'var(--muted-foreground)' }}
+            >
+              {statusLine}
+            </div>
+          )}
+          {/* Ni runBackfill.isError ni regenerateStale.isError se miraban
+              antes: un rechazo previo al primer evento de progreso volvía el
+              botón a su reposo sin decir nada de lo que había pasado. */}
+          {(runBackfill.error ?? regenerateStale.error) && (
+            <div className="mt-1 text-[11px] font-semibold text-destructive">
+              Couldn&apos;t start — {(runBackfill.error ?? regenerateStale.error)?.message}
+            </div>
+          )}
+        </>
       }
       icon={BookOpen}
       color={VIOLET}

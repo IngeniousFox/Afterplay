@@ -28,6 +28,7 @@ export type {
   CloudInventory,
   CloudMachine,
   IdentityCheck,
+  LocalBackupsUsage,
   RecoveryResult,
   RestoreMode,
   RestorePlanFile,
@@ -38,6 +39,7 @@ export type {
   SavesBackupResult,
   SavesGameState,
   SavesLocalState,
+  SavesQueuedEvent,
   SavesScanEntry,
   SavesStatus,
 } from '../main/saves/contracts';

@@ -32,6 +32,16 @@ export const useImageSrc = (url: string | null, type: ImageCacheType): string | 
     // Sin url no hay nada que pedir — nada que setear en el efecto tampoco,
     // el `if (!key) return null` de abajo ya cubre este caso en el render.
     if (!url || !key) return;
+    // Ya resuelta: no hace falta ni preguntar. Antes esto SIEMPRE llamaba al
+    // IPC, caché de módulo o no — el `srcCache` solo evitaba el parpadeo del
+    // primer frame, pero cada remontaje (volver de una ficha, un filtro que
+    // vuelve a montar la parrilla) disparaba una llamada de todas formas.
+    // Con cientos de carátulas en pantalla, eso son cientos de idas y
+    // vueltas IPC + un stat en el main por cada una, para preguntar algo que
+    // ya se sabía. La revalidación de verdad (¿cambió el fichero local desde
+    // la última vez?) no es lo que esto hacía — era una simple relectura del
+    // mismo resultado.
+    if (srcCache.has(key)) return;
 
     let cancelled = false;
     window.api.images.getSrc(url, type).then((src) => {

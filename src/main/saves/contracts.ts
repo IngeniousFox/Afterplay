@@ -192,6 +192,20 @@ export type RecoveryResult = {
 // bucket.
 export type SaveBackupsUsage = { totalBytes: number; backupCount: number };
 
+// Cuánto ocupa la carpeta LOCAL de backups (save-backups/, ver run.ts), para
+// el mantenimiento de Ajustes — ver saves/localUsage.ts. No confundir con
+// SaveBackupsUsage de arriba, que es el mismo dato pero en R2.
+export type LocalBackupsUsage = {
+  totalBytes: number;
+  totalFiles: number;
+  // Ya reflejado en el índice de esta máquina — seguro de borrar.
+  reclaimableBytes: number;
+  reclaimableFiles: number;
+  // Carpetas sin fila ni juego que las reclame.
+  orphanBytes: number;
+  orphanFolders: number;
+};
+
 // Copia automática en marcha, para que la ficha abierta lo cuente en vivo
 // (§10.2). Las cuatro fases son las que un humano necesita distinguir:
 // "va a pasar", "está pasando", "ya está" y "no ha podido ser".
@@ -208,4 +222,16 @@ export type SavesActivityEvent = {
   foundFiles?: boolean;
   // Solo en 'failed'.
   message?: string;
+};
+
+// La ficha pide su estado (getGameSavesState -> previewGame) y ludusavi ya
+// está ocupado con otra cosa (un escaneo global, PARTIDAS-GUARDADAS.md §4.1,
+// dura 8-15s en una biblioteca real) — antes esto era un spinner mudo sin
+// decir por qué tardaba. `label` sale de peekLudusaviQueueLabel(), leído en
+// el main JUSTO ANTES de encolar esta petición: lo que estuviera corriendo
+// en ese instante es, por construcción, SIEMPRE ajeno (la propia petición
+// nunca puede ser lo que ve corriendo antes de haberse encolado ella misma).
+export type SavesQueuedEvent = {
+  gameId: number;
+  label: string;
 };

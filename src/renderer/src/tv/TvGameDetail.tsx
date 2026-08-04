@@ -10,6 +10,7 @@ import {
   Lightbulb,
   Play,
   Repeat,
+  TriangleAlert,
   Trophy,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -211,8 +212,16 @@ const ActionButton = ({
 // Volver, visible: el mando tiene B, el ratón necesita una puerta que se vea.
 // Cristal como el resto de superficies; al enfocarse, el anillo RESPIRA y el
 // chevrón se asoma hacia la salida — la puerta te señala el camino.
-const BackButton = ({ onSelect }: { onSelect: () => void }): React.JSX.Element => {
-  const { ref, focused } = useTvFocusable({ onSelect });
+const BackButton = ({
+  onSelect,
+  autoFocus,
+}: {
+  onSelect: () => void;
+  // Para cuando ESTE botón es lo único que hay en pantalla que enfocar —
+  // ver el placeholder de "juego no encontrado" más abajo.
+  autoFocus?: boolean;
+}): React.JSX.Element => {
+  const { ref, focused } = useTvFocusable({ onSelect, autoFocus });
   return (
     <button
       ref={ref}
@@ -513,7 +522,38 @@ export const TvGameDetail = (): React.JSX.Element | null => {
     { action: 'x', label: 'Set status' },
   ]);
 
-  if (!game) return null;
+  // El equivalente de escritorio (GameDetail.tsx) usa QueryStatePlaceholder
+  // para esto mismo: un mensaje y un camino de vuelta. Aquí antes era un
+  // `return null` a secas — con la query bajo el prefijo ['games'], que
+  // CUALQUIER sync o mutation invalida en bloque, un juego que desaparece
+  // (o que una carrera deja momentáneamente sin datos) dejaba la pantalla
+  // entera en negro desde el sofá, sin mensaje y sin nada que enfocar con el
+  // mando salvo adivinar B.
+  if (!game) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-[1.1em] text-center">
+        <div
+          className="flex h-[3.2em] w-[3.2em] items-center justify-center rounded-full"
+          style={{
+            background: 'rgba(232,93,114,.12)',
+            boxShadow: 'inset 0 0 0 1px rgba(232,93,114,.3)',
+          }}
+        >
+          <TriangleAlert className="h-[1.4em] w-[1.4em]" style={{ color: '#e85d72' }} />
+        </div>
+        <div className="text-[1.1em] font-extrabold text-foreground">
+          This game is no longer in your library
+        </div>
+        <BackButton
+          autoFocus
+          onSelect={() => {
+            tvSound.back();
+            void navigate(-1);
+          }}
+        />
+      </div>
+    );
+  }
 
   const status = getGameStatusMeta(game.currentState);
   const sessionCount = sessions.length;
@@ -560,6 +600,11 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           ? 'That executable is gone — set it again from your desk.'
           : 'Could not launch the game.',
       );
+      // Al fallo, YA — mismo motivo que TvHome: el toast dice que no arrancó
+      // en el acto, y el botón no puede seguir "Launching…" 2.5s más
+      // contradiciéndolo (y tragándose una segunda pulsación mientras tanto).
+      setLaunching(false);
+      return;
     }
     setTimeout(() => setLaunching(false), 2_500);
   };

@@ -111,6 +111,13 @@ export const HistoryList = ({
   const [draftNote, setDraftNote] = useState('');
   const [draftAmount, setDraftAmount] = useState('');
   const [draftDate, setDraftDate] = useState<PrecisionDateValue | null>(null);
+  // Antes save() disparaba .mutate() (sin esperar) y cerraba el editor en la
+  // línea siguiente SIN mirar si había ido bien — un fallo (la DB en pleno
+  // swap de conexión, por ejemplo) volvía la fila a sus valores viejos con
+  // cero indicio de que la edición se había perdido. Se guarda aquí para
+  // enseñarlo dentro del propio editor, que sigue abierto hasta que sí
+  // funcione.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Con la entrada "Added to Afterplay" en la línea temporal, el evento
   // 'plan_to_play' es redundante (misma fecha, misma información: "entró en
@@ -166,9 +173,10 @@ export const HistoryList = ({
     setDraftNote(entry.note ?? '');
     setDraftAmount(entry.kind === 'spend' ? String(entry.event.amount) : '');
     setDraftDate(entryPickerValue(entry));
+    setSaveError(null);
   };
 
-  const save = (entry: Entry): void => {
+  const save = async (entry: Entry): Promise<void> => {
     // La fecha solo entra al patch si CAMBIÓ respecto a la guardada — así un
     // evento con precisión 'datetime' (hora real) que solo edita la nota no
     // pierde su hora por el simple hecho de pasar por el picker de días.
@@ -184,22 +192,30 @@ export const HistoryList = ({
       : {};
 
     const note = draftNote.trim() || null;
+    setSaveError(null);
 
-    if (entry.kind === 'status') {
-      const patch: UpdateStateEventPatch = { note, ...datePatch };
-      updateStateEvent.mutate({ id: entry.id, patch });
-    } else if (entry.kind === 'spend') {
-      const parsedAmount = Number(draftAmount);
-      const amountValid =
-        draftAmount.trim() !== '' && !Number.isNaN(parsedAmount) && parsedAmount > 0;
-      const patch: UpdateSpendEventPatch = {
-        note,
-        ...datePatch,
-        // Cantidad inválida (vacía/0/no numérica): se conserva la guardada
-        // en vez de romper el gasto.
-        ...(amountValid && parsedAmount !== entry.event.amount ? { amount: parsedAmount } : {}),
-      };
-      updateSpendEvent.mutate({ id: entry.id, patch });
+    try {
+      if (entry.kind === 'status') {
+        const patch: UpdateStateEventPatch = { note, ...datePatch };
+        await updateStateEvent.mutateAsync({ id: entry.id, patch });
+      } else if (entry.kind === 'spend') {
+        const parsedAmount = Number(draftAmount);
+        const amountValid =
+          draftAmount.trim() !== '' && !Number.isNaN(parsedAmount) && parsedAmount > 0;
+        const patch: UpdateSpendEventPatch = {
+          note,
+          ...datePatch,
+          // Cantidad inválida (vacía/0/no numérica): se conserva la guardada
+          // en vez de romper el gasto.
+          ...(amountValid && parsedAmount !== entry.event.amount ? { amount: parsedAmount } : {}),
+        };
+        await updateSpendEvent.mutateAsync({ id: entry.id, patch });
+      }
+    } catch (error) {
+      // El editor se queda ABIERTO con lo que habías escrito: cerrarlo aquí
+      // habría sido la misma pérdida silenciosa que esto viene a arreglar.
+      setSaveError(error instanceof Error ? error.message : String(error));
+      return;
     }
     setEditingKey(null);
   };
@@ -311,7 +327,7 @@ export const HistoryList = ({
                                 value={draftAmount}
                                 onChange={(event) => setDraftAmount(event.target.value)}
                                 onKeyDown={(event) => {
-                                  if (event.key === 'Enter') save(entry);
+                                  if (event.key === 'Enter') void save(entry);
                                   if (event.key === 'Escape') setEditingKey(null);
                                 }}
                                 min={0}
@@ -338,7 +354,7 @@ export const HistoryList = ({
                             value={draftNote}
                             onChange={(event) => setDraftNote(event.target.value)}
                             onKeyDown={(event) => {
-                              if (event.key === 'Enter') save(entry);
+                              if (event.key === 'Enter') void save(entry);
                               if (event.key === 'Escape') setEditingKey(null);
                             }}
                             placeholder="Note…"
@@ -346,7 +362,7 @@ export const HistoryList = ({
                           />
                           <button
                             type="button"
-                            onClick={() => save(entry)}
+                            onClick={() => void save(entry)}
                             className="flex-none rounded-md p-1.5 text-primary hover:bg-primary/10"
                             aria-label="Save changes"
                           >
@@ -361,6 +377,11 @@ export const HistoryList = ({
                             <X size={14} />
                           </button>
                         </div>
+                        {saveError && (
+                          <div className="text-[11px] text-destructive">
+                            Couldn&apos;t save — {saveError}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       entry.note && (

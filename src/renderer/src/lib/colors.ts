@@ -18,3 +18,8 @@ export const VIOLET = '#7c86c8';
 export const BLUE = '#85a3d6';
 export const TEAL = '#2bb6a6';
 export const GRAY = '#8b93a3';
+// Mismo hex que --destructive de main.css: un acento aparte para cuando hace
+// falta el valor en JS (p.ej. un icono a color) en vez de una clase de
+// Tailwind. Coincide de casualidad con el 'dropped' de gameStatus.ts —
+// tokens distintos que hoy pintan igual, no una referencia al mismo sitio.
+export const RED = '#e85d72';

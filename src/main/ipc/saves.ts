@@ -14,9 +14,11 @@ import type {
   RestoreResult,
   SavesBackupResult,
   SavesGameState,
+  SavesQueuedEvent,
   SavesScanEntry,
   SavesStatus,
 } from '../saves/contracts';
+import { cleanLocalBackups, getLocalBackupsUsage } from '../saves/localUsage';
 import { deleteMachineFromCloud, recoverIndexFromCloud, scanBucket } from '../saves/recovery';
 import {
   adoptMachine,
@@ -39,6 +41,7 @@ import {
   toSlashes,
 } from '../saves/paths';
 import { isR2Configured, deleteKeys } from '../saves/r2';
+import { peekLudusaviQueueLabel } from '../saves/run';
 import {
   clearAllRestoreWorkspaces,
   deleteLocalBackups,
@@ -74,6 +77,11 @@ export const registerSavesHandlers = (): void => {
   // Espacio ocupado en R2, para Ajustes (API & Sync) — SUM local sobre
   // save_backups, cero llamadas al bucket (ver getSaveBackupsUsage).
   handleDb('saves:getUsage', async () => getSaveBackupsUsage());
+
+  // Espacio ocupado en DISCO por save-backups/, y cuánto de eso es
+  // prescindible (ya en R2, o huérfano) — ver saves/localUsage.ts.
+  handleDb('saves:getLocalUsage', async () => getLocalBackupsUsage());
+  handleDb('saves:cleanLocalBackups', async () => cleanLocalBackups());
 
   // ── Identidad de esta máquina frente al bucket (saves/identity.ts) ──
   // La puerta es local y GRATIS: solo compara el bucket configurado con el
@@ -164,10 +172,24 @@ export const registerSavesHandlers = (): void => {
     return results;
   });
 
-  handleDb('saves:getGameState', async (_event, gameId: number): Promise<SavesGameState | null> => {
+  handleDb('saves:getGameState', async (event, gameId: number): Promise<SavesGameState | null> => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
-    return game ? getGameSavesState(game, games) : null;
+    if (!game) return null;
+
+    // Leído JUSTO ANTES de pedir el estado (que encola su propio --preview):
+    // lo que esté corriendo en este instante es, por construcción, SIEMPRE
+    // una operación AJENA — la nuestra todavía no existe como tarea encolada,
+    // así que nunca puede verse a sí misma aquí. Sin este orden (peek DESPUÉS
+    // de encolar, o por sondeo desde el renderer) el label podía llegar a ser
+    // el de la propia petición ya en marcha — "esperando detrás de mí mismo".
+    const waitingBehind = peekLudusaviQueueLabel();
+    if (waitingBehind) {
+      const queuedEvent: SavesQueuedEvent = { gameId, label: waitingBehind };
+      event.sender.send('saves:queued', queuedEvent);
+    }
+
+    return getGameSavesState(game, games);
   });
 
   // Activación por juego (§10.5). Nada se sube salvo que esté marcado: subir
@@ -214,6 +236,33 @@ export const registerSavesHandlers = (): void => {
     // usuario haya añadido a mano SÍ se conservan: son suyas, no detectadas.
     await updateGame(gameId, { saveLudusaviName: ludusaviName, saveDetectionSource: 'auto' });
     return ludusaviName;
+  });
+
+  // Deshacer un emparejado AUTOMÁTICO. Hacía falta y no existía: ludusavi
+  // empareja por título normalizado contra un manifest enorme, y a veces casa
+  // con el juego EQUIVOCADO (verificado en la biblioteca real: "Nuts",
+  // "Nidhogg", "Spacewar" y "Stick Fight" salían como detectados sin estarlo
+  // — PARTIDAS-GUARDADAS.md §4). Antes de esto no había ninguna forma de
+  // quitarse ese emparejamiento de encima: las filas AUTO de FoldersBlock no
+  // llevan botón de borrar (a diferencia de las tuyas, que sí — no tiene
+  // sentido "borrar" una carpeta que ludusavi deriva sola en cada máquina, lo
+  // que hay que poder borrar es la DECISIÓN de emparejar), y un match sin un
+  // solo archivo local dejaba la tarjeta en la vista "Detected" vacía sin
+  // camino de vuelta a "Detect automatically" / "Choose the folder myself".
+  //
+  // Solo toca el emparejamiento — NUNCA las carpetas propias (§10.3, "no son
+  // dos modos excluyentes": conviven, y deshacer uno no debe llevarse el
+  // otro) ni nada ya subido (el índice de save_backups sigue la partida por
+  // gameId, no por ludusaviName — ver getSaveBackups). Solo tiene sentido
+  // sobre un emparejamiento 'auto': uno 'manual' ya se deshace solo al
+  // quitar su última carpeta (ver saves:removeFolder, unas líneas más abajo).
+  handleDb('saves:clearDetection', async (_event, gameId: number): Promise<boolean> => {
+    const games = await getSaveGames();
+    const game = games.find((candidate) => candidate.id === gameId);
+    if (!game || game.saveDetectionSource !== 'auto') return false;
+
+    await updateGame(gameId, { saveLudusaviName: null, saveDetectionSource: null });
+    return true;
   });
 
   // Añadir una carpeta a mano (§10.3). Dos casos en la misma operación:
@@ -314,6 +363,15 @@ export const registerSavesHandlers = (): void => {
       // motivo (§10bis.5). Si esta copia falla, el restore NO sigue: mejor
       // no restaurar que restaurar sin salida de emergencia. Y es barata: si
       // la partida no cambió desde la última copia, ludusavi no genera nada.
+      //
+      // Se hace SIEMPRE, incluso con "Cloud backup: OFF" para este juego —
+      // apagarlo lo desactivaba de los disparadores normales (el botón, el
+      // cierre de sesión), pero aquí es la única red de seguridad de una
+      // operación destructiva, y saltársela dejaría el restore SIN vuelta
+      // atrás para justo esos juegos. Lo que sí cambia es que se avisa: el
+      // warning de más abajo (calculado también en el preview, así que se ve
+      // ANTES de confirmar) dice explícitamente que esta subida rompe por
+      // esta vez el "nada sale de este PC" — nunca en silencio.
       if (!request.preview && request.mode === 'in-place') {
         await backupGameToCloud(game, games);
       }
@@ -353,6 +411,17 @@ export const registerSavesHandlers = (): void => {
         warnings.push(
           'This overwrites the save currently on disk. A backup of it is taken first, so you can undo this from the version list.',
         );
+        // Este juego tiene "Cloud backup: OFF" — pero la copia de seguridad
+        // de arriba se hace de todas formas, porque sin ella este restore no
+        // se podría deshacer. Se avisa a las claras de la excepción, en vez
+        // de dejar que la partida actual suba a la nube sin que el mensaje
+        // de la propia tarjeta ("nada sale de este PC") lo contradiga
+        // calladamente.
+        if (!game.saveBackupEnabled) {
+          warnings.push(
+            'Cloud backup is off for this game, but restoring still uploads one safety copy of your current save first — the only way to make this undoable.',
+          );
+        }
       }
 
       // Recordar el destino elegido, pero SOLO en el modo que es una decisión
@@ -389,11 +458,23 @@ export const registerSavesHandlers = (): void => {
     // el borrado no servía de nada: el zip seguía en disco y el siguiente
     // backup lo volvía a subir al reconciliar el espejo, con un diferencial
     // nuevo colgado de él. Una versión borrada tiene que quedarse borrada.
+    //
+    // En su try/catch PROPIO: lo que de verdad importa (el objeto de R2 y su
+    // fila) ya se borró arriba con éxito — si esta limpieza local revienta
+    // (un antivirus con el zip agarrado, el indexador de Windows) no puede
+    // deshacer eso ni mentir diciendo que el borrado entero falló cuando la
+    // parte que importa ya está hecha. El zip huérfano que pueda quedar lo
+    // recoge el barrido de save-backups/ de Ajustes (localUsage.ts) la
+    // próxima vez que se limpie.
     if (row.machineId === getMachineId()) {
-      deleteLocalBackups(
-        row.ludusaviName,
-        doomed.map((candidate) => candidate.backupName),
-      );
+      try {
+        deleteLocalBackups(
+          row.ludusaviName,
+          doomed.map((candidate) => candidate.backupName),
+        );
+      } catch (error) {
+        console.warn(`[saves] no se pudo limpiar la copia local de "${row.backupName}":`, error);
+      }
     }
     return true;
   });

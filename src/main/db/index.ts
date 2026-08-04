@@ -266,14 +266,29 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 // in the packaged app (electron-builder includes the folder by default; it's
 // plain text read via fs, so it doesn't need asarUnpack).
 export const runMigrations = async (): Promise<void> => {
+  const remoteConfigured = hasRemoteConfigured();
+  // Sondeo barato ANTES de pagar dos timeouts de red completos (push de
+  // migraciones + connectWithSync, 4s cada uno de CONNECT_TIMEOUT_MS): sin
+  // adaptador de red (avión, sin cable) ninguno de los dos va a responder
+  // nunca, así que arrancar en local directamente ahorra hasta 8s de espera
+  // muerta. Mismo sondeo que isTursoReachable() usa más abajo para el ciclo
+  // de ascenso en caliente — no sustituye al timeout real (con wifi pero sin
+  // Turso alcanzable, ese caso sigue necesitando la espera de verdad para
+  // saberlo), solo el caso "no hay red en absoluto".
+  const online = !remoteConfigured || net.isOnline();
+
   // Conexión aparte, antes de tocar la de verdad: deja el remoto al día por
   // su cuenta (ver pushMigrationsToRemote) para que el CDC nunca tenga que
   // cargar con el DDL de esta migración. Va en secuencia y no en paralelo con
   // la conexión de abajo A PROPÓSITO: la de sync no debe engancharse a Turso
   // mientras el DDL está a medias.
-  migrationPushPending = !(await pushMigrationsToRemote(CONNECT_TIMEOUT_MS));
+  migrationPushPending =
+    remoteConfigured && !(online && (await pushMigrationsToRemote(CONNECT_TIMEOUT_MS)));
 
-  const { db, capable } = await attemptInitialConnect();
+  const { db, capable } =
+    remoteConfigured && !online
+      ? { db: await connectLocalOnly(), capable: false }
+      : await attemptInitialConnect();
   dbInstance = db;
   syncCapable = capable;
 

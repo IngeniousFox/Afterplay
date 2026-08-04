@@ -93,7 +93,17 @@ export const SessionClosedToast = ({
 
   const save = async (): Promise<void> => {
     if (!note.trim() || setSessionNote.isPending) return;
-    await setSessionNote.mutateAsync({ id: event.sessionId, note });
+    try {
+      await setSessionNote.mutateAsync({ id: event.sessionId, note });
+    } catch {
+      // Antes esto no se atrapaba en ningún sitio: la nota escrita se perdía
+      // como una promesa rechazada sin dueño, y el input se quedaba tal cual
+      // sin decir que el guardado no había funcionado — y encima la cuenta
+      // atrás del toast seguía corriendo, así que hasta podía cerrarse solo
+      // llevándose la nota sin dejar ni rastro.
+      toast.error('Could not save the note.');
+      return;
+    }
     setSaved(true);
     // Un respiro para que se vea el acuse de recibo antes de irse — cerrar
     // en seco deja la duda de si se guardó.
@@ -115,6 +125,10 @@ export const SessionClosedToast = ({
     } catch {
       // Fallo al escribir (DB ocupada, lo que sea): el botón sigue ahí y se
       // puede reintentar — o marcarlo después desde la ficha, como siempre.
+      // El toast.error es lo que faltaba: TvSessionPanel ya lo hace para
+      // este mismo fallo, y aquí se quedaba mudo — el clic parecía no haber
+      // hecho nada.
+      toast.error('Could not save the status.');
       return;
     }
     setMarked(key);

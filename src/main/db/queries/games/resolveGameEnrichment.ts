@@ -61,7 +61,16 @@ export const resolveGameEnrichment = async (
   // sumaba su latencia entera a la espera del botón "Add". Aquí se esconde
   // detrás de HowLongToBeat, que siempre es el más lento de los tres.
   const [hltb, steamGridDbId, steamAppId] = await Promise.all([
-    getHltbTimes(detail.title, detail.releaseYear),
+    // Sin red de seguridad, esto SÍ podía tumbar el alta entera: hltb-client
+    // pega directo contra una API no oficial sin límite de tiempo propio, y
+    // un fallo suyo (o un cuelgue) rechazaba este Promise.all aunque IGDB —la
+    // única fuente que de verdad hace falta— ya hubiera contestado bien. Los
+    // otros dos ingredientes de este mismo Promise.all ya tenían su .catch;
+    // a este se le había quedado fuera.
+    getHltbTimes(detail.title, detail.releaseYear).catch((error) => {
+      console.warn('[hltb] sin tiempos de HowLongToBeat para este alta (sigo sin ellos):', error);
+      return null;
+    }),
     overrides.steamGridDbId !== null
       ? Promise.resolve(overrides.steamGridDbId)
       : sgdbSearch(detail.title, detail.releaseYear).catch((error) => {

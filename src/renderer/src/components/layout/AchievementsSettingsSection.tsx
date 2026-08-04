@@ -67,14 +67,24 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
       description="Pulls each game's achievements from Steam and RetroAchievements and matches your unlocks against your play sessions — so a trophy becomes a moment in your history, not just a checkbox."
       textClassName="min-w-0 flex-1"
       extra={
-        statusLine && (
-          <div
-            className="mt-1 text-[11px] font-semibold"
-            style={{ color: running ? AMBER : 'var(--muted-foreground)' }}
-          >
-            {statusLine}
-          </div>
-        )
+        <>
+          {statusLine && (
+            <div
+              className="mt-1 text-[11px] font-semibold"
+              style={{ color: running ? AMBER : 'var(--muted-foreground)' }}
+            >
+              {statusLine}
+            </div>
+          )}
+          {/* Ni sync.isError ni retry.isError se miraban antes: un rechazo
+              (clave revocada, sin red) antes del primer evento de progreso
+              volvía el botón a su reposo sin dejar ni rastro de por qué. */}
+          {(sync.error ?? retry.error) && (
+            <div className="mt-1 text-[11px] font-semibold text-destructive">
+              Couldn&apos;t start — {(sync.error ?? retry.error)?.message}
+            </div>
+          )}
+        </>
       }
       icon={Trophy}
       color={AMBER}

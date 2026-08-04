@@ -342,7 +342,12 @@ export const TvLibrary = (): React.JSX.Element => {
       // A '' — vuelve al 1 que pinta React; el inline solo vive un frame.
       el.style.opacity = '';
     }
-  });
+    // visibleIds y NO sin array: sin dependencias esto forzaba un reflow
+    // completo (querySelectorAll + offsetLeft/Top de CADA celda montada, la
+    // biblioteca entera) en CUALQUIER re-render — una sync de logros de
+    // fondo, el watcher, cualquier mutation ajena — no solo al filtrar o
+    // buscar, que es lo único que de verdad puede haber movido algo.
+  }, [visibleIds]);
 
   // El billete de vuelta (screenMemory): al abrir una ficha se guarda el
   // sitio exacto — filtro, query, scroll y qué carátula era. Solo este

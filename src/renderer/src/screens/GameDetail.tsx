@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { AchievementsSection } from '../components/library/detail/AchievementsSection';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { ActionBar } from '../components/library/detail/ActionBar';
@@ -177,7 +178,17 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
 
       <EditGameModal game={game} open={editOpen} onOpenChange={setEditOpen} />
       <EditNotesModal game={game} open={editNotesOpen} onOpenChange={setEditNotesOpen} />
-      <AddGameModal open={addGameOpen} onOpenChange={setAddGameOpen} />
+      {/* Alta desde la propia ficha (ActionBar → onAddGame): igual que el
+          "Add a game" de PlanGameDetail, onCreated es un toast y no una
+          navegación — el usuario está viendo OTRO juego y llevárselo de
+          golpe al que acaba de añadir sería más confuso que útil. Sin esto,
+          el modal se cerraba sin dejar rastro de que el alta hubiera
+          funcionado. */}
+      <AddGameModal
+        open={addGameOpen}
+        onOpenChange={setAddGameOpen}
+        onCreated={() => toast.success('Added to your library')}
+      />
       <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
       <DeleteGameDialog
         game={game}

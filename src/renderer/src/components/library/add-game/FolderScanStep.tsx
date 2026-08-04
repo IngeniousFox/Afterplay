@@ -71,6 +71,13 @@ export const FolderScanStep = ({
   const { data: report, isLoading, rescan, isRescanning, rescanError } = useScanResults();
   const results = report?.candidates;
 
+  // El .catch(() => undefined) sigue haciendo falta (mutateAsync rechaza la
+  // promesa además de marcar isError, y aquí nadie más la espera — sin
+  // esto sería una promesa rechazada sin dueño), pero antes el fallo
+  // desaparecía DEL TODO: setFolders.isError nunca se leía en ningún sitio
+  // de este componente. La fila de carpetas se quedaba tal cual, sin ningún
+  // indicio de que el clic no había servido de nada. Ahora sí se enseña, más
+  // abajo, mismo sitio que rescanError.
   const handleAddFolder = async (): Promise<void> => {
     const folder = await window.api.dialog.pickFolder();
     if (!folder || folders.includes(folder)) return;
@@ -149,6 +156,12 @@ export const FolderScanStep = ({
       {rescanError && !isRescanning && (
         <div className="mt-2 text-center text-[11.5px] font-semibold text-destructive">
           Couldn&apos;t scan your folders — {rescanError.message}
+        </div>
+      )}
+
+      {setFolders.isError && (
+        <div className="mt-2 text-center text-[11.5px] font-semibold text-destructive">
+          Couldn&apos;t update your folders — {setFolders.error.message}
         </div>
       )}
 

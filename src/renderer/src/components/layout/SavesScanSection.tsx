@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, CloudUpload, FileText, Loader2, Radar, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import type { SavesScanEntry } from '../../../../shared/types';
 import { queryKeys } from '../../hooks/queryKeys';
 import {
+  useSavesScanResults,
   useSavesStatus,
   useSavesUsage,
   useScanSaves,
@@ -28,7 +29,12 @@ export const SavesScanSection = (): React.JSX.Element => {
   const { data: status } = useSavesStatus();
   const scan = useScanSaves();
   const setEnabled = useSetSaveBackupEnabled();
-  const [results, setResults] = useState<SavesScanEntry[] | null>(null);
+  const queryClient = useQueryClient();
+  // Respaldado por query (useSavesScanResults), no por useState: Ajustes es
+  // un Dialog de Radix que desmonta su contenido al cerrarse, así que un
+  // useState tiraba a la basura una pasada de ~9s en cuanto cerrabas la
+  // ventana — aunque nada en la biblioteca hubiera cambiado desde entonces.
+  const { data: results } = useSavesScanResults();
   // Qué fila está guardándose ahora mismo. Sin esto, activar un juego no
   // daba NINGUNA señal hasta cerrar y reabrir Ajustes: la lista es una foto
   // del escaneo, y una mutation que invalida queries no la toca.
@@ -40,16 +46,22 @@ export const SavesScanSection = (): React.JSX.Element => {
 
   const ready = status?.ready ?? false;
 
+  const setResults = (next: SavesScanEntry[] | null): void => {
+    queryClient.setQueryData(queryKeys.savesLibraryScan.results, next);
+  };
+
   const handleScan = async (): Promise<void> => {
     setResults(null);
     setResults(await scan.mutateAsync());
   };
 
-  const patchEntry = (gameId: number, enabled: boolean): void =>
-    setResults(
-      (current) =>
+  const patchEntry = (gameId: number, enabled: boolean): void => {
+    queryClient.setQueryData(
+      queryKeys.savesLibraryScan.results,
+      (current: SavesScanEntry[] | null | undefined) =>
         current?.map((entry) => (entry.gameId === gameId ? { ...entry, enabled } : entry)) ?? null,
     );
+  };
 
   // Optimista: la fila cambia YA y se revierte si el guardado falla. Es una
   // preferencia de una columna booleana, no una operación de riesgo — esperar

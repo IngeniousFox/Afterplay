@@ -80,7 +80,11 @@ export const scanLibrary = async (
 
   const output = await runLudusavi<LudusaviOperationOutput>(
     ['backup', '--preview', '--api', '--force', '--no-cloud-sync'],
-    { timeoutMs: ESCANEO_TIMEOUT_MS, configure: () => applyLudusaviConfig({ customGames }) },
+    {
+      timeoutMs: ESCANEO_TIMEOUT_MS,
+      configure: () => applyLudusaviConfig({ customGames }),
+      label: 'scanning your library',
+    },
   );
 
   return (
@@ -106,6 +110,7 @@ export const findLudusaviName = async (title: string): Promise<string | null> =>
   ]) {
     const output = await runLudusavi<LudusaviFindOutput>(args, {
       configure: () => applyLudusaviConfig(),
+      label: `detecting ${title}`,
     }).catch(() => null);
     const [match] = Object.keys(output?.games ?? {});
     if (match) return match;
@@ -124,7 +129,7 @@ export const previewGame = async (
 
   const output = await runLudusavi<LudusaviOperationOutput>(
     ['backup', '--preview', '--api', '--force', '--no-cloud-sync', ludusaviName],
-    { configure: () => applyLudusaviConfig({ customGames }) },
+    { configure: () => applyLudusaviConfig({ customGames }), label: `checking ${ludusaviName}` },
   );
 
   const entry = output.games?.[ludusaviName];
@@ -152,7 +157,7 @@ export const backupGame = async (
 
   const output = await runLudusavi<LudusaviOperationOutput>(
     ['backup', '--api', '--force', '--no-cloud-sync', ludusaviName],
-    { configure: () => applyLudusaviConfig({ customGames }) },
+    { configure: () => applyLudusaviConfig({ customGames }), label: `backing up ${ludusaviName}` },
   );
 
   const entry = output.games?.[ludusaviName];
@@ -273,6 +278,7 @@ export const restoreGame = async (options: RestoreOptions): Promise<RestorePlan>
             ? { [ludusaviName]: Object.fromEntries(skipRegistryKeys.map((key) => [key, false])) }
             : {},
         }),
+      label: `restoring ${ludusaviName}`,
     },
   );
 

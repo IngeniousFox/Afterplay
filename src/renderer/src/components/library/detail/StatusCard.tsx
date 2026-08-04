@@ -50,6 +50,11 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
   const addStateEvent = useAddStateEvent();
   const status = getGameStatusMeta(game.currentState);
   const isSaving = addIteration.isPending || addStateEvent.isPending;
+  // Sin esto, un fallo en cualquiera de las dos mutaciones dejaba el botón
+  // volviendo a "Save status" como si nada — idéntico a no haber pulsado
+  // nada — y el cambio de estado (con su nota) se perdía en silencio. Es el
+  // control principal de la pantalla más visitada de la app.
+  const saveError = addIteration.error ?? addStateEvent.error ?? null;
 
   // Desde cuándo el juego está en este estado — el evento real más reciente
   // ('plan_to_play' no cuenta: es intención, no estado de juego, mismo
@@ -92,38 +97,43 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
 
     let iterationId = needsNewIteration ? undefined : (activeIteration?.id ?? lastIt?.id);
 
-    if (!iterationId) {
-      const iteration = await addIteration.mutateAsync({
-        gameId: game.id,
-        playedPlatform: game.officialPlatforms?.[0] ?? 'PC',
-        origin: 'Purchased',
-        format: 'digital',
-      });
-      iterationId = iteration.id;
-
-      // Un playthrough nuevo siempre arranca por "Playing" en el log — si
-      // no, el historial empezaría directo en "Completado"/"Dropped" sin
-      // haber pasado nunca por "Jugando". Modelo v2: ese evento ES además
-      // la fecha de inicio del playthrough (derivada al leer), sin sesión
-      // marcadora aparte.
-      if (pending !== 'playing') {
-        await addStateEvent.mutateAsync({
-          iterationId,
-          type: 'started',
-          occurredAt: new Date(),
-          datePrecision: 'datetime',
-          note: null,
+    try {
+      if (!iterationId) {
+        const iteration = await addIteration.mutateAsync({
+          gameId: game.id,
+          playedPlatform: game.officialPlatforms?.[0] ?? 'PC',
+          origin: 'Purchased',
+          format: 'digital',
         });
-      }
-    }
+        iterationId = iteration.id;
 
-    await addStateEvent.mutateAsync({
-      iterationId,
-      type: STATUS_TO_STATE_TYPE[pending],
-      occurredAt: new Date(),
-      datePrecision: 'datetime',
-      note: note.trim() || null,
-    });
+        // Un playthrough nuevo siempre arranca por "Playing" en el log — si
+        // no, el historial empezaría directo en "Completado"/"Dropped" sin
+        // haber pasado nunca por "Jugando". Modelo v2: ese evento ES además
+        // la fecha de inicio del playthrough (derivada al leer), sin sesión
+        // marcadora aparte.
+        if (pending !== 'playing') {
+          await addStateEvent.mutateAsync({
+            iterationId,
+            type: 'started',
+            occurredAt: new Date(),
+            datePrecision: 'datetime',
+            note: null,
+          });
+        }
+      }
+
+      await addStateEvent.mutateAsync({
+        iterationId,
+        type: STATUS_TO_STATE_TYPE[pending],
+        occurredAt: new Date(),
+        datePrecision: 'datetime',
+        note: note.trim() || null,
+      });
+    } catch (error) {
+      console.error('[status] fallo guardando el cambio de estado:', error);
+      return;
+    }
     setNote('');
 
     // Solo al COMPLETAR, y solo después de que el guardado haya ido bien: si
@@ -212,6 +222,12 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
             <Check size={16} />
             <span>{isSaving ? 'Saving…' : 'Save status'}</span>
           </button>
+
+          {saveError && (
+            <div className="mt-2 text-[11.5px] text-destructive">
+              Couldn&apos;t save — {saveError.message}
+            </div>
+          )}
         </div>
       </div>
     </div>

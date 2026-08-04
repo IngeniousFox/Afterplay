@@ -1,26 +1,20 @@
 import type {
   CreateGameWithDetailsInput,
-  GameDetail,
   GameRow,
   IgdbSearchResult,
 } from '../../../../../shared/types';
 // Imports de valor (no `import type`): estos hooks solo se usan aquí dentro
 // de `ReturnType<typeof ...>`, y TypeScript no permite `typeof` sobre un
 // binding importado como type-only (TS1361).
-import {
-  useCreateGameWithDetails,
-  useCreatePlannedGame,
-  usePromotePlannedGame,
-} from '../../../hooks/games';
+import { useCreatePlannedGame } from '../../../hooks/games';
 import { useCreateIteration } from '../../../hooks/iterations';
-import { useAssignSession } from '../../../hooks/sessions';
 import { useAddStateEvent } from '../../../hooks/stateEvents';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import { STATUS_TO_STATE_TYPE } from '../../../lib/gameStatus';
 import { parseIsoDate } from './precisionDate';
 import type { PrecisionDateValue } from './precisionDate';
 import { parseOptionalNumber } from './types';
-import type { AddGameFormValues, ManualPlaythroughEntry } from './types';
+import type { AddGameFormValues } from './types';
 
 // Los pasos de handleSave (AddGameModal), extraídos como funciones con
 // nombre — uno de los tres caminos mutuamente excluyentes que puede tomar el
@@ -166,61 +160,12 @@ export const savePlannedGame = async (
     steamGridDbId: values.steamGridDbId,
   });
 
-type PromotedGameMutations = {
-  promote: ReturnType<typeof usePromotePlannedGame>;
-  addIteration: ReturnType<typeof useCreateIteration>;
-  addStateEvent: ReturnType<typeof useAddStateEvent>;
-};
-
-export const savePromotedGame = async (
-  promoteGame: GameDetail,
-  details: Omit<CreateGameWithDetailsInput, 'igdbId'>,
-  extraPlaythroughs: ManualPlaythroughEntry[],
-  mutations: PromotedGameMutations,
-): Promise<void> => {
-  const { promote, addIteration, addStateEvent } = mutations;
-
-  await promote.mutateAsync({ gameId: promoteGame.id, ...details });
-  for (const entry of extraPlaythroughs) {
-    await addManualPlaythrough(
-      promoteGame.id,
-      { ...entry, status: entry.pastStatus },
-      { addIteration, addStateEvent },
-    );
-  }
-};
-
-type NewLibraryGameMutations = {
-  createGame: ReturnType<typeof useCreateGameWithDetails>;
-  assignSession: ReturnType<typeof useAssignSession>;
-  addIteration: ReturnType<typeof useCreateIteration>;
-  addStateEvent: ReturnType<typeof useAddStateEvent>;
-};
-
-export const saveNewLibraryGame = async (
-  selected: IgdbSearchResult,
-  details: Omit<CreateGameWithDetailsInput, 'igdbId'>,
-  extraPlaythroughs: ManualPlaythroughEntry[],
-  assignSessionId: number | undefined,
-  mutations: NewLibraryGameMutations,
-): Promise<GameRow> => {
-  const { createGame, assignSession, addIteration, addStateEvent } = mutations;
-
-  const created = await createGame.mutateAsync({ igdbId: selected.igdbId, ...details });
-
-  // Flujo "+ Add new game" del modal de asignación (EMULADORES.md §6): la
-  // sesión pendiente que lo originó se asigna sola al juego recién creado.
-  if (assignSessionId !== undefined) {
-    await assignSession.mutateAsync({ sessionId: assignSessionId, gameId: created.id });
-  }
-
-  for (const entry of extraPlaythroughs) {
-    await addManualPlaythrough(
-      created.id,
-      { ...entry, status: entry.pastStatus },
-      { addIteration, addStateEvent },
-    );
-  }
-
-  return created;
-};
+// savePromotedGame y saveNewLibraryGame (promote/createGame + assignSession +
+// playthroughs extra) vivían aquí como funciones aparte, pero AddGameModal
+// necesitaba intercalar un guard de reintento ENTRE el paso primario y los de
+// detrás (no volver a llamar a promote/createGame si ya salieron bien en un
+// intento anterior — su id no es idempotente, y repetir revienta con un error
+// que no tiene nada que ver con lo que de verdad falló). Esa lógica solo tiene
+// sentido donde vive el estado de "ya se creó" (el propio componente), así
+// que esos dos pasos se inlinearon en handleSave del modal; lo que queda
+// aquí es lo que SÍ se sigue compartiendo con EditGameModal.

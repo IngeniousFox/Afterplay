@@ -37,12 +37,7 @@ import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { FolderScanStep } from './add-game/FolderScanStep';
 import { FormSection } from './add-game/FormSection';
 import { GameNotesPanel } from './add-game/GameNotesPanel';
-import {
-  buildGameDetails,
-  saveNewLibraryGame,
-  savePlannedGame,
-  savePromotedGame,
-} from './add-game/handleSave';
+import { addManualPlaythrough, buildGameDetails, savePlannedGame } from './add-game/handleSave';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
 import { ScanAutofillRow } from './add-game/ScanAutofillRow';
 import { ManualPlaythroughsList } from './add-game/ManualPlaythroughsField';
@@ -229,6 +224,23 @@ const AddGameModalBody = ({
     assignSession.isPending ||
     addIteration.isPending ||
     addStateEvent.isPending;
+  // El juego/promoción YA se creó en un intento anterior, pero un paso de
+  // detrás (asignar la sesión, un playthrough extra) falló a mitad — sin
+  // esto, reintentar "Add to library" volvía a llamar a createGame/promote
+  // con el MISMO igdbId, y eso revienta contra la unicidad de games.igdbId
+  // con un error que no tiene nada que ver con lo que de verdad falló. Se
+  // guarda el id ya creado para que el reintento se salte justo ese paso.
+  const [partialSave, setPartialSave] = useState<{ gameId: number } | null>(null);
+  // El banner de error solo miraba la mutación PRIMARIA — un fallo en
+  // assignSession/addIteration/addStateEvent (los pasos que corren DESPUÉS de
+  // crear el juego) pasaba totalmente inadvertido: el botón volvía a su
+  // estado normal y no había ni rastro de qué había ido mal.
+  const saveError =
+    activeMutation.error ??
+    assignSession.error ??
+    addIteration.error ??
+    addStateEvent.error ??
+    null;
 
   const resetAll = (): void => {
     setQuery('');
@@ -240,10 +252,14 @@ const AddGameModalBody = ({
     // al instante sin releer el disco.
     setScanning(false);
     setNotesOpen(false);
+    setPartialSave(null);
     resetForm({ ...DEFAULT_FORM_VALUES, moneySpentDate: todayValue() });
     createGame.reset();
     createPlanned.reset();
     promote.reset();
+    assignSession.reset();
+    addIteration.reset();
+    addStateEvent.reset();
   };
 
   const handleClose = (): void => {
@@ -319,6 +335,9 @@ const AddGameModalBody = ({
     const values = getValues();
 
     if (isPlan) {
+      // Un único paso, sin nada detrás que pueda fallar por separado: si
+      // esto revienta, activeMutation.isError ya lo refleja tal cual, y
+      // reintentar no puede duplicar nada porque no llegó a crearse nada.
       const planned = await savePlannedGame(selected, values, createPlanned);
       resetAll();
       onOpenChange(false);
@@ -335,29 +354,68 @@ const AddGameModalBody = ({
     const extraPlaythroughs =
       values.playedBefore && !values.endless ? values.extraPlaythroughs : [];
 
-    if (isPromote && promoteGame) {
-      await savePromotedGame(promoteGame, details, extraPlaythroughs, {
-        promote,
-        addIteration,
-        addStateEvent,
-      });
+    // Promote y New game encadenan varios pasos tras el principal
+    // (assignSession/extraPlaythroughs), y NINGUNO de ellos puede reventar
+    // sin control: antes, un fallo aquí no se atrapaba en ningún sitio, así
+    // que el modal se quedaba abierto y CALLADO — sin cerrar, sin
+    // resetAll(), y sin que el banner de error (que solo miraba la mutación
+    // primaria) dijera una palabra. Con el try/catch de aquí abajo, el
+    // rechazo se recoge y saveError (que sí mira las cuatro mutaciones) lo
+    // enseña.
+    try {
+      if (isPromote && promoteGame) {
+        // Guard de reintento: si "promote" YA salió bien en un intento
+        // anterior (partialSave puesto), no se vuelve a llamar — promover
+        // dos veces el mismo Plan revienta con "no está en el Plan" en vez
+        // de decir la verdad sobre qué falló de verdad.
+        if (!partialSave) {
+          await promote.mutateAsync({ gameId: promoteGame.id, ...details });
+          setPartialSave({ gameId: promoteGame.id });
+        }
+        for (const entry of extraPlaythroughs) {
+          await addManualPlaythrough(
+            promoteGame.id,
+            { ...entry, status: entry.pastStatus },
+            { addIteration, addStateEvent },
+          );
+        }
+        resetAll();
+        onOpenChange(false);
+        onPromoted?.();
+        return;
+      }
+
+      // Mismo guard para el alta normal: createGame.igdbId es UNIQUE (ver
+      // schema.ts), así que repetir la llamada tras un fallo posterior
+      // revienta con un error de fila duplicada que no explica nada al
+      // usuario — el juego ya está, solo falta lo de detrás.
+      let gameId = partialSave?.gameId;
+      if (gameId === undefined) {
+        const created = await createGame.mutateAsync({ igdbId: selected.igdbId, ...details });
+        gameId = created.id;
+        setPartialSave({ gameId });
+      }
+
+      // Flujo "+ Add new game" del modal de asignación (EMULADORES.md §6): la
+      // sesión pendiente que lo originó se asigna sola al juego recién creado.
+      if (assignSessionId !== undefined) {
+        await assignSession.mutateAsync({ sessionId: assignSessionId, gameId });
+      }
+
+      for (const entry of extraPlaythroughs) {
+        await addManualPlaythrough(
+          gameId,
+          { ...entry, status: entry.pastStatus },
+          { addIteration, addStateEvent },
+        );
+      }
+
       resetAll();
       onOpenChange(false);
-      onPromoted?.();
-      return;
+      onCreated?.(gameId);
+    } catch (error) {
+      console.error('[add-game] fallo guardando:', error);
     }
-
-    const created = await saveNewLibraryGame(
-      selected,
-      details,
-      extraPlaythroughs,
-      assignSessionId,
-      { createGame, assignSession, addIteration, addStateEvent },
-    );
-
-    resetAll();
-    onOpenChange(false);
-    onCreated?.(created.id);
   };
 
   const stepTransitionClass = `duration-300 animate-in fade-in-0 ${
@@ -472,6 +530,7 @@ const AddGameModalBody = ({
             onQueryChange={setQuery}
             isLoading={search.isLoading}
             results={search.data}
+            isError={search.isError}
             onScanFolders={() => {
               setStepDirection(1);
               setScanning(true);
@@ -776,10 +835,9 @@ const AddGameModalBody = ({
 
               {!isPlan && <StatusSummaryLine />}
 
-              {activeMutation.isError && (
+              {saveError && (
                 <div className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
-                  Couldn&apos;t {isPromote ? 'move' : 'add'} the game —{' '}
-                  {activeMutation.error.message}
+                  Couldn&apos;t {isPromote ? 'move' : 'add'} the game — {saveError.message}
                 </div>
               )}
             </div>

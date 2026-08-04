@@ -146,6 +146,20 @@ export const searchGames = async (query: string): Promise<IgdbSearchResult[]> =>
   }));
 };
 
+// Caché corta del detalle por igdbId. Existe por un patrón muy concreto: el
+// renderer ya pide este MISMO detalle en cuanto se elige un juego en Add Game
+// (para pintar el formulario), y resolveGameEnrichment lo vuelve a pedir al
+// pulsar "Add" — la caché del renderer (staleTime Infinity) es invisible
+// desde aquí, así que sin esto el botón pagaba una segunda ida y vuelta
+// completa a IGDB por algo que ya se sabía, justo en la ruta crítica que el
+// comentario de más abajo dice que se cuidó de no alargar.
+// TTL corto (no Infinity como el renderer): esto es para coalescer las DOS
+// llamadas de una misma sesión de alta, no una caché de catálogo — un detalle
+// de IGDB puede cambiar (nueva carátula, categoría corregida) y cinco
+// minutos es de sobra para cualquier "reviso el formulario y pulso Add".
+const DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const detailCache = new Map<number, { detail: IgdbGameDetail | null; expiresAt: number }>();
+
 export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | null> => {
   // El id va interpolado en el body: entero obligatorio, que por ahí no se
   // cuele texto arbitrario hacia la query.
@@ -153,13 +167,22 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     throw new Error(`igdbId inválido: ${igdbId}`);
   }
 
+  const cached = detailCache.get(igdbId);
+  if (cached && cached.expiresAt > Date.now()) return cached.detail;
+
   const body =
     `fields ${SEARCH_FIELDS}, artworks.image_id, screenshots.image_id, ` +
     `involved_companies.company.name, involved_companies.developer, involved_companies.publisher, ` +
     `external_games.uid, external_games.external_game_source; ` +
     `where id = ${igdbId};`;
   const [game] = igdbDetailResponseSchema.parse(await igdbRequest('games', body));
-  if (!game) return null;
+  if (!game) {
+    // También se cachea el "no existe" — un igdbId que ya no está en el
+    // catálogo (lo quitaron) seguiría fallando igual en el segundo intento, y
+    // así no se paga esa ida y vuelta dos veces por nada.
+    detailCache.set(igdbId, { detail: null, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
+    return null;
+  }
 
   const companies = game.involved_companies ?? [];
 
@@ -172,7 +195,7 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
   // resolveAchievementsSteamAppId(), que en el alta corre EN PARALELO con
   // HowLongToBeat y SteamGridDB (ver resolveGameEnrichment) — o sea, gratis
   // en tiempo de reloj. El renderer no usa el appid para nada.
-  return {
+  const detail: IgdbGameDetail = {
     directSteamAppId: steamAppIdFromExternals(game.external_games),
     parentIgdbId: game.parent_game ?? null,
     igdbId: game.id,
@@ -193,6 +216,8 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     // arriba en vez de fallar — nunca peor que el tamaño de antes.
     screenshots: game.screenshots?.map((shot) => igdbImageUrl(shot.image_id, '1080p')) ?? [],
   };
+  detailCache.set(igdbId, { detail, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
+  return detail;
 };
 
 // Tope de filas que IGDB devuelve por respuesta. Importa de verdad: un juego

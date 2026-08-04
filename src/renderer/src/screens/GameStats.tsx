@@ -131,13 +131,33 @@ export const GameStats = ({
   // que podría salir vacío (y ni siquiera estar entre las opciones) si el
   // juego no se ha jugado este año.
   const [heatmapYear, setHeatmapYear] = useState<Year | null>(null);
+  // GameStats no se remonta al cambiar de juego (la navegación entre fichas
+  // solo cambia el prop gameId) — sin esto, un año elegido A MANO para un
+  // juego sobrevivía al saltar a otro, y si ese año no tenía sesiones ahí
+  // (lo normal), el heatmap salía vacío contradiciendo el propio criterio de
+  // arriba ("el año más reciente CON sesiones de este juego").
+  const [seenGameId, setSeenGameId] = useState(gameId);
+  if (gameId !== seenGameId) {
+    setSeenGameId(gameId);
+    setHeatmapYear(null);
+  }
   const effectiveHeatmapYear = heatmapYear ?? heatmapYears[0] ?? new Date().getFullYear();
-  const { longestSec: longestSessionSec, avgSec: avgSessionSec } =
-    sessionDurationStats(realSessions);
+  // Memoizados: los 4 useCountUp de abajo reprintan el componente en cada
+  // frame de su animación (~700ms) mientras suben, y sin esto cada frame
+  // repetía el filter+reduce de sessionDurationStats y el spread+sort de
+  // longestStreak sobre TODAS las sesiones del juego para el mismo
+  // resultado que el frame anterior (mismo motivo que Sessions.tsx).
+  const { longestSec: longestSessionSec, avgSec: avgSessionSec } = useMemo(
+    () => sessionDurationStats(realSessions),
+    [realSessions],
+  );
   // La racha más larga DE ESTE JUEGO, de todos los tiempos (aquí no hay
   // filtro de año — el del heatmap de abajo es solo suyo). Días con al menos
   // una sesión trackeada real, ver lib/streaks.ts.
-  const longestDailyStreak = longestStreak(playedDayKeys(realSessions));
+  const longestDailyStreak = useMemo(
+    () => longestStreak(playedDayKeys(realSessions)),
+    [realSessions],
+  );
 
   // Récords: día más intenso, días distintos jugados, mes más cargado —
   // solo sesiones cerradas (las abiertas aún no tienen duración final).

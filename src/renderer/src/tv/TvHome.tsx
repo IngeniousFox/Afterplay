@@ -562,6 +562,13 @@ export const TvHome = (): React.JSX.Element => {
           ? 'That executable is gone — set it again from your desk.'
           : 'Could not launch the game.',
       );
+      // Al fallo, YA: el toast dice que no arrancó en el mismo instante, y
+      // antes el botón seguía "Launching…" 2.5s más — una contradicción
+      // visible entre lo que el aviso acaba de decir y lo que el botón sigue
+      // afirmando, y de paso tragándose una segunda pulsación durante ese
+      // rato. El retardo solo tiene sentido cuando SÍ arrancó.
+      setLaunching(false);
+      return;
     }
     // El overlay se disuelve solo: si el juego arrancó, ya está delante.
     setTimeout(() => setLaunching(false), 2_500);

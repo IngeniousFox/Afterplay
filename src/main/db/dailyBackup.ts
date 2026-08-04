@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { vacuumInto } from './backupCore';
+import { withDbAccess } from '.';
 import { removeSidecars, sweepStraySidecars } from './sidecars';
 
 const MAX_BACKUPS = 5;
@@ -27,10 +28,14 @@ const listBackups = (dir: string): string[] =>
 
 // Una copia física del .db local al día, sin tocar Turso para nada — para
 // el "se me ha ido la pinza con algo y quiero volver a ayer/anteayer" sin
-// depender de tener red ni de la ventana de retención de Turso. Corre justo
-// después de runMigrations() en el arranque, con el criterio de todo lo
-// accesorio del arranque: si falla, se avisa por consola y la app sigue
-// igual — no es motivo para no arrancar.
+// depender de tener red ni de la ventana de retención de Turso. Se lanza
+// (sin esperar) justo después de runMigrations() en el arranque, con el
+// criterio de todo lo accesorio del arranque: si falla, se avisa por
+// consola y la app sigue igual — no es motivo para no arrancar, y mucho
+// menos para retrasar la ventana mientras VACUUM INTO copia el fichero
+// entero. Al no ser ya "antes de que exista ninguna concurrencia real" (ver
+// manualBackup.ts), el propio VACUUM INTO va dentro de withDbAccess, igual
+// que cualquier otro acceso a la DB que corre fuera del arranque síncrono.
 export const runDailyBackup = async (): Promise<void> => {
   const dir = getBackupsDir();
   mkdirSync(dir, { recursive: true });
@@ -44,7 +49,7 @@ export const runDailyBackup = async (): Promise<void> => {
   if (existsSync(filePath)) return;
 
   try {
-    await vacuumInto(filePath);
+    await withDbAccess(() => vacuumInto(filePath));
     console.log(`[backup] copia diaria creada: ${filePath}`);
   } catch (error) {
     console.warn('[backup] no se pudo crear la copia diaria:', error);
