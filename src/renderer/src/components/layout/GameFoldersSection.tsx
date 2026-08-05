@@ -1,7 +1,6 @@
 import { FolderPlus, FolderSearch, HardDrive, X } from 'lucide-react';
 import { useScanFolders, useSetScanFolders } from '../../hooks/scan';
 import { BLUE } from '../../lib/colors';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
 
 // Las carpetas del modo "Scan my game folders" de Add Game. La MISMA lista
@@ -25,11 +24,9 @@ export const GameFoldersSection = (): React.JSX.Element => {
     <SettingsCard
       layout="column"
       title="Game folders"
-      description="Where your games live on disk. Add Game can scan these to find installed games, with their folder and executable."
+      description="The folders where your games are installed. When you add a game, Afterplay can scan these to find it — folder, executable and all — instead of you browsing for it by hand."
       icon={FolderSearch}
       color={BLUE}
-      className={revealClass}
-      style={revealStyle(6)}
       headerRight={
         <button
           type="button"

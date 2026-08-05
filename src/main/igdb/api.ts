@@ -6,9 +6,10 @@ import {
   igdbDetailResponseSchema,
   igdbExternalGamesResponseSchema,
   igdbGameVersionsResponseSchema,
+  igdbRatingsBatchResponseSchema,
   igdbSearchResponseSchema,
 } from './schemas';
-import type { IgdbGameDetail, IgdbSearchResult } from './types';
+import type { GameRatings, IgdbGameDetail, IgdbSearchResult } from './types';
 
 const SEARCH_FIELDS =
   'name, cover.image_id, first_release_date, platforms.name, genres.name, summary, ' +
@@ -173,7 +174,8 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
   const body =
     `fields ${SEARCH_FIELDS}, artworks.image_id, screenshots.image_id, ` +
     `involved_companies.company.name, involved_companies.developer, involved_companies.publisher, ` +
-    `external_games.uid, external_games.external_game_source; ` +
+    `external_games.uid, external_games.external_game_source, ` +
+    `aggregated_rating, aggregated_rating_count, rating, rating_count; ` +
     `where id = ${igdbId};`;
   const [game] = igdbDetailResponseSchema.parse(await igdbRequest('games', body));
   if (!game) {
@@ -199,6 +201,11 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     directSteamAppId: steamAppIdFromExternals(game.external_games),
     parentIgdbId: game.parent_game ?? null,
     igdbId: game.id,
+    // Sin fundir con total_rating — ver el porqué en schema.ts.
+    ratingCritics: game.aggregated_rating ?? null,
+    ratingCriticsCount: game.aggregated_rating_count ?? null,
+    ratingUsers: game.rating ?? null,
+    ratingUsersCount: game.rating_count ?? null,
     title: game.name,
     coverUrl: game.cover ? igdbImageUrl(game.cover.image_id, 'cover_big') : null,
     releaseYear: toReleaseYear(game.first_release_date),
@@ -218,6 +225,42 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
   };
   detailCache.set(igdbId, { detail, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
   return detail;
+};
+
+// Puntuaciones de un LOTE de juegos, para el "Refresh all" de Ajustes. A
+// diferencia del refresco de UN juego (que reutiliza getGameDetails, gratis
+// porque el detalle ya viaja entero), aquí pedir el detalle completo de
+// cientos de juegos sería absurdo: esta query trae SOLO los cuatro campos de
+// notas, y con `where id = (...)` una biblioteca entera cabe en 1-2
+// peticiones — por eso el backfill no necesita cola, ni progreso, ni botón
+// de parar como los logros: termina en segundos.
+//
+// 400 por petición y no el límite real de IGDB (500): aquí una fila es un
+// juego exacto (id único, sin el problema de external_games de varias filas
+// por juego), pero el margen evita vivir pegado al tope por si IGDB lo baja.
+const RATINGS_BATCH_SIZE = 400;
+
+export const getGameRatingsBatch = async (igdbIds: number[]): Promise<Map<number, GameRatings>> => {
+  assertIntegerIds(igdbIds);
+  const result = new Map<number, GameRatings>();
+
+  for (let start = 0; start < igdbIds.length; start += RATINGS_BATCH_SIZE) {
+    const chunk = igdbIds.slice(start, start + RATINGS_BATCH_SIZE);
+    const body =
+      `fields aggregated_rating, aggregated_rating_count, rating, rating_count; ` +
+      `where id = (${chunk.join(',')}); limit ${chunk.length};`;
+    const rows = igdbRatingsBatchResponseSchema.parse(await igdbRequest('games', body));
+
+    for (const row of rows) {
+      result.set(row.id, {
+        ratingCritics: row.aggregated_rating ?? null,
+        ratingCriticsCount: row.aggregated_rating_count ?? null,
+        ratingUsers: row.rating ?? null,
+        ratingUsersCount: row.rating_count ?? null,
+      });
+    }
+  }
+  return result;
 };
 
 // Tope de filas que IGDB devuelve por respuesta. Importa de verdad: un juego

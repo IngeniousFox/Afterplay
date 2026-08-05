@@ -207,7 +207,13 @@ export type DirectoryPickResult = { path: string; sizeBytes: number };
 export type LaunchExecutableResult =
   { ok: true } | { ok: false; reason: 'missing' } | { ok: false; reason: 'error'; message: string };
 
-export type { IgdbGameDetail, IgdbSearchResult } from '../main/igdb/types';
+export type {
+  GameRatings,
+  IgdbGameDetail,
+  IgdbSearchResult,
+  RatingsRefreshSummary,
+  RatingsStatus,
+} from '../main/igdb/types';
 
 export type { HltbTimes } from '../main/hltb/types';
 

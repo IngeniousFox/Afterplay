@@ -7,7 +7,6 @@ import {
   useSyncAchievements,
 } from '../../hooks/achievements';
 import { AMBER } from '../../lib/colors';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → Achievements: la pasada que trae el catálogo de logros de tus
@@ -88,8 +87,6 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
       }
       icon={Trophy}
       color={AMBER}
-      className={revealClass}
-      style={revealStyle(8)}
     >
       <div className="flex flex-none items-center gap-2">
         {/* Reintentar solo los fallidos: repetir los 300 y pico por 3 que

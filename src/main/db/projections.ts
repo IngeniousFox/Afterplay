@@ -53,6 +53,11 @@ export const gameColumns = {
   achievementsUnlocksSyncedAt: gamesTable.achievementsUnlocksSyncedAt,
   raGameId: gamesTable.raGameId,
   raCheckedAt: gamesTable.raCheckedAt,
+  ratingCritics: gamesTable.ratingCritics,
+  ratingCriticsCount: gamesTable.ratingCriticsCount,
+  ratingUsers: gamesTable.ratingUsers,
+  ratingUsersCount: gamesTable.ratingUsersCount,
+  ratingsCheckedAt: gamesTable.ratingsCheckedAt,
 };
 
 export const curiosityColumns = {

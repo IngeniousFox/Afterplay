@@ -6,7 +6,6 @@ import {
 } from '../../hooks/curiosities';
 import { useCredentials } from '../../hooks/settings';
 import { TEAL } from '../../lib/colors';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → Game trivia: el botón que genera las curiosidades de los juegos
@@ -70,8 +69,6 @@ export const TriviaSection = (): React.JSX.Element => {
       }
       icon={Lightbulb}
       color={TEAL}
-      className={revealClass}
-      style={revealStyle(7)}
     >
       <button
         type="button"

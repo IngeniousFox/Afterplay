@@ -28,6 +28,17 @@ export const igdbSearchResponseSchema = z.array(igdbSearchGameSchema);
 export const igdbDetailGameSchema = igdbSearchGameSchema.extend({
   artworks: z.array(imageSchema).optional(),
   screenshots: z.array(imageSchema).optional(),
+  // Puntuaciones — solo en el detalle, no en SEARCH_FIELDS: el buscador no
+  // las enseña, y pedirlas en cada tecleo sería peso sin uso.
+  // aggregated_rating es la media de CRÍTICA que IGDB agrega (0-100);
+  // rating es la nota de la COMUNIDAD de IGDB (0-100, escala distinta a la
+  // de 0-10 que se ve en su web). Los dos vienen con su *_count — la
+  // muestra sobre la que se calculan, imprescindible para no enseñar un
+  // número sacado de dos votos como si fuera fiable.
+  aggregated_rating: z.number().optional(),
+  aggregated_rating_count: z.number().optional(),
+  rating: z.number().optional(),
+  rating_count: z.number().optional(),
   // Identidades del juego en tiendas externas — de aquí sale el appid de
   // Steam, filtrando por external_game_source (ver el porqué en igdb/api.ts).
   external_games: z
@@ -45,6 +56,19 @@ export const igdbDetailGameSchema = igdbSearchGameSchema.extend({
 });
 
 export const igdbDetailResponseSchema = z.array(igdbDetailGameSchema);
+
+// Puntuaciones de un LOTE de juegos (el "Refresh all" de Ajustes): solo el id
+// y los cuatro campos de notas — nada de covers ni companies, que a 400
+// juegos por petición serían peso muerto multiplicado.
+export const igdbRatingsBatchResponseSchema = z.array(
+  z.object({
+    id: z.number(),
+    aggregated_rating: z.number().optional(),
+    aggregated_rating_count: z.number().optional(),
+    rating: z.number().optional(),
+    rating_count: z.number().optional(),
+  }),
+);
 
 // Respuesta del endpoint external_games para el backfill por lotes: una fila
 // por (juego, tienda), ya filtrada a Steam en la propia query.

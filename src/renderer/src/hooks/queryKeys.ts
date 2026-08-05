@@ -51,6 +51,7 @@ export const queryKeys = {
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
     details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,
+    ratingsStatus: ['igdb', 'ratingsStatus'] as const,
   },
   hltb: {
     times: (title: string, releaseYear: number | null) => ['hltb', title, releaseYear] as const,

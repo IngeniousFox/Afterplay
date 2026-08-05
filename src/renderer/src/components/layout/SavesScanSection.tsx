@@ -11,7 +11,7 @@ import {
   useSetSaveBackupEnabled,
 } from '../../hooks/saves';
 import { formatBytes, pluralize } from '../../lib/format';
-import { expandClass, revealClass, revealStyle } from '../../lib/styles';
+import { expandClass } from '../../lib/styles';
 import { CloudIdentitySection } from './CloudIdentitySection';
 import { CloudInventorySection } from './CloudInventorySection';
 import { SettingsCard } from './SettingsCard';
@@ -93,12 +93,10 @@ export const SavesScanSection = (): React.JSX.Element => {
   return (
     <SettingsCard
       layout="column"
-      title="Game saves"
-      description="Find which installed games Afterplay can back up, and pick the ones you want in the cloud."
+      title="Cloud saves"
+      description="Scan your installed games to find the ones whose save files Afterplay can back up, then choose which ones to keep safe in the cloud. Nothing uploads until you turn a game on."
       icon={CloudUpload}
       color={BLUE}
-      className={revealClass}
-      style={revealStyle(5)}
       // Arriba a la derecha, a la altura del título: debajo puede aparecer
       // una lista de veinte juegos, y en una fila centrada el botón acababa
       // flotando en mitad de la nada.

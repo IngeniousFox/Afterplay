@@ -135,6 +135,27 @@ export const gamesTable = sqliteTable('games', {
   // una fuente externa se graba en piedra — se graba CON FECHA y el barrido
   // periódico lo vuelve a preguntar (los sets se publican cada semana).
   raCheckedAt: int({ mode: 'timestamp_ms' }),
+  // ── Puntuaciones de IGDB ─────────────────────────────────────────────────
+  // Dos números que a propósito NO se funden en uno (decisión de producto:
+  // se investigaron Metacritic/RAWG/OpenCritic/MobyGames/Giant Bomb a fondo y
+  // se descartaron — sin API pública, sin cobertura retro real, o de pago).
+  // ratingCritics es la media de CRÍTICA que IGDB agrega, y solo existe de
+  // forma fiable desde que existen agregadores (~2000): un juego de SNES no
+  // la tiene. ratingUsers es la nota de la COMUNIDAD de IGDB, y ahí es al
+  // revés — los clásicos retro llevan dos décadas acumulando votos, mientras
+  // que un juego recién salido puede tener aún pocos. Enseñando los DOS por
+  // separado, cada ficha muestra lo que de verdad tiene en vez de un hueco o
+  // un número mezclado (total_rating) que ya no dice de quién es la opinión.
+  ratingCritics: real(),
+  ratingCriticsCount: int(),
+  ratingUsers: real(),
+  ratingUsersCount: int(),
+  // Cuándo se preguntó por última vez — misma convención que
+  // steamAppIdCheckedAt: null = nunca (juegos dados de alta antes de esta
+  // función), con fecha = ya preguntado, aunque las notas salieran vacías.
+  // Sin pasada de fondo que lo vigile: un juego recién salido gana votos
+  // cada semana, así que el refresco es manual desde la ficha (RatingsRow).
+  ratingsCheckedAt: int({ mode: 'timestamp_ms' }),
 });
 
 export const sessionsTable = sqliteTable('sessions', {

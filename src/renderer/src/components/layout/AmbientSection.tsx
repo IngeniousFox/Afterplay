@@ -1,7 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import { useAmbientIdleMinutes, useSetAmbientIdleMinutes } from '../../hooks/settings';
 import { VIOLET } from '../../lib/colors';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { Dropdown } from '../library/add-game/Dropdown';
 import { SettingsCard } from './SettingsCard';
 
@@ -42,8 +41,6 @@ export const AmbientSection = (): React.JSX.Element => {
       textClassName="min-w-0 flex-1"
       icon={Sparkles}
       color={VIOLET}
-      className={revealClass}
-      style={revealStyle(6)}
     >
       <div className="w-44 flex-none">
         <Dropdown
@@ -51,9 +48,10 @@ export const AmbientSection = (): React.JSX.Element => {
           options={[...OPTIONS]}
           onChange={(next) => setMinutes.mutate(Number(next))}
           renderOption={(option) => LABELS[option]}
-          // Hacia arriba: esta tarjeta vive abajo del modal y el panel se
-          // salía por el borde inferior.
-          openDirection="up"
+          // Hacia abajo: en la pestaña General esta tarjeta vive arriba del
+          // panel — hacia arriba el desplegable se recortaba contra el borde
+          // superior del área con scroll.
+          openDirection="down"
         />
       </div>
     </SettingsCard>

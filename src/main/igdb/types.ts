@@ -13,7 +13,36 @@ export type IgdbSearchResult = {
   summary: string | null;
 };
 
-export type IgdbGameDetail = {
+// Las cuatro puntuaciones que se guardan en la fila del juego (ver
+// schema.ts para el porqué de mantenerlas separadas). Nombre compartido con
+// el patch de refresco manual (igdb:refreshRatings) — es la misma forma en
+// los dos sitios, así que un solo tipo cubre ambos.
+export type GameRatings = {
+  ratingCritics: number | null;
+  ratingCriticsCount: number | null;
+  ratingUsers: number | null;
+  ratingUsersCount: number | null;
+};
+
+// Estado del bloque Ratings de Ajustes: cuántos juegos tienen alguna nota y
+// cuántos no se han preguntado nunca (los dados de alta antes de que esta
+// función existiera).
+export type RatingsStatus = {
+  total: number;
+  withRatings: number;
+  neverChecked: number;
+};
+
+// Resumen del "Refresh all": cuántos respondió IGDB (updated) y cuántos de
+// ellos traen alguna nota — la diferencia con total son juegos que ya no
+// están en el catálogo (rarísimo) y se quedan como estaban.
+export type RatingsRefreshSummary = {
+  total: number;
+  updated: number;
+  withRatings: number;
+};
+
+export type IgdbGameDetail = GameRatings & {
   igdbId: number;
   // Appid de Steam tal cual viene ATADO a este juego en la misma respuesta
   // (external_games) — gratis, sin petición extra. Puede no ser el appid con

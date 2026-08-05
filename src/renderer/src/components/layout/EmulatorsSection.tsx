@@ -38,11 +38,9 @@ export const EmulatorsSection = (): React.JSX.Element => {
     <SettingsCard
       layout="column"
       title="Emulators"
-      description="Watched like any game — sessions they generate land in Sessions as pending, for you to assign to the right game."
+      description="Add your emulators here and Afterplay will watch them like any other game. Time played in one lands in Sessions as pending, for you to assign to the right game."
       icon={Cpu}
       color={VIOLET}
-      className={revealClass}
-      style={revealStyle(5)}
     >
       {emulators.length > 0 && (
         <div className="flex flex-col gap-1.5">

@@ -34,6 +34,7 @@ import { CoverThumb } from './add-game/CoverThumb';
 import { ExecutablePathField } from './add-game/ExecutablePathField';
 import { FormSection } from './add-game/FormSection';
 import { InstallDirectoryField } from './add-game/InstallDirectoryField';
+import { ScanAutofillRow } from './add-game/ScanAutofillRow';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from './add-game/styles';
 import { EndlessSection } from './edit-game/EndlessSection';
 import {
@@ -311,6 +312,14 @@ export const EditGameModal = ({
             className={revealClass}
             style={revealStyle(4)}
           >
+            {/* El mismo atajo que en Add Game: si el juego está en una
+                carpeta vigilada, el escaneo ya sabe su ruta, tamaño y .exe —
+                un clic rellena los campos de abajo. Aquí es incluso más
+                típico: un juego dado de alta a mano sin rutas que se instala
+                DESPUÉS se completa desde Edit, y sin este botón tocaba
+                buscar carpeta y ejecutable a mano otra vez. */}
+            <ScanAutofillRow title={game.title} igdbId={game.igdbId} fillExecutable={!isEmulated} />
+
             <InstallDirectoryField showOptionalHint={false} />
 
             {/* Un juego emulado no tiene .exe propio (EMULADORES.md §5) —

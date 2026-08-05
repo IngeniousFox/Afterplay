@@ -8,7 +8,6 @@ import {
 } from '../../hooks/memories';
 import { useCredentials } from '../../hooks/settings';
 import { VIOLET } from '../../lib/colors';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → Your story (AFTERPLAY-LOOP.md §3.6): la tarjeta de los recaps,
@@ -83,8 +82,6 @@ export const MemoriesSection = (): React.JSX.Element => {
       }
       icon={BookOpen}
       color={VIOLET}
-      className={revealClass}
-      style={revealStyle(8)}
     >
       <div className="flex flex-none flex-col items-stretch gap-1.5">
         {running ? (

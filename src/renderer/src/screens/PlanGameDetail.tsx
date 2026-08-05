@@ -5,6 +5,7 @@ import { AchievementsSection } from '../components/library/detail/AchievementsSe
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
 import { DetailsCard } from '../components/library/detail/DetailsCard';
+import { RatingsCard } from '../components/library/detail/RatingsCard';
 import { EditNotesModal } from '../components/library/detail/EditNotesModal';
 import { HeroBanner } from '../components/library/detail/HeroBanner';
 import { HistoryList } from '../components/library/detail/HistoryList';
@@ -146,7 +147,13 @@ export const PlanGameDetail = ({
             <div className={revealClass} style={revealStyle(2)}>
               <HowLongToBeatCard game={game} markerHours={0} markerScope="total" />
             </div>
+            {/* En un planeado, las notas son directamente material de
+                decisión: cuánto dura y si vale la pena, una debajo de la
+                otra, ANTES de comprometerte a jugarlo. */}
             <div className={revealClass} style={revealStyle(3)}>
+              <RatingsCard game={game} />
+            </div>
+            <div className={revealClass} style={revealStyle(4)}>
               <DetailsCard game={game} />
             </div>
           </div>

@@ -10,8 +10,9 @@ import {
 } from '../../hooks/images';
 import { AMBER, BLUE, GRAY, GREEN } from '../../lib/colors';
 import { formatBytes } from '../../lib/format';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
+import { UsageBreakdownBar } from './UsageBreakdownBar';
+import type { UsageSegment } from './UsageBreakdownBar';
 
 // Ajustes → Images: qué ocupa en tu disco lo que la app se ha ido bajando, y
 // las dos únicas cosas que se pueden querer hacer con ello — tirar lo que ya
@@ -39,62 +40,21 @@ const buttonClass =
 
 const BAR_CLASS = 'flex h-2.5 gap-0.5 overflow-hidden rounded-full';
 
-// Una carpeta que existe pero pesa cuatro pelos sigue mereciendo un trocito
-// visible: sin mínimo, "18 MB de logros" desaparece del todo al lado de 650
-// MB de capturas y parece que no está.
-const MIN_SEGMENT_PERCENT = 2;
-
 // Lo que dura la confirmación de la limpieza antes de devolverle el renglón
 // al estado real. Suficiente para leerla sin buscarla, corto para que no se
 // quede a vivir ahí (que es justo lo que pasaba cuando no caducaba nunca).
 const CONFIRMATION_MS = 5000;
 
-type Segment = { type: ImageCacheType; label: string; color: string; bytes: number };
-
-const segmentsOf = (usage: ImageCacheUsage): Segment[] =>
+// El reparto por carpeta, con la clave de cada segmento siendo su tipo — la
+// barra y su leyenda (con el hover sincronizado de Status Breakdown) viven
+// en UsageBreakdownBar, compartida con Local copies.
+const segmentsOf = (usage: ImageCacheUsage): UsageSegment[] =>
   FOLDERS.map((folder) => ({
-    ...folder,
+    key: folder.type,
+    label: folder.label,
+    color: folder.color,
     bytes: usage.byType.find((entry) => entry.type === folder.type)?.bytes ?? 0,
   })).filter((segment) => segment.bytes > 0);
-
-// El reparto por carpeta. La leyenda va en rejilla de dos columnas con el
-// tamaño alineado a la derecha, no en flex-wrap: con cuatro etiquetas de
-// ancho distinto, envolver dejaba una fila de tres y otra de una, con las
-// cifras cayendo cada una en un sitio.
-const UsageBreakdown = ({ segments }: { segments: Segment[] }): React.JSX.Element => {
-  const total = segments.reduce((sum, segment) => sum + segment.bytes, 0);
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className={BAR_CLASS}>
-        {segments.map((segment) => (
-          <div
-            key={segment.type}
-            className="h-full rounded-full"
-            style={{
-              width: `${Math.max(MIN_SEGMENT_PERCENT, (segment.bytes / total) * 100)}%`,
-              background: segment.color,
-            }}
-          />
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-x-5 gap-y-1.5">
-        {segments.map((segment) => (
-          <div key={segment.type} className="flex items-center gap-1.75 text-[11px]">
-            <div
-              className="h-1.5 w-1.5 flex-none rounded-full"
-              style={{ background: segment.color }}
-            />
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">{segment.label}</span>
-            <span className="flex-none font-semibold tabular-nums text-foreground">
-              {formatBytes(segment.bytes)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 // Mientras se redescarga, la barra de reparto deja su sitio a la de progreso:
 // es el mismo hueco y la misma forma, así que la tarjeta no da un salto al
@@ -183,8 +143,6 @@ export const ImagesSection = (): React.JSX.Element => {
       description="Covers, heroes, achievement icons and screenshots, kept on your disk so the app works offline and instantly."
       icon={Images}
       color={BLUE}
-      className={revealClass}
-      style={revealStyle(8)}
       headerRight={
         <div className="flex flex-none items-center gap-2">
           <button
@@ -237,7 +195,7 @@ export const ImagesSection = (): React.JSX.Element => {
         {running && progress ? (
           <RedownloadBar done={progress.done} total={progress.total} />
         ) : segments.length > 0 ? (
-          <UsageBreakdown segments={segments} />
+          <UsageBreakdownBar segments={segments} />
         ) : (
           usage && (
             <div className="text-[11px] text-muted-foreground">

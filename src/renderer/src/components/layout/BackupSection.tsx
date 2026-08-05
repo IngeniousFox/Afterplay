@@ -1,7 +1,6 @@
 import { FolderOpen, HardDriveDownload } from 'lucide-react';
 import { useState } from 'react';
 import { useCreateManualBackup } from '../../hooks/backup';
-import { revealClass, revealStyle } from '../../lib/styles';
 import { SettingsCard } from './SettingsCard';
 import { TEAL } from '../../lib/colors';
 
@@ -24,13 +23,11 @@ export const BackupSection = (): React.JSX.Element => {
   return (
     <SettingsCard
       layout="row"
-      title="Backups"
-      description="On top of the automatic daily copies, save one right now wherever you want."
+      title="Data backups"
+      description="Your library, sessions and stats live in one small database file, and Afterplay already keeps a rotating daily copy of it. This saves an extra one right now, wherever you want. Game save files are separate — see the Game saves tab."
       textClassName="min-w-0 flex-1"
       icon={HardDriveDownload}
       color={TEAL}
-      className={revealClass}
-      style={revealStyle(4)}
       extra={
         <>
           {savedPath && (

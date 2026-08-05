@@ -40,6 +40,14 @@ export type GameEnrichment = {
   // tiene que volver a preguntar por él.
   steamAppId: number | null;
   steamAppIdCheckedAt: Date;
+  // Puntuaciones — mismo viaje gratis que el resto: ya vienen en el detalle
+  // que se pide de todas formas, así que el juego nace con sus notas de
+  // salida en vez de con la ficha vacía hasta el primer refresco manual.
+  ratingCritics: number | null;
+  ratingCriticsCount: number | null;
+  ratingUsers: number | null;
+  ratingUsersCount: number | null;
+  ratingsCheckedAt: Date;
 };
 
 export const resolveGameEnrichment = async (
@@ -105,5 +113,10 @@ export const resolveGameEnrichment = async (
     hltbCompletionist: hltb?.hltbCompletionist ?? null,
     steamAppId,
     steamAppIdCheckedAt: new Date(),
+    ratingCritics: detail.ratingCritics,
+    ratingCriticsCount: detail.ratingCriticsCount,
+    ratingUsers: detail.ratingUsers,
+    ratingUsersCount: detail.ratingUsersCount,
+    ratingsCheckedAt: new Date(),
   };
 };

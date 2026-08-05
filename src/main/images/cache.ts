@@ -90,9 +90,19 @@ const ATTEMPTS = 3;
 // Un 404 no es contención: es una respuesta definitiva. Reintentarlo tres
 // veces con espera era triplicar peticiones muertas por cada imagen que ya
 // no existe — y con un juego entero de iconos rotos, cientos de ellas.
+//
+// PERO no todo 4xx es definitivo. El 429 (Too Many Requests) es justo lo
+// contrario: contención pura, y la provoca la propia app — una lista de
+// cientos de juegos montando sus carátulas a la vez es exactamente la
+// ráfaga que el CDN castiga. Tratarlo como permanente (bug real) vetaba
+// esas URLs para TODA la sesión: juegos sueltos sin imagen, distintos en
+// cada arranque según a cuáles les tocara el rate limit, que se "curaban"
+// solos al reiniciar. 408/425 son timeouts/contención del mismo estilo.
+const RETRYABLE_4XX = new Set([408, 425, 429]);
+
 const isDefinitive = (error: unknown): boolean => {
   const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-  return status !== undefined && status >= 400 && status < 500;
+  return status !== undefined && status >= 400 && status < 500 && !RETRYABLE_4XX.has(status);
 };
 
 // Y las que ya fallaron así NO se vuelven a pedir mientras la app viva: la
