@@ -123,4 +123,10 @@ export const queryKeys = {
     credentials: ['settings', 'credentials'] as const,
     syncFailure: ['settings', 'syncFailure'] as const,
   },
+  // La versión instalada — el pie de Ajustes. No cambia nunca en caliente
+  // (solo con una actualización que reinicia la app), por eso vive fuera de
+  // settings.*: no es un ajuste, es un dato de fábrica del propio binario.
+  window: {
+    version: ['window', 'version'] as const,
+  },
 };

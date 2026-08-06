@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import {
+  useAppVersion,
   useOpenAtLogin,
   useSetOpenAtLogin,
   useSetTimeFormat,
@@ -123,6 +124,7 @@ export const SettingsModal = ({
   const setOpenAtLogin = useSetOpenAtLogin();
   const { data: timeFormat = '24h' } = useTimeFormat();
   const setTimeFormat = useSetTimeFormat();
+  const { data: appVersion } = useAppVersion();
 
   // Radix desmonta el contenido al cerrar, así que esto se re-evalúa en cada
   // apertura: normalmente General, y Connections si venimos del primer
@@ -186,6 +188,15 @@ export const SettingsModal = ({
             </button>
           );
         })}
+        {/* La versión instalada, al pie del sidebar: visible sin importar en
+            qué pestaña estés (no es un ajuste de ninguna pestaña concreta,
+            es un dato del propio binario) y fuera del scroll de las
+            pestañas — mt-auto la empuja al fondo del panel. */}
+        {appVersion && (
+          <div className="mt-auto px-2.5 pt-2 text-[10.5px] font-semibold text-muted-foreground/50">
+            Afterplay v{appVersion}
+          </div>
+        )}
       </div>
 
       {/* ── Panel de la pestaña activa ──

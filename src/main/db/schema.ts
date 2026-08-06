@@ -1,4 +1,4 @@
-import { int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { RecapPayload } from '../../shared/memory/payload';
 
 // Nada de `check()` SQL en columnas tipo-enum (type/milestone/datePrecision/
@@ -305,42 +305,56 @@ export const sessionsTable = sqliteTable('sessions', {
   // las queries de lectura (ver getGameById).
 });
 
-export const iterationsTable = sqliteTable('iterations', {
-  id: int().primaryKey({ autoIncrement: true }),
-  gameId: int()
-    .notNull()
-    .references(() => gamesTable.id, { onDelete: 'cascade' }),
-  label: text().notNull(),
-  playedPlatform: text().notNull(),
-  origin: text().notNull(),
-  format: text({ enum: ['digital', 'physical'] }),
-  manualTotalPlayed: real(),
-  // Rango 1-5 validado en TypeScript (ver $type abajo), no en SQL — mismo
-  // motivo que el resto del archivo.
-  rating: int().$type<1 | 2 | 3 | 4 | 5>(),
-  extraContent: int({ mode: 'boolean' }).notNull().default(false),
-  // Modelo v2: sin startSessionId/endSessionId — las fechas del playthrough
-  // se derivan de sus sesiones y su log de state_events (ver getGameById).
-});
+export const iterationsTable = sqliteTable(
+  'iterations',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    gameId: int()
+      .notNull()
+      .references(() => gamesTable.id, { onDelete: 'cascade' }),
+    label: text().notNull(),
+    playedPlatform: text().notNull(),
+    origin: text().notNull(),
+    format: text({ enum: ['digital', 'physical'] }),
+    manualTotalPlayed: real(),
+    // Rango 1-5 validado en TypeScript (ver $type abajo), no en SQL — mismo
+    // motivo que el resto del archivo.
+    rating: int().$type<1 | 2 | 3 | 4 | 5>(),
+    extraContent: int({ mode: 'boolean' }).notNull().default(false),
+    // Modelo v2: sin startSessionId/endSessionId — las fechas del playthrough
+    // se derivan de sus sesiones y su log de state_events (ver getGameById).
+  },
+  // SQLite NO indexa las claves foráneas solo — cada "las iteraciones de
+  // este juego" era un escaneo completo de la tabla, multiplicado por juego
+  // en las queries por-fila (la nota del plan en getPlannedGames, la carga
+  // de la ficha…). Con biblioteca de cientos, se notaba al entrar al Plan.
+  (table) => [index('iterations_game_idx').on(table.gameId)],
+);
 
-export const stateEventsTable = sqliteTable('state_events', {
-  id: int().primaryKey({ autoIncrement: true }),
-  iterationId: int()
-    .notNull()
-    .references(() => iterationsTable.id, { onDelete: 'cascade' }),
-  // 'plan_to_play' es SOLO una entrada de historial ("Planeado el X") — el
-  // estado actual de un juego se deriva ignorándolo (ver games.planned).
-  // Nunca aparece en ningún dropdown de estado: no se puede elegir ni
-  // volver a él.
-  type: text({
-    enum: ['started', 'completed', 'dropped', 'on_hold', 'resting', 'plan_to_play'],
-  }).notNull(),
-  occurredAt: int({ mode: 'timestamp_ms' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
-  note: text(),
-});
+export const stateEventsTable = sqliteTable(
+  'state_events',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    iterationId: int()
+      .notNull()
+      .references(() => iterationsTable.id, { onDelete: 'cascade' }),
+    // 'plan_to_play' es SOLO una entrada de historial ("Planeado el X") — el
+    // estado actual de un juego se deriva ignorándolo (ver games.planned).
+    // Nunca aparece en ningún dropdown de estado: no se puede elegir ni
+    // volver a él.
+    type: text({
+      enum: ['started', 'completed', 'dropped', 'on_hold', 'resting', 'plan_to_play'],
+    }).notNull(),
+    occurredAt: int({ mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
+    note: text(),
+  },
+  // Mismo motivo que iterations_game_idx: la FK sin índice convertía "los
+  // eventos de esta iteración" en un escaneo del historial entero.
+  (table) => [index('state_events_iteration_idx').on(table.iterationId)],
+);
 
 // EMULADORES.md §5 — un emulador no es un juego, es una herramienta que el
 // watcher vigila con el MISMO mecanismo que un .exe cualquiera (getWatchTargets

@@ -1,6 +1,8 @@
 import { ipcRenderer } from 'electron';
 
 export const windowApi = {
+  // La versión instalada — el pie de Ajustes.
+  getVersion: (): Promise<string> => ipcRenderer.invoke('window:get-version'),
   minimize: (): void => ipcRenderer.send('window:minimize'),
   maximize: (): void => ipcRenderer.send('window:maximize'),
   close: (): void => ipcRenderer.send('window:close'),

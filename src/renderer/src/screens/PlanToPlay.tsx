@@ -20,7 +20,7 @@ import {
 } from '../hooks/external';
 import { usePlannedGames, useSetPlanPinned } from '../hooks/games';
 import { useDismissRadarGame, useRadarGames } from '../hooks/radar';
-import { useScrollMemory } from '../hooks/useScrollMemory';
+import { getStoredScroll, useScrollMemory } from '../hooks/useScrollMemory';
 import { AMBER, GRAY, GREEN, TEAL, VIOLET } from '../lib/colors';
 import { STATUS_META } from '../lib/gameStatus';
 import type { PlanLens } from '../lib/plan';
@@ -35,6 +35,80 @@ import {
 } from '../lib/styles';
 
 const PLAN_COLOR = STATUS_META.plan.color;
+
+// El montaje POR TANDAS de la cola — el arreglo del lag de 1-2s al entrar.
+//
+// El coste real de abrir el Plan no era la query (cacheada, staleTime
+// Infinity): era montar de golpe cientos de PlanRow —cada una con carátula,
+// chips, medición de clamp y su resolución de imagen— ANTES del primer
+// pintado. El clic se quedaba congelado pagando todo ese trabajo por filas
+// que ni siquiera caben en pantalla.
+//
+// Ahora el primer render monta solo lo que llena el primer pantallazo, y el
+// resto entra en tandas en el TIEMPO SOBRANTE de los frames siguientes — para
+// cuando el ojo termina de leer la cabecera, la lista está completa.
+//
+// Volver de una ficha con scroll guardado necesita más filas de salida
+// (useScrollMemory restaura scrollTop al enganchar el contenedor, y si el
+// contenido es más corto el navegador recorta el salto y aterrizas donde no
+// estabas). Pero "más" NO es "todas": la primera versión montaba la cola
+// entera en ese caso, y eso era justo el 1-2s de congelación al pulsar "Back
+// to plan" — con viewTransition, la pantalla se queda en la foto CONGELADA de
+// la ficha mientras React monta, así que el retraso se veía entero como un
+// botón que no responde. Ahora se calcula cuántas filas hacen falta para que
+// el scroll guardado quepa, y el resto sigue entrando por tandas como
+// siempre.
+//
+// requestIdleCallback y NO requestAnimationFrame, y esta es la diferencia
+// entre "entra rápido" y "entra rápido Y suave": rAF dispara justo ANTES de
+// pintar cada frame, así que la tanda se montaba dentro del presupuesto del
+// mismo frame que tenía que estar dibujando la animación de entrada — el
+// trabajo se comía los 16ms y la animación daba tirones. El idle callback
+// corre en el tiempo QUE SOBRA después de pintar, y si no sobra ninguno se
+// aplaza solo: la animación cobra primero siempre, y las filas se cuelan por
+// los huecos. El `timeout` es la red de seguridad para que una pantalla que
+// nunca se queda quieta no deje la cola a medias.
+//
+// Tandas más pequeñas por el mismo motivo: 80 filas no caben en ningún hueco
+// de tiempo real, así que la tanda se pasaba de largo igual y volvía a
+// bloquear. 24 es lo que cabe holgado en un respiro de frame.
+const INITIAL_QUEUE_ROWS = 14;
+const QUEUE_ROWS_PER_BATCH = 24;
+const QUEUE_BATCH_TIMEOUT_MS = 120;
+const PLAN_SCROLL_KEY = 'plan';
+
+// Alto de fila para la cuenta del scroll restaurado. A propósito por DEBAJO
+// del mínimo real (una fila pelada mide ~156px: carátula de 128 + padding):
+// quedarse corto en el alto significa pasarse en el número de filas, que es
+// el error inofensivo — sobran unas pocas. Al revés, el scroll aterrizaría
+// más arriba de donde estabas.
+const ESTIMATED_ROW_HEIGHT = 150;
+const SCROLL_RESTORE_BUFFER_ROWS = 8;
+
+// Cuántas filas montar en el PRIMER render. Sin scroll guardado, lo que llena
+// el primer pantallazo; con él, lo justo para que el punto guardado exista.
+const initialQueueRows = (): number => {
+  const scroll = getStoredScroll(PLAN_SCROLL_KEY);
+  if (scroll <= 0) return INITIAL_QUEUE_ROWS;
+  // El scrollTop incluye todo lo de arriba (cabecera, deuda, horizonte, Up
+  // next), así que dividirlo entero entre el alto de fila se pasa de largo —
+  // otra vez el error que sobra en vez del que falta.
+  return (
+    Math.ceil((scroll + window.innerHeight) / ESTIMATED_ROW_HEIGHT) + SCROLL_RESTORE_BUFFER_ROWS
+  );
+};
+
+// requestIdleCallback existe en Chromium (y por tanto en Electron), pero se
+// deja el respaldo a rAF por si el runtime de turno no lo trae: peor cadencia,
+// nunca una cola sin terminar.
+const scheduleIdle = (run: () => void): (() => void) => {
+  if (typeof requestIdleCallback === 'function') {
+    const handle = requestIdleCallback(run, { timeout: QUEUE_BATCH_TIMEOUT_MS });
+    return () => cancelIdleCallback(handle);
+  }
+  const handle = requestAnimationFrame(run);
+  return () => cancelAnimationFrame(handle);
+};
 
 // Sección Plan to Play — pantalla PROPIA desde PLAN-TO-PLAY.md §1.
 //
@@ -60,7 +134,8 @@ const PLAN_COLOR = STATUS_META.plan.color;
 export const PlanToPlay = (): React.JSX.Element => {
   const navigate = useNavigate();
   const { data: games = [], isLoading, isError, refetch } = usePlannedGames();
-  const { attachRef, onScroll } = useScrollMemory<HTMLDivElement>('plan');
+  const { attachRef, onScroll } = useScrollMemory<HTMLDivElement>(PLAN_SCROLL_KEY);
+  const [queueLimit, setQueueLimit] = useState(initialQueueRows);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [lens, setLens] = useState<PlanLens>('oldest');
   // Plegado por defecto: lo que aún no ha salido no compite con lo jugable.
@@ -88,6 +163,15 @@ export const PlanToPlay = (): React.JSX.Element => {
 
   const { upNext, queue, horizon } = splitPlanSections(games, lens);
   const debt = computePlanDebt(games);
+
+  // La siguiente tanda, en el primer hueco de tiempo libre tras pintar la
+  // anterior (ver scheduleIdle). El cleanup cancela la pendiente si la
+  // pantalla se desmonta a mitad.
+  useEffect(() => {
+    if (queueLimit >= queue.length) return;
+    return scheduleIdle(() => setQueueLimit((limit) => limit + QUEUE_ROWS_PER_BATCH));
+  }, [queueLimit, queue.length]);
+  const visibleQueue = queueLimit >= queue.length ? queue : queue.slice(0, queueLimit);
 
   // El horizonte junta las DOS fuentes de §2.5 y las ordena por cercanía: da
   // igual quién lo apuntara, lo que se pregunta es qué llega antes.
@@ -455,9 +539,17 @@ export const PlanToPlay = (): React.JSX.Element => {
                               lente baraja el array entero y React
                               reconcilia por key sin animar nada. */}
                           <FlipList
-                            items={queue}
+                            items={visibleQueue}
                             keyOf={(game) => game.id}
                             className="flex flex-col gap-2"
+                            /* content-visibility:auto en cada envoltorio:
+                               Chromium se salta maquetar y pintar las filas
+                               fuera del viewport (el grueso de una cola de
+                               cientos), con su alto estimado reservando el
+                               hueco para que el scroll no baile. FlipList lo
+                               respeta porque mide el envoltorio, no el
+                               contenido — ver su comentario de medición. */
+                            itemClassName="[content-visibility:auto] [contain-intrinsic-size:auto_158px]"
                             renderItem={(game) => (
                               <PlanRow
                                 game={game}

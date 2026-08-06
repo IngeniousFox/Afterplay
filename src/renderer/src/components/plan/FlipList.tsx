@@ -36,6 +36,11 @@ type FlipListProps<T> = {
   // presta. Callback y no RefObject: mutar una ref ajena está prohibido por
   // el compilador de React (con razón — es de quien la creó).
   containerRef?: React.RefCallback<HTMLDivElement | null>;
+  // Clase para CADA envoltorio de fila. La cola del Plan pasa aquí su
+  // content-visibility:auto — el envoltorio es justo el elemento que puede
+  // llevarla sin que este componente la rompa midiendo dentro (ver el
+  // porqué de medir el envoltorio y no el hijo, abajo).
+  itemClassName?: string;
 };
 
 // Reordena SIN parpadeo cuando el layout de los items cambia por una causa
@@ -78,10 +83,21 @@ export const FlipList = <T,>({
   className,
   enabled = true,
   containerRef,
+  itemClassName,
 }: FlipListProps<T>): React.JSX.Element => {
   const container = useRef<HTMLDivElement | null>(null);
   const elements = useRef(new Map<Key, HTMLDivElement>());
   const previous = useRef(new Map<Key, Measured>());
+  // La secuencia de keys de la pasada anterior. FLIP anima REORDENACIONES
+  // (lentes, pin/unpin, una sección que aparece), no cambios de tamaño: si
+  // las keys y su orden son idénticos, nada se ha reordenado y no hay nada
+  // que animar por mucho que las posiciones difieran.
+  const previousKeys = useRef<Key[]>([]);
+  // Hasta cuándo puede seguir en vuelo el FLIP de cada fila: al disparar uno
+  // se apunta ahora + duración. Es lo que permite saltarse getComputedStyle
+  // en el 99% de mediciones (ver abajo) sin perder la corrección con las
+  // transiciones a medio camino.
+  const animatingUntil = useRef(new Map<Key, number>());
 
   // Sin deps: tiene que volver a medir tras CUALQUIER render que pueda haber
   // movido el DOM. Cuando nada cambió, la pasada es una comparación de
@@ -96,31 +112,64 @@ export const FlipList = <T,>({
 
     // PRIMERO medir todo, DESPUÉS animar: aplicar un transform a mitad de
     // medición contaminaría las medidas de las filas siguientes.
-    const containerShift = readTranslate(container.current as Element);
+    //
+    // Dos decisiones de esta pasada son de RENDIMIENTO puro, medidas contra
+    // una cola de cientos de filas (el lag de 1-2s al entrar al Plan):
+    //
+    //  1. Se mide el ENVOLTORIO salvo que el hijo lleve un transform INLINE
+    //     (el arrastre de Up next, el único que mueve contenido sin mover la
+    //     caja). Leer la geometría del hijo habría obligado a Chromium a
+    //     materializar las filas con content-visibility:auto fuera de
+    //     pantalla — tirando la optimización entera. Leer `style.transform`
+    //     inline es gratis (no fuerza ningún recálculo).
+    //  2. getComputedStyle (que sí fuerza recálculo de estilo) solo se paga
+    //     cuando la fila PUEDE llevar un transform en vuelo: inline puesto o
+    //     un FLIP propio disparado hace menos de DURATION. En una pasada
+    //     normal de 260 filas, cero llamadas en vez de ~800.
+    //
+    // Un transform HEREDADO (un FlipList externo deslizando esta lista
+    // entera) no necesita nada de esto: afecta por igual al contenedor y a
+    // las filas, y se cancela solo en la resta rect − containerRect —
+    // getComputedStyle devuelve únicamente el transform PROPIO del elemento.
+    const measuredAt = performance.now();
     for (const [key, element] of elements.current) {
-      const target = (element.firstElementChild as HTMLElement | null) ?? element;
+      const child = element.firstElementChild as HTMLElement | null;
+      const childHasInline = child !== null && child.style.transform !== '';
+      const target = childHasInline && child ? child : element;
       const rect = target.getBoundingClientRect();
-      const wrapperShift = readTranslate(element);
-      const targetShift = target === element ? { left: 0, top: 0 } : readTranslate(target);
+
+      const mayHaveShift =
+        childHasInline ||
+        element.style.transform !== '' ||
+        (animatingUntil.current.get(key) ?? 0) > measuredAt;
+      const wrapperShift = mayHaveShift ? readTranslate(element) : { left: 0, top: 0 };
+      const childShift = childHasInline && child ? readTranslate(child) : { left: 0, top: 0 };
       const shift = {
-        left: wrapperShift.left + targetShift.left,
-        top: wrapperShift.top + targetShift.top,
+        left: wrapperShift.left + childShift.left,
+        top: wrapperShift.top + childShift.top,
       };
       next.set(key, {
         layout: {
-          // El shift del contenedor también se resta: si un FlipList EXTERNO
-          // está deslizando este bloque entero, su transform llega hasta aquí
-          // por herencia — al contenedor y a las filas por igual — y ya se
-          // cancela en la resta del rect; lo que no puede es colarse como
-          // shift propio de las filas.
-          left: rect.left - containerRect.left - (shift.left - containerShift.left),
-          top: rect.top - containerRect.top - (shift.top - containerShift.top),
+          left: rect.left - containerRect.left - shift.left,
+          top: rect.top - containerRect.top - shift.top,
         },
         shift,
       });
     }
 
-    if (enabled) {
+    // Una fila que cambia de ALTO (una sinopsis que se recorta al medirse, un
+    // botón que aparece) desplaza a todas las de abajo — y sin esta guarda el
+    // FLIP tomaba ese desplazamiento por una reordenación y lo animaba: un
+    // bandazo de la lista entera cada vez que cualquier fila se reajustaba.
+    // Las posiciones nuevas SÍ se guardan (la próxima reordenación de verdad
+    // tiene que partir de la realidad), solo se calla la animación.
+    const keys = [...elements.current.keys()];
+    const reordered =
+      keys.length !== previousKeys.current.length ||
+      keys.some((key, index) => key !== previousKeys.current[index]);
+    previousKeys.current = keys;
+
+    if (enabled && reordered) {
       for (const [key, element] of elements.current) {
         const before = previous.current.get(key);
         const now = next.get(key);
@@ -139,6 +188,9 @@ export const FlipList = <T,>({
         const dy = layoutDy + before.shift.top;
         element.style.transition = 'none';
         element.style.transform = `translate(${dx}px, ${dy}px)`;
+        // La ventana en la que la próxima medición debe mirar el estilo
+        // computado de esta fila (su transición seguirá en vuelo).
+        animatingUntil.current.set(key, measuredAt + DURATION + 80);
         // Reflow forzado: sin leer una métrica de por medio, el navegador
         // funde "sin transición en el sitio viejo" y "con transición en el
         // nuevo" en un solo estilo y no anima nada.
@@ -166,6 +218,7 @@ export const FlipList = <T,>({
         return (
           <div
             key={key}
+            className={itemClassName}
             ref={(element) => {
               if (element) elements.current.set(key, element);
               else elements.current.delete(key);

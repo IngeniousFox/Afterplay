@@ -332,7 +332,23 @@ export const PlanRow = ({
                 {game.summary}
               </button>
             ) : (
-              <p className={`${SUMMARY_TEXT_CLASS} text-muted-foreground/85`}>{game.summary}</p>
+              // El MISMO line-clamp que la variante botón, aunque aquí sea
+              // decorativo (si no está recortada, recortarla no hace nada).
+              // Sin él, el primer render —donde isClamped todavía es false,
+              // porque la medida aún no ha corrido— pintaba la sinopsis
+              // ENTERA y la fila nacía con cinco líneas de alto, para encoger
+              // a dos en cuanto la medición contestaba. Ese cambio de altura
+              // movía todo lo que había debajo, y el FLIP de la lista lo leía
+              // como una reordenación y lo animaba: un bandazo por cada tanda
+              // de filas montadas. Con el clamp puesto de salida, la fila
+              // nace ya con su altura definitiva y no se mueve nada.
+              <p
+                className={`${SUMMARY_TEXT_CLASS} text-muted-foreground/85 ${
+                  expanded ? '' : 'line-clamp-2'
+                }`}
+              >
+                {game.summary}
+              </p>
             )}
           </div>
         )}

@@ -13,6 +13,12 @@ const positions = new Map<string, number>();
 // el compilador de React no ve ningún ref leído en render. Funciona porque
 // los datos de la lista están cacheados (staleTime Infinity): al volver, la
 // lista ya se pinta a altura completa y el scrollTop restaurado "cabe".
+// El scroll guardado de una pantalla, para decisiones de PRIMER render (el
+// Plan lo usa para saber si puede montar su cola por tandas o si tiene que
+// pintarla entera de golpe porque hay un scroll profundo que restaurar).
+// Lectura de una vez en un inicializador de useState — no una suscripción.
+export const getStoredScroll = (key: string): number => positions.get(key) ?? 0;
+
 export const useScrollMemory = <T extends HTMLElement>(
   key: string,
 ): { attachRef: (element: T | null) => void; onScroll: (event: React.UIEvent<T>) => void } => {

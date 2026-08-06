@@ -26,6 +26,16 @@ const useSettingMutation = <T>(
 // de esta familia solo cambian vía su propia mutation (que ya fija el valor
 // con setQueryData), nunca por otra vía — sin esto, refetcheaban de más en
 // cada mount/focus sin ningún cambio real detrás.
+// La versión instalada (SPEC: pie de Ajustes). staleTime Infinity: no hay
+// forma de que cambie mientras la app vive — solo con una actualización, que
+// reinicia el proceso entero y con él cualquier caché.
+export const useAppVersion = (): UseQueryResult<string, Error> =>
+  useQuery({
+    queryKey: queryKeys.window.version,
+    queryFn: () => window.api.window.getVersion(),
+    staleTime: Infinity,
+  });
+
 export const useOpenAtLogin = (): UseQueryResult<boolean, Error> =>
   useQuery({
     queryKey: queryKeys.settings.openAtLogin,

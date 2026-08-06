@@ -1,6 +1,12 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 
 export const registerWindowHandlers = (): void => {
+  // La versión instalada, para el pie de Ajustes — app.getVersion() lee
+  // package.json (o el manifest del build empaquetado), así que nunca hay que
+  // acordarse de mantener este número sincronizado a mano en ningún otro
+  // sitio: sube solo con cada release (ver scripts/release.ts).
+  ipcMain.handle('window:get-version', () => app.getVersion());
+
   ipcMain.on('window:minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize();
   });

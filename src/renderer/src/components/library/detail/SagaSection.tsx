@@ -161,6 +161,9 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
   const { data: libraryGames = [] } = useGames();
   const { data: plannedGames = [] } = usePlannedGames();
 
+  // Arranca por el PRINCIPIO de la saga, no por el juego que estás mirando:
+  // la sección cuenta una línea temporal, y una línea temporal se lee desde
+  // el principio. Los puntos de abajo dicen dónde estás sin moverse nadie.
   const [index, setIndex] = useState(0);
   const [pending, setPending] = useState<CollectionGame | null>(null);
   const [addTo, setAddTo] = useState<{ where: 'plan' | 'library'; game: CollectionGame } | null>(
@@ -230,7 +233,9 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           </span>
         </div>
         <div className="flex flex-none items-center gap-2.5">
-          <span className="text-[11px] text-muted-foreground tabular-nums">{members.length}</span>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {Math.min(index, maxIndex) + 1}/{members.length}
+          </span>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -273,6 +278,33 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           ))}
         </div>
       </div>
+
+      {/* Los puntos, mismo lenguaje que Screenshots: píldora que crece en el
+          activo en vez de puntos sueltos indistinguibles. Aquí además hacen
+          de mapa de la saga — con veintidós juegos, dicen de un vistazo por
+          dónde vas sin tener que contar carátulas. */}
+      {members.length > 1 && (
+        <div className="mt-3.5 flex flex-wrap items-center justify-center gap-1.5">
+          {members.map((member, i) => {
+            const active = i === Math.min(index, maxIndex);
+            return (
+              <button
+                key={member.igdbId}
+                type="button"
+                onClick={() => setIndex(i)}
+                aria-label={`Go to ${member.title}`}
+                title={member.title}
+                className="h-1.75 cursor-pointer rounded-full transition-[width,background-color,box-shadow] duration-200"
+                style={{
+                  width: active ? 18 : 7,
+                  background: active ? GREEN : 'rgba(255,255,255,.2)',
+                  boxShadow: active ? `0 0 8px ${GREEN}80` : 'none',
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {pending && (
         <WhereToAddDialog
