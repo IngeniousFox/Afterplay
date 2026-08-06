@@ -35,6 +35,7 @@ import { setAchievementsNotifier } from './steam/notify';
 import { setImagesNotifier } from './images/maintenance';
 import { closeAchievementOverlay } from './steam/notifications/overlay';
 import { startEmuWatcher, stopEmuWatcher } from './steam/emu/watcher';
+import { startSteamLivePoll, stopSteamLivePoll } from './steam/livePoll';
 import { runRaStartupPass } from './ra/backfill';
 import { startRaLivePoll, stopRaLivePoll } from './ra/livePoll';
 import { setMemoriesNotifier } from './memories/notify';
@@ -642,6 +643,10 @@ app.whenReady().then(async () => {
     // watcher vea un emulador corriendo.
     void runRaStartupPass();
     startRaLivePoll(() => watcher?.hasActiveEmulator() ?? false);
+    // Y el gemelo para Steam: los logros del juego que estés jugando AHORA,
+    // sin esperar a cerrarlo. Solo pregunta mientras el watcher vea juegos
+    // corriendo, igual que el de RA con los emuladores.
+    startSteamLivePoll(() => watcher?.getActiveGameIds() ?? []);
   });
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
   memoriesTimer = setInterval(() => void runMemoriesDailyTick(), MEMORIES_TICK_MS);
@@ -680,6 +685,7 @@ app.on('before-quit', () => {
   closeAchievementOverlay();
   stopEmuWatcher();
   stopRaLivePoll();
+  stopSteamLivePoll();
   if (syncTimer) clearInterval(syncTimer);
   if (memoriesTimer) clearInterval(memoriesTimer);
 });

@@ -443,6 +443,18 @@ export class ProcessWatcher {
     return this.active.has(`game:${gameId}`);
   }
 
+  // Qué JUEGOS (no emuladores) están corriendo AHORA. Mismo mapa en memoria
+  // que isGameRunning, sin escanear procesos ni tocar la DB. Lo consume el
+  // sondeo en vivo de logros de Steam (steam/livePoll.ts): solo tiene
+  // sentido preguntarle a Steam por lo que se está jugando en este momento.
+  getActiveGameIds(): number[] {
+    const ids: number[] = [];
+    for (const key of this.active.keys()) {
+      if (key.startsWith('game:')) ids.push(Number(key.slice('game:'.length)));
+    }
+    return ids;
+  }
+
   // ¿Hay ALGÚN emulador en marcha? Lo consume el sondeo en vivo de
   // RetroAchievements (ra/livePoll.ts): sin emulador no puede estar cayendo
   // ningún logro retro, y sondear en vacío sería ruido de red perpetuo.
