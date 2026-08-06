@@ -31,7 +31,13 @@ type Owned =
   | { kind: 'none' };
 
 type SagaSlideProps = {
-  game: CollectionGame;
+  // Lo que se PINTA, que no siempre es el capítulo tal cual: si tienes una
+  // edición concreta, aquí llega esa (ver resolveSlot).
+  title: string;
+  coverUrl: string | null;
+  // El año del CAPÍTULO, no el de la edición: ver el comentario de
+  // CollectionGameEdition.
+  releaseYear: number | null;
   owned: Owned;
   // El juego cuya ficha estás mirando: se resalta en su sitio de la línea
   // temporal y NO es clicable — ya estás en él.
@@ -39,8 +45,15 @@ type SagaSlideProps = {
   onSelect: () => void;
 };
 
-const SagaSlide = ({ game, owned, isCurrent, onSelect }: SagaSlideProps): React.JSX.Element => {
-  const coverSrc = useImageSrc(game.coverUrl, 'covers');
+const SagaSlide = ({
+  title,
+  coverUrl,
+  releaseYear,
+  owned,
+  isCurrent,
+  onSelect,
+}: SagaSlideProps): React.JSX.Element => {
+  const coverSrc = useImageSrc(coverUrl, 'covers');
   const status = owned.kind === 'library' ? getGameStatusMeta(owned.state) : null;
 
   return (
@@ -48,7 +61,7 @@ const SagaSlide = ({ game, owned, isCurrent, onSelect }: SagaSlideProps): React.
       type="button"
       onClick={isCurrent ? undefined : onSelect}
       disabled={isCurrent}
-      title={isCurrent ? `${game.title} — you're here` : game.title}
+      title={isCurrent ? `${title} — you're here` : title}
       className={`group/saga ${slideShellClass} text-left ${isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
     >
       <div
@@ -67,7 +80,7 @@ const SagaSlide = ({ game, owned, isCurrent, onSelect }: SagaSlideProps): React.
           <img
             src={coverSrc}
             loading="lazy"
-            alt={game.title}
+            alt={title}
             // Los que NO tienes se atenúan y recuperan el color al pasar por
             // encima: de un vistazo, la saga cuenta tu historia con ella —
             // "el 1 y el 2 terminados, el 3 en el Plan, el 4 ni lo tengo".
@@ -120,12 +133,10 @@ const SagaSlide = ({ game, owned, isCurrent, onSelect }: SagaSlideProps): React.
           isCurrent ? 'text-foreground' : 'text-muted-foreground group-hover/saga:text-foreground'
         }`}
       >
-        {game.title}
+        {title}
       </div>
-      {game.releaseYear !== null && (
-        <div className="text-[10.5px] text-muted-foreground/60 tabular-nums">
-          {game.releaseYear}
-        </div>
+      {releaseYear !== null && (
+        <div className="text-[10.5px] text-muted-foreground/60 tabular-nums">{releaseYear}</div>
       )}
     </button>
   );
@@ -133,6 +144,45 @@ const SagaSlide = ({ game, owned, isCurrent, onSelect }: SagaSlideProps): React.
 
 type SagaSectionProps = {
   game: GameDetail;
+};
+
+// Un hueco del carrusel: el capítulo (que fija el sitio y el año) y la
+// versión concreta que se enseña en él.
+type Slot = {
+  chapter: CollectionGame;
+  shown: { igdbId: number; title: string; coverUrl: string | null };
+  owned: Owned;
+  isCurrent: boolean;
+};
+
+// QUÉ EDICIÓN SE ENSEÑA EN CADA HUECO.
+//
+// Un capítulo puede existir en varias cajas —el original, el remaster, la
+// "Panoramic Edition" de Steam— y todas comparten hueco (ver
+// foldEditionsIntoChapters en main/igdb/api.ts). El desempate, por orden:
+//
+//  1. El juego cuya ficha estás mirando. Si tienes la Panoramic Edition y
+//     estás en ella, el "YOU'RE HERE" tiene que caer sobre la Panoramic —
+//     antes ni siquiera aparecía y la saga te ignoraba a ti mismo.
+//  2. La que tengas en biblioteca o en el Plan. La saga cuenta TU historia
+//     con ella, así que enseña tu copia y no una vanilla que no es la tuya.
+//  3. El capítulo pelado. Lo que no tienes se ve como lo publicaron.
+const resolveSlot = (
+  chapter: CollectionGame,
+  ownedByIgdbId: Map<number, Owned>,
+  currentIgdbId: number,
+): Slot => {
+  const versions = [chapter, ...chapter.editions];
+  const shown =
+    versions.find((version) => version.igdbId === currentIgdbId) ??
+    versions.find((version) => ownedByIgdbId.has(version.igdbId)) ??
+    chapter;
+  return {
+    chapter,
+    shown: { igdbId: shown.igdbId, title: shown.title, coverUrl: shown.coverUrl },
+    owned: ownedByIgdbId.get(shown.igdbId) ?? { kind: 'none' },
+    isCurrent: shown.igdbId === currentIgdbId,
+  };
 };
 
 // LA SAGA EN LA FICHA (PLAN-TO-PLAY.md §3) — los demás juegos de la serie de
@@ -150,7 +200,12 @@ type SagaSectionProps = {
 //     colección y fechas. Así que esto es "la saga en orden de salida" con el
 //     juego actual resaltado en su sitio, y cada cual lee lo que hay antes y
 //     después. No se inventa una relación que la fuente no da.
-//  3. Dato DECORATIVO (§3.5). Las colecciones de IGDB son curación
+//  3. Un hueco por CAPÍTULO, no por ficha de IGDB. El remaster, el port y la
+//     "Panoramic Edition" comparten hueco con su original y se enseña la
+//     versión que tú tienes (resolveSlot). Así una saga de tres no se
+//     convierte en una lista de siete con la misma carátula repetida, y la
+//     edición que compraste deja de ser invisible en su propia saga.
+//  4. Dato DECORATIVO (§3.5). Las colecciones de IGDB son curación
 //     comunitaria: se piden al abrir la ficha, con caché de cinco minutos y
 //     sin tabla. Sin colección, sin datos o sin conexión, la sección no
 //     aparece — nunca deja un hueco pidiendo perdón.
@@ -208,16 +263,18 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
     ownedByIgdbId.set(planned.igdbId, { kind: 'plan', gameId: planned.id });
   }
 
-  const maxIndex = Math.max(0, members.length - 1);
+  const slots = members.map((member) => resolveSlot(member, ownedByIgdbId, game.igdbId));
+
+  const maxIndex = Math.max(0, slots.length - 1);
   const trackX = -(Math.min(index, maxIndex) * (SLIDE_WIDTH + SLIDE_GAP));
 
-  const openMember = (member: CollectionGame): void => {
-    const owned = ownedByIgdbId.get(member.igdbId) ?? { kind: 'none' as const };
+  const openSlot = (slot: Slot): void => {
     // La navegación literal de §3.4: si lo tienes, a su ficha (la de
-    // biblioteca o la del Plan, según dónde viva); si no, el intermedio.
-    if (owned.kind === 'library') void navigate(`/games/${owned.gameId}`);
-    else if (owned.kind === 'plan') void navigate(`/plan/${owned.gameId}`);
-    else setPending(member);
+    // biblioteca o la del Plan, según dónde viva); si no, el intermedio —
+    // y ahí se da de alta el capítulo, no una edición suelta.
+    if (slot.owned.kind === 'library') void navigate(`/games/${slot.owned.gameId}`);
+    else if (slot.owned.kind === 'plan') void navigate(`/plan/${slot.owned.gameId}`);
+    else setPending(slot.chapter);
   };
 
   return (
@@ -234,7 +291,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
         </div>
         <div className="flex flex-none items-center gap-2.5">
           <span className="text-[11px] text-muted-foreground tabular-nums">
-            {Math.min(index, maxIndex) + 1}/{members.length}
+            {Math.min(index, maxIndex) + 1}/{slots.length}
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -267,13 +324,15 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           className="flex gap-3 transition-transform duration-320 ease-[cubic-bezier(.4,0,.2,1)]"
           style={{ transform: `translateX(${trackX}px)` }}
         >
-          {members.map((member) => (
+          {slots.map((slot) => (
             <SagaSlide
-              key={member.igdbId}
-              game={member}
-              owned={ownedByIgdbId.get(member.igdbId) ?? { kind: 'none' }}
-              isCurrent={member.igdbId === game.igdbId}
-              onSelect={() => openMember(member)}
+              key={slot.chapter.igdbId}
+              title={slot.shown.title}
+              coverUrl={slot.shown.coverUrl}
+              releaseYear={slot.chapter.releaseYear}
+              owned={slot.owned}
+              isCurrent={slot.isCurrent}
+              onSelect={() => openSlot(slot)}
             />
           ))}
         </div>
@@ -283,17 +342,17 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           activo en vez de puntos sueltos indistinguibles. Aquí además hacen
           de mapa de la saga — con veintidós juegos, dicen de un vistazo por
           dónde vas sin tener que contar carátulas. */}
-      {members.length > 1 && (
+      {slots.length > 1 && (
         <div className="mt-3.5 flex flex-wrap items-center justify-center gap-1.5">
-          {members.map((member, i) => {
+          {slots.map((slot, i) => {
             const active = i === Math.min(index, maxIndex);
             return (
               <button
-                key={member.igdbId}
+                key={slot.chapter.igdbId}
                 type="button"
                 onClick={() => setIndex(i)}
-                aria-label={`Go to ${member.title}`}
-                title={member.title}
+                aria-label={`Go to ${slot.shown.title}`}
+                title={slot.shown.title}
                 className="h-1.75 cursor-pointer rounded-full transition-[width,background-color,box-shadow] duration-200"
                 style={{
                   width: active ? 18 : 7,

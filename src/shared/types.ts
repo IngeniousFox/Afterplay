@@ -209,6 +209,7 @@ export type LaunchExecutableResult =
 
 export type {
   CollectionGame,
+  CollectionGameEdition,
   ExternalDataStatus,
   ExternalRefreshEvent,
   ExternalRefreshSummary,

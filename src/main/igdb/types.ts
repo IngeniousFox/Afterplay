@@ -55,6 +55,22 @@ export type CollectionGame = {
   // para poder decir "de la saga Fable" en la fila del horizonte — que es lo
   // que convierte un título desconocido en una noticia que te importa.
   collectionIds: number[];
+  // Otras EDICIONES de este mismo capítulo: el remaster, el port, la
+  // "Panoramic Edition". No son juegos distintos de la saga —son el mismo
+  // juego en otra caja—, así que no ocupan hueco propio en la línea temporal:
+  // viajan colgadas de su capítulo para que el carrusel pueda enseñar la
+  // versión que TÚ tienes en vez de una vanilla que no es la tuya.
+  editions: CollectionGameEdition[];
+};
+
+// Lo justo para reconocer una edición y pintarla en el sitio de su capítulo.
+// Sin fecha a propósito: la que manda en el carrusel es la del capítulo (una
+// "Panoramic Edition" de 2022 de un juego de 2014 pertenece a 2014, y poner
+// su año propio bajo la carátula parecería un fallo de ordenación).
+export type CollectionGameEdition = {
+  igdbId: number;
+  title: string;
+  coverUrl: string | null;
 };
 
 // Etiqueta de Steam con sus votos (§8) — top 8, ya ordenadas. Vocabulario de

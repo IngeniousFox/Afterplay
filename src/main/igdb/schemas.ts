@@ -123,5 +123,10 @@ export const igdbCollectionGamesResponseSchema = z.array(
     // tuya viene cada anuncio, y el nombre ya lo tiene en casa — está
     // guardado en tus propios juegos.
     collections: z.array(z.number()).optional(),
+    // Los dos que distinguen un capítulo de una edición de ese capítulo: el
+    // tipo (0 = juego principal; 8/9/10/11 = remake/remaster/expandido/port)
+    // y a quién cuelga. Ausentes en la respuesta del radar, que no los pide.
+    game_type: z.number().optional(),
+    parent_game: z.number().optional(),
   }),
 );

@@ -558,14 +558,18 @@ const COLLECTION_GAMES_LIMIT = 25;
 const collectionCache = new Map<string, { games: CollectionGame[]; expiresAt: number }>();
 const COLLECTION_CACHE_TTL_MS = 5 * 60 * 1000;
 
-const toCollectionGame = (row: {
+type CollectionRow = {
   id: number;
   name: string;
   cover?: { image_id: string };
   first_release_date?: number;
   release_dates?: { date?: number; date_format?: number | { id: number } }[];
   collections?: number[];
-}): CollectionGame => {
+  game_type?: number;
+  parent_game?: number;
+};
+
+const toCollectionGame = (row: CollectionRow): CollectionGame => {
   const release = resolveReleaseDate(row.release_dates);
   return {
     igdbId: row.id,
@@ -575,6 +579,7 @@ const toCollectionGame = (row: {
     releaseDate: release?.date ?? null,
     releaseDatePrecision: release?.precision ?? null,
     collectionIds: row.collections ?? [],
+    editions: [],
   };
 };
 
@@ -592,6 +597,37 @@ const byReleaseAsc = (a: CollectionGame, b: CollectionGame): number => {
   return left - right || a.title.localeCompare(b.title);
 };
 
+// ── Capítulos vs. EDICIONES de un capítulo ──
+//
+// `game_type = 0` (solo juegos principales) dejaba fuera algo que sí es parte
+// de tu saga: la edición concreta que tienes tú. Comprobado en vivo el
+// 2026-08-06 con la colección 3000 (Monument Valley): con el filtro viejo
+// salían tres filas —MV, MV II, MV III— y "Monument Valley: Panoramic
+// Edition", que es la que está en Steam y la que el usuario había dado de
+// alta, no aparecía por ningún lado. Ni siquiera se marcaba a sí misma con el
+// "YOU'RE HERE" al abrir su propia ficha: su saga la ignoraba.
+//
+// La ficha del vivo lo explica entera: id 203331, `game_type: 10` (Expanded
+// Game), `parent_game: 8900` (Monument Valley), `version_parent: null` — o
+// sea que el `version_parent = null` que había aquí para colar ediciones NO
+// las cuela, porque IGDB engancha estas por `parent_game`. Quien filtraba de
+// verdad era `game_type`.
+//
+// Estos cuatro tipos no son otro capítulo: son el MISMO en otra caja, y por
+// eso no ganan hueco propio en la línea temporal —eso convertiría una saga de
+// tres en una lista de siete con la misma carátula repetida— sino que se
+// pliegan sobre su capítulo. Los DLC (1), expansiones (2), packs (3, 13) y
+// updates (14) siguen fuera: esos no son ni capítulo ni edición.
+const EDITION_GAME_TYPES = [8, 9, 10, 11] as const;
+
+// Filas pedidas a IGDB, que ya no son lo mismo que capítulos devueltos: una
+// saga con muchas reediciones gasta filas sin sumar huecos. El margen sobre
+// COLLECTION_GAMES_LIMIT es de seis a uno para que el recorte lo decida
+// siempre el tope de capítulos y no el de filas — medido en vivo, las peores
+// (Resident Evil, Call of Duty, Final Fantasy, Super Mario) van de dos a
+// tres filas por capítulo.
+const COLLECTION_ROWS_LIMIT = 150;
+
 export const getCollectionGames = async (collectionIds: number[]): Promise<CollectionGame[]> => {
   assertIntegerIds(collectionIds);
   if (collectionIds.length === 0) return [];
@@ -601,15 +637,45 @@ export const getCollectionGames = async (collectionIds: number[]): Promise<Colle
   if (cached && cached.expiresAt > Date.now()) return cached.games;
 
   const body =
-    `fields name, cover.image_id, first_release_date, collections, ` +
+    `fields name, cover.image_id, first_release_date, collections, game_type, parent_game, ` +
     `release_dates.date, release_dates.date_format; ` +
-    `where collections = (${key}) & game_type = 0 & version_parent = null; ` +
-    `sort first_release_date asc; limit ${COLLECTION_GAMES_LIMIT};`;
+    // La lista sobre un campo ESCALAR es "cualquiera de estos" (comprobado en
+    // vivo): nada que ver con el `(…)` de contención sobre `collections`, que
+    // es un array. Misma sintaxis, dos significados.
+    `where collections = (${key}) & version_parent = null ` +
+    `& game_type = (0,${EDITION_GAME_TYPES.join(',')}); ` +
+    `sort first_release_date asc; limit ${COLLECTION_ROWS_LIMIT};`;
   const rows = igdbCollectionGamesResponseSchema.parse(await igdbRequest('games', body));
 
-  const games = rows.map(toCollectionGame).sort(byReleaseAsc);
+  const games = foldEditionsIntoChapters(rows).sort(byReleaseAsc).slice(0, COLLECTION_GAMES_LIMIT);
   collectionCache.set(key, { games, expiresAt: Date.now() + COLLECTION_CACHE_TTL_MS });
   return games;
+};
+
+// Cada edición va a parar a su capítulo por `parent_game`. Las huérfanas —una
+// reedición cuyo juego base no está en esta colección— se caen: sin capítulo
+// donde plegarse no tienen sitio, y darles hueco propio sería justo el
+// problema que esto viene a evitar.
+const foldEditionsIntoChapters = (rows: CollectionRow[]): CollectionGame[] => {
+  const chapters: CollectionGame[] = [];
+  const editions: CollectionRow[] = [];
+  for (const row of rows) {
+    if ((row.game_type ?? 0) === 0) chapters.push(toCollectionGame(row));
+    else if (row.parent_game !== undefined) editions.push(row);
+  }
+
+  const byIgdbId = new Map(chapters.map((chapter) => [chapter.igdbId, chapter]));
+  // En el orden en que vinieron, que es `first_release_date asc`: si tienes
+  // dos ediciones del mismo capítulo, gana la más antigua — determinista, y
+  // el caso es raro de por sí.
+  for (const row of editions) {
+    byIgdbId.get(row.parent_game as number)?.editions.push({
+      igdbId: row.id,
+      title: row.name,
+      coverUrl: row.cover ? igdbImageUrl(row.cover.image_id, 'cover_big') : null,
+    });
+  }
+  return chapters;
 };
 
 // Lo que el radar sale a buscar (§4.2): juegos de estas colecciones con fecha
