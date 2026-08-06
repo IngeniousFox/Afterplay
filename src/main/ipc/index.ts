@@ -3,12 +3,14 @@ import { registerBackupHandlers } from './backup';
 import { registerCuriositiesHandlers } from './curiosities';
 import { registerDialogHandlers } from './dialog';
 import { registerEmulatorsHandlers } from './emulators';
+import { registerExternalHandlers } from './external';
 import { registerGamesHandlers } from './games';
 import { registerHltbHandlers } from './hltb';
 import { registerIgdbHandlers } from './igdb';
 import { registerImagesHandlers } from './images';
 import { registerIterationsHandlers } from './iterations';
 import { registerMemoriesHandlers } from './memories';
+import { registerRadarHandlers } from './radar';
 import { registerSavesHandlers } from './saves';
 import { registerScanHandlers } from './scan';
 import { registerSessionsHandlers } from './sessions';
@@ -32,6 +34,7 @@ export const registerIpcHandlers = (): void => {
   registerStateEventsHandlers();
   registerSpendHandlers();
   registerIgdbHandlers();
+  registerExternalHandlers();
   registerHltbHandlers();
   registerSgdbHandlers();
   registerImagesHandlers();
@@ -41,4 +44,5 @@ export const registerIpcHandlers = (): void => {
   registerCuriositiesHandlers();
   registerMemoriesHandlers();
   registerAchievementsHandlers();
+  registerRadarHandlers();
 };

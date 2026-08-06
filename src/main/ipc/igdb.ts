@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron';
-import { eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { updateGame } from '../db/queries/games/updateGame';
 import { gamesTable } from '../db/schema';
-import { getGameDetails, getGameRatingsBatch, searchGames } from '../igdb/api';
-import type { GameRatings, RatingsRefreshSummary, RatingsStatus } from '../igdb/types';
+import { getCollectionGames, getGameDetails, searchGames } from '../igdb/api';
+import type { GameRatings } from '../igdb/types';
 
 export const registerIgdbHandlers = (): void => {
   ipcMain.handle('igdb:search', async (_event, query: string) => {
@@ -13,6 +13,13 @@ export const registerIgdbHandlers = (): void => {
 
   ipcMain.handle('igdb:getById', async (_event, igdbId: number) => {
     return getGameDetails(igdbId);
+  });
+
+  // Los juegos de una saga (PLAN-TO-PLAY.md §3.5) — bajo demanda al abrir la
+  // ficha, con caché TTL en memoria y SIN tabla: es dato decorativo y volátil.
+  // Sin conexión, esto falla y la sección simplemente no se pinta.
+  ipcMain.handle('igdb:collectionGames', async (_event, collectionIds: number[]) => {
+    return getCollectionGames(collectionIds);
   });
 
   // Volver a preguntarle a IGDB por las notas de UN juego ya dado de alta.
@@ -52,70 +59,24 @@ export const registerIgdbHandlers = (): void => {
         ratingUsersCount: detail.ratingUsersCount,
       };
 
+      // De paso se guarda todo lo demás que el detalle ya trae en la MISMA
+      // respuesta (sinopsis, sagas, fecha completa con su precisión): pedirlo
+      // cuesta cero y dejarlo sin guardar sería tirar el viaje a medias. Lo
+      // que devuelve el handler siguen siendo solo las notas, que es lo único
+      // que la card necesita para decir cómo fue.
       await withDbAccess(async () =>
-        updateGame(gameId, { ...ratings, ratingsCheckedAt: new Date() }),
+        updateGame(gameId, {
+          ...ratings,
+          summary: detail.summary,
+          igdbCollections: detail.igdbCollections,
+          releaseDate: detail.release?.date ?? null,
+          releaseDatePrecision: detail.release?.precision ?? null,
+          ...(detail.releaseYear !== null ? { releaseYear: detail.releaseYear } : {}),
+          ratingsCheckedAt: new Date(),
+        }),
       );
 
       return ratings;
     },
   );
-
-  // Estado del bloque Ratings de Ajustes — un par de COUNT, sin traer filas.
-  ipcMain.handle('igdb:ratingsStatus', async (): Promise<RatingsStatus> => {
-    const [row] = await withDbAccess(async () =>
-      getDb()
-        .select({
-          total: sql<number>`count(*)`,
-          withRatings: sql<number>`count(*) filter (where ${or(
-            isNotNull(gamesTable.ratingCritics),
-            isNotNull(gamesTable.ratingUsers),
-          )})`,
-          neverChecked: sql<number>`count(*) filter (where ${isNull(gamesTable.ratingsCheckedAt)})`,
-        })
-        .from(gamesTable),
-    );
-    return row;
-  });
-
-  // El "Refresh all" de Ajustes: las notas de TODA la biblioteca (planeados
-  // incluidos — su ficha también las enseña) en 1-2 peticiones por lotes
-  // (getGameRatingsBatch). Existe sobre todo por los juegos dados de alta
-  // ANTES de esta función, que nacieron sin notas — pero sirve igual para
-  // poner al día toda la estantería de una vez en lugar de ficha a ficha.
-  ipcMain.handle('igdb:refreshAllRatings', async (): Promise<RatingsRefreshSummary> => {
-    const games = await withDbAccess(async () =>
-      getDb().select({ id: gamesTable.id, igdbId: gamesTable.igdbId }).from(gamesTable),
-    );
-
-    // La red FUERA del candado, como siempre; y ANTES de escribir nada — si
-    // IGDB falla a mitad de los lotes, no se ha tocado ni una fila.
-    const ratingsByIgdbId = await getGameRatingsBatch(games.map((game) => game.igdbId));
-
-    const now = new Date();
-    let withRatings = 0;
-    await withDbAccess(async () =>
-      getDb().transaction(async (tx) => {
-        for (const game of games) {
-          const ratings = ratingsByIgdbId.get(game.igdbId);
-          if (ratings) {
-            if (ratings.ratingCritics !== null || ratings.ratingUsers !== null) withRatings++;
-            await tx
-              .update(gamesTable)
-              .set({ ...ratings, ratingsCheckedAt: now })
-              .where(eq(gamesTable.id, game.id));
-          } else {
-            // IGDB no devolvió el juego (ya no está en el catálogo): se
-            // estampa el "preguntado" sin pisar lo que hubiera — un dato
-            // viejo sigue siendo mejor que ninguno.
-            await tx
-              .update(gamesTable)
-              .set({ ratingsCheckedAt: now })
-              .where(eq(gamesTable.id, game.id));
-          }
-        }
-      }),
-    );
-
-    return { total: games.length, updated: ratingsByIgdbId.size, withRatings };
-  });
 };

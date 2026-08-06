@@ -3,12 +3,14 @@ import { backupApi } from './backup';
 import { curiositiesApi } from './curiosities';
 import { dialogApi } from './dialog';
 import { emulatorsApi } from './emulators';
+import { externalApi } from './external';
 import { gamesApi } from './games';
 import { hltbApi } from './hltb';
 import { igdbApi } from './igdb';
 import { imagesApi } from './images';
 import { iterationsApi } from './iterations';
 import { memoriesApi } from './memories';
+import { radarApi } from './radar';
 import { savesApi } from './saves';
 import { scanApi } from './scan';
 import { sessionsApi } from './sessions';
@@ -30,6 +32,7 @@ export const api = {
   stateEvents: stateEventsApi,
   spend: spendApi,
   igdb: igdbApi,
+  external: externalApi,
   hltb: hltbApi,
   sgdb: sgdbApi,
   images: imagesApi,
@@ -40,6 +43,7 @@ export const api = {
   curiosities: curiositiesApi,
   memories: memoriesApi,
   achievements: achievementsApi,
+  radar: radarApi,
 };
 
 export type Api = typeof api;

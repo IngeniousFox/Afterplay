@@ -30,3 +30,27 @@ export const normalizeSteamCommunityImageUrl = (url: string): string => {
   if (index === -1) return url;
   return CURRENT_BASE + url.slice(index + LEGACY_PREFIX.length);
 };
+
+// ── URLs SIN FICHERO: el otro fallo del mismo sitio ─────────────────────────
+//
+// Caso real (6-ago-2026), y no es un 404 de los de arriba sino un 403:
+//
+//   https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/4039140/
+//
+// Fíjate en cómo termina: en la barra. No hay hash, no hay .jpg. Así es como
+// GetSchemaForGame devuelve el icono de un logro cuyo desarrollador NO le ha
+// puesto ninguno todavía — típico de un juego recién anunciado o en acceso
+// anticipado. Steam manda el prefijo del directorio y ya, y el CDN contesta a
+// eso con un 403 (listar un directorio está prohibido), no con un 404.
+//
+// Sin este filtro pasaban dos cosas feas: se guardaba en la DB una URL que no
+// puede funcionar NUNCA, y como los 34 logros del juego comparten esa misma
+// URL vacía, cada vez que se abría su ficha salían 34 avisos idénticos en la
+// consola. Un icono que no existe no es un fallo de red que reintentar: es un
+// logro sin icono, que es un estado perfectamente normal.
+export const hasImageFilename = (url: string): boolean => {
+  // Sin query ni fragmento: lo que importa es el último tramo de la RUTA.
+  const path = url.split(/[?#]/)[0];
+  const lastSegment = path.slice(path.lastIndexOf('/') + 1);
+  return lastSegment.length > 0;
+};

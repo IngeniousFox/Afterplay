@@ -1,11 +1,10 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  CollectionGame,
   GameRatings,
   IgdbGameDetail,
   IgdbSearchResult,
-  RatingsRefreshSummary,
-  RatingsStatus,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useDebouncedValue } from './useDebouncedValue';
@@ -38,6 +37,26 @@ export const useIgdbDetails = (
     staleTime: Infinity,
   });
 
+// Los juegos de la saga (PLAN-TO-PLAY.md §3.5) — bajo demanda al abrir la
+// ficha. staleTime largo pero NO Infinity: es dato de catálogo ajeno que
+// puede crecer cualquier semana (justo el caso que el radar existe para
+// cazar), pero desde luego no cambia entre dos visitas seguidas a la ficha.
+// El main tiene además su propia caché TTL, así que esto solo evita el
+// viaje por IPC.
+export const useCollectionGames = (
+  collectionIds: number[],
+): UseQueryResult<CollectionGame[], Error> => {
+  // Ordenados en la key: el mismo juego devuelve sus colecciones en cualquier
+  // orden y no queremos dos entradas de caché para la misma pregunta.
+  const key = [...collectionIds].sort((a, b) => a - b);
+  return useQuery({
+    queryKey: queryKeys.igdb.collection(key),
+    queryFn: () => window.api.igdb.collectionGames(key),
+    enabled: key.length > 0,
+    staleTime: 10 * 60 * 1000,
+  });
+};
+
 // Vuelve a pedir las notas de UN juego ya dado de alta y las guarda.
 //
 // Invalida ['games'] porque las notas viven en la fila del juego, no en una
@@ -56,36 +75,7 @@ export const useRefreshGameRatings = (): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       // El conteo de Ajustes también cambia: este juego puede haber pasado
       // de "sin notas" a "con notas".
-      queryClient.invalidateQueries({ queryKey: queryKeys.igdb.ratingsStatus });
-    },
-  });
-};
-
-// Estado del bloque Ratings de Ajustes — cuántos juegos tienen alguna nota y
-// cuántos no se han preguntado nunca. staleTime corto en vez de Infinity: se
-// abre poco y su verdad cambia por debajo (altas nuevas, refrescos de ficha).
-export const useRatingsStatus = (): UseQueryResult<RatingsStatus, Error> =>
-  useQuery({
-    queryKey: queryKeys.igdb.ratingsStatus,
-    queryFn: () => window.api.igdb.ratingsStatus(),
-    staleTime: 30_000,
-  });
-
-// El "Refresh all" de Ajustes: pone al día las notas de TODA la biblioteca
-// en 1-2 peticiones por lotes. Invalida ['games'] entero — las notas viven
-// en la fila de cada juego y cualquier ficha abierta debe verlas frescas.
-export const useRefreshAllRatings = (): UseMutationResult<
-  RatingsRefreshSummary,
-  Error,
-  void,
-  unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => window.api.igdb.refreshAllRatings(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.igdb.ratingsStatus });
+      queryClient.invalidateQueries({ queryKey: queryKeys.external.status });
     },
   });
 };

@@ -1,31 +1,545 @@
+import { Bookmark, CalendarClock, Gamepad2, ListOrdered, Pin, Plus, RefreshCw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GameListScreen } from '../components/library/GameListScreen';
-import { usePlannedGames } from '../hooks/games';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { AddGameModal } from '../components/library/AddGameModal';
+import type { IgdbSearchResult } from '../../../shared/types';
+import { PlanDebtHeader } from '../components/plan/PlanDebtHeader';
+import { PlanLensChips } from '../components/plan/PlanLensChips';
+import { PlanRow } from '../components/plan/PlanRow';
+import { FlipList } from '../components/plan/FlipList';
+import { PlanSectionHeading } from '../components/plan/PlanSectionHeading';
+import { RadarRow } from '../components/plan/RadarRow';
+import { UpNextList } from '../components/plan/UpNextList';
+import { WhereToAddDialog } from '../components/library/WhereToAddDialog';
+import {
+  useExternalRefreshProgress,
+  useIsExternalRefreshRunning,
+  useRefreshPlanData,
+} from '../hooks/external';
+import { usePlannedGames, useSetPlanPinned } from '../hooks/games';
+import { useDismissRadarGame, useRadarGames } from '../hooks/radar';
+import { useScrollMemory } from '../hooks/useScrollMemory';
+import { AMBER, GRAY, GREEN, TEAL, VIOLET } from '../lib/colors';
+import { STATUS_META } from '../lib/gameStatus';
+import type { PlanLens } from '../lib/plan';
+import { computePlanDebt, splitPlanSections } from '../lib/plan';
+import { countdownLabel, releaseCountdown, releaseSortKey } from '../lib/releaseDate';
+import {
+  accentGradientStyle,
+  expandClass,
+  outlineButtonClass,
+  revealClass,
+  revealStyle,
+} from '../lib/styles';
 
-// Sección Plan to Play — el mismo aspecto que Library (grid + botón de Add
-// game), pero sobre la lista de juegos planeados: todo lo que se añade aquí
-// nace con el estado especial Plan to Play (modo 'plan' del modal) y no
-// aparece en ninguna otra parte de la app hasta pasarlo a la biblioteca.
+const PLAN_COLOR = STATUS_META.plan.color;
+
+// Sección Plan to Play — pantalla PROPIA desde PLAN-TO-PLAY.md §1.
+//
+// Nació reutilizando GameListScreen, la misma pantalla que Library, cuyo
+// propio comentario presumía de que las dos eran "~90% idénticas". Razonable
+// para nacer, pero heredó el diseño de OTRA pregunta:
+//
+//   Library → "¿qué tengo y qué estoy jugando?" → reconocimiento → parrilla
+//   Plan    → "¿qué juego a continuación?"      → DECISIÓN      → datos
+//
+// Una parrilla de 262 carátulas iguales esconde justo lo que la decisión
+// necesita. El orden vertical:
+//
+//   deuda honesta → horizonte (plegado) → Up next → la cola con sus lentes
+//
+// El horizonte arriba pero PLEGADO es el equilibrio: cerrada es un renglón
+// que no compite con lo jugable, y aún así sus noticias ("Out today!", lo
+// que el radar encontró) quedan a un clic de la entrada, no enterradas bajo
+// doscientas filas.
+//
+// Lo que NO cambia (§1.1): la búsqueda, el modal de alta en modo 'plan', la
+// ficha del planeado y toda la fontanería. La divergencia es de PRESENTACIÓN.
 export const PlanToPlay = (): React.JSX.Element => {
   const navigate = useNavigate();
   const { data: games = [], isLoading, isError, refetch } = usePlannedGames();
+  const { attachRef, onScroll } = useScrollMemory<HTMLDivElement>('plan');
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [lens, setLens] = useState<PlanLens>('oldest');
+  // Plegado por defecto: lo que aún no ha salido no compite con lo jugable.
+  const [horizonOpen, setHorizonOpen] = useState(false);
+
+  const { data: radarGames = [] } = useRadarGames();
+  const dismissRadar = useDismissRadarGame();
+  // Un descubrimiento del radar que quieres: no está en ninguna parte
+  // todavía, así que hay que preguntar dónde va (el mismo intermedio que el
+  // carrusel de la saga, §3.4).
+  const [pendingAdd, setPendingAdd] = useState<IgdbSearchResult | null>(null);
+  const [addTo, setAddTo] = useState<{ where: 'plan' | 'library'; game: IgdbSearchResult } | null>(
+    null,
+  );
+
+  const setPinned = useSetPlanPinned();
+  const refresh = useRefreshPlanData();
+  // El "ocupado" viene del MAIN, no de la mutation: la pasada sobrevive a
+  // salir de esta pantalla (y el aviso de que termino llega estes donde
+  // estes, desde la suscripcion unica de Afterplay.tsx). Sin esto, volver al
+  // Plan a mitad de refresco encontraba el boton como si no pasara nada — y
+  // un segundo clic habria arrancado una pasada duplicada.
+  const refreshing = useIsExternalRefreshRunning();
+  const progress = useExternalRefreshProgress();
+
+  const { upNext, queue, horizon } = splitPlanSections(games, lens);
+  const debt = computePlanDebt(games);
+
+  // El horizonte junta las DOS fuentes de §2.5 y las ordena por cercanía: da
+  // igual quién lo apuntara, lo que se pregunta es qué llega antes.
+  const horizonItems = [
+    ...horizon.map((game) => ({ kind: 'plan' as const, game, at: releaseSortKey(game) })),
+    ...radarGames.map((game) => ({ kind: 'radar' as const, game, at: releaseSortKey(game) })),
+  ].sort((a, b) => a.at - b.at);
+
+  // La noticia más urgente del horizonte, para susurrarla en la cabecera
+  // MIENTRAS está plegado: una sección cerrada no puede ser una caja negra
+  // justo la semana en que algo sale. "Iron Nest · Out today!" en la propia
+  // cabecera es lo que hace que plegarla por defecto no esconda nada — la
+  // lista está ordenada por cercanía, así que el primero con cuenta atrás
+  // urgente ES el titular.
+  const horizonHeadline = ((): { title: string; label: string; color: string } | null => {
+    for (const item of horizonItems) {
+      const countdown = releaseCountdown(item.game);
+      if (!countdown) continue;
+      const urgent = countdown.kind !== 'soon' || countdown.imminent ? countdown : null;
+      if (!urgent) break;
+      return {
+        title: item.game.title,
+        label: countdownLabel(urgent),
+        color: urgent.kind === 'out-now' ? GREEN : AMBER,
+      };
+    }
+    return null;
+  })();
+
+  // Vacío es vacío del PLAN: un radar con descubrimientos no convierte una
+  // lista vacía en una lista — son juegos que ni tienes ni has apuntado.
+  const isEmpty = games.length === 0;
+
+  const openGame = (id: number): void => {
+    void navigate(`/plan/${id}`);
+  };
+
+  // El juego que ACABA de cambiar de estantería por un pin/unpin, Y HACIA
+  // DÓNDE. El destino no es un adorno del estado: es lo que impide que la
+  // animación se dispare en el sitio equivocado.
+  //
+  // El bug que arregla (parpadeo real al fijar): la marca era solo el id, así
+  // que en cuanto se pulsaba el pin, la fila —que en ese instante SIGUE en la
+  // cola, porque la mutation aún no ha vuelto— se pintaba con la animación de
+  // llegada puesta. Como el keyframe arranca casi transparente, la fila se
+  // apagaba y volvía EN SU SITIO VIEJO… y después, al montarse arriba,
+  // animaba otra vez. Dos animaciones, la primera donde no tocaba.
+  //
+  // Con el destino guardado, solo la sección a la que el juego LLEGA enciende
+  // la animación; la que lo pierde no hace nada.
+  const [justMoved, setJustMoved] = useState<{ id: number; toUpNext: boolean } | null>(null);
+  const justMovedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => clearTimeout(justMovedTimer.current ?? undefined), []);
+
+  // Marcas de llegada por sección: cada fila solo anima si ESTA es su destino.
+  const landingInUpNext = justMoved?.toUpNext === true ? justMoved.id : null;
+  const landingInQueue = justMoved?.toUpNext === false ? justMoved.id : null;
+
+  const togglePin = (id: number, pinned: boolean): void => {
+    setJustMoved({ id, toUpNext: pinned });
+    clearTimeout(justMovedTimer.current ?? undefined);
+    // Ventana holgada sobre los 750ms de la animación: cubre el viaje por
+    // IPC sin arriesgarse a que una segunda pasada la re-dispare.
+    justMovedTimer.current = setTimeout(() => setJustMoved(null), 1200);
+    setPinned.mutate(
+      { id, pinned },
+      {
+        onError: () => toast.error("Couldn't update Up next."),
+      },
+    );
+  };
+
+  const runRefresh = (): void => {
+    refresh.mutate(undefined, {
+      // Solo el fallo de ARRANCAR la pasada (leer la lista de planeados). El
+      // de la pasada en si llega por evento, con su propio toast.
+      onError: () => toast.error("Couldn't start the refresh."),
+    });
+  };
+
+  // Mientras corre, el botón cuenta por dónde va. Solo la fase de SteamSpy
+  // avanza juego a juego (IGDB entero son 1-2 peticiones que vuelan), así que
+  // es la única a la que se le puede poner un porcentaje sin inventárselo: en
+  // las otras dos el botón lo dice con palabras y su barra late en vez de
+  // avanzar. Con un Plan grande esa fase son minutos.
+  const measurable = refreshing && progress?.phase === 'steam' && progress.total > 0;
+  const refreshPercent = measurable && progress ? (progress.done / progress.total) * 100 : 0;
+  const refreshLabel = !refreshing
+    ? 'Refresh data'
+    : measurable && progress
+      ? `${progress.done}/${progress.total}`
+      : progress?.phase === 'saving'
+        ? 'Saving…'
+        : 'Refreshing…';
 
   return (
-    <GameListScreen
-      title="Plan to play"
-      subtitle="Games you want to play someday — move them to your library when the day comes"
-      emptyTitle="Nothing planned yet"
-      emptyText="Add a game you want to play someday — it won't clutter your library."
-      loadingText="Loading your plan…"
-      errorText="Something went wrong loading your plan. Try again in a moment."
-      games={games}
-      isLoading={isLoading}
-      isError={isError}
-      onRetry={() => void refetch()}
-      modalMode="plan"
-      addLabel="Plan a game"
-      scrollKey="plan"
-      onSelectGame={(id) => navigate(`/plan/${id}`)}
-    />
+    <div ref={attachRef} onScroll={onScroll} className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
+      <div
+        className={`mb-5 flex items-start justify-between gap-4 ${revealClass}`}
+        style={revealStyle(0)}
+      >
+        <div>
+          {/* items-baseline y no items-center: mismo motivo que en Library —
+              con el H1 tan grande junto a una píldora pequeña, centrar por
+              CAJA deja la píldora flotando en vez de asentada. */}
+          <div className="flex items-baseline gap-2.75">
+            <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
+              Plan to play
+            </h1>
+            {!isLoading && !isError && games.length > 0 && (
+              <span className="flex-none rounded-full border border-input bg-white/[0.03] px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
+                {games.length}
+                <span className="ml-1 font-semibold text-muted-foreground">
+                  {games.length === 1 ? 'game' : 'games'}
+                </span>
+              </span>
+            )}
+          </div>
+          <p className="mt-1.25 text-[13.5px] text-muted-foreground">
+            Everything you want to play, with what it takes to decide — how long it is, how long
+            it&apos;s waited and what people say about it.
+          </p>
+        </div>
+
+        <div className="flex flex-none items-center gap-2">
+          {/* Puerta 1 de las dos del refresco (§5.1): la del día a día, solo
+              sobre los planeados. Notas, sinopsis, fecha de salida y
+              etiquetas de Steam — justo los datos que esta pantalla usa para
+              decidir, y los que más se mueven por debajo (un juego sin salir
+              gana fecha, uno recién salido gana reseñas cada semana). */}
+          {!isEmpty && (
+            <button
+              type="button"
+              onClick={runRefresh}
+              disabled={refreshing}
+              title="Re-fetch ratings, summaries, release dates and Steam tags for your plan"
+              className={`${outlineButtonClass} relative overflow-hidden border-input bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:cursor-default disabled:opacity-100`}
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : undefined} />
+              <span className="tabular-nums">{refreshLabel}</span>
+              {/* La barra DENTRO del propio botón, pegada a su borde inferior:
+                  es donde el ojo ya está mirando (acaba de pulsarlo) y no le
+                  roba sitio a nada de la cabecera. Un contador suelto dice
+                  "42/260" y hay que hacer la división de cabeza; la barra dice
+                  cuánto queda de un vistazo. En las fases sin porcentaje
+                  medible late a lo ancho en vez de mentir con un avance. */}
+              {refreshing && (
+                <span className="absolute inset-x-0 bottom-0 h-[2px] bg-white/[0.07]">
+                  <span
+                    className={`block h-full transition-[width] duration-500 ease-out ${
+                      measurable ? '' : 'animate-pulse'
+                    }`}
+                    style={{
+                      width: measurable ? `${refreshPercent}%` : '100%',
+                      background: TEAL,
+                    }}
+                  />
+                </span>
+              )}
+            </button>
+          )}
+          <Button
+            type="button"
+            onClick={() => setAddModalOpen(true)}
+            className="flex flex-none items-center gap-2 rounded-[10px] px-4.5 py-4.5 text-sm font-bold text-[#08120c] shadow-[0_4px_14px_rgba(47,220,126,0.22)]"
+            style={{ background: accentGradientStyle.background }}
+          >
+            <Plus size={16} />
+            Plan a game
+          </Button>
+        </div>
+      </div>
+
+      {/* onCreated abre la ficha del recién añadido — mismo comportamiento
+          que tenía la pantalla vieja. */}
+      <AddGameModal
+        open={addModalOpen}
+        onOpenChange={setAddModalOpen}
+        mode="plan"
+        onCreated={openGame}
+        onOpenExisting={openGame}
+      />
+
+      {isLoading ? (
+        <p className={`text-sm text-muted-foreground ${revealClass}`} style={revealStyle(1)}>
+          Loading your plan…
+        </p>
+      ) : isError ? (
+        <div className={`flex flex-col items-start gap-2.5 ${revealClass}`} style={revealStyle(1)}>
+          <p className="text-sm text-destructive">
+            Something went wrong loading your plan. Try again in a moment.
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className={`${outlineButtonClass} border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]`}
+          >
+            <RefreshCw size={14} />
+            <span>Try again</span>
+          </button>
+        </div>
+      ) : isEmpty ? (
+        <div
+          className={`flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-24 text-center ${revealClass}`}
+          style={revealStyle(1)}
+        >
+          <div className="flex h-13 w-13 items-center justify-center rounded-full bg-white/[0.04]">
+            <Gamepad2 size={24} strokeWidth={1.5} className="text-muted-foreground/50" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Nothing planned yet</p>
+            <p className="mt-0.75 text-xs text-muted-foreground">
+              Add a game you want to play someday — it won&apos;t clutter your library.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className={revealClass} style={revealStyle(1)}>
+            <PlanDebtHeader
+              debt={debt}
+              upNextCount={upNext.length}
+              queueCount={queue.length}
+              horizonCount={horizon.length}
+            />
+          </div>
+
+          {/* ── Las tres secciones, dentro de un FLIP de SECCIONES ──────
+              Cada bloque de aquí abajo puede aparecer o desaparecer entero
+              (fijar el primer juego monta Up next; soltar el último la
+              desmonta), y eso desplaza TODO lo que tiene debajo. Sin este
+              FLIP externo, la cabecera de la cola saltaba de golpe mientras
+              sus filas planeaban con el FLIP interno — dos mitades de la
+              misma sección moviéndose a velocidades distintas. Con él, la
+              sección entera (rótulo + filas) se desliza como una unidad, y
+              el FLIP interior no se entera porque mide relativo a su propio
+              contenedor, que viaja con ella.
+
+              Las secciones entran con expandClass (corta, sin retraso) y no
+              con el reveal escalonado de la carga: un retraso con fill
+              backwards deja 200ms de hueco invisible ya reservado — en la
+              carga inicial nadie lo nota, pero al aparecer en mitad de una
+              interacción se veía como un agujero que luego se rellenaba. */}
+          <FlipList
+            items={[
+              ...(horizonItems.length > 0
+                ? [
+                    {
+                      key: 'horizon',
+                      node: (
+                        /* ── En el horizonte (§2.5) ──────────────────────
+                           Lo que aún no ha salido no compite con lo jugable
+                           — es ESPERA, no decisión. Arriba pero PLEGADO:
+                           cerrada ocupa un renglón y su titular ("Out
+                           today!") queda a la vista sin competir con la
+                           cola. DOS fuentes mezcladas por fecha: tus
+                           planeados sin salir y lo que el radar (§4)
+                           descubrió — las tuyas con borde sólido, las del
+                           radar punteadas. */
+                        <section className={`mt-5 ${expandClass}`}>
+                          <PlanSectionHeading
+                            Icon={CalendarClock}
+                            color={VIOLET}
+                            label="ON THE HORIZON"
+                            count={horizonItems.length}
+                            hint={
+                              horizonOpen ? undefined : horizonHeadline ? (
+                                <span className="font-semibold">
+                                  <span className="text-foreground/80">
+                                    {horizonHeadline.title}
+                                  </span>
+                                  <span className="mx-1 text-muted-foreground/40">·</span>
+                                  <span style={{ color: horizonHeadline.color }}>
+                                    {horizonHeadline.label}
+                                  </span>
+                                </span>
+                              ) : radarGames.length > 0 ? (
+                                `not out yet · ${radarGames.length} found by radar`
+                              ) : (
+                                'not out yet'
+                              )
+                            }
+                            collapsible={{
+                              open: horizonOpen,
+                              onToggle: () => setHorizonOpen((it) => !it),
+                            }}
+                          />
+                          {horizonOpen && (
+                            <div className={`flex flex-col gap-2 ${expandClass}`}>
+                              {horizonItems.map((item) =>
+                                item.kind === 'plan' ? (
+                                  <PlanRow
+                                    key={`plan-${item.game.id}`}
+                                    game={item.game}
+                                    pinned={false}
+                                    landing={landingInQueue === item.game.id}
+                                    onSelect={() => openGame(item.game.id)}
+                                    onTogglePin={() => togglePin(item.game.id, true)}
+                                  />
+                                ) : (
+                                  <RadarRow
+                                    key={`radar-${item.game.id}`}
+                                    game={item.game}
+                                    onAdd={setPendingAdd}
+                                    onDismiss={() => dismissRadar.mutate(item.game.igdbId)}
+                                  />
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </section>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(upNext.length > 0
+                ? [
+                    {
+                      key: 'upnext',
+                      node: (
+                        /* ── Up next (§2.2) — máxima prioridad, siempre
+                           manual: se entra por un gesto tuyo, nunca lo
+                           deriva la app. */
+                        <section className={`mt-7 ${expandClass}`}>
+                          <PlanSectionHeading
+                            Icon={Pin}
+                            color={PLAN_COLOR}
+                            label="UP NEXT"
+                            count={upNext.length}
+                            hint={
+                              upNext.length >= 8
+                                ? 'if everything is a priority, nothing is'
+                                : 'the ones you actually committed to'
+                            }
+                          />
+                          {/* Lista propia porque las filas se REORDENAN
+                              arrastrando por el asa — la cola no la
+                              necesita: ahí ordenan las lentes. */}
+                          <UpNextList
+                            games={upNext}
+                            onSelect={openGame}
+                            onUnpin={(id) => togglePin(id, false)}
+                            highlightId={landingInUpNext}
+                          />
+                        </section>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(queue.length > 0
+                ? [
+                    {
+                      key: 'queue',
+                      node: (
+                        /* ── La cola, con sus lentes (§2.3-2.4) ────────── */
+                        <section className={`mt-7 ${expandClass}`}>
+                          <PlanSectionHeading
+                            Icon={ListOrdered}
+                            color={GRAY}
+                            label={upNext.length > 0 ? 'THE REST' : 'YOUR QUEUE'}
+                            count={queue.length}
+                            right={<PlanLensChips value={lens} onChange={setLens} />}
+                          />
+                          {/* FlipList y no un .map() a secas: cambiar de
+                              lente baraja el array entero y React
+                              reconcilia por key sin animar nada. */}
+                          <FlipList
+                            items={queue}
+                            keyOf={(game) => game.id}
+                            className="flex flex-col gap-2"
+                            renderItem={(game) => (
+                              <PlanRow
+                                game={game}
+                                pinned={false}
+                                landing={landingInQueue === game.id}
+                                onSelect={() => openGame(game.id)}
+                                onTogglePin={() => togglePin(game.id, true)}
+                              />
+                            )}
+                          />
+                        </section>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(queue.length === 0 && upNext.length === 0 && horizonItems.length > 0
+                ? [
+                    {
+                      key: 'all-waiting',
+                      node: (
+                        /* Todo lo planeado está sin salir: la cola vacía no
+                           es un error, es una situación con su propia frase. */
+                        <div
+                          className={`mt-7 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center ${expandClass}`}
+                        >
+                          <Bookmark
+                            size={20}
+                            strokeWidth={1.5}
+                            className="text-muted-foreground/50"
+                          />
+                          <p className="text-[13px] font-semibold text-foreground">
+                            Everything on your plan is still to come.
+                          </p>
+                          <p className="max-w-80 text-[11.5px] text-muted-foreground">
+                            Nothing here is playable tonight — open the horizon above to see
+                            what&apos;s on the way.
+                          </p>
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+            keyOf={(section) => section.key}
+            renderItem={(section) => section.node}
+          />
+        </>
+      )}
+
+      {/* El intermedio del radar: pulsaste una entrega que no tienes y hay
+          exactamente dos sitios donde puede ir. El mismo diálogo que usa el
+          carrusel de la saga — la pregunta es idéntica. */}
+      {pendingAdd && (
+        <WhereToAddDialog
+          title={pendingAdd.title}
+          onCancel={() => setPendingAdd(null)}
+          onPick={(where) => {
+            setAddTo({ where, game: pendingAdd });
+            setPendingAdd(null);
+          }}
+        />
+      )}
+      {addTo && (
+        <AddGameModal
+          open
+          onOpenChange={(next) => {
+            if (!next) setAddTo(null);
+          }}
+          mode={addTo.where === 'plan' ? 'plan' : 'library'}
+          preselected={addTo.game}
+          onCreated={(gameId) => {
+            setAddTo(null);
+            // Al añadirlo deja de ser un descubrimiento pendiente: la
+            // siguiente pasada del radar borra su fila (su igdbId ya está en
+            // tu BD), y hasta entonces se descarta para que no se vea
+            // duplicado con el juego de verdad.
+            dismissRadar.mutate(addTo.game.igdbId);
+            if (addTo.where === 'library') void navigate(`/games/${gameId}`);
+            else openGame(gameId);
+          }}
+        />
+      )}
+    </div>
   );
 };

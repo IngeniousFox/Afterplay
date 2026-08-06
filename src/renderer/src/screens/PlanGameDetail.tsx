@@ -1,9 +1,11 @@
-import { ArrowRight, ImagePlus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowRight, ImagePlus, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { AchievementsSection } from '../components/library/detail/AchievementsSection';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
+import { AboutCard } from '../components/library/detail/AboutCard';
+import { SagaSection } from '../components/library/detail/SagaSection';
 import { DetailsCard } from '../components/library/detail/DetailsCard';
 import { RatingsCard } from '../components/library/detail/RatingsCard';
 import { EditNotesModal } from '../components/library/detail/EditNotesModal';
@@ -15,7 +17,8 @@ import { PlannedPanel } from '../components/library/detail/PlannedPanel';
 import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCarousel';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
-import { useGame } from '../hooks/games';
+import { useGame, useSetPlanPinned } from '../hooks/games';
+import { STATUS_META } from '../lib/gameStatus';
 import {
   accentGradientStyle,
   destructiveIconButtonClass,
@@ -24,6 +27,8 @@ import {
   revealStyle,
   squareIconButtonClass,
 } from '../lib/styles';
+
+const PLAN_COLOR = STATUS_META.plan.color;
 
 type PlanGameDetailProps = {
   gameId: number;
@@ -45,6 +50,7 @@ export const PlanGameDetail = ({
   onPromoted,
 }: PlanGameDetailProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
+  const setPinned = useSetPlanPinned();
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [addPlannedOpen, setAddPlannedOpen] = useState(false);
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
@@ -93,6 +99,43 @@ export const PlanGameDetail = ({
                 <ArrowRight size={16} />
               </button>
 
+              {/* "Up next" (PLAN-TO-PLAY.md §2.2) también desde la ficha —
+                  hasta ahora solo se podía fijar desde la fila de la lista, y
+                  la ficha es justo donde uno acaba de decidir "este va el
+                  primero". Mismo lenguaje que su gemelo en PlanRow: tintado y
+                  ENCENDIDO siempre que está fijado (no solo al pasar el
+                  ratón, a diferencia del resto de botones cuadrados de esta
+                  fila) — el estado del botón ES la respuesta a "¿está en Up
+                  next?", no hace falta ir a mirar la lista. */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !game.planPinnedAt;
+                  setPinned.mutate(
+                    { id: game.id, pinned: next },
+                    {
+                      onSuccess: () =>
+                        toast.success(next ? 'Pinned to Up next' : 'Removed from Up next'),
+                      onError: () => toast.error("Couldn't update Up next."),
+                    },
+                  );
+                }}
+                disabled={setPinned.isPending}
+                title={game.planPinnedAt ? 'Remove from Up next' : 'Pin to Up next'}
+                className={squareIconButtonClass}
+                style={
+                  game.planPinnedAt
+                    ? {
+                        color: PLAN_COLOR,
+                        borderColor: `${PLAN_COLOR}47`,
+                        background: `${PLAN_COLOR}1c`,
+                      }
+                    : undefined
+                }
+              >
+                {game.planPinnedAt ? <PinOff size={17} /> : <Pin size={17} />}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setChangeCoverOpen(true)}
@@ -121,21 +164,35 @@ export const PlanGameDetail = ({
               </button>
             </div>
 
-            <div className={revealClass} style={revealStyle(1)}>
-              <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
-            </div>
-            <div className={revealClass} style={revealStyle(2)}>
-              <ScreenshotsCarousel igdbId={game.igdbId} />
+            {/* Arriba y abierta, al reves que en la biblioteca: aqui el
+                juego no lo has jugado, y esta es la que contesta "que era
+                esto que apunte hace ocho meses". Es la primera pregunta de
+                la ficha de un planeado, no una nota al pie. */}
+            <div className={`mt-5 ${revealClass}`} style={revealStyle(1)}>
+              <AboutCard game={game} defaultOpen />
             </div>
 
-            <div className={`mt-7.5 ${revealClass}`} style={revealStyle(3)}>
+            <div className={revealClass} style={revealStyle(2)}>
+              <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
+            </div>
+            <div className={revealClass} style={revealStyle(3)}>
+              <ScreenshotsCarousel igdbId={game.igdbId} />
+            </div>
+            {/* Y aqui vale doble: mirando un planeado, ver que el 1 y el 2
+                los tienes terminados es justo el contexto que decide si este
+                sube en la lista o se queda esperando. */}
+            <div className={revealClass} style={revealStyle(4)}>
+              <SagaSection game={game} />
+            </div>
+
+            <div className={`mt-7.5 ${revealClass}`} style={revealStyle(4)}>
               <HistoryList stateHistory={game.stateHistory} spendHistory={game.spendHistory} />
             </div>
 
             {/* Sí, también en un planeado: el catálogo de Steam responde
                 tengas el juego o no, así que "esto tiene 34 logros" es
                 información válida de algo que aún no has jugado. */}
-            <div className={revealClass} style={revealStyle(4)}>
+            <div className={revealClass} style={revealStyle(5)}>
               <AchievementsSection gameId={gameId} />
             </div>
           </div>

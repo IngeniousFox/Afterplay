@@ -17,7 +17,13 @@ export type RankableGame = {
   category: number;
   versionParent: number | null;
   parentGame: number | null;
-  collection: number | null;
+  // Las sagas de IGDB del juego. LISTA, no un id suelto: un juego pertenece a
+  // varias a la vez ("Super Mario Bros." está en "Mario Bros.", "Super Mario
+  // Bros." y "Super Mario"). Antes esto era `collection: number | null` y
+  // valía SIEMPRE null, porque el campo singular que se le pedía a IGDB está
+  // muerto (ver igdb/api.ts) — o sea, el empujón de saga dominante de más
+  // abajo nunca llegó a dispararse ni una vez.
+  collections: number[];
   hasCover: boolean;
   totalRatingCount: number | null;
   follows: number | null;
@@ -38,8 +44,9 @@ const logBoost = (value: number | null, cap: number, scale: number): number =>
 const findDominantCollection = (games: RankableGame[]): number | null => {
   const counts = new Map<number, number>();
   for (const game of games) {
-    if (game.collection === null) continue;
-    counts.set(game.collection, (counts.get(game.collection) ?? 0) + 1);
+    for (const collection of game.collections) {
+      counts.set(collection, (counts.get(collection) ?? 0) + 1);
+    }
   }
 
   let dominant: number | null = null;
@@ -98,7 +105,7 @@ const scoreGame = (
   popularityScore += logBoost(game.totalRatingCount, 55, 18);
   popularityScore += logBoost(game.follows, 25, 10);
   popularityScore += logBoost(game.hypes, 18, 8);
-  if (dominantCollection !== null && game.collection === dominantCollection) {
+  if (dominantCollection !== null && game.collections.includes(dominantCollection)) {
     popularityScore += 15;
   }
   if (game.firstReleaseYear !== null) {

@@ -28,6 +28,12 @@ type AppConfig = {
   // elige en minutos y guardar la misma unidad que se enseña evita
   // conversiones repartidas por el código.
   ambientIdleMinutes: number;
+  // Cuándo corrió por última vez el radar de secuelas (PLAN-TO-PLAY.md §4.2),
+  // en epoch ms. 0 = nunca — y esa primera pasada SIEMBRA EN SILENCIO, ver
+  // radar/pass.ts. Va aquí y no en la DB a propósito: es el reloj de ESTA
+  // máquina para no repetir la pasada, no un dato tuyo que deba viajar entre
+  // PCs (lo que sí viaja son los descubrimientos, que están en radar_games).
+  radarLastRunAt: number;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -36,6 +42,7 @@ const DEFAULT_CONFIG: AppConfig = {
   windowMaximized: false,
   scanFolders: [],
   ambientIdleMinutes: 3,
+  radarLastRunAt: 0,
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

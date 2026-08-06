@@ -282,6 +282,49 @@
   }
 }
 
+/* Una fila del Plan aterrizando en su estantería nueva tras un pin/unpin
+   (PlanRow.landing): entra con un zoom sutil desde arriba y un halo del azul
+   del Plan (#85a3d6) que se apaga. El halo es la mitad importante — al fijar,
+   la fila desaparece de la cola y reaparece en Up next, y sin una señal
+   encontrarla era trabajo del ojo. El color va en el keyframe (y no inyectado)
+   porque el azul del Plan es una constante de la SPEC, no un tema.
+
+   Tercera pasada, y las dos cosas que se quitaron son las que la hacían
+   sentirse rota:
+
+   · `opacity: 0` de salida. Una fila que ENTRA puede aparecer de la nada,
+     pero el hueco que ocupa ya está reservado por el layout — así que el
+     arranque invisible se leía como un parpadeo del listado, no como una
+     llegada. Empieza al 30%: se materializa, no se enciende.
+   · `scale()`. Encoger una fila dentro de una columna la despega de sus
+     vecinas y por un instante parece que se solapan. Solo sube: el
+     desplazamiento vertical ya cuenta la llegada sin deformar nada.
+
+   Queda un movimiento único y continuo con la curva estándar de entrada de la
+   casa (cubic-bezier(.22,1,.36,1), la misma de Screenshots/Journey/TV): sube
+   y se asienta en el primer 40%, y el halo se apaga solo durante el resto —
+   así el gesto termina en calma en vez de cortarse. */
+@keyframes afterplay-pin-land {
+  0% {
+    opacity: 0.3;
+    transform: translateY(-6px);
+    box-shadow:
+      0 0 0 1px rgba(133, 163, 214, 0.55),
+      0 0 22px rgba(133, 163, 214, 0.38);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow:
+      0 0 0 1px rgba(133, 163, 214, 0),
+      0 0 22px rgba(133, 163, 214, 0);
+  }
+}
+
 /* El anillo de progreso de logros dibujándose al entrar: arranca vacío
    (offset = circunferencia completa, que el componente inyecta en
    --afterplay-ring-c) y se cierra hasta el valor que dejó puesto inline.

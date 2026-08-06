@@ -14,13 +14,15 @@ import { deleteGame } from '../db/queries/games/deleteGame';
 import { purgeGameSaves } from '../saves/orchestrator';
 import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
-import { getPlannedGames } from '../db/queries/games/getPlannedGames';
+import { getPlannedGames, reorderUpNext, setPlanPinned } from '../db/queries/games/getPlannedGames';
 import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
 import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
 import { cacheImage } from '../images/cache';
 import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
+import { getSteamSpyData } from '../steamspy/api';
+import { withDbAccess } from '../db';
 
 // Fire-and-forget a propósito: crear/editar un juego no debe esperar a que
 // termine de bajar la imagen de un CDN externo, eso haría el guardado lento
@@ -39,6 +41,26 @@ const warmImageCache = (game: Pick<GameRow, 'coverUrl' | 'heroUrl'>): void => {
   }
 };
 
+// Etiquetas y reseñas de Steam del juego recién dado de alta (PLAN-TO-PLAY.md
+// §6). Fire-and-forget por el mismo motivo que la caché de imágenes: guardar
+// un juego no puede esperar a un tercero gratuito, y la ruta del botón "Add"
+// ya se cuidó una vez de no alargarla. Si SteamSpy no contesta, el refresco
+// por lotes lo recogerá — y mientras tanto el juego se queda sin chips, que
+// es exactamente lo mismo que le pasa a cualquier juego de consola.
+const warmSteamSpy = (game: Pick<GameRow, 'id' | 'steamAppId'>): void => {
+  if (game.steamAppId === null) return;
+  void getSteamSpyData(game.steamAppId)
+    .then(async (data) => {
+      if (!data) return;
+      await withDbAccess(async () =>
+        updateGame(game.id, { ...data, steamSpyCheckedAt: new Date() }),
+      );
+    })
+    .catch((error) => {
+      console.error('[steamspy] fallo guardando etiquetas del alta:', error);
+    });
+};
+
 export const registerGamesHandlers = (): void => {
   handleDb('games:getAll', async () => {
     return getGames();
@@ -51,6 +73,7 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
     const game = await createGameWithDetails(input);
     warmImageCache(game);
+    warmSteamSpy(game);
     // Sus curiosidades del modo ambiente, de fondo (mismo espíritu que la
     // caché de imágenes): el guardado no espera a Wikipedia ni a la API.
     generateCuriositiesInBackground(game);
@@ -69,6 +92,10 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
     const game = await createPlannedGame(input);
     warmImageCache(game);
+    // Las etiquetas SÍ, a diferencia de las curiosidades: SteamSpy contesta
+    // sobre el juego tengas la cuenta que tengas, y las etiquetas son justo
+    // uno de los datos con los que la pantalla del Plan se decide.
+    warmSteamSpy(game);
     // Curiosidades NO aquí: un Plan to Play puede ser un juego que ni ha
     // salido todavía, del que no se sabe nada — pedirle trivia al modelo en
     // ese momento es pagar por un "no lo sé" seguro, y encima lo dejaría
@@ -86,6 +113,18 @@ export const registerGamesHandlers = (): void => {
     // planear un juego no es haberlo jugado.
     void queueAchievementsRefreshForGame(game.id, { notify: false });
     return game;
+  });
+
+  // "Up next" (PLAN-TO-PLAY.md §2.2) — fijar/soltar un planeado como
+  // prioridad de verdad. Un solo campo, sin nada externo que resolver.
+  handleDb('games:setPlanPinned', async (_event, id: number, pinned: boolean) => {
+    return setPlanPinned(id, pinned);
+  });
+
+  // Y reordenarlos arrastrando: reparte los timestamps de planPinnedAt que ya
+  // existen en el orden nuevo (ver la query para el porqué).
+  handleDb('games:reorderUpNext', async (_event, orderedIds: number[]) => {
+    return reorderUpNext(orderedIds);
   });
 
   handleDb('games:promote', async (_event, input: PromotePlannedGameInput) => {

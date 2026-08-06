@@ -156,7 +156,104 @@ export const gamesTable = sqliteTable('games', {
   // Sin pasada de fondo que lo vigile: un juego recién salido gana votos
   // cada semana, así que el refresco es manual desde la ficha (RatingsRow).
   ratingsCheckedAt: int({ mode: 'timestamp_ms' }),
+  // ── El Plan y sus datos externos (PLAN-TO-PLAY.md §10) ───────────────────
+  // La sinopsis de IGDB. `summary`, NUNCA `storyline` (§7): el segundo es la
+  // trama entera, más largo y con spoilers de un juego que precisamente no
+  // has jugado. Vale oro en el Plan ("¿qué era esto que apunté hace 8
+  // meses?") y se pinta SIEMPRE con line-clamp: una mala no rompe nada y una
+  // ausente no deja hueco.
+  summary: text(),
+  // Las COLECCIONES de IGDB (§3.1): líneas de serie ("Super Mario" aparte de
+  // "Mario Kart"), no la franquicia entera. null = juego sin saga… por ahora:
+  // un juego único ESTRENA colección el día que IGDB crea la de su secuela
+  // recién anunciada, que es justo lo que el radar (§4.1) sale a mirar.
+  //
+  // PLURAL, y no la columna única que el diseño daba por hecha: comprobado en
+  // vivo el 2026-08-06, el campo `collection` (singular) de IGDB está MUERTO
+  // — se acepta en la query y siempre viene vacío, el mismo fallo mudo que ya
+  // nos comió una tarde con external_games.category. El vivo es `collections`
+  // y es una LISTA: "Super Mario Bros." pertenece a la vez a "Mario Bros.",
+  // "Super Mario Bros." y "Super Mario". Guardarlas todas es lo honesto con
+  // la fuente y lo que el radar necesita para no perderse una entrega por
+  // haber elegido mal la saga.
+  igdbCollections: text({ mode: 'json' }).$type<{ id: number; name: string }[]>(),
+  // ── SteamSpy (§6) — etiquetas y reseñas, del MISMO fetch ─────────────────
+  // Las 8 etiquetas más votadas de Steam, ya ordenadas. Valen más que los
+  // géneros de IGDB porque son vocabulario de JUGADORES: IGDB dice "Platform,
+  // Adventure" y Steam dice Metroidvania, Souls-like, Cozy. Solo juegos con
+  // steamAppId; el retro emulado se queda sin ellas y no pasa nada.
+  steamTags: text({ mode: 'json' }).$type<{ name: string; votes: number }[]>(),
+  // Reseñas positivas/negativas de Steam — la nota de usuarios con la muestra
+  // más grande que existe (Hollow Knight: 415.946 reseñas frente a ~1.400
+  // votos en IGDB). Se guardan CRUDAS y el porcentaje se calcula al pintar:
+  // así el umbral de muestra se puede cambiar sin volver a pedir nada.
+  steamPositive: int(),
+  steamNegative: int(),
+  // Misma convención que el resto de checkedAt: con fecha = preguntado,
+  // aunque SteamSpy no supiera nada. SteamSpy es un tercero que ya se ha roto
+  // otras veces — si muere, lo guardado se queda y deja de refrescarse.
+  steamSpyCheckedAt: int({ mode: 'timestamp_ms' }),
+  // "Up next" (§2.2): cuándo fijaste este juego como prioridad de verdad.
+  // null = cola normal. SIEMPRE manual (un icono de pin tuyo), nunca derivado
+  // por la app — la prioridad es un compromiso personal, no una heurística —
+  // y se limpia al pasar el juego a la biblioteca: lo que ya juegas no está
+  // "por jugar". Es una columna de games, así que sincroniza por Turso y el
+  // Plan del móvil (REMOTO.md) hereda Up next gratis.
+  planPinnedAt: int({ mode: 'timestamp_ms' }),
+  // ── Fecha de lanzamiento COMPLETA (§7bis) ────────────────────────────────
+  // La fecha exacta que IGDB ya mandaba en cada respuesta y que llevábamos
+  // desde el principio truncando a año. Con su PRECISIÓN al lado, que es lo
+  // que la hace honesta: IGDB devuelve un timestamp concreto incluso cuando
+  // solo conoce el año, y pintar "Dec 31, 1994" para un juego que solo se
+  // sabe de 1994 es inventarse un día. Con precision se pinta "Mar 17, 2017",
+  // "March 1995" o "1995" — cada juego según lo que de verdad se sabe.
+  //
+  // releaseYear NO se toca ni se sustituye: de él dependen las stats (el
+  // donut de edad) y el matching de HowLongToBeat. Estas dos son columnas
+  // nuevas SOLO de presentación.
+  releaseDate: int({ mode: 'timestamp_ms' }),
+  releaseDatePrecision: text({ enum: ['year', 'month', 'day'] }),
 });
+
+// El RADAR DE SECUELAS (PLAN-TO-PLAY.md §4.3) — lo que la pasada semanal
+// descubre: juegos ANUNCIADOS de sagas tuyas que todavía no tienes.
+//
+// Tabla propia y no una columna en games porque no son juegos tuyos: son
+// noticias sobre juegos que aún no existen. Meterlos en games los colaría en
+// la biblioteca, en las stats y en el watcher; aquí viven aparte y solo los
+// lee la sección "On the horizon" del Plan.
+//
+// Sincroniza por Turso como el resto, así que el horizonte del móvil
+// (REMOTO.md) los hereda gratis.
+export const radarGamesTable = sqliteTable('radar_games', {
+  id: int().primaryKey({ autoIncrement: true }),
+  // Un descubrimiento, una fila. El unique es lo que hace que la pasada
+  // semanal pueda re-insertar sin duplicar y sin tener que leer antes.
+  igdbId: int().notNull().unique(),
+  // De qué saga TUYA viene — para poder decir "de la saga Fable" en la fila,
+  // que es lo que convierte un juego desconocido en una noticia relevante.
+  collectionId: int(),
+  collectionName: text(),
+  title: text().notNull(),
+  coverUrl: text(),
+  // Fecha prevista con su precisión, igual que en games: sin ella no habría
+  // cuenta atrás ni forma de ordenar el horizonte.
+  releaseDate: int({ mode: 'timestamp_ms' }),
+  releaseDatePrecision: text({ enum: ['year', 'month', 'day'] }),
+  releaseYear: int(),
+  // Cuándo apareció en tu radar — de aquí sale el badge de "nuevo".
+  discoveredAt: int({ mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  // Descartable, y el descarte es PARA SIEMPRE (hasta que lo deshagas desde
+  // la propia fila): no toda secuela de una saga tuya te interesa, y una
+  // lista que te vuelve a proponer cada semana lo que ya dijiste que no es
+  // una lista que se deja de mirar.
+  dismissedAt: int({ mode: 'timestamp_ms' }),
+});
+
+export type RadarGameRow = typeof radarGamesTable.$inferSelect;
+export type NewRadarGame = typeof radarGamesTable.$inferInsert;
 
 export const sessionsTable = sqliteTable('sessions', {
   id: int().primaryKey({ autoIncrement: true }),

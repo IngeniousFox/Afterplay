@@ -1,7 +1,8 @@
-import { Folder, HardDrive } from 'lucide-react';
+import { Folder, HardDrive, Tag } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatBytes } from '../../../lib/format';
+import { formatRelease } from '../../../lib/releaseDate';
 import { InfoChip } from './InfoChip';
 
 type DetailsCardProps = {
@@ -53,7 +54,13 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       <div className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3.5">
         <Cell label="DEVELOPER" value={game.developer ?? '—'} />
         <Cell label="PUBLISHER" value={game.publisher ?? '—'} />
-        <Cell label="RELEASED" value={game.releaseYear ?? '—'} />
+        {/* La fecha COMPLETA cuando de verdad se sabe (PLAN-TO-PLAY.md
+            §7bis): "March 17, 2017" si IGDB conoce el día, "March 1995" si
+            solo el mes, "1995" si solo el año — nunca un día inventado para
+            un juego del que solo se sabe el año. El dato viajaba en cada
+            respuesta desde el principio y se estaba truncando; lo que
+            faltaba no era pedirlo, era saber cuánto de él es real. */}
+        <Cell label="RELEASED" value={formatRelease(game) ?? '—'} />
         {/* Un endless nunca llega a "Beaten" (no existe ese estado para él,
             ver ENDLESS_STATUS_OPTIONS) — su única forma de generar una
             iteración nueva es Dropped -> empezar de cero, que no es lo que
@@ -76,6 +83,34 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
           <div className="flex flex-wrap gap-1.5">
             {game.genres.map((genre) => (
               <InfoChip key={genre}>{genre}</InfoChip>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Las etiquetas de Steam, JUSTO debajo de los géneros y para TODOS los
+          juegos, no solo los del Plan (§8). Van aquí y no en su propia card
+          porque son lo mismo que los géneros —cómo se clasifica este juego—
+          solo que dicho por quien lo ha jugado: IGDB dice "Platform,
+          Adventure" y Steam dice Metroidvania, Souls-like, Cozy. Vocabulario
+          de jugadores, no de catálogo, y por eso van pegadas y no sustituyen
+          a los géneros: las dos cosas son ciertas.
+
+          Top 8 por votos y ya: Steam lista una veintena, y de la décima en
+          adelante son ruido de cola larga. Sin appid (todo lo emulado de
+          consola) o sin datos, el bloque simplemente no aparece — no es un
+          hueco que explicar, es lo normal para media biblioteca. */}
+      {game.steamTags && game.steamTags.length > 0 && (
+        <div className="mt-4 border-t border-white/5 pt-3.5">
+          <div className="mb-2 flex items-center gap-1.25 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+            <Tag size={10} />
+            STEAM TAGS
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {game.steamTags.map((tag) => (
+              <InfoChip key={tag.name} title={`${tag.votes.toLocaleString()} players tagged it`}>
+                {tag.name}
+              </InfoChip>
             ))}
           </div>
         </div>

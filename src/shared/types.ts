@@ -208,11 +208,20 @@ export type LaunchExecutableResult =
   { ok: true } | { ok: false; reason: 'missing' } | { ok: false; reason: 'error'; message: string };
 
 export type {
+  CollectionGame,
+  ExternalDataStatus,
+  ExternalRefreshEvent,
+  ExternalRefreshSummary,
+  GameExternalData,
   GameRatings,
   IgdbGameDetail,
   IgdbSearchResult,
-  RatingsRefreshSummary,
-  RatingsStatus,
+  ReleaseDatePrecision,
+  SteamTag,
+} from '../main/igdb/types';
+import type {
+  ReleaseDatePrecision as ReleaseDatePrecisionValue,
+  SteamTag as SteamTagValue,
 } from '../main/igdb/types';
 
 export type { HltbTimes } from '../main/hltb/types';
@@ -305,6 +314,69 @@ export type GameListItem = {
   liveSince: Date | null;
   sessionCount: number;
 };
+
+// Un juego del Plan, con TODO lo que su pantalla necesita para que la lista
+// se pueda decidir sin entrar a ninguna ficha (PLAN-TO-PLAY.md §2.3).
+//
+// Extiende GameListItem en vez de sustituirlo: los otros tres consumidores de
+// la lista de planeados (la columna de navegación, el Backlog debt de Stats y
+// el "esto ya lo tienes" del buscador de Add Game) siguen recibiendo lo mismo
+// de siempre sin enterarse. Y estos campos extra NO se le añaden a
+// GameListItem a secas a propósito: la biblioteca puede tener cientos de
+// juegos y arrastrar una sinopsis por cada uno hasta el renderer sería peso
+// puro; el Plan son unas decenas y su pantalla los usa TODOS.
+export type PlannedGameItem = GameListItem & {
+  // La sinopsis de IGDB — la segunda línea de la fila, siempre con
+  // line-clamp: la respuesta a "¿qué era esto que apunté hace 8 meses?".
+  summary: string | null;
+  // POR QUÉ lo planeaste: la nota del evento 'plan_to_play', hoy enterrada en
+  // el historial de la ficha. "Me lo recomendó Dani" en la fila cambia la
+  // sección entera — de lista de deuda a lista de ilusiones.
+  planNote: string | null;
+  // "Up next" (§2.2): fijado a mano como prioridad de verdad. null = cola.
+  planPinnedAt: Date | null;
+  // Fecha de salida completa y su precisión (§7bis) — lo que hace posible la
+  // sección "On the horizon" y su cuenta atrás.
+  releaseDate: Date | null;
+  releaseDatePrecision: ReleaseDatePrecisionValue | null;
+  // Las tres notas, sin fundir jamás (§9): crítica e IGDB por un lado, el
+  // porcentaje de reseñas positivas de Steam por otro.
+  ratingCritics: number | null;
+  ratingCriticsCount: number | null;
+  ratingUsers: number | null;
+  ratingUsersCount: number | null;
+  steamPositive: number | null;
+  steamNegative: number | null;
+  // Las etiquetas de Steam (§8) también en la fila: "Metroidvania,
+  // Souls-like" dice más de qué noche te espera que cualquier género de
+  // catálogo. Solo los juegos con appid las tienen; el resto, null y sin
+  // hueco que explicar.
+  steamTags: SteamTagValue[] | null;
+};
+
+// ── El radar de secuelas (PLAN-TO-PLAY.md §4) ─────────────────────────────
+// Un juego ANUNCIADO de una saga tuya que todavía no tienes. No es un juego
+// de tu biblioteca: es una noticia sobre uno que aún no existe, y por eso
+// vive en su propia tabla y solo aparece en "On the horizon".
+export type RadarGame = {
+  id: number;
+  igdbId: number;
+  title: string;
+  coverUrl: string | null;
+  // De qué saga TUYA viene — lo que convierte un título desconocido en algo
+  // que te importa ("de la saga Fable").
+  collectionName: string | null;
+  releaseDate: Date | null;
+  releaseDatePrecision: ReleaseDatePrecisionValue | null;
+  releaseYear: number | null;
+  discoveredAt: Date;
+  dismissedAt: Date | null;
+};
+
+// Un solo aviso AGRUPADO por pasada, nunca uno por juego: enterarte de tres
+// secuelas la misma semana es una noticia, no tres. Y la primera pasada de la
+// vida no avisa de nada (§4.4) — sembraría docenas de golpe.
+export type RadarActivityEvent = { discovered: number };
 
 // Preferencia de formato de hora (ajustes, SPEC 3E-bis) — 24h por defecto.
 // Un solo tipo compartido: el main la persiste (config/store.ts), el

@@ -24,6 +24,7 @@ import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { setCuriositiesNotifier } from './curiosities/notify';
+import { setExternalNotifier } from './external/notify';
 import { runMemoriesDailyTick } from './memories/detect';
 import { runSteamAppIdBackfill } from './steam/appIdBackfill';
 import {
@@ -39,6 +40,8 @@ import { startSteamLivePoll, stopSteamLivePoll } from './steam/livePoll';
 import { runRaStartupPass } from './ra/backfill';
 import { startRaLivePoll, stopRaLivePoll } from './ra/livePoll';
 import { setMemoriesNotifier } from './memories/notify';
+import { setRadarNotifier } from './radar/notify';
+import { runRadarTick } from './radar/pass';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
 import { setSessionClosedNotifier } from './watcher/notifySession';
@@ -514,6 +517,22 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('achievements:activity', event);
     }
   });
+  // Datos externos (PLAN-TO-PLAY.md §5): la parte de SteamSpy va a ~1
+  // petición por segundo, así que una pasada dura minutos — más de lo que
+  // cualquiera deja Ajustes abierto. Por eso su estado es del main y viaja
+  // por aquí: cerrar el modal o cambiar de pantalla no la para ni la pierde.
+  setExternalNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('external:activity', event);
+    }
+  });
+  // El radar de secuelas (PLAN-TO-PLAY.md §4.4): un aviso agrupado cuando la
+  // pasada semanal encuentra entregas nuevas de tus sagas.
+  setRadarNotifier((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('radar:activity', event);
+    }
+  });
   // Redescarga de la caché de imágenes (Ajustes → Images): miles de ficheros
   // en una pasada, así que el progreso va por evento como todo lo largo.
   setImagesNotifier((event) => {
@@ -628,6 +647,9 @@ app.whenReady().then(async () => {
   // queda nada que preguntar. Tras la primera pasada es un no-op.
   void runSyncCycle().then(async () => {
     void runMemoriesDailyTick();
+    // El radar mira si toca (una vez por semana) y no hace nada el resto de
+    // los arranques — la comprobacion es leer una fecha de config.json.
+    void runRadarTick();
     // El catálogo de logros necesita el appid, así que va DESPUÉS del
     // backfill de appids y no en paralelo: un juego cuyo appid acaba de
     // llegar entra en la misma pasada en vez de esperar al próximo arranque.
@@ -649,7 +671,12 @@ app.whenReady().then(async () => {
     startSteamLivePoll(() => watcher?.getActiveGameIds() ?? []);
   });
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
-  memoriesTimer = setInterval(() => void runMemoriesDailyTick(), MEMORIES_TICK_MS);
+  memoriesTimer = setInterval(() => {
+    void runMemoriesDailyTick();
+    // Mismo tic para el radar: la app puede pasar semanas sin reiniciarse
+    // (vive en la bandeja), asi que mirarlo solo al arrancar no basta.
+    void runRadarTick();
+  }, MEMORIES_TICK_MS);
 
   // Auto-actualización (solo app empaquetada — ver updater.ts). Al final del
   // arranque a propósito: comprobar una release jamás debe retrasar la

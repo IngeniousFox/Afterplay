@@ -84,6 +84,15 @@ type AddGameModalProps = {
   // toca donde abrir una ficha no tendría sentido (dentro de Sesiones) o
   // llevaría a la sección equivocada (el alta de un planeado).
   onOpenExisting?: (gameId: number) => void;
+  // Un juego del catálogo YA elegido: el modal se abre directamente en el
+  // formulario, saltándose la búsqueda. Lo usa el carrusel de la saga
+  // (PLAN-TO-PLAY.md §3.4), donde el juego ya se eligió al pulsar su
+  // carátula y volver a escribir su nombre sería absurdo. A diferencia de
+  // promoteGame esto NO es una promoción: el juego no existe todavía en tu
+  // biblioteca, así que el alta es la normal (o la de plan, según `mode`).
+  // Montar el modal SOLO cuando se abre — el prellenado vive en los
+  // inicializadores de useState.
+  preselected?: IgdbSearchResult;
   // EMULADORES.md §6 — flujo "+ Add new game" desde el modal de asignación:
   // el checkbox de emulado arranca premarcado…
   defaultEmulated?: boolean;
@@ -116,6 +125,7 @@ const AddGameModalBody = ({
   onOpenChange,
   mode = 'library',
   promoteGame,
+  preselected,
   onPromoted,
   onCreated,
   onOpenExisting,
@@ -148,7 +158,7 @@ const AddGameModalBody = ({
           genres: promoteGame.genres ?? [],
           summary: null,
         }
-      : null,
+      : (preselected ?? null),
   );
   const [pickerTarget, setPickerTarget] = useState<CoverPickerTarget | null>(null);
   // Modo "escanear carpetas" del primer paso — alternativa al buscador, no un

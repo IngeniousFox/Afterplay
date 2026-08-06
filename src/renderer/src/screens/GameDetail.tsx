@@ -5,6 +5,8 @@ import { AddGameModal } from '../components/library/AddGameModal';
 import { ActionBar } from '../components/library/detail/ActionBar';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
+import { AboutCard } from '../components/library/detail/AboutCard';
+import { SagaSection } from '../components/library/detail/SagaSection';
 import { DetailsCard } from '../components/library/detail/DetailsCard';
 import { EditNotesModal } from '../components/library/detail/EditNotesModal';
 import { EndlessBadge } from '../components/library/detail/EndlessBadge';
@@ -110,6 +112,12 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
             <div className={revealClass} style={revealStyle(3)}>
               <ScreenshotsCarousel igdbId={game.igdbId} />
             </div>
+            {/* La saga justo debajo de las capturas: las dos son "el juego
+                visto por fuera" (arte y contexto de catalogo), frente al
+                historial y los logros de mas abajo, que son tuyos. */}
+            <div className={revealClass} style={revealStyle(4)}>
+              <SagaSection game={game} />
+            </div>
 
             <div
               className={`mt-7.5 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4.5 ${revealClass}`}
@@ -172,11 +180,18 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
             <div className={revealClass} style={revealStyle(4)}>
               <DetailsCard game={game} />
             </div>
+            {/* La sinopsis de IGDB, recogida y detrás de Details: en la
+                biblioteca es un extra de catalogo, no una decision — de un
+                juego que ya terminaste no necesitas que te cuenten de que
+                iba. En la ficha del Plan es al reves y va abierta y arriba. */}
+            <div className={revealClass} style={revealStyle(5)}>
+              <AboutCard game={game} />
+            </div>
             {/* PARTIDAS-GUARDADAS.md §10.4 — el único sitio de la app desde
                 el que se restaura una partida. No hay restauración automática
                 en ninguna parte. Va con Details porque es de la misma
                 naturaleza: datos del juego EN ESTE PC, no historial. */}
-            <div className={revealClass} style={revealStyle(5)}>
+            <div className={revealClass} style={revealStyle(6)}>
               <SavesSection gameId={gameId} gameTitle={game.title} />
             </div>
           </div>

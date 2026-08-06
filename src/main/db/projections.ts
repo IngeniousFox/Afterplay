@@ -58,6 +58,15 @@ export const gameColumns = {
   ratingUsers: gamesTable.ratingUsers,
   ratingUsersCount: gamesTable.ratingUsersCount,
   ratingsCheckedAt: gamesTable.ratingsCheckedAt,
+  summary: gamesTable.summary,
+  igdbCollections: gamesTable.igdbCollections,
+  steamTags: gamesTable.steamTags,
+  steamPositive: gamesTable.steamPositive,
+  steamNegative: gamesTable.steamNegative,
+  steamSpyCheckedAt: gamesTable.steamSpyCheckedAt,
+  planPinnedAt: gamesTable.planPinnedAt,
+  releaseDate: gamesTable.releaseDate,
+  releaseDatePrecision: gamesTable.releaseDatePrecision,
 };
 
 export const curiosityColumns = {

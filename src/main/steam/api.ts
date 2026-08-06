@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { z } from 'zod';
-import { normalizeSteamCommunityImageUrl } from '../images/steamCdn';
+import { hasImageFilename, normalizeSteamCommunityImageUrl } from '../images/steamCdn';
 
 // Cliente de la Steam Web API para los logros (LOGROS.md §3).
 //
@@ -80,8 +80,17 @@ const playerAchievementsResponse = z.object({
 // Los iconos que da GetSchemaForGame apuntan a una ubicación que Steam ya no
 // sirve para buena parte del catálogo — el porqué completo, en images/
 // steamCdn.ts. Se traducen AQUÍ para que lo que se guarde nazca ya bien.
-const normalizeIconUrl = (url: string | undefined): string | null =>
-  url ? normalizeSteamCommunityImageUrl(url) : null;
+//
+// Y se descartan las que no llevan fichero (terminan en '/'): así es como
+// Steam devuelve el icono de un logro al que su desarrollador aún no le ha
+// puesto ninguno, y guardar eso es guardar una URL que no puede funcionar
+// nunca — un 403 garantizado por cada logro del juego. Sin icono es null,
+// que es lo que de verdad es.
+const normalizeIconUrl = (url: string | undefined): string | null => {
+  if (!url) return null;
+  const normalized = normalizeSteamCommunityImageUrl(url);
+  return hasImageFilename(normalized) ? normalized : null;
+};
 
 export type SteamAchievementDef = {
   apiName: string;
