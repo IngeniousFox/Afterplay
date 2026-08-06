@@ -51,7 +51,26 @@ export const queryKeys = {
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
     details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,
-    ratingsStatus: ['igdb', 'ratingsStatus'] as const,
+    // Los juegos de una saga. La key es la lista de colecciones YA ordenada
+    // (ver useCollectionGames): la misma pregunta, una sola entrada.
+    collection: (collectionIds: number[]) => ['igdb', 'collection', collectionIds] as const,
+  },
+  // Datos externos de la biblioteca (PLAN-TO-PLAY.md 5): el estado que
+  // pinta la tarjeta de Ajustes. Los datos en si no viven aqui — van en la
+  // fila de cada juego, bajo ['games'].
+  // El radar de secuelas (PLAN-TO-PLAY.md 4): los descubrimientos de la
+  // pasada semanal, que alimentan la segunda fuente del horizonte del Plan.
+  radar: {
+    all: ['radar'] as const,
+  },
+  external: {
+    status: ['external', 'status'] as const,
+    // El ultimo evento de progreso de la pasada. No es una query de verdad
+    // (no hay nada que "pedir": su unico origen es el evento del main) — vive
+    // en la cache porque la cache SOBREVIVE a los desmontajes, que es justo
+    // lo que le faltaba al estado local: cerrar Ajustes o cambiar de pantalla
+    // no puede perder de vista una pasada que dura minutos.
+    activity: ['external', 'activity'] as const,
   },
   hltb: {
     times: (title: string, releaseYear: number | null) => ['hltb', title, releaseYear] as const,

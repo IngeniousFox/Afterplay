@@ -1,8 +1,8 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, like } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { getAchievementsStatus } from '../db/queries/achievements/getAchievementsStatus';
 import { getPendingAchievementsGames } from '../db/queries/achievements/getPendingAchievementsGames';
-import { gamesTable } from '../db/schema';
+import { achievementsTable, gamesTable } from '../db/schema';
 import type { AchievementsStatus } from '../../shared/types';
 import { refreshRaForGame } from '../ra/backfill';
 import { hasSteamKey } from './api';
@@ -43,6 +43,7 @@ export const runAchievementsBackfill = async (full: boolean): Promise<number> =>
 // cientos de peticiones a Steam.
 export const runAchievementsStartupPass = async (): Promise<void> => {
   try {
+    await clearIconlessAchievementIcons();
     const queued = await runAchievementsBackfill(false);
     if (queued > 0) {
       // Solo ASCII en los console.log, misma convencion que
@@ -52,6 +53,30 @@ export const runAchievementsStartupPass = async (): Promise<void> => {
   } catch (error) {
     console.warn('[steam] fallo en la pasada inicial de logros (se reintentara):', error);
   }
+};
+
+// Limpieza de una vez: los iconos que se guardaron apuntando al DIRECTORIO
+// del appid en vez de a un fichero (asi devuelve Steam el icono de un logro
+// que su desarrollador aun no ha puesto, ver images/steamCdn.ts). No son una
+// imagen que falte: son una URL que NUNCA va a funcionar, y cada una era un
+// 403 y un aviso en consola por cada logro del juego.
+//
+// Va aqui y no en una migracion porque es dato de una fuente externa, no
+// esquema: se corrige en cada arranque, es instantaneo (dos UPDATE con LIKE)
+// y es idempotente. Lo que se sincronice a partir de ahora ya nace bien
+// (normalizeIconUrl en steam/api.ts).
+const clearIconlessAchievementIcons = async (): Promise<void> => {
+  await withDbAccess(async () => {
+    const db = getDb();
+    await db
+      .update(achievementsTable)
+      .set({ iconUrl: null })
+      .where(like(achievementsTable.iconUrl, '%/'));
+    await db
+      .update(achievementsTable)
+      .set({ iconGrayUrl: null })
+      .where(like(achievementsTable.iconGrayUrl, '%/'));
+  });
 };
 
 // El barrido de emuladores del arranque (LOGROS.md §7): para cada juego con

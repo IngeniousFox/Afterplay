@@ -48,6 +48,15 @@ export type GameEnrichment = {
   ratingUsers: number | null;
   ratingUsersCount: number | null;
   ratingsCheckedAt: Date;
+  // PLAN-TO-PLAY.md §7/§7bis/§10 — sinopsis, sagas y fecha completa con su
+  // precisión. Mismo viaje gratis que las notas: ya vienen en el detalle que
+  // se pide de todas formas, así que un juego nace con todo puesto en vez de
+  // esperar al primer refresco masivo. `ratingsCheckedAt` los cubre a los
+  // tres: salen de la misma respuesta, no hacen falta marcas propias.
+  summary: string | null;
+  igdbCollections: { id: number; name: string }[] | null;
+  releaseDate: Date | null;
+  releaseDatePrecision: 'year' | 'month' | 'day' | null;
 };
 
 export const resolveGameEnrichment = async (
@@ -118,5 +127,9 @@ export const resolveGameEnrichment = async (
     ratingUsers: detail.ratingUsers,
     ratingUsersCount: detail.ratingUsersCount,
     ratingsCheckedAt: new Date(),
+    summary: detail.summary,
+    igdbCollections: detail.igdbCollections,
+    releaseDate: detail.release?.date ?? null,
+    releaseDatePrecision: detail.release?.precision ?? null,
   };
 };

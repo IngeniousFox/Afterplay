@@ -19,6 +19,23 @@ export const formatHours = (hours: number): string => {
 // nunca coma, sin importar el locale del sistema.
 export const formatMoney = (amount: number): string => `€${amount.toFixed(2)}`;
 
+// Un CONTEO grande en un hueco pequeño: "416K reviews" en vez de "415,946
+// reviews". Nació de un recorte real — el tile de Steam de la RatingsCard
+// mide 81px y la muestra de Hollow Knight (415.946 reseñas) se cortaba a la
+// mitad, con lo que el número dejaba de decir nada. Redondear una MUESTRA no
+// pierde nada: lo que informa de ella es el orden de magnitud, y el valor
+// exacto sigue estando en el title al pasar el ratón.
+//
+// 'en-US' fijo, mismo motivo que las fechas de este archivo: el resto de la
+// UI está en inglés sin i18n, y con el locale del sistema en español "415,946"
+// salía como "415.946", que un lector inglés lee como un decimal.
+export const formatCount = (value: number): string => {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 100_000) return `${Math.round(value / 1000)}K`;
+  if (value >= 10_000) return `${(value / 1000).toFixed(1)}K`;
+  return value.toLocaleString('en-US');
+};
+
 // 'en-US' fijo (mismo motivo que abajo) — hour12 es lo único que cambia
 // según el ajuste de Settings (slider 12h/24h, 24h por defecto).
 export const formatTime = (date: Date, timeFormat: TimeFormat): string =>

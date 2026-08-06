@@ -30,7 +30,7 @@ import { GameFoldersSection } from './GameFoldersSection';
 import { ImagesSection } from './ImagesSection';
 import { LocalSaveBackupsSection } from './LocalSaveBackupsSection';
 import { MemoriesSection } from './MemoriesSection';
-import { RatingsSection } from './RatingsSection';
+import { ExternalDataSection } from './ExternalDataSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
 import { TimeFormatSlider } from './TimeFormatSlider';
@@ -264,7 +264,7 @@ export const SettingsModal = ({
               <EmulatorsSection />
             </div>
             <div className={revealClass} style={revealStyle(3)}>
-              <RatingsSection />
+              <ExternalDataSection />
             </div>
           </>
         )}

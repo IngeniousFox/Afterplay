@@ -4,7 +4,7 @@ import { writeFileAtomic } from '../lib/atomicWrite';
 import { app } from 'electron';
 import axios from 'axios';
 import { extname, join } from 'path';
-import { normalizeSteamCommunityImageUrl } from './steamCdn';
+import { hasImageFilename, normalizeSteamCommunityImageUrl } from './steamCdn';
 
 // El nombre coincide con el de la carpeta dentro de userData, así no hace
 // falta mapear uno a otro. 'screenshots' se añade en el Bloque 2H para el
@@ -164,6 +164,15 @@ export const cacheImage = async (rawUrl: string, type: ImageCacheType): Promise<
   // vieja de Steam funcionan sin resincronizar nada, y la vieja y la nueva
   // comparten el mismo fichero en vez de descargarse dos veces.
   const url = normalizeSteamCommunityImageUrl(rawUrl);
+  // Una URL que termina en '/' no es una imagen: es el prefijo de un
+  // directorio, y a eso el CDN de Steam contesta con un 403 (ver steamCdn.ts).
+  // Se corta ANTES de salir a la red, y no solo en el alta: hay miles de
+  // iconos ya guardados así de antes de este filtro, y esos no se van a
+  // resincronizar solos.
+  if (!hasImageFilename(url)) {
+    permanentlyFailed.add(url);
+    throw new Error(`URL sin fichero de imagen (no se pide): ${url}`);
+  }
   const dir = getImageCacheDir(type);
   const filePath = join(dir, filenameForUrl(url));
   if (await fileExists(filePath)) return filePath;

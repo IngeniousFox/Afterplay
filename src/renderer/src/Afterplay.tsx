@@ -5,6 +5,8 @@ import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAchievementsActivitySync } from './hooks/achievements';
 import { useCuriositiesActivity } from './hooks/curiosities';
+import { useExternalRefreshActivity } from './hooks/external';
+import { useRadarActivity } from './hooks/radar';
 import { useBigPicture } from './hooks/useBigPicture';
 import { useWatcherSync } from './hooks/useWatcherSync';
 import { BLUE, GREEN, RED } from './lib/colors';
@@ -62,6 +64,14 @@ const Afterplay = (): React.JSX.Element => {
   // estés, y sus queries son staleTime Infinity — sin este aviso, una ficha
   // abierta antes de que llegara su catálogo se quedaba vacía hasta reiniciar.
   useAchievementsActivitySync();
+  // Y el refresco de datos externos (PLAN-TO-PLAY.md 5): su parte de
+  // SteamSpy dura minutos, mucho mas de lo que nadie deja Ajustes abierto.
+  // La suscripcion vive AQUI para que la pasada se siga viendo desde
+  // cualquier pantalla y su aviso de "ya esta" te llegue estes donde estes.
+  useExternalRefreshActivity();
+  // Y el radar de secuelas: su pasada semanal puede caer estes en la pantalla
+  // que estes (o con la app en la bandeja), asi que su aviso vive aqui.
+  useRadarActivity();
   // Modo TV: los toasts que sobrevivan en él (errores, conexión de mando) se
   // escalan para leerse desde el sofá (BIG-PICTURE.md §4).
   const bigPicture = useBigPicture();

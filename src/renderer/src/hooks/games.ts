@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
@@ -7,6 +7,7 @@ import type {
   GameListItem,
   GameRow,
   LaunchExecutableResult,
+  PlannedGameItem,
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../../shared/types';
@@ -45,12 +46,110 @@ export const useGame = (id: number): UseQueryResult<GameDetail | null, Error> =>
 // planeados (que useGames() nunca trae). Mismo staleTime Infinity: su key
 // vive bajo el prefijo ['games'], así que todas las invalidaciones de
 // games.all la refrescan también.
-export const usePlannedGames = (): UseQueryResult<GameListItem[], Error> =>
+export const usePlannedGames = (): UseQueryResult<PlannedGameItem[], Error> =>
   useQuery({
     queryKey: queryKeys.games.planned,
     queryFn: () => window.api.games.getPlanned(),
     staleTime: Infinity,
   });
+
+// "Up next" (PLAN-TO-PLAY.md 2.2) — fijar o soltar un planeado como
+// prioridad de verdad.
+//
+// OPTIMISTA, igual que el reordenar de mas abajo, y por un motivo que se veia
+// en pantalla: con la version anterior (invalidar y esperar) el clic tenia que
+// pagar DOS saltos asincronos —el viaje por IPC y el refetch de la lista—
+// antes de que la fila se moviera. En ese hueco no pasaba nada, y despues
+// saltaba todo de golpe: el pin no respondia al dedo, respondia al reloj.
+//
+// Ahora la fila cambia de estanteria en el mismo tick que el clic, que es
+// cuando la animacion de llegada tiene que arrancar. El unico "dato inventado"
+// es la marca de tiempo: se pone new Date() igual que hace el main, asi que la
+// lista optimista queda ordenada como quedara la de verdad y el refetch no
+// mueve nada.
+export const useSetPlanPinned = (): UseMutationResult<
+  boolean,
+  Error,
+  { id: number; pinned: boolean },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: number; pinned: boolean }) =>
+      window.api.games.setPlanPinned(id, pinned),
+    onMutate: async ({ id, pinned }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.games.planned });
+      const previous = queryClient.getQueryData<PlannedGameItem[]>(queryKeys.games.planned);
+      if (previous) {
+        queryClient.setQueryData(
+          queryKeys.games.planned,
+          previous.map((game) =>
+            game.id === id ? { ...game, planPinnedAt: pinned ? new Date() : null } : game,
+          ),
+        );
+      }
+      return { previous };
+    },
+    onError: (_error, _input, context) => {
+      const previous = (context as { previous?: PlannedGameItem[] } | undefined)?.previous;
+      if (previous) queryClient.setQueryData(queryKeys.games.planned, previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};
+
+// El MISMO reparto de timestamps que hace el main (reorderUpNext en la
+// query): los planPinnedAt existentes, ordenados de antiguo a nuevo, se
+// reasignan en el orden nuevo. Duplicado aqui a proposito — es lo que hace
+// posible la actualizacion OPTIMISTA de abajo: la cache queda exactamente
+// como va a quedar la DB, asi que cuando llegue el refetch no se mueve nada.
+const reassignPinStamps = (games: PlannedGameItem[], orderedIds: number[]): PlannedGameItem[] => {
+  const byId = new Map(games.map((game) => [game.id, game]));
+  const ids = orderedIds.filter((id) => byId.get(id)?.planPinnedAt != null);
+  if (ids.length < 2) return games;
+
+  const stamps = ids
+    .map((id) => (byId.get(id)?.planPinnedAt as Date).getTime())
+    .sort((a, b) => a - b);
+  for (let k = 1; k < stamps.length; k++) {
+    if (stamps[k] <= stamps[k - 1]) stamps[k] = stamps[k - 1] + 1;
+  }
+
+  const stampById = new Map(ids.map((id, k) => [id, stamps[k]]));
+  return games.map((game) => {
+    const stamp = stampById.get(game.id);
+    return stamp === undefined ? game : { ...game, planPinnedAt: new Date(stamp) };
+  });
+};
+
+// Reordenar Up next arrastrando. OPTIMISTA a proposito: el gesto termina con
+// la fila ya posada donde la soltaste, y esperar la ida y vuelta al main para
+// reflejarlo la haria saltar un frame despues — justo lo que delata que "no
+// era verdad todavia". Se pinta el orden nuevo al instante; si el main
+// fallara (rarisimo: es un update local), se restaura el anterior.
+export const useReorderUpNext = (): UseMutationResult<boolean, Error, number[], unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: number[]) => window.api.games.reorderUpNext(orderedIds),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.games.planned });
+      const previous = queryClient.getQueryData<PlannedGameItem[]>(queryKeys.games.planned);
+      if (previous) {
+        queryClient.setQueryData(queryKeys.games.planned, reassignPinStamps(previous, orderedIds));
+      }
+      return { previous };
+    },
+    onError: (_error, _ids, context) => {
+      const previous = (context as { previous?: PlannedGameItem[] } | undefined)?.previous;
+      if (previous) queryClient.setQueryData(queryKeys.games.planned, previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    },
+  });
+};
 
 export const useCreatePlannedGame = (): UseMutationResult<
   GameRow,

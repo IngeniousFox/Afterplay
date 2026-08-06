@@ -28,6 +28,12 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
       .update(gamesTable)
       .set({
         planned: false,
+        // El pin de "Up next" se limpia al promocionar (PLAN-TO-PLAY.md
+        // §2.2): un juego que ya juegas no está "por jugar". Sin esto, el
+        // juego se iba a la biblioteca dejando su fecha de fijado puesta —
+        // invisible, pero lista para reaparecer arriba del Plan si algún día
+        // volviera a planearse.
+        planPinnedAt: null,
         endless: input.endless,
         isEmulated: input.isEmulated,
         notes: input.gameNotes,

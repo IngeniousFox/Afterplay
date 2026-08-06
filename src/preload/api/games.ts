@@ -6,13 +6,24 @@ import type {
   GameListItem,
   GameRow,
   LaunchExecutableResult,
+  PlannedGameItem,
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
 
 export const gamesApi = {
   getAll: (): Promise<GameListItem[]> => ipcRenderer.invoke('games:getAll'),
-  getPlanned: (): Promise<GameListItem[]> => ipcRenderer.invoke('games:getPlanned'),
+  // PlannedGameItem y no GameListItem: la pantalla del Plan necesita mas de
+  // cada juego (sinopsis, el porque de haberlo planeado, el pin, la fecha
+  // completa, las notas). Es un superconjunto, asi que sus otros tres
+  // consumidores siguen leyendo exactamente lo mismo que antes.
+  getPlanned: (): Promise<PlannedGameItem[]> => ipcRenderer.invoke('games:getPlanned'),
+  // "Up next" (PLAN-TO-PLAY.md 2.2) — fijar o soltar un planeado.
+  setPlanPinned: (id: number, pinned: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('games:setPlanPinned', id, pinned),
+  // Reordenar Up next arrastrando — los ids fijados, en su orden nuevo.
+  reorderUpNext: (orderedIds: number[]): Promise<boolean> =>
+    ipcRenderer.invoke('games:reorderUpNext', orderedIds),
   createPlanned: (input: CreatePlannedGameInput): Promise<GameRow> =>
     ipcRenderer.invoke('games:createPlanned', input),
   promote: (input: PromotePlannedGameInput): Promise<GameRow> =>

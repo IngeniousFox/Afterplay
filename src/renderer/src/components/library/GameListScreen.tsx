@@ -41,18 +41,17 @@ type GameListScreenProps = {
   onSelectGame: (id: number) => void;
 };
 
-// Library y PlanToPlay son la misma pantalla (~90% idéntica: cabecera, botón
-// Add game, isLoading/isError/empty, GameGrid) — solo cambian los textos, el
-// modo del modal y a dónde navega la grid al seleccionar un juego. Rediseño:
-// las GameCard del grid ya estaban bien (zoom, degradado, glow en marcha) y
-// se quedan intactas — lo que se pule es todo lo de alrededor, que hasta
-// ahora era el único rincón sin nada del lenguaje "juicy" del resto de la
-// app: la cabecera no decía cuántos juegos había, el vacío era una caja
-// punteada sin gracia, y nada entraba con ninguna animación. A propósito NO
-// hay entrada escalonada tarjeta a tarjeta — con cientos de juegos en la
-// grid, un delay por tarjeta tardaría segundos en terminar de aparecer (el
-// mismo problema que se evitó en MiddleColumn); solo la cabecera y el estado
-// vacío/carga entran suaves, la grid aparece de golpe como siempre.
+// Desde el rediseño del Plan (PLAN-TO-PLAY.md §1) esta pantalla ya solo la
+// usa Library: el Plan estrenó pantalla propia (PlanToPlay.tsx) con filas de
+// decisión en vez de parrilla. Se conserva la forma genérica por si algún
+// día vuelve a haber una segunda lista con esta pinta.
+//
+// La entrada escalonada tarjeta a tarjeta SÍ existe ahora, pero vive en
+// GameGrid y se reparte POR PANTALLA: solo las tarjetas visibles en el
+// viewport corren la onda (el resto ni anima), así que el peligro que este
+// comentario documentaba antes —una ola de delays recorriendo cientos de
+// juegos durante segundos— no puede darse. Ver el porqué completo en
+// GameGrid.tsx.
 export const GameListScreen = ({
   title,
   subtitle,
