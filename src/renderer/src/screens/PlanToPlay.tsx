@@ -1,5 +1,5 @@
 import { Bookmark, CalendarClock, Gamepad2, ListOrdered, Pin, Plus, RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -140,6 +140,12 @@ export const PlanToPlay = (): React.JSX.Element => {
   const [lens, setLens] = useState<PlanLens>('oldest');
   // Plegado por defecto: lo que aún no ha salido no compite con lo jugable.
   const [horizonOpen, setHorizonOpen] = useState(false);
+  // Up next arranca ABIERTA, al revés que el horizonte: es la sección
+  // accionable de la pantalla, y esconder por defecto aquello a lo que te has
+  // comprometido sería esconder la respuesta. Se pliega porque con la
+  // estantería llena hay que hacer scroll por encima de ocho compromisos cada
+  // vez que lo que quieres es rebuscar en la cola.
+  const [upNextOpen, setUpNextOpen] = useState(true);
 
   const { data: radarGames = [] } = useRadarGames();
   const dismissRadar = useDismissRadarGame();
@@ -161,8 +167,13 @@ export const PlanToPlay = (): React.JSX.Element => {
   const refreshing = useIsExternalRefreshRunning();
   const progress = useExternalRefreshProgress();
 
-  const { upNext, queue, horizon } = splitPlanSections(games, lens);
-  const debt = computePlanDebt(games);
+  // Memoizados porque el montaje por tandas repinta esta pantalla decenas de
+  // veces seguidas, y sin esto cada repintado rehacía tres filtrados y dos
+  // ordenaciones sobre la lista entera para devolver exactamente lo mismo —
+  // con un Plan de cientos, eso es basura que generar y recoger en el mismo
+  // hueco de frame en el que se está montando la siguiente tanda.
+  const { upNext, queue, horizon } = useMemo(() => splitPlanSections(games, lens), [games, lens]);
+  const debt = useMemo(() => computePlanDebt(games), [games]);
 
   // La siguiente tanda, en el primer hueco de tiempo libre tras pintar la
   // anterior (ver scheduleIdle). El cleanup cancela la pendiente si la
@@ -463,13 +474,23 @@ export const PlanToPlay = (): React.JSX.Element => {
                             <div className={`flex flex-col gap-2 ${expandClass}`}>
                               {horizonItems.map((item) =>
                                 item.kind === 'plan' ? (
+                                  /* Un planeado sin salir vive aquí ESTÉ O NO
+                                     fijado (ver splitPlanSections), así que su
+                                     pin refleja el estado real y alterna en
+                                     los dos sentidos. Sin animación de
+                                     llegada: esta fila no se mueve de sitio al
+                                     fijarla — la que aterriza es su copia de
+                                     Up next, y animar las dos contaría dos
+                                     viajes donde solo hay uno. */
                                   <PlanRow
                                     key={`plan-${item.game.id}`}
                                     game={item.game}
-                                    pinned={false}
-                                    landing={landingInQueue === item.game.id}
+                                    pinned={item.game.planPinnedAt !== null}
+                                    landing={false}
                                     onSelect={() => openGame(item.game.id)}
-                                    onTogglePin={() => togglePin(item.game.id, true)}
+                                    onTogglePin={() =>
+                                      togglePin(item.game.id, item.game.planPinnedAt === null)
+                                    }
                                   />
                                 ) : (
                                   <RadarRow
@@ -501,21 +522,65 @@ export const PlanToPlay = (): React.JSX.Element => {
                             color={PLAN_COLOR}
                             label="UP NEXT"
                             count={upNext.length}
+                            /* Plegada, el rótulo dice a QUIÉN le toca: es la
+                               única pregunta que Up next contesta, y sería
+                               absurdo tener que abrirla para leerla. */
                             hint={
-                              upNext.length >= 8
-                                ? 'if everything is a priority, nothing is'
-                                : 'the ones you actually committed to'
+                              !upNextOpen ? (
+                                <span className="font-semibold">
+                                  <span className="text-muted-foreground/40">first · </span>
+                                  <span className="text-foreground/80">{upNext[0].title}</span>
+                                </span>
+                              ) : upNext.length >= 8 ? (
+                                'if everything is a priority, nothing is'
+                              ) : (
+                                'the ones you actually committed to'
+                              )
                             }
+                            collapsible={{
+                              open: upNextOpen,
+                              onToggle: () => setUpNextOpen((it) => !it),
+                            }}
                           />
                           {/* Lista propia porque las filas se REORDENAN
                               arrastrando por el asa — la cola no la
-                              necesita: ahí ordenan las lentes. */}
-                          <UpNextList
-                            games={upNext}
-                            onSelect={openGame}
-                            onUnpin={(id) => togglePin(id, false)}
-                            highlightId={landingInUpNext}
-                          />
+                              necesita: ahí ordenan las lentes.
+
+                              El pliegue ANIMA la altura en los dos sentidos
+                              (interpolate-size permite transicionar hasta
+                              auto/0 sin medir nada), y por eso la lista se
+                              queda MONTADA en vez del montar/desmontar del
+                              horizonte: desmontar es instantáneo por
+                              definición y el cierre aparecía de golpe. Son
+                              tus fijados (un puñado), tenerlos vivos
+                              plegados no cuesta nada — el horizonte sí se
+                              desmonta porque arranca cerrado y puede cargar
+                              decenas de filas que quizá nunca abras. */}
+                          {/* Curvas DISTINTAS por dirección, a propósito: la
+                              de la casa (.22,1,.36,1) mete casi todo el
+                              recorrido en el primer tercio — cerrando lee
+                              como un chasquido que se asienta, pero abriendo
+                              soltaba la lista entera de golpe y arrastraba
+                              la cola: un pop, no un despliegue. Abrir va con
+                              un ease-in-out clásico y un pelín más de
+                              tiempo: arranca suave, cruza rápido y aterriza
+                              suave. La clase cambia con el estado en el
+                              mismo render, así que cada transición usa la
+                              curva de SU dirección. */}
+                          <div
+                            className={`overflow-hidden [interpolate-size:allow-keywords] transition-[height] ${
+                              upNextOpen
+                                ? 'h-auto duration-350 ease-[cubic-bezier(.45,0,.2,1)]'
+                                : 'h-0 duration-300 ease-[cubic-bezier(.22,1,.36,1)]'
+                            }`}
+                          >
+                            <UpNextList
+                              games={upNext}
+                              onSelect={openGame}
+                              onUnpin={(id) => togglePin(id, false)}
+                              highlightId={landingInUpNext}
+                            />
+                          </div>
                         </section>
                       ),
                     },

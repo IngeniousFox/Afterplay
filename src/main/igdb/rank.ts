@@ -1,12 +1,21 @@
 import { diceCoefficient, normalizeTitle } from '../lib/titleMatch';
 
 // Categorías de IGDB (games.category) que tiene sentido ofrecer como "un
-// juego que añadir a la biblioteca": el juego principal, remakes/remasters/
-// ports (misma obra, re-publicada) y bundles. Deliberadamente fuera quedan
-// dlc_addon(1), expansion(2), mod(5), episode(6), season(7), fork(12),
-// pack(13) y update(14) — son piezas colgando de un juego que YA tiene su
-// propia entrada base, no un resultado que alguien busca para añadir suelto.
-const ALLOWED_CATEGORIES = new Set([0, 3, 8, 9, 10, 11]);
+// juego que añadir a la biblioteca": el juego principal, las expansiones
+// INDEPENDIENTES, remakes/remasters/ports (misma obra, re-publicada) y
+// bundles. Deliberadamente fuera quedan dlc_addon(1), expansion(2), mod(5),
+// episode(6), season(7), fork(12), pack(13) y update(14) — son piezas
+// colgando de un juego que YA tiene su propia entrada base, no un resultado
+// que alguien busca para añadir suelto.
+//
+// La standalone_expansion(4) llevaba fuera por descuido, y era un agujero
+// visible: "Marvel's Spider-Man: Miles Morales" y "Dead Island: Riptide" no
+// aparecían al buscarlos. El nombre engaña — el "standalone" es justo lo que
+// las separa de la expansion(2) de arriba: se compran solas, se instalan
+// solas y se juegan sin tener la base, así que en una biblioteca son una
+// entrada propia y no una pieza de otra. La lista de exclusiones de este
+// mismo comentario nunca la mencionó; se caía por no estar, no por decisión.
+const ALLOWED_CATEGORIES = new Set([0, 3, 4, 8, 9, 10, 11]);
 
 // Forma mínima que necesita el ranking, independiente del schema Zod exacto
 // de IGDB — así esta lógica se puede probar/leer sin arrastrar el resto del

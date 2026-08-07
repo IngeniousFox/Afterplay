@@ -10,10 +10,9 @@ import {
   ThumbsUp,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
 import type { PlannedGameItem } from '../../../../shared/types';
 import { useImageSrc } from '../../hooks/useImageSrc';
-import { useIsClamped } from '../../hooks/useIsClamped';
+import { useNearViewport } from '../../hooks/useNearViewport';
 import { GRAY, TEAL } from '../../lib/colors';
 import { daysBetween, humanizeSpan } from '../../lib/dateMath';
 import { formatHours } from '../../lib/format';
@@ -76,11 +75,11 @@ export const PlanRow = ({
   landing = false,
 }: PlanRowProps): React.JSX.Element => {
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
-  const [expanded, setExpanded] = useState(false);
-  // Sin esto, una sinopsis de una sola línea corta seguía siendo un botón
-  // clicable con hover y cursor de mano — una interacción que al pulsarla no
-  // desplegaba nada, porque no había nada más que enseñar.
-  const [measureRef, isClamped] = useIsClamped<HTMLParagraphElement>();
+  // Desestructurado y no `const cover = …`: pasar `cover.observe` a un ref=
+  // hace que el compilador de React tome el objeto entero por una ref y
+  // prohíba leer `cover.near` en el render (mismo motivo por el que
+  // useScrollMemory se desestructura en sus consumidores).
+  const { observe: observeCover, near: coverNear } = useNearViewport();
   const ratings = resolveRatings(game);
 
   // Lo que decide qué se pinta a la derecha lo dice el JUEGO, no la sección
@@ -155,8 +154,14 @@ export const PlanRow = ({
         </div>
       )}
 
-      <div className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-white/10 bg-muted shadow-[0_8px_22px_rgba(0,0,0,.45)]">
-        {coverSrc ? (
+      {/* La caja mide lo mismo con carátula y sin ella, que es lo que permite
+          soltar la imagen de las filas lejanas sin mover el layout ni un
+          píxel (ver useNearViewport). */}
+      <div
+        ref={observeCover}
+        className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-white/10 bg-muted shadow-[0_8px_22px_rgba(0,0,0,.45)]"
+      >
+        {!coverNear ? null : coverSrc ? (
           <img
             src={coverSrc}
             loading="lazy"
@@ -298,59 +303,21 @@ export const PlanRow = ({
           </div>
         )}
 
-        {/* Y la respuesta a "¿qué era esto que apunté hace ocho meses?". Solo
-            es un BOTÓN si de verdad hay algo que desplegar — con isClamped en
-            false (la sinopsis ya cabe en dos líneas) es texto plano, sin
-            cursor de mano, sin hover, sin interacción que no lleve a ningún
-            sitio. */}
+        {/* Y la respuesta a "¿qué era esto que apunté hace ocho meses?".
+            SIEMPRE a dos líneas, sin expandir: la fila es para comparar y
+            decidir, y para leer la sinopsis entera ya se entra a la ficha —
+            que es literalmente el clic de la propia fila. Hubo una versión
+            con "Show more" aquí (botón + clon de medida + estado) y era
+            interacción duplicada con peor destino: desplegaba un muro de
+            texto en medio de la lista en vez de llevarte a donde está todo.
+            El clamp fijo de salida además mantiene la altura de la fila
+            estable desde el primer render — sin él, las sinopsis largas
+            nacían a cinco líneas y el FLIP leía el reajuste como una
+            reordenación (bandazo real que ya pasó). */}
         {game.summary && (
-          <div className="relative mt-1">
-            {/* El clon de medida: invisible, SIEMPRE a 2 líneas — mide sin
-                depender de si `expanded` ya quitó el recorte del texto
-                visible. Mismo ancho que él (absolute inset-x-0). */}
-            <p
-              ref={measureRef}
-              aria-hidden="true"
-              className={`invisible absolute inset-x-0 top-0 line-clamp-2 ${SUMMARY_TEXT_CLASS}`}
-            >
-              {game.summary}
-            </p>
-            {isClamped ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  // La fila entera navega a la ficha: sin esto, desplegar la
-                  // sinopsis te sacaba de la lista.
-                  event.stopPropagation();
-                  setExpanded((previous) => !previous);
-                }}
-                className={`block w-full cursor-pointer text-left ${SUMMARY_TEXT_CLASS} text-muted-foreground/85 transition-colors duration-150 hover:text-foreground/75 ${
-                  expanded ? '' : 'line-clamp-2'
-                }`}
-                title={expanded ? 'Show less' : 'Show more'}
-              >
-                {game.summary}
-              </button>
-            ) : (
-              // El MISMO line-clamp que la variante botón, aunque aquí sea
-              // decorativo (si no está recortada, recortarla no hace nada).
-              // Sin él, el primer render —donde isClamped todavía es false,
-              // porque la medida aún no ha corrido— pintaba la sinopsis
-              // ENTERA y la fila nacía con cinco líneas de alto, para encoger
-              // a dos en cuanto la medición contestaba. Ese cambio de altura
-              // movía todo lo que había debajo, y el FLIP de la lista lo leía
-              // como una reordenación y lo animaba: un bandazo por cada tanda
-              // de filas montadas. Con el clamp puesto de salida, la fila
-              // nace ya con su altura definitiva y no se mueve nada.
-              <p
-                className={`${SUMMARY_TEXT_CLASS} text-muted-foreground/85 ${
-                  expanded ? '' : 'line-clamp-2'
-                }`}
-              >
-                {game.summary}
-              </p>
-            )}
-          </div>
+          <p className={`mt-1 line-clamp-2 ${SUMMARY_TEXT_CLASS} text-muted-foreground/85`}>
+            {game.summary}
+          </p>
         )}
       </div>
     </div>

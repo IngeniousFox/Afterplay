@@ -75,12 +75,25 @@ export type PlanSections = {
   // Lo que aún no ha salido (§2.5). Aparte porque no compite con lo jugable:
   // no puedes elegirlo esta noche, así que mezclarlo en la cola solo ensucia
   // la decisión. Es espera, no decisión.
+  //
+  // La ÚNICA de las tres que no es excluyente: un fijado sin salir sale aquí Y
+  // en Up next (ver abajo).
   horizon: PlannedGameItem[];
 };
 
-// Un juego fijado que además no ha salido se queda en Up next, no en el
-// horizonte: si te has comprometido con él a mano, la app no te lo esconde en
-// una sección plegada. Su cuenta atrás viaja igual en la fila.
+// upNext y queue reparten lo jugable; el horizonte es una CAPA aparte, no un
+// tercer trozo del reparto.
+//
+// Antes sí lo era, y se notaba mal: fijar un juego que estaba en el horizonte
+// lo hacía desaparecer de allí. Desde el sofá parecía que la app se había
+// comido la cuenta atrás — que es justo el dato por el que ese juego está en
+// el horizonte y no en otro sitio. Fijar dice "este me importa", no "quítalo
+// del calendario"; el calendario no es una estantería de la que se saca algo,
+// es la vista de lo que aún no puedes jugar.
+//
+// Así que el horizonte se calcula sobre TODOS los planeados sin salir, estén
+// fijados o no. De la cola sí siguen fuera los fijados: ahí el reparto es real
+// (una fila no puede estar en dos estanterías de lo jugable a la vez).
 export const splitPlanSections = (games: PlannedGameItem[], lens: PlanLens): PlanSections => {
   const upNext = games
     .filter((game) => game.planPinnedAt !== null)
@@ -89,12 +102,11 @@ export const splitPlanSections = (games: PlannedGameItem[], lens: PlanLens): Pla
         (a.planPinnedAt as Date).getTime() - (b.planPinnedAt as Date).getTime() || byTitle(a, b),
     );
 
-  const rest = games.filter((game) => game.planPinnedAt === null);
-  const horizon = rest
+  const horizon = games
     .filter((game) => isUnreleased(game))
     .sort((a, b) => releaseSortKey(a) - releaseSortKey(b) || byTitle(a, b));
   const queue = sortByLens(
-    rest.filter((game) => !isUnreleased(game)),
+    games.filter((game) => game.planPinnedAt === null && !isUnreleased(game)),
     lens,
   );
 

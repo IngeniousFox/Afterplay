@@ -13,7 +13,10 @@ import type { RecapPayload } from '../../shared/memory/payload';
 // que la validación de estos campos vive SOLO en la capa de TypeScript/app,
 // nunca en la base de datos — evita este tipo de migración para siempre.
 
-export type GameRow = typeof gamesTable.$inferSelect;
+// Omit de la columna muerta (ver legacySteamGridDbId en la tabla): para el
+// resto de la app no existe — las projections no la seleccionan y ningún
+// insert/update la nombra, así que el tipo tampoco debe enseñarla.
+export type GameRow = Omit<typeof gamesTable.$inferSelect, 'legacySteamGridDbId'>;
 export type Session = typeof sessionsTable.$inferSelect;
 export type Iteration = typeof iterationsTable.$inferSelect;
 export type StateEvent = typeof stateEventsTable.$inferSelect;
@@ -46,7 +49,28 @@ export const gamesTable = sqliteTable('games', {
   coverUrl: text(),
   heroUrl: text(),
   igdbId: int().notNull().unique(),
-  steamGridDbId: int().unique(),
+  // COLUMNA MUERTA — no leer ni escribir nunca. Su UNIQUE era un error: este
+  // id no viene de una relación, viene de BUSCAR por nombre y año en
+  // SteamGridDB, así que un juego y su standalone expansion (o su edición)
+  // resuelven al mismo id y el alta del segundo reventaba con "UNIQUE
+  // constraint failed". Quitarlo resultó IMPOSIBLE en este stack, con recibo
+  // de cada vía (7-ago-2026): reconstruir la tabla arrasó producción dos
+  // veces (lote remoto no fail-stop, PRAGMA foreign_keys ignorado, CASCADE
+  // vaciando las hijas); PRAGMA writable_schema está bloqueado en el servidor
+  // de Turso a nivel de parser; y DROP COLUMN es ilegal sobre columna
+  // indexada. La única salida sin tocar DDL peligroso es esta: abandonarla.
+  //
+  // `sgdbId` (debajo) es la columna viva, nacida por ALTER ADD COLUMN + copia
+  // de valores — la única clase de migración que este proyecto se permite. La
+  // muerta se queda de cuerpo presente, a NULL en las filas nuevas (NULL no
+  // colisiona con NULL en un UNIQUE de SQLite), invisible para el resto del
+  // código: las projections no la seleccionan y GameRow la excluye.
+  legacySteamGridDbId: int('steamGridDbId').unique(),
+  // El id de SteamGridDB de verdad. La PROPIEDAD conserva el nombre de
+  // siempre (steamGridDbId) apuntando a la columna nueva: para el resto del
+  // código no ha cambiado nada — projections, altas y tipos compilan tal
+  // cual, solo que ahora escriben donde no hay UNIQUE.
+  steamGridDbId: int('sgdbId'),
   officialPlatforms: text({ mode: 'json' }).$type<string[]>(),
   releaseYear: int(),
   hltbMain: real(),

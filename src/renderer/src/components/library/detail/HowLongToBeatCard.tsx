@@ -1,4 +1,4 @@
-import { Check, Info, PartyPopper, RefreshCw } from 'lucide-react';
+import { Check, Hourglass, Info, PartyPopper, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { GameDetail } from '../../../../../shared/types';
@@ -113,7 +113,7 @@ export const HowLongToBeatCard = ({
   game,
   markerHours,
   markerScope,
-}: HowLongToBeatCardProps): React.JSX.Element | null => {
+}: HowLongToBeatCardProps): React.JSX.Element => {
   // Antes del early return de abajo: un hook nunca puede ser condicional.
   const [hoveredTier, setHoveredTier] = useState<TierKey | null>(null);
   const refresh = useRefreshGameHltb();
@@ -121,7 +121,47 @@ export const HowLongToBeatCard = ({
   const main = game.hltbMain ?? 0;
   const extra = game.hltbMainExtras ?? 0;
   const completionist = game.hltbCompletionist ?? 0;
-  if (main === 0 && extra === 0 && completionist === 0) return null;
+  const hasNoTimes = main === 0 && extra === 0 && completionist === 0;
+
+  // SIN match de HLTB (todavía) — la card antes desaparecía entera aquí, y
+  // con ella su botón de refrescar: un juego que no encontró match en el
+  // alta (título raro, recién salido, demasiado nicho) se quedaba SIN
+  // FORMA de volver a intentarlo, porque el único sitio donde vivía ese
+  // botón era una card que él mismo hacía invisible. Este hueco se queda
+  // en vez de desaparecer, con el mismo botón que la card completa.
+  if (hasNoTimes) {
+    return (
+      <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white/[0.04] text-muted-foreground/50">
+            <Hourglass size={14} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13.5px] font-bold text-foreground">How long to beat</div>
+            <div className="text-xs text-muted-foreground">No confident match yet</div>
+          </div>
+          <button
+            type="button"
+            disabled={refresh.isPending}
+            onClick={() => {
+              refresh.mutate(game.id, {
+                onSuccess: (times) => {
+                  if (times) toast.success('Times found on HowLongToBeat.');
+                  else toast.info('HowLongToBeat still has no confident match for this game.');
+                },
+                onError: () => toast.error('Could not reach HowLongToBeat.'),
+              });
+            }}
+            title="Fetch times from HowLongToBeat"
+            aria-label="Fetch times from HowLongToBeat"
+            className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+          >
+            <RefreshCw size={13} className={refresh.isPending ? 'animate-spin' : undefined} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Escala la barra al mayor de los tres datos que SÍ conocemos — no siempre
   // a completionist. HLTB no siempre trae los tres tiempos; un dato que

@@ -31,6 +31,19 @@ type FlipListProps<T> = {
   // arrastra: ahí quien mueve las filas es la mano, y un FLIP activo se
   // pelearía con ella.
   enabled?: boolean;
+  // Silencio DE UN SOLO USO para la próxima reordenación real: se consulta
+  // justo antes de animar y, si devuelve true, esa pasada mide (previous se
+  // actualiza igual) pero no anima. Lo necesita el aterrizaje del arrastre de
+  // Up next: su planeo termina con la fila EXACTAMENTE donde el orden nuevo
+  // la pone, así que en ese render no hay nada que animar — pero la última
+  // foto de este componente es del instante de soltar (durante el planeo no
+  // hay renders) y sin el silencio "corregía" la fila desde esa foto rancia:
+  // un segundo viaje visible para un gesto ya terminado. Callback y no
+  // boolean para que el consumidor pueda armarla desde un timeout sin
+  // provocar renders, y consumirla solo cuando la reordenación de verdad
+  // llega (si el render del aterrizaje viniera partido en dos, el primero —
+  // sin reordenación— no la gastaría).
+  consumeMute?: () => boolean;
   // Up next mide la geometría de su arrastre contra este contenedor: al
   // pasar a envolver sus filas, FlipList es quien lo pinta, así que se lo
   // presta. Callback y no RefObject: mutar una ref ajena está prohibido por
@@ -82,6 +95,7 @@ export const FlipList = <T,>({
   renderItem,
   className,
   enabled = true,
+  consumeMute,
   containerRef,
   itemClassName,
 }: FlipListProps<T>): React.JSX.Element => {
@@ -169,7 +183,7 @@ export const FlipList = <T,>({
       keys.some((key, index) => key !== previousKeys.current[index]);
     previousKeys.current = keys;
 
-    if (enabled && reordered) {
+    if (enabled && reordered && !(consumeMute?.() ?? false)) {
       for (const [key, element] of elements.current) {
         const before = previous.current.get(key);
         const now = next.get(key);

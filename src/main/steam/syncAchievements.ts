@@ -213,12 +213,19 @@ export const syncGameAchievements = async (
           iconUrl: definition.iconUrl,
           iconGrayUrl: definition.iconGrayUrl,
           hidden: definition.hidden,
-          globalPercent: percentages.get(definition.apiName) ?? null,
+          globalPercent: percentages?.get(definition.apiName) ?? null,
           sortIndex: definition.sortIndex,
         };
         // UPSERT por (juego, nombre interno) — resincronizar refresca textos,
         // iconos y rareza sin duplicar el catálogo ni perder los desbloqueos
         // que cuelgan de estas filas.
+        //
+        // La rareza es la ÚNICA columna que se queda fuera del set cuando su
+        // llamada falló (percentages === null): en las demás, lo que trae el
+        // schema es la verdad de ahora mismo, pero un porcentaje que no se ha
+        // podido leer no es un porcentaje nuevo — pisarlo con null borraría
+        // un dato bueno a cambio de nada. En un alta el null va igual: no hay
+        // nada guardado que conservar.
         await tx
           .insert(achievementsTable)
           .values(values)
@@ -230,7 +237,7 @@ export const syncGameAchievements = async (
               iconUrl: values.iconUrl,
               iconGrayUrl: values.iconGrayUrl,
               hidden: values.hidden,
-              globalPercent: values.globalPercent,
+              ...(percentages ? { globalPercent: values.globalPercent } : {}),
               sortIndex: values.sortIndex,
             },
           });

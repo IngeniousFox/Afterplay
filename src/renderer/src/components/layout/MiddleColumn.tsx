@@ -216,10 +216,17 @@ const GameRow = ({
   rowRef,
 }: RowProps): React.JSX.Element => {
   return (
+    // content-visibility:auto, el mismo remedio que la cola del Plan: esta
+    // columna monta UNA FILA POR JUEGO sin lotes ni recorte, así que con una
+    // biblioteca de cientos hay otras tantas carátulas maquetadas y pintadas
+    // a la vez —encima de las de la pantalla que estés mirando, que tiene las
+    // suyas—. Chromium se salta el trabajo de las que no caben en la columna
+    // y el alto reservado (48 de carátula + 18 de padding) evita que la barra
+    // de scroll baile mientras entran. loading="lazy" ya vive en GameCover.
     <div
       ref={rowRef}
       onClick={onClick}
-      className="relative mb-0.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.25 hover:bg-white/[0.04]"
+      className="relative mb-0.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.25 [contain-intrinsic-size:auto_66px] [content-visibility:auto] hover:bg-white/[0.04]"
     >
       {/* En marcha DEBAJO de la selección: si el juego que juegas es además
           el que tienes abierto, manda el marco de "estás aquí". */}

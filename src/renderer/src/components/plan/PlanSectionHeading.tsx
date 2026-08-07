@@ -7,8 +7,9 @@ type PlanSectionHeadingProps = {
   label: string;
   count: number;
   hint?: React.ReactNode;
-  // Solo el horizonte se pliega: es la única sección que no es accionable
-  // ahora mismo. Sin esto, la cabecera es un rótulo, no un botón.
+  // Se pliegan el horizonte (no es accionable ahora mismo) y Up next (con la
+  // estantería llena, tapa la cola). La cola no: plegar lo que has venido a
+  // mirar no resuelve nada. Sin esto, la cabecera es un rótulo, no un botón.
   collapsible?: { open: boolean; onToggle: () => void };
   // Las lentes de la cola viven a la derecha de su propia cabecera.
   right?: React.ReactNode;

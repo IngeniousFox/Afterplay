@@ -5,11 +5,6 @@ import { useIsClamped } from '../../../hooks/useIsClamped';
 
 type AboutCardProps = {
   game: GameDetail;
-  // En la ficha del Plan la sinopsis se abre por defecto: ahí el juego no lo
-  // has jugado y esto es lo que contesta "¿qué era esto que apunté hace ocho
-  // meses?". En la biblioteca va recogida — de un juego que has terminado no
-  // necesitas que te cuenten de qué iba.
-  defaultOpen?: boolean;
 };
 
 const TEXT_CLASS = 'text-[12.5px] leading-relaxed';
@@ -24,11 +19,14 @@ const TEXT_CLASS = 'text-[12.5px] leading-relaxed';
 // eso basta para lo que se les pide aquí. Por eso van SIEMPRE recortadas con
 // "ver más": una mala no rompe nada, y una que no existe no deja hueco
 // porque la card entera no se pinta.
-export const AboutCard = ({
-  game,
-  defaultOpen = false,
-}: AboutCardProps): React.JSX.Element | null => {
-  const [expanded, setExpanded] = useState(defaultOpen);
+// SIEMPRE nace recogida, también en la ficha del Plan. Nació con un
+// defaultOpen para abrirla allí por defecto ("el juego no lo has jugado, la
+// sinopsis es la respuesta") — y en la práctica era una card gigante de texto
+// plantada en medio de la ficha en cada visita, tapando los datos que sí se
+// comparan (tiempos, notas, fecha). Quien quiera leerla tiene el "Read more"
+// a un clic; quien ya la leyó no paga el muro de texto cada vez.
+export const AboutCard = ({ game }: AboutCardProps): React.JSX.Element | null => {
+  const [expanded, setExpanded] = useState(false);
   // Sin esto, un resumen de dos líneas cortas seguía enseñando "Read more" —
   // un botón que al pulsarlo no cambiaba nada, porque no había nada que
   // desplegar. isClamped mide si a 3 líneas de verdad falta texto.
@@ -57,7 +55,25 @@ export const AboutCard = ({
         >
           {game.summary}
         </p>
-        <p className={`${TEXT_CLASS} text-muted-foreground ${expanded ? '' : 'line-clamp-3'}`}>
+        {/* El pliegue ANIMA la altura de verdad, no aparece de golpe:
+            interpolate-size (Chromium 129+, y este Electron trae 142) es lo
+            que permite transicionar hasta `auto` — sin él habría que medir
+            scrollHeights a mano. Recogida mide 3lh (tres líneas exactas del
+            propio line-height), así que el corte cae limpio en el borde de
+            línea; el precio es no tener el "…" del line-clamp — lo asume el
+            "Read more" de abajo, que ya dice que hay más. La curva es la
+            estándar de entrada de la casa (ver afterplay-pin-land). */}
+        <p
+          className={`${TEXT_CLASS} overflow-hidden text-muted-foreground [interpolate-size:allow-keywords] transition-[height] ${
+            // El alto fijo SOLO cuando hay recorte real: una sinopsis de dos
+            // líneas con h-[3lh] reservaría una línea de aire vacío debajo.
+            // Curvas distintas por dirección — mismo motivo que el pliegue de
+            // Up next (ver PlanToPlay): la de la casa despliega a lo bruto.
+            isClamped && !expanded
+              ? 'h-[3lh] duration-300 ease-[cubic-bezier(.22,1,.36,1)]'
+              : 'h-auto duration-350 ease-[cubic-bezier(.45,0,.2,1)]'
+          }`}
+        >
           {game.summary}
         </p>
       </div>

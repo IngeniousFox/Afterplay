@@ -129,16 +129,30 @@ const reassignPinStamps = (games: PlannedGameItem[], orderedIds: number[]): Plan
 // reflejarlo la haria saltar un frame despues — justo lo que delata que "no
 // era verdad todavia". Se pinta el orden nuevo al instante; si el main
 // fallara (rarisimo: es un update local), se restaura el anterior.
+//
+// El orden de las lineas de onMutate NO es cosmetico, y es lo que arreglo el
+// "al soltar la fila se recoloca a medias": UpNextList lanza esta mutation y
+// limpia los transforms del gesto en el mismo tick, contando con que React
+// agrupe las dos cosas en un solo render. Con `await cancelQueries` DELANTE,
+// el setQueryData caia en un microtask posterior: React pintaba primero un
+// frame sin transforms y con el orden VIEJO —la fila volvia de un salto a
+// donde la habias cogido— y solo despues llegaba el orden nuevo y el FLIP la
+// llevaba otra vez a su sitio. Dos viajes para un solo gesto.
+//
+// Escribiendo antes de cualquier await, el estado optimista es sincrono y
+// entra en el mismo render que el fin del gesto. La cancelacion no se pierde:
+// cancelQueries actua al invocarla, lo unico que se aplaza es esperarla.
 export const useReorderUpNext = (): UseMutationResult<boolean, Error, number[], unknown> => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (orderedIds: number[]) => window.api.games.reorderUpNext(orderedIds),
     onMutate: async (orderedIds) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.games.planned });
+      const cancelled = queryClient.cancelQueries({ queryKey: queryKeys.games.planned });
       const previous = queryClient.getQueryData<PlannedGameItem[]>(queryKeys.games.planned);
       if (previous) {
         queryClient.setQueryData(queryKeys.games.planned, reassignPinStamps(previous, orderedIds));
       }
+      await cancelled;
       return { previous };
     },
     onError: (_error, _ids, context) => {

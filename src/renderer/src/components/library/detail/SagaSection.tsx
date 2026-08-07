@@ -128,8 +128,18 @@ const SagaSlide = ({
         )}
       </div>
 
+      {/* Alto de DOS líneas reservado siempre, ocupe una o dos.
+          El track es flex y sin items-start estiraba todos los botones al
+          alto del más alto —el del título largo—, y el contenido de un
+          <button> se centra en vertical dentro de su caja: las tarjetas de
+          título corto quedaban con la carátula bajada, el título a media
+          altura y el año descolgado fuera de la fila donde el ojo lo busca.
+          Con items-start arriba y las dos líneas reservadas aquí, portada,
+          título y año arrancan a la misma Y en todas.
+          leading en px (y no leading-tight) porque el hueco reservado tiene
+          que ser exactamente 2 líneas: 2 × 14 = min-h-7. */}
       <div
-        className={`mt-1.5 line-clamp-2 text-[11.5px] leading-tight font-semibold ${
+        className={`mt-1.5 line-clamp-2 min-h-7 text-[11.5px] leading-[14px] font-semibold ${
           isCurrent ? 'text-foreground' : 'text-muted-foreground group-hover/saga:text-foreground'
         }`}
       >
@@ -234,10 +244,15 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           <SectionLabel>THE SAGA</SectionLabel>
           <div className="h-7" />
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-start gap-3">
           {Array.from({ length: SKELETON_COUNT }, (_, i) => (
             <div key={i} className={slideShellClass}>
               <div className="aspect-3/4 animate-pulse rounded-[10px] bg-white/[0.06]" />
+              {/* El mismo hueco que reserva el slide de verdad (dos líneas de
+                  título + el año): sin él la sección crecía de golpe al
+                  terminar de cargar y empujaba todo lo que tiene debajo. */}
+              <div className="mt-1.5 min-h-7 text-[11.5px] leading-[14px]" />
+              <div className="text-[10.5px]">&nbsp;</div>
             </div>
           ))}
         </div>
@@ -321,7 +336,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           comía el borde superior de la carátula levantada por el hover. */}
       <div className="-my-2 overflow-hidden py-2">
         <div
-          className="flex gap-3 transition-transform duration-320 ease-[cubic-bezier(.4,0,.2,1)]"
+          className="flex items-start gap-3 transition-transform duration-320 ease-[cubic-bezier(.4,0,.2,1)]"
           style={{ transform: `translateX(${trackX}px)` }}
         >
           {slots.map((slot) => (

@@ -5,7 +5,12 @@ import { drizzle } from 'drizzle-orm/tursodatabase-sync';
 import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
 import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { pushPendingMigrations } from './migrationSync';
+import {
+  applyRemotePending,
+  listRemotePending,
+  readLocalMigrations,
+  REBUILD_MARKER,
+} from './migrationSync';
 
 // Bloque 4 — @tursodatabase/sync sustituye por completo a @tursodatabase/
 // database: su propio connect() ya da el mismo Database (mismo prepare/exec/
@@ -130,13 +135,30 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 // tiempo: para entonces la ventana está abierta y nada le corre detrás.
 let migrationPushPending = false;
 
-// El arranque no puede quedarse esperando a la red, así que esta comprobación
-// tiene un límite corto. Pero OJO con leer mal su fallo: el mensaje aparece
-// también cuando NO hay ninguna migración pendiente, porque el límite cubre
-// toda la operación —abrir conexión, crear la tabla de control, leer qué hay
-// aplicado— y una base de Turso que estaba dormida tarda lo suyo en
-// despertar. O sea que casi siempre significa "no me dio tiempo a
-// PREGUNTAR", no "no pude aplicar nada".
+// out/main -> out -> project root -> drizzle. Misma profundidad relativa en
+// dev y en la app empaquetada.
+const MIGRATIONS_FOLDER = join(__dirname, '../../drizzle');
+
+// ¿Quedaron migraciones sin aplicar EN LOCAL porque el remoto no estaba al
+// día? Ver la puerta de runMigrations, que es donde se explica el porqué.
+let localMigrationsPending = false;
+
+// Dos fases con reglas DISTINTAS de tiempo, y la distinción es una cicatriz:
+//
+//  · LEER qué falta sí corre con límite corto — el arranque no puede esperar
+//    a una base de Turso dormida, y quedarse sin saber es recuperable (la
+//    puerta de runMigrations no aplica nada y runSyncCycle lo reintenta).
+//    OJO al leer su fallo: aparece también cuando NO hay nada pendiente,
+//    porque el límite cubre abrir conexión + leer — casi siempre significa
+//    "no me dio tiempo a PREGUNTAR", no "no pude aplicar nada".
+//  · APLICAR corre SIN límite, siempre. Antes el timeout envolvía la
+//    operación entera y su finally cerraba el cliente: withTimeout no cancela
+//    nada, así que un lote DDL que pasara de 4s seguía ejecutándose en el
+//    servidor mientras aquí se le cerraba la conexión por debajo — DDL
+//    descuartizado a mitad. Fue una de las piezas del destrozo del 7-ago-2026
+//    (las otras, en applyRemotePending). Si hay algo que aplicar, el arranque
+//    ESPERA lo que haga falta: es una vez por migración y por máquina, y la
+//    alternativa era esta cicatriz.
 const pushMigrationsToRemote = async (timeoutMs: number | null): Promise<boolean> => {
   if (!hasRemoteConfigured()) return true;
 
@@ -146,15 +168,22 @@ const pushMigrationsToRemote = async (timeoutMs: number | null): Promise<boolean
   });
 
   try {
-    const push = pushPendingMigrations(client, join(__dirname, '../../drizzle'));
-    const { applied } = timeoutMs === null ? await push : await withTimeout(push, timeoutMs);
-    if (applied.length > 0) {
+    const list = listRemotePending(client, MIGRATIONS_FOLDER);
+    const pending = timeoutMs === null ? await list : await withTimeout(list, timeoutMs);
+
+    if (pending.length > 0) {
+      console.log(
+        `[db] aplicando en Turso (sin límite de tiempo): ${pending
+          .map((migration) => migration.name)
+          .join(', ')}`,
+      );
+      const { applied } = await applyRemotePending(client, pending);
       console.log(`[db] migraciones aplicadas directamente en Turso: ${applied.join(', ')}`);
     }
     return true;
   } catch (error) {
     console.warn(
-      '[db] no se pudo comprobar las migraciones de Turso en el arranque, se reintentara en segundo plano:',
+      '[db] no se pudo dejar Turso al día en el arranque, se reintentara en segundo plano:',
       error,
     );
     return false;
@@ -262,9 +291,30 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
   }
 };
 
-// out/main -> out -> project root -> drizzle. Same relative depth in dev and
-// in the packaged app (electron-builder includes the folder by default; it's
-// plain text read via fs, so it doesn't need asarUnpack).
+// PROTOCOLO PARA CAMBIOS DE ESQUEMA QUE ALTER NO SOPORTA
+// (quitar un constraint, cambiar un tipo… — todo lo que drizzle-kit resuelve
+// generando una reconstrucción CREATE __new_x + INSERT + DROP + RENAME).
+//
+// Escrito tras perder producción DOS veces con la misma reconstrucción el
+// 7-ago-2026 (quitando el UNIQUE de games.steamGridDbId), y tras probar cada
+// alternativa con recibo:
+//   · Reconstruir en caliente: contra test salió impecable y contra
+//     producción el lote no fue fail-stop, el PRAGMA foreign_keys=off no se
+//     respetó (el CASCADE del DROP vació las tablas hijas) y el RENAME no
+//     llegó. NO ES REPRODUCIBLE. Prohibido, en remoto y en local.
+//   · PRAGMA writable_schema (cirugía de catálogo): bloqueado por el
+//     servidor de Turso a nivel de parser ("SQL not allowed statement").
+//   · ALTER TABLE DROP COLUMN: funciona, pero SQLite lo prohíbe sobre una
+//     columna indexada — que es justo la que tiene el constraint.
+//
+// Lo único que queda, y es el protocolo: EXPANDIR SIN CONTRAER. Columna nueva
+// por ALTER ADD COLUMN + UPDATE de copia, la propiedad de drizzle conserva el
+// nombre de siempre apuntando a la nueva, y la vieja se queda muerta en la
+// tabla (el ejemplo vivo: games.steamGridDbId → sgdbId, ver schema.ts). Es
+// una migración aditiva normal: entra sola en cada base, remota y local, sin
+// pasos manuales. Ningún cliente ejecuta jamás una reconstrucción; el
+// guardarraíl de abajo (pendingTableRebuild) lo garantiza aunque alguien
+// genere una por descuido.
 export const runMigrations = async (): Promise<void> => {
   const remoteConfigured = hasRemoteConfigured();
   // Sondeo barato ANTES de pagar dos timeouts de red completos (push de
@@ -292,7 +342,86 @@ export const runMigrations = async (): Promise<void> => {
   dbInstance = db;
   syncCapable = capable;
 
-  await migrate(db, { migrationsFolder: join(__dirname, '../../drizzle') });
+  // LA PUERTA: si hay remoto configurado y no se pudo dejar al día, en local
+  // NO se aplica nada.
+  //
+  // Sin ella, `migrationPushPending` era solo una nota para reintentar luego y
+  // esta línea corría igual — o sea que el caso "no me dio tiempo a
+  // preguntarle a Turso" (4s, con una base dormida que tarda en despertar: ver
+  // pushMigrationsToRemote) terminaba con la migración aplicada SOLO en local.
+  // Con las migraciones aditivas de siempre eso se reabsorbía en el reintento
+  // y no se notó nunca. Con una reconstrucción de tabla fue fatal por partida
+  // doble: la local se rompió al ejecutarla sobre CDC, y encima quedó con otro
+  // orden de columnas que el remoto — y el replicador va POR POSICIÓN de
+  // columna (ver SCHEMA_MISMATCH_HINTS), así que lo siguiente habría sido
+  // escribir valores en la columna equivocada.
+  //
+  // Quedarse sin aplicar es siempre recuperable: se reintenta en cuanto vuelva
+  // la red (runSyncCycle) y hasta entonces la app trabaja con el esquema que
+  // ya tenía. Aplicar a medias no lo es.
+  if (migrationPushPending) {
+    localMigrationsPending = true;
+    console.warn(
+      '[db] Turso no se pudo comprobar al arrancar: NO aplico migraciones en local hasta que el remoto esté al día (se reintenta en el ciclo de sync)',
+    );
+    return;
+  }
+
+  const rebuild = await pendingTableRebuild(db);
+  if (rebuild) {
+    localMigrationsPending = true;
+    console.error(
+      `[db] ${rebuild} RECONSTRUYE UNA TABLA y no se ejecuta en local nunca (ver el protocolo en el comentario de runMigrations). Migra el fichero en frío, súbelo a Turso y borra el .db local para que se baje ya migrado.`,
+    );
+    return;
+  }
+
+  await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+};
+
+// ¿Hay pendiente alguna migración que reconstruya una tabla?
+//
+// Esta guarda es el guardarraíl que faltaba, y existe porque la puerta de
+// arriba NO basta: aquella cubre "el remoto no está al día", pero el 7-ago-2026
+// el push al remoto funcionó y aun así se perdió la base — el DROP+RENAME se
+// ejecutó igualmente (en el remoto por su cuenta, y en la local al reflejarlo
+// por sync) y dejó __new_games sin games, con las tablas hijas vaciadas por
+// CASCADE. La conclusión tras probarlo en test (impecable) y en producción
+// (destrozo) es que este DDL no es reproducible, así que la única política
+// segura es no ejecutarlo NUNCA desde la app.
+//
+// El criterio de "pendiente" es el mismo que usa drizzle: created_at por
+// encima del último aplicado. Sin tabla de control no hay nada que proteger —
+// es una instalación nueva, que crea las tablas desde cero sin reconstruir.
+const pendingTableRebuild = async (db: Db): Promise<string | null> => {
+  let lastApplied = 0;
+  try {
+    const rows = await db.all<{ created_at: number | null }>(
+      sql`select max(created_at) as created_at from __drizzle_migrations`,
+    );
+    lastApplied = Number(rows[0]?.created_at ?? 0);
+  } catch {
+    return null;
+  }
+
+  const pending = readLocalMigrations(MIGRATIONS_FOLDER).filter(
+    (migration) => migration.folderMillis > lastApplied,
+  );
+  return (
+    pending.find((migration) =>
+      migration.statements.some((statement) => statement.includes(REBUILD_MARKER)),
+    )?.name ?? null
+  );
+};
+
+// El reintento de la puerta de arriba: el remoto ya está al día, así que ahora
+// sí toca poner la local a la par. Va por withDbAccess como todo lo demás —
+// esto corre desde el ciclo de sync, con el watcher sondeando por su cuenta.
+const applyPendingLocalMigrations = async (): Promise<void> => {
+  if (!localMigrationsPending || migrationPushPending || !dbInstance) return;
+  await withDbAccess(async () => migrate(getDb(), { migrationsFolder: MIGRATIONS_FOLDER }));
+  localMigrationsPending = false;
+  console.log('[db] migraciones locales aplicadas al fin (el remoto ya estaba al día)');
 };
 
 // ---- Candado de acceso a la DB (para el swap de conexión en caliente) ----
@@ -458,6 +587,11 @@ export const runSyncCycle = async (): Promise<void> => {
 
     if (!syncCapable) await attemptSyncUpgrade();
     if (!syncCapable) return;
+
+    // Con el remoto ya al día, lo que la puerta del arranque dejó sin aplicar
+    // en local se aplica ahora — ANTES del pull/push, igual que el DDL va
+    // siempre antes que las filas.
+    await applyPendingLocalMigrations();
 
     const db = getDb();
     await db.$client.pull();

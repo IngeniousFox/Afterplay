@@ -12,7 +12,12 @@ import { join } from 'node:path';
 
 const MIGRATIONS_TABLE = '__drizzle_migrations';
 
-type LocalMigration = {
+// La firma de una migración que RECONSTRUYE una tabla: drizzle-kit siempre la
+// escribe creando una tabla puente con este prefijo. Es lo que busca la
+// guarda de runMigrations para negarse a ejecutarla en local (ver allí).
+export const REBUILD_MARKER = '__new_';
+
+export type LocalMigration = {
   name: string;
   hash: string;
   folderMillis: number;
@@ -33,7 +38,7 @@ const formatToMillis = (dateStr: string): number => {
 // Idéntico a readMigrationFiles en node_modules/drizzle-orm/migrator.js —
 // mismo hash y mismo split, para que el registro que dejamos en Turso sea
 // indistinguible del que dejaría drizzle-kit corriendo en local.
-const readLocalMigrations = (migrationsFolder: string): LocalMigration[] => {
+export const readLocalMigrations = (migrationsFolder: string): LocalMigration[] => {
   const folders = readdirSync(migrationsFolder, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
@@ -53,16 +58,13 @@ const readLocalMigrations = (migrationsFolder: string): LocalMigration[] => {
 
 export type PushResult = { applied: string[] };
 
-// Aplica contra `client` (conexión PLANA a Turso, sin sync/CDC de por medio)
-// las migraciones de `migrationsFolder` que todavía no estén registradas en
-// su __drizzle_migrations — mismo criterio "por nombre" que usa drizzle
-// (ver getMigrationsToRun). Cada migración pendiente corre en su propia
-// transacción remota; si una falla, se revierte y se para ahí (no se
-// intentan las siguientes con el remoto en un estado a medias).
-export const pushPendingMigrations = async (
+// FASE 1 — solo LEER qué falta. Barata y sin efectos: es la única parte que
+// el arranque puede permitirse correr con límite de tiempo (una base de Turso
+// dormida tarda en despertar, y el arranque no puede esperarla para siempre).
+export const listRemotePending = async (
   client: Client,
   migrationsFolder: string,
-): Promise<PushResult> => {
+): Promise<LocalMigration[]> => {
   await client.execute(`
     CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
       id INTEGER PRIMARY KEY,
@@ -76,34 +78,76 @@ export const pushPendingMigrations = async (
   const { rows: appliedRows } = await client.execute(`SELECT name FROM ${MIGRATIONS_TABLE}`);
   const appliedNames = new Set(appliedRows.map((row) => row.name as string));
 
-  const pending = readLocalMigrations(migrationsFolder).filter(
+  return readLocalMigrations(migrationsFolder).filter(
     (migration) => !appliedNames.has(migration.name),
   );
+};
 
-  for (const migration of pending) {
-    // client.migrate() (a diferencia de client.transaction()) hace el
-    // PRAGMA foreign_keys=off ANTES del BEGIN, no dentro — igual que
-    // necesita esta migración para poder recrear `sessions` sin que la
-    // referencia desde iterations.startSessionId/endSessionId lo bloquee.
-    // Un PRAGMA metido dentro de la transacción es un no-op en SQLite/
-    // libSQL (foreign_keys solo se puede tocar sin BEGIN/SAVEPOINT
-    // pendiente) — con client.transaction() el remoto sí lo respetaba a
-    // rajatabla y el DROP TABLE sessions moría con FOREIGN KEY constraint
-    // failed, aunque en local (más laxo con esto) no diera problema.
+// FASE 2 — aplicar lo pendiente. NUNCA se corre con timeout, nunca en una
+// carrera, nunca con un close() esperando en un finally compartido: matar la
+// conexión con DDL en vuelo fue una de las tres piezas del destrozo del
+// 7-ago-2026 (withTimeout no cancela nada — el lote seguía ejecutándose en el
+// servidor mientras el finally le cerraba la conexión por debajo).
+//
+// Y las otras dos piezas, aprendidas del cadáver que dejó producción, son las
+// que justifican el resto de esta función:
+//
+//  · El lote remoto NO es fail-stop: producción quedó con el RENAME sin
+//    ejecutar pero con la migración registrada — el registro era la última
+//    sentencia del mismo lote y corrió igual. Por eso el registro ya NO viaja
+//    en el lote: se escribe después, y solo si la verificación pasa. Una
+//    migración a medias debe quedar SIN registrar, gritando en cada arranque,
+//    no dada por buena en silencio.
+//  · La VERIFICACIÓN: si tras aplicar queda una tabla puente __new_* en
+//    sqlite_master, la migración se quedó a medias (el PRAGMA foreign_keys
+//    tampoco es de fiar en el servidor — el CASCADE que vació las tablas
+//    hijas lo demostró). Se lanza error con instrucciones, sin registrar.
+//
+// client.migrate() (y no client.transaction()) sigue siendo el vehículo: hace
+// el PRAGMA foreign_keys=off ANTES del BEGIN, único sitio donde SQLite lo
+// acepta — con transaction() el DROP de la migración de sessions moría con
+// FOREIGN KEY constraint failed. Que el servidor lo respete ya es otra
+// historia (ver arriba); por eso la fe está en la verificación, no en el PRAGMA.
+export const applyRemotePending = async (
+  client: Client,
+  migrations: LocalMigration[],
+): Promise<PushResult> => {
+  for (const migration of migrations) {
     const statements: InStatement[] = migration.statements
       .map((statement) => statement.trim())
       .filter(Boolean);
-    statements.push({
-      sql: `INSERT INTO ${MIGRATIONS_TABLE} (hash, created_at, name, applied_at) VALUES (?, ?, ?, ?)`,
-      args: [migration.hash, migration.folderMillis, migration.name, new Date().toISOString()],
-    });
 
     try {
       await client.migrate(statements);
     } catch (error) {
       throw new Error(`fallo aplicando ${migration.name} contra Turso: ${String(error)}`);
     }
+
+    const { rows: leftovers } = await client.execute(
+      String.raw`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '\_\_new\_%' ESCAPE '\'`,
+    );
+    if (leftovers.length > 0) {
+      throw new Error(
+        `${migration.name} se quedó A MEDIAS en Turso: quedan ${leftovers
+          .map((row) => String(row.name))
+          .join(', ')}. NO se registra — revisa el estado remoto a mano antes de nada.`,
+      );
+    }
+
+    await client.execute({
+      sql: `INSERT INTO ${MIGRATIONS_TABLE} (hash, created_at, name, applied_at) VALUES (?, ?, ?, ?)`,
+      args: [migration.hash, migration.folderMillis, migration.name, new Date().toISOString()],
+    });
   }
 
-  return { applied: pending.map((migration) => migration.name) };
+  return { applied: migrations.map((migration) => migration.name) };
 };
+
+// Las dos fases seguidas, para quien no necesita separarlas (el script
+// manual). El arranque de la app NO usa esta: separa las fases para poder
+// poner límite de tiempo a la lectura sin ponérselo jamás a la aplicación.
+export const pushPendingMigrations = async (
+  client: Client,
+  migrationsFolder: string,
+): Promise<PushResult> =>
+  applyRemotePending(client, await listRemotePending(client, migrationsFolder));

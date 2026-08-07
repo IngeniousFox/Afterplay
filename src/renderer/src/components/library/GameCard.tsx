@@ -1,8 +1,9 @@
 import { CalendarRange, Clock3, Gamepad2, Play } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { GameListItem } from '../../../../shared/types';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
+import { useNearViewport } from '../../hooks/useNearViewport';
 import { DAY_MS, humanizeSpan, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
@@ -18,6 +19,11 @@ type GameCardProps = {
 // todos desbordaría la card con juegos de 4-5 géneros (el espacio es el que
 // es, formato 3/4).
 const MAX_GENRES = 2;
+
+// Cuánto sobrevive la trasera al ratón que se va. Holgado sobre los 700ms del
+// giro: lo que no puede pasar es que se desmonte con la card todavía dándole
+// la espalda al usuario (ver everFlipped).
+const BACK_RELEASE_MS = 900;
 
 // "Last played 3 weeks ago" — el lazo con el juego dicho en humano, no una
 // fecha que obliga a restar de cabeza.
@@ -228,23 +234,40 @@ const CardBack = ({
 // contador reaparece en la trasera para no perderlo al voltear.
 export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element => {
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
+  // Desestructurado: ver el porqué en PlanRow, mismo caso.
+  const { observe: observeCard, near: cardNear } = useNearViewport();
   const elapsedSeconds = useLiveTimer(game.isLive ? game.liveSince : null);
   const [flipped, setFlipped] = useState(false);
-  // La trasera se monta en el PRIMER hover y se queda montada: montada desde
-  // el principio dispararía la carga del hero (imagen 1080p) de todos los
-  // juegos del grid a la vez; desmontarla al salir dejaría la animación de
-  // vuelta enseñando un hueco vacío durante su primera mitad (la card aún da
-  // la espalda cuando el ratón ya se fue).
+  // La trasera se monta en el PRIMER hover y se suelta cuando el giro de
+  // vuelta ha TERMINADO. Los dos extremos estaban descartados por su motivo:
+  // montada desde el principio dispararía la carga del hero (imagen 1080p) de
+  // todos los juegos del grid a la vez; desmontarla en el mouseleave dejaría
+  // la animación de vuelta enseñando un hueco vacío durante su primera mitad
+  // (la card aún da la espalda cuando el ratón ya se fue).
+  //
+  // Antes se quedaba montada PARA SIEMPRE, y esa era la tercera opción mala:
+  // en una biblioteca de cientos, pasear el ratón por la parrilla iba dejando
+  // un hero 1080p vivo por cada card tocada (~8 MB de bitmap descodificado
+  // cada uno) más su capa de compositor de will-change, y nada de eso se
+  // soltaba nunca. Con la ventana de gracia se conserva la animación intacta
+  // y la memoria vuelve sola en cuanto apartas el ratón.
   const [everFlipped, setEverFlipped] = useState(false);
+  const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => clearTimeout(releaseTimer.current ?? undefined), []);
 
   return (
     <div
+      ref={observeCard}
       onClick={onSelect}
       onMouseEnter={() => {
+        clearTimeout(releaseTimer.current ?? undefined);
         setFlipped(true);
         setEverFlipped(true);
       }}
-      onMouseLeave={() => setFlipped(false)}
+      onMouseLeave={() => {
+        setFlipped(false);
+        releaseTimer.current = setTimeout(() => setEverFlipped(false), BACK_RELEASE_MS);
+      }}
       className="group relative cursor-pointer [perspective:1100px]"
     >
       {/* will-change SOLO tras el primer volteo: al terminar el giro, sin él,
@@ -253,7 +276,8 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
           grid), los iconos de la trasera daban un saltito de medio píxel al
           aterrizar. Con la capa fijada, lo que se ve durante el giro y al
           posarse es la MISMA rasterización. Las cards nunca volteadas no
-          pagan la memoria de la capa. */}
+          pagan la memoria de la capa, y las que ya volvieron la devuelven
+          con la trasera (everFlipped). */}
       <div
         className="relative aspect-3/4 transition-transform duration-700 ease-[cubic-bezier(.35,.9,.3,1)] [transform-style:preserve-3d]"
         style={{
@@ -261,9 +285,13 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
           willChange: everFlipped ? 'transform' : undefined,
         }}
       >
-        {/* Cara frontal — la carátula. */}
+        {/* Cara frontal — la carátula. Se suelta al alejarse de la vista
+            (useNearViewport): la parrilla monta TODAS las cards de la
+            biblioteca, y sin esto recorrerla entera dejaba una carátula
+            descodificada por juego viva para el resto de la sesión. La caja
+            no cambia de tamaño, así que la parrilla no se entera. */}
         <div className="absolute inset-0 overflow-hidden rounded-[13px] border border-border bg-card [backface-visibility:hidden]">
-          {coverSrc ? (
+          {!cardNear ? null : coverSrc ? (
             <img
               src={coverSrc}
               loading="lazy"

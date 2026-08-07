@@ -169,7 +169,7 @@ export const PlanGameDetail = ({
                 esto que apunte hace ocho meses". Es la primera pregunta de
                 la ficha de un planeado, no una nota al pie. */}
             <div className={`mt-5 ${revealClass}`} style={revealStyle(1)}>
-              <AboutCard game={game} defaultOpen />
+              <AboutCard game={game} />
             </div>
 
             <div className={revealClass} style={revealStyle(2)}>

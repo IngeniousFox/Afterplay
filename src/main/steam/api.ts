@@ -168,20 +168,29 @@ export const getAchievementSchema = async (appId: number): Promise<SteamAchievem
   }));
 };
 
-// Rareza: apiName -> % de jugadores que lo tienen. Sin key. Si falla, se
-// devuelve vacío — la rareza es un adorno, nunca debe tumbar una sync.
-export const getGlobalPercentages = async (appId: number): Promise<Map<string, number>> => {
-  const result = new Map<string, number>();
+// Rareza: apiName -> % de jugadores que lo tienen. Sin key. Nunca lanza — la
+// rareza es un adorno y no debe tumbar una sync.
+//
+// null y no un Map vacío cuando falla, y la diferencia importa: un mapa vacío
+// significa "este juego NO publica porcentajes" (respuesta legítima), y quien
+// llama lo escribe tal cual. Con el fallo devolviendo también vacío, un
+// timeout de 10s o un 429 de un instante bastaban para machacar con null la
+// rareza buena que ya había guardada, y la ficha se quedaba sin porcentajes
+// hasta la siguiente sync que sí tuviera suerte. Ahora "no se pudo saber" se
+// distingue de "no hay nada que saber", y solo lo segundo escribe.
+export const getGlobalPercentages = async (appId: number): Promise<Map<string, number> | null> => {
   try {
     const raw = await steamGet('GetGlobalAchievementPercentagesForApp/v2/', { gameid: appId });
     const parsed = globalPercentagesResponse.parse(raw);
+    const result = new Map<string, number>();
     for (const entry of parsed.achievementpercentages?.achievements ?? []) {
       result.set(entry.name, entry.percent);
     }
-  } catch {
-    // Silencio a propósito: un juego sin porcentajes publicados es normal.
+    return result;
+  } catch (error) {
+    console.warn(`[steam] sin rareza para ${appId} (se conserva la guardada):`, error);
+    return null;
   }
-  return result;
 };
 
 // Tus desbloqueos en un juego. null (y no []) cuando Steam se niega a
