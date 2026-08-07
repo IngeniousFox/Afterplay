@@ -56,6 +56,8 @@ export const getPlannedGames = async (): Promise<PlannedGameItem[]> => {
       releaseYear: gamesTable.releaseYear,
       addedAt: gamesTable.addedAt,
       hltbMain: gamesTable.hltbMain,
+      hltbMainExtras: gamesTable.hltbMainExtras,
+      hltbCompletionist: gamesTable.hltbCompletionist,
       summary: gamesTable.summary,
       planPinnedAt: gamesTable.planPinnedAt,
       releaseDate: gamesTable.releaseDate,
@@ -86,6 +88,8 @@ export const getPlannedGames = async (): Promise<PlannedGameItem[]> => {
     totalHours: 0,
     addedAt: game.addedAt,
     hltbMain: game.hltbMain,
+    hltbMainExtras: game.hltbMainExtras,
+    hltbCompletionist: game.hltbCompletionist,
     // Un planeado no tiene exe que lanzar — el campo existe para el Play del
     // modo TV (que tampoco enseña juegos del Plan).
     executablePath: null,

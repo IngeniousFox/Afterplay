@@ -10,6 +10,7 @@ import { igdbApi } from './igdb';
 import { imagesApi } from './images';
 import { iterationsApi } from './iterations';
 import { memoriesApi } from './memories';
+import { overlayApi } from './overlay';
 import { radarApi } from './radar';
 import { savesApi } from './saves';
 import { scanApi } from './scan';
@@ -44,6 +45,7 @@ export const api = {
   memories: memoriesApi,
   achievements: achievementsApi,
   radar: radarApi,
+  overlay: overlayApi,
 };
 
 export type Api = typeof api;

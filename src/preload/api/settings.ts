@@ -1,5 +1,10 @@
 import { ipcRenderer } from 'electron';
-import type { CredentialsValues, SyncFailureInfo, TimeFormat } from '../../shared/types';
+import type {
+  CredentialsValues,
+  OverlayShortcutStatus,
+  SyncFailureInfo,
+  TimeFormat,
+} from '../../shared/types';
 
 export const settingsApi = {
   getOpenAtLogin: (): Promise<boolean> => ipcRenderer.invoke('settings:getOpenAtLogin'),
@@ -13,6 +18,15 @@ export const settingsApi = {
     ipcRenderer.invoke('settings:getAmbientIdleMinutes'),
   setAmbientIdleMinutes: (minutes: number): Promise<void> =>
     ipcRenderer.invoke('settings:setAmbientIdleMinutes', minutes),
+  // Overlay in-game (OVERLAY.md §12).
+  getOverlayEnabled: (): Promise<boolean> => ipcRenderer.invoke('settings:getOverlayEnabled'),
+  setOverlayEnabled: (enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setOverlayEnabled', enabled),
+  getOverlayShortcut: (): Promise<string> => ipcRenderer.invoke('settings:getOverlayShortcut'),
+  setOverlayShortcut: (accelerator: string): Promise<void> =>
+    ipcRenderer.invoke('settings:setOverlayShortcut', accelerator),
+  getOverlayShortcutStatus: (): Promise<OverlayShortcutStatus> =>
+    ipcRenderer.invoke('settings:getOverlayShortcutStatus'),
   // null = el último ciclo de sync fue bien (o todavía no hubo ninguno).
   getSyncFailure: (): Promise<SyncFailureInfo | null> =>
     ipcRenderer.invoke('settings:getSyncFailure'),
