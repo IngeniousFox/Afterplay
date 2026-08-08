@@ -34,6 +34,13 @@ type AppConfig = {
   // máquina para no repetir la pasada, no un dato tuyo que deba viajar entre
   // PCs (lo que sí viaja son los descubrimientos, que están en radar_games).
   radarLastRunAt: number;
+  // Overlay in-game (OVERLAY.md §12). off por defecto A PROPÓSITO: es una
+  // función que pinta encima de juegos — que la encienda quien la quiera, y
+  // una mala experiencia no queme a nadie que no la pidió (§14.13).
+  overlayEnabled: boolean;
+  // Accelerator de Electron para invocar el HUD (§6.1). Configurable porque
+  // ningún atajo global está libre en todas las máquinas.
+  overlayShortcut: string;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -43,6 +50,8 @@ const DEFAULT_CONFIG: AppConfig = {
   scanFolders: [],
   ambientIdleMinutes: 3,
   radarLastRunAt: 0,
+  overlayEnabled: false,
+  overlayShortcut: 'CommandOrControl+Shift+Space',
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

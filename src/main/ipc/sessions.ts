@@ -7,6 +7,7 @@ import { deletePendingSession } from '../db/queries/sessions/deletePendingSessio
 import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
 import { startGameSession } from '../db/queries/sessions/startGameSession';
 import { updateSessionNote } from '../db/queries/sessions/updateSessionNote';
+import { notifyOverlaySessionStarted } from '../overlay';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 
 // Modelo v2: fuera sessions:add y sessions:updateMilestone*(...) — los
@@ -21,7 +22,14 @@ export const registerSessionsHandlers = (): void => {
   // abierta (no debería pasar — el botón está deshabilitado mientras hay una
   // live — pero no es un error, el juego ya se está trackeando igual).
   handleDb('sessions:startForGame', async (_event, gameId: number) => {
-    return startGameSession(gameId);
+    const session = await startGameSession(gameId);
+    // El overlay in-game se arma AQUÍ y no esperando al watcher (que sondea
+    // cada 5s): pulsar Play y que su atajo no respondiera durante esos
+    // segundos era justo lo que se sentía roto. Solo si la sesión abrió de
+    // verdad — un null significa que ya había una viva, y entonces el
+    // overlay ya estaba armado.
+    if (session) notifyOverlaySessionStarted();
+    return session;
   });
 
   handleDb('sessions:getAll', async () => {

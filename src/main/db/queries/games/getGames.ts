@@ -45,6 +45,11 @@ export const getGames = async (): Promise<GameListItem[]> => {
       releaseYear: gamesTable.releaseYear,
       addedAt: gamesTable.addedAt,
       hltbMain: gamesTable.hltbMain,
+      // Los otros dos tramos de HLTB viajan también: el overlay in-game
+      // pinta la misma barra de tres tramos que la card de la ficha, y esta
+      // lista es su única fuente de datos (OVERLAY.md §8.2).
+      hltbMainExtras: gamesTable.hltbMainExtras,
+      hltbCompletionist: gamesTable.hltbCompletionist,
       // Para el botón Play del modo TV (BIG-PICTURE.md §5.1): el hero de
       // TvHome lanza sin pasar por la ficha, y la lista era el único sitio
       // donde la ruta no viajaba.
@@ -248,6 +253,8 @@ export const getGames = async (): Promise<GameListItem[]> => {
       totalHours: hoursByGame.get(game.id) ?? 0,
       addedAt: game.addedAt,
       hltbMain: game.hltbMain,
+      hltbMainExtras: game.hltbMainExtras,
+      hltbCompletionist: game.hltbCompletionist,
       executablePath: game.executablePath,
       manualIterations: manualIterationsByGame.get(game.id) ?? [],
       currentState: latestStateEvent?.type ?? null,

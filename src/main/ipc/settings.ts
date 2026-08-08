@@ -4,6 +4,7 @@ import { getConfigValue, setConfigValue } from '../config/store';
 import { getLastSyncFailure, runSyncCycle } from '../db';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
+import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
 import { resetR2Client } from '../saves/r2';
 import { resetSgdbClient } from '../sgdb/client';
 import type { CredentialsValues, TimeFormat } from '../../shared/types';
@@ -49,6 +50,26 @@ export const registerSettingsHandlers = (): void => {
   ipcMain.handle('settings:setAmbientIdleMinutes', (_event, minutes: number) => {
     setConfigValue('ambientIdleMinutes', minutes);
   });
+
+  // Overlay in-game (OVERLAY.md §12): toggle maestro + atajo. Los setters
+  // avisan al módulo del overlay para que registre/suelte el atajo EN
+  // CALIENTE — con un juego corriendo, cambiar el ajuste debe notarse ya,
+  // no en la próxima sesión.
+  ipcMain.handle('settings:getOverlayEnabled', () => getConfigValue('overlayEnabled'));
+
+  ipcMain.handle('settings:setOverlayEnabled', (_event, enabled: boolean) => {
+    setConfigValue('overlayEnabled', enabled);
+    refreshOverlaySettings();
+  });
+
+  ipcMain.handle('settings:getOverlayShortcut', () => getConfigValue('overlayShortcut'));
+
+  ipcMain.handle('settings:setOverlayShortcut', (_event, accelerator: string) => {
+    if (accelerator.trim() !== '') setConfigValue('overlayShortcut', accelerator.trim());
+    refreshOverlaySettings();
+  });
+
+  ipcMain.handle('settings:getOverlayShortcutStatus', () => getOverlayShortcutStatus());
 
   // Estado del sync con Turso — para que un fallo persistente (sobre todo un
   // desajuste de esquema, que NO se cura reintentando) se vea en Ajustes en

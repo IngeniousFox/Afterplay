@@ -289,6 +289,10 @@ export type GameListItem = {
   // frente al tiempo oficial en juegos completados). Null si HLTB no lo
   // tenía al enriquecer el juego.
   hltbMain: number | null;
+  // Los otros dos tramos, para la barra de tres tramos del overlay in-game
+  // (el mismo dibujo que la card de la ficha, OVERLAY.md §7).
+  hltbMainExtras: number | null;
+  hltbCompletionist: number | null;
   // Para el botón Play del hero de TvHome (BIG-PICTURE.md §5.1) — lanzar el
   // último juego sin pasar por la ficha. Null si no hay exe configurado (o
   // es un juego emulado, que no tiene propio).
@@ -383,6 +387,12 @@ export type RadarActivityEvent = { discovered: number };
 // Un solo tipo compartido: el main la persiste (config/store.ts), el
 // renderer la usa para formatear cualquier datetime (lib/format.ts).
 export type TimeFormat = '12h' | '24h';
+
+// Estado del atajo global del overlay in-game (OVERLAY.md §6.1): 'inactive'
+// mientras no hay juego corriendo (el atajo ni se registra), 'ok' registrado,
+// 'conflict' cuando otro programa ya lo tiene — el aviso visible en Ajustes
+// es parte del diseño ("nunca fallar en silencio").
+export type OverlayShortcutStatus = 'inactive' | 'ok' | 'conflict';
 
 // Credenciales de servicios externos, editables desde Ajustes y guardadas
 // cifradas en userData (ver main/config/credentials.ts) — la app funciona

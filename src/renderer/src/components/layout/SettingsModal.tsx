@@ -31,6 +31,7 @@ import { GameFoldersSection } from './GameFoldersSection';
 import { ImagesSection } from './ImagesSection';
 import { LocalSaveBackupsSection } from './LocalSaveBackupsSection';
 import { MemoriesSection } from './MemoriesSection';
+import { OverlaySection } from './OverlaySection';
 import { ExternalDataSection } from './ExternalDataSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
@@ -244,6 +245,9 @@ export const SettingsModal = ({
             </SettingsCard>
             <div className={revealClass} style={revealStyle(3)}>
               <AmbientSection />
+            </div>
+            <div className={revealClass} style={revealStyle(4)}>
+              <OverlaySection />
             </div>
           </>
         )}

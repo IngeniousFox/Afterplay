@@ -1,6 +1,11 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CredentialsValues, SyncFailureInfo, TimeFormat } from '../../../shared/types';
+import type {
+  CredentialsValues,
+  OverlayShortcutStatus,
+  SyncFailureInfo,
+  TimeFormat,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 // Ajustes del sistema operativo (arrancar con Windows, formato de hora) que
@@ -78,6 +83,57 @@ export const useSetAmbientIdleMinutes = (): UseMutationResult<void, Error, numbe
     (minutes: number) => window.api.settings.setAmbientIdleMinutes(minutes),
     queryKeys.settings.ambientIdleMinutes,
   );
+
+// Overlay in-game (OVERLAY.md §12). Las mutations de esta pareja invalidan
+// ADEMÁS el estado del atajo: encender el toggle o cambiar el accelerator
+// re-registra en el main, y el "shortcut in use by another app" de Ajustes
+// tiene que reflejar el resultado nuevo, no el de antes del cambio.
+export const useOverlayEnabled = (): UseQueryResult<boolean, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.overlayEnabled,
+    queryFn: () => window.api.settings.getOverlayEnabled(),
+    staleTime: Infinity,
+  });
+
+export const useSetOverlayEnabled = (): UseMutationResult<void, Error, boolean, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => window.api.settings.setOverlayEnabled(enabled),
+    onSuccess: (_data, enabled) => {
+      queryClient.setQueryData(queryKeys.settings.overlayEnabled, enabled);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.overlayShortcutStatus });
+    },
+  });
+};
+
+export const useOverlayShortcut = (): UseQueryResult<string, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.overlayShortcut,
+    queryFn: () => window.api.settings.getOverlayShortcut(),
+    staleTime: Infinity,
+  });
+
+export const useSetOverlayShortcut = (): UseMutationResult<void, Error, string, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (accelerator: string) => window.api.settings.setOverlayShortcut(accelerator),
+    onSuccess: (_data, accelerator) => {
+      queryClient.setQueryData(queryKeys.settings.overlayShortcut, accelerator);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.overlayShortcutStatus });
+    },
+  });
+};
+
+// staleTime 0 a propósito, al revés que el resto de la familia: el estado
+// del atajo cambia por fuera de las mutations (arranca un juego → el main
+// registra; otro programa se adelanta → conflicto), así que cada apertura
+// de Ajustes vuelve a preguntar.
+export const useOverlayShortcutStatus = (): UseQueryResult<OverlayShortcutStatus, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.overlayShortcutStatus,
+    queryFn: () => window.api.settings.getOverlayShortcutStatus(),
+    staleTime: 0,
+  });
 
 // Estado del sync con Turso. A diferencia del resto de esta familia SÍ se
 // refresca sola cada medio minuto: es lo único de Ajustes que cambia por su

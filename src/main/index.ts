@@ -34,6 +34,7 @@ import {
 } from './steam/backfill';
 import { setAchievementsNotifier } from './steam/notify';
 import { setImagesNotifier } from './images/maintenance';
+import { destroyOverlay, handleOverlayActiveGames } from './overlay';
 import { closeAchievementOverlay } from './steam/notifications/overlay';
 import { startEmuWatcher, stopEmuWatcher } from './steam/emu/watcher';
 import { startSteamLivePoll, stopSteamLivePoll } from './steam/livePoll';
@@ -480,6 +481,12 @@ app.whenReady().then(async () => {
     () => mainWindow,
     (titles) => {
       if (tray) setTrayActiveGames(tray, titles);
+      // El overlay in-game vive y muere con las sesiones (OVERLAY.md §5.7):
+      // con juego vivo registra su atajo, escucha el mando y PRECALIENTA su
+      // ventana; al cerrarse la última sesión lo suelta todo. Este callback
+      // dispara en arranque, cierre Y adopción de sesiones — las dos ramas
+      // por las que puede empezar una.
+      handleOverlayActiveGames(titles.length);
     },
   );
   watcher.start();
@@ -710,6 +717,8 @@ app.on('before-quit', () => {
   // La ventana del aviso de logros vive fuera del ciclo de la principal: sin
   // esto, una tarjeta en pantalla al salir mantendría el proceso vivo.
   closeAchievementOverlay();
+  // Y la del overlay in-game igual (§5.7) — además suelta atajo y mando.
+  destroyOverlay();
   stopEmuWatcher();
   stopRaLivePoll();
   stopSteamLivePoll();
