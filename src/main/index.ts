@@ -524,7 +524,7 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('achievements:activity', event);
     }
   });
-  // Datos externos (PLAN-TO-PLAY.md §5): la parte de SteamSpy va a ~1
+  // Datos externos (PLAN-TO-PLAY.md §5): la parte de las reseñas va a ~2
   // petición por segundo, así que una pasada dura minutos — más de lo que
   // cualquiera deja Ajustes abierto. Por eso su estado es del main y viaja
   // por aquí: cerrar el modal o cambiar de pantalla no la para ni la pierde.

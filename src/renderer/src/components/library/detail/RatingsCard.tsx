@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Newspaper, RefreshCw, ThumbsUp, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { GameDetail } from '../../../../../shared/types';
-import { useRefreshGameRatings } from '../../../hooks/igdb';
+import { useRefreshGameRatings } from '../../../hooks/external';
 import { formatCount } from '../../../lib/format';
 import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../../lib/ratings';
 
@@ -100,12 +100,15 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-[13.5px] font-bold text-foreground">Ratings</span>
-          {/* Volver a preguntarle a IGDB — mismo gesto discreto que el
+          {/* Volver a preguntar por las TRES — mismo gesto discreto que el
               refresco de How long to beat, y por el mismo motivo: estas
               cifras se piden en el alta y se mueven por debajo (un
-              lanzamiento reciente gana crítica y votos cada semana). El de
-              Steam no entra aquí: viene de SteamSpy y se refresca con el
-              botón de lotes (el del Plan o el de Ajustes). */}
+              lanzamiento reciente gana crítica y votos cada semana).
+              Las tres, y no solo las de IGDB como al principio: un botón de
+              refrescar dentro de una card refresca lo que hay en esa card, o
+              miente. Lo que NO entra aquí es lo que no sale en la card —
+              etiquetas, HowLongToBeat, logros: para eso está el botón de
+              "actualizar el juego entero" de la barra de acciones. */}
           <button
             type="button"
             disabled={refresh.isPending}
@@ -113,19 +116,38 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
               refresh.mutate(game.id, {
                 onSuccess: (refreshed) => {
                   if (!refreshed) {
-                    toast.info(
-                      "This game isn't in IGDB's catalog anymore — ratings kept as they were.",
-                    );
-                  } else if (refreshed.ratingCritics === null && refreshed.ratingUsers === null) {
-                    toast.info('IGDB has no ratings for this game yet.');
-                  } else {
-                    toast.success('Ratings updated from IGDB.');
+                    toast.error("This game isn't in the library anymore.");
+                    return;
                   }
+                  const { ratings, steam } = refreshed;
+                  // Se avisa por la fuente que NO pudo, y solo cuando la otra
+                  // tampoco trajo nada: con tres tiles de tres poblaciones
+                  // distintas, "IGDB no tiene notas de esto" es ruido si el %
+                  // de Steam acaba de llegar.
+                  if (ratings === null) {
+                    toast.info(
+                      steam === 'updated'
+                        ? "Steam reviews updated — IGDB doesn't list this game anymore."
+                        : "This game isn't in IGDB's catalog anymore — ratings kept as they were.",
+                    );
+                    return;
+                  }
+                  const noIgdbRatings =
+                    ratings.ratingCritics === null && ratings.ratingUsers === null;
+                  if (noIgdbRatings && steam !== 'updated') {
+                    toast.info('No ratings for this game yet.');
+                    return;
+                  }
+                  toast.success(
+                    steam === 'updated'
+                      ? 'Ratings updated from IGDB and Steam.'
+                      : 'Ratings updated.',
+                  );
                 },
-                onError: () => toast.error('Could not reach IGDB.'),
+                onError: () => toast.error("Couldn't refresh — ratings kept as they were."),
               });
             }}
-            title="Re-fetch ratings from IGDB"
+            title="Re-fetch ratings from IGDB and Steam"
             aria-label="Refresh ratings"
             className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >

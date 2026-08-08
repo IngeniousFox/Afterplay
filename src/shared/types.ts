@@ -214,9 +214,11 @@ export type {
   ExternalRefreshEvent,
   ExternalRefreshSummary,
   GameExternalData,
+  GameFullRefreshResult,
   GameRatings,
   IgdbGameDetail,
   IgdbSearchResult,
+  RatingsRefreshResult,
   ReleaseDatePrecision,
   SteamTag,
 } from '../main/igdb/types';

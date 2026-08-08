@@ -201,7 +201,7 @@ export const gamesTable = sqliteTable('games', {
   // la fuente y lo que el radar necesita para no perderse una entrega por
   // haber elegido mal la saga.
   igdbCollections: text({ mode: 'json' }).$type<{ id: number; name: string }[]>(),
-  // ── SteamSpy (§6) — etiquetas y reseñas, del MISMO fetch ─────────────────
+  // ── Steam (§6) — etiquetas y reseñas ─────────────────────────────────────
   // Las 8 etiquetas más votadas de Steam, ya ordenadas. Valen más que los
   // géneros de IGDB porque son vocabulario de JUGADORES: IGDB dice "Platform,
   // Adventure" y Steam dice Metroidvania, Souls-like, Cozy. Solo juegos con
@@ -214,8 +214,15 @@ export const gamesTable = sqliteTable('games', {
   steamPositive: int(),
   steamNegative: int(),
   // Misma convención que el resto de checkedAt: con fecha = preguntado,
-  // aunque SteamSpy no supiera nada. SteamSpy es un tercero que ya se ha roto
-  // otras veces — si muere, lo guardado se queda y deja de refrescarse.
+  // aunque Steam no supiera nada. Todo esto es dato DECORATIVO — si la API de
+  // la tienda cambia, lo guardado se queda y deja de refrescarse.
+  //
+  // El NOMBRE de la columna es un fósil: estos datos venían de SteamSpy, que
+  // ya no está en la app (se le pidió a él primero y resultó tener vacíos los
+  // juegos recientes y atrasados los demás — el recibo, en steam/tags.ts).
+  // Renombrarla exigiría reconstruir la tabla, y eso en este stack ya costó
+  // producción dos veces: se queda como está y ya. Ver también
+  // legacySteamGridDbId, arriba, por el mismo motivo.
   steamSpyCheckedAt: int({ mode: 'timestamp_ms' }),
   // "Up next" (§2.2): cuándo fijaste este juego como prioridad de verdad.
   // null = cola normal. SIEMPRE manual (un icono de pin tuyo), nunca derivado

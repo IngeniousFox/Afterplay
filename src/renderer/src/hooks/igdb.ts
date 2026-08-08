@@ -1,11 +1,6 @@
-import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CollectionGame,
-  GameRatings,
-  IgdbGameDetail,
-  IgdbSearchResult,
-} from '../../../shared/types';
+import type { UseQueryResult } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import type { CollectionGame, IgdbGameDetail, IgdbSearchResult } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useDebouncedValue } from './useDebouncedValue';
 
@@ -57,25 +52,6 @@ export const useCollectionGames = (
   });
 };
 
-// Vuelve a pedir las notas de UN juego ya dado de alta y las guarda.
-//
-// Invalida ['games'] porque las notas viven en la fila del juego, no en una
-// query propia de IGDB: RatingsRow las lee de `game.ratingCritics`/
-// `ratingUsers` — mismo motivo que useRefreshGameHltb.
-export const useRefreshGameRatings = (): UseMutationResult<
-  GameRatings | null,
-  Error,
-  number,
-  unknown
-> => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (gameId: number) => window.api.igdb.refreshRatings(gameId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-      // El conteo de Ajustes también cambia: este juego puede haber pasado
-      // de "sin notas" a "con notas".
-      queryClient.invalidateQueries({ queryKey: queryKeys.external.status });
-    },
-  });
-};
+// El refresco de notas de un juego vive ahora en hooks/external.ts
+// (useRefreshGameRatings): dejó de ser cosa solo de IGDB cuando la card
+// estrenó el tile de Steam.

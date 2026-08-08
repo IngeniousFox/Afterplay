@@ -16,8 +16,8 @@ import { SettingsCard } from './SettingsCard';
 // Evolución de la vieja sección "Ratings": el refresco por lotes trae ahora,
 // del MISMO viaje, todo lo que la app le pide a fuentes externas de catálogo —
 // notas de crítica y jugadores, la sinopsis, la fecha de salida completa con
-// su precisión y las sagas (IGDB), más las etiquetas y las reseñas de Steam
-// (SteamSpy). Un botón, porque son los mismos juegos y la misma pasada.
+// su precisión y las sagas (IGDB), más las etiquetas y las reseñas de la
+// propia Steam. Un botón, porque son los mismos juegos y la misma pasada.
 //
 // La otra puerta es la cabecera del Plan, que hace lo mismo pero solo sobre
 // los planeados: esa es la del día a día, esta es la de "ponlo todo al día".
@@ -27,7 +27,7 @@ import { SettingsCard } from './SettingsCard';
 // frágil de fallos mudos. Su botón por-juego de la ficha es la vía correcta.
 //
 // Layout 'column' y no 'row' como su antecesora: esta pasada dura MINUTOS
-// (SteamSpy va a una petición por segundo) y una tarjeta con un solo renglón
+// (las reseñas se piden juego a juego) y una tarjeta con un solo renglón
 // de texto para contarlo se queda corta — hace falta el ancho entero para una
 // barra, igual que en Images.
 
@@ -105,8 +105,8 @@ export const ExternalDataSection = (): React.JSX.Element => {
   const progress = useExternalRefreshProgress();
 
   // Casi todo sale de IGDB, así que sin sus claves no hay nada que pedir —
-  // mismo aviso-en-línea que Trivia con la de Anthropic. SteamSpy no necesita
-  // ninguna, pero por sí solo no justifica el botón.
+  // mismo aviso-en-línea que Trivia con la de Anthropic. Lo de Steam no
+  // necesita ninguna, pero por sí solo no justifica el botón.
   const hasKey = Boolean(creds?.twitchClientId && creds?.twitchClientSecret);
 
   // Solo la fase de Steam avanza juego a juego: IGDB entero son 1-2
@@ -124,8 +124,8 @@ export const ExternalDataSection = (): React.JSX.Element => {
       // viva en vez de colgada.
       if (measurable && progress) {
         return progress.currentTitle
-          ? `Now asking SteamSpy about ${progress.currentTitle}…`
-          : 'Asking SteamSpy for tags and reviews, one game per second…';
+          ? `Now asking Steam about ${progress.currentTitle}…`
+          : 'Asking Steam for reviews, game by game…';
       }
       if (progress?.phase === 'saving') return 'Saving what came back…';
       return 'Asking IGDB for ratings, summaries and release dates…';
@@ -136,6 +136,15 @@ export const ExternalDataSection = (): React.JSX.Element => {
     // este modal estuviera cerrado cuando la pasada acabó.
     const summary = progress?.summary;
     if (summary && summary.total > 0) {
+      // Lo primero, si pasó: es la única noticia de la pasada que abre datos
+      // NUEVOS (etiquetas, reseñas y logros de un juego que hasta hoy la app
+      // daba por no-Steam), y pasa callada si no se dice. El caso típico es un
+      // juego que se dio de alta antes de salir.
+      if (summary.appIdsFound > 0) {
+        return summary.appIdsFound === 1
+          ? 'Done. 1 game just turned up on Steam — its tags and reviews are in.'
+          : `Done. ${summary.appIdsFound} games just turned up on Steam — their tags and reviews are in.`;
+      }
       const skipped = summary.total - summary.updated;
       return skipped > 0
         ? `Done. ${skipped} no longer in IGDB's catalog, kept as they were.`
@@ -152,7 +161,7 @@ export const ExternalDataSection = (): React.JSX.Element => {
     <SettingsCard
       layout="column"
       title="External data"
-      description="Ratings, summaries, full release dates and Steam tags for every game — from IGDB and SteamSpy, in one pass. Your plan has its own refresh button for just the games you're deciding between."
+      description="Ratings, summaries, full release dates, Steam tags and Steam reviews for every game — from IGDB and Steam, in one pass. Your plan has its own refresh button for just the games you're deciding between."
       icon={Globe}
       color={TEAL}
       headerRight={

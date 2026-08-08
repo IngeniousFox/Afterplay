@@ -81,7 +81,7 @@ export const igdbDetailResponseSchema = z.array(igdbDetailGameSchema);
 // cabecera del Plan): id, notas, sinopsis, colecciones y fecha con precisión —
 // nada de covers ni companies, que a 400 juegos por petición serían peso
 // muerto multiplicado. Todo lo demás (etiquetas y reseñas de Steam) sale de
-// SteamSpy, no de aquí.
+// la API de la tienda de Steam, no de aquí.
 export const igdbExternalBatchResponseSchema = z.array(
   z.object({
     id: z.number(),

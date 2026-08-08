@@ -2,14 +2,19 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import type { ExternalDataStatus, ExternalRefreshEvent } from '../../../shared/types';
+import type {
+  ExternalDataStatus,
+  ExternalRefreshEvent,
+  GameFullRefreshResult,
+  RatingsRefreshResult,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 
 // Datos externos (PLAN-TO-PLAY.md §5): notas, sinopsis, fecha completa y
-// sagas de IGDB + etiquetas y reseñas de SteamSpy. Un mecanismo, dos puertas.
+// sagas de IGDB + etiquetas y reseñas de Steam. Un mecanismo, dos puertas.
 //
 // El estado de la pasada NO vive en ningún componente, y esa es la clave de
-// todo este archivo: la parte de SteamSpy va a ~1 petición por segundo, así
+// todo este archivo: las reseñas se piden juego a juego, así
 // que con la biblioteca entera son MINUTOS. En ese rato cierras Ajustes, te
 // vas al Plan o miras otra pantalla — y con un useMutation por componente,
 // cada desmontaje se llevaba por delante el "Refreshing…" aunque el trabajo
@@ -99,6 +104,55 @@ export const useRefreshAllExternalData = (): UseMutationResult<number, Error, vo
 // Puerta 2 — la cabecera del Plan: solo los planeados. La del día a día.
 export const useRefreshPlanData = (): UseMutationResult<number, Error, void, unknown> =>
   useExternalRefresh(() => window.api.external.refreshPlan());
+
+// Puerta 3 — el botón de la ficha: TODO lo externo de UN juego (notas,
+// sinopsis, fecha, tiempos de HLTB, appid, etiquetas y reseñas de Steam, y
+// los logros). A diferencia de las otras dos, esta SÍ es un useMutation
+// normal con su isPending: son segundos y no sobrevive a nada — si cierras la
+// ficha, tampoco hay ya botón al que devolverle el estado.
+export const useRefreshGameEverything = (): UseMutationResult<
+  GameFullRefreshResult | null,
+  Error,
+  number,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (gameId: number) => window.api.external.refreshGame(gameId),
+    onSuccess: () => {
+      // Todo lo que toca vive en la fila del juego, salvo los logros, que
+      // tienen su propio árbol. La cobertura de Ajustes también se mueve: este
+      // juego puede acabar de entrar en "con notas" o en "con etiquetas".
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.external.status });
+    },
+  });
+};
+
+// Puerta 4 — el ⟳ de la card Ratings: solo las notas que esa card enseña, las
+// de IGDB y el % de Steam.
+//
+// Invalida ['games'] porque las notas viven en la fila del juego, no en una
+// query propia: la card las lee de `game.ratingCritics`/`ratingUsers`/
+// `steamPositive` — mismo motivo que useRefreshGameHltb.
+export const useRefreshGameRatings = (): UseMutationResult<
+  RatingsRefreshResult | null,
+  Error,
+  number,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (gameId: number) => window.api.external.refreshRatings(gameId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+      // El conteo de Ajustes también cambia: este juego puede haber pasado
+      // de "sin notas" a "con notas".
+      queryClient.invalidateQueries({ queryKey: queryKeys.external.status });
+    },
+  });
+};
 
 // ¿Hay una pasada en marcha? Combina las dos fuentes a propósito: el evento
 // (inmediato, pero solo existe si ha llegado alguno en esta sesión) y el

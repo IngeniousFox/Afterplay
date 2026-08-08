@@ -65,7 +65,7 @@ const Afterplay = (): React.JSX.Element => {
   // abierta antes de que llegara su catálogo se quedaba vacía hasta reiniciar.
   useAchievementsActivitySync();
   // Y el refresco de datos externos (PLAN-TO-PLAY.md 5): su parte de
-  // SteamSpy dura minutos, mucho mas de lo que nadie deja Ajustes abierto.
+  // el barrido dura minutos, mucho mas de lo que nadie deja Ajustes abierto.
   // La suscripcion vive AQUI para que la pasada se siga viendo desde
   // cualquier pantalla y su aviso de "ya esta" te llegue estes donde estes.
   useExternalRefreshActivity();

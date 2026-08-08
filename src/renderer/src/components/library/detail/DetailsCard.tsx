@@ -106,9 +106,13 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
             <Tag size={10} />
             STEAM TAGS
           </div>
+          {/* Sin cifra en el título: el número que traen ahora las etiquetas
+              es un PESO relativo de Steam, no un recuento de personas (ver
+              SteamTag) — enseñarlo como "N players" sería inventarse un dato.
+              El orden ya dice lo que importa. */}
           <div className="flex flex-wrap gap-1.5">
             {game.steamTags.map((tag) => (
-              <InfoChip key={tag.name} title={`${tag.votes.toLocaleString()} players tagged it`}>
+              <InfoChip key={tag.name} title="Player tag on Steam">
                 {tag.name}
               </InfoChip>
             ))}

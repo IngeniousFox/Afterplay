@@ -21,7 +21,7 @@ import { updateGame } from '../db/queries/games/updateGame';
 import { cacheImage } from '../images/cache';
 import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
-import { getSteamSpyData } from '../steamspy/api';
+import { getSteamGameData } from '../external/steamData';
 import { withDbAccess } from '../db';
 
 // Fire-and-forget a propósito: crear/editar un juego no debe esperar a que
@@ -44,12 +44,12 @@ const warmImageCache = (game: Pick<GameRow, 'coverUrl' | 'heroUrl'>): void => {
 // Etiquetas y reseñas de Steam del juego recién dado de alta (PLAN-TO-PLAY.md
 // §6). Fire-and-forget por el mismo motivo que la caché de imágenes: guardar
 // un juego no puede esperar a un tercero gratuito, y la ruta del botón "Add"
-// ya se cuidó una vez de no alargarla. Si SteamSpy no contesta, el refresco
-// por lotes lo recogerá — y mientras tanto el juego se queda sin chips, que
-// es exactamente lo mismo que le pasa a cualquier juego de consola.
-const warmSteamSpy = (game: Pick<GameRow, 'id' | 'steamAppId'>): void => {
+// ya se cuidó una vez de no alargarla. Si Steam no contesta, el refresco por
+// lotes lo recogerá — y mientras tanto el juego se queda sin chips, que es
+// exactamente lo mismo que le pasa a cualquier juego de consola.
+const warmSteamData = (game: Pick<GameRow, 'id' | 'steamAppId'>): void => {
   if (game.steamAppId === null) return;
-  void getSteamSpyData(game.steamAppId)
+  void getSteamGameData(game.steamAppId)
     .then(async (data) => {
       if (!data) return;
       await withDbAccess(async () =>
@@ -57,7 +57,7 @@ const warmSteamSpy = (game: Pick<GameRow, 'id' | 'steamAppId'>): void => {
       );
     })
     .catch((error) => {
-      console.error('[steamspy] fallo guardando etiquetas del alta:', error);
+      console.error('[steam] fallo guardando etiquetas del alta:', error);
     });
 };
 
@@ -73,7 +73,7 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
     const game = await createGameWithDetails(input);
     warmImageCache(game);
-    warmSteamSpy(game);
+    warmSteamData(game);
     // Sus curiosidades del modo ambiente, de fondo (mismo espíritu que la
     // caché de imágenes): el guardado no espera a Wikipedia ni a la API.
     generateCuriositiesInBackground(game);
@@ -92,10 +92,10 @@ export const registerGamesHandlers = (): void => {
   handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
     const game = await createPlannedGame(input);
     warmImageCache(game);
-    // Las etiquetas SÍ, a diferencia de las curiosidades: SteamSpy contesta
-    // sobre el juego tengas la cuenta que tengas, y las etiquetas son justo
-    // uno de los datos con los que la pantalla del Plan se decide.
-    warmSteamSpy(game);
+    // Las etiquetas SÍ, a diferencia de las curiosidades: la tienda de Steam
+    // contesta sobre el juego tengas la cuenta que tengas, y las etiquetas son
+    // justo uno de los datos con los que la pantalla del Plan se decide.
+    warmSteamData(game);
     // Curiosidades NO aquí: un Plan to Play puede ser un juego que ni ha
     // salido todavía, del que no se sabe nada — pedirle trivia al modelo en
     // ese momento es pagar por un "no lo sé" seguro, y encima lo dejaría

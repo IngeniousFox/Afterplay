@@ -263,7 +263,7 @@ export const PlanToPlay = (): React.JSX.Element => {
     });
   };
 
-  // Mientras corre, el botón cuenta por dónde va. Solo la fase de SteamSpy
+  // Mientras corre, el botón cuenta por dónde va. Solo la fase de Steam
   // avanza juego a juego (IGDB entero son 1-2 peticiones que vuelan), así que
   // es la única a la que se le puede poner un porcentaje sin inventárselo: en
   // las otras dos el botón lo dice con palabras y su barra late en vez de

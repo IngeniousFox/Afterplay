@@ -15,7 +15,7 @@ export type IgdbSearchResult = {
 
 // Las cuatro puntuaciones que se guardan en la fila del juego (ver
 // schema.ts para el porqué de mantenerlas separadas). Nombre compartido con
-// el patch de refresco manual (igdb:refreshRatings) — es la misma forma en
+// el patch de refresco manual (external:refreshRatings) — es la misma forma en
 // los dos sitios, así que un solo tipo cubre ambos.
 export type GameRatings = {
   ratingCritics: number | null;
@@ -73,8 +73,15 @@ export type CollectionGameEdition = {
   coverUrl: string | null;
 };
 
-// Etiqueta de Steam con sus votos (§8) — top 8, ya ordenadas. Vocabulario de
-// jugadores (Metroidvania, Souls-like, Cozy), no de catálogo.
+// Etiqueta de Steam (§8) — top 8, ya ordenadas. Vocabulario de jugadores
+// (Metroidvania, Souls-like, Cozy), no de catálogo.
+//
+// `votes` es un PESO relativo, no un recuento de personas, y por eso no se
+// enseña como cifra en ninguna parte: sirve para ordenar y nada más. El
+// nombre del campo se conserva de cuando esto venía de SteamSpy (que sí daba
+// votos) porque el valor viaja serializado en la columna JSON steamTags —
+// renombrarlo obligaría a reescribir lo ya guardado de toda la biblioteca a
+// cambio de nada.
 export type SteamTag = { name: string; votes: number };
 
 // Estado del bloque de datos externos de Ajustes: qué parte de la biblioteca
@@ -97,7 +104,7 @@ export type ExternalDataStatus = {
 };
 
 // Progreso de la pasada, por el canal 'external:activity'. Existe porque la
-// parte de SteamSpy va a ~1 petición por segundo y con la biblioteca entera
+// parte de las reseñas va juego a juego y con la biblioteca entera
 // son MINUTOS: en ese rato el usuario cierra Ajustes o se va a otra pantalla,
 // y el estado no puede vivir en un componente que se desmonta. Con esto la
 // pasada se ve igual desde donde estés, y termina donde estés.
@@ -110,7 +117,7 @@ export type ExternalRefreshEvent = {
   // verdad se ve avanzar; 'saving' es la transacción final.
   phase: 'igdb' | 'steam' | 'saving' | 'done';
   done: number;
-  // El total es el de SteamSpy (los juegos con appid): es la única parte que
+  // El total es el de las reseñas (los juegos con appid): es la única parte que
   // avanza juego a juego.
   total: number;
   currentTitle: string | null;
@@ -130,9 +137,50 @@ export type ExternalRefreshSummary = {
   withRatings: number;
   withSummary: number;
   withFullDate: number;
-  // Cuántos juegos con appid se le preguntaron a SteamSpy y de cuántos supo.
+  // Cuántos juegos ENTRARON en Steam en esta pasada: no los tenían y ahora
+  // sí. Se cuenta aparte porque es lo único de la pasada que desbloquea datos
+  // nuevos hacia adelante (etiquetas, reseñas y logros) en vez de refrescar
+  // los de siempre — y porque su caso típico es un juego dado de alta antes
+  // de salir, que hasta entonces se quedaba fuera de Steam para siempre.
+  appIdsFound: number;
+  // Cuántos juegos con appid se le preguntaron a Steam y de cuántos supo.
   steamChecked: number;
   steamFound: number;
+};
+
+// El parte del ⟳ de la card Ratings (external/refreshRatings.ts) — las tres
+// notas que esa card enseña, que salen de DOS sitios distintos.
+export type RatingsRefreshResult = {
+  // null = IGDB ya no tiene el juego en su catálogo; lo que hubiera se
+  // conserva y el resto de la pasada sigue igual.
+  ratings: GameRatings | null;
+  // 'skipped' = este juego no está en Steam, así que no hay a quién preguntar
+  // por el %. No es un fallo: es lo normal en media biblioteca.
+  steam: 'updated' | 'no-data' | 'skipped';
+};
+
+// El parte de un "actualizar este juego entero" (external/refreshGame.ts).
+//
+// Un veredicto por fuente y no un simple ok/ko a propósito: aquí lo NORMAL es
+// terminar a medias — un juego de consola no tiene nada de Steam, HowLongToBeat
+// no reconoce a los muy raros, y ninguna de esas dos cosas es un fallo. Un
+// resultado único obligaría a elegir entre cantar error por algo que está bien
+// o cantar éxito habiendo dejado fuera lo que el usuario venía a buscar.
+export type GameFullRefreshResult = {
+  // 'gone' = IGDB ya no tiene el juego en su catálogo (rarísimo, pero pasa);
+  // lo que hubiera se conserva.
+  igdb: 'updated' | 'gone' | 'failed';
+  // 'no-match' = HLTB no lo reconoció con confianza suficiente. No se pisa lo
+  // que ya había.
+  hltb: 'updated' | 'no-match' | 'failed';
+  // 'had-it' = ya tenía appid y no se toca (es identidad del juego);
+  // 'found' = no lo tenía y acaba de aparecer, que es la noticia buena.
+  steam: 'found' | 'had-it' | 'not-on-steam' | 'failed';
+  // 'skipped' = sin appid no hay a quién preguntar.
+  steamSpy: 'updated' | 'no-data' | 'skipped' | 'failed';
+  // 'nothing' = ni Steam ni RetroAchievements tienen nada que decir de este
+  // juego (ver queueAchievementsRefreshForGame).
+  achievements: 'queued' | 'nothing' | 'failed';
 };
 
 export type IgdbGameDetail = GameRatings & {

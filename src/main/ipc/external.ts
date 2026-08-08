@@ -3,6 +3,8 @@ import { isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
 import { isExternalRefreshRunning, startExternalRefresh } from '../external/refresh';
+import { refreshGameEverything } from '../external/refreshGame';
+import { refreshGameRatings } from '../external/refreshRatings';
 import type { ExternalDataStatus } from '../igdb/types';
 
 // Las dos puertas del refresco de datos externos (PLAN-TO-PLAY.md §5.1). La
@@ -43,4 +45,17 @@ export const registerExternalHandlers = (): void => {
   // porque son los juegos cuyos datos deciden algo (¿cuánto dura?, ¿merece la
   // pena?, ¿ha salido ya?) y los que más se mueven por debajo.
   ipcMain.handle('external:refreshPlan', (): Promise<number> => startExternalRefresh('plan'));
+
+  // Puerta 3 — la ficha de UN juego. No es una pasada: son cuatro peticiones
+  // que tardan segundos, así que va directa y devuelve el parte completo por
+  // el propio invoke, sin cola ni canal de eventos. Además de lo que hacen
+  // las otras dos puertas, esta refresca los LOGROS, que la pasada de
+  // biblioteca no toca (ver refreshGame.ts).
+  ipcMain.handle('external:refreshGame', (_event, gameId: number) => refreshGameEverything(gameId));
+
+  // Puerta 4 — el ⟳ de la card Ratings: SOLO las tres notas que esa card
+  // enseña (IGDB + el % de Steam). Más estrecha que la puerta 3 a propósito:
+  // un botón dentro de una card refresca lo que hay en esa card, ni más
+  // —nada de logros ni de HowLongToBeat— ni menos.
+  ipcMain.handle('external:refreshRatings', (_event, gameId: number) => refreshGameRatings(gameId));
 };

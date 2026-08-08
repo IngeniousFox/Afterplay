@@ -276,7 +276,8 @@ export const PlanRow = ({
             {game.steamTags.map((tag) => (
               <span
                 key={tag.name}
-                title={`${tag.votes.toLocaleString()} players tagged it`}
+                // Sin cifra: es un peso relativo, no personas (ver SteamTag).
+                title="Player tag on Steam"
                 className="flex-none rounded-md border border-white/8 bg-white/[0.03] px-1.75 py-0.5 text-[10.5px] font-semibold text-muted-foreground"
               >
                 {tag.name}
