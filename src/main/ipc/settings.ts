@@ -4,6 +4,7 @@ import { getConfigValue, setConfigValue } from '../config/store';
 import { getLastSyncFailure, runSyncCycle } from '../db';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
+import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
 import { resetR2Client } from '../saves/r2';
 import { resetSgdbClient } from '../sgdb/client';
 import type { CredentialsValues, TimeFormat } from '../../shared/types';
