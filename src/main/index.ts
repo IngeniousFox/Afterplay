@@ -422,9 +422,14 @@ app.whenReady().then(async () => {
     // Con la instancia única (§1.1), "la app ya estaba abierta" ha dejado de
     // ser una causa posible de este error — el texto ya no la enmascara y
     // puede señalar a los culpables reales que quedan.
+    // El mensaje real y no solo el genérico: cuando el que falla es el
+    // verificador de una reconstrucción de tabla, ahí viene QUÉ tablas
+    // perdieron filas y DÓNDE está la copia de justo antes — datos que no
+    // sirven de nada enterrados en una consola que nadie va a mirar.
     dialog.showErrorBox(
       'Afterplay',
-      'No se pudo preparar la base de datos (¿otro programa está usando el archivo, o falló una migración?). La app se va a cerrar.',
+      'No se pudo preparar la base de datos (¿otro programa está usando el archivo, o falló una migración?). La app se va a cerrar.\n\n' +
+        (error instanceof Error ? error.message : String(error)),
     );
     app.quit();
     return;

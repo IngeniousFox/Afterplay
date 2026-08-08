@@ -51,8 +51,14 @@ const findWikipediaSite = (
 // tiene texto. Los errores de red/credenciales SÍ lanzan: significan "no se
 // pudo comprobar", y el que llama debe dejar el juego pendiente para otro
 // intento, no generar sin grounding creyendo que no había artículo.
-export const getWikipediaArticle = async (igdbId: number): Promise<WikipediaArticle | null> => {
-  if (!Number.isInteger(igdbId)) return null;
+// igdbId null = el juego no está en el catálogo de IGDB (existe en Steam y
+// ellos aún no lo tienen). El enlace a Wikipedia sale precisamente de la ficha
+// de IGDB, así que sin id no hay por dónde empezar: se devuelve null y quien
+// llama sigue sin artículo, igual que con un juego que no tiene ninguno.
+export const getWikipediaArticle = async (
+  igdbId: number | null,
+): Promise<WikipediaArticle | null> => {
+  if (igdbId === null || !Number.isInteger(igdbId)) return null;
 
   const raw = await igdbRequest(
     'games',

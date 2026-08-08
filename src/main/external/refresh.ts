@@ -5,6 +5,8 @@ import { getGameExternalBatch, getSteamAppIds } from '../igdb/api';
 import type { ExternalRefreshSummary } from '../igdb/types';
 import { getSteamReviewCounts, STEAM_REVIEWS_DELAY_MS } from '../steam/reviews';
 import { getSteamTags } from '../steam/tags';
+import { adoptIgdbForCandidates, findAdoptionCandidates } from './adoptIgdb';
+import { fillMissingSgdbIds } from './sgdbBackfill';
 import { notifyExternalActivity } from './notify';
 import { mergeSteamPatch, type SteamGamePatch } from './steamData';
 
@@ -82,7 +84,10 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 export type RefreshScope = 'plan' | 'all';
 
-type TargetGame = { id: number; igdbId: number; title: string; steamAppId: number | null };
+// igdbId null = juego que no está en el catálogo de IGDB (existe en Steam y
+// ellos todavía no lo tienen). Entra igual en la pasada: lo de Steam sí se le
+// puede pedir, solo se salta la parte de IGDB.
+type TargetGame = { id: number; igdbId: number | null; title: string; steamAppId: number | null };
 
 const EMPTY_SUMMARY: ExternalRefreshSummary = {
   total: 0,
@@ -90,6 +95,7 @@ const EMPTY_SUMMARY: ExternalRefreshSummary = {
   withRatings: 0,
   withSummary: 0,
   withFullDate: 0,
+  adoptedFromSteam: 0,
   appIdsFound: 0,
   steamChecked: 0,
   steamFound: 0,
@@ -144,7 +150,8 @@ export const startExternalRefresh = async (scope: RefreshScope): Promise<number>
   return games.length;
 };
 
-const runPass = async (scope: RefreshScope, games: TargetGame[]): Promise<void> => {
+const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise<void> => {
+  let games = initialGames;
   // Arranca con los que YA tienen appid y crece si la ronda de appids
   // encuentra alguno más. Declarado con `let` y con valor desde el principio
   // a propósito: el `finally` lo lee para el evento final, y si la pasada
@@ -186,13 +193,40 @@ const runPass = async (scope: RefreshScope, games: TargetGame[]): Promise<void> 
   try {
     emit('igdb', 0, null);
 
+    // ── ¿Alguno ya está en IGDB? ────────────────────────────────────────────
+    // Lo PRIMERO de la pasada, y a propósito: los juegos dados de alta solo
+    // con Steam (porque IGDB no los tenía) cambian aquí de fuente, y así el
+    // resto de la pasada ya los trata como juegos de IGDB normales — entran
+    // en el lote de notas, en el de appids y en todo lo demás.
+    const adoptedCount = await adoptIgdbForCandidates(await findAdoptionCandidates());
+    // Se relee la lista si hubo adopciones: los que acaban de ganar igdbId
+    // tienen que entrar en el lote de IGDB de aquí abajo, no esperar a la
+    // pasada siguiente.
+    if (adoptedCount > 0) {
+      games = await selectTargets(scope);
+      // Y con ella la lista de Steam: la adopción no cambia qué juegos tienen
+      // appid, pero sí sus TÍTULOS (pasan a los de IGDB), y esos títulos son
+      // los que el progreso va cantando juego a juego.
+      steamTargets = games.filter((game) => game.steamAppId !== null);
+    }
+
+    // Y el id de SteamGridDB de los que no lo tengan — mismo motivo que la
+    // adopción de arriba: un juego dado de alta recién anunciado no tenía arte
+    // todavía, y ese "no" caduca (ver external/sgdbBackfill.ts).
+    await fillMissingSgdbIds();
+
     // ── Red, fuera del candado ──────────────────────────────────────────────
-    const igdbByIgdbId = await getGameExternalBatch(games.map((game) => game.igdbId));
+    // Solo los que TIENEN id de IGDB: a los de Steam sin ficha en IGDB no hay
+    // a quién preguntarles, y colar un null en la query los rompería a todos.
+    const inIgdb = games.filter(
+      (game): game is TargetGame & { igdbId: number } => game.igdbId !== null,
+    );
+    const igdbByIgdbId = await getGameExternalBatch(inIgdb.map((game) => game.igdbId));
 
     // Los appids que faltan, re-preguntados (ver el bloque de arriba). Va
     // dentro de la fase 'igdb' porque es lo mismo: peticiones de catálogo que
     // vuelan, sin nada que enseñar juego a juego.
-    const withoutAppId = games.filter((game) => game.steamAppId === null);
+    const withoutAppId = inIgdb.filter((game) => game.steamAppId === null);
     for (let start = 0; start < withoutAppId.length; start += APPID_BATCH_SIZE) {
       const batch = withoutAppId.slice(start, start + APPID_BATCH_SIZE);
       const appIdByIgdbId = await getSteamAppIds(batch.map((game) => game.igdbId));
@@ -240,7 +274,10 @@ const runPass = async (scope: RefreshScope, games: TargetGame[]): Promise<void> 
     await withDbAccess(async () =>
       getDb().transaction(async (tx) => {
         for (const game of games) {
-          const igdb = igdbByIgdbId.get(game.igdbId);
+          // Sin id de IGDB no hay nada que buscar: se trata igual que un juego
+          // que IGDB ya no lista — se conserva lo que hubiera y se sigue con
+          // lo de Steam, que es independiente.
+          const igdb = game.igdbId === null ? undefined : igdbByIgdbId.get(game.igdbId);
           const steam = steamByGameId.get(game.id);
           if (steam) steamFound++;
 
@@ -305,6 +342,7 @@ const runPass = async (scope: RefreshScope, games: TargetGame[]): Promise<void> 
       withRatings,
       withSummary,
       withFullDate,
+      adoptedFromSteam: adoptedCount,
       appIdsFound: foundAppIds.size,
       steamChecked: steamTargets.length,
       steamFound,

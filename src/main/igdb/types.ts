@@ -142,6 +142,10 @@ export type ExternalRefreshSummary = {
   // nuevos hacia adelante (etiquetas, reseñas y logros) en vez de refrescar
   // los de siempre — y porque su caso típico es un juego dado de alta antes
   // de salir, que hasta entonces se quedaba fuera de Steam para siempre.
+  // Cuántos juegos que estaban dados de alta SOLO con Steam han aparecido por
+  // fin en IGDB en esta pasada, y por tanto han cambiado de fuente entera
+  // (carátula, hero, sinopsis, géneros, fecha). Ver external/adoptIgdb.ts.
+  adoptedFromSteam: number;
   appIdsFound: number;
   // Cuántos juegos con appid se le preguntaron a Steam y de cuántos supo.
   steamChecked: number;
@@ -169,7 +173,10 @@ export type RatingsRefreshResult = {
 export type GameFullRefreshResult = {
   // 'gone' = IGDB ya no tiene el juego en su catálogo (rarísimo, pero pasa);
   // lo que hubiera se conserva.
-  igdb: 'updated' | 'gone' | 'failed';
+  // 'adopted' = el juego estaba dado de alta SOLO con Steam y acaba de
+  // aparecer en IGDB: se ha cambiado de fuente entera (ver adoptIgdb.ts). Es
+  // la noticia buena y por eso tiene nombre propio en vez de un 'updated'.
+  igdb: 'updated' | 'adopted' | 'gone' | 'failed';
   // 'no-match' = HLTB no lo reconoció con confianza suficiente. No se pisa lo
   // que ya había.
   hltb: 'updated' | 'no-match' | 'failed';
@@ -182,6 +189,13 @@ export type GameFullRefreshResult = {
   // juego (ver queueAchievementsRefreshForGame).
   achievements: 'queued' | 'nothing' | 'failed';
 };
+
+// El tráiler de un juego. `videoId` es un id de YouTube: IGDB no aloja vídeo,
+// solo apunta — y por eso esto acaba en un iframe y no en un <video>.
+//
+// Se guarda UNO y no la lista entera (ver pickTrailer en igdb/api.ts): en la
+// ficha solo cabe uno, y una lista de "Dev Diary #4" no le sirve a nadie.
+export type GameTrailer = { videoId: string; name: string | null };
 
 export type IgdbGameDetail = GameRatings & {
   igdbId: number;
@@ -212,4 +226,6 @@ export type IgdbGameDetail = GameRatings & {
   covers: string[];
   heroes: string[];
   screenshots: string[];
+  // null = IGDB no tiene ningún vídeo de este juego.
+  trailer: GameTrailer | null;
 };

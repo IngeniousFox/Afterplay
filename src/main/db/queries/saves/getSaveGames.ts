@@ -12,7 +12,7 @@ export type SaveGame = {
   title: string;
   // La clave de R2 se indexa por igdbId, que ya es independiente de la
   // máquina y del título (PARTIDAS-GUARDADAS.md §9).
-  igdbId: number;
+  igdbId: number | null;
   saveBackupEnabled: boolean;
   saveDetectionSource: 'auto' | 'manual' | null;
   saveLudusaviName: string | null;

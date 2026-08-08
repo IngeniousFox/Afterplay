@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { floatingPanelClass } from '../../../lib/styles';
 
 type DropdownProps<T extends string> = {
@@ -29,10 +29,32 @@ export const Dropdown = <T extends string>({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const close = (): void => {
     setOpen(false);
     setQuery('');
   };
+
+  // Clic fuera del panel = cerrarlo (bug real, 8-ago-2026: antes solo se
+  // cerraba eligiendo una opción o volviendo a pulsar el propio botón).
+  // Captura y no burbuja: así se cierra ANTES de que el clic llegue a
+  // cualquier otro botón que hubiera detrás.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (!containerRef.current?.contains(event.target as Node)) close();
+    };
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const visibleOptions = normalizedQuery
@@ -64,7 +86,7 @@ export const Dropdown = <T extends string>({
   }`;
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => (open ? close() : setOpen(true))}

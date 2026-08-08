@@ -7,6 +7,8 @@ import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
 import type { GameFullRefreshResult } from '../igdb/types';
 import type { UpdateGamePatch } from '../../shared/types';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
+import { resolveSgdbId } from '../sgdb/api';
+import { adoptIgdbForGame } from './adoptIgdb';
 import { getSteamGameData } from './steamData';
 
 // "Actualízalo TODO" de UN juego — el botón de su ficha.
@@ -52,6 +54,7 @@ export const refreshGameEverything = async (
         igdbId: gamesTable.igdbId,
         title: gamesTable.title,
         releaseYear: gamesTable.releaseYear,
+        steamGridDbId: gamesTable.steamGridDbId,
         steamAppId: gamesTable.steamAppId,
       })
       .from(gamesTable)
@@ -60,16 +63,37 @@ export const refreshGameEverything = async (
   );
   if (!game) return null;
 
+  // ── 0. ¿Ya lo tiene IGDB? ───────────────────────────────────────────────
+  // Antes que nada, y solo para los que se dieron de alta solo con Steam: si
+  // IGDB por fin lo ha metido, el juego cambia de fuente AQUÍ y el resto del
+  // refresco sigue ya con su ficha buena, no con la provisional de la tienda
+  // (ver external/adoptIgdb.ts).
+  let igdbId = game.igdbId;
+  let adopted = false;
+  if (igdbId === null && game.steamAppId !== null) {
+    const found = await adoptIgdbForGame(gameId, game.steamAppId);
+    if (found !== null) {
+      igdbId = found;
+      adopted = true;
+    }
+  }
+
   const patch: UpdateGamePatch = {};
   const now = new Date();
 
   // ── 1. IGDB: notas, sinopsis, sagas y fecha completa ────────────────────
   // Va primero y sola porque los demás dependen de lo que traiga: el título y
   // el año con los que se busca en HowLongToBeat, y el appid que lleva atado.
-  const detail = await getGameDetails(game.igdbId).catch((error) => {
-    console.warn('[refresh] IGDB no contesto para este juego (sigo con el resto):', error);
-    return undefined;
-  });
+  // igdbId null = este juego no está en el catálogo de IGDB (existe en Steam
+  // pero IGDB todavía no lo tiene). No hay a quién preguntar, así que se trata
+  // igual que un "ya no está en el catálogo": ni se pide, ni se pisa nada.
+  const detail =
+    igdbId === null
+      ? null
+      : await getGameDetails(igdbId).catch((error) => {
+          console.warn('[refresh] IGDB no contesto para este juego (sigo con el resto):', error);
+          return undefined;
+        });
 
   // Tres estados distintos y hay que distinguirlos: contestó (undefined es
   // que falló la red; null es que el juego ya no está en su catálogo).
@@ -154,6 +178,20 @@ export const refreshGameEverything = async (
     }
   }
 
+  // ── 3bis. El id de SteamGridDB, si le faltaba ───────────────────────────
+  // Mismo caso que el id de IGDB: SteamGridDB tampoco tiene arte de un juego
+  // el día que se anuncia. Si el alta se hizo demasiado pronto, aquí es donde
+  // se recupera — y solo si falta: el que ya está puede ser el que elegiste tú
+  // en el CoverPicker.
+  if (game.steamGridDbId === null) {
+    const sgdbId = await resolveSgdbId({
+      title: detail?.title ?? game.title,
+      releaseYear: detail?.releaseYear ?? game.releaseYear,
+      steamAppId: appId ?? null,
+    });
+    if (sgdbId !== null) patch.steamGridDbId = sgdbId;
+  }
+
   // ── 4. Escritura, con todo lo que se haya reunido ───────────────────────
   await withDbAccess(async () => updateGame(gameId, patch));
 
@@ -173,7 +211,10 @@ export const refreshGameEverything = async (
   });
 
   return {
-    igdb,
+    // La adopción manda sobre el veredicto normal: si el juego ACABA de
+    // entrar en IGDB, eso es lo que hay que contar, no un "actualizado" que
+    // suena a refresco rutinario.
+    igdb: adopted ? 'adopted' : igdb,
     hltb,
     steam,
     steamSpy,

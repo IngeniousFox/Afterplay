@@ -95,6 +95,27 @@ const dedupePaths = (paths: string[]): string[] => {
   });
 };
 
+// La nube de partidas indexa por igdbId (saves/<igdbId>/<machineId>/), que es
+// lo que hace que la misma partida se reconozca desde otro PC. Un juego que
+// solo está en Steam todavía no tiene esa identidad portable.
+//
+// En la práctica no es un caso que se dé: por ahí entran juegos RECIÉN
+// ANUNCIADOS —muchos ni han salido— así que no hay partidas que respaldar. Y
+// en cuanto IGDB los mete (cualquiera de los tres refrescos lo detecta, ver
+// external/adoptIgdb.ts) ganan su id y la nube funciona sola.
+//
+// Así que esto no es una función que haya que evitar, es la red por si acaso:
+// un mensaje claro en vez de una clave de R2 con "null" dentro, que sería un
+// destino imposible de encontrar después.
+const requireIgdbId = (game: SaveGame): number => {
+  if (game.igdbId === null) {
+    throw new Error(
+      `"${game.title}" todavía no está en IGDB, así que aún no tiene un identificador que compartir entre PCs. En cuanto aparezca allí (lo comprueba cualquier refresco) sus partidas podrán ir a la nube.`,
+    );
+  }
+  return game.igdbId;
+};
+
 // ── Espejo local -> R2 ────────────────────────────────────────────────────
 // El bucket refleja la carpeta local del juego. Es idempotente por diseño:
 // si una subida falló a medias, la siguiente la completa sin duplicar nada,
@@ -111,7 +132,7 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // Solo se toca la carpeta de ESTA máquina. Lo que hayan subido otros PCs
   // vive en su propio prefijo y aquí no se lee, ni se sube, ni se borra.
   const machineId = getMachineId();
-  const prefix = r2.gamePrefix(game.igdbId, machineId);
+  const prefix = r2.gamePrefix(requireIgdbId(game), machineId);
   const remote = await r2.listKeys(prefix);
   const remoteNames = new Set(remote.map((object) => basename(object.key)));
 
@@ -441,7 +462,7 @@ export const runRestore = async (
   request: RestoreRequestInput,
 ): Promise<Omit<RestoreResult, 'warnings'>> => {
   const ludusaviName = row.ludusaviName;
-  const workspace = await materializeBackup(game.igdbId, ludusaviName, row.machineId, {
+  const workspace = await materializeBackup(requireIgdbId(game), ludusaviName, row.machineId, {
     name: row.backupName,
     chain: row.parentBackupName ? [row.parentBackupName, row.backupName] : [row.backupName],
   });

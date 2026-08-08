@@ -16,7 +16,7 @@ import { writeInitialPlaythrough } from './writeInitialPlaythrough';
 export const createGameWithDetails = async (
   input: CreateGameWithDetailsInput,
 ): Promise<GameRow> => {
-  const enrichment = await resolveGameEnrichment(input.igdbId, {
+  const enrichment = await resolveGameEnrichment(input.source, {
     coverUrl: input.coverUrl,
     heroUrl: input.heroUrl,
     steamGridDbId: input.steamGridDbId,

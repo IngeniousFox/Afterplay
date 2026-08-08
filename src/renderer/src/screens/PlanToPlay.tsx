@@ -684,7 +684,17 @@ export const PlanToPlay = (): React.JSX.Element => {
             if (!next) setAddTo(null);
           }}
           mode={addTo.where === 'plan' ? 'plan' : 'library'}
-          preselected={addTo.game}
+          preselected={{
+            // Un descubrimiento del radar SIEMPRE viene de IGDB: es de donde
+            // sale el radar entero.
+            source: { igdbId: addTo.game.igdbId },
+            title: addTo.game.title,
+            coverUrl: addTo.game.coverUrl,
+            releaseYear: addTo.game.releaseYear,
+            platforms: addTo.game.platforms,
+            genres: addTo.game.genres,
+            summary: addTo.game.summary,
+          }}
           onCreated={(gameId) => {
             setAddTo(null);
             // Al añadirlo deja de ser un descubrimiento pendiente: la

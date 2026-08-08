@@ -84,6 +84,35 @@ export const useSetAmbientIdleMinutes = (): UseMutationResult<void, Error, numbe
     queryKeys.settings.ambientIdleMinutes,
   );
 
+// Cadencia y retención de la copia local automática (db/dailyBackup.ts) — sin
+// efecto en caliente: la próxima comprobación es en el próximo arranque, no
+// hay nada que despertar aquí.
+export const useBackupIntervalHours = (): UseQueryResult<number, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.backupIntervalHours,
+    queryFn: () => window.api.settings.getBackupIntervalHours(),
+    staleTime: Infinity,
+  });
+
+export const useSetBackupIntervalHours = (): UseMutationResult<void, Error, number, unknown> =>
+  useSettingMutation(
+    (hours: number) => window.api.settings.setBackupIntervalHours(hours),
+    queryKeys.settings.backupIntervalHours,
+  );
+
+export const useBackupCount = (): UseQueryResult<number, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.backupCount,
+    queryFn: () => window.api.settings.getBackupCount(),
+    staleTime: Infinity,
+  });
+
+export const useSetBackupCount = (): UseMutationResult<void, Error, number, unknown> =>
+  useSettingMutation(
+    (count: number) => window.api.settings.setBackupCount(count),
+    queryKeys.settings.backupCount,
+  );
+
 // Overlay in-game (OVERLAY.md §12). Las mutations de esta pareja invalidan
 // ADEMÁS el estado del atajo: encender el toggle o cambiar el accelerator
 // re-registra en el main, y el "shortcut in use by another app" de Ajustes

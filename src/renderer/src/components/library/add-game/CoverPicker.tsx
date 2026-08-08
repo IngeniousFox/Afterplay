@@ -12,7 +12,10 @@ export type CoverPickerTarget = 'cover' | 'hero';
 
 type CoverPickerProps = {
   target: CoverPickerTarget;
-  igdbId: number;
+  // null = el juego no esta en IGDB (existe en Steam y ellos aun no lo
+  // tienen): sin candidatas suyas, pero las de SteamGridDB buscan por nombre
+  // y siguen saliendo igual.
+  igdbId: number | null;
   title: string;
   releaseYear: number | null;
   // Puesto (no null) = buscar imágenes de SteamGridDB de ESE id concreto en

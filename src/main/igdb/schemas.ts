@@ -73,6 +73,11 @@ export const igdbDetailGameSchema = igdbSearchGameSchema.extend({
       }),
     )
     .optional(),
+  // Vídeos del juego: `video_id` es un id de YouTube, no una URL ni un
+  // fichero — IGDB no aloja vídeo, solo apunta. `name` viene a ser
+  // "Launch Trailer", "Gameplay", "Dev Diary #2"…, y es lo único con lo que
+  // distinguir el tráiler de un diario de desarrollo.
+  videos: z.array(z.object({ video_id: z.string(), name: z.string().optional() })).optional(),
 });
 
 export const igdbDetailResponseSchema = z.array(igdbDetailGameSchema);

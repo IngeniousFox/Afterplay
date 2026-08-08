@@ -1,6 +1,7 @@
 import { ArrowRight, FolderSearch, Gamepad2, Search, TriangleAlert, X } from 'lucide-react';
 import { useState } from 'react';
-import type { IgdbSearchResult } from '../../../../../shared/types';
+import type { IgdbSearchResult, SteamSearchResult } from '../../../../../shared/types';
+import { SteamFallback } from './SteamFallback';
 import { BLUE } from '../../../lib/colors';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
@@ -16,6 +17,8 @@ type SearchStepProps = {
   // a como se ve una app colgada.
   isError?: boolean;
   onSelect: (result: IgdbSearchResult) => void;
+  // El respaldo: elegir un juego que solo existe en Steam.
+  onSelectSteam: (result: SteamSearchResult) => void;
   // Cambia al modo "escanear mis carpetas". Opcional: el alta de un juego
   // planeado (mode='plan') no lo ofrece — ahí no hay nada instalado que
   // escanear todavía.
@@ -75,6 +78,7 @@ export const SearchStep = ({
   results,
   isError = false,
   onSelect,
+  onSelectSteam,
   onScanFolders,
   ownedByIgdbId,
 }: SearchStepProps): React.JSX.Element => {
@@ -234,14 +238,7 @@ export const SearchStep = ({
             </p>
           </div>
         ) : results?.length === 0 ? (
-          <div className="flex flex-col items-center gap-2.5 px-4 py-8 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.04]">
-              <Search size={18} strokeWidth={1.5} className="text-muted-foreground/50" />
-            </div>
-            <p className="text-[13px] text-muted-foreground">
-              No games found in the catalog — try another title.
-            </p>
-          </div>
+          <SteamFallback query={trimmed} onSelect={onSelectSteam} />
         ) : (
           // Sin key artificial por búsqueda: cada tecleo trae igdbId
           // distintos, así que React ya monta filas nuevas por su cuenta —

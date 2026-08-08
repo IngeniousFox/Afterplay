@@ -1,6 +1,11 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
-import type { CollectionGame, IgdbGameDetail, IgdbSearchResult } from '../../../shared/types';
+import type {
+  CollectionGame,
+  IgdbGameDetail,
+  IgdbSearchResult,
+  SteamSearchResult,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useDebouncedValue } from './useDebouncedValue';
 
@@ -15,6 +20,22 @@ export const useIgdbSearch = (query: string): UseQueryResult<IgdbSearchResult[],
     queryKey: queryKeys.igdb.search(trimmed),
     queryFn: () => window.api.igdb.search(trimmed),
     enabled: trimmed.length > 0,
+  });
+};
+
+// El respaldo del buscador: la tienda de Steam, SOLO cuando IGDB ha vuelto
+// vacío (quien lo monta ya se encarga de eso, ver SteamFallback). Mismo
+// debounce que el de IGDB por el mismo motivo — una petición por tecla no.
+export const useSteamSearch = (query: string): UseQueryResult<SteamSearchResult[], Error> => {
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const trimmed = debouncedQuery.trim();
+
+  return useQuery({
+    queryKey: queryKeys.igdb.steamSearch(trimmed),
+    queryFn: () => window.api.igdb.searchSteam(trimmed),
+    enabled: trimmed.length > 0,
+    // La tienda no cambia de una tecla a otra: sin refetch al reenfocar.
+    staleTime: 5 * 60 * 1000,
   });
 };
 

@@ -151,6 +151,81 @@ const parseSteamUid = (uid: string): number | null => {
   return Number.isInteger(appId) && appId > 0 ? appId : null;
 };
 
+// UN tráiler por juego, no la lista entera de vídeos.
+//
+// La lista trae de todo mezclado y en la ficha solo cabe uno. La primera
+// versión de esto elegía por POSICIÓN —el último con "trailer" en el nombre—
+// y estaba mal: el caso que lo destapó es "007 First Light", con 20 vídeos,
+// donde el último llamado "Trailer" es material posterior al lanzamiento
+// mientras que el bueno, "Launch Trailer", está en la posición 16. La
+// posición no dice nada; el NOMBRE sí.
+//
+// Así que se puntúa por nombre y gana el mejor. El orden de preferencia no es
+// una opinión, es lo que un tráiler promete: el de LANZAMIENTO es el que
+// enseña el juego que existe. Detrás van los que enseñan algo concreto de él
+// (historia, gameplay), luego los del anuncio —que son de años antes y a
+// veces ni se parecen al juego final— y por último el "Trailer" a secas.
+//
+// La lista de RECHAZADOS es igual de importante: un "Dev Diary Episode 3" o
+// un "Accolades Trailer" (el montaje de citas de prensa) no es lo que quieres
+// ver al abrir una ficha, y un "Update"/"DLC"/"Season" enseña justo lo que NO
+// es el juego base. Nunca dejan a un juego sin vídeo: si todo fuera
+// rechazable se cogería igualmente el menos malo — comprobado sobre la
+// biblioteca real (8-ago-2026), donde eso no le pasa a NI UN juego.
+//
+// Reparto real de lo que elige esta regla en esa biblioteca, de 955 juegos
+// con vídeo: 356 un "Trailer" a secas, 281 un "Launch Trailer", 136 uno de
+// gameplay, 132 de anuncio, 11 de historia y 39 el resto.
+//
+// null = este juego no tiene vídeo en IGDB (30 de 985, casi todo shovelware).
+// La sección simplemente no lo enseña.
+
+// Menor = mejor. Se recorre en orden y gana la primera que encaje.
+const TRAILER_RANKS: [RegExp, number][] = [
+  [/launch\s*trailer/i, 0],
+  [/story\s*trailer/i, 1],
+  [/gameplay\s*trailer/i, 2],
+  [/(reveal|announcement)\s*trailer/i, 3],
+  [/^\s*trailer\s*$/i, 4],
+  [/trailer/i, 5],
+  [/gameplay/i, 6],
+  [/teaser/i, 7],
+];
+
+// Material que no es "el tráiler del juego": contenido posterior al
+// lanzamiento, piezas de prensa y todo lo que es sobre el juego en vez de ser
+// el juego.
+const TRAILER_REJECTED =
+  /dev\s*diary|accolades|update|season|dlc|expansion|pass|episode|patch|behind the|making of|soundtrack|interview|tga\s*\d{4}|awards/i;
+
+const trailerScore = (name: string | undefined): number => {
+  const label = name ?? '';
+  if (TRAILER_REJECTED.test(label)) return 90;
+  for (const [pattern, rank] of TRAILER_RANKS) if (pattern.test(label)) return rank;
+  return 8;
+};
+
+const pickTrailer = (
+  videos: { video_id: string; name?: string }[] | undefined,
+): IgdbGameDetail['trailer'] => {
+  if (!videos || videos.length === 0) return null;
+
+  // Entre dos con la misma puntuación gana el PRIMERO. IGDB los devuelve en
+  // orden de alta, así que lo de más abajo tiende a ser lo añadido después
+  // del lanzamiento — que es exactamente el fallo que esta función existe
+  // para no repetir.
+  let best = videos[0];
+  let bestScore = trailerScore(videos[0].name);
+  for (const video of videos.slice(1)) {
+    const score = trailerScore(video.name);
+    if (score < bestScore) {
+      best = video;
+      bestScore = score;
+    }
+  }
+  return { videoId: best.video_id, name: best.name ?? null };
+};
+
 const steamAppIdFromExternals = (
   externals: { uid: string; external_game_source?: number }[] | undefined,
 ): number | null => {
@@ -266,6 +341,7 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     `collections.id, collections.name, release_dates.date, release_dates.date_format, ` +
     `involved_companies.company.name, involved_companies.developer, involved_companies.publisher, ` +
     `external_games.uid, external_games.external_game_source, ` +
+    `videos.video_id, videos.name, ` +
     `aggregated_rating, aggregated_rating_count, rating, rating_count; ` +
     `where id = ${igdbId};`;
   const [game] = igdbDetailResponseSchema.parse(await igdbRequest('games', body));
@@ -315,6 +391,7 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     // (raro, la mayoría ya vienen a 1080p o más), Cloudinary la escala hacia
     // arriba en vez de fallar — nunca peor que el tamaño de antes.
     screenshots: game.screenshots?.map((shot) => igdbImageUrl(shot.image_id, '1080p')) ?? [],
+    trailer: pickTrailer(game.videos),
   };
   detailCache.set(igdbId, { detail, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
   return detail;
@@ -381,6 +458,38 @@ const assertIntegerIds = (igdbIds: number[]): void => {
   for (const igdbId of igdbIds) {
     if (!Number.isInteger(igdbId)) throw new Error(`igdbId inválido: ${igdbId}`);
   }
+};
+
+// El camino INVERSO: de un appid de Steam al juego de IGDB, si lo tienen.
+//
+// Es la puerta de vuelta de los juegos dados de alta solo con Steam (los que
+// IGDB todavía no tenía cuando se añadieron): los tres refrescos preguntan
+// por aquí, y el día que IGDB por fin lo mete, el juego recupera su id y con
+// él todo lo que cuelga de tenerlo — sagas, tráiler, capturas, notas.
+//
+// appid -> igdbId, solo para los que IGDB conoce. Los ausentes del mapa
+// simplemente no están todavía en su catálogo.
+export const getIgdbIdsBySteamAppIds = async (appIds: number[]): Promise<Map<number, number>> => {
+  const result = new Map<number, number>();
+  const valid = appIds.filter((appId) => Number.isInteger(appId) && appId > 0);
+  if (valid.length === 0) return result;
+
+  // Los uid viajan como CADENA en external_games (otras tiendas meten ahí
+  // slugs), así que la comparación va entrecomillada.
+  const body =
+    `fields game, uid; ` +
+    `where uid = (${valid.map((appId) => `"${appId}"`).join(',')}) & ` +
+    `external_game_source = ${STEAM_SOURCE_ID}; ` +
+    `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`;
+  const rows = igdbExternalGamesResponseSchema.parse(await igdbRequest('external_games', body));
+
+  for (const row of rows) {
+    const appId = parseSteamUid(row.uid);
+    // El primero gana, igual que en el camino de ida: un mismo appid puede
+    // constar en varias filas (paquetes regionales) y cualquiera sirve.
+    if (appId !== null && !result.has(appId)) result.set(appId, row.game);
+  }
+  return result;
 };
 
 // Los appids de Steam ATADOS DIRECTAMENTE a estos juegos.

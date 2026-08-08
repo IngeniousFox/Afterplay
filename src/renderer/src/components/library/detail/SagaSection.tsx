@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Gamepad2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CollectionGame, GameDetail, IgdbSearchResult } from '../../../../../shared/types';
+import type { SelectedGame, CollectionGame, GameDetail } from '../../../../../shared/types';
 import { useGames, usePlannedGames } from '../../../hooks/games';
 import { useCollectionGames } from '../../../hooks/igdb';
 import { useImageSrc } from '../../../hooks/useImageSrc';
@@ -180,7 +180,9 @@ type Slot = {
 const resolveSlot = (
   chapter: CollectionGame,
   ownedByIgdbId: Map<number, Owned>,
-  currentIgdbId: number,
+  // null = el juego abierto no esta en IGDB (existe en Steam y ellos aun no
+  // lo tienen). No casa con ningun miembro de la saga, que es lo correcto.
+  currentIgdbId: number | null,
 ): Slot => {
   const versions = [chapter, ...chapter.editions];
   const shown =
@@ -268,6 +270,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
   // ya hace el buscador de Add Game para reconocer lo que ya tienes.
   const ownedByIgdbId = new Map<number, Owned>();
   for (const owned of libraryGames) {
+    if (owned.igdbId === null) continue;
     ownedByIgdbId.set(owned.igdbId, {
       kind: 'library',
       gameId: owned.id,
@@ -275,6 +278,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
     });
   }
   for (const planned of plannedGames) {
+    if (planned.igdbId === null) continue;
     ownedByIgdbId.set(planned.igdbId, { kind: 'plan', gameId: planned.id });
   }
 
@@ -401,7 +405,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
             if (!next) setAddTo(null);
           }}
           mode={addTo.where === 'plan' ? 'plan' : 'library'}
-          preselected={toSearchResult(addTo.game)}
+          preselected={toSelectedGame(addTo.game)}
           onCreated={(gameId) => {
             setAddTo(null);
             void navigate(addTo.where === 'plan' ? `/plan/${gameId}` : `/games/${gameId}`);
@@ -412,13 +416,15 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
   );
 };
 
-// El modal de alta habla en IgdbSearchResult (es lo que le da su buscador).
+// El modal de alta habla en SelectedGame (la forma unificada de su buscador).
 // Un miembro de la saga trae menos campos —no se piden plataformas ni géneros
 // para pintar veinticinco carátulas— y eso está bien: el modal completa el
 // resto con el detalle de IGDB en cuanto se abre, igual que haría con un
 // resultado de búsqueda.
-const toSearchResult = (game: CollectionGame): IgdbSearchResult => ({
-  igdbId: game.igdbId,
+const toSelectedGame = (game: CollectionGame): SelectedGame => ({
+  // Un miembro de la saga SIEMPRE viene de IGDB — es de donde sale el
+  // carrusel entero.
+  source: { igdbId: game.igdbId },
   title: game.title,
   coverUrl: game.coverUrl,
   releaseYear: game.releaseYear,

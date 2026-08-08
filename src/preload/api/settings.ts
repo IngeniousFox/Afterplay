@@ -27,6 +27,14 @@ export const settingsApi = {
     ipcRenderer.invoke('settings:setOverlayShortcut', accelerator),
   getOverlayShortcutStatus: (): Promise<OverlayShortcutStatus> =>
     ipcRenderer.invoke('settings:getOverlayShortcutStatus'),
+  // Cadencia y retención de la copia local automática.
+  getBackupIntervalHours: (): Promise<number> =>
+    ipcRenderer.invoke('settings:getBackupIntervalHours'),
+  setBackupIntervalHours: (hours: number): Promise<void> =>
+    ipcRenderer.invoke('settings:setBackupIntervalHours', hours),
+  getBackupCount: (): Promise<number> => ipcRenderer.invoke('settings:getBackupCount'),
+  setBackupCount: (count: number): Promise<void> =>
+    ipcRenderer.invoke('settings:setBackupCount', count),
   // null = el último ciclo de sync fue bien (o todavía no hubo ninguno).
   getSyncFailure: (): Promise<SyncFailureInfo | null> =>
     ipcRenderer.invoke('settings:getSyncFailure'),

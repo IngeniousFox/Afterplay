@@ -1,12 +1,12 @@
 import { Clock } from 'lucide-react';
-import type { IgdbSearchResult } from '../../../../../shared/types';
+import type { SelectedGame } from '../../../../../shared/types';
 import { useHltbTimes } from '../../../hooks/hltb';
 import { formatHours } from '../../../lib/format';
 import { InfoChip } from '../detail/InfoChip';
 import { CoverThumb } from './CoverThumb';
 
 type SelectedGameSummaryProps = {
-  selected: IgdbSearchResult;
+  selected: SelectedGame;
   // El hero elegido (o el auto-rellenado por AddGameImagesField) — de fondo,
   // tras un velo oscuro: la ficha deja de ser una caja gris y pasa a ser
   // "el juego". Nullable: hasta que IGDB responde no hay hero, y la ficha

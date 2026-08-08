@@ -109,9 +109,14 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
             <div className={revealClass} style={revealStyle(2)}>
               <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
             </div>
-            <div className={revealClass} style={revealStyle(3)}>
-              <ScreenshotsCarousel igdbId={game.igdbId} />
-            </div>
+            {/* Sin id de IGDB no hay capturas ni trailer que pedir (un juego
+                que existe en Steam y que IGDB todavia no tiene): la seccion
+                no se pinta, igual que cuando IGDB no devuelve ninguna. */}
+            {game.igdbId !== null && (
+              <div className={revealClass} style={revealStyle(3)}>
+                <ScreenshotsCarousel igdbId={game.igdbId} />
+              </div>
+            )}
             {/* La saga justo debajo de las capturas: las dos son "el juego
                 visto por fuera" (arte y contexto de catalogo), frente al
                 historial y los logros de mas abajo, que son tuyos. */}

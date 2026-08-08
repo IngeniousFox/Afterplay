@@ -422,6 +422,36 @@
   animation: afterplay-toast-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
+/* El aviso temblando al pasar el ratón por su borde (bug real, 8-ago-2026:
+   se movía arriba y abajo sin parar). No era nuestro CSS, era un choque
+   entre cómo mide Sonner y cómo crece este toast:
+
+     · Sonner CONGELA la altura mientras tienes el ratón encima —
+       `[data-sonner-toast][data-mounted][data-expanded='true'] { height:
+       var(--initial-height) }`— y ese --initial-height se mide UNA vez, y
+       solo se vuelve a medir si cambia `toast.jsx` (su efecto depende de
+       eso, ver sonner/dist/index.mjs).
+     · Pero este toast CRECE por dentro sin cambiar su jsx: la banda de
+       logros aparece sola un par de segundos después, cuando la sync del
+       cierre termina. Sonner nunca se entera, así que --initial-height se
+       queda con la altura de ANTES de la banda.
+
+   Resultado: al pasar el ratón, la altura saltaba a la vieja (más baja).
+   Como el toast está anclado abajo (bottom: 0), encoger le baja el borde
+   SUPERIOR — el puntero se quedaba fuera, se perdía el hover, recuperaba su
+   altura real, volvía a quedar debajo del puntero... y vuelta a empezar. Por
+   eso solo pasaba en el borde: en el centro de la tarjeta el puntero seguía
+   dentro tras encoger, y no había bucle.
+
+   El arreglo es quitarle a Sonner esa congelación SOLO en nuestros toasts a
+   medida: que la altura sea siempre la de su contenido. Gana en especificidad
+   (:has() cuenta como su argumento, una clase) sin !important, y no toca la
+   regla de la pila colapsada ([data-expanded='false'][data-front='false']),
+   que sigue haciendo su trabajo cuando hay varios avisos. */
+[data-sonner-toast][data-mounted='true'][data-expanded='true']:has(.afterplay-toast) {
+  height: auto;
+}
+
 /* ── Modo ambiente ────────────────────────────────────────────────────────
    El salvapantallas que aparece cuando dejas de tocar la app.
 

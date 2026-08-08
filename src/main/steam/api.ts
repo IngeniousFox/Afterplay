@@ -113,9 +113,15 @@ const getKey = (): string | null => process.env.STEAM_API_KEY || null;
 export const getSteamUserId = (): string | null => process.env.STEAM_USER_ID64 || null;
 export const hasSteamKey = (): boolean => getKey() !== null;
 
-// Un 400 de esta API casi nunca es un error de verdad: es como contesta
-// "este appid no tiene stats" y "este appid no existe". Se distingue aquí
-// para que quien llama no tenga que mirar códigos HTTP.
+// Un 400 o un 403 de esta API casi nunca son un error de verdad: son como
+// contesta "este appid no tiene stats" y "este appid no existe". Se distingue
+// aquí para que quien llama no tenga que mirar códigos HTTP.
+//
+// El caso más común no es un appid malo, es un juego que TODAVÍA no ha salido:
+// mientras está en "coming soon" no hay stats que servir aunque su ficha ya
+// anuncie logros (comprobado con Enter the kOS, que los lista y aun así da
+// 403). Es un "no" que caduca solo el día del lanzamiento, así que se sigue
+// preguntando en cada sync — pero sin ruido, porque es la respuesta esperada.
 class SteamNoStatsError extends Error {}
 
 const steamGet = async (
@@ -188,7 +194,18 @@ export const getGlobalPercentages = async (appId: number): Promise<Map<string, n
     }
     return result;
   } catch (error) {
-    console.warn(`[steam] sin rareza para ${appId} (se conserva la guardada):`, error);
+    // Un juego sin stats (el caso de los que no han salido) no es un fallo: es
+    // Steam contestando, y en silencio como sus dos hermanas de aquí al lado.
+    // Con un warn se llenaba el log de trazas en cada sync, una por cada juego
+    // de la lista de pendientes que aún no ha salido — y son justo los que más
+    // veces se resincronizan.
+    //
+    // Se devuelve null igual (no un mapa vacío) y a propósito: "todavía no hay
+    // porcentajes" no es "este juego no publica porcentajes". El día que salga
+    // los tendrá, y hasta entonces no hay por qué escribir nada.
+    if (!(error instanceof SteamNoStatsError)) {
+      console.warn(`[steam] sin rareza para ${appId} (se conserva la guardada):`, error);
+    }
     return null;
   }
 };

@@ -2,21 +2,28 @@ import { index, int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sq
 import type { RecapPayload } from '../../shared/memory/payload';
 
 // Nada de `check()` SQL en columnas tipo-enum (type/milestone/datePrecision/
-// format) — a propósito, tras un incidente real. SQLite no permite ALTER un
-// CHECK existente: cada vez que se añade un valor al enum (pasó al meter
-// 'plan_to_play'), drizzle-kit genera una migración que reconstruye la tabla
-// entera (CREATE __new_x + copiar filas + DROP + RENAME). Ese RENAME final no
-// se replicó bien a Turso a través de @tursodatabase/sync (todavía en early
-// preview): el remoto se quedó con `__new_state_events` con los datos, sin
-// que la tabla real `state_events` volviera a aparecer. Los `enum: [...]` de
-// abajo se quedan (son solo un tipo de TypeScript, ningún CHECK de SQL), así
-// que la validación de estos campos vive SOLO en la capa de TypeScript/app,
-// nunca en la base de datos — evita este tipo de migración para siempre.
+// format), y el motivo cambió el 8-ago-2026 aunque la decisión se mantenga.
+//
+// Lo que se creía: que reconstruir una tabla (CREATE __new_x + copiar +
+// DROP + RENAME, que es lo que genera drizzle-kit al tocar un CHECK) no se
+// replicaba bien a Turso y dejaba el remoto a medias. Se culpó al replicador.
+//
+// Lo que resultó ser: la migración se aplicaba DOS VECES. Primero directa
+// contra Turso (bien), y después otra vez en local — y esa segunda la
+// capturaba el CDC y la subía, con lo que el DROP se llevaba por delante la
+// tabla que ya estaba correctamente migrada arriba. Reproducido con la cola
+// del replicador como prueba y arreglado en db/index.ts
+// (migrateWithoutCapture): lo que se aplica en local ya no se replica.
+//
+// Con eso, una reconstrucción es hoy una migración viable — verificada de
+// punta a punta sobre una copia de producción entera. Pero estos enum se
+// quedan SIN check() igualmente, por una razón que no ha cambiado: añadir un
+// valor a un enum es de las cosas más triviales que se le pueden pedir a este
+// esquema, y no merece arrastrar una reconstrucción de tabla cada vez. La
+// validación vive en la capa de TypeScript, que es donde cambiar de opinión
+// es gratis.
 
-// Omit de la columna muerta (ver legacySteamGridDbId en la tabla): para el
-// resto de la app no existe — las projections no la seleccionan y ningún
-// insert/update la nombra, así que el tipo tampoco debe enseñarla.
-export type GameRow = Omit<typeof gamesTable.$inferSelect, 'legacySteamGridDbId'>;
+export type GameRow = typeof gamesTable.$inferSelect;
 export type Session = typeof sessionsTable.$inferSelect;
 export type Iteration = typeof iterationsTable.$inferSelect;
 export type StateEvent = typeof stateEventsTable.$inferSelect;
@@ -48,28 +55,25 @@ export const gamesTable = sqliteTable('games', {
   title: text().notNull(),
   coverUrl: text(),
   heroUrl: text(),
-  igdbId: int().notNull().unique(),
-  // COLUMNA MUERTA — no leer ni escribir nunca. Su UNIQUE era un error: este
-  // id no viene de una relación, viene de BUSCAR por nombre y año en
-  // SteamGridDB, así que un juego y su standalone expansion (o su edición)
-  // resuelven al mismo id y el alta del segundo reventaba con "UNIQUE
-  // constraint failed". Quitarlo resultó IMPOSIBLE en este stack, con recibo
-  // de cada vía (7-ago-2026): reconstruir la tabla arrasó producción dos
-  // veces (lote remoto no fail-stop, PRAGMA foreign_keys ignorado, CASCADE
-  // vaciando las hijas); PRAGMA writable_schema está bloqueado en el servidor
-  // de Turso a nivel de parser; y DROP COLUMN es ilegal sobre columna
-  // indexada. La única salida sin tocar DDL peligroso es esta: abandonarla.
+  // NULLABLE a propósito: hay juegos que existen en Steam y todavía no en
+  // IGDB (los recién anunciados — el caso que lo destapó fue "Enter the kOS",
+  // appid 4414410, del que IGDB no sabe nada ni por nombre ni por appid). Con
+  // este campo obligatorio esos juegos no se pueden ni dar de alta, que es
+  // peor que darlos de alta con menos datos.
   //
-  // `sgdbId` (debajo) es la columna viva, nacida por ALTER ADD COLUMN + copia
-  // de valores — la única clase de migración que este proyecto se permite. La
-  // muerta se queda de cuerpo presente, a NULL en las filas nuevas (NULL no
-  // colisiona con NULL en un UNIQUE de SQLite), invisible para el resto del
-  // código: las projections no la seleccionan y GameRow la excluye.
-  legacySteamGridDbId: int('steamGridDbId').unique(),
-  // El id de SteamGridDB de verdad. La PROPIEDAD conserva el nombre de
-  // siempre (steamGridDbId) apuntando a la columna nueva: para el resto del
-  // código no ha cambiado nada — projections, altas y tipos compilan tal
-  // cual, solo que ahora escriben donde no hay UNIQUE.
+  // El UNIQUE se queda: dos juegos no pueden compartir id de IGDB. Y NULL no
+  // colisiona con NULL en un UNIQUE de SQLite, así que varios juegos "solo de
+  // Steam" conviven sin problema.
+  igdbId: int().unique(),
+  // El id de SteamGridDB. Sin UNIQUE a propósito: este id no viene de una
+  // relación, viene de BUSCAR por nombre y año en SteamGridDB, así que un
+  // juego y su standalone expansion (o su edición) resuelven al mismo id y el
+  // alta del segundo reventaba con "UNIQUE constraint failed".
+  //
+  // La columna se llama `sgdbId` en la base y no `steamGridDbId` por un
+  // fósil: la original llevaba ese UNIQUE erróneo y durante meses no se pudo
+  // quitar, así que se creó una nueva al lado y la vieja se quedó muerta. Ya
+  // no: la reconstrucción de esta migración se lleva la muerta por delante.
   steamGridDbId: int('sgdbId'),
   officialPlatforms: text({ mode: 'json' }).$type<string[]>(),
   releaseYear: int(),

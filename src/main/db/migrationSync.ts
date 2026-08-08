@@ -99,15 +99,24 @@ export const listRemotePending = async (
 //    migración a medias debe quedar SIN registrar, gritando en cada arranque,
 //    no dada por buena en silencio.
 //  · La VERIFICACIÓN: si tras aplicar queda una tabla puente __new_* en
-//    sqlite_master, la migración se quedó a medias (el PRAGMA foreign_keys
-//    tampoco es de fiar en el servidor — el CASCADE que vació las tablas
-//    hijas lo demostró). Se lanza error con instrucciones, sin registrar.
+//    sqlite_master, la migración se quedó a medias. Se lanza error con
+//    instrucciones, sin registrar.
 //
 // client.migrate() (y no client.transaction()) sigue siendo el vehículo: hace
 // el PRAGMA foreign_keys=off ANTES del BEGIN, único sitio donde SQLite lo
 // acepta — con transaction() el DROP de la migración de sessions moría con
-// FOREIGN KEY constraint failed. Que el servidor lo respete ya es otra
-// historia (ver arriba); por eso la fe está en la verificación, no en el PRAGMA.
+// FOREIGN KEY constraint failed.
+//
+// NOTA (8-ago-2026): aquí se leía que "el PRAGMA tampoco es de fiar en el
+// servidor, el CASCADE que vació las tablas hijas lo demostró". Era FALSO y se
+// corrige por si alguien lo da por bueno: ese CASCADE no salió de aquí. Venía
+// de que la misma migración se aplicaba DOS veces —esta, directa, y otra en
+// local que el CDC subía— y era la segunda la que destrozaba lo que esta había
+// dejado bien (ver migrateWithoutCapture en db/index.ts). Comprobado contra la
+// base de test con datos de producción: reconstrucción completa de `games` por
+// esta vía, cero filas perdidas, integrity_check ok. Este camino siempre
+// estuvo bien. La verificación se queda igualmente — no por desconfianza del
+// PRAGMA, sino porque una migración a medias no debe registrarse jamás.
 export const applyRemotePending = async (
   client: Client,
   migrations: LocalMigration[],

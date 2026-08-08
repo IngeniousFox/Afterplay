@@ -3,10 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <title>Electron</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+
+         `frame-src` es la ÚNICA rendija abierta a un tercero, y es a
+         propósito: los tráilers de IGDB son ids de YouTube (IGDB no aloja
+         vídeo, solo apunta), así que sin esto no hay reproductor posible.
+         Se acota todo lo que se puede:
+          · Solo youtube-nocookie.com, el dominio sin cookies de seguimiento;
+            el youtube.com normal NO entra.
+          · Solo `frame-src`. `script-src` sigue siendo 'self': el código de
+            YouTube corre DENTRO de su iframe, en su propio origen, y no
+            puede tocar nada de la app.
+          · `img-src` no se toca: la miniatura del tráiler NO se pide a
+            YouTube desde aquí, se descarga en el main y se sirve por
+            afterplay-image:, igual que las capturas — así además queda
+            cacheada y se ve sin conexión.
+         Sin tráilers, esta línea se puede quitar entera y volver a
+         default-src 'self' sin tocar nada más. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: afterplay-image:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: afterplay-image:; frame-src https://www.youtube-nocookie.com"
     />
   </head>
 

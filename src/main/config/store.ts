@@ -41,6 +41,21 @@ type AppConfig = {
   // Accelerator de Electron para invocar el HUD (§6.1). Configurable porque
   // ningún atajo global está libre en todas las máquinas.
   overlayShortcut: string;
+  // ── Copia de seguridad LOCAL automática (db/dailyBackup.ts) ─────────────
+  // Cada cuántas HORAS toca una copia nueva — en horas y no en días para
+  // poder bajar de "una vez al día" (cada 6h, cada 12h). 24 = el
+  // comportamiento de siempre. El disparo sigue viviendo en el arranque —
+  // esto no crea un temporizador de fondo, solo decide si al abrir la app
+  // AHORA ya toca o todavía no— así que un intervalo largo en una app que se
+  // abre poco puede saltarse ventanas enteras sin que pase nada raro:
+  // simplemente la próxima vez que se abra, si ya pasaron suficientes horas,
+  // se hace la copia.
+  backupIntervalHours: number;
+  // Cuántas copias locales conservar, rotando (borra la más vieja al pasar
+  // de este número). 0 = apagado del todo: no se crea ninguna copia nueva
+  // — las que ya hubiera de antes NO se borran solas, apagar esto no es
+  // pedir que se destruya nada, es solo dejar de generar más.
+  backupCount: number;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -52,6 +67,10 @@ const DEFAULT_CONFIG: AppConfig = {
   radarLastRunAt: 0,
   overlayEnabled: false,
   overlayShortcut: 'CommandOrControl+Shift+Space',
+  // El comportamiento de siempre, antes de que esto fuera configurable: una
+  // copia al día (24h), 5 en rotación.
+  backupIntervalHours: 24,
+  backupCount: 5,
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

@@ -3,8 +3,9 @@ import { app, net } from 'electron';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/tursodatabase-sync';
 import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
-import { existsSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { removeEmptySidecars } from './sidecars';
 import {
   applyRemotePending,
   listRemotePending,
@@ -369,14 +370,155 @@ export const runMigrations = async (): Promise<void> => {
 
   const rebuild = await pendingTableRebuild(db);
   if (rebuild) {
-    localMigrationsPending = true;
-    console.error(
-      `[db] ${rebuild} RECONSTRUYE UNA TABLA y no se ejecuta en local nunca (ver el protocolo en el comentario de runMigrations). Migra el fichero en frío, súbelo a Turso y borra el .db local para que se baje ya migrado.`,
-    );
+    await applyRebuildVerified(db, rebuild);
     return;
   }
 
-  await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+  await migrateWithoutCapture(db);
+};
+
+// EL ARREGLO DE LA DOBLE APLICACIÓN — la pieza que faltaba desde el 7-ago-2026.
+//
+// Reproducido de punta a punta el 8-ago-2026 contra la base de test, con la
+// cola del replicador como prueba del delito. Lo que pasaba:
+//
+//   1. pushMigrationsToRemote aplica la migración DIRECTAMENTE en Turso. Bien:
+//      su verificación pasa y el remoto queda correcto, con games ya renombrada.
+//   2. La app conecta con sync, y ahí la captura de cambios está ENCENDIDA.
+//   3. La local no tiene la migración en su tabla de control, así que la
+//      aplica OTRA VEZ. También correcta, vista en local.
+//   4. Pero el CDC captura ese rebuild local ENTERO. Medido en la cola de la
+//      base rota: 985 filas de `__new_games` (los INSERT), 2 de `sqlite_schema`
+//      (el CREATE y el DROP/RENAME) y 2 de `__drizzle_migrations`.
+//   5. Eso se empuja al remoto: el `DROP TABLE games` se lleva por delante la
+//      tabla BUENA que ya estaba migrada, y el RENAME es justo lo que no
+//      sobrevive a la replicación.
+//   6. El remoto queda con `__new_games` y sin `games`; el sync lo baja y la
+//      local acaba igual de rota.
+//
+// O sea que la migración se aplicaba DOS VECES y la segunda destruía a la
+// primera. El push directo se hizo para que "el CDC nunca cargue con el DDL
+// de la migración", pero nadie impedía que la aplicación LOCAL se capturara y
+// subiera sola.
+//
+// El arreglo es decirlo explícitamente: lo que se aplica en local NO se
+// replica, porque el remoto ya tiene exactamente lo mismo aplicado por su
+// cuenta. La captura se apaga durante la migración y se restaura después al
+// modo que tuviera — se lee antes (el pragma es consultable) en vez de
+// asumirlo, para no encender la captura en una conexión que la tenía apagada.
+const migrateWithoutCapture = async (db: Db): Promise<void> => {
+  const [state] = await db.all<{ mode: string }>(
+    sql.raw('PRAGMA unstable_capture_data_changes_conn'),
+  );
+  const previous = state?.mode ?? 'off';
+
+  if (previous !== 'off') {
+    await db.run(sql.raw(`PRAGMA unstable_capture_data_changes_conn('off')`));
+  }
+  try {
+    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+  } finally {
+    // En finally: si la migración revienta, la conexión NO puede quedarse sin
+    // captura el resto de la sesión — todo lo que escribieras después se
+    // quedaría en local sin subir nunca, y en silencio.
+    if (previous !== 'off') {
+      await db.run(sql.raw(`PRAGMA unstable_capture_data_changes_conn('${previous}')`));
+    }
+  }
+};
+
+// Las tablas de DATOS y sus filas. Se dejan fuera las internas: las de SQLite,
+// las de drizzle (__drizzle_migrations) y las del replicador (turso_cdc y
+// compañía), que cambian de tamaño por su cuenta y dispararían la alarma sin
+// que nadie haya perdido nada.
+const tableRowCounts = async (db: Db): Promise<Map<string, number>> => {
+  const tables = await db.all<{ name: string }>(
+    sql.raw(
+      `SELECT name FROM sqlite_master WHERE type='table'
+         AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
+         AND name NOT LIKE '\\_\\_%' ESCAPE '\\'
+         AND name NOT LIKE 'turso\\_%' ESCAPE '\\'
+       ORDER BY name`,
+    ),
+  );
+
+  const counts = new Map<string, number>();
+  for (const { name } of tables) {
+    // El nombre viene de sqlite_master, no de fuera: no hay nada que inyectar.
+    const [row] = await db.all<{ n: number }>(sql.raw(`SELECT count(*) AS n FROM "${name}"`));
+    counts.set(name, Number(row?.n ?? 0));
+  }
+  return counts;
+};
+
+// Una reconstrucción de tabla, con red.
+//
+// Aquí antes había una PROHIBICIÓN: cualquier migración con __new_ se negaba a
+// correr en local, para siempre. Nació el 7-ago-2026 tras perder producción
+// dos veces, cuando no se sabía por qué pasaba — y prohibir era lo único
+// responsable que se podía hacer sin entenderlo.
+//
+// Lo que se sabe ahora, medido el 8-ago-2026 sobre una copia de producción
+// entera (985 juegos, 39.602 logros, 5 tablas hijas con CASCADE):
+//   · Contra Turso, vía client.migrate(): reconstrucción completa de `games`,
+//     CERO filas perdidas, integrity_check ok, los UNIQUE intactos.
+//   · En local, con el driver de verdad y el migrador de drizzle: CERO filas
+//     perdidas. El driver no dispara las cascadas en el borrado implícito del
+//     DROP TABLE, a diferencia de SQLite estándar.
+// O sea que la reconstrucción, HOY, sale limpia por los dos lados.
+//
+// Pero "me salió bien tres veces" no es una garantía, y el 7-ago también
+// pareció ir bien hasta que se miró. Así que la prohibición no se sustituye
+// por confianza: se sustituye por PRUEBA. Antes de tocar nada se deja una
+// copia exacta del fichero, y después se cuenta fila por fila. Si algo se
+// perdió, se LANZA — y lanzar aquí para la app entera (ver main/index.ts),
+// que es justo lo que hay que hacer: seguir arrancando con la base mermada
+// significaría que el sync sube ese borrado a Turso y se lleva también el
+// remoto. Esa amplificación es lo que convirtió un fallo en un desastre.
+//
+// La verificación por conteo existe además porque la que había NO habría
+// cazado nada: comprobaba que no quedaran tablas puente __new_, y en el caso
+// que destrozó la base no quedaba ninguna.
+const applyRebuildVerified = async (db: Db, rebuild: string): Promise<void> => {
+  const before = await tableRowCounts(db);
+
+  // La copia va a la carpeta de siempre pero con nombre propio y sin fecha:
+  // así la rotación de las copias diarias (que filtra por su propio patrón) no
+  // se la lleva por delante justo cuando más falta hace.
+  const backupsDir = join(app.getPath('userData'), 'backups');
+  mkdirSync(backupsDir, { recursive: true });
+  const safetyCopy = join(backupsDir, `antes-de-${rebuild}.db`);
+  if (!existsSync(safetyCopy)) {
+    const escaped = safetyCopy.replace(/'/g, "''");
+    await db.run(sql.raw(`VACUUM INTO '${escaped}'`));
+    removeEmptySidecars(safetyCopy);
+  }
+  console.log(`[db] ${rebuild} reconstruye una tabla — copia previa en ${safetyCopy}`);
+
+  // Sin captura: es JUSTO la reconstrucción cuyo DDL, replicado hacia arriba,
+  // se llevaba por delante la tabla ya migrada del remoto (ver
+  // migrateWithoutCapture).
+  await migrateWithoutCapture(db);
+
+  const after = await tableRowCounts(db);
+  const losses: string[] = [];
+  for (const [table, rows] of before) {
+    const now = after.get(table);
+    // Una tabla que DESAPARECE cuenta como pérdida total: ninguna migración de
+    // este proyecto borra tablas, así que si pasa es que algo salió mal.
+    if (now === undefined) losses.push(`${table}: ${rows} -> (ya no existe)`);
+    else if (now < rows) losses.push(`${table}: ${rows} -> ${now}`);
+  }
+
+  if (losses.length > 0) {
+    throw new Error(
+      `${rebuild} PERDIÓ DATOS al reconstruir la tabla (${losses.join(', ')}). ` +
+        `La copia de justo antes está en ${safetyCopy}. No sigas usando la app con esta base: ` +
+        `el sync subiría el borrado a Turso.`,
+    );
+  }
+
+  console.log(`[db] ${rebuild} aplicada y verificada: ${before.size} tablas, sin pérdidas`);
 };
 
 // ¿Hay pendiente alguna migración que reconstruya una tabla?
@@ -419,7 +561,7 @@ const pendingTableRebuild = async (db: Db): Promise<string | null> => {
 // esto corre desde el ciclo de sync, con el watcher sondeando por su cuenta.
 const applyPendingLocalMigrations = async (): Promise<void> => {
   if (!localMigrationsPending || migrationPushPending || !dbInstance) return;
-  await withDbAccess(async () => migrate(getDb(), { migrationsFolder: MIGRATIONS_FOLDER }));
+  await withDbAccess(async () => migrateWithoutCapture(getDb()));
   localMigrationsPending = false;
   console.log('[db] migraciones locales aplicadas al fin (el remoto ya estaba al día)');
 };

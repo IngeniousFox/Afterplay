@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
-import type { IgdbSearchResult } from '../../../../../shared/types';
+import type { SelectedGame } from '../../../../../shared/types';
+import { selectedIgdbId } from '../../../../../shared/types';
 import { useIgdbDetails } from '../../../hooks/igdb';
 import type { CoverPickerTarget } from './CoverPicker';
 import { ImagesField } from './ImagesField';
 import type { AddGameFormValues } from './types';
 
 type AddGameImagesFieldProps = {
-  selected: IgdbSearchResult;
+  selected: SelectedGame;
   onPick: (target: CoverPickerTarget) => void;
 };
 
@@ -24,7 +25,10 @@ export const AddGameImagesField = ({
   const coverUrl = useWatch({ control, name: 'coverUrl' });
   const heroUrl = useWatch({ control, name: 'heroUrl' });
   const steamGridDbId = useWatch({ control, name: 'steamGridDbId' });
-  const detail = useIgdbDetails(selected.igdbId);
+  // Sin id de IGDB (un juego solo de Steam) no hay detalle que pedir: el
+  // hook ya lo trata como "nada que buscar" y las candidatas se quedan en las
+  // de SteamGridDB.
+  const detail = useIgdbDetails(selectedIgdbId(selected));
 
   useEffect(() => {
     if (heroUrl === null && detail.data?.heroes[0]) {

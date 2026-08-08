@@ -12,7 +12,7 @@ import { gamesTable } from '../../schema';
 // filtro sin quererlo: un juego de tu plan ya instalado salía como nuevo.
 export type OwnedGameRef = {
   id: number;
-  igdbId: number;
+  igdbId: number | null;
   title: string;
   planned: boolean;
 };

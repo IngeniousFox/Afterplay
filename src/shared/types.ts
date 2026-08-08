@@ -47,6 +47,10 @@ export type {
 // Escaneo de carpetas del modo "Scan your folders" (Add Game).
 export type { ScanCandidate, ScannedFolder, ScanReport } from '../main/scan/contracts';
 
+// Resultado del buscador de la tienda de Steam — el respaldo del alta cuando
+// IGDB no tiene el juego (steam/store.ts).
+export type { SteamSearchResult } from '../main/steam/store';
+
 // Precisión de una fecha elegida a mano en un picker (Add/Edit Game,
 // History) — 'datetime' no es una opción del picker (nadie teclea hora a
 // mano), solo la llevan los eventos que la app crea ella sola en el momento
@@ -121,6 +125,31 @@ export type UpdateSpendEventPatch = {
   note?: string | null;
 };
 
+// De dónde se da de alta un juego. La segunda forma es para los que existen
+// en Steam y que IGDB todavía no tiene (ver steam/store.ts).
+export type GameSource = { igdbId: number } | { steamAppId: number };
+
+// El juego ELEGIDO en el buscador del alta, venga de donde venga. Unifica los
+// dos catálogos que hoy alimentan ese buscador —IGDB y, cuando IGDB no lo
+// tiene, la tienda de Steam— en la única forma que el formulario necesita.
+//
+// Se lleva `source` en vez de un igdbId suelto justo para eso: a partir de la
+// elección, el resto del alta no vuelve a preguntarse de dónde salió.
+export type SelectedGame = {
+  source: GameSource;
+  title: string;
+  coverUrl: string | null;
+  releaseYear: number | null;
+  platforms: string[];
+  genres: string[];
+  summary: string | null;
+};
+
+// El igdbId de una selección, o null si vino de Steam — lo piden las piezas
+// que solo saben hablar con IGDB (el CoverPicker, el detalle).
+export const selectedIgdbId = (selected: SelectedGame): number | null =>
+  'igdbId' in selected.source ? selected.source.igdbId : null;
+
 // Input del guardado atómico del modal de añadir juego (Bloque 2F). Va en
 // una sola llamada porque el main resuelve TODO lo que hace falta de fuera
 // (detalle de IGDB, tiempos de HLTB, id de SteamGridDB) y escribe game +
@@ -128,7 +157,10 @@ export type UpdateSpendEventPatch = {
 // transacción — así no puede quedar un juego "a medias" si algo falla a
 // mitad de camino.
 export type CreateGameWithDetailsInput = {
-  igdbId: number;
+  // De dónde sale la ficha. Excluyentes: o el juego viene de IGDB (lo normal)
+  // o de Steam (los recién anunciados que IGDB todavía no tiene). Nunca los
+  // dos — ver EnrichmentSource en resolveGameEnrichment.ts.
+  source: GameSource;
   endless: boolean;
   // EMULADORES.md §5 — checkbox "Emulated game" del modal: sin .exe propio
   // que vigilar (el campo se oculta), sesiones vía asignación manual.
@@ -180,7 +212,7 @@ export type CreateGameWithDetailsInput = {
 // playthrough real todavía (ni plataforma, ni gasto, ni exe), solo el juego
 // del catálogo + tus notas + la nota del historial ("por qué lo planeo").
 export type CreatePlannedGameInput = {
-  igdbId: number;
+  source: GameSource;
   note: string | null;
   gameNotes: string | null;
   coverUrl: string | null;
@@ -192,7 +224,7 @@ export type CreatePlannedGameInput = {
 // alta normal (el modal de Add Game se abre prellenado) pero sobre el juego
 // YA existente — nada de borrar y recrear, el historial (incluida la
 // entrada de "Plan to Play") se conserva.
-export type PromotePlannedGameInput = Omit<CreateGameWithDetailsInput, 'igdbId'> & {
+export type PromotePlannedGameInput = Omit<CreateGameWithDetailsInput, 'source'> & {
   gameId: number;
 };
 
@@ -265,7 +297,7 @@ export type GameListItem = {
   // Identidad en el catálogo de IGDB — aquí para que el buscador de Add Game
   // reconozca qué resultados ya están en tu Plan to play y te lleve a
   // promocionarlos en vez de darlos de alta por segunda vez.
-  igdbId: number;
+  igdbId: number | null;
   title: string;
   coverUrl: string | null;
   // Para la cara trasera de la card de la biblioteca (flip al pasar el

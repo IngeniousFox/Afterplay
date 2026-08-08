@@ -10,7 +10,13 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
-import type { GameDetail, IgdbSearchResult } from '../../../../shared/types';
+import type {
+  GameDetail,
+  IgdbSearchResult,
+  SelectedGame,
+  SteamSearchResult,
+} from '../../../../shared/types';
+import { selectedIgdbId } from '../../../../shared/types';
 import {
   useCreateGameWithDetails,
   useCreatePlannedGame,
@@ -59,6 +65,33 @@ import {
   PLATFORM_OPTIONS,
 } from './add-game/types';
 
+// Un resultado del buscador (IGDB o Steam) pasa a ser LA selección. Se
+// convierte aquí, en el borde: a partir de este punto el formulario ya no
+// vuelve a preguntarse de qué catálogo salió el juego.
+const toSelected = (result: IgdbSearchResult | SteamSearchResult): SelectedGame =>
+  'igdbId' in result
+    ? {
+        source: { igdbId: result.igdbId },
+        title: result.title,
+        coverUrl: result.coverUrl,
+        releaseYear: result.releaseYear,
+        platforms: result.platforms,
+        genres: result.genres,
+        summary: result.summary,
+      }
+    : {
+        source: { steamAppId: result.appId },
+        title: result.title,
+        // Lo que Steam da en la BÚSQUEDA es solo el nombre y una miniatura; el
+        // resto (sinopsis, géneros, carátula de verdad) lo resuelve el main al
+        // guardar, con la ficha completa de la tienda.
+        coverUrl: result.thumbnailUrl,
+        releaseYear: null,
+        platforms: ['PC (Microsoft Windows)'],
+        genres: [],
+        summary: null,
+      };
+
 type AddGameModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -92,7 +125,7 @@ type AddGameModalProps = {
   // biblioteca, así que el alta es la normal (o la de plan, según `mode`).
   // Montar el modal SOLO cuando se abre — el prellenado vive en los
   // inicializadores de useState.
-  preselected?: IgdbSearchResult;
+  preselected?: SelectedGame;
   // EMULADORES.md §6 — flujo "+ Add new game" desde el modal de asignación:
   // el checkbox de emulado arranca premarcado…
   defaultEmulated?: boolean;
@@ -147,10 +180,14 @@ const AddGameModalBody = ({
   const igdbReady = Boolean(credentials?.twitchClientId && credentials?.twitchClientSecret);
 
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<IgdbSearchResult | null>(() =>
-    promoteGame
+  const [selected, setSelected] = useState<SelectedGame | null>(() =>
+    // El prellenado al promover necesita el id de IGDB: es lo que identifica
+    // al juego en todo lo que viene después. Un planeado sin ficha en IGDB
+    // (existe en Steam y ellos aún no lo tienen) entra al modal como si nada
+    // estuviera elegido — el buscador queda a la vista, que es lo honesto.
+    promoteGame && promoteGame.igdbId !== null
       ? {
-          igdbId: promoteGame.igdbId,
+          source: { igdbId: promoteGame.igdbId },
           title: promoteGame.title,
           coverUrl: promoteGame.coverUrl,
           releaseYear: promoteGame.releaseYear,
@@ -286,6 +323,9 @@ const AddGameModalBody = ({
   const canLeaveForOwned = !isPlan && assignSessionId === undefined;
   const ownedByIgdbId = new Map<number, OwnedGameMatch>();
   for (const game of libraryGames ?? []) {
+    // Sin id de IGDB no puede casar con ningun resultado del buscador, que es
+    // justo lo que este mapa cruza.
+    if (game.igdbId === null) continue;
     const reachable = canLeaveForOwned && onOpenExisting !== undefined;
     ownedByIgdbId.set(game.igdbId, {
       gameId: game.id,
@@ -304,6 +344,7 @@ const AddGameModalBody = ({
     });
   }
   for (const game of plannedGames ?? []) {
+    if (game.igdbId === null) continue;
     const reachable = canLeaveForOwned && onPickPlanned !== undefined;
     ownedByIgdbId.set(game.igdbId, {
       gameId: game.id,
@@ -401,7 +442,7 @@ const AddGameModalBody = ({
       // usuario — el juego ya está, solo falta lo de detrás.
       let gameId = partialSave?.gameId;
       if (gameId === undefined) {
-        const created = await createGame.mutateAsync({ igdbId: selected.igdbId, ...details });
+        const created = await createGame.mutateAsync({ source: selected.source, ...details });
         gameId = created.id;
         setPartialSave({ gameId });
       }
@@ -513,7 +554,7 @@ const AddGameModalBody = ({
                 methods.setValue('executablePath', folder.executablePath);
               }
               setStepDirection(1);
-              setSelected(match);
+              setSelected(toSelected(match));
             }}
             // Un planeado que aparece en el escaneo es el mejor caso posible:
             // ya lo querías jugar y resulta que ya está instalado. En vez de
@@ -547,7 +588,11 @@ const AddGameModalBody = ({
             }}
             onSelect={(result) => {
               setStepDirection(1);
-              setSelected(result);
+              setSelected(toSelected(result));
+            }}
+            onSelectSteam={(result) => {
+              setStepDirection(1);
+              setSelected(toSelected(result));
             }}
             ownedByIgdbId={ownedByIgdbId}
           />
@@ -556,7 +601,7 @@ const AddGameModalBody = ({
         <div key="picker" className={stepTransitionClass}>
           <CoverPicker
             target={pickerTarget}
-            igdbId={selected.igdbId}
+            igdbId={selectedIgdbId(selected)}
             title={selected.title}
             releaseYear={selected.releaseYear}
             steamGridDbId={steamGridDbId}
@@ -782,7 +827,7 @@ const AddGameModalBody = ({
                         un clic rellena los dos campos de abajo. */}
                     <ScanAutofillRow
                       title={selected.title}
-                      igdbId={selected.igdbId}
+                      igdbId={selectedIgdbId(selected)}
                       fillExecutable={!isEmulated}
                     />
 

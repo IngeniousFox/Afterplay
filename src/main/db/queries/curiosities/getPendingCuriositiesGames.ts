@@ -8,7 +8,7 @@ import { gamesTable } from '../../schema';
 // igual; "Prey (2017) by Arkane" no deja dudas).
 export type PendingCuriositiesGame = {
   id: number;
-  igdbId: number;
+  igdbId: number | null;
   title: string;
   releaseYear: number | null;
   developer: string | null;

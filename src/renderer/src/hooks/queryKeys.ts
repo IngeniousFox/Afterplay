@@ -50,6 +50,9 @@ export const queryKeys = {
   },
   igdb: {
     search: (query: string) => ['igdb', 'search', query] as const,
+    // El respaldo de la tienda de Steam, bajo el mismo prefijo: es la misma
+    // pregunta del mismo buscador, solo que a otro catálogo.
+    steamSearch: (query: string) => ['igdb', 'steamSearch', query] as const,
     details: (igdbId: number | null) => ['igdb', 'details', igdbId] as const,
     // Los juegos de una saga. La key es la lista de colecciones YA ordenada
     // (ver useCollectionGames): la misma pregunta, una sola entrada.
@@ -123,6 +126,8 @@ export const queryKeys = {
     overlayEnabled: ['settings', 'overlayEnabled'] as const,
     overlayShortcut: ['settings', 'overlayShortcut'] as const,
     overlayShortcutStatus: ['settings', 'overlayShortcutStatus'] as const,
+    backupIntervalHours: ['settings', 'backupIntervalHours'] as const,
+    backupCount: ['settings', 'backupCount'] as const,
     credentials: ['settings', 'credentials'] as const,
     syncFailure: ['settings', 'syncFailure'] as const,
   },

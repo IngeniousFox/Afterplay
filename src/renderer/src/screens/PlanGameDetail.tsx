@@ -175,9 +175,14 @@ export const PlanGameDetail = ({
             <div className={revealClass} style={revealStyle(2)}>
               <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
             </div>
-            <div className={revealClass} style={revealStyle(3)}>
-              <ScreenshotsCarousel igdbId={game.igdbId} />
-            </div>
+            {/* Sin id de IGDB no hay capturas ni trailer que pedir (un juego
+                que existe en Steam y que IGDB todavia no tiene): la seccion
+                no se pinta, igual que cuando IGDB no devuelve ninguna. */}
+            {game.igdbId !== null && (
+              <div className={revealClass} style={revealStyle(3)}>
+                <ScreenshotsCarousel igdbId={game.igdbId} />
+              </div>
+            )}
             {/* Y aqui vale doble: mirando un planeado, ver que el 1 y el 2
                 los tienes terminados es justo el contexto que decide si este
                 sube en la lista o se queda esperando. */}

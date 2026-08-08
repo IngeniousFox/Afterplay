@@ -44,7 +44,10 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
   const patch: UpdateGamePatch = {};
   const now = new Date();
 
-  const detail = await getGameDetails(game.igdbId);
+  // igdbId null = no está en el catálogo de IGDB (existe en Steam y ellos aún
+  // no lo tienen). Sin id no hay nada que pedir; la pata de Steam de más abajo
+  // sigue igual, que es justo la gracia de que sean fuentes independientes.
+  const detail = game.igdbId === null ? null : await getGameDetails(game.igdbId);
 
   let ratings: GameRatings | null = null;
   if (detail) {

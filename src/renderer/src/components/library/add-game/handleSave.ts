@@ -1,7 +1,7 @@
 import type {
   CreateGameWithDetailsInput,
   GameRow,
-  IgdbSearchResult,
+  SelectedGame,
 } from '../../../../../shared/types';
 // Imports de valor (no `import type`): estos hooks solo se usan aquí dentro
 // de `ReturnType<typeof ...>`, y TypeScript no permite `typeof` sobre un
@@ -37,7 +37,7 @@ const toBackendDate = (
 // Plan to Play (que no lleva playthrough todavía).
 export const buildGameDetails = (
   values: AddGameFormValues,
-): Omit<CreateGameWithDetailsInput, 'igdbId'> => {
+): Omit<CreateGameWithDetailsInput, 'source'> => {
   const initialStatus = values.playedBefore
     ? STATUS_TO_STATE_TYPE[values.pastStatus]
     : values.endless
@@ -147,12 +147,12 @@ export const addManualPlaythrough = async (
 // Alta reducida (Plan to Play): un juego planeado no tiene playthrough real
 // todavía — solo el juego elegido, las imágenes y las notas.
 export const savePlannedGame = async (
-  selected: IgdbSearchResult,
+  selected: SelectedGame,
   values: AddGameFormValues,
   createPlanned: ReturnType<typeof useCreatePlannedGame>,
 ): Promise<GameRow> =>
   createPlanned.mutateAsync({
-    igdbId: selected.igdbId,
+    source: selected.source,
     note: values.note.trim() || null,
     gameNotes: values.gameNotes.trim() || null,
     coverUrl: values.coverUrl,

@@ -71,6 +71,21 @@ export const registerSettingsHandlers = (): void => {
 
   ipcMain.handle('settings:getOverlayShortcutStatus', () => getOverlayShortcutStatus());
 
+  // Cadencia y retención de la copia local automática (db/dailyBackup.ts).
+  // Sin efecto en caliente que avisar: la próxima comprobación es en el
+  // próximo arranque, no hay temporizador de fondo que despertar aquí.
+  ipcMain.handle('settings:getBackupIntervalHours', () => getConfigValue('backupIntervalHours'));
+
+  ipcMain.handle('settings:setBackupIntervalHours', (_event, hours: number) => {
+    setConfigValue('backupIntervalHours', Math.max(1, Math.round(hours)));
+  });
+
+  ipcMain.handle('settings:getBackupCount', () => getConfigValue('backupCount'));
+
+  ipcMain.handle('settings:setBackupCount', (_event, count: number) => {
+    setConfigValue('backupCount', Math.max(0, Math.round(count)));
+  });
+
   // Estado del sync con Turso — para que un fallo persistente (sobre todo un
   // desajuste de esquema, que NO se cura reintentando) se vea en Ajustes en
   // vez de morir en la consola.

@@ -1,8 +1,10 @@
-import { eq, inArray, isNull, sql } from 'drizzle-orm';
+import { eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getConfigValue, setConfigValue } from '../config/store';
 import { getDb, withDbAccess } from '../db';
 import { gamesTable, radarGamesTable } from '../db/schema';
 import { getGameExternalBatch, getUpcomingCollectionGames } from '../igdb/api';
+import { adoptIgdbForCandidates, findAdoptionCandidates } from '../external/adoptIgdb';
+import { fillMissingSgdbIds } from '../external/sgdbBackfill';
 import { notifyRadarActivity } from './notify';
 
 // EL RADAR DE SECUELAS (PLAN-TO-PLAY.md §4) — la única cosa de todo este
@@ -59,22 +61,48 @@ export const isRadarRunning = (): boolean => running;
 
 // ── Fase 1: refrescar la pertenencia de TODOS los juegos ───────────────────
 const refreshMembership = async (): Promise<number[]> => {
+  // Antes de nada: los juegos dados de alta SOLO con Steam (porque IGDB no
+  // los tenía) pueden estar ya en su catálogo. Se comprueba aquí porque esta
+  // es la única pasada que corre sola, sin que nadie pulse nada — y por tanto
+  // la que de verdad hace que un juego "aparezca" en IGDB sin que tengas que
+  // acordarte de refrescar. Si alguno entra, cambia de fuente y a partir de
+  // esta misma pasada ya tiene sagas como cualquier otro.
+  const adopted = await adoptIgdbForCandidates(await findAdoptionCandidates());
+  if (adopted > 0) {
+    // Solo ASCII, misma convención que el resto de logs del main.
+    console.log(`[radar] ${adopted} juego(s) que solo estaban en Steam ya estan en IGDB`);
+  }
+
+  // Y lo mismo con el id de SteamGridDB: tampoco existe el día que se anuncia
+  // un juego. Aquí cuesta poco — solo entran los que no lo tienen, así que
+  // esto se agota solo y en régimen normal son cero peticiones.
+  await fillMissingSgdbIds();
+
+  // isNotNull(igdbId): el radar va de sagas de IGDB, así que un juego sin
+  // ficha allí (existe en Steam y ellos aún no lo tienen) no puede aportar
+  // ninguna colección ni cruzarse con nada. Se queda fuera de la pasada.
   const games = await withDbAccess(async () =>
-    getDb().select({ id: gamesTable.id, igdbId: gamesTable.igdbId }).from(gamesTable),
+    getDb()
+      .select({ id: gamesTable.id, igdbId: gamesTable.igdbId })
+      .from(gamesTable)
+      .where(isNotNull(gamesTable.igdbId)),
   );
   if (games.length === 0) return [];
+  const inIgdb = games.filter(
+    (game): game is { id: number; igdbId: number } => game.igdbId !== null,
+  );
 
   // Red fuera del candado, como siempre. Es el MISMO lote que el refresco
   // manual (§5.1): una biblioteca entera cabe en 1-2 peticiones, y de paso
   // trae notas, sinopsis y fechas — o sea que la pasada semanal también pone
   // al día los "por salir" ya fichados sin pedir nada extra. Un planeado que
   // por fin tiene fecha se reordena solo en el horizonte.
-  const byIgdbId = await getGameExternalBatch(games.map((game) => game.igdbId));
+  const byIgdbId = await getGameExternalBatch(inIgdb.map((game) => game.igdbId));
 
   const now = new Date();
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
-      for (const game of games) {
+      for (const game of inIgdb) {
         const data = byIgdbId.get(game.igdbId);
         if (!data) continue;
         await tx
@@ -116,9 +144,11 @@ const findAnnounced = async (collectionIds: number[]): Promise<number> => {
   // Lo que YA tienes no es un descubrimiento. El cruce es por igdbId exacto,
   // el mismo emparejado que usa todo lo demás de la app.
   const ownedIgdbIds = new Set(
-    (
-      await withDbAccess(async () => getDb().select({ igdbId: gamesTable.igdbId }).from(gamesTable))
-    ).map((game) => game.igdbId),
+    (await withDbAccess(async () => getDb().select({ igdbId: gamesTable.igdbId }).from(gamesTable)))
+      .map((game) => game.igdbId)
+      // Los que no estan en IGDB no pueden cruzarse con un descubrimiento
+      // suyo: fuera del conjunto en vez de meter un null que no casa con nada.
+      .filter((igdbId): igdbId is number => igdbId !== null),
   );
 
   const candidates = upcoming.filter((game) => !ownedIgdbIds.has(game.igdbId));

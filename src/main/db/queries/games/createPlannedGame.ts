@@ -12,7 +12,7 @@ import { resolveGameEnrichment } from './resolveGameEnrichment';
 // historial) y el evento 'plan_to_play' que deja constancia de cuándo — y,
 // con la nota, de por qué — lo planeaste.
 export const createPlannedGame = async (input: CreatePlannedGameInput): Promise<GameRow> => {
-  const enrichment = await resolveGameEnrichment(input.igdbId, {
+  const enrichment = await resolveGameEnrichment(input.source, {
     coverUrl: input.coverUrl,
     heroUrl: input.heroUrl,
     steamGridDbId: input.steamGridDbId,
