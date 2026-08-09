@@ -328,6 +328,19 @@ export class ProcessWatcher {
     }
   }
 
+  // Cuánto puede callarse un cronómetro antes de darlo por abandonado.
+  //
+  // GENEROSO a propósito, y no los pocos minutos que sugeriría un latido de uno
+  // por minuto. El §7.5 avisa de por qué: los navegadores móviles suspenden las
+  // pestañas de fondo sin piedad, así que es normal que el latido se pare
+  // MIENTRAS SIGUES JUGANDO. Con un umbral corto, una tarde de consola con el
+  // móvil en el bolsillo se cortaría por la mitad.
+  //
+  // El precio es el opuesto y está asumido (§7.6): dormirse con el cronómetro
+  // puesto suma hasta seis horas de más. Pero eso se corrige después editando
+  // la sesión, y perder tiempo real no se corrige con nada.
+  private static readonly TIMER_STALE_HOURS = 6;
+
   // Al arrancar puede haber sesiones abiertas de antes: la app se cerró con un
   // juego en marcha (cierre brusco / corte de luz), o quedó un Play manual sin
   // parar. Por cada una: si el dueño (juego o emulador) está corriendo AHORA
@@ -342,6 +355,28 @@ export class ProcessWatcher {
     let changed = false;
 
     for (const session of openSessions) {
+      // Las sesiones de CRONÓMETRO (REMOTO.md §7) no tienen proceso: las abre
+      // el móvil para una consola física, GeForce Now o cualquier cosa que
+      // este watcher no puede ver. Sin esta salida se cerraban en el acto con
+      // duración 0, que es justo el obstáculo que documenta el §7.3.
+      //
+      // La regla de frescura del §7.4: si latió hace poco, estás jugando y no
+      // se toca — ni aunque el PC se haya reiniciado por medio. Si lleva horas
+      // mudo, se da por abandonada y se cierra en su último latido, que es lo
+      // más cerca del final real que se puede afinar sin inventar.
+      if (session.startedBy === 'timer') {
+        const lastBeat = session.lastHeartbeatAt ?? session.startedAt;
+        const staleMs = ProcessWatcher.TIMER_STALE_HOURS * 3_600_000;
+        if (Date.now() - lastBeat.getTime() < staleMs) continue;
+
+        await closeSession(session.sessionId, lastBeat);
+        console.log(
+          `[watcher] [info] sesion ${session.sessionId} de cronometro sin latir ${ProcessWatcher.TIMER_STALE_HOURS}h - cerrada en su ultimo latido`,
+        );
+        changed = true;
+        continue;
+      }
+
       const key = openSessionKey(session);
       const runningTarget = key !== null ? running.get(key) : undefined;
       if (key !== null && runningTarget) {

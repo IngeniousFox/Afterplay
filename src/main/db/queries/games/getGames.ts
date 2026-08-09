@@ -34,6 +34,10 @@ export const getGames = async (): Promise<GameListItem[]> => {
     .select({
       id: gamesTable.id,
       igdbId: gamesTable.igdbId,
+      // Para que el buscador de Add Game reconozca los juegos que solo existen
+      // en Steam — los que tienen igdbId null y que el cruce por IGDB no puede
+      // ver (ver GameListItem.steamAppId).
+      steamAppId: gamesTable.steamAppId,
       title: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
       // Para la cara trasera de la card (flip) — una columna de texto más
@@ -243,6 +247,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
     return {
       id: game.id,
       igdbId: game.igdbId,
+      steamAppId: game.steamAppId,
       title: game.title,
       coverUrl: game.coverUrl,
       heroUrl: game.heroUrl,

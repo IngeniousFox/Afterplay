@@ -1,0 +1,8 @@
+<!-- Maskable: el sistema recorta esto a la forma que use (círculo, squircle…),
+     así que el fondo va a sangre y la marca se queda dentro del 80% central,
+     que es la única zona que ningún recorte se come. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0a0b0a"/>
+  <path d="M256 168 L332 360 L288 360 L256 272 L224 360 L180 360 Z" fill="#2fdc7e"/>
+  <rect x="212" y="302" width="88" height="21" rx="10" fill="#0a0b0a"/>
+</svg>

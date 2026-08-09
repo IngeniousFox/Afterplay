@@ -1,5 +1,6 @@
 import { index, int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { RecapPayload } from '../../shared/memory/payload';
+import type { PlanMailboxEntry, PlanMailboxType } from '../../shared/planMailbox';
 
 // Nada de `check()` SQL en columnas tipo-enum (type/milestone/datePrecision/
 // format), y el motivo cambió el 8-ago-2026 aunque la decisión se mantenga.
@@ -326,6 +327,21 @@ export const sessionsTable = sqliteTable('sessions', {
   // abierta hasta el siguiente arranque — así no se pierde el tiempo jugado
   // ni se infla con el hueco de la app apagada. Null en sesiones manuales.
   lastHeartbeatAt: int({ mode: 'timestamp_ms' }),
+  // QUIÉN abrió esta sesión (REMOTO.md §7.3). No cambia lo que la sesión ES —
+  // sigue siendo tiempo medido de verdad, con `isManual: false`, y cuenta
+  // igual en el heatmap, las rachas y los momentos. Solo dice quién apretó el
+  // botón.
+  //
+  // Existe por un choque concreto: reconcileOpenSessions recorre las sesiones
+  // abiertas y cierra la que no tenga su proceso corriendo. Una sesión de
+  // cronómetro (una consola física, GeForce Now, un juego de navegador) NUNCA
+  // va a tener proceso, así que sin esta marca se cerraría en el acto con
+  // `endedAt = startedAt` — duración 0 — cada vez que el watcher mirara.
+  //
+  // 'watcher' por defecto: es lo que era todo hasta ahora.
+  startedBy: text({ enum: ['watcher', 'timer'] })
+    .notNull()
+    .default('watcher'),
   datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
   // Diario de sesión: "dónde lo dejé". Se ofrece al cerrar el juego (toast) y
   // se puede escribir o corregir después desde la propia fila de la sesión —
@@ -569,6 +585,49 @@ export const generatedMemoriesTable = sqliteTable(
   },
   (table) => [uniqueIndex('generated_memories_scope_unique').on(table.scopeType, table.scopeKey)],
 );
+
+// ── El buzón del Plan (REMOTO.md §6) ──────────────────────────────────────
+//
+// Lo que el móvil ENCOLA y este escritorio DRENA al arrancar. Tabla minúscula
+// y DESECHABLE: el cliente web nunca escribe en las tablas reales, solo aquí,
+// así que un bug en la web no puede corromper la biblioteca — como mucho deja
+// una orden que no se aplica.
+//
+// Sincroniza por Turso como todo lo demás, sin inventar ningún canal: el móvil
+// inserta en el remoto, el pull del arranque se la trae, y el resultado de
+// aplicarla sube por el push de siempre.
+//
+// El payload va en JSON desde el minuto uno (§6.4) y no en columnas fijas:
+// así el "alta de juego normal con sus gastos" del §1.1 es AMPLIAR el payload,
+// no reescribir el mecanismo.
+export const planMailboxTable = sqliteTable(
+  'plan_mailbox',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    // Duplicado del `type` que ya va dentro del payload, a propósito: permite
+    // filtrar e indexar sin abrir el JSON de cada fila.
+    type: text().$type<PlanMailboxType>().notNull(),
+    payload: text({ mode: 'json' }).$type<PlanMailboxEntry>().notNull(),
+    createdAt: int({ mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    // Quién la encoló. En un despliegue de dos personas cada una tiene su
+    // propia base, así que esto no elige nada — es para depurar.
+    requestedBy: text(),
+    // null = pendiente. Con fecha = ya drenada, con éxito o sin él.
+    processedAt: int({ mode: 'timestamp_ms' }),
+    // Por qué falló, si falló. La fila se marca como procesada IGUALMENTE: una
+    // orden que revienta (un juego que IGDB ya no tiene, uno borrado entre
+    // medias) no puede quedarse reintentándose en cada arranque para siempre.
+    // El error se guarda para poder mirarlo, no para reintentar.
+    error: text(),
+  },
+  // Lo que se pregunta en cada arranque es "¿qué queda pendiente?", y con el
+  // buzón creciendo indefinidamente eso sería un escaneo completo.
+  (table) => [index('plan_mailbox_pending_idx').on(table.processedAt, table.id)],
+);
+
+export type PlanMailboxRow = typeof planMailboxTable.$inferSelect;
 
 export const spendEventsTable = sqliteTable('spend_events', {
   id: int().primaryKey({ autoIncrement: true }),

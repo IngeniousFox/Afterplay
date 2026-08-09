@@ -11,9 +11,12 @@ export type OpenSession = {
   gameId: number | null;
   emulatorId: number | null;
   startedAt: Date;
-  // Último latido del watcher mientras la sesión estaba viva. Es la mejor
-  // estimación del fin real si la app murió de golpe (ver reconcile).
+  // Último latido mientras la sesión estaba viva. Es la mejor estimación del
+  // fin real si la app murió de golpe (ver reconcile).
   lastHeartbeatAt: Date | null;
+  // Quién la abrió. Las de 'timer' (REMOTO.md §7) no tienen proceso que
+  // vigilar, así que la reconciliación las trata aparte — ver allí.
+  startedBy: 'watcher' | 'timer';
 };
 
 // Todas las sesiones abiertas (endedAt null) con su dueño (juego o
@@ -29,6 +32,7 @@ export const getOpenSessions = async (): Promise<OpenSession[]> => {
       emulatorId: sessionsTable.emulatorId,
       startedAt: sessionsTable.startedAt,
       lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
+      startedBy: sessionsTable.startedBy,
     })
     .from(sessionsTable)
     .leftJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id))

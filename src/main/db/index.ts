@@ -696,6 +696,29 @@ let lastSyncFailure: SyncFailure | null = null;
 
 export const getLastSyncFailure = (): SyncFailure | null => lastSyncFailure;
 
+// Lo que hay que hacer DESPUÉS de un pull que de verdad ha traído cosas.
+//
+// Hoy es el drenado del buzón del Plan, y vive aquí en vez de en cada llamador
+// por dos motivos que costaron un repaso entero:
+//
+//  · `syncCapable` no significa "acaba de haber un pull": se pone a true una
+//    vez y no vuelve a bajar aunque el pull siguiente falle. Colgar el drenado
+//    de esa bandera dejaba que corriera contra datos viejos, y peor: cuando
+//    runSyncCycle salía de inmediato por estar ya en marcha, el `.then()` del
+//    llamador disparaba igual sin que hubiera habido pull ninguno.
+//  · Había TRES sitios que llaman a runSyncCycle (arranque, el tic de 60s y
+//    el de settings al guardar credenciales) y solo dos drenaban. Con el
+//    enganche aquí dentro, cualquier llamador futuro —un botón de "sincronizar
+//    ya", un handler de volver de suspensión— lo hereda sin acordarse.
+//
+// Se registra una sola vez desde main/index.ts. No se importa el drenado desde
+// aquí a propósito: sería una dependencia circular (él ya importa este módulo).
+let afterSuccessfulSync: (() => Promise<void>) | null = null;
+
+export const onSyncCompleted = (task: () => Promise<void>): void => {
+  afterSuccessfulSync = task;
+};
+
 // Firma de los errores del motor cuando el esquema remoto no cuadra: el
 // replicador va por posición de columna, así que un desajuste sale como un
 // tipo que no encaja o una tabla que no existe, nunca como un error de red.
@@ -739,6 +762,16 @@ export const runSyncCycle = async (): Promise<void> => {
     await db.$client.pull();
     await db.$client.push();
     lastSyncFailure = null;
+
+    // Y solo AQUÍ, con el pull ya hecho y sin fallo: es la única garantía de
+    // que lo que el móvil escribió en el remoto existe ya en local. La tarea
+    // no puede lanzar (ver runPlanMailboxDrain), pero se blinda igualmente:
+    // un fallo suyo no puede contarse como un fallo de sync.
+    try {
+      await afterSuccessfulSync?.();
+    } catch (taskError) {
+      console.warn('[db] la tarea posterior al sync falló (el sync sí fue bien):', taskError);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const lower = message.toLowerCase();

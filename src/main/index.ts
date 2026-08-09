@@ -26,6 +26,8 @@ import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { setCuriositiesNotifier } from './curiosities/notify';
 import { setExternalNotifier } from './external/notify';
 import { runMemoriesDailyTick } from './memories/detect';
+import { runPlanMailboxDrain } from './plan/drainMailbox';
+import { onSyncCompleted } from './db';
 import { runSteamAppIdBackfill } from './steam/appIdBackfill';
 import {
   queueAchievementsRefreshForGame,
@@ -360,6 +362,23 @@ function toggleBigPicture(): void {
   else enterBigPicture();
 }
 
+// El drenado del buzón del Plan (REMOTO.md §6.2), registrado UNA vez como
+// tarea posterior al sync.
+//
+// No se llama desde ningún sitio a mano: lo dispara runSyncCycle justo después
+// de un pull correcto (ver onSyncCompleted en db/index.ts). Así corre en los
+// tres sitios que sincronizan —arranque, tic de 60s y guardar credenciales en
+// Ajustes— sin que ninguno tenga que acordarse, y nunca sin que haya habido
+// pull de verdad.
+//
+// Avisa al renderer al terminar porque los hooks de juegos usan
+// `staleTime: Infinity`, y eso solo se sostiene si todo el que escribe avisa.
+onSyncCompleted(async () => {
+  await runPlanMailboxDrain(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('games:changed');
+  });
+});
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -658,6 +677,11 @@ app.whenReady().then(async () => {
   // que los recaps, por el mismo motivo: si el otro PC ya lo hizo, aquí no
   // queda nada que preguntar. Tras la primera pasada es un no-op.
   void runSyncCycle().then(async () => {
+    // El buzón ya se ha drenado aquí dentro: runSyncCycle lo dispara solo tras
+    // el pull (ver onSyncCompleted arriba). Un alta encolada existe por tanto
+    // como juego ANTES de que pasen por encima el backfill de appids y las
+    // pasadas de logros, que es justo lo que hace falta para que no se quede
+    // esperando al siguiente arranque.
     void runMemoriesDailyTick();
     // El radar mira si toca (una vez por semana) y no hace nada el resto de
     // los arranques — la comprobacion es leer una fecha de config.json.
@@ -682,12 +706,28 @@ app.whenReady().then(async () => {
     // corriendo, igual que el de RA con los emuladores.
     startSteamLivePoll(() => watcher?.getActiveGameIds() ?? []);
   });
+  // Cada ciclo sincroniza Y drena (el drenado va dentro, ver onSyncCompleted).
+  //
+  // Que el buzón se mire en cada tic y no solo al arrancar es lo que lo hace
+  // servir de algo en el uso normal de esta app: vive semanas en la bandeja
+  // sin reiniciarse — el mismo motivo por el que existe el tic horario de más
+  // abajo — así que lo encolado desde el móvil se aplicaba solo tras un
+  // reinicio completo.
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
   memoriesTimer = setInterval(() => {
     void runMemoriesDailyTick();
     // Mismo tic para el radar: la app puede pasar semanas sin reiniciarse
     // (vive en la bandeja), asi que mirarlo solo al arrancar no basta.
     void runRadarTick();
+    // Y la copia local, por exactamente el mismo motivo. Estaba SOLO en el
+    // arranque, con lo que "una copia cada 6 horas" era en realidad "una copia
+    // por cada vez que abres la app": con la app en la bandeja tres semanas,
+    // te llevabas una copia en tres semanas. La función ya decide sola si toca
+    // (mira la fecha de la última que existe), así que llamarla cada hora es
+    // barato y hace que el ajuste signifique lo que dice.
+    void runDailyBackup().catch((error: unknown) => {
+      console.warn('[backup] fallo inesperado en la copia periodica (sigo igualmente):', error);
+    });
   }, MEMORIES_TICK_MS);
 
   // Auto-actualización (solo app empaquetada — ver updater.ts). Al final del

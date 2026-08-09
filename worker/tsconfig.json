@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  // Fuera de src/ entran los ficheros COMPARTIDOS con el escritorio, que se
+  // importan por ruta relativa (../../src/...). No es una copia ni un paquete
+  // publicado: es el mismo fichero, compilado por el bundler de wrangler.
+  // Esta es la razón práctica de que la web viva en el mismo repo — ver db.ts.
+  "include": [
+    "src/**/*.ts",
+    "../src/main/db/schema.ts",
+    "../src/main/db/queries/games/iterationHours.ts",
+    "../src/shared/**/*.ts"
+  ],
+  "exclude": ["../src/shared/memory/__tests__"]
+}

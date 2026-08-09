@@ -321,14 +321,42 @@ const AddGameModalBody = ({
   // juego al que colgar esa sesión, y ni promocionar ni abrir una ficha la
   // asignan — irse por cualquiera de los dos la dejaría huérfana.
   const canLeaveForOwned = !isPlan && assignSessionId === undefined;
+
+  // Lo que ya tienes, indexado por las DOS identidades que puede traer un
+  // resultado del buscador: la de IGDB y la de Steam.
+  //
+  // La segunda entró tarde y por un agujero real. El respaldo de Steam
+  // (SteamFallback) devuelve juegos que IGDB todavía no tiene, o sea con
+  // `igdbId` null — y este cruce, que solo miraba igdbId, no podía
+  // reconocerlos nunca. "Enter the kOS", añadido desde el móvil y ya en el
+  // Plan, se seguía ofreciendo como si fuera nuevo.
+  //
+  // Se construyen a la vez y con la MISMA descripción a propósito: son dos
+  // llaves de la misma cerradura, y separarlas sería dejar que un día digan
+  // cosas distintas del mismo juego.
   const ownedByIgdbId = new Map<number, OwnedGameMatch>();
-  for (const game of libraryGames ?? []) {
-    // Sin id de IGDB no puede casar con ningun resultado del buscador, que es
-    // justo lo que este mapa cruza.
-    if (game.igdbId === null) continue;
+  const ownedBySteamAppId = new Map<number, OwnedGameMatch>();
+
+  const indexOwned = (
+    games: { id: number; igdbId: number | null; steamAppId: number | null }[],
+    match: (gameId: number) => OwnedGameMatch,
+  ): void => {
+    for (const game of games) {
+      // UNA sola descripción para las dos claves, no una por mapa: así el
+      // mismo juego no puede acabar describiéndose distinto según por dónde lo
+      // encuentre el buscador.
+      const owned = match(game.id);
+      // Un juego puede tener las dos identidades, una, o —los emulados de
+      // consola— ninguna. Se indexa por las que tenga.
+      if (game.igdbId !== null) ownedByIgdbId.set(game.igdbId, owned);
+      if (game.steamAppId !== null) ownedBySteamAppId.set(game.steamAppId, owned);
+    }
+  };
+
+  indexOwned(libraryGames ?? [], (gameId) => {
     const reachable = canLeaveForOwned && onOpenExisting !== undefined;
-    ownedByIgdbId.set(game.igdbId, {
-      gameId: game.id,
+    return {
+      gameId,
       where: 'library',
       label: 'IN YOUR LIBRARY',
       color: GREEN,
@@ -338,25 +366,25 @@ const AddGameModalBody = ({
       onPick: reachable
         ? () => {
             handleClose();
-            onOpenExisting(game.id);
+            onOpenExisting(gameId);
           }
         : undefined,
-    });
-  }
-  for (const game of plannedGames ?? []) {
-    if (game.igdbId === null) continue;
+    };
+  });
+
+  indexOwned(plannedGames ?? [], (gameId) => {
     const reachable = canLeaveForOwned && onPickPlanned !== undefined;
-    ownedByIgdbId.set(game.igdbId, {
-      gameId: game.id,
+    return {
+      gameId,
       where: 'plan',
       label: 'IN YOUR PLAN',
       color: BLUE,
       hint: reachable
         ? 'Already in your plan — pick it to move it into your library.'
         : 'Already in your plan.',
-      onPick: reachable ? () => onPickPlanned(game.id) : undefined,
-    });
-  }
+      onPick: reachable ? () => onPickPlanned(gameId) : undefined,
+    };
+  });
 
   // Cambiar endless puede dejar pastStatus apuntando a una opción que ya no
   // existe en el dropdown (ej. "Beaten" al activar endless) — se corrige aquí
@@ -595,6 +623,7 @@ const AddGameModalBody = ({
               setSelected(toSelected(result));
             }}
             ownedByIgdbId={ownedByIgdbId}
+            ownedBySteamAppId={ownedBySteamAppId}
           />
         </div>
       ) : pickerTarget !== null ? (

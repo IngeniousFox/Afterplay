@@ -47,6 +47,10 @@ export const getPlannedGames = async (): Promise<PlannedGameItem[]> => {
     .select({
       id: gamesTable.id,
       igdbId: gamesTable.igdbId,
+      // Para el cruce del buscador con los juegos que solo existen en Steam
+      // (ver GameListItem.steamAppId). Un planeado añadido por esa vía tiene
+      // igdbId null, así que sin esto no hay forma de reconocerlo.
+      steamAppId: gamesTable.steamAppId,
       title: gamesTable.title,
       coverUrl: gamesTable.coverUrl,
       heroUrl: gamesTable.heroUrl,
@@ -78,6 +82,7 @@ export const getPlannedGames = async (): Promise<PlannedGameItem[]> => {
   return games.map((game) => ({
     id: game.id,
     igdbId: game.igdbId,
+    steamAppId: game.steamAppId,
     title: game.title,
     coverUrl: game.coverUrl,
     heroUrl: game.heroUrl,

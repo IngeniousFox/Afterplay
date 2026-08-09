@@ -9,6 +9,12 @@ out
 .env
 .db
 .db-wal
+# Secretos de desarrollo del Worker. Wrangler los lee de aquí para `wrangler
+# dev`; en producción los mismos nombres viven en los secrets de Cloudflare,
+# así que este fichero nunca sale de tu máquina.
+.dev.vars
+.dev.vars.*
+.wrangler
 # Binario de ludusavi (33 MB) — lo baja scripts/fetch-ludusavi.ts en cada
 # build a partir de ludusavi.lock.json. El repo son 3 MB y git guardaría
 # cada versión para siempre.

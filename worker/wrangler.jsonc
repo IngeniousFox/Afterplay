@@ -1,0 +1,59 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "afterplay-web",
+  "main": "src/index.ts",
+  // Un día por detrás de hoy a propósito: workerd solo admite fechas que su
+  // propio binario conozca, y el de wrangler 4.120 llega hasta el 2026-08-08.
+  // Poner la fecha de hoy hace que `wrangler dev` ni arranque.
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // SIN BINDINGS. A propósito, y conviene que siga así:
+  //
+  //  · Nada de r2_buckets — ahí viven las partidas guardadas y este Worker no
+  //    tiene por qué poder tocarlas. REMOTO.md §1.1 deja los saves FUERA del
+  //    alcance de la web, y la forma de garantizarlo no es acordarse de no
+  //    llamarlos: es no tener el binding. Sin él, la API de R2 no existe
+  //    dentro de este Worker.
+  //  · Nada de kv_namespaces / d1_databases / durable_objects — los datos
+  //    viven en Turso, que se abre por petición (ver tenants.ts). Un binding
+  //    de estado compartido es justo lo que la regla 1 del §5.2 prohíbe.
+  //
+  // Los secretos (TENANTS, y en dev TURSO_*) NO van aquí: en local los lee
+  // wrangler de .dev.vars, y en producción de los secrets de Cloudflare.
+  // Este fichero se commitea; .dev.vars no.
+
+  // La PWA se sirve desde ESTE MISMO Worker como assets estáticos, en vez de
+  // desde un proyecto de Pages aparte. Cambio respecto al boceto del §4.1, y
+  // por tres motivos que se notan:
+  //
+  //  · UN SOLO ORIGEN => cero CORS. Con Pages y Worker separados hay dos
+  //    dominios, y para que la PWA mande la cookie de Access hace falta CORS
+  //    con credenciales y una lista de orígenes permitidos: más piezas que
+  //    pueden estar mal, todas en el camino de la autenticación.
+  //  · UNA SOLA aplicación de Access que proteger, no dos que mantener
+  //    sincronizadas.
+  //  · Los assets estáticos no cuentan para la cuota de peticiones de
+  //    Workers, así que sigue igual de gratis (§4.1).
+  //
+  // `run_worker_first` en /api/* es lo que impide que el fallback de SPA se
+  // trague las rutas de la API y devuelva index.html con un 200.
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "observability": {
+    "enabled": true,
+    // Los logs de Workers entran en el plan gratuito. head_sampling_rate a 1
+    // porque a ~100 peticiones/día (§4.1) muestrear no ahorra nada y perder
+    // el log de la única petición que falló sí duele.
+    "head_sampling_rate": 1
+  },
+
+  // Sin "routes" ni "workers_dev": false — el Worker se sirve en su
+  // *.workers.dev hasta que haya dominio propio, que es opcional (§4.1).
+  "placement": { "mode": "smart" }
+}

@@ -3,10 +3,15 @@ import type { SteamSearchResult } from '../../../../../shared/types';
 import { useSteamSearch } from '../../../hooks/igdb';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { BLUE } from '../../../lib/colors';
+import type { OwnedGameMatch } from './SearchStep';
 
 type SteamFallbackProps = {
   query: string;
   onSelect: (result: SteamSearchResult) => void;
+  // Lo que ya tienes, por appid. Sin esto, un juego añadido por esta misma vía
+  // se seguía ofreciendo como nuevo para siempre: el cruce de arriba va por
+  // igdbId, y estos juegos son precisamente los que NO lo tienen.
+  ownedBySteamAppId: Map<number, OwnedGameMatch>;
 };
 
 // Una fila de resultado, con su miniatura de verdad.
@@ -15,26 +20,60 @@ type SteamFallbackProps = {
 // afterplay-image: — así que NO se pinta a pelo, se resuelve por la caché de
 // siempre (useImageSrc: la baja el main y la sirve por su propio protocolo),
 // exactamente igual que las carátulas de IGDB en el buscador de al lado.
+//
+// El tratamiento de "ya lo tienes" es EL MISMO que el de los resultados de
+// IGDB (SearchStep): badge con el color de su sitio, el hint en lugar del
+// subtítulo, y la fila apagada y no pulsable cuando no hay a dónde llevarte.
 const SteamResultRow = ({
   result,
-  onSelect,
+  owned,
+  onPick,
 }: {
   result: SteamSearchResult;
-  onSelect: (result: SteamSearchResult) => void;
+  owned: OwnedGameMatch | undefined;
+  onPick: (result: SteamSearchResult) => void;
 }): React.JSX.Element => {
   const src = useImageSrc(result.thumbnailUrl, 'covers');
+  // Ya es tuyo y no hay sitio al que llevarte: marcado pero apagado, en vez de
+  // dejar que lo elijas para estrellarte luego al guardar.
+  const isLocked = owned !== undefined && owned.onPick === undefined;
+
   return (
     <button
       type="button"
-      onClick={() => onSelect(result)}
-      className="flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-100 hover:bg-white/[0.05]"
+      disabled={isLocked}
+      onClick={() => onPick(result)}
+      className={`flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-100 ${
+        isLocked ? 'cursor-default opacity-55' : 'hover:bg-white/[0.05]'
+      }`}
     >
       <div className="h-11.5 w-23 flex-none overflow-hidden rounded-[7px] border border-white/10 bg-white/[0.03]">
         {src && <img src={src} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-semibold text-foreground">{result.title}</div>
-        <div className="mt-0.5 text-[11px] text-muted-foreground">Steam · {result.appId}</div>
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-[13.5px] font-semibold text-foreground">
+            {result.title}
+          </span>
+          {owned && (
+            <span
+              className="flex-none rounded-md px-1.75 py-0.5 text-[10px] font-bold tracking-[.08em]"
+              style={{ background: `${owned.color}22`, color: owned.color }}
+            >
+              {owned.label}
+            </span>
+          )}
+        </div>
+        {/* Uno que ya tienes dice a dónde lleva, en vez de repetir su appid:
+            lo que hay que decidir aquí ya no es "¿es este juego?" sino qué va
+            a pasar al pincharlo — que no es dar de alta nada nuevo. */}
+        {owned ? (
+          <div className="mt-0.5 text-[11px]" style={{ color: owned.color }}>
+            {owned.hint}
+          </div>
+        ) : (
+          <div className="mt-0.5 text-[11px] text-muted-foreground">Steam · {result.appId}</div>
+        )}
       </div>
     </button>
   );
@@ -58,8 +97,24 @@ const SteamResultRow = ({
 // nace con menos datos. Y se dice también que se arregla solo — los tres
 // refrescos vigilan y, en cuanto IGDB lo meta, el juego cambia de fuente sin
 // que haya que hacer nada (ver external/adoptIgdb.ts).
-export const SteamFallback = ({ query, onSelect }: SteamFallbackProps): React.JSX.Element => {
+export const SteamFallback = ({
+  query,
+  onSelect,
+  ownedBySteamAppId,
+}: SteamFallbackProps): React.JSX.Element => {
   const { data: results, isLoading } = useSteamSearch(query);
+
+  // Un juego que ya tienes no se da de alta otra vez: o lleva a donde ya vive,
+  // o no se puede elegir. Centralizado igual que el `pick` de SearchStep, para
+  // que la decisión viva en UN sitio y no en el onClick de cada fila.
+  const pick = (result: SteamSearchResult): void => {
+    const owned = ownedBySteamAppId.get(result.appId);
+    if (owned === undefined) {
+      onSelect(result);
+      return;
+    }
+    owned.onPick?.();
+  };
 
   if (isLoading) {
     return (
@@ -95,7 +150,12 @@ export const SteamFallback = ({ query, onSelect }: SteamFallbackProps): React.JS
         </p>
       </div>
       {results.map((result) => (
-        <SteamResultRow key={result.appId} result={result} onSelect={onSelect} />
+        <SteamResultRow
+          key={result.appId}
+          result={result}
+          owned={ownedBySteamAppId.get(result.appId)}
+          onPick={pick}
+        />
       ))}
     </div>
   );

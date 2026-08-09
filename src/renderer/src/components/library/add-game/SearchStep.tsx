@@ -27,6 +27,11 @@ type SearchStepProps = {
   // biblioteca ni de tu plan, así que sin esto salían como un resultado más
   // y darlos de alta reventaba contra el UNIQUE de igdbId al guardar.
   ownedByIgdbId: Map<number, OwnedGameMatch>;
+  // Y lo mismo por appid, para el respaldo de Steam. Va aparte y no fundido
+  // con el anterior porque son dos numeraciones INDEPENDIENTES: un igdbId y un
+  // appid pueden coincidir sin tener nada que ver, y un solo mapa daría falsos
+  // positivos — marcaría como "ya lo tienes" un juego que no es.
+  ownedBySteamAppId: Map<number, OwnedGameMatch>;
 };
 
 // Un juego que ya tienes, tal como lo ven los dos pasos de alta (este y el
@@ -81,6 +86,7 @@ export const SearchStep = ({
   onSelectSteam,
   onScanFolders,
   ownedByIgdbId,
+  ownedBySteamAppId,
 }: SearchStepProps): React.JSX.Element => {
   // Índice resaltado por TECLADO — a propósito separado del :hover del ratón
   // (que se queda en CSS puro): si el hover moviera este índice, el
@@ -238,7 +244,11 @@ export const SearchStep = ({
             </p>
           </div>
         ) : results?.length === 0 ? (
-          <SteamFallback query={trimmed} onSelect={onSelectSteam} />
+          <SteamFallback
+            query={trimmed}
+            onSelect={onSelectSteam}
+            ownedBySteamAppId={ownedBySteamAppId}
+          />
         ) : (
           // Sin key artificial por búsqueda: cada tecleo trae igdbId
           // distintos, así que React ya monta filas nuevas por su cuenta —

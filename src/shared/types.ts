@@ -298,6 +298,14 @@ export type GameListItem = {
   // reconozca qué resultados ya están en tu Plan to play y te lleve a
   // promocionarlos en vez de darlos de alta por segunda vez.
   igdbId: number | null;
+  // Y la identidad en STEAM, por el mismo motivo y para el mismo buscador.
+  //
+  // Hacía falta porque el respaldo de Steam (SteamFallback) devuelve juegos
+  // que IGDB todavía no tiene, o sea con `igdbId` null: el cruce por igdbId no
+  // podía reconocerlos NUNCA, ni aunque el juego estuviera ya en tu Plan. El
+  // caso real fue "Enter the kOS", añadido desde el móvil y ofrecido otra vez
+  // por el buscador del escritorio como si fuera nuevo.
+  steamAppId: number | null;
   title: string;
   coverUrl: string | null;
   // Para la cara trasera de la card de la biblioteca (flip al pasar el

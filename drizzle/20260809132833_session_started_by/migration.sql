@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `startedBy` text DEFAULT 'watcher' NOT NULL;

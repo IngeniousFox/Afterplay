@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["vite/client"]
+  },
+  // El contrato de la API se importa del Worker (worker/src/api-types.ts), y
+  // SOLO eso: son tipos, no entra nada suyo en el bundle. Si allí cambia un
+  // campo, aquí deja de compilar — que es justo lo que se quiere de tener las
+  // dos mitades en el mismo repo.
+  // Además del contrato de la API, el del BUZÓN: shared/planMailbox.ts se
+  // importa entero (no solo sus tipos) porque el reparto de marcas de tiempo
+  // al reordenar tiene que ser el mismo aquí y en el escritorio. Es TypeScript
+  // puro, sin drizzle ni nada de Node — el mismo fichero, no una copia.
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "vite.config.ts",
+    "../worker/src/api-types.ts",
+    "../src/shared/planMailbox.ts"
+  ]
+}
