@@ -19,6 +19,7 @@ import { registerImageProtocolHandler, registerImageProtocolScheme } from './ima
 import { registerIpcHandlers } from './ipc';
 import { registerContextMenu } from './lib/contextMenu';
 import { wasOpenedHiddenAtLogin } from './lib/loginItem';
+import { applyYoutubeReferer } from './lib/youtubeReferer';
 import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
 import { startAutoUpdater } from './updater';
@@ -465,6 +466,9 @@ app.whenReady().then(async () => {
 
   registerIpcHandlers();
   registerImageProtocolHandler();
+  // Antes de crear la ventana: los tráilers de la ficha no se reproducen en la
+  // app instalada sin esto (ver lib/youtubeReferer.ts para el porqué).
+  applyYoutubeReferer();
 
   // IPC de Big Picture y del quit real, registrados AQUÍ y no en ipc/ — su
   // estado (bigPictureMode, isQuitting) vive en este módulo, que es el dueño
