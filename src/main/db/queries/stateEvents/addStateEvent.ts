@@ -19,8 +19,9 @@ import { computeDurationSec } from '../sessions/sessionDuration';
 //      se cumpla venga la orden de donde venga.
 //   2. El INSERT del evento.
 //   3. Cierre de la sesión abierta, si el estado nuevo lo pide
-//      (closesOpenSession). Sin esto, terminar un juego que sigue en marcha
-//      dejaba sus horas sin contar hasta que el watcher notara el cierre real.
+//      (closesOpenSession) y el hito no viene fechado antes de que esa sesión
+//      empezara. Sin esto, terminar un juego que sigue en marcha dejaba sus
+//      horas sin contar hasta que el watcher notara el cierre real.
 export const addStateEvent = async (input: AddStateEventInput): Promise<StateEvent> => {
   const db = getDb();
   // Resuelto una sola vez y reutilizado en todo lo demás (pausa de hermanos,
@@ -127,7 +128,19 @@ export const addStateEvent = async (input: AddStateEventInput): Promise<StateEve
         .where(and(eq(sessionsTable.iterationId, input.iterationId), isNull(sessionsTable.endedAt)))
         .limit(1);
 
-      if (openSession) {
+      // Pero solo si el hito cae DESPUÉS del inicio de esa sesión. El Edit
+      // rellena `occurredAt` con el picker "Finished / left", que acepta
+      // cualquier fecha del pasado: pasar a Beaten con la fecha real en que lo
+      // terminaste (una semana atrás) mientras el juego SIGUE corriendo
+      // cerraba la sesión viva con endedAt anterior a su propio startedAt y
+      // durationSec 0 —computeDurationSec hace Math.max(0, …) pensando en un
+      // reloj raro—, o sea las horas medidas de esa tarde a la basura. Y sin
+      // arreglo posible después: closeSession es idempotente a propósito, así
+      // que al morir el proceso el watcher la ve cerrada y la deja tal cual.
+      // Un hito fechado en el pasado es una corrección del historial, no el
+      // final de la partida de ahora — esa la cierra el watcher cuando muera
+      // el proceso.
+      if (openSession && occurredAt.getTime() >= openSession.startedAt.getTime()) {
         const durationSec = computeDurationSec(openSession.startedAt, occurredAt);
         await tx
           .update(sessionsTable)

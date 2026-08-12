@@ -3,7 +3,6 @@ import { handleDb } from './dbHandle';
 import type {
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
-  GameRow,
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
@@ -18,48 +17,13 @@ import { getPlannedGames, reorderUpNext, setPlanPinned } from '../db/queries/gam
 import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
 import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
-import { cacheImage } from '../images/cache';
 import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
-import { getSteamGameData } from '../external/steamData';
-import { withDbAccess } from '../db';
+import { warmImageCache, warmSteamData } from '../external/warmNewGame';
 
-// Fire-and-forget a propósito: crear/editar un juego no debe esperar a que
-// termine de bajar la imagen de un CDN externo, eso haría el guardado lento
-// sin necesidad (la propia cacheImage() es idempotente, y si esto falla la
-// imagen se sigue mostrando bien vía getImageSrc en el momento de pintarla).
-const warmImageCache = (game: Pick<GameRow, 'coverUrl' | 'heroUrl'>): void => {
-  if (game.coverUrl) {
-    cacheImage(game.coverUrl, 'covers').catch((error) => {
-      console.error('[images] fallo precacheando cover:', error);
-    });
-  }
-  if (game.heroUrl) {
-    cacheImage(game.heroUrl, 'heroes').catch((error) => {
-      console.error('[images] fallo precacheando hero:', error);
-    });
-  }
-};
-
-// Etiquetas y reseñas de Steam del juego recién dado de alta (PLAN-TO-PLAY.md
-// §6). Fire-and-forget por el mismo motivo que la caché de imágenes: guardar
-// un juego no puede esperar a un tercero gratuito, y la ruta del botón "Add"
-// ya se cuidó una vez de no alargarla. Si Steam no contesta, el refresco por
-// lotes lo recogerá — y mientras tanto el juego se queda sin chips, que es
-// exactamente lo mismo que le pasa a cualquier juego de consola.
-const warmSteamData = (game: Pick<GameRow, 'id' | 'steamAppId'>): void => {
-  if (game.steamAppId === null) return;
-  void getSteamGameData(game.steamAppId)
-    .then(async (data) => {
-      if (!data) return;
-      await withDbAccess(async () =>
-        updateGame(game.id, { ...data, steamSpyCheckedAt: new Date() }),
-      );
-    })
-    .catch((error) => {
-      console.error('[steam] fallo guardando etiquetas del alta:', error);
-    });
-};
+// warmImageCache y warmSteamData viven en external/warmNewGame.ts desde que
+// el alta desde el MÓVIL (que entra por el buzón del Plan, no por aquí) se
+// quedaba sin ellas. Ver el porqué allí.
 
 export const registerGamesHandlers = (): void => {
   handleDb('games:getAll', async () => {

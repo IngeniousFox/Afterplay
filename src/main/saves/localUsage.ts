@@ -5,7 +5,7 @@ import {
   getOwnBackupEntries,
 } from '../db/queries/saves/getLocalBackupsIndex';
 import type { LocalBackupsUsage } from './contracts';
-import { getMachineId } from './machine';
+import { getMachineId, setPruneFloor } from './machine';
 import { MAPPING_FILE, readMapping } from './mapping';
 import { isR2Configured } from './r2';
 import { getBackupDir } from './run';
@@ -23,7 +23,15 @@ import { deleteLocalBackups, findGameBackupDir } from './service';
 // el dato — es la fuente desde la que se sube a R2, y R2 es quien de verdad
 // importa (una restauración SIEMPRE baja de R2, nunca de aquí — ver
 // orchestrator.ts:materializeBackup). Una vez algo está confirmado en el
-// índice, la copia local es pura caché de disco: prescindible.
+// índice, la copia local es prescindible.
+//
+// Pero prescindible NO quiere decir inofensiva de borrar: el espejo de
+// syncGameToR2 retira del bucket todo objeto que no esté en esta carpeta
+// —así replica la retención de ludusavi—, así que vaciarla equivale a
+// afirmar "esas versiones ya no valen" y el siguiente backup del juego se
+// llevaría por delante su historial en la nube. Por eso cleanLocalBackups
+// sube el suelo de poda ANTES de borrar nada: es exactamente el mismo caso
+// que recuperar el índice desde el bucket (ver pruneFloor en machine.ts).
 
 const EMPTY_USAGE: LocalBackupsUsage = {
   totalBytes: 0,
@@ -132,7 +140,8 @@ export const cleanLocalBackups = async (): Promise<{
     return contents;
   };
 
-  // 1. Ya sincronizadas.
+  // 1. QUÉ se va a borrar. Se decide entero antes de tocar el disco porque el
+  // suelo de poda (paso 2) tiene que estar puesto antes del primer rmSync.
   const own = await getOwnBackupEntries(getMachineId());
   const byGame = new Map<string, string[]>();
   for (const entry of own) {
@@ -142,6 +151,41 @@ export const cleanLocalBackups = async (): Promise<{
     list.push(entry.backupName);
     byGame.set(entry.ludusaviName, list);
   }
+
+  // Huérfanas: el nombre real sale del mapping.yaml, no del directorio (misma
+  // fuente que findGameBackupDir). Sin nombre legible no se toca — ante la
+  // duda, no borrar. Ningún juego con filas en el índice puede caer aquí:
+  // getKnownLudusaviNames incluye los nombres de save_backups enteros, así
+  // que las dos listas de este paso no se solapan nunca.
+  const known = new Set(await getKnownLudusaviNames());
+  const orphanDirs: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const dir = join(root, entry.name);
+    const mappingName = readMapping(dir)?.name ?? null;
+    if (!mappingName || known.has(mappingName)) continue;
+    orphanDirs.push(dir);
+  }
+
+  if (byGame.size === 0 && orphanDirs.length === 0) return { files: 0, bytes: 0, folders: 0 };
+
+  // 2. El suelo de poda, ANTES de borrar. Sin esto, el espejo a R2 leía la
+  // carpeta recién vaciada como "la retención ya descartó esas versiones" y el
+  // siguiente backup de cada juego borraba del bucket y del índice todo su
+  // historial anterior — irreversible y sin un solo error a la vista. La
+  // limpieza no es la retención de ludusavi hablando: es el usuario liberando
+  // disco, y esta instalación deja de tener autoridad para afirmar que lo de
+  // antes caducó.
+  //
+  // Va delante y no al final porque el paso 3 borra juego a juego y puede
+  // lanzar a mitad: en Windows un EPERM/EBUSY (ludusavi o el antivirus con el
+  // zip abierto) en el juego N deja los 1..N-1 ya borrados, y con el suelo al
+  // final no se llegaba a poner nunca — justo el borrado en la nube que esto
+  // existe para impedir. Subirlo de más solo cuesta espacio en el bucket;
+  // subirlo de menos cuesta datos.
+  setPruneFloor(new Date());
+
+  // 3. Ya sincronizadas.
   for (const [ludusaviName, names] of byGame) {
     const dir = findGameBackupDir(ludusaviName);
     const before = folderContents(dir);
@@ -155,35 +199,30 @@ export const cleanLocalBackups = async (): Promise<{
     }
   }
 
-  // 2. Huérfanas — releído tras el paso 1: alguna carpeta puede haberse
-  // vaciado y desaparecido ya sola.
-  const known = new Set(await getKnownLudusaviNames());
-  if (existsSync(root)) {
-    for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const dir = join(root, entry.name);
-      const mappingName = readMapping(dir)?.name ?? null;
-      if (!mappingName || known.has(mappingName)) continue;
+  // 4. Huérfanas. La lista es la del paso 1, no un relistado: alguna carpeta
+  // puede haber desaparecido ya sola en el paso 3 (un juego que se queda sin
+  // versiones se lleva su carpeta entera), y para esas no hay nada que hacer.
+  for (const dir of orphanDirs) {
+    if (!existsSync(dir)) continue;
 
-      let dirBytes = 0;
-      let dirFiles = 0;
-      try {
-        for (const file of readdirSync(dir, { withFileTypes: true })) {
-          if (file.isFile()) {
-            dirBytes += fileSize(join(dir, file.name));
-            dirFiles++;
-          }
+    let dirBytes = 0;
+    let dirFiles = 0;
+    try {
+      for (const file of readdirSync(dir, { withFileTypes: true })) {
+        if (file.isFile()) {
+          dirBytes += fileSize(join(dir, file.name));
+          dirFiles++;
         }
-      } catch {
-        // Si ni se puede listar, se borra igual: una carpeta huérfana e
-        // ilegible no es un caso "ante la duda" — nada la reclama y nada
-        // puede leerla tampoco.
       }
-      rmSync(dir, { recursive: true, force: true });
-      bytes += dirBytes;
-      files += dirFiles;
-      folders++;
+    } catch {
+      // Si ni se puede listar, se borra igual: una carpeta huérfana e
+      // ilegible no es un caso "ante la duda" — nada la reclama y nada
+      // puede leerla tampoco.
     }
+    rmSync(dir, { recursive: true, force: true });
+    bytes += dirBytes;
+    files += dirFiles;
+    folders++;
   }
 
   return { files, bytes, folders };

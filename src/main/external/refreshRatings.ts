@@ -6,6 +6,7 @@ import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
 import type { GameRatings, RatingsRefreshResult } from '../igdb/types';
 import type { UpdateGamePatch } from '../../shared/types';
 import { getSteamReviewCounts } from '../steam/reviews';
+import { findSteamAppIdFix } from './steamAppIdFix';
 
 // El ⟳ de la card "Ratings" de la ficha — las TRES notas que esa card enseña.
 //
@@ -34,7 +35,11 @@ import { getSteamReviewCounts } from '../steam/reviews';
 export const refreshGameRatings = async (gameId: number): Promise<RatingsRefreshResult | null> => {
   const [game] = await withDbAccess(async () =>
     getDb()
-      .select({ igdbId: gamesTable.igdbId, steamAppId: gamesTable.steamAppId })
+      .select({
+        title: gamesTable.title,
+        igdbId: gamesTable.igdbId,
+        steamAppId: gamesTable.steamAppId,
+      })
       .from(gamesTable)
       .where(eq(gamesTable.id, gameId))
       .limit(1),
@@ -73,18 +78,55 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
   // ninguno— y la pata de Steam sigue adelante igual: son fuentes distintas y
   // que una se caiga no es motivo para renunciar a la otra.
 
-  // El appid, si falta y el detalle de IGDB lo trae: es gratis (ya viajó
-  // dentro de esa misma respuesta) y es la única forma de que el tile de
-  // STEAM llegue a existir para un juego que aún no lo tenía. Los que ya lo
-  // tienen ni se tocan — es identidad del juego, no se re-resuelve por gusto.
+  // El appid, con dos preguntas distintas según el juego lo tenga o no.
+  //
+  // Si FALTA y el detalle de IGDB lo trae: es gratis (ya viajó dentro de esa
+  // misma respuesta) y es la única forma de que el tile de STEAM llegue a
+  // existir para un juego que aún no lo tenía.
+  //
+  // Si lo TIENE ya no vale el viejo "es identidad del juego, no se re-resuelve
+  // por gusto": hay un tercer estado, "tiene uno y es el equivocado" — el del
+  // playtest del propio juego, o el de OTRO producto (los dos motivos están en
+  // findSteamAppIdCorrections, igdb/api.ts).
+  //
+  // Y aquí no es teoría, porque el % de ESTA card sale de ese appid: se le pide
+  // a la propia Steam, al resumen de reseñas de su tienda (steam/reviews.ts).
+  // El caso que la falseaba es el segundo motivo, el appid ajeno: "Trails in
+  // the Sky 2nd Chapter" —el remake, sin salir— llevaba el appid del original
+  // de 2015, así que esta card enseñaba tres mil reseñas de un juego que no ha
+  // salido. Sin esta comprobación, pulsar el ⟳ volvía a escribir esos mismos
+  // números una y otra vez mientras el botón de al lado (ActionBar ->
+  // refreshGame.ts) sí corregía el appid: dos botones sobre el mismo dato y
+  // resultados opuestos. Un botón de refrescar refresca lo que se ve encima, o
+  // miente — la misma regla de la cabecera.
+  //
+  // El appid de un playtest no llegaba a falsear ESTE número (una beta cerrada
+  // no tiene página de tienda, así que el resumen de reseñas no contesta y la
+  // card se queda sin %), pero se corrige igual: de ese mismo appid cuelgan las
+  // etiquetas y los logros que sí se ven en las otras cards.
+  //
+  // No se re-resuelve nada más: el guardado solo se comprueba contra las
+  // entradas de Steam de su propia ficha, que es lo mismo que hacen las otras
+  // dos rutas de refresco (refresh.ts y refreshGame.ts, con el mismo helper).
   let appId = game.steamAppId;
-  if (appId === null && detail) {
-    appId = await resolveAchievementsSteamAppId(
-      detail.igdbId,
-      detail.parentIgdbId,
-      detail.directSteamAppId,
-    ).catch(() => null);
-    if (appId !== null) {
+  let correctedAppId = false;
+  if (detail) {
+    const igdbId = detail.igdbId;
+    if (appId === null) {
+      appId = await resolveAchievementsSteamAppId(
+        igdbId,
+        detail.parentIgdbId,
+        detail.directSteamAppId,
+      ).catch(() => null);
+    } else {
+      // El aviso por consola lo da el helper, igual en las tres rutas.
+      const better = await findSteamAppIdFix({ igdbId, steamAppId: appId, title: game.title });
+      if (better !== undefined) {
+        appId = better;
+        correctedAppId = true;
+      }
+    }
+    if (appId !== null && appId !== game.steamAppId) {
       patch.steamAppId = appId;
       patch.steamAppIdCheckedAt = now;
     }
@@ -98,12 +140,22 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
       patch.steamPositive = reviews.steamPositive;
       patch.steamNegative = reviews.steamNegative;
       patch.steamSpyCheckedAt = now;
+    } else if (correctedAppId) {
+      // El appid era de otro producto y el bueno todavía no tiene reseñas
+      // —justo el caso Trails in the Sky, un remake sin salir—: los números
+      // guardados no son un dato viejo de este juego que convenga conservar,
+      // son los de OTRO juego. Dejarlos sería corregir el appid para seguir
+      // enseñando la misma mentira, ahora colgada del appid bueno.
+      patch.steamPositive = null;
+      patch.steamNegative = null;
     }
   }
 
   // Las ETIQUETAS no se piden aquí a propósito: no salen en esta card (viven
   // en Details) y esto es el botón de las notas. Quien las quiera tiene el de
-  // "actualizar el juego entero" al lado.
+  // "actualizar el juego entero" al lado — que es también el que arregla las
+  // de un appid recién corregido aquí: este botón no las pide, así que hasta
+  // entonces la card de Details sigue enseñando las del producto viejo.
 
   if (Object.keys(patch).length > 0) {
     await withDbAccess(async () => updateGame(gameId, patch));

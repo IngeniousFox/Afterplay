@@ -1,9 +1,10 @@
 import { Package, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useDeleteIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
-import { formatByPrecision } from '../../../lib/format';
+import { formatByPrecision, pluralize } from '../../../lib/format';
 import {
   END_EVENT_STATUS_KEYS,
   NORMAL_STATUS_OPTIONS,
@@ -21,6 +22,12 @@ import { ManualPlaythroughsList } from '../add-game/ManualPlaythroughsField';
 import { PlaythroughLabel } from '../add-game/PlaythroughLabel';
 import { PlaythroughPlatformFormatOrigin } from '../add-game/PlaythroughPlatformFormatOrigin';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../add-game/styles';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '../../ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { edgeEventPickerValue } from './types';
 import type { EditGameFormValues } from './types';
@@ -48,6 +55,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
   const origin = useWatch({ control, name: 'origin' });
   const newPlaythroughs = useWatch({ control, name: 'newPlaythroughs' });
   const deleteIteration = useDeleteIteration();
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const loadIteration = (iteration: IterationDetail): void => {
     setValue('iterationMode', 'existing');
@@ -82,6 +90,30 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
 
   const selectedIteration = game.iterations.find((it) => it.id === selectedIterationId) ?? null;
   const labelsById = new Map(game.iterations.map((it) => [String(it.id), it.label]));
+
+  // Borrar un playthrough arrastra en cascada TODAS sus sesiones y su log de
+  // estados (ON DELETE CASCADE), así que pasa por confirmación como todo lo
+  // que destruye tiempo medido (SPEC 11.8 nivel 2, mismo lenguaje que
+  // DeleteSessionDialog): antes borraba a un clic directo, sin diálogo y sin
+  // vuelta atrás ni pulsando Cancel. Y va con mutateAsync porque el estado
+  // local NO puede adelantarse a una escritura que puede fallar — con
+  // .mutate() la UI saltaba al playthrough anterior y el error no aparecía
+  // por ningún sitio.
+  const handleRemove = async (): Promise<void> => {
+    if (!selectedIterationId) return;
+    const remaining = game.iterations.filter((it) => it.id !== selectedIterationId);
+    try {
+      await deleteIteration.mutateAsync(selectedIterationId);
+    } catch (error) {
+      // El banner del diálogo lo cuenta (deleteIteration.error); aquí solo se
+      // evita la promesa rechazada sin dueño del onClick.
+      console.error('[edit-game] fallo borrando el playthrough:', error);
+      return;
+    }
+    if (remaining.length > 0) loadIteration(remaining[remaining.length - 1]);
+    else setValue('iterationMode', 'none');
+    setConfirmingRemove(false);
+  };
 
   // Los pendientes se numeran continuando la cuenta real del juego: si ya
   // tiene 2 guardados, el primero que prepares es el 3.
@@ -199,20 +231,32 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
         />
 
         {selectedIterationId && (
-          <button
-            type="button"
-            onClick={() => {
-              const remaining = game.iterations.filter((it) => it.id !== selectedIterationId);
-              deleteIteration.mutate(selectedIterationId);
-              if (remaining.length > 0) loadIteration(remaining[remaining.length - 1]);
-              else setValue('iterationMode', 'none');
-            }}
-            disabled={deleteIteration.isPending}
-            className="flex w-fit items-center gap-1.5 rounded-[9px] px-3 py-1.75 text-[12.5px] font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          >
-            <Trash2 size={13} />
-            Remove playthrough
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setConfirmingRemove(true)}
+              disabled={deleteIteration.isPending}
+              className="flex w-fit items-center gap-1.5 rounded-[9px] px-3 py-1.75 text-[12.5px] font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 size={13} />
+              Remove playthrough
+            </button>
+            <RemovePlaythroughDialog
+              open={confirmingRemove}
+              iteration={selectedIteration}
+              onClose={() => {
+                if (deleteIteration.isPending) return;
+                // El diálogo no se desmonta al cerrarlo, así que sin esto el
+                // banner de un borrado fallido reaparecería sobre el
+                // siguiente playthrough — mismo motivo que DeleteSessionDialog.
+                deleteIteration.reset();
+                setConfirmingRemove(false);
+              }}
+              onConfirm={handleRemove}
+              pending={deleteIteration.isPending}
+              error={deleteIteration.error}
+            />
+          </>
         )}
       </div>
 
@@ -220,6 +264,97 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
     </div>
   );
 };
+
+// Confirmación de "Remove playthrough". Mismo lenguaje visual que
+// DeleteSessionDialog/DeleteHistoryEntryDialog (nivel 2 de SPEC 11.8) pero
+// vive aquí y no en un fichero compartido porque es el único sitio que lo
+// usa. Dice DOS cosas que el usuario no puede adivinar: cuántas sesiones se
+// van por delante, y que esto NO espera al "Save changes" del modal — es la
+// única escritura del formulario que ocurre al instante, así que cerrar con
+// Cancel después no la deshace.
+const RemovePlaythroughDialog = ({
+  open,
+  iteration,
+  onClose,
+  onConfirm,
+  pending,
+  error,
+}: {
+  open: boolean;
+  iteration: IterationDetail | null;
+  onClose: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+  error: Error | null;
+}): React.JSX.Element => (
+  <AlertDialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-[#121413] p-0">
+      <div className="relative overflow-hidden border-b border-border">
+        {/* Mismo lavado rojo de cabecera que el resto de diálogos de borrado:
+            acción destructiva, dicho de un vistazo. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: 'linear-gradient(120deg, rgba(232,93,114,.14) 0%, transparent 60%)',
+          }}
+        />
+        <div className="relative flex items-center gap-3 px-5.5 py-5">
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
+            <Trash2 size={16} className="text-destructive" />
+          </div>
+          <AlertDialogTitle className="text-base font-extrabold text-foreground">
+            Remove playthrough
+          </AlertDialogTitle>
+        </div>
+      </div>
+
+      <div className="px-5.5 py-5">
+        <div className="text-[13.5px] leading-relaxed text-[#c4cac6]">
+          This permanently deletes{' '}
+          <span className="font-bold text-foreground">{iteration?.label}</span>
+          {iteration && iteration.sessions.length > 0 && (
+            <>
+              {' '}
+              and its{' '}
+              <span className="font-bold text-foreground">
+                {pluralize(iteration.sessions.length, 'tracked session')}
+              </span>
+            </>
+          )}
+          , along with its status history. Hours and stats will update. It happens right away —
+          leaving Edit with Cancel won&apos;t bring it back. This can&apos;t be undone.
+        </div>
+
+        {error && (
+          <div className="mt-3 text-[12px] text-destructive">
+            Couldn&apos;t remove the playthrough — {error.message}
+          </div>
+        )}
+      </div>
+
+      <AlertDialogFooter className="!mx-0 !mb-0 flex-row justify-end gap-2.5 !border-t border-border !bg-transparent px-5.5 py-4">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={pending}
+          className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-white/6"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={pending}
+          className="[will-change:transform] flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-white transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(220,38,38,.4)]"
+          style={{ background: '#dc2626' }}
+        >
+          <Trash2 size={15} />
+          {pending ? 'Removing…' : 'Remove playthrough'}
+        </button>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+);
 
 const FormInput = ({
   name,

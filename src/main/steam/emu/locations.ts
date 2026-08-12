@@ -161,25 +161,46 @@ const appIdLocations = (): AppIdLocation[] => {
 // EMPRESS tiene una segunda forma con el appid repetido:
 // <publicDocs>/EMPRESS/<appid>/remote/<appid>/achievements.json — se trata
 // aparte porque el <appid> aparece dos veces y el modelo de tail no lo cubre.
+//
+// La BASE se saca a su propia función a propósito. Fuera de appIdLocations()
+// se leen tres sitios más —este y los dos de junto al EXE del final—, pero
+// este es el único con carpeta FIJA y el appid en el primer segmento, o sea el
+// único que el vigilante puede vigilar. Estaba escrito solo dentro de
+// empressPublicFile, y por eso se quedó fuera de existingEmuBases: sus logros
+// se leían al arrancar pero no se veían en vivo, que es justo el fallo que el
+// vigilante existe para evitar. Con la base en un solo sitio, las dos
+// funciones beben de ella.
+const empressPublicBase = (): string =>
+  join(env('PUBLIC') || 'C:\\Users\\Public', 'Documents', 'EMPRESS');
+
 const empressPublicFile = (appId: number): string =>
-  join(
-    env('PUBLIC') || 'C:\\Users\\Public',
-    'Documents',
-    'EMPRESS',
-    String(appId),
-    'remote',
-    String(appId),
-    'achievements.json',
-  );
+  join(empressPublicBase(), String(appId), 'remote', String(appId), 'achievements.json');
 
 // Las carpetas base que EXISTEN en este PC, sin repetir. Es lo que hay que
 // vigilar para enterarse en vivo de un desbloqueo: son cuatro o cinco rutas
 // locales, no una por juego.
+//
+// Cubre las bases por appid y la de EMPRESS. NO cubre —ni puede— las dos
+// rutas de junto al EXE (userstats y 3DM): cuelgan de executablePath, que es
+// de la FILA del juego, así que no hay carpeta fija que vigilar. Para esas
+// dos, los logros entran igual al cerrar la sesión (main/index.ts llama
+// entonces a queueAchievementsRefreshForGame) o en el barrido del arranque; lo
+// que se pierde es el aviso en el momento, no el dato.
+//
+// Una base nueva en appIdLocations() aparece aquí sola. Una fuente nueva de
+// carpeta fija escrita a mano fuera de ese mapa hay que añadirla aquí también,
+// o se leerá al arrancar y no en vivo — que es exactamente lo que le pasó a
+// EMPRESS.
 export const existingEmuBases = (): string[] => {
   const bases = new Set<string>();
   for (const location of appIdLocations()) {
     if (existsSync(location.base)) bases.add(location.base);
   }
+  // Vale igual para el vigilante aunque su tail sea raro: bajo esta base el
+  // PRIMER segmento sigue siendo el appid, que es lo único que necesita para
+  // saber de qué juego viene el evento.
+  const empress = empressPublicBase();
+  if (existsSync(empress)) bases.add(empress);
   return [...bases];
 };
 

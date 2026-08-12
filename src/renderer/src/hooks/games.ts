@@ -14,16 +14,36 @@ import type {
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
 
-// Infinity y no un número arbitrario: estos datos solo cambian por dos vías,
-// y las dos invalidan queryKeys.games.all al terminar:
-//   1. Las mutations de este archivo (create/update/delete/addStateEvent/
-//      addSpend/addSession).
-//   2. El watcher del main (Bloque 3), que escribe sesiones directo desde el
-//      main sin pasar por ninguna mutation de aquí — pero avisa con el evento
-//      IPC 'games:changed', al que useWatcherSync() se suscribe para invalidar
-//      esta misma key.
-// Así no hay ningún "después de X minutos podría estar desactualizado" real:
-// siempre hay un aviso explícito detrás de cada cambio.
+// Infinity y no un número arbitrario: la regla de la casa es que TODO EL QUE
+// ESCRIBE AVISA, así que detrás de cada cambio hay siempre una invalidación
+// explícita de queryKeys.games.all y no un "después de X minutos podría estar
+// desactualizado".
+//
+// A la tabla `games` le escriben MUCHOS más sitios que las mutations de este
+// archivo, y la lista no para de crecer: el watcher (Bloque 3) mete sesiones
+// directo desde el main, el pull de Turso mete filas que bajan de otro PC
+// tuyo (notifyPulledChanges, main/db/index.ts) y el drenado del buzón del
+// Plan crea planeados venidos del móvil (main/plan/drainMailbox.ts, cableado
+// en main/index.ts sobre onSyncCompleted). Ninguno pasa por aquí y todos
+// AVISAN con el evento IPC 'games:changed', al que useWatcherSync() se
+// suscribe para invalidar esta misma key — por eso el staleTime aguanta sin
+// que este archivo tenga que conocerlos.
+//
+// Y por eso este comentario ya no intenta enumerarlos: el que había aquí lo
+// intentó, se quedó corto (juraba que solo existían las mutations y el
+// watcher), y una lista falsamente completa es lo que hizo que el bug de
+// abajo tardara tanto en verse. La regla se comprueba en el emisor, no en un
+// censo escrito en el consumidor.
+//
+// LO QUE HOY NO CUMPLE LA REGLA — no como censo, sino porque este es el que
+// nos mordió: el "calentado" del alta (warmSteamData, main/external/warmNewGame.ts).
+// Es fire-and-forget: escribe etiquetas y reseñas de Steam en la fila cuando
+// la tienda contesta, o sea DESPUÉS del refetch que dispara la mutation del
+// alta, y no emite nada. Mientras siga así, un juego recién añadido se queda
+// sin sus chips de etiquetas en el Plan hasta que cualquier otra cosa invalide
+// ['games'] (arrancar un juego, otra mutation, un pull, reiniciar). El arreglo
+// es suyo y no de aquí: un temporizador en el renderer contra un viaje de red
+// ajeno sería peor que el bug.
 export const useGames = (): UseQueryResult<GameListItem[], Error> =>
   useQuery({
     queryKey: queryKeys.games.all,

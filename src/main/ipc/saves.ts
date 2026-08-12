@@ -1,6 +1,6 @@
 import { ipcMain, shell } from 'electron';
 import { handleDb } from './dbHandle';
-import { getSaveGames } from '../db/queries/saves/getSaveGames';
+import { getSaveGames, type SaveGame } from '../db/queries/saves/getSaveGames';
 import { updateGame } from '../db/queries/games/updateGame';
 import { getSaveBackups } from '../db/queries/saves/getSaveBackups';
 import { deleteSaveBackups } from '../db/queries/saves/deleteSaveBackups';
@@ -360,9 +360,12 @@ export const registerSavesHandlers = (): void => {
       // reversible: ANTES de pisar la partida en curso, copia de lo que hay
       // ahora. Solo en 'in-place' — exportar y restaurar a otra ruta no
       // tocan la partida viva, y ahí un backup previo sería un peaje sin
-      // motivo (§10bis.5). Si esta copia falla, el restore NO sigue: mejor
-      // no restaurar que restaurar sin salida de emergencia. Y es barata: si
-      // la partida no cambió desde la última copia, ludusavi no genera nada.
+      // motivo (§10bis.5). Si ludusavi revienta, el restore no sigue (la
+      // excepción sale por este handler); y si termina sin copiar nada, se
+      // aborta cuando ese "nada" no se puede interpretar — el porqué de esa
+      // asimetría está en el bloque de abajo, es lo delicado de todo esto. Y
+      // es barata: si la partida no cambió desde la última copia, ludusavi no
+      // genera nada.
       //
       // Se hace SIEMPRE, incluso con "Cloud backup: OFF" para este juego —
       // apagarlo lo desactivaba de los disparadores normales (el botón, el
@@ -373,7 +376,77 @@ export const registerSavesHandlers = (): void => {
       // ANTES de confirmar) dice explícitamente que esta subida rompe por
       // esta vez el "nada sale de este PC" — nunca en silencio.
       if (!request.preview && request.mode === 'in-place') {
-        await backupGameToCloud(game, games);
+        // El emparejamiento del JUEGO puede haber desaparecido desde que se
+        // subió esta versión, y las versiones siguen ahí porque el índice
+        // cuelga del gameId: "Reset detection" pone saveLudusaviName a null
+        // (saves:clearDetection) y quitar la última carpeta de un emparejado
+        // 'manual' hace lo mismo (saves:removeFolder). Con el nombre a null
+        // backupGameToCloud se iba en su primera línea devolviendo null, ese
+        // null no lo miraba nadie y el restore seguía adelante: ludusavi
+        // pisaba la partida en disco usando row.ludusaviName mientras el
+        // aviso de abajo prometía una copia que no existía. El índice SÍ
+        // conserva el nombre, así que se tira de él — solo para esta copia y
+        // solo en memoria: nada de re-emparejar por la puerta de atrás un
+        // juego que el usuario desemparejó a propósito.
+        const paired = Boolean(game.saveLudusaviName);
+        const safetySource: SaveGame = paired
+          ? game
+          : {
+              ...game,
+              saveLudusaviName: row.ludusaviName,
+              // 'auto' porque buildCustomGames lo traduce a `integration:
+              // extend`. Con cualquier otro valor sale 'override', que
+              // SUSTITUYE la entrada del manifest en vez de sumarse a ella: la
+              // copia se dejaría fuera justo las rutas que el restore va a
+              // pisar (el caso de clearDetection, que conserva las carpetas
+              // propias pero no el nombre). Si el nombre no está en el
+              // manifest no hay nada que extender y se comporta igual que
+              // override; el precio es que un título que coincida por
+              // casualidad con uno del manifest copiaría de más, y en una red
+              // de seguridad ese es el lado bueno del error.
+              saveDetectionSource: 'auto',
+            };
+        // Y la LISTA también parcheada, no solo el primer argumento: los
+        // customGames que ludusavi va a recibir los construye buildCustomGames
+        // recorriendo `allGames` (orchestrator.ts), así que pasándole la lista
+        // sin tocar el juego reconstruido no llegaba a definirse. Con eso, un
+        // emparejado 'manual' se respaldaba con un nombre que ludusavi no
+        // conocía (cero archivos) y uno 'auto' perdía las carpetas añadidas a
+        // mano, que son las que el restore SÍ va a sobrescribir.
+        const safetyGames = paired
+          ? games
+          : games.map((candidate) => (candidate.id === game.id ? safetySource : candidate));
+        const safety = await backupGameToCloud(safetySource, safetyGames);
+
+        // Y AQUÍ SE ABORTA SI NO HAY COPIA DE VERDAD. Mirar el null no sirve:
+        // con el nombre del índice detrás ya no puede darse (ludusaviName es
+        // notNull en save_backups), y sobre todo un resultado truthy no
+        // significa que haya copia — `{ uploaded: 0, foundFiles: false }`
+        // significa exactamente que ludusavi no encontró nada que copiar.
+        //
+        // Se aborta SOLO cuando la copia previa corrió A CIEGAS, y los dos
+        // caminos que dejan el nombre a null NO son iguales en eso:
+        //
+        //  · saves:clearDetection ("Reset detection") borra el nombre pero
+        //    CONSERVA las carpetas propias. La reconstrucción le devuelve a
+        //    ludusavi exactamente lo que tendría el juego emparejado (nombre
+        //    del índice + esas carpetas, en extend), así que mira las MISMAS
+        //    rutas que el restore va a pisar: cero archivos es cero archivos,
+        //    y ese es el caso normal de restaurar en un PC recién instalado —
+        //    abortarlo sería bloquear justo para lo que existe la nube.
+        //  · saves:removeFolder (quitar la última carpeta de un 'manual') se
+        //    lleva las carpetas Y el nombre: no queda ni una ruta que darle, y
+        //    un nombre 'manual' tampoco está en el manifest. Ahí "no encontró
+        //    nada" no prueba que no haya nada, y se aborta.
+        //
+        // Con el juego bien emparejado nunca se aborta, por lo mismo que en
+        // el primer punto: ludusavi miró donde el restore va a escribir.
+        const safetyRanBlind = !paired && (game.saveCustomPaths?.length ?? 0) === 0;
+        if (safetyRanBlind && safety?.foundFiles !== true) {
+          throw new Error(
+            "Afterplay doesn't know where this game's save lives any more, so it couldn't take a safety copy first — nothing was restored. Point it at the folder again from Saves, or restore into a folder you pick.",
+          );
+        }
       }
 
       const outcome = await runRestore(game, row, { ...request, target: target ?? undefined });
@@ -408,8 +481,13 @@ export const registerSavesHandlers = (): void => {
         );
       }
       if (request.mode === 'in-place') {
+        // Los avisos se calculan igual en el preview y en la pasada real (una
+        // sola rama), así que lo que se lee ANTES de confirmar es lo que va a
+        // pasar. Por eso la promesa lleva su condición pegada en vez de
+        // afirmar la copia a secas: cuando no se puede hacer, esto no se
+        // restaura (ver el bloque de la copia previa, arriba).
         warnings.push(
-          'This overwrites the save currently on disk. A backup of it is taken first, so you can undo this from the version list.',
+          "This overwrites the save currently on disk. A backup of it is taken first, so you can undo this from the version list — and if that copy can't be made, nothing is restored.",
         );
         // Este juego tiene "Cloud backup: OFF" — pero la copia de seguridad
         // de arriba se hace de todas formas, porque sin ella este restore no

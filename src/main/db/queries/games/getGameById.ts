@@ -104,10 +104,20 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   // antes de arrancarlo) cae en ese primer playthrough. on_hold/resting no
   // cierran la ventana (mismo criterio que crear una iteración nueva al
   // volver a "Playing", ver StatusCard.tsx/ActionBar.tsx).
+  //
+  // El "último" sale del helper compartido y no de la última fila del array:
+  // ignora 'plan_to_play' (historial de intención, nunca estado) y desempata
+  // por id, así que tampoco depende del ORDER BY de la query. Con la última
+  // fila a secas, cualquier juego promovido desde el Plan tenía su
+  // plan_to_play —fechado AHORA por createPlannedGame— tapando el
+  // completed/dropped que se tecleó con fecha del pasado: terminalAt = null,
+  // la ventana del Playthrough 1 no se cerraba nunca y todo el gasto
+  // posterior (el DLC de años después) se le colgaba a él en vez de al
+  // playthrough que estaba abierto en esa fecha.
   const terminalAtByIteration = new Map<number, Date | null>();
   for (const iteration of iterations) {
     const events = stateEventsByIteration.get(iteration.id) ?? [];
-    const latest = events[events.length - 1];
+    const latest = latestRealStateEvent(events);
     terminalAtByIteration.set(
       iteration.id,
       latest && endsPlaythrough(latest.type) ? latest.occurredAt : null,

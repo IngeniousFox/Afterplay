@@ -1,20 +1,19 @@
 import { asc, eq } from 'drizzle-orm';
 import { getDb } from '../..';
-import type {
-  AchievementEntry,
-  AchievementSource,
-  GameAchievements,
-} from '../../../../shared/types';
+import type { AchievementEntry, GameAchievements } from '../../../../shared/types';
 import { achievementsTable, achievementUnlocksTable, gamesTable } from '../../schema';
+import { mergeUnlocksByAchievement } from './mergeUnlocks';
 
 // Los logros de un juego, con las fuentes YA FUNDIDAS (LOGROS.md §2).
 //
 // Aquí es donde el diseño de "un desbloqueo es un hecho con origen" se paga
 // solo: la ficha no tiene que saber nada de Steam ni de emuladores, recibe
 // una lista de logros donde cada uno o está desbloqueado o no. Si el mismo
-// logro consta por varias fuentes, gana la fecha MÁS TEMPRANA — porque la
-// pregunta que responde la ficha es "¿cuándo hiciste esto por primera vez?",
-// y esa respuesta no cambia porque después lo compraras en Steam.
+// logro consta por varias fuentes gana la MÁS TEMPRANA de las que traen fecha
+// fiable — porque la pregunta que responde la ficha es "¿cuándo hiciste esto
+// por primera vez?", y esa respuesta no cambia porque después lo compraras en
+// Steam, pero tampoco puede contestarla la fecha inventada de un rescate. El
+// desempate entero está en mergeUnlocks.ts.
 export const getGameAchievements = async (gameId: number): Promise<GameAchievements> => {
   const db = getDb();
 
@@ -55,8 +54,8 @@ export const getGameAchievements = async (gameId: number): Promise<GameAchieveme
   if (definitions.length === 0) return empty;
 
   // Todos los desbloqueos del juego, sin agregar: la fusión por logro se hace
-  // abajo en JS — es una lista corta (los logros de UN juego) y así la regla
-  // de "gana la fecha más temprana" vive en un solo sitio legible.
+  // en JS — es una lista corta (los logros de UN juego) y así la regla vive en
+  // un solo sitio legible.
   const unlocks = await db
     .select({
       achievementId: achievementUnlocksTable.achievementId,
@@ -70,51 +69,14 @@ export const getGameAchievements = async (gameId: number): Promise<GameAchieveme
     .innerJoin(achievementsTable, eq(achievementUnlocksTable.achievementId, achievementsTable.id))
     .where(eq(achievementsTable.gameId, gameId));
 
-  type Merged = {
-    unlockedAt: Date;
-    dateReliable: boolean;
-    sources: AchievementSource[];
-    sessionId: number | null;
-    iterationId: number | null;
-  };
-  const mergedById = new Map<number, Merged>();
-
-  for (const unlock of unlocks) {
-    const existing = mergedById.get(unlock.achievementId);
-    if (!existing) {
-      mergedById.set(unlock.achievementId, {
-        unlockedAt: unlock.unlockedAt,
-        dateReliable: unlock.dateReliable,
-        sources: [unlock.source],
-        sessionId: unlock.sessionId,
-        iterationId: unlock.iterationId,
-      });
-      continue;
-    }
-
-    existing.sources.push(unlock.source);
-
-    // Una fuente CON fecha fiable gana siempre a una que no la tiene, por
-    // temprana que sea esta: el caso real es tener el logro por el arrastre
-    // masivo del crack (fecha inventada de hoy) y también por Steam con su
-    // fecha de verdad — la buena es la de Steam, aunque sea posterior.
-    if (unlock.dateReliable && !existing.dateReliable) {
-      existing.unlockedAt = unlock.unlockedAt;
-      existing.dateReliable = true;
-      existing.sessionId = unlock.sessionId;
-      existing.iterationId = unlock.iterationId;
-      continue;
-    }
-    if (!unlock.dateReliable && existing.dateReliable) continue;
-
-    // Empatadas en fiabilidad: manda la más temprana, y con ella viaja SU
-    // sesión — la que importa es la de la primera vez, no la de la repetición.
-    if (unlock.unlockedAt.getTime() < existing.unlockedAt.getTime()) {
-      existing.unlockedAt = unlock.unlockedAt;
-      existing.sessionId = unlock.sessionId;
-      existing.iterationId = unlock.iterationId;
-    }
-  }
+  // El fundido multi-fuente sale de mergeUnlocks.ts y ya no de una copia a
+  // mano: la fila GANADORA representa al logro —y con ella viajan SU sesión y
+  // SU playthrough, que es lo que hace que el historial de sesiones de la
+  // ficha cuelgue el trofeo del rato correcto—, y `rows` da la lista entera de
+  // fuentes, que la ficha necesita completa aunque solo pinte algo cuando
+  // ninguna es Steam (el sello "local" / "RA" de AchievementsSection). Es la
+  // única consulta que usa las dos mitades del helper.
+  const mergedById = mergeUnlocksByAchievement(unlocks);
 
   const entries: AchievementEntry[] = definitions.map((definition) => {
     const merged = mergedById.get(definition.id);
@@ -132,11 +94,11 @@ export const getGameAchievements = async (gameId: number): Promise<GameAchieveme
       iconGrayUrl: definition.iconGrayUrl,
       hidden: definition.hidden,
       globalPercent: definition.globalPercent,
-      unlockedAt: merged?.unlockedAt ?? null,
-      dateReliable: merged?.dateReliable ?? true,
-      sources: merged?.sources ?? [],
-      sessionId: merged?.sessionId ?? null,
-      iterationId: merged?.iterationId ?? null,
+      unlockedAt: merged?.winner.unlockedAt ?? null,
+      dateReliable: merged?.winner.dateReliable ?? true,
+      sources: merged?.rows.map((row) => row.source) ?? [],
+      sessionId: merged?.winner.sessionId ?? null,
+      iterationId: merged?.winner.iterationId ?? null,
     };
   });
 

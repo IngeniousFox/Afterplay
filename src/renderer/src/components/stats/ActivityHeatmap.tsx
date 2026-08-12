@@ -110,6 +110,22 @@ export const ActivityHeatmap = ({
     const daysInclusive = Math.round((startOfDayMs(rangeEnd) - rangeStart.getTime()) / DAY_MS) + 1;
     const weeks = Math.max(1, Math.ceil(daysInclusive / 7));
 
+    // Los días que de verdad se PINTAN, y el único filtro de los mapas de
+    // abajo. Alinear el 1 de enero a lunes puede arrastrar hasta 6 días del
+    // diciembre anterior, y el año en curso trae además días futuros: esas
+    // celdas salen forzadas a nivel 0 y NO se les cablea onMouseEnter, así
+    // que ni mandan en la escala de color ni pueden abrir tooltip. Acumular
+    // sus segundos era dato muerto que solo servía para envenenar maxSeconds:
+    // con una maratón de Nochevieja de 10h fijándolo, el día más cargado del
+    // año elegido se quedaba en nivel 2 y ninguna celda llegaba nunca al
+    // verde sólido, mientras la leyenda seguía anunciando los cinco niveles.
+    // SPEC 8.3: el nivel es relativo al día más cargado de la ventana VISIBLE.
+    const lastPaintedMs = Math.min(rangeEnd.getTime(), today.getTime());
+    const isPainted = (dayMs: number): boolean =>
+      dayMs >= rangeStart.getTime() &&
+      dayMs <= lastPaintedMs &&
+      (year === 'all' || new Date(dayMs).getFullYear() === year);
+
     const secondsByDay = new Map<number, number>();
     // Para el tooltip: las sesiones de cada día (aquí también las aún
     // abiertas — el nivel de color solo cuenta las cerradas, pero al pasar
@@ -118,7 +134,7 @@ export const ActivityHeatmap = ({
     for (const session of sessions) {
       if (!isMeasuredSession(session)) continue;
       const dayMs = startOfDayMs(session.startedAt);
-      if (dayMs < rangeStart.getTime() || dayMs > rangeEnd.getTime()) continue;
+      if (!isPainted(dayMs)) continue;
       const daySessions = sessionsByDay.get(dayMs) ?? [];
       daySessions.push(session);
       sessionsByDay.set(dayMs, daySessions);
@@ -170,10 +186,10 @@ export const ActivityHeatmap = ({
         // diciembre anterior que se cuela al alinear a lunes): nivel 0 a la
         // fuerza — se pinta igual de tenue que un día sin jugar, para que
         // la rejilla siempre se vea completa, pero nunca con datos que no
-        // son de este año.
-        const inRange =
-          dayMs <= Math.min(rangeEnd.getTime(), today.getTime()) &&
-          (year === 'all' || dayDate.getFullYear() === year);
+        // son de este año. Es el MISMO predicado con el que se llenaron
+        // secondsByDay/sessionsByDay: ni la escala de color ni el tooltip
+        // pueden salir de días que esta rejilla no pinta.
+        const inRange = isPainted(dayMs);
         cells.push({ level: inRange ? levelFor(secondsByDay.get(dayMs) ?? 0) : 0, dayMs, inRange });
       }
     }

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { isVdfObject, parseBinaryVdf } from './binaryVdf';
@@ -17,8 +18,10 @@ import type { VdfObject, VdfValue } from './binaryVdf';
 // Pero el cliente de Steam SÍ las enseña, así que las tiene: las guarda en
 // `appcache/stats/UserGameStatsSchema_<appid>.bin`, un VDF binario con el
 // schema completo del juego en todos los idiomas. Leerlo de ahí es local,
-// instantáneo, gratis y sin depender de nadie — nada de scraping ni de APIs
-// de terceros.
+// gratis y sin depender de nadie — nada de scraping ni de APIs de terceros.
+// Gratis no quiere decir instantáneo: son ficheros de cientos de KB y esto se
+// llama una vez por juego con ocultos dentro de la pasada de 300 y pico, así
+// que el disco se toca en asíncrono (ver getLocalAchievementTexts).
 //
 // Límite honesto: solo hay fichero de los juegos que TU Steam ha cacheado
 // (los que tienes en la cuenta y ha visto alguna vez). Para el resto, no hay
@@ -117,9 +120,23 @@ export const getLocalAchievementTexts = async (
     if (!steamPath) return result;
 
     const file = join(steamPath, 'appcache', 'stats', `UserGameStatsSchema_${appId}.bin`);
-    if (!existsSync(file)) return result;
 
-    collectAchievements(parseBinaryVdf(readFileSync(file)), result);
+    // Lectura ASÍNCRONA a propósito, y el ENOENT hace de "no existe" en vez de
+    // un existsSync previo: un readFileSync aquí bloquea el proceso main
+    // entero —ventana, IPC y el ciclo de sync con Turso, que corre cada
+    // minuto— una vez por cada juego con ocultos de la pasada. El parseo del
+    // buffer sigue siendo síncrono, pero eso es memoria, no disco.
+    let raw: Buffer;
+    try {
+      raw = await readFile(file);
+    } catch (error) {
+      // Juego que tu Steam nunca ha cacheado: es el caso normal de media
+      // biblioteca, no un fallo que merezca una línea en la consola.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return result;
+      throw error;
+    }
+
+    collectAchievements(parseBinaryVdf(raw), result);
   } catch (error) {
     console.warn(`[steam] no se pudo leer el schema local de ${appId} (sigo sin el):`, error);
   }

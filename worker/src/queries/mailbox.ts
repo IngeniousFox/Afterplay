@@ -5,14 +5,15 @@ import type { TenantDb } from '../db';
 
 // El buzón visto desde el Worker: encolar y leer lo pendiente.
 //
-// Es la ÚNICA tabla en la que la web escribe (§6.2). Es desechable a
-// propósito: un bug aquí deja una orden que no se aplica, no una biblioteca
-// corrupta.
+// Es la única tabla que la web escribe SIN que sea una tabla de verdad (§6.2)
+// —el cronómetro toca `sessions` y `state_events`, ver queries/timer.ts, y es
+// la excepción del §8.1—. Y es desechable a propósito: un bug aquí deja una
+// orden que no se aplica, no una biblioteca corrupta.
 
 // Lo que llega del navegador es texto sin ninguna garantía, y de aquí sale
 // directo a una tabla que el ESCRITORIO va a leer y ejecutar. Si dejo pasar un
 // payload con la forma torcida, el fallo no ocurre aquí —donde se vería— sino
-// dentro del drenado, en la máquina de otro, days después y sin nadie mirando.
+// dentro del drenado, en la máquina de otro, días después y sin nadie mirando.
 // Así que se valida entero, campo a campo, en vez de confiar en el tipo.
 const isPositiveInt = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0;
@@ -142,9 +143,6 @@ export const listPending = async (db: TenantDb): Promise<PendingEntry[]> => {
   }));
 };
 
-// Las últimas órdenes que SÍ se drenaron y fallaron. Sin esto, una orden que
-// revienta desaparece en silencio: deja de estar pendiente, nunca se aplicó, y
-// no hay nada en pantalla que lo explique.
 // Descartar un fallo. Borra SOLO el mensaje de error de una fila que ya está
 // procesada: no reencola nada, no toca ninguna tabla real, y no puede
 // resucitar una orden (processedAt sigue puesto).
@@ -163,6 +161,9 @@ export const dismissFailure = async (db: TenantDb, id: number): Promise<boolean>
   return rows.length > 0;
 };
 
+// Las últimas órdenes que SÍ se drenaron y fallaron. Sin esto, una orden que
+// revienta desaparece en silencio: deja de estar pendiente, nunca se aplicó, y
+// no hay nada en pantalla que lo explique.
 export const listRecentFailures = async (
   db: TenantDb,
 ): Promise<{ id: number; entry: PlanMailboxEntry; error: string }[]> => {

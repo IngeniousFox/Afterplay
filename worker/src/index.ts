@@ -51,30 +51,51 @@ export default {
       return fail('not_found', 'esta ruta no es de la API', 404);
     }
 
-    // GET para leer y POST SOLO para el buzón del Plan (§6.2). Cualquier otro
-    // método se corta aquí arriba, y el POST además está acotado a dos rutas
-    // más abajo: la web no escribe en las tablas reales ni por descuido.
+    // GET y POST, nada más: cualquier otro método se corta aquí arriba.
+    //
+    // El reparto era "GET lee, POST escribe" y ya no es cierto del todo. Lo
+    // que la web puede escribir sigue siendo lo del §8.1 —el buzón del Plan y
+    // el cronómetro, y nada más—, pero el cronómetro entra por las dos
+    // puertas: sus POST (start/beat/stop) y también el GET de /api/timer, que
+    // cierra las sesiones abandonadas mientras contesta (§7.4, ver
+    // queries/timer.ts). Es la única excepción, y está tratada como escritura
+    // donde importa: en la guarda CSRF de aquí abajo.
     if (request.method !== 'GET' && request.method !== 'POST') {
       return fail('not_found', 'método no permitido', 405);
     }
 
     // CSRF. access.ts acepta la cookie CF_Authorization, así que sin esto una
-    // página cualquiera que visites estando dentro de Access podría mandar un
-    // POST con tu cookie ambiente y encolar órdenes que tu escritorio EJECUTA
-    // después. Un formulario HTML cross-site puede hacerlo sin preflight.
+    // página cualquiera que visites estando dentro de Access podría mandar una
+    // petición con tu cookie ambiente y encolar órdenes que tu escritorio
+    // EJECUTA después. Un formulario HTML cross-site puede hacerlo sin
+    // preflight.
     //
     // La defensa es barata porque el Worker sirve la PWA y la API desde el
-    // MISMO origen (ver wrangler.jsonc): cualquier POST legítimo viene de
-    // 'same-origin'. Los navegadores que no mandan Sec-Fetch-Site caen al
-    // Origin, y si tampoco hay se rechaza — un POST sin ninguno de los dos no
-    // sale de esta PWA.
-    if (request.method === 'POST') {
+    // MISMO origen (ver wrangler.jsonc): cualquier petición legítima viene de
+    // 'same-origin'.
+    //
+    // Cubre los POST y el GET de /api/timer, que también escribe. Pero no con
+    // la misma vara, y la asimetría es deliberada:
+    //
+    //   - POST: falla CERRADO. Sin Sec-Fetch-Site se mira el Origin, y si no
+    //     hay ninguno de los dos, fuera. Una orden del buzón acaba
+    //     ejecutándose en el PC: ahí no se conceden dudas.
+    //   - el GET que escribe: se rechaza solo lo que se SABE cruzado. Los
+    //     navegadores no mandan Origin en un GET, así que exigir una de las
+    //     dos cabeceras dejaría sin cronómetro a cualquiera sin Sec-Fetch-Site
+    //     (iOS Safari anterior a 16.4), y esto es una PWA de móvil. El techo
+    //     del daño es cerrar una sesión que la regla de frescura iba a cerrar
+    //     igual en cuanto alguien mirara.
+    const writingGet = request.method === 'GET' && url.pathname === '/api/timer';
+    if (request.method === 'POST' || writingGet) {
       const site = request.headers.get('sec-fetch-site');
       const origin = request.headers.get('origin');
-      const sameOrigin =
-        site === 'same-origin' || (site === null && origin !== null && origin === url.origin);
-      if (!sameOrigin) {
-        console.warn(`[csrf] POST rechazado (sec-fetch-site=${site}, origin=${origin})`);
+      const sameOrigin = site === 'same-origin' || (site === null && origin === url.origin);
+      const unknown = site === null && origin === null;
+      if (!sameOrigin && !(unknown && writingGet)) {
+        console.warn(
+          `[csrf] ${request.method} ${url.pathname} rechazado (sec-fetch-site=${site}, origin=${origin})`,
+        );
         return fail('forbidden', 'petición cruzada rechazada', 403);
       }
     }
@@ -108,13 +129,14 @@ export default {
     const db = openTenantDb(tenant);
 
     try {
-      // ── La ÚNICA escritura de toda la API ───────────────────────────────
-      // Encola una orden en el buzón. No toca ninguna tabla real: el
-      // escritorio la drena al arrancar llamando al código de verdad (§6.2).
+      // ── Las escrituras de la API (§8.1: solo Plan y cronómetro) ─────────
+      // Casi todas son del buzón, y el buzón no toca ninguna tabla real: deja
+      // una orden que el escritorio drena al arrancar llamando al código de
+      // verdad (§6.2). La excepción es el cronómetro, aquí abajo.
       if (request.method === 'POST') {
         // Descartar un fallo ya drenado. No es una orden para el escritorio:
         // solo borra el mensaje de error de una fila del propio buzón, que es
-        // la única tabla en la que la web escribe.
+        // una tabla desechable y no una de las de verdad.
         if (url.pathname === '/api/plan/dismiss') {
           const id = readInt(url.searchParams.get('id'));
           if (id === undefined || !Number.isInteger(id) || id <= 0) {
@@ -126,9 +148,11 @@ export default {
             : fail('not_found', 'esa orden no existe o todavía no se ha drenado', 404);
         }
 
-        // El CRONÓMETRO (§7) — la otra escritura, y la única que toca una
-        // tabla real. No puede ir por buzón: una sesión en marcha tiene que
-        // existir ahora, no cuando abras el PC.
+        // El CRONÓMETRO (§7) — lo único de toda la API que toca tablas
+        // REALES, y son dos: `sessions` siempre, y `state_events` cuando el
+        // playthrough no estaba activo y hay que dejarle su 'started' (§8.10).
+        // No puede ir por buzón: una sesión en marcha tiene que existir ahora,
+        // no cuando abras el PC.
         if (url.pathname.startsWith('/api/timer/')) {
           const action = url.pathname.slice('/api/timer/'.length);
           try {
@@ -306,8 +330,14 @@ export default {
       // El cronómetro en marcha, si lo hay. Lo consulta la portada al abrir
       // para poder retomar el contador aunque cierres y vuelvas a abrir la
       // pestaña — el tiempo se cuenta contra `startedAt`, no desde que miras.
+      //
+      // Y de paso ESCRIBE: cierra los cronómetros que llevan horas sin latir
+      // (§7.4). Con el PC apagado no hay nadie más que pueda hacerlo, y este
+      // es justo el momento en que la respuesta importa. Recibe el `now` de la
+      // petición para decidir la frescura con el mismo reloj que todo lo
+      // demás, en vez de con un Date.now() suyo.
       if (url.pathname === '/api/timer') {
-        return json(await getActiveTimer(db));
+        return json(await getActiveTimer(db, now));
       }
 
       if (url.pathname === '/api/stats/summary') {

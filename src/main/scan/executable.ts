@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 // Adivinar el .exe de un juego a partir de su carpeta. Al contrario que el
 // listado de carpetas (que NO baja de nivel a propósito), esto sí recorre en
@@ -11,8 +11,10 @@ import { join } from 'node:path';
 // cambiar en el formulario antes de guardar. Preferimos no proponer nada a
 // proponer un desinstalador.
 
-// Cosas que NUNCA son el juego. Se comparan en minúsculas contra el nombre
-// del ejecutable y contra la carpeta que lo contiene.
+// Cosas que NUNCA son el juego. Se comparan en minúsculas, tramo a tramo,
+// contra el nombre del ejecutable y contra la ruta DENTRO de la carpeta del
+// juego — nunca contra la ruta absoluta, y descontando antes el nombre del
+// propio juego. Las dos cicatrices están en score().
 const NEVER = [
   'unins',
   'uninstall',
@@ -72,7 +74,10 @@ const MAX_DEPTH = 5;
 // los layouts reales y se sale antes en los patológicos.
 const MAX_ENTRIES = 4000;
 
-type Candidate = { path: string; name: string; dir: string; size: number; depth: number };
+// `relDir` es la ruta de la carpeta contenedora RELATIVA a la carpeta del
+// juego ('' si el .exe está en la raíz): es lo único que se puede comparar
+// contra NEVER sin arrastrar la raíz de escaneo. Ver score().
+type Candidate = { path: string; name: string; relDir: string; size: number; depth: number };
 
 const collect = async (
   root: string,
@@ -108,7 +113,7 @@ const collect = async (
       found.push({
         path: full,
         name: entry.name,
-        dir,
+        relDir: relative(root, dir),
         size: info.size,
         depth,
       });
@@ -123,17 +128,48 @@ const collect = async (
 // casa con "Bomber Crew" y "dotage.exe" con "dotAge".
 const squash = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+// Un tramo de ruta (o el nombre del exe) listo para comparar contra NEVER,
+// con el nombre del juego DESCONTADO. Es lo que impide que un juego se
+// descalifique a sí mismo: NEVER se busca por subcadena, así que "Patch
+// Quest"/PatchQuest.exe puntuaba -1 por 'patch' y ese juego se quedaba sin
+// UN SOLO candidato — y sin candidatos, needsDescribe (cache.ts) lo hace
+// recorrer entero en disco en cada barrido durante dos horas.
+//
+// Se descuenta el nombre y no se perdona el tramo entero, que es donde el
+// filtro sigue haciendo falta: en esa misma carpeta, PatchQuestServer.exe
+// queda en 'server' y PatchQuest_Setup.exe en 'setup', y los dos siguen
+// descalificados.
+const withoutGameName = (segment: string, squashedFolder: string): string => {
+  const squashed = squash(segment);
+  // Un nombre de tres letras se comería medio tramo por casualidad ("Ico"
+  // dentro de "unicode"): por debajo de cuatro no se descuenta nada. Es el
+  // mismo umbral que usan las reglas de puntuación de abajo.
+  if (squashedFolder.length < 4 || !squashed.includes(squashedFolder)) return segment.toLowerCase();
+  return squashed.split(squashedFolder).join('');
+};
+
 const score = (candidate: Candidate, folderName: string): number => {
   const name = candidate.name.toLowerCase().replace(/\.exe$/, '');
-  const haystack = `${candidate.dir.toLowerCase()}/${name}`;
+  const squashedName = squash(name);
+  const squashedFolder = squash(folderName);
+
+  // SOLO lo que hay de la carpeta del juego hacia abajo, y tramo a tramo.
+  // Con la ruta absoluta se comparaba también la unidad y todas las carpetas
+  // de arriba, y como NEVER se busca por subcadena bastaba una raíz llamada
+  // "D:\Installed Games" ('install') para descalificar a TODOS los candidatos
+  // de TODOS los juegos: biblioteca entera sin ejecutable propuesto y, de
+  // paso, recorrida en disco cada barrido durante dos horas.
+  const segments = [...candidate.relDir.split(/[\\/]/), name];
 
   // Descalificación directa: mejor no proponer nada que proponer el
   // desinstalador o el instalador de DirectX.
-  if (NEVER.some((bad) => haystack.includes(bad))) return -1;
+  const banned = segments.some((segment) => {
+    const clean = withoutGameName(segment, squashedFolder);
+    return NEVER.some((bad) => clean.includes(bad));
+  });
+  if (banned) return -1;
 
   let points = 0;
-  const squashedName = squash(name);
-  const squashedFolder = squash(folderName);
 
   // Coincidir con el nombre de la carpeta es la señal más fuerte que hay.
   if (squashedName === squashedFolder) points += 100;

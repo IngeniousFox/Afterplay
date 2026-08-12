@@ -9,6 +9,7 @@ import {
 import { latestRealStateEvent, manualHoursAnchor } from '../../../src/shared/playthroughState';
 import type { LibraryGame, StateType } from '../api-types';
 import type { TenantDb } from '../db';
+import { TIMER_STALE_MS } from './timer';
 
 // La LISTA de la biblioteca y los agregados de los que sale. La ficha de un
 // juego suelto vive en game.ts.
@@ -29,6 +30,34 @@ import type { TenantDb } from '../db';
 // hora del alta — colarlo aquí convierte "los últimos que jugué" en "los
 // últimos que añadí". Se reconocen porque caen al segundo con el addedAt.
 const ADDED_AT_TOLERANCE_MS = 5_000;
+
+// "Sigue jugando AHORA", que no es lo mismo que "la fila no tiene endedAt".
+//
+// Las de CRONÓMETRO llevan pegada la regla de frescura del §7.4: se abren
+// desde el móvil y se olvidan (§7.6), así que un latido de hace horas
+// significa abandonada. Sin esto, la biblioteca pintaba LIVE un juego que
+// nadie está tocando desde el viernes — y lo pintaba justo hasta que alguien
+// pidiera /api/timer, que es el que barre de verdad, así que dependía del
+// orden en que la portada lanzara sus peticiones.
+//
+// Las del WATCHER se quedan como estaban, y no es un olvido: su regla no es un
+// umbral de tiempo sino "¿sigue vivo el proceso?", y eso solo lo puede
+// contestar el PC. Su latido además se pausa cuando la pantalla se bloquea, o
+// sea que un latido viejo ahí no significa nada. Una que quede abierta por un
+// corte de luz sigue pintando LIVE hasta que el PC arranque y reconcilie:
+// mismo comportamiento que el escritorio, y no es esta consulta quien lo
+// cambia.
+//
+// Cerrarlas tampoco es cosa de aquí. Esto es una lectura; que un GET escriba
+// ya es bastante excepción con /api/timer (ver queries/timer.ts).
+const isSessionLive = (
+  session: { startedBy: 'watcher' | 'timer'; startedAt: Date; lastHeartbeatAt: Date | null },
+  now: number,
+): boolean => {
+  if (session.startedBy !== 'timer') return true;
+  const lastBeat = session.lastHeartbeatAt ?? session.startedAt;
+  return now - lastBeat.getTime() < TIMER_STALE_MS;
+};
 
 // Unas horas MANUALES con el año al que se atribuyen. Las horas manuales no
 // tienen fecha propia —son un número suelto en la iteración— así que se
@@ -84,6 +113,10 @@ export const buildLibraryData = async (db: TenantDb): Promise<LibraryData> => {
       startedAt: sessionsTable.startedAt,
       endedAt: sessionsTable.endedAt,
       durationSec: sessionsTable.durationSec,
+      // Los dos últimos son solo para isSessionLive: quién abrió la sesión y
+      // cuándo latió por última vez.
+      startedBy: sessionsTable.startedBy,
+      lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
     })
     .from(sessionsTable)
     .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id));
@@ -104,13 +137,17 @@ export const buildLibraryData = async (db: TenantDb): Promise<LibraryData> => {
   const liveSinceByGame = new Map<number, Date>();
   const lastPlayedByGame = new Map<number, Date>();
 
+  const now = Date.now();
+
   for (const row of sessionRows) {
     trackedSecondsByIteration.set(
       row.iterationId,
       (trackedSecondsByIteration.get(row.iterationId) ?? 0) + (row.durationSec ?? 0),
     );
     sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
-    if (row.endedAt === null) liveSinceByGame.set(row.gameId, row.startedAt);
+    if (row.endedAt === null && isSessionLive(row, now)) {
+      liveSinceByGame.set(row.gameId, row.startedAt);
+    }
 
     // endedAt y no startedAt: una partida larga cuenta por cuándo se dejó. En
     // una sesión abierta, el arranque es lo más reciente que hay.
@@ -147,6 +184,16 @@ export const buildLibraryData = async (db: TenantDb): Promise<LibraryData> => {
   }
 
   // Las horas manuales con su año de atribución, por juego.
+  //
+  // PENDIENTE CONOCIDO: `getFullYear()` aquí es UTC —un Worker no tiene zona
+  // horaria— y en el escritorio es hora local. Una fecha con precisión de año
+  // se guardó como el 1 de enero a las 00:00 LOCALES, así que desde España cae
+  // en el 31 de diciembre anterior en UTC y estas horas se cuelgan del año de
+  // antes. El mismo desfase está en stats.ts (thisYear y el año de cada
+  // sesión). Arreglarlo de verdad es sacar "a qué año pertenece esta fecha" a
+  // un helper de src/shared que reciba la zona del cliente, y consumirlo desde
+  // los dos lados; ni src/shared ni la PWA que tendría que mandarla se pueden
+  // tocar desde aquí.
   const manualByGame = new Map<number, ManualHours[]>();
   for (const iteration of iterations) {
     if (iteration.manualTotalPlayed === null) continue;

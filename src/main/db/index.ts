@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client';
-import { app, net } from 'electron';
+import { app, BrowserWindow, net } from 'electron';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/tursodatabase-sync';
 import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
@@ -302,20 +302,33 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 //   · Reconstruir en caliente: contra test salió impecable y contra
 //     producción el lote no fue fail-stop, el PRAGMA foreign_keys=off no se
 //     respetó (el CASCADE del DROP vació las tablas hijas) y el RENAME no
-//     llegó. NO ES REPRODUCIBLE. Prohibido, en remoto y en local.
+//     llegó. NO ES REPRODUCIBLE — de ahí todo lo que viene debajo.
 //   · PRAGMA writable_schema (cirugía de catálogo): bloqueado por el
 //     servidor de Turso a nivel de parser ("SQL not allowed statement").
 //   · ALTER TABLE DROP COLUMN: funciona, pero SQLite lo prohíbe sobre una
 //     columna indexada — que es justo la que tiene el constraint.
 //
-// Lo único que queda, y es el protocolo: EXPANDIR SIN CONTRAER. Columna nueva
-// por ALTER ADD COLUMN + UPDATE de copia, la propiedad de drizzle conserva el
-// nombre de siempre apuntando a la nueva, y la vieja se queda muerta en la
-// tabla (el ejemplo vivo: games.steamGridDbId → sgdbId, ver schema.ts). Es
-// una migración aditiva normal: entra sola en cada base, remota y local, sin
-// pasos manuales. Ningún cliente ejecuta jamás una reconstrucción; el
-// guardarraíl de abajo (pendingTableRebuild) lo garantiza aunque alguien
-// genere una por descuido.
+// LA POLÍTICA DE HOY (revisada el 8-ago-2026), que ya NO es la prohibición
+// total de aquel día:
+//
+//   · Lo preferido sigue siendo EXPANDIR SIN CONTRAER. Columna nueva por
+//     ALTER ADD COLUMN + UPDATE de copia, la propiedad de drizzle conserva el
+//     nombre de siempre apuntando a la nueva y la vieja se queda muerta en la
+//     tabla. Es una migración aditiva normal: entra sola en cada base, remota
+//     y local, sin pasos manuales.
+//   · Pero una reconstrucción ya no está prohibida: la prohibición se
+//     sustituyó por PRUEBA (ver applyRebuildVerified). Su ÚNICA vía legítima
+//     es esa función — copia previa en backups/antes-de-<migración>.db,
+//     conteo de filas antes y después, y lanzar si se perdió una sola. El
+//     guardarraíl de abajo (pendingTableRebuild) ya no bloquea nada: ENRUTA
+//     hacia ella. Las dos entradas que aplican migraciones en local (el
+//     arranque y el reintento del ciclo de sync) pasan por
+//     applyMigrationsGuarded, que es quien hace ese enrutado.
+//   · El precedente medido es 20260808165354_igdbid_nullable_y_adios_columna_muerta:
+//     reconstruyó `games` sobre una copia de producción entera sin perder una
+//     fila. Y de paso se llevó por delante la columna muerta que este bloque
+//     ponía de ejemplo vivo (la vieja steamGridDbId): hoy solo queda sgdbId,
+//     ver schema.ts.
 export const runMigrations = async (): Promise<void> => {
   const remoteConfigured = hasRemoteConfigured();
   // Sondeo barato ANTES de pagar dos timeouts de red completos (push de
@@ -368,13 +381,7 @@ export const runMigrations = async (): Promise<void> => {
     return;
   }
 
-  const rebuild = await pendingTableRebuild(db);
-  if (rebuild) {
-    await applyRebuildVerified(db, rebuild);
-    return;
-  }
-
-  await migrateWithoutCapture(db);
+  await applyMigrationsGuarded(db);
 };
 
 // EL ARREGLO DE LA DOBLE APLICACIÓN — la pieza que faltaba desde el 7-ago-2026.
@@ -479,6 +486,24 @@ const tableRowCounts = async (db: Db): Promise<Map<string, number>> => {
 // La verificación por conteo existe además porque la que había NO habría
 // cazado nada: comprobaba que no quedaran tablas puente __new_, y en el caso
 // que destrozó la base no quedaba ninguna.
+
+// Una pérdida VERIFICADA deja la base local mermada y eso no se "reintenta":
+// las filas ya no están. Esta bandera la marca como NO SINCRONIZABLE para lo
+// que queda de proceso y runSyncCycle se planta antes del pull/push.
+//
+// Existe porque lanzar NO bastaba, y la protección solo duraba 60 segundos: al
+// lanzar, `localMigrationsPending` se queda en true y el ciclo siguiente vuelve
+// a entrar en applyPendingLocalMigrations… pero el migrador de drizzle ya había
+// apuntado la migración en __drizzle_migrations dentro de la MISMA transacción
+// que corrió el DDL. O sea que a la vuelta ya no hay reconstrucción pendiente,
+// applyMigrationsGuarded pasa de largo, nadie vuelve a contar filas y el push
+// subía la base mermada a Turso un minuto después de haber detectado el
+// destrozo. Justo la amplificación que todo este módulo existe para impedir.
+//
+// No se apaga sola: la salida es cerrar la app y restaurar la copia de
+// backups/antes-de-<migración>.db.
+let dataLossBlocksSync = false;
+
 const applyRebuildVerified = async (db: Db, rebuild: string): Promise<void> => {
   const before = await tableRowCounts(db);
 
@@ -511,6 +536,9 @@ const applyRebuildVerified = async (db: Db, rebuild: string): Promise<void> => {
   }
 
   if (losses.length > 0) {
+    // ANTES de lanzar: quien nos llame desde el ciclo de sync solo verá una
+    // excepción, y una excepción sola no impide el push del minuto siguiente.
+    dataLossBlocksSync = true;
     throw new Error(
       `${rebuild} PERDIÓ DATOS al reconstruir la tabla (${losses.join(', ')}). ` +
         `La copia de justo antes está en ${safetyCopy}. No sigas usando la app con esta base: ` +
@@ -528,9 +556,10 @@ const applyRebuildVerified = async (db: Db, rebuild: string): Promise<void> => {
 // el push al remoto funcionó y aun así se perdió la base — el DROP+RENAME se
 // ejecutó igualmente (en el remoto por su cuenta, y en la local al reflejarlo
 // por sync) y dejó __new_games sin games, con las tablas hijas vaciadas por
-// CASCADE. La conclusión tras probarlo en test (impecable) y en producción
-// (destrozo) es que este DDL no es reproducible, así que la única política
-// segura es no ejecutarlo NUNCA desde la app.
+// CASCADE. Nació negándose a aplicar esas migraciones para siempre; desde el
+// 8-ago-2026 no bloquea, ENRUTA: quien tenga una reconstrucción pendiente pasa
+// por applyRebuildVerified (copia previa + conteo de filas) en vez de por el
+// migrador a pelo.
 //
 // El criterio de "pendiente" es el mismo que usa drizzle: created_at por
 // encima del último aplicado. Sin tabla de control no hay nada que proteger —
@@ -556,12 +585,47 @@ const pendingTableRebuild = async (db: Db): Promise<string | null> => {
   );
 };
 
+// LA ÚNICA VÍA por la que esta app aplica migraciones en su base local.
+//
+// Es una función y no dos líneas sueltas porque hay DOS entradas —el arranque
+// (runMigrations) y el reintento del ciclo de sync (applyPendingLocalMigrations)—
+// y hasta que se juntaron aquí solo la primera pasaba por el guardarraíl: la
+// segunda llamaba a migrateWithoutCapture a pelo, sin preguntar por
+// reconstrucciones, sin copia previa y sin conteo de filas. O sea que una
+// migración diferida por arrancar sin red (justo la que la puerta de arriba
+// deja pendiente) se aplicaba SIN protección… y tres líneas más abajo el
+// push() de runSyncCycle habría subido a Turso lo que se hubiera perdido. Esa
+// amplificación es exactamente lo que applyRebuildVerified existe para
+// impedir, así que no puede haber una segunda puerta que la esquive.
+const applyMigrationsGuarded = async (db: Db): Promise<void> => {
+  const rebuild = await pendingTableRebuild(db);
+  if (rebuild) {
+    await applyRebuildVerified(db, rebuild);
+    return;
+  }
+
+  await migrateWithoutCapture(db);
+};
+
 // El reintento de la puerta de arriba: el remoto ya está al día, así que ahora
 // sí toca poner la local a la par. Va por withDbAccess como todo lo demás —
 // esto corre desde el ciclo de sync, con el watcher sondeando por su cuenta.
+//
+// Si la verificación de una reconstrucción detecta pérdida, applyRebuildVerified
+// LANZA. Aquí eso no tumba la app (esto no es el arranque): corta el ciclo y el
+// error queda en lastSyncFailure, que Ajustes enseña. Pero lo que de verdad
+// impide que el borrado suba a Turso NO es cortar este ciclo —el siguiente ya
+// no vería nada pendiente— sino la bandera dataLossBlocksSync que
+// applyRebuildVerified levanta antes de lanzar; ver allí.
+//
+// Así que la política no es una sola, son dos con el mismo throw detrás, y a
+// propósito: por el arranque (runMigrations) cierra la app con diálogo, porque
+// hay un humano delante al que se le puede pedir que restaure la copia; por
+// aquí la sesión sigue viva pero ya sin sync, porque tumbar la ventana a mitad
+// de una partida no salvaría ni una fila más.
 const applyPendingLocalMigrations = async (): Promise<void> => {
   if (!localMigrationsPending || migrationPushPending || !dbInstance) return;
-  await withDbAccess(async () => migrateWithoutCapture(getDb()));
+  await withDbAccess(async () => applyMigrationsGuarded(getDb()));
   localMigrationsPending = false;
   console.log('[db] migraciones locales aplicadas al fin (el remoto ya estaba al día)');
 };
@@ -719,6 +783,26 @@ export const onSyncCompleted = (task: () => Promise<void>): void => {
   afterSuccessfulSync = task;
 };
 
+// Un pull que trae filas es UN ESCRITOR MÁS de la base local, y el contrato de
+// la casa dice que todo el que escribe avisa: los hooks de juegos usan
+// `staleTime: Infinity` y solo se sostienen mientras eso se cumpla.
+//
+// Hasta que esto existió, el único aviso posterior al sync colgaba del drenado
+// del buzón del Plan y solo salía si el buzón había aplicado algo: cubría la
+// vía móvil→buzón y NO la normal. Lo que baja de OTRO PC tuyo (SPEC-2, "un
+// solo usuario, varias máquinas suyas") entraba en la DB en silencio absoluto
+// y la ventana seguía enseñando las horas, el estado y las notas de antes
+// hasta reiniciar la app — sin ninguna pista, porque el sync iba bien.
+//
+// Se avisa a TODAS las ventanas: cada una tiene su propio caché de react-query
+// (la principal y el HUD del overlay), la referencia a la principal vive en
+// main/index.ts y no aquí, y un canal que una ventana no escucha es un no-op.
+const notifyPulledChanges = (): void => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send('games:changed');
+  }
+};
+
 // Firma de los errores del motor cuando el esquema remoto no cuadra: el
 // replicador va por posición de columna, así que un desajuste sale como un
 // tipo que no encaja o una tabla que no existe, nunca como un error de red.
@@ -732,6 +816,11 @@ const SCHEMA_MISMATCH_HINTS = [
 
 export const runSyncCycle = async (): Promise<void> => {
   if (syncCycleRunning) return;
+  // Base marcada por una pérdida verificada (ver dataLossBlocksSync): ni pull
+  // ni push mientras dure el proceso. No se toca lastSyncFailure — el mensaje
+  // del destrozo, con la ruta de la copia previa, es justo lo que Ajustes tiene
+  // que seguir enseñando en vez de un "reintentando" que no va a arreglar nada.
+  if (dataLossBlocksSync) return;
   syncCycleRunning = true;
 
   try {
@@ -759,9 +848,14 @@ export const runSyncCycle = async (): Promise<void> => {
     await applyPendingLocalMigrations();
 
     const db = getDb();
-    await db.$client.pull();
+    // pull() devuelve si de verdad ha aplicado cambios: sin eso, avisar en
+    // cada tic de 60s invalidaría el caché entero de la ventana un minuto sí
+    // y otro también sin que nada hubiera cambiado.
+    const pulled = await db.$client.pull();
     await db.$client.push();
     lastSyncFailure = null;
+
+    if (pulled) notifyPulledChanges();
 
     // Y solo AQUÍ, con el pull ya hecho y sin fallo: es la única garantía de
     // que lo que el móvil escribió en el remoto existe ya en local. La tarea

@@ -163,8 +163,16 @@ export const SessionHistorySection = ({
             <div className="flex items-center gap-2.5">
               <Clock3 size={12} className="flex-none" style={{ color: GREEN }} />
               <div className="min-w-0 flex-1">
+                {/* La precisión REAL de la fila, no un 'day' fijo: una sesión
+                    manual del modelo v1 con precisión de año se pintaba como
+                    "January 1, 2021" — un día concreto que nunca se registró,
+                    justo encima de "Logged manually". Solo se degrada a 'day'
+                    cuando la fila SÍ tiene hora, porque esa hora ya va en la
+                    línea de abajo y repetirla aquí sobra. */}
                 <div className="text-[12px] font-bold">
-                  {formatByPrecision(session.startedAt, 'day')}
+                  {session.datePrecision === 'datetime'
+                    ? formatByPrecision(session.startedAt, 'day')
+                    : formatByPrecision(session.startedAt, session.datePrecision)}
                 </div>
                 <div className="mt-0.5 text-[10.5px] font-semibold text-muted-foreground tabular-nums">
                   {session.datePrecision === 'datetime' && (

@@ -147,6 +147,13 @@ export type ExternalRefreshSummary = {
   // (carátula, hero, sinopsis, géneros, fecha). Ver external/adoptIgdb.ts.
   adoptedFromSteam: number;
   appIdsFound: number;
+  // Cuántos appids GUARDADOS apuntaban donde no debían (el playtest del
+  // propio juego, u otro producto) y se corrigieron. Contador APARTE de
+  // appIdsFound a propósito: una corrección no es un estreno — el juego ya
+  // "estaba en Steam", solo que mirando al sitio equivocado — y sumarlos
+  // hacía que la tarjeta de Ajustes cantara "N games just turned up on
+  // Steam" en una pasada donde no había entrado ninguno.
+  appIdsFixed: number;
   // Cuántos juegos con appid se le preguntaron a Steam y de cuántos supo.
   steamChecked: number;
   steamFound: number;
@@ -180,7 +187,25 @@ export type GameFullRefreshResult = {
   // 'no-match' = HLTB no lo reconoció con confianza suficiente. No se pisa lo
   // que ya había.
   hltb: 'updated' | 'no-match' | 'failed';
-  // 'had-it' = ya tenía appid y no se toca (es identidad del juego);
+  // 'had-it' = ya tenía appid CUANDO empezó el refresco — que no es lo mismo
+  // que "no se toca". refreshGame.ts revisa ese appid guardado
+  // (findSteamAppIdCorrections en igdb/api.ts) y lo corrige por dos motivos:
+  // apuntaba a una entrada de prueba del propio juego (playtest, demo, beta),
+  // o apuntaba a OTRO producto — el appid del juego VIEJO en la ficha del
+  // NUEVO (Trails in the Sky 2nd Chapter, Brothers, Stanley Parable, Miles
+  // Morales, Atlas Fallen). El primero solo lo saca de una beta cerrada que
+  // no tenía tienda ni logros; el segundo le cambia la identidad de Steam
+  // entera, y con ella sus etiquetas, sus reseñas y sus logros — que es el
+  // caso por el que este veredicto se queda corto.
+  //
+  // Ese juego sale por aquí como 'had-it', y no porque no se pueda saber: el
+  // ternario que decide este veredicto tiene la corrección ya resuelta en el
+  // mismo ámbito (sale del mismo Promise.all que el resto) y simplemente no
+  // la mira. Falta un veredicto propio ('fixed') que sí la mire. Mientras no
+  // exista, el cambio deja rastro —se guardan steamAppId y
+  // steamAppIdCheckedAt, y las etiquetas y reseñas se piden ya con el appid
+  // corregido— pero ningún AVISO: solo un console.log del main, y el parte
+  // que ve el usuario no lo menciona.
   // 'found' = no lo tenía y acaba de aparecer, que es la noticia buena.
   steam: 'found' | 'had-it' | 'not-on-steam' | 'failed';
   // 'skipped' = sin appid no hay a quién preguntar.

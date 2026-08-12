@@ -1,6 +1,6 @@
-import { and, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { gamesTable, iterationsTable } from '../db/schema';
 import { diceCoefficient, findBestTitleMatch, normalizeTitle } from '../lib/titleMatch';
 import { getRaConsoles, getRaGameList, hasRaCredentials } from './api';
 import type { RaGameListEntry } from './api';
@@ -22,9 +22,17 @@ const REMATCH_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
 // Umbral PROPIO por encima del genérico de findBestTitleMatch (0.5): las
 // listas de RA no traen año, así que no hay desempate — sin él, un 0.6 de
 // parecido es una apuesta, no un match. Preferimos dejar el juego sin
-// emparejar (el barrido reintentará, y el fallo es visible) a colgarle el
-// set de otro juego (fallo silencioso con logros de otro).
+// emparejar (el barrido lo reintenta cada pocos días, y un juego sin logros
+// se nota) a colgarle el set de otro, que sí es irrecuperable en la práctica:
+// la ficha enseña los logros de otro juego y nada delata que estén mal.
 const MIN_RA_SIMILARITY = 0.8;
+
+// Distancia por debajo de la cual dos consolas NO están decidiendo nada: sin
+// año que desempate, tres sets con el título exacto puntúan 1.00 clavado y el
+// "ganador" acaba siendo el que IGDB puso antes en officialPlatforms. Un
+// margen pequeño (y no la igualdad exacta) porque un 1.00 contra un 0.97 de
+// otra consola tampoco es una decisión: es ruido de bigramas.
+const AMBIGUOUS_MARGIN = 0.05;
 
 // Respiro entre juegos al sincronizar en cadena. Aquí NO vale el ritmo de la
 // cola de Steam (120ms — su API aguanta 100k/día): la de RA va detrás de
@@ -45,27 +53,128 @@ type MatchCandidate = {
   heroUrl: string | null;
 };
 
+// Un set candidato CON la consola de la que sale: el desempate y el aviso de
+// abajo razonan por consola, no por raGameId suelto.
+type ConsoleMatch = { consoleId: number; raGameId: number };
+
+// El veredicto del emparejado. 'ambiguous' es un caso aparte de 'none' a
+// propósito: quien llama todavía puede romper el empate con un dato que aquí
+// no está (la plataforma que el usuario apuntó), y si no puede tiene que
+// CONTARLO — un empate callado es indistinguible de "este juego no está en
+// RA", y son dos cosas muy distintas.
+type RaMatch =
+  | { kind: 'matched'; raGameId: number }
+  | { kind: 'none' }
+  | { kind: 'ambiguous'; tied: ConsoleMatch[] };
+
 // Emparejar UN juego contra las listas (ya bajadas) de sus consolas.
+//
+// Se puntúa por CONSOLA, no en un pool único con todas las listas aplanadas.
+// La cicatriz: officialPlatforms es la lista cruda de IGDB, en SU orden, y un
+// multiplataforma como Sonic the Hedgehog está con el título idéntico en Game
+// Gear, Master System y Mega Drive. Sin año en las listas de RA los tres
+// puntúan 1.00, y el pool aplanado se quedaba con el primero del array de
+// IGDB — un sorteo. Y games solo guarda UN raGameId, así que elegir mal se
+// paga dos veces: la ficha enseña el progreso de un set que no juegas, y el
+// sondeo en vivo (que busca por raGameId) descarta EN SILENCIO los
+// desbloqueos del set que sí.
+//
+// PURA y sin console a propósito: el empate no se decide aquí (falta el dato
+// que lo rompe) y avisar desde dentro metía la ráfaga de warns en mitad de la
+// transacción del nivel 2.
 const matchAgainstLists = (
   game: MatchCandidate,
   lists: Map<number, RaGameListEntry[]>,
   consoleIds: number[],
-): number | null => {
-  const candidates = consoleIds.flatMap((consoleId) => lists.get(consoleId) ?? []);
-  if (candidates.length === 0) return null;
+): RaMatch => {
+  const perConsole: { consoleId: number; raGameId: number; similarity: number }[] = [];
+  for (const consoleId of consoleIds) {
+    const candidates = lists.get(consoleId);
+    if (!candidates || candidates.length === 0) continue;
 
-  const best = findBestTitleMatch(
-    candidates,
-    (candidate) => candidate.title,
-    () => undefined,
-    game.title,
-    game.releaseYear,
+    const best = findBestTitleMatch(
+      candidates,
+      (candidate) => candidate.title,
+      // Las listas de RA no traen año: el bonus de findBestTitleMatch queda
+      // siempre a cero y su score ES la similitud de nombre pelada.
+      () => undefined,
+      game.title,
+      game.releaseYear,
+    );
+    if (!best) continue;
+
+    const similarity = diceCoefficient(normalizeTitle(best.title), normalizeTitle(game.title));
+    if (similarity < MIN_RA_SIMILARITY) continue;
+    perConsole.push({ consoleId, raGameId: best.raGameId, similarity });
+  }
+  if (perConsole.length === 0) return { kind: 'none' };
+
+  perConsole.sort((a, b) => b.similarity - a.similarity);
+  const [winner] = perConsole;
+  const tied = perConsole.filter(
+    (entry) => winner.similarity - entry.similarity <= AMBIGUOUS_MARGIN,
   );
-  if (!best) return null;
-
-  const similarity = diceCoefficient(normalizeTitle(best.title), normalizeTitle(game.title));
-  return similarity >= MIN_RA_SIMILARITY ? best.raGameId : null;
+  if (tied.length > 1) {
+    return {
+      kind: 'ambiguous',
+      tied: tied.map((entry) => ({ consoleId: entry.consoleId, raGameId: entry.raGameId })),
+    };
+  }
+  return { kind: 'matched', raGameId: winner.raGameId };
 };
+
+// La válvula de escape del empate: la plataforma que TÚ apuntaste en la
+// partida. Es el único dato de la casa que sabe en qué consola juegas de
+// verdad — officialPlatforms es la lista COMPLETA de IGDB, así que sin esto el
+// empate no es un caso raro sino el pan de cada clásico (Sonic, Aladdin,
+// Mortal Kombat, Castlevania SotN en PS1 y Saturn…) y todos ellos se quedaban
+// sin set para siempre.
+//
+// Habla poco, y hay que contarlo: el desplegable de plataforma ofrece
+// "Emulated" (que es justo lo que preselecciona el alta de un juego emulado) y
+// no tiene entrada para media Sega, así que muchas veces no traduce a ninguna
+// consola de RA. Si no señala a EXACTAMENTE uno de los empatados, el empate
+// sigue en pie: desempatar con media pista es volver a la moneda al aire, que
+// es lo que se vino a quitar.
+const breakTieByPlayedPlatform = (
+  tied: ConsoleMatch[],
+  playedPlatforms: string[],
+): number | null => {
+  const played = new Set(raConsoleIdsForPlatforms(playedPlatforms));
+  const hits = tied.filter((entry) => played.has(entry.consoleId));
+  return hits.length === 1 ? hits[0].raGameId : null;
+};
+
+// Las plataformas apuntadas de unos pocos juegos. Se pide SOLO cuando hay
+// empates (un puñado, y en la mayoría de pasadas ninguno), así que el camino
+// normal no paga esta consulta.
+const readPlayedPlatforms = async (gameIds: number[]): Promise<Map<number, string[]>> => {
+  const rows = await withDbAccess(async () =>
+    getDb()
+      .select({ gameId: iterationsTable.gameId, playedPlatform: iterationsTable.playedPlatform })
+      .from(iterationsTable)
+      .where(inArray(iterationsTable.gameId, gameIds)),
+  );
+  const byGame = new Map<number, string[]>();
+  for (const row of rows) {
+    const platforms = byGame.get(row.gameId);
+    if (platforms) platforms.push(row.playedPlatform);
+    else byGame.set(row.gameId, [row.playedPlatform]);
+  }
+  return byGame;
+};
+
+// El aviso del empate con NOMBRE de consola y no solo el id: "Mega Drive (1)"
+// se entiende, "1" manda a buscar la tabla de IDs de RA. Los nombres solo los
+// tiene quien haya bajado GetConsoleIDs (el nivel 2); el refresco de un juego
+// suelto no baja esa tabla solo para redactar un aviso, y ahí degrada al id.
+const describeTie = (tied: ConsoleMatch[], consoleNames?: Map<number, string>): string =>
+  tied
+    .map((entry) => {
+      const name = consoleNames?.get(entry.consoleId);
+      return name ? `${name} (${entry.consoleId})` : String(entry.consoleId);
+    })
+    .join(', ');
 
 // Un único hilo de sincronización RA a la vez. Las dos pasadas que encadenan
 // syncRaGame con BREATHE_MS de respiro —el nivel 3 del arranque y el "Sync
@@ -181,31 +290,114 @@ export const runRaStartupPass = async (): Promise<void> => {
         }
       }
 
+      // El emparejado es CPU pura y se decide ENTERO fuera de la transacción.
+      // Antes se hacía dentro: el candado de escritura tomado mientras se
+      // puntúan miles de títulos, y los avisos de empate saliendo en ráfaga
+      // desde el mismo sitio.
+      const decisions = withConsoles
+        // Si su lista no se pudo bajar, no se marca como preguntado: que el
+        // próximo arranque lo reintente.
+        .filter(({ consoleIds }) => consoleIds.some((id) => lists.has(id)))
+        .map(({ game, consoleIds }) => ({
+          game,
+          match: matchAgainstLists(game, lists, consoleIds),
+        }));
+
+      const tiedGameIds = decisions.flatMap((entry) =>
+        entry.match.kind === 'ambiguous' ? [entry.game.id] : [],
+      );
+      const playedPlatforms =
+        tiedGameIds.length > 0
+          ? await readPlayedPlatforms(tiedGameIds)
+          : new Map<number, string[]>();
+
+      // raGameId null = "no está en RA" O "empate irresoluble"; `tied` solo
+      // lleva algo en el segundo caso, que es el que hay que contar.
+      const resolved = decisions.map(({ game, match }) => {
+        if (match.kind === 'matched') {
+          return { game, raGameId: match.raGameId, tied: [] as ConsoleMatch[] };
+        }
+        if (match.kind === 'none') return { game, raGameId: null, tied: [] as ConsoleMatch[] };
+        const raGameId = breakTieByPlayedPlatform(match.tied, playedPlatforms.get(game.id) ?? []);
+        return { game, raGameId, tied: raGameId === null ? match.tied : [] };
+      });
+
       const checkedAt = new Date();
-      const matched: (MatchCandidate & { raGameId: number })[] = [];
       await withDbAccess(async () =>
         getDb().transaction(async (tx) => {
-          for (const { game, consoleIds } of withConsoles) {
-            // Si su lista no se pudo bajar, no se marca como preguntado: que
-            // el proximo arranque lo reintente.
-            if (!consoleIds.some((id) => lists.has(id))) continue;
-            const raGameId = matchAgainstLists(game, lists, consoleIds);
+          for (const { game, raGameId } of resolved) {
             await tx
               .update(gamesTable)
               .set({ raGameId, raCheckedAt: checkedAt })
               .where(eq(gamesTable.id, game.id));
-            if (raGameId !== null) matched.push({ ...game, raGameId });
           }
         }),
       );
-      if (matched.length > 0) {
-        console.log(`[ra] emparejados ${matched.length}/${withConsoles.length} juego(s) con RA`);
+
+      const matchedCount = resolved.filter((entry) => entry.raGameId !== null).length;
+      if (matchedCount > 0) {
+        console.log(`[ra] emparejados ${matchedCount}/${withConsoles.length} juego(s) con RA`);
+      }
+
+      // UN aviso agrupado, y fuera de la transacción: en una biblioteca retro
+      // los empates son decenas y una línea por juego era una ráfaga. A estos
+      // SÍ se les estampa raCheckedAt arriba, así que se reintentan con la
+      // cadencia del barrido (no en cada arranque) y volverán a empatar hasta
+      // que alguien apunte la plataforma que juega o exista el enlace manual
+      // de la ficha (RETROACHIEVEMENTS.md §5), que hoy NO existe: no hay ni un
+      // raGameId en el renderer ni en el ipc. Hasta entonces el hueco solo se
+      // ve aquí — el botón de la ficha devuelve false y parece un "este juego
+      // no tiene set".
+      const unresolved = resolved.filter((entry) => entry.tied.length > 0);
+      if (unresolved.length > 0) {
+        const consoleNames = new Map<number, string>(
+          consoles.map((entry) => [entry.id, entry.name]),
+        );
+        console.warn(
+          `[ra] ${unresolved.length} juego(s) sin emparejar por empate entre consolas de RA (mejor hueco que colgarles el set de otra consola): ` +
+            unresolved
+              .map((entry) => `"${entry.game.title}" -> ${describeTie(entry.tied, consoleNames)}`)
+              .join(' | '),
+        );
       }
     }
 
     // ── Nivel 3: catálogo de los emparejados que no lo tienen ────────────
     // (los recién emparejados de arriba, más los que quedaran a medias de
     // una pasada anterior).
+    //
+    // Sin filtrar por steamAppId a propósito: tener appid de Steam NO
+    // descalifica de RA — son fuentes distintas y un clásico puede tener las
+    // dos (puerto en Steam y set en RA), que es justo lo que ya hacen el
+    // "Sync now" de abajo y el refresco por juego. La cicatriz: aquí había un
+    // isNull(steamAppId) que saltaba precisamente a los recién emparejados
+    // con appid (Mega Man X, comprado en Steam y con set de SNES), y se
+    // quedaban con raGameId y sin catálogo hasta que otro camino los tocara,
+    // así que lo que veías dependía de quién hubiera corrido primero.
+    //
+    // Lo que sigue cojo y NO se arregla aquí — achievementsSyncedAt es UNA
+    // marca para DOS fuentes, y se pisan en las dos direcciones:
+    //
+    //   · Steam -> RA: a un juego cuyo catálogo de Steam ya llegó, este nivel
+    //     no le trae el de RA (la marca ya está puesta). Se lo traen el "Sync
+    //     now" o el botón de la ficha.
+    //   · RA -> Steam: al revés es peor, porque aquí sí se escribe. syncRaGame
+    //     estampa achievementsSyncedAt (ra/sync.ts) y la pasada automática de
+    //     Steam pide justo isNull(achievementsSyncedAt)
+    //     (db/queries/achievements/getPendingAchievementsGames.ts), así que un
+    //     juego con las dos fuentes queda fuera del backfill de catálogo de
+    //     Steam para siempre. En el arranque normal no muerde: index.ts lanza
+    //     la pasada de Steam antes y su cola ya se llevó su lista. Muerde
+    //     cuando Steam no llegó a encolarlo — sin API key todavía, fallo de
+    //     red o 429 en la cola, o el bail deliberado de steam/syncAchievements
+    //     para el juego que aún no ha salido (403). Ese bail existe justo para
+    //     que el próximo arranque lo vuelva a coger, y con un set de RA ya no
+    //     lo consigue: su comentario ("no estampar para que el arranque lo
+    //     vuelva a coger") es media verdad desde que este nivel existe. La
+    //     salida que le queda al usuario es "Sync now" o jugar el juego.
+    //
+    // El arreglo de verdad es una marca por fuente (o una columna `source` en
+    // achievements): schema y queries ajenas a este fichero.
     const pendingSync = await withDbAccess(async () =>
       getDb()
         .select({
@@ -215,7 +407,7 @@ export const runRaStartupPass = async (): Promise<void> => {
           heroUrl: gamesTable.heroUrl,
         })
         .from(gamesTable)
-        .where(and(isNull(gamesTable.achievementsSyncedAt), isNull(gamesTable.steamAppId))),
+        .where(isNull(gamesTable.achievementsSyncedAt)),
     );
     const toSync = pendingSync.filter(
       (game): game is typeof game & { raGameId: number } => game.raGameId !== null,
@@ -325,7 +517,21 @@ export const refreshRaForGame = async (
       for (const consoleId of consoleIds) {
         lists.set(consoleId, await getRaGameList(consoleId));
       }
-      raGameId = matchAgainstLists(game, lists, consoleIds);
+      const match = matchAgainstLists(game, lists, consoleIds);
+      if (match.kind === 'ambiguous') {
+        // Mismo desempate que el nivel 2. Si tampoco aquí desempata, hueco y
+        // aviso — con los ids pelados: no compensa una petición más de
+        // GetConsoleIDs por un juego suelto solo para redactarlo.
+        const played = await readPlayedPlatforms([gameId]);
+        raGameId = breakTieByPlayedPlatform(match.tied, played.get(gameId) ?? []);
+        if (raGameId === null) {
+          console.warn(
+            `[ra] "${game.title}" empata entre ${match.tied.length} consolas de RA (${describeTie(match.tied)}) - sin emparejar: mejor hueco que colgarle el set de otra consola`,
+          );
+        }
+      } else {
+        raGameId = match.kind === 'matched' ? match.raGameId : null;
+      }
       await withDbAccess(async () =>
         getDb()
           .update(gamesTable)

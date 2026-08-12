@@ -13,6 +13,14 @@ import { isMeasuredSession } from '../lib/sessionStats';
 // (para eso está el tooltip que aquí no existe), se lee el PATRÓN — dónde
 // hubo racha, dónde hubo sequía. Por eso viaja al modo TV con sus mismos
 // colores y su misma regla, solo que con celdas más grandes y sin hover.
+//
+// CICATRIZ: esa "misma regla" se perdió por el camino. Esta versión acumulaba
+// TODAS las sesiones sin mirar el rango, así que el denominador del color era
+// el mejor día de toda tu vida jugando: con un maratón de 12 h en 2026, la
+// portada de un 2019 cuyo día más fuerte fueron 3 h salía entera en el verde
+// más tenue, y la cabecera anunciaba "best day · 12h" para un año en el que
+// nadie jugó 12 h. Por eso el recorte al periodo PINTADO va antes de acumular
+// (SPEC-2 §8.3: el nivel es relativo al día más cargado de la ventana visible).
 
 const ROLLING_WEEKS = 52;
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'];
@@ -54,13 +62,29 @@ export const TvActivityHeatmap = ({
       Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (7 * 24 * 3600 * 1000)) + 1,
     );
 
+    // Un día CUENTA solo si de verdad se pinta, y esta es la única definición
+    // de "se pinta": la usan tanto la acumulación como el nivel de cada celda,
+    // para que el denominador del color no pueda volver a ser un día que no
+    // está en la rejilla. Alinear a lunes arrastra hasta 6 días del diciembre
+    // anterior, y el año en curso deja meses de futuro por delante: ninguno de
+    // los dos sale, así que ninguno de los dos manda en la escala.
+    const lastPaintedMs = Math.min(rangeEnd.getTime(), today.getTime());
+    const isPainted = (day: Date): boolean =>
+      day.getTime() >= rangeStart.getTime() &&
+      day.getTime() <= lastPaintedMs &&
+      (year === 'all' || day.getFullYear() === year);
+
     // Solo sesiones MEDIDAS y cerradas alimentan el color — igual que el
     // escritorio: una sesión abierta aún no ha "sumado" su día.
     const secondsByDay = new Map<number, number>();
     for (const session of sessions) {
       if (!isMeasuredSession(session) || session.endedAt === null) continue;
-      const dayMs = startOfDay(session.startedAt).getTime();
-      secondsByDay.set(dayMs, (secondsByDay.get(dayMs) ?? 0) + (session.durationSec ?? 0));
+      const day = startOfDay(session.startedAt);
+      if (!isPainted(day)) continue;
+      secondsByDay.set(
+        day.getTime(),
+        (secondsByDay.get(day.getTime()) ?? 0) + (session.durationSec ?? 0),
+      );
     }
     const maxSeconds = Math.max(0, ...secondsByDay.values());
     const levelFor = (seconds: number): number => {
@@ -93,10 +117,7 @@ export const TvActivityHeatmap = ({
       for (let day = 0; day < 7; day++) {
         const dayDate = addDays(weekStart, day);
         const dayMs = dayDate.getTime();
-        const inRange =
-          dayMs <= Math.min(rangeEnd.getTime(), today.getTime()) &&
-          (year === 'all' || dayDate.getFullYear() === year);
-        const level = inRange ? levelFor(secondsByDay.get(dayMs) ?? 0) : 0;
+        const level = isPainted(dayDate) ? levelFor(secondsByDay.get(dayMs) ?? 0) : 0;
         if (level > 0) played++;
         list.push({ level, key: dayMs });
       }

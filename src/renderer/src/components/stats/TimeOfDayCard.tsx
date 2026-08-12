@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatHours } from '../../lib/format';
+import { hasMeasuredDuration } from '../../lib/sessionStats';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 
@@ -7,6 +8,10 @@ type DaypartSession = {
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
+  // Hace falta para descartarlas: una fila manual con precisión de mes o año
+  // se guarda a las 00:00 del día 1, así que su "hora de arranque" es relleno
+  // — ver el filtro de abajo.
+  isManual: boolean;
 };
 
 type TimeOfDayCardProps = {
@@ -31,7 +36,13 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
 
   const seconds = DAYPARTS.map(() => 0);
   for (const session of sessions) {
-    if (session.endedAt === null) continue;
+    // Solo tiempo MEDIDO (SPEC 8.1 regla 1, hasMeasuredDuration cubre también
+    // las abiertas, que aún no tienen duración). Sin este filtro una fila
+    // manual con precisión de año metía sus 60h enteras en "Night" —la hora
+    // 00:00 del 1 de enero que se guarda cuando no hay hora— y la card
+    // declaraba "mostly night" contradiciendo a sus vecinas de la misma
+    // pantalla, que sí filtran.
+    if (!hasMeasuredDuration(session)) continue;
     const hour = session.startedAt.getHours();
     const index = DAYPARTS.findIndex((part) => hour >= part.fromHour && hour < part.toHour);
     if (index >= 0) seconds[index] += session.durationSec ?? 0;

@@ -18,6 +18,7 @@ import { useGame, useGames } from '../hooks/games';
 import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { useImageSrc } from '../hooks/useImageSrc';
+import { AMBER, BLUE, GREEN, VIOLET } from '../lib/colors';
 import { monthKey, startOfDayMs, yearsDesc } from '../lib/dateMath';
 import { formatDateOnly, formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
@@ -89,7 +90,7 @@ const ShareRing = ({ pct }: { pct: number }): React.JSX.Element => {
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#2fdc7e"
+        stroke={GREEN}
         strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={`${arc} ${circumference}`}
@@ -150,6 +151,18 @@ export const GameStats = ({
   const { longestSec: longestSessionSec, avgSec: avgSessionSec } = useMemo(
     () => sessionDurationStats(realSessions),
     [realSessions],
+  );
+  // Lo que come la vitrina de trofeos: SOLO tiempo medido (lib/sessionStats,
+  // la misma regla que el heatmap, las rachas y "When do you play it?"). Sin
+  // esto, "Log 50 tracked sessions" contaba filas manuales del modelo viejo
+  // y "Play a single session of 4 hours or more" se regalaba con una fila de
+  // 60h con precisión de año — que ni es una sentada ni tuvo hora. Las cards
+  // de arriba (SESSIONS, "Session records") siguen contándolas todas a
+  // propósito: ahí la pregunta es qué consta, no cómo juegas.
+  const measuredSessions = useMemo(() => realSessions.filter(hasMeasuredDuration), [realSessions]);
+  const longestMeasuredSessionSec = useMemo(
+    () => sessionDurationStats(measuredSessions).longestSec,
+    [measuredSessions],
   );
   // La racha más larga DE ESTE JUEGO, de todos los tiempos (aquí no hay
   // filtro de año — el del heatmap de abajo es solo suyo). Días con al menos
@@ -354,33 +367,38 @@ export const GameStats = ({
           className={`grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
           style={revealStyle(0)}
         >
-          {/* Valores animados (count-up): suben hasta el real al entrar. */}
+          {/* Valores animados (count-up): suben hasta el real al entrar. Los
+              acentos salen de lib/colors, no de hex sueltos: esta fila es un
+              clon de MetricsRow (SPEC 10.2 — verde tiempo, violeta ratios,
+              azul conteos, ámbar dinero) y con la paleta copiada a mano
+              cambiar el verde de la app dejaba una de las dos con el viejo. */}
           <MetricCard
             Icon={Clock}
             label="TOTAL HOURS"
             value={formatHours(animatedHours)}
-            accent="#2fdc7e"
+            accent={GREEN}
           />
           <MetricCard
             Icon={Gauge}
             label="COST / HOUR"
             value={game.costPerHour !== null ? formatMoney(animatedCost) : '—'}
-            accent="#7c86c8"
+            accent={VIOLET}
           />
           <MetricCard
             Icon={SessionsIcon}
             label="SESSIONS"
             // realSessions: las sesiones colgadas de las iteraciones del
-            // juego, las mismas que cuenta la vista de Sesiones — mismo
-            // número en las dos pantallas.
+            // juego, TODAS (también las manuales) — las mismas que cuenta la
+            // vista de Sesiones, mismo número en las dos pantallas. Los
+            // trofeos de más abajo sí filtran; ver measuredSessions.
             value={String(Math.round(animatedSessions))}
-            accent="#85a3d6"
+            accent={BLUE}
           />
           <MetricCard
             Icon={DollarSign}
             label="TOTAL SPENT"
             value={formatMoney(animatedSpent)}
-            accent="#e3b24a"
+            accent={AMBER}
           />
         </div>
 
@@ -482,9 +500,9 @@ export const GameStats = ({
           <GameBadges
             totalHours={game.totalHours}
             totalSpent={game.totalSpend}
-            longestSessionSec={longestSessionSec}
+            longestSessionSec={longestMeasuredSessionSec}
             longestStreakDays={longestDailyStreak}
-            sessionCount={realSessions.length}
+            sessionCount={measuredSessions.length}
             beaten={everBeaten}
             hltbCompletionist={game.hltbCompletionist}
             sessions={realSessions}

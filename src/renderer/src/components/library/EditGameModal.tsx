@@ -109,10 +109,34 @@ export const EditGameModal = ({
   const endless = useWatch({ control, name: 'endless' });
   const isEmulated = useWatch({ control, name: 'isEmulated' });
 
+  // Se resetea al ABRIR y al cambiar de juego, nunca en cada refetch. Antes
+  // el efecto dependía de la IDENTIDAD del objeto `game`: cualquier
+  // invalidación de ['games'] con el modal abierto (el propio "Remove
+  // playthrough", o el watcher al detectar un arranque de juego) devolvía un
+  // objeto nuevo y reescribía el formulario entero — título tecleado y
+  // playthroughs pendientes se perdían sin aviso (bug real). Mismo criterio
+  // que useResetOnOpen (ChangeCoverModal/EditNotesModal), pero en efecto y no
+  // durante el render: `reset` de react-hook-form avisa a los useWatch de los
+  // hijos, y llamarlo en render sería un setState sobre otro componente a
+  // media pasada.
+  //
+  // LA CONTRAPARTIDA, que es real y no está tapada: el formulario ya no se
+  // resincroniza con el servidor, así que un modal abierto mucho rato guarda
+  // contra una foto vieja. El caso concreto: saveExistingIteration compara
+  // `values.status` contra el `game` REFRESCADO, de modo que si el watcher
+  // detecta un arranque mientras el modal está abierto, previousStatus pasa a
+  // 'playing' y `values.status` se queda como estaba — y el guardado lo lee
+  // como "el usuario está corrigiendo el estado" y escribe en el log con el
+  // valor viejo. Se prefiere a perder lo tecleado, que era el bug de verdad.
+  // El apaño fino (reset(..., { keepDirtyValues: true })) hoy NO es seguro:
+  // media docena de campos se escriben con setValue() sin shouldDirty (el
+  // dropdown de estado, plataforma/formato/origen, las fechas…), así que
+  // react-hook-form los ve limpios y volvería a machacar justo lo elegido a
+  // mano — el mismo bug con otra cara. Pediría marcar esos setValue primero.
   useEffect(() => {
     if (open) reset(buildDefaults(game));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, game]);
+  }, [open, game.id]);
 
   const updateGame = useUpdateGame();
   const addIteration = useCreateIteration();
@@ -151,6 +175,8 @@ export const EditGameModal = ({
 
   const handleSave = async (): Promise<void> => {
     const values = getValues();
+    // Cuántos de los pendientes han entrado YA en la base — lo lee el catch.
+    let created = 0;
 
     // Cadena de mutaciones independientes: si una de en medio falla (p. ej.
     // una conversión a endless donde resetEndlessState ya confirmó y luego
@@ -181,12 +207,28 @@ export const EditGameModal = ({
       // Los pendientes se crean SIEMPRE (salvo endless, que no tiene
       // playthroughs discretos) y después de tocar el existente: el orden
       // importa porque cada 'started' nuevo puede auto-pausar al anterior.
+      // De uno en uno y llevando la cuenta porque la tanda NO es atómica: si
+      // el tercero de cinco revienta, los dos primeros ya están en la base.
+      // Eso antes lo tapaba de rebote el reset por identidad de `game` (la
+      // invalidación de ['games'] vaciaba el formulario entero); al quitarlo
+      // para no perder lo tecleado, un segundo Save volvía a crear los que ya
+      // existían -> playthroughs duplicados.
       if (!values.endless) {
-        await saveNewPlaythroughs(game, values, { addIteration, addStateEvent });
+        for (const pending of values.newPlaythroughs) {
+          await saveNewPlaythroughs(
+            game,
+            { ...values, newPlaythroughs: [pending] },
+            { addIteration, addStateEvent },
+          );
+          created += 1;
+        }
       }
 
       onOpenChange(false);
     } catch (error) {
+      // Los que sí entraron salen del formulario: el modal se queda abierto
+      // con el banner, y reintentar tiene que crear solo lo que falta.
+      if (created > 0) setValue('newPlaythroughs', values.newPlaythroughs.slice(created));
       console.error('[edit-game] fallo guardando cambios:', error);
     }
   };

@@ -4,8 +4,7 @@ import { and, isNotNull } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../../db';
 import { gamesTable } from '../../db/schema';
 import { existingEmuBases } from './locations';
-import { readEmuUnlocksForGame } from './readUnlocks';
-import { storeUnlocks } from '../syncAchievements';
+import { applyEmuUnlocksForGame } from '../syncAchievements';
 import { maybeCelebrateCompletion } from '../notifications/complete';
 import { enqueueAchievementToasts } from '../notifications/overlay';
 import { notifyAchievementsActivity } from '../notify';
@@ -32,10 +31,14 @@ const DEBOUNCE_MS = 900;
 
 let watchers: FSWatcher[] = [];
 let debounce: ReturnType<typeof setTimeout> | null = null;
-// true mientras flush() está en vuelo. Sin esto, un segundo flush del debounce
-// podía arrancar mientras el primero aún esperaba en la DB o en la red, y —vía
-// el snapshot no atómico de storeUnlocks— los dos daban el mismo logro por
-// "nuevo": doble toast y doble tarjeta del 100%.
+// true mientras flush() está en vuelo. Nació de una carrera: un segundo
+// vaciado arrancaba mientras el primero aún esperaba a la DB, los dos leían la
+// misma foto de "qué constaba ya desbloqueado" y los dos daban el mismo logro
+// por nuevo — doble toast y doble tarjeta del 100%. Esa carrera la cerró
+// después storeUnlocks, que hoy decide qué es nuevo DENTRO de la transacción
+// que inserta; el cerrojo se queda porque evita el trabajo repetido (releer
+// los mismos ficheros, reescribir las mismas filas) y porque es quien mantiene
+// ordenado el ir y venir de dirtyAppIds.
 let flushing = false;
 // Los appid tocados desde el último vaciado. Se acumulan a propósito: sacar
 // varios logros seguidos toca el mismo fichero varias veces, y lo que
@@ -87,31 +90,44 @@ const flush = async (): Promise<void> => {
       // logros se perdían hasta un sync manual completo. Ahora el que falla se
       // re-encola para el próximo debounce y los demás siguen.
       try {
-        const game = games.find((candidate) => candidate.steamAppId === appId);
+        // TODAS las filas con este appid, no la primera: el schema permite a
+        // propósito varias fichas de IGDB con el mismo appid (juego y edición,
+        // ver schema.ts), el select de arriba no lleva orderBy, y con un find()
+        // los logros acababan colgados de la fila que devolviera antes SQLite —
+        // podía ser la edición que NO estás jugando. runEmuUnlocksSweep ya se
+        // los da a todas, así que con find() el estado "en vivo" y el de
+        // después de reiniciar ni siquiera coincidían.
+        //
         // Un appid que no está en la biblioteca (o cuyo catálogo aún no se ha
         // traído): no hay dónde colgar sus logros. Se ignora en silencio.
-        if (!game) continue;
+        const matches = games.filter((candidate) => candidate.steamAppId === appId);
 
-        const emu = readEmuUnlocksForGame(appId, game.executablePath);
-        if (emu.unlocks.length === 0) continue;
+        for (const game of matches) {
+          // Una lectura por FILA y no una por appid (los dos formatos que viven
+          // junto al EXE dependen de executablePath, que es de la fila), por el
+          // mismo helper que usa el barrido del arranque: la regla estaba
+          // escrita dos veces y ya divergió una vez.
+          const { fresh } = await applyEmuUnlocksForGame(
+            { id: game.id, steamAppId: appId, executablePath: game.executablePath },
+            new Date(),
+          );
+          if (fresh.length === 0) continue;
 
-        const fresh = await storeUnlocks(game.id, 'emu', emu.unlocks, new Date());
-        if (fresh.length === 0) continue;
-
-        // Solo ASCII en los console.log, misma convencion que watcher/watcher.ts.
-        console.log(`[steam] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
-        enqueueAchievementToasts(
-          fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
-        );
-        // ¿Acaba de caer el último? El broche dorado del 100%.
-        maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
-        // Y que la ficha abierta se entere sin recargar nada.
-        notifyAchievementsActivity({
-          kind: 'synced',
-          gameId: game.id,
-          catalogCount: 0,
-          unlockedCount: fresh.length,
-        });
+          // Solo ASCII en los console.log, misma convencion que watcher/watcher.ts.
+          console.log(`[steam] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
+          enqueueAchievementToasts(
+            fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
+          );
+          // ¿Acaba de caer el último? El broche dorado del 100%.
+          maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
+          // Y que la ficha abierta se entere sin recargar nada.
+          notifyAchievementsActivity({
+            kind: 'synced',
+            gameId: game.id,
+            catalogCount: 0,
+            unlockedCount: fresh.length,
+          });
+        }
       } catch (error) {
         console.warn(
           `[steam] fallo leyendo logros en vivo del appid ${appId} (se reintenta):`,

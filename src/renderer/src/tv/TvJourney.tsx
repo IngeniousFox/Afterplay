@@ -730,9 +730,28 @@ export const TvJourney = (): React.JSX.Element => {
             </span>
             {/* EL AÑO EN NÚMEROS: las cifras que de verdad se leen desde el
                 sofá — lo que jugaste, cuántos juegos y cuántas veces te
-                sentaste. Salen de yearTotals, la MISMA función que usa la
-                pantalla de Stats de escritorio (lib/statsTotals), para que
-                nadie vea dos cifras distintas del mismo año. */}
+                sentaste.
+                Horas y juegos salen de las MISMAS JourneyEntry que se ven
+                debajo (Journey.tsx toma la misma decisión y por el mismo
+                motivo: así la cifra cuadra EXACTAMENTE con las carátulas de
+                este capítulo). Y ahí está la diferencia con Stats: una entrada
+                de playthrough cuelga TODAS sus horas del año de su lastAt —la
+                última señal de vida del tramo, sea una sesión o un evento del
+                log—, mientras que yearTotals (lib/statsTotals) reparte por la
+                fecha de CADA sesión... pero SOLO las horas trackeadas. Las
+                MANUALES las ancla al año del FIN del playthrough
+                (manualHoursAnchor), o sea el mismo criterio de familia que
+                usamos aquí y no un invento de esta pantalla — aunque tampoco
+                idéntico: el ancla mira el fin y lastAt la última señal, que en
+                un playthrough con sesiones después del Beaten caen en años
+                distintos. Un playthrough a caballo entre dos años da cifras
+                distintas en las dos pantallas, y es a propósito. Los endless
+                ni eso: journeyEntries los parte por MESES, así que cada entrada
+                trae solo lo de su mes.
+                Las sesiones se cuentan aparte y por su propia fecha, que es lo
+                único que tiene sentido para "veces que te sentaste", y solo las
+                CERRADAS (endedAt): la que está corriendo ahora mismo aún no ha
+                terminado de ser una. */}
             <div
               className={`flex flex-none flex-wrap items-baseline gap-x-[1.6em] gap-y-[0.2em] ${tvRevealClass}`}
               style={tvRevealStyle(2)}

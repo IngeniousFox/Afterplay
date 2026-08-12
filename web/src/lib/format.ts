@@ -109,6 +109,13 @@ export const humanizeSpan = (days: number): string => {
 // de días que no significa nada — un juego empezado y terminado en 2021 salía
 // como "less than a day". La unidad del resultado nunca puede ser más fina que
 // la más gruesa de las dos precisiones.
+//
+// La rama de días mide tramos REALES (los timestamps restados tal cual), igual
+// que dateMath.ts en el escritorio. Esta copia los truncaba a medianoche antes
+// de restar, y era el mismo playthrough contado de dos maneras: uno del 1 de
+// marzo a las 23:00 al 2 a la 01:00 (dos horas) decía "less than a day" en el
+// PC y "1 day" en el móvil. Ojo, relativeDay —aquí abajo— sí cuenta días de
+// calendario, pero eso es a propósito y responde a otra pregunta.
 export const humanizeSpanByPrecision = (
   from: number,
   to: number,
@@ -136,7 +143,7 @@ export const humanizeSpanByPrecision = (
     return months <= 0 ? 'Same month' : `${months} ${months === 1 ? 'month' : 'months'}`;
   }
 
-  return humanizeSpan(daysBetween(startOfDayMs(from), startOfDayMs(to)));
+  return humanizeSpan(daysBetween(from, to));
 };
 
 // Escala corta para "hace cuánto" en frases sueltas: redondear sin vergüenza,

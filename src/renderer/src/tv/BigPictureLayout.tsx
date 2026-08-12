@@ -22,7 +22,14 @@ import {
   useTvInputDevice,
   useTvPadBrand,
 } from './inputDevice';
-import type { HandlersRef, TvContextButton, TvHint, TvHintAction } from './tvInput';
+import type {
+  HandlersRef,
+  TvContextButton,
+  TvHint,
+  TvHintAction,
+  TvLegendRegistry,
+  TvLegendSlot,
+} from './tvInput';
 import { TvButtonsContext, TvLegendContext } from './tvInput';
 import { TvSessionPanel } from './TvSessionPanel';
 import { TvStartMenu } from './TvStartMenu';
@@ -258,15 +265,34 @@ const TvShell = (): React.JSX.Element => {
   // está abierto, y al cerrarse se RESTAURAN los de debajo (un slot único los
   // perdía para siempre — la pantalla nunca re-registra los suyos porque su
   // efecto no re-ejecuta).
-  const hintsStackRef = useRef<TvHint[][]>([]);
-  const registerHints = useCallback((hints: TvHint[]): (() => void) => {
-    hintsStackRef.current.push(hints);
-    setExtraHints(hints);
-    return () => {
-      hintsStackRef.current = hintsStackRef.current.filter((entry) => entry !== hints);
-      setExtraHints(hintsStackRef.current[hintsStackRef.current.length - 1] ?? []);
-    };
-  }, []);
+  //
+  // De HUECOS estables, no de arrays sueltos: cambiar de pistas ya no es
+  // salir y volver a entrar por arriba. Con el array a pelo, la leyenda de
+  // TvLibrary (que depende del dispositivo) se re-registraba al soltar el
+  // ratón con el OSK abierto y aterrizaba ENCIMA de la del teclado — el pie
+  // anunciaba botones que el velo del OSK se come. Ahora el contenido muta
+  // dentro del mismo hueco (refresh) y la posición en la pila solo la mueven
+  // montar y desmontar. El spread al pintar no es manía: el array del hueco
+  // se muta en sitio, y sin identidad nueva React no re-renderizaría.
+  const hintsStackRef = useRef<TvLegendSlot[]>([]);
+  const legendRegistry = useMemo<TvLegendRegistry>(
+    () => ({
+      register: (slot) => {
+        hintsStackRef.current.push(slot);
+        setExtraHints([...slot.hints]);
+        return () => {
+          hintsStackRef.current = hintsStackRef.current.filter((entry) => entry !== slot);
+          const top = hintsStackRef.current[hintsStackRef.current.length - 1];
+          setExtraHints(top ? [...top.hints] : []);
+        };
+      },
+      refresh: (slot) => {
+        const top = hintsStackRef.current[hintsStackRef.current.length - 1];
+        if (top === slot) setExtraHints([...slot.hints]);
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     const dispatchContextButton = (button: TvContextButton): boolean => {
@@ -478,7 +504,7 @@ const TvShell = (): React.JSX.Element => {
 
   return (
     <TvButtonsContext.Provider value={registerButtons}>
-      <TvLegendContext.Provider value={registerHints}>
+      <TvLegendContext.Provider value={legendRegistry}>
         <TvBackdropContext.Provider value={setBackdrop}>
           <div
             // Base #070908 y no el #0b0d0c del escritorio: la tele arranca

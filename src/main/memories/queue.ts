@@ -42,13 +42,25 @@ const queue = createClaimQueue<QueuedScope>({
     // Sin capítulo ya no hay nada que narrar (la actividad se borró entre
     // encolar y generar): no es un fallo, simplemente no toca.
     if (chapter && !chapter.soFar) {
-      await generateMemoryForChapter(chapter);
-      notifyMemoriesActivity({
-        kind: 'generated',
-        scopeType: item.scope.type,
-        scopeKey: scopeKeyOf(item.scope),
-        origin: item.origin,
-      });
+      // Solo se anuncia lo que se guardó de verdad. Un rechazo del modelo sale
+      // limpio y sin fila (generate.ts devuelve false), y avisar igual
+      // levantaba el toast de aterrizaje "Your June story is ready" hacia un
+      // Journey donde no había ningún panel que leer.
+      //
+      // El aviso es un booleano y TypeScript no obliga a nadie a mirarlo:
+      // volver a escribir aquí `await generateMemoryForChapter(chapter)` como
+      // sentencia suelta reintroduce el toast mentiroso sin que compile en
+      // rojo. Lo único que lo canta es el test "memories: un rechazo del
+      // modelo no anuncia 'generated'" de src/main/__tests__/queues.test.ts.
+      const written = await generateMemoryForChapter(chapter);
+      if (written) {
+        notifyMemoriesActivity({
+          kind: 'generated',
+          scopeType: item.scope.type,
+          scopeKey: scopeKeyOf(item.scope),
+          origin: item.origin,
+        });
+      }
     }
   },
   onProgress: (progress) => {

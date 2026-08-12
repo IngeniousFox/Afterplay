@@ -14,14 +14,19 @@ import type { Readable } from 'node:stream';
 // SDK, solo cambia el endpoint— pero SIN coste de egress, que es justo lo
 // que se paga al restaurar.
 //
-// Estructura de claves, indexada por igdbId porque ya es independiente de la
-// máquina y del título:
+// Estructura de claves. El igdbId va delante porque es lo único que
+// identifica al juego con independencia de la máquina y del título; el
+// machineId, detrás, porque cada PC es dueño de su propia carpeta (el porqué,
+// entero, en el comentario de gamePrefix — es la decisión central del módulo,
+// y la versión sin él estaba rota de raíz):
 //
-//   saves/<igdbId>/mapping.yaml            <- índice, se sobrescribe siempre
-//   saves/<igdbId>/backup-<timestamp>.zip  <- una clave por versión
+//   saves/<igdbId>/<machineId>/mapping.yaml            <- índice de ESA carpeta
+//   saves/<igdbId>/<machineId>/backup-<timestamp>.zip  <- una clave por versión
+//   machines/<machineId>.json                          <- quién es ese PC
 //
-// El bucket es un ESPEJO de la carpeta local de backups de ese juego: lo que
-// la retención de ludusavi se lleva en local, se borra también aquí.
+// El bucket es un ESPEJO de la carpeta local de backups de ese juego EN ESA
+// MÁQUINA: lo que la retención de ludusavi se lleva en local, se borra también
+// aquí — salvo lo que proteja el suelo de poda (pruneFloor en machine.ts).
 
 const R2_REGION = 'auto';
 
@@ -130,6 +135,18 @@ export const uploadFile = async (key: string, filePath: string): Promise<number>
     new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
   );
   return body.byteLength;
+};
+
+// Subir un texto que solo existe en memoria. Lo pide el mapping.yaml del
+// espejo: se sube FUSIONADO con el que ya hubiera arriba (orchestrator.ts), o
+// sea que lo que va al bucket no es el fichero local sino algo compuesto, y
+// escribirlo en disco para reusar uploadFile sería pisar el índice que
+// mantiene ludusavi.
+export const uploadText = async (key: string, body: string): Promise<void> => {
+  const { client, bucket } = requireClient();
+  await client.send(
+    new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
+  );
 };
 
 // Subir/leer un objeto JSON pequeño sin pasar por disco — el registro de

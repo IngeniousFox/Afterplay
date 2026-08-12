@@ -9,6 +9,7 @@ import type { UpdateGamePatch } from '../../shared/types';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { resolveSgdbId } from '../sgdb/api';
 import { adoptIgdbForGame } from './adoptIgdb';
+import { findSteamAppIdFix } from './steamAppIdFix';
 import { getSteamGameData } from './steamData';
 
 // "Actualízalo TODO" de UN juego — el botón de su ficha.
@@ -32,7 +33,9 @@ import { getSteamGameData } from './steamData';
 //  · Una sola escritura al final, con todo lo que se haya podido reunir.
 //  · Un "no" de una fuente NUNCA borra lo que ya había: si HLTB hoy no
 //    reconoce el juego, se conserva lo que sí encontró el día del alta. Un
-//    dato viejo vale más que ninguno.
+//    dato viejo vale más que ninguno. La única excepción está en el paso 3 y
+//    no es una excepción de verdad: cuando el appid se corrige, lo guardado
+//    de Steam era de OTRO producto, no un dato viejo de este juego.
 //  · Cada fuente se cae SOLA: que IGDB no conteste no puede llevarse por
 //    delante los logros ni las etiquetas. Por eso cada pata tiene su catch y
 //    su propio veredicto en el resultado — un refresco "a medias" es lo
@@ -118,7 +121,7 @@ export const refreshGameEverything = async (
   // ── 2. HowLongToBeat y el appid, a la vez ───────────────────────────────
   // Son independientes entre sí y los dos pueden tardar, así que se pagan en
   // paralelo en vez de en fila.
-  const [times, resolvedAppId] = await Promise.all([
+  const [times, resolvedAppId, appIdFix] = await Promise.all([
     getHltbTimes(detail?.title ?? game.title, detail?.releaseYear ?? game.releaseYear).catch(
       (error) => {
         console.warn('[refresh] HowLongToBeat no contesto (sigo sin sus tiempos):', error);
@@ -128,6 +131,13 @@ export const refreshGameEverything = async (
     // El appid solo se busca si NO lo tiene: teniéndolo, es identidad del
     // juego y no se re-resuelve por gusto. Sin el detalle de IGDB no hay con
     // qué buscarlo (hace falta su parent_game y su entrada directa).
+    //
+    // La excepción es un appid que apunta DONDE NO DEBE: a una beta cerrada
+    // —sin tienda, sin etiquetas y sin logros— o directamente a otro producto,
+    // y ninguno de los dos es la identidad de nada. Se comprueba contra las
+    // entradas de Steam de su propia ficha y se corrige solo en esos dos casos
+    // (external/steamAppIdFix.ts, que es de donde sale también el aviso por
+    // consola).
     game.steamAppId !== null || !detail
       ? Promise.resolve(undefined)
       : resolveAchievementsSteamAppId(
@@ -137,6 +147,13 @@ export const refreshGameEverything = async (
         ).catch((error) => {
           console.warn('[refresh] no se pudo resolver el appid de Steam:', error);
           return undefined;
+        }),
+    game.steamAppId === null || !detail
+      ? Promise.resolve(undefined)
+      : findSteamAppIdFix({
+          igdbId: detail.igdbId,
+          steamAppId: game.steamAppId,
+          title: game.title,
         }),
   ]);
 
@@ -148,6 +165,15 @@ export const refreshGameEverything = async (
     patch.hltbCompletionist = times.hltbCompletionist;
   }
 
+  // 'had-it' mira el appid con el que EMPEZÓ el refresco, así que un juego al
+  // que se le acaba de corregir (appIdFix, unas líneas más abajo) sale también
+  // por aquí. El dato para distinguirlo ya está resuelto y a mano; lo que
+  // falta es DÓNDE ponerlo: la unión de GameFullRefreshResult (igdb/types.ts)
+  // no tiene miembro para "lo tenía y era de otro juego", y estrenarlo sin la
+  // frase que lo cuente en el renderer (useRefreshGame.ts) cambia una etiqueta
+  // muda por otra — el toast cae igual al titular genérico. Hasta que entren
+  // los tres cambios a la vez, el único rastro del cambio de identidad es el
+  // aviso por consola del helper y lo que se escribe aquí debajo.
   const steam: GameFullRefreshResult['steam'] =
     game.steamAppId !== null
       ? 'had-it'
@@ -160,17 +186,39 @@ export const refreshGameEverything = async (
     patch.steamAppId = resolvedAppId;
     patch.steamAppIdCheckedAt = now;
   }
+  // El appid guardado no era el de este juego y su ficha tiene el bueno.
+  if (appIdFix !== undefined) {
+    patch.steamAppId = appIdFix;
+    patch.steamAppIdCheckedAt = now;
+  }
 
   // ── 3. Steam: etiquetas y reseñas ───────────────────────────────────────
-  // Con el appid que sea: el de siempre o el que acaba de aparecer — que sea
-  // nuevo es justo el caso en el que estas dos cosas llegan por primera vez.
-  const appId = game.steamAppId ?? (steam === 'found' ? resolvedAppId : null);
+  // Con el appid que sea: el de siempre, el corregido, o el que acaba de
+  // aparecer — que sea nuevo es justo el caso en el que estas dos cosas
+  // llegan por primera vez. El corregido va DELANTE del guardado: si no, se
+  // pedirían las etiquetas del juego equivocado, que es lo que se arregla.
+  const appId = appIdFix ?? game.steamAppId ?? (steam === 'found' ? resolvedAppId : null);
   let steamSpy: GameFullRefreshResult['steamSpy'] = 'skipped';
   if (appId) {
+    // Si el appid se ha CORREGIDO, lo guardado es de otro producto: a null
+    // ANTES de pedir nada, para que lo que Steam conteste lo pise y lo que no
+    // se quede vacío en vez de mentir. El caso real es el remake sin salir
+    // ("Trails in the Sky 2nd Chapter" llevaba el appid del original de 2015):
+    // su página existe, así que llegan etiquetas, pero aún no tiene ni una
+    // reseña — y sin esto la ficha seguía enseñando los tres mil votos del
+    // juego de 2015, ahora colgados del appid bueno. La regla de la casa ("un
+    // no externo no borra lo que había") protege un dato de ESTE juego que
+    // envejeció, y esos números nunca lo fueron.
+    if (appIdFix !== undefined) {
+      patch.steamTags = null;
+      patch.steamPositive = null;
+      patch.steamNegative = null;
+    }
     const data = await getSteamGameData(appId);
     // Las dos fuentes se tragan sus propios errores y devuelven null, así que
     // aquí "no hay dato" y "no contestó" son lo mismo — y en los dos casos se
-    // conserva lo que hubiera.
+    // conserva lo que hubiera, salvo el appid corregido de aquí arriba, donde
+    // "lo que hubiera" era de otro juego.
     steamSpy = data ? 'updated' : 'no-data';
     if (data) {
       Object.assign(patch, data);

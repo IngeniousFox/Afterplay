@@ -150,10 +150,19 @@ export const GameDetailScreen = (): React.JSX.Element => {
   // el `isPending` de abajo pintaba un spinner eterno, sin error ni salida.
   // Pasa de verdad — el fallback de SPA sirve la app para cualquier /game/*,
   // así que un enlace compartido a medias aterriza aquí.
+  //
+  // El texto lo escribe ErrorState a partir del `code`; este `message` no se
+  // pinta en ninguna pantalla y está en el idioma del resto de mensajes de
+  // desarrollo, para quien lo vea en una traza. La salida de esa pantalla es
+  // el enlace a la biblioteca, no un reintento: volver a montar esto con el
+  // mismo :id roto da exactamente lo mismo.
   if (!Number.isFinite(gameId)) {
-    return <ErrorState error={new ApiFailure('not_found', 'That game link is not valid.')} />;
+    return <ErrorState error={new ApiFailure('not_found', 'el :id de la URL no es un numero')} />;
   }
   if (game.isPending) return <Loading />;
+  // El reintento es para lo que se cura reintentando (red, 500). Un 404 —el
+  // /game/99999 que llega por la red— también entra por aquí, y ErrorState se
+  // encarga de no ofrecer el botón en ese caso.
   if (game.isError) return <ErrorState error={game.error} onRetry={() => game.refetch()} />;
 
   const detail = game.data;

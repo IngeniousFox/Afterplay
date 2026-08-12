@@ -35,6 +35,9 @@ export const queryKeys = {
     status: ['saves', 'status'] as const,
     legal: ['saves', 'legal'] as const,
     usage: ['saves', 'usage'] as const,
+    // Dentro del árbol a propósito, al revés que savesLibraryScan de abajo, y
+    // asumiendo el refetch de más que eso implica: el porqué (y el precio)
+    // está escrito entero en useLocalBackupsUsage.
     localUsage: ['saves', 'localUsage'] as const,
     identityNeeded: ['saves', 'identityNeeded'] as const,
     game: (gameId: number) => ['saves', 'game', gameId] as const,

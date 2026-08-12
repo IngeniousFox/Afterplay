@@ -1,6 +1,14 @@
 import { test, mock, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  existsSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { stringify } from 'yaml';
 
@@ -19,6 +27,14 @@ import { stringify } from 'yaml';
 //
 // Y sin R2 configurado, nada es reclamable ni se borra nunca — es la única
 // copia que existe.
+//
+// El quinto escenario no es de contabilidad sino de daños: el suelo de poda.
+// Vaciar esta carpeta le dice al espejo de R2 que esas versiones caducaron,
+// así que si el barrido borra algo y NO sella el suelo, el siguiente backup
+// de cada juego se lleva su historial de la nube por delante. Por eso se
+// cuentan las llamadas a setPruneFloor: tiene que haber exactamente una
+// cuando se libera algo, ninguna cuando no, y —lo caro— tiene que estar hecha
+// aunque el borrado reviente a mitad.
 
 const TMP_ROOT = join(__dirname, '.tmp-local-backups');
 
@@ -26,6 +42,7 @@ let machineId = 'machine-under-test';
 let r2Configured = true;
 let ownEntries: { ludusaviName: string; backupName: string; sizeBytes: number }[] = [];
 let knownNames: string[] = [];
+let pruneFloorCalls = 0;
 
 mock.module('../run', {
   namedExports: {
@@ -35,6 +52,12 @@ mock.module('../run', {
 mock.module('../machine', {
   namedExports: {
     getMachineId: () => machineId,
+    // El "suelo de poda": cleanLocalBackups lo sella antes de borrar copias
+    // que ya estan en la nube, para que el espejo no las de por caducadas
+    // arriba (machine.ts, pruneFloor).
+    setPruneFloor: () => {
+      pruneFloorCalls++;
+    },
   },
 });
 mock.module('../r2', {
@@ -94,6 +117,7 @@ beforeEach(() => {
   r2Configured = true;
   ownEntries = [];
   knownNames = [];
+  pruneFloorCalls = 0;
 });
 
 after(() => {
@@ -113,6 +137,7 @@ test('sin carpeta save-backups/, todo a cero y sin reventar', async () => {
   });
   const result = await cleanLocalBackups();
   assert.deepEqual(result, { files: 0, bytes: 0, folders: 0 });
+  assert.equal(pruneFloorCalls, 0); // no se ha liberado nada: nada que proteger
 });
 
 test('version sincronizada se borra, la version SIN subir se queda', async () => {
@@ -135,11 +160,40 @@ test('version sincronizada se borra, la version SIN subir se queda', async () =>
 
   const result = await cleanLocalBackups();
   assert.deepEqual(result, { files: 1, bytes: 1000, folders: 0 });
+  assert.equal(pruneFloorCalls, 1);
 
   const dir = join(TMP_ROOT, 'Alive Game');
   assert.equal(existsSync(join(dir, 'backup-20260101T000000Z-1.zip')), false);
   assert.equal(existsSync(join(dir, 'backup-20260102T000000Z-2.zip')), true);
   assert.equal(existsSync(join(dir, 'mapping.yaml')), true);
+});
+
+test('si el borrado revienta a mitad, el suelo de poda YA esta puesto', async () => {
+  writeGameFolder('Alive Game', 'Alive Game', [
+    { name: 'backup-20260101T000000Z-1.zip', bytes: 1000 }, // sincronizada
+    { name: 'backup-20260102T000000Z-2.zip', bytes: 500 }, // sin subir aun
+  ]);
+  knownNames = ['Alive Game'];
+  ownEntries = [
+    { ludusaviName: 'Alive Game', backupName: 'backup-20260101T000000Z-1.zip', sizeBytes: 1000 },
+  ];
+
+  // mapping.yaml de solo lectura: deleteLocalBackups borra el zip y revienta
+  // justo después, al reescribir el índice (service.ts -> mapping.ts). Es el
+  // EPERM/EBUSY de Windows —el antivirus o ludusavi con un fichero abierto—
+  // metido en la mitad exacta donde duele: con zips ya borrados.
+  const mappingPath = join(TMP_ROOT, 'Alive Game', 'mapping.yaml');
+  chmodSync(mappingPath, 0o444);
+  try {
+    await assert.rejects(cleanLocalBackups());
+    // Lo que importa: el zip ya no está, así que el espejo a R2 daría esa
+    // versión por caducada. Sin el suelo sellado ANTES del borrado, el
+    // siguiente backup del juego la borraría del bucket y del índice.
+    assert.equal(existsSync(join(TMP_ROOT, 'Alive Game', 'backup-20260101T000000Z-1.zip')), false);
+    assert.equal(pruneFloorCalls, 1);
+  } finally {
+    chmodSync(mappingPath, 0o644); // o el rmSync de la limpieza no puede con ella
+  }
 });
 
 test('un juego totalmente sincronizado desaparece entero (carpeta vacia se recoge sola)', async () => {
@@ -189,6 +243,8 @@ test('carpeta huerfana (nadie la reclama) se borra ENTERA aunque no tenga fila',
   const result = await cleanLocalBackups();
   assert.deepEqual(result, { files: 2, bytes: 777 + mapping, folders: 1 }); // zip + mapping.yaml
   assert.equal(existsSync(join(TMP_ROOT, 'Ghost Game')), false);
+  // Una huérfana también vacía la carpeta local: mismo suelo, mismo motivo.
+  assert.equal(pruneFloorCalls, 1);
 });
 
 test('mapping.yaml ilegible: cuenta en el total pero jamas se marca huerfana ni se toca', async () => {
@@ -208,6 +264,9 @@ test('mapping.yaml ilegible: cuenta en el total pero jamas se marca huerfana ni 
   const result = await cleanLocalBackups();
   assert.deepEqual(result, { files: 0, bytes: 0, folders: 0 });
   assert.equal(existsSync(dir), true); // intacta
+  // Nada borrado, nada que proteger: subir el suelo aquí solo dejaría basura
+  // sin podar en el bucket para siempre.
+  assert.equal(pruneFloorCalls, 0);
 });
 
 test('sin R2 configurado, nada es reclamable ni se borra — es la unica copia', async () => {
@@ -228,6 +287,7 @@ test('sin R2 configurado, nada es reclamable ni se borra — es la unica copia',
   assert.deepEqual(result, { files: 0, bytes: 0, folders: 0 });
   assert.equal(existsSync(join(TMP_ROOT, 'Alive Game')), true);
   assert.equal(existsSync(join(TMP_ROOT, 'Ghost Game')), true);
+  assert.equal(pruneFloorCalls, 0);
 });
 
 test('multiples juegos a la vez: cada uno se resuelve por su cuenta', async () => {

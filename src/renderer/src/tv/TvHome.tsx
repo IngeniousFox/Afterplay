@@ -543,11 +543,20 @@ export const TvHome = (): React.JSX.Element => {
 
   const shelfAutoFocusId = restoredFocusId ?? fallbackFocusId;
 
-  const openGame = (game: GameListItem): void => {
-    // El billete de vuelta: solo el viaje a la ficha guarda el sitio.
+  // El billete de vuelta: solo el viaje a la ficha guarda el sitio.
+  //
+  // `focusOnReturn` NO es "el juego que abres", es DÓNDE debe caer el foco al
+  // volver, y desde el hero tiene que ser null: el hero también sale abajo en
+  // YOUR LIBRARY y en RECENTLY FINISHED (`shelf` y `finished` no lo filtran,
+  // a diferencia de `playing` y `recent`). Guardando su id, hasRestoredTile
+  // salía true al volver, los botones del hero perdían su autoFocus y se lo
+  // llevaba esa carátula de abajo — y el glideIntoView del foco arrastraba el
+  // scroll hasta la estantería, pisando el scrollTop que el useLayoutEffect
+  // acababa de restaurar. Volvías a un sitio en el que nunca estuviste.
+  const openGame = (game: GameListItem, focusOnReturn: number | null = game.id): void => {
     rememberHome({
       scrollTop: scrollRef.current?.scrollTop ?? 0,
-      focusGameId: game.id,
+      focusGameId: focusOnReturn,
     });
     void navigate(`/tv/game/${game.id}`);
   };
@@ -854,7 +863,10 @@ export const TvHome = (): React.JSX.Element => {
                 <HeroButton
                   label="Details"
                   autoFocus={(!hero.executablePath || hero.isLive) && !hasRestoredTile}
-                  onSelect={() => openGame(hero)}
+                  // Saliste DEL HERO: al volver, el foco es de estos botones
+                  // (HomeSnapshot.focusGameId = null), no de la carátula del
+                  // hero repetida en las baldas de abajo.
+                  onSelect={() => openGame(hero, null)}
                   onFocusSpot={() => setSpotId(null)}
                 />
               </div>

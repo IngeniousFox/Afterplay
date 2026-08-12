@@ -1,6 +1,7 @@
 import { getDb } from '../..';
 import type { AchievementsOverview } from '../../../../shared/types';
 import { achievementsTable, achievementUnlocksTable, gamesTable } from '../../schema';
+import { mergeUnlocksByAchievement } from './mergeUnlocks';
 
 // La vista GLOBAL de los logros (LOGROS-IDEAS.md §3-4): la materia del
 // bloque de trofeos de Stats — salón de la fama, totales por año, muro de
@@ -72,28 +73,10 @@ export const getAchievementsOverview = async (
     })
     .from(achievementUnlocksTable);
 
-  // Fundido multi-fuente por logro — la MISMA regla que getGameAchievements:
-  // una fecha fiable gana a una que no lo es; empatadas, la más temprana.
-  const merged = new Map<number, { unlockedAt: Date; dateReliable: boolean }>();
-  for (const unlock of unlockRows) {
-    const existing = merged.get(unlock.achievementId);
-    if (!existing) {
-      merged.set(unlock.achievementId, {
-        unlockedAt: unlock.unlockedAt,
-        dateReliable: unlock.dateReliable,
-      });
-      continue;
-    }
-    if (unlock.dateReliable && !existing.dateReliable) {
-      existing.unlockedAt = unlock.unlockedAt;
-      existing.dateReliable = true;
-      continue;
-    }
-    if (!unlock.dateReliable && existing.dateReliable) continue;
-    if (unlock.unlockedAt.getTime() < existing.unlockedAt.getTime()) {
-      existing.unlockedAt = unlock.unlockedAt;
-    }
-  }
+  // Fundido multi-fuente por logro — la regla de la zona, ya no copiada aquí
+  // a mano sino en mergeUnlocks.ts, que es de donde la leen también las demás
+  // consultas de logros.
+  const merged = mergeUnlocksByAchievement(unlockRows);
 
   // ── Agregados por juego (completados / almost there) ────────────────────
   type PerGame = {
@@ -112,7 +95,7 @@ export const getAchievementsOverview = async (
       unlockDates: [],
     };
     entry.total++;
-    const unlock = merged.get(definition.id);
+    const unlock = merged.get(definition.id)?.winner;
     if (unlock) {
       entry.unlocked++;
       entry.unlockDates.push({ time: unlock.unlockedAt.getTime(), reliable: unlock.dateReliable });
@@ -183,7 +166,7 @@ export const getAchievementsOverview = async (
 
   // ── Los desbloqueados, con su definición (fama / años / rareza) ─────────
   const unlockedDefs = definitions.flatMap((definition) => {
-    const unlock = merged.get(definition.id);
+    const unlock = merged.get(definition.id)?.winner;
     return unlock ? [{ definition, unlock }] : [];
   });
 

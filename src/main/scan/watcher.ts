@@ -75,6 +75,11 @@ export class ScanWatcher {
   // mismo fichero de caché, así que nunca corren a la vez. Encadenar
   // promesas es todo el candado que hace falta estando en un solo proceso.
   private queue: Promise<unknown> = Promise.resolve();
+  // Lo que ya se ha mirado en la RONDA en curso (la cadena de ciclos de 15s
+  // que se reencadena mientras queden carpetas). Es lo que hace que el
+  // troceado AVANCE: ver el comentario del batch en runCycle(). Se vacía al
+  // terminar la ronda para que el siguiente barrido empiece de cero.
+  private readonly roundSeen = new Set<string>();
 
   constructor(onChange: () => void) {
     this.onChange = onChange;
@@ -99,6 +104,7 @@ export class ScanWatcher {
     this.debounceTimer = null;
     for (const watcher of this.watchers.values()) watcher.close();
     this.watchers.clear();
+    this.roundSeen.clear();
   }
 
   // Las raíces han cambiado en caliente (el usuario añadió o quitó una
@@ -168,8 +174,51 @@ export class ScanWatcher {
 
   private async reconcile(force: boolean): Promise<void> {
     const roots = getConfigValue('scanFolders');
-    if (roots.length === 0) return;
+    // Sin raíces no hay nada que mirar, pero sí hay una ronda que cerrar:
+    // salir dejando marcas en roundSeen hacía que, al volver a señalar una
+    // carpeta, sus carpetas salieran ya "vistas" — fresh a 0, ninguna cadena
+    // de 15s y el trabajo esperando al barrido de cinco minutos, que es justo
+    // la espera que rootsChanged() existe para evitar.
+    if (roots.length === 0) {
+      this.roundSeen.clear();
+      return;
+    }
 
+    // Lo que queda de ronda viaja en una caja mutable —igual que el
+    // presupuesto de executable.ts— para que el cierre del finally lo tenga
+    // aunque el ciclo reviente DESPUÉS de haberlo decidido.
+    const round = { leftover: 0 };
+    try {
+      await this.runCycle(roots, force, round);
+    } finally {
+      if (round.leftover > 0) {
+        // Quedan carpetas sin mirar EN ESTA RONDA: se sigue enseguida en vez
+        // de esperar cinco minutos por tanda. Con una biblioteca recién
+        // señalada, esa espera convertiría "unos segundos" en más de una
+        // hora. Va en el finally porque un ciclo que revienta a mitad dejaba
+        // el peor final posible: su tanda ya marcada en roundSeen y sin
+        // cadena que recogiera a las siguientes, o sea saltadas hasta que
+        // otra ronda terminara. Que la tanda que falló se quede marcada sí es
+        // deliberado: así el fallo no se reintenta en bucle cada 15s.
+        this.schedule(15_000);
+      } else {
+        // Ronda terminada (o el botón, que se lo lleva todo de una tacada).
+        // Olvidar lo mirado es lo que corta la cadena de 15s cuando ya no
+        // queda nada NUEVO —aunque media biblioteca siga "necesitada"— y lo
+        // que hace que el próximo barrido vuelva a empezar por el principio.
+        this.roundSeen.clear();
+      }
+    }
+  }
+
+  // Un ciclo: bajas, tanda de altas y aviso al renderer. Anota en `round`
+  // cuántas carpetas se quedan para el ciclo siguiente; quien decide qué
+  // hacer con eso es reconcile(), que lo hace pase lo que pase aquí dentro.
+  private async runCycle(
+    roots: string[],
+    force: boolean,
+    round: { leftover: number },
+  ): Promise<void> {
     // Reengancha raíces que hayan vuelto a aparecer (disco enchufado otra
     // vez) — barato y evita depender solo del evento que ya se perdió.
     this.bindRoots();
@@ -220,10 +269,26 @@ export class ScanWatcher {
     // "listo" sería mentirle. En segundo plano sí se trocea, porque ahí
     // nadie espera y lo que importa es no dar un tirón de disco y de cuota
     // de IGDB la primera vez que se señala una carpeta llena.
-    const batch = force ? pending : pending.slice(0, MAX_NEW_PER_CYCLE);
-    const leftover = pending.length - batch.length;
-    if (leftover > 0) {
-      console.log(`[scan] ${pending.length} carpetas por revisar; ${batch.length} en este ciclo`);
+    //
+    // El troceado avanza por RONDA, no por "sigue necesitada". `pending`
+    // conserva las carpetas que aún piden trabajo, y una carpeta sin .exe lo
+    // pide durante DOS HORAS por muchas veces que se la describa
+    // (needsDescribe, cache.ts): cortando siempre por las 25 primeras, una
+    // biblioteca de ROMs sin ejecutable volvía a recorrer en disco esas 25
+    // mismas carpetas cada 15 segundos mientras las de detrás no se miraban
+    // ni se cruzaban con IGDB una sola vez. `roundSeen` marca lo ya mirado en
+    // esta cadena de ciclos para que cada tanda coja las SIGUIENTES.
+    const fresh = pending.filter((ref) => !this.roundSeen.has(pathKey(ref.path)));
+    const batch = force ? pending : fresh.slice(0, MAX_NEW_PER_CYCLE);
+    round.leftover = force ? 0 : fresh.length - batch.length;
+    // El botón no se trocea por rondas —se lleva `pending` entero—, así que
+    // no hay nada que marcar: hacerlo llenaba el set con hasta 300 claves que
+    // el cierre de ronda borra al salir.
+    if (!force) {
+      for (const ref of batch) this.roundSeen.add(pathKey(ref.path));
+    }
+    if (round.leftover > 0) {
+      console.log(`[scan] ${fresh.length} carpetas por revisar; ${batch.length} en este ciclo`);
     }
 
     if (batch.length > 0) {
@@ -235,10 +300,6 @@ export class ScanWatcher {
     }
 
     if (changed) this.onChange();
-    // Quedan carpetas sin mirar: se sigue enseguida en vez de esperar cinco
-    // minutos por tanda. Con una biblioteca recién señalada, esa espera
-    // convertiría "unos segundos" en más de una hora.
-    if (leftover > 0) this.schedule(15_000);
   }
 
   private async scanBatch(refs: FolderRef[], force: boolean, now: number): Promise<CacheEntry[]> {

@@ -10,6 +10,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { hasMeasuredDuration } from '../../lib/sessionStats';
 import { floatingPanelClass } from '../../lib/styles';
 import { StatCard } from './StatCard';
 
@@ -17,13 +18,26 @@ type BadgeSession = {
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
+  // Hace falta para descartarlas: una fila manual con precisión de mes o año
+  // se guarda a las 00:00 del día 1, así que ni su hora ni su día de la
+  // semana existieron — ver el filtro del reparto de abajo.
+  isManual: boolean;
 };
 
 type GameBadgesProps = {
   totalHours: number;
   totalSpent: number;
+  // La sesión MEDIDA más larga, con el mismo predicado que todo lo demás de
+  // aquí: "a single session of 4 hours or more" habla de una sentada, y una
+  // fila manual de 60h con precisión de año no lo es. La card "Session
+  // records" de la misma pantalla sí las cuenta a propósito — ahí la
+  // pregunta es "cuál es la sesión más larga registrada", no "qué te
+  // tragaste de un tirón", así que los dos números pueden no coincidir.
   longestSessionSec: number;
   longestStreakDays: number;
+  // Sesiones MEDIDAS, contadas con el mismo predicado que el reparto de
+  // abajo (hasMeasuredDuration): el criterio del trofeo Regular dice
+  // literalmente "tracked sessions", así que una fila manual no cuenta.
   sessionCount: number;
   // ¿Tiene al menos un Completed en su historial? (no el estado actual —
   // un Beaten rejugado y ahora Playing sigue teniendo el logro).
@@ -58,13 +72,17 @@ export const GameBadges = ({
   sessions,
 }: GameBadgesProps): React.JSX.Element => {
   // Reparto de segundos jugados por franja de arranque de la sesión — para
-  // Night Owl y Weekend Warrior. Solo cerradas (las abiertas no tienen
-  // duración aún).
+  // Night Owl y Weekend Warrior. Solo tiempo MEDIDO (SPEC 8.1 regla 1;
+  // hasMeasuredDuration descarta además las abiertas, que no tienen duración
+  // aún). Sin el filtro de manuales, una fila histórica con precisión de año
+  // regalaba los dos trofeos desde su 1 de enero a las 00:00 —domingo y
+  // madrugada de relleno— mientras "When do you play it?", que sí filtra y
+  // recibe el MISMO array, no pintaba ni un segundo ese domingo.
   let totalSec = 0;
   let nightSec = 0;
   let weekendSec = 0;
   for (const session of sessions) {
-    if (session.endedAt === null) continue;
+    if (!hasMeasuredDuration(session)) continue;
     const seconds = session.durationSec ?? 0;
     totalSec += seconds;
     const hour = session.startedAt.getHours();

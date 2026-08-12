@@ -174,10 +174,16 @@ export type StatsSummary = {
   hoursThisYear: number;
   gamesThisYear: number;
   year: number;
-  // Reparto por estado actual, para la fila de cifras de la portada.
+  // Reparto por estado actual, para la fila de cifras de la portada. Están los
+  // CINCO estados más el "sin estado", así que la suma es exactamente
+  // totalGames: la portada los tenía que deducir por resta (todo lo que no era
+  // beaten/playing/dropped/unplayed caía en un tramo "On Hold + Resting" a
+  // ojo), y una resta no sabe partir ese tramo en dos.
   beaten: number;
   playing: number;
   dropped: number;
+  onHold: number;
+  resting: number;
   unplayed: number;
   // La sesión abierta ahora mismo, si la hay: es lo que hace que la portada
   // valga la pena mirar desde el sofá (§2.1 — una fila con endedAt a null se

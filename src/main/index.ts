@@ -37,7 +37,7 @@ import {
 } from './steam/backfill';
 import { setAchievementsNotifier } from './steam/notify';
 import { setImagesNotifier } from './images/maintenance';
-import { destroyOverlay, handleOverlayActiveGames } from './overlay';
+import { destroyOverlay, handleOverlayActiveGames, sendToOverlay } from './overlay';
 import { closeAchievementOverlay } from './steam/notifications/overlay';
 import { startEmuWatcher, stopEmuWatcher } from './steam/emu/watcher';
 import { startSteamLivePoll, stopSteamLivePoll } from './steam/livePoll';
@@ -130,6 +130,24 @@ registerImageProtocolScheme();
 // base de datos de lo que solo era "ya estabas abierta". La segunda
 // instancia ahora es un mensajero: entrega sus argv a la primera por
 // 'second-instance' y se va en milisegundos, sin ventana ni DB.
+//
+// El candado se toma a nivel de módulo, así que el mensaje puede llegar ANTES
+// de que exista la ventana: whenReady se pasa segundos dentro de
+// initCredentials + runMigrations (con la base de Turso dormida es justo la
+// espera larga y visible por la que existe el splash — y por tanto justo el
+// hueco en el que a uno le da por hacer doble clic otra vez). Ahí no hay
+// ventana NI handlers IPC, así que la petición se APARCA en vez de
+// atenderse.
+// Atenderla ahí fabricaba una ventana principal que cargaba la SPA antes de
+// registerIpcHandlers() —todos sus invoke rechazando con "No handler
+// registered for 'games:getAll'"— y que se quedaba huérfana pero visible en
+// cuanto el final del arranque creaba la de verdad: imposible de cerrar (su
+// 'close' solo la esconde a la bandeja), con dos trackWindowState peleándose
+// por guardar los bounds, y si la cerrabas su 'closed' ponía mainWindow a
+// null aunque la buena siguiera viva.
+let startupFinished = false;
+let pendingWindowRequest: 'show' | 'bigpicture' | null = null;
+
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) {
   app.quit();
@@ -138,7 +156,17 @@ if (!isPrimaryInstance) {
     // El caso Moonlight (BIG-PICTURE.md §2): `Afterplay.exe --bigpicture`
     // con la app ya corriendo = la primera instancia se pone en modo TV.
     // Sin el argumento, el clásico "doble clic": traerla delante y ya.
-    if (argv.includes('--bigpicture')) {
+    const wantsBigPicture = argv.includes('--bigpicture');
+    if (!startupFinished) {
+      // El modo TV gana sobre un "tráela delante" posterior: si Moonlight
+      // pidió pantalla, el doble clic impaciente de después no debe degradar
+      // la petición a ventana normal.
+      if (wantsBigPicture) pendingWindowRequest = 'bigpicture';
+      else if (pendingWindowRequest === null) pendingWindowRequest = 'show';
+      console.log('[startup] peticion de segunda instancia aparcada hasta que exista la ventana');
+      return;
+    }
+    if (wantsBigPicture) {
       enterBigPicture();
     } else {
       showMainWindow();
@@ -147,12 +175,24 @@ if (!isPrimaryInstance) {
 }
 
 function createWindow(): void {
+  // La ventana principal es ÚNICA: con una viva delante esto no crea otra.
+  // Reasignar mainWindow dejaba la anterior huérfana pero visible, con todos
+  // los estropicios que cuenta el comentario del candado de instancia única.
+  // Los otros dos caminos que llaman aquí ya preguntan antes ('activate' solo
+  // si no queda ninguna ventana, showMainWindow solo si mainWindow es null),
+  // pero el invariante se defiende en el sitio donde se rompe.
+  if (mainWindow && !mainWindow.isDestroyed()) return;
+
   // Si Windows/macOS arrancó la app sola por el login item, no se enseña la
   // ventana — arranca directa a la bandeja (SPEC 3E). Ver lib/loginItem.ts
   // para el porqué esto no es tan simple como parece en Windows.
   // `--bigpicture` GANA sobre el arranque oculto (BIG-PICTURE.md §2): si
-  // pediste el modo TV, lo que quieres es pantalla, no bandeja.
-  const wasOpenedAtLogin = wasOpenedHiddenAtLogin() && !bigPictureMode;
+  // pediste el modo TV, lo que quieres es pantalla, no bandeja. Y una
+  // petición de segunda instancia aparcada durante el arranque gana igual:
+  // alguien acaba de pedir la ventana a mano, esconderla en la bandeja es lo
+  // contrario de lo que ha pedido.
+  const wasOpenedAtLogin =
+    wasOpenedHiddenAtLogin() && !bigPictureMode && pendingWindowRequest === null;
 
   // Mismo tamaño/posición que tenía al cerrarla la última vez (o el de
   // siempre si es la primera vez, o si el monitor de entonces ya no está
@@ -377,6 +417,7 @@ function toggleBigPicture(): void {
 onSyncCompleted(async () => {
   await runPlanMailboxDrain(() => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('games:changed');
+    sendToOverlay('games:changed');
   });
 });
 
@@ -484,7 +525,20 @@ app.whenReady().then(async () => {
     app.quit();
   });
 
+  // Lo que pidió una segunda instancia mientras se migraba (ver
+  // pendingWindowRequest) se aplica sobre la ventana BUENA, no sobre una
+  // propia. El modo TV se resuelve ANTES de crearla para que nazca ya a
+  // pantalla completa: así el camino queda idéntico al del arranque en frío
+  // con --bigpicture (el renderer pregunta por bigpicture:get al montar, así
+  // que no hay que avisarle de nada aparte).
+  if (pendingWindowRequest === 'bigpicture') bigPictureMode = true;
+
   createWindow();
+
+  // Desde aquí ya hay ventana Y handlers IPC: 'second-instance' vuelve a
+  // atenderse en el acto en vez de aparcarse.
+  startupFinished = true;
+  pendingWindowRequest = null;
 
   // Bandeja del sistema (SPEC 3E): icono persistente con "Open"/"Quit" — la
   // app sigue vigilando procesos aunque la ventana esté oculta, y solo se
@@ -509,12 +563,30 @@ app.whenReady().then(async () => {
     () => mainWindow,
     (titles) => {
       if (tray) setTrayActiveGames(tray, titles);
-      // El overlay in-game vive y muere con las sesiones (OVERLAY.md §5.7):
-      // con juego vivo registra su atajo, escucha el mando y PRECALIENTA su
-      // ventana; al cerrarse la última sesión lo suelta todo. Este callback
+      // El overlay in-game vive y muere con los JUEGOS en marcha (OVERLAY.md
+      // §5.7): con uno vivo registra su atajo, escucha el mando y PRECALIENTA
+      // su ventana; al cerrarse el último lo suelta todo. Este callback
       // dispara en arranque, cierre Y adopción de sesiones — las dos ramas
       // por las que puede empezar una.
-      handleOverlayActiveGames(titles.length);
+      //
+      // Juegos, y no `titles.length`, que es lo que había aquí: esos títulos
+      // son los de la BANDEJA e incluyen los emuladores (claves "emu:N"), y
+      // el HUD no sabe pintar uno. Una sesión de emulador sin asignar nace
+      // con iterationId null, así que getGames la tira en su innerJoin con
+      // iterations y ningún juego queda isLive: con RetroArch en marcha y
+      // ningún juego nativo, el atajo global quedaba registrado y pulsarlo
+      // enseñaba una ventana transparente del tamaño del monitor con CERO
+      // píxeles pintados — le robaba el foco al emulador (muchos se pausan al
+      // perderlo) y se comía todos los clics, ni siquiera el clic al fondo la
+      // cerraba porque el div que lo escucha no llega a montarse.
+      //
+      // El precio, que no es cero: una sesión de emulador YA asignada a un
+      // juego (la bandeja Pending deja asignarlas en caliente) sí tendría
+      // contenido que pintar, y tampoco arma el overlay. Desde aquí no hay
+      // forma de distinguirlas — el callback solo trae títulos y
+      // getActiveGameIds() solo mira las claves "game:". El `?? 0` es
+      // inalcanzable: quien llama es el propio watcher.
+      handleOverlayActiveGames(watcher?.getActiveGameIds().length ?? 0);
     },
   );
   watcher.start();
@@ -547,10 +619,17 @@ app.whenReady().then(async () => {
   });
   // Logros (LOGROS.md): mismo canal de progreso que las curiosidades y los
   // recaps — la ficha abierta y la tarjeta de Ajustes se refrescan solas.
+  //
+  // Y TAMBIÉN al HUD, que es justo la ventana donde más se nota: los logros
+  // caen MIENTRAS juegas, y el HUD se abre encima del juego para verlos. Sin
+  // esta segunda línea el catálogo del HUD se quedaba en la foto del momento
+  // en que empezaste a jugar — la tarjeta cantaba el desbloqueo y el HUD
+  // seguía enseñándolo bloqueado hasta reiniciar la app.
   setAchievementsNotifier((event) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('achievements:activity', event);
     }
+    sendToOverlay('achievements:activity', event);
   });
   // Datos externos (PLAN-TO-PLAY.md §5): la parte de las reseñas va a ~2
   // petición por segundo, así que una pasada dura minutos — más de lo que
@@ -653,12 +732,22 @@ app.whenReady().then(async () => {
   setScanWatcher(scanWatcher);
   scanWatcher.start();
 
-  // Bloque 3G — bloquear/suspender el PC no es tiempo jugado, siga el
-  // proceso vivo detrás o no. 'lock-screen'/'resume' son Windows (Win+L,
-  // pantalla de bloqueo); 'suspend'/'resume' cubren además Mac/Linux y el
-  // suspendido real de Windows. Los cuatro apuntan a pause()/resume(), que ya
-  // son idempotentes (no pasa nada si se disparan los dos a la vez, ej. al
-  // cerrar la tapa del portátil).
+  // Bloque 3G / SPEC-2.md §7.2 — bloquear o suspender el PC no es tiempo
+  // jugado, siga el proceso vivo detrás o no. 'lock-screen'/'unlock-screen'
+  // son el bloqueo de pantalla (Win+L y su equivalente en macOS);
+  // 'suspend'/'resume' cubren además el suspendido real y Linux.
+  //
+  // Los cuatro llaman a pause()/resume() sin decir de parte de quién, y aquí
+  // no se decide nada más porque aquí no se puede saber. Que sean
+  // idempotentes NO basta —es justo lo que este comentario prometía, y era
+  // falso—: las dos causas comparten un único booleano en el watcher, no se
+  // llevan cuenta (la segunda pause() sale de vacío), así que con un bloqueo
+  // Y una suspensión encima bastaba un aviso de vuelta para deshacerlo todo.
+  // Y al despertar con contraseña Windows manda
+  // 'resume' ANTES que 'unlock-screen', con lo que todo el rato que tardaras
+  // en teclearla se contaba como jugado. Ahora resume() solo PIDE la vuelta;
+  // quien decide es el sondeo del watcher, preguntándole al sistema si la
+  // pantalla sigue bloqueada (isScreenLocked, en watcher/watcher.ts).
   powerMonitor.on('suspend', () => watcher?.pause());
   powerMonitor.on('lock-screen', () => watcher?.pause());
   powerMonitor.on('resume', () => watcher?.resume());
@@ -703,6 +792,16 @@ app.whenReady().then(async () => {
     // RetroAchievements (RETROACHIEVEMENTS.md): emparejado + catálogos de lo
     // emulado retro, y su sondeo en vivo — que solo pregunta mientras el
     // watcher vea un emulador corriendo.
+    //
+    // Después de la pasada de Steam, y ese orden sostiene algo: la marca
+    // achievementsSyncedAt es UNA sola para las dos fuentes, así que
+    // sincronizar por RA un juego que además está en Steam la estampa igual y
+    // lo saca de la lista de catálogos pendientes de Steam hasta un "Sync
+    // now" (getPendingAchievementsGames filtra por
+    // isNull(achievementsSyncedAt)). Hoy no muerde porque la pasada de Steam
+    // ya eligió su lista antes —entre las dos hay el await del barrido de
+    // emuladores—, pero es una carrera ganada por margen, no una garantía:
+    // adelantar esta línea deja juegos sin catálogo sin que nada lo cante.
     void runRaStartupPass();
     startRaLivePoll(() => watcher?.hasActiveEmulator() ?? false);
     // Y el gemelo para Steam: los logros del juego que estés jugando AHORA,

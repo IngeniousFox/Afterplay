@@ -76,6 +76,13 @@ import type {
 const humanizeShortcut = (accelerator: string): string =>
   accelerator.replaceAll('CommandOrControl', 'Ctrl').replaceAll('+', ' + ');
 
+// Los segundos de una sesión viva, con la MISMA cuenta que useLiveTimer
+// (useLiveTimer.ts:18) pero leyendo el reloj EN EL RENDER, en vez de un `now`
+// que solo mueve un intervalo. De aquí sale el elapsed de toda la pantalla, no
+// solo el de un caso raro: ver el telón, más abajo.
+const secondsSince = (since: Date | null): number =>
+  since === null ? 0 : Math.max(0, (Date.now() - since.getTime()) / 1000);
+
 // Los tres tiempos del telón: abierto, fundiéndose, y fuera del DOM (con la
 // ventana ya oculta no queda nada montado — Regla 1: oculto, coste cero).
 type Phase = 'hidden' | 'open' | 'closing';
@@ -113,6 +120,22 @@ const TIER_COLOR: Record<TierKey, string> = {
   extra: HLTB_EXTRA,
   completionist: HLTB_COMPLETIONIST,
 };
+// Los tramos se ACUMULAN: quien ha superado el de "+ Extra" se pasó la
+// historia principal por el camino. El encendido de los tiles era excluyente
+// aquí (reached={reachedTier === key}) y acumulativo en la ficha
+// (HowLongToBeatCard.tsx:399 y 409): con 45h sobre main=26h/extra=40h, la
+// ficha encendía MAIN y + EXTRA y este HUD enseñaba "Main Story" apagado —
+// o sea, decía que NO te habías pasado la historia justo cuando la ficha
+// decía que sí, con los mismos números delante. La regla vive aquí en una
+// función para que no vuelva a copiarse a mano distinta.
+// De la ficha se hereda TAMBIÉN su rareza, y queda dicha: si el tramo de
+// arriba está alcanzado, uno sin dato (threshold 0, que se pinta '—') sale
+// encendido con su check. La card hace exactamente eso (reached={reachedTier
+// !== null}), y aquí manda la paridad — que las dos pantallas digan lo mismo
+// vale más que limarlo en una sola y volver a tener dos reglas.
+const TIER_ORDER: TierKey[] = ['main', 'extra', 'completionist'];
+const tierReached = (reachedTier: TierKey | null, key: TierKey): boolean =>
+  reachedTier !== null && TIER_ORDER.indexOf(reachedTier) >= TIER_ORDER.indexOf(key);
 
 // El chip de icono de las cabeceras — idéntico al de PlanSectionHeading.
 const SectionIcon = ({
@@ -156,7 +179,8 @@ const MomentChip = ({
 );
 
 // El tile de un tramo — adaptación directa del TierTile de la card: el
-// alcanzado se enciende con su check, el del ratón se realza y atenúa al resto.
+// alcanzado se enciende con su check (y con él todos los de debajo, ver
+// tierReached), el del ratón se realza y atenúa al resto.
 const TierTile = ({
   tierKey,
   value,
@@ -359,7 +383,7 @@ const HltbPanel = ({
               key={key}
               tierKey={key}
               value={threshold > 0 ? formatHours(threshold) : '—'}
-              reached={reachedTier === key}
+              reached={tierReached(reachedTier, key)}
               hovered={hoveredTier === key}
               dimmed={hoveredTier !== null && hoveredTier !== key}
               onHover={setHoveredTier}
@@ -546,8 +570,34 @@ const SessionRow = ({
 
         {/* El diario de ESTA sesión, editable aquí igual que en la ficha —
             no solo la de ahora mismo (esa la cubre el panel "Where are you?"
-            grande de al lado): cualquier sesión pasada de este juego. */}
-        <SessionNote sessionId={session.id} note={session.note} />
+            grande de al lado): cualquier sesión pasada de este juego.
+
+            key con la propia nota, y no es decorativo: SessionNote inicializa
+            su borrador UNA vez con useState(note ?? '') y no vuelve a
+            sincronizarlo con el prop nunca. Aquí —único sitio de la app donde
+            DOS editores de la MISMA nota conviven en pantalla: este y el
+            panel grande, porque la fila viva ES openSession— escribías la
+            nota arriba, pulsabas el lapicero de la fila para releerla y el
+            input se abría VACÍO (el '' del montaje); confirmar con Enter
+            mandaba note:'' y BORRABA lo que acababas de escribir. Cambiar la
+            nota cambia la key, así que el editor se remonta leyendo el valor
+            de verdad.
+
+            El precio, que no es gratis: remontar por VALOR también tira un
+            borrador a medias. Si abres el lapicero de esta fila, escribes SIN
+            confirmar y la nota cambia por fuera —guardando desde el panel
+            grande de al lado, o por el push del watcher cuando la escribe la
+            ventana principal—, la key cambia, el editor se remonta y tu texto a
+            medio escribir desaparece con él. Es estrecho (hay que abandonar el
+            editor abierto para ir a guardar arriba) y se acepta a sabiendas:
+            perder cuatro palabras a medias duele menos que mandar note:'' y
+            BORRAR la nota entera, que es lo que pasaba antes.
+
+            El arreglo de fondo —que el borrador arranque del prop al ABRIR el
+            editor, dentro de SessionNote, que curaría esto y además cubriría a
+            la ficha del juego— NO está hecho: ese fichero es de otra zona. Esta
+            key es una tirita local al overlay, no la cura. */}
+        <SessionNote key={session.note ?? ''} sessionId={session.id} note={session.note} />
       </div>
       <div className="relative z-1 flex flex-none items-center gap-1.5">
         {isRecord && <Flame size={13} color="#e85d72" />}
@@ -596,6 +646,49 @@ export const OverlayHud = (): React.JSX.Element | null => {
       }),
     [queryClient],
   );
+
+  // Y el aviso de LOGROS, que es el que de verdad importa aquí: los
+  // desbloqueos caen MIENTRAS juegas, y el de arriba solo se emite al abrir o
+  // cerrar una sesión. Sin esta suscripción el catálogo se quedaba en la foto
+  // del arranque de la partida — la tarjeta flotante cantaba el logro y este
+  // panel seguía enseñándolo bloqueado hasta reiniciar la app, porque las
+  // queries de logros son staleTime Infinity y nadie las invalidaba.
+  //
+  // Es el mismo useAchievementsActivitySync de la ventana principal, montado
+  // a mano: aquel vive en la raíz de la app (Afterplay.tsx), un árbol que
+  // esta ventana no comparte.
+  // Solo 'synced', que es el único que significa "hay datos nuevos". Los
+  // 'progress' son la barra de la tarjeta de Ajustes, que aquí no se pinta:
+  // atenderlos sería recargar el catálogo 300 veces durante una pasada
+  // completa para no cambiar nada.
+  useEffect(
+    () =>
+      window.api.achievements.onActivity((event) => {
+        if (event.kind !== 'synced') return;
+        void queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+      }),
+    [queryClient],
+  );
+
+  // Y los AJUSTES, que aquí llegaban una vez y se quedaban fósiles: sus dos
+  // queries van a staleTime Infinity, pero quien las escribe es la OTRA
+  // ventana — useSetOverlayShortcut hace setQueryData en el caché de quien
+  // pulsa, y hacia el overlay no viaja ningún aviso (el main solo re-registra
+  // el acelerador). Y esta ventana no se recrea: se precalienta al arrancar
+  // la sesión y vive hasta que el juego muere, así que la foto vieja duraba
+  // HORAS. Cambiabas el atajo a mitad de partida porque chocaba con una tecla
+  // del juego y el pie del HUD seguía anunciando la única combinación que ya
+  // NO lo abre; igual con el reloj, con las horas del historial y la
+  // marquesina clavadas en 24h el resto de la partida.
+  // Se vuelve a preguntar en CADA apertura del telón — mismo criterio que
+  // useOverlayShortcutStatus, que refresca al abrir Ajustes porque su valor
+  // también cambia por fuera de las mutations. Son dos lecturas diminutas
+  // contra un gesto que el usuario hace a mano.
+  useEffect(() => {
+    if (phase !== 'open') return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.settings.overlayShortcut });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.settings.timeFormat });
+  }, [phase, openCount, queryClient]);
 
   // El espejo del estado del main, patrón get()+onChange de la casa (ver la
   // cabecera): se escucha Y se pregunta, descartando la foto inicial si el
@@ -679,6 +772,23 @@ export const OverlayHud = (): React.JSX.Element | null => {
       ),
     [gameSessions],
   );
+  // La última vez ANTES de esta: el fin más reciente de las CERRADAS.
+  // live.lastPlayedAt no sirve aquí: getGames lo alimenta también con la
+  // sesión ABIERTA, así que con el juego en marcha siempre decía "less than a
+  // day ago" — la fecha era la de la partida que tienes delante. Y "first
+  // time here" era literalmente inalcanzable: se estrenaba justo cuando el
+  // overlay puede abrirse por primera vez, jugando.
+  const previousEndedAt = useMemo(
+    () =>
+      gameSessions.reduce<Date | null>(
+        (latest, s) =>
+          s.endedAt !== null && (latest === null || s.endedAt.getTime() > latest.getTime())
+            ? s.endedAt
+            : latest,
+        null,
+      ),
+    [gameSessions],
+  );
   // Los logros de CADA sesión, indexados por sessionId. El cruce lo hace el
   // main (cada desbloqueo lleva su sessionId); aquí solo se agrupa, igual
   // que en la pantalla de Sesiones y el historial de la ficha.
@@ -691,9 +801,34 @@ export const OverlayHud = (): React.JSX.Element | null => {
     }
     return map;
   }, [sessionUnlocks]);
-  // Con el telón cerrándose (u oculto) el tick se para (§9.1). El mismo tick
-  // mueve el contador y refresca el reloj: cero timers de más.
-  const elapsed = useLiveTimer(phase === 'open' && live ? live.liveSince : null);
+  // Del hook se quiere SOLO el tick: con el telón cerrándose (u oculto) su
+  // intervalo se para (§9.1), y abierto, ese re-render por segundo es el que
+  // mueve el contador y refresca el reloj de la marquesina — cero timers de
+  // más. Lo que se DESCARTA a propósito es su valor de retorno.
+  useLiveTimer(phase === 'open' && live ? live.liveSince : null);
+  // Porque ese valor miente en los DOS bordes del telón, y elapsed alimenta
+  // media pantalla: el contador verde de 32px, el "· Xh total", el marcador de
+  // HowLongToBeat, la baldosa "Longest", la fila viva del historial (y con ella
+  // maxDurationSec, que si era la primera sesión del juego apagaba las barras
+  // de relleno de todas las demás) y los dos MomentChip.
+  //   BAJANDO: useLiveTimer con null no se limita a dejar de correr, DEVUELVE 0
+  //   (useLiveTimer.ts:17), y este componente sigue montado y pintando los
+  //   210ms que dura 'closing' — el primer frame del fundido de salida se
+  //   repintaba entero con cero segundos de sesión.
+  //   SUBIENDO (el que se ve más, y el que la primera pasada dejó a medias): el
+  //   hook guarda `now` en un useState que solo mueve su propio intervalo
+  //   (useLiveTimer.ts:9-15), y al rearrancar el efecto no hay un setNow
+  //   inmediato. Ese `now` congelado sobrevive entre aperturas: esta función no
+  //   se desmonta al ocultarse (solo devuelve null) y el key={openCount} de más
+  //   abajo remonta el árbol de DENTRO, no sus hooks. Así que cada reapertura
+  //   pintaba durante hasta un segundo entero la foto del cierre — con el HUD
+  //   media hora cerrado, media hora de menos en toda esa lista y luego el
+  //   salto de golpe.
+  // La cuenta a mano en render (fórmula literal del hook, leyendo el reloj
+  // ahora) es exacta en los dos bordes: lo que baja es el TELÓN, no la partida
+  // — la sesión sigue viva y su cuenta sigue siendo cierta. Sin intervalo
+  // propio (§9.1) y sin ref, que leerlo en render lo prohíbe react-hooks/refs.
+  const elapsed = secondsSince(live?.liveSince ?? null);
 
   if (!live || phase === 'hidden') return null;
   const closing = phase === 'closing';
@@ -922,7 +1057,18 @@ export const OverlayHud = (): React.JSX.Element | null => {
             tiene una altura fijada desde fuera. items-stretch (default,
             explícito para que quede dicho) es lo que hace que ambas columnas
             LLEGUEN a esa altura en vez de quedarse en la suya propia. */}
-        <div className="mt-3 grid min-h-0 flex-1 grid-cols-[0.95fr_1.05fr] grid-rows-[1fr] items-stretch gap-3">
+        {/* minmax(0, ·fr) y no ·fr a secas: un track fr tiene el min-content
+            de su contenido como MÍNIMO, y estas dos columnas van llenas de
+            texto con truncate — que es nowrap, o sea que su "mínimo" es el
+            ancho SIN cortar. El caso real que lo destapó (Naiad, primera
+            sesión de la vida): el historial, casi vacío, colapsaba a su
+            mínimo (~300px) y la columna de logros se comía el resto — 600/300
+            en vez del 47/53 pactado, con los tiles truncando ("0h ...",
+            "3 d..."). Con el mínimo a 0 el reparto es el pactado SIEMPRE, y
+            del sobrante se encargan los truncate de dentro, que para eso
+            están. Es exactamente lo que Tailwind pone de serie en sus
+            grid-cols-N (repeat(N, minmax(0, 1fr))), y por este mismo motivo. */}
+        <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] grid-rows-[1fr] items-stretch gap-3">
           <div className="flex min-h-0 flex-col gap-3">
             {/* La nota rápida (§7.2.1), COMPACTA: 3 líneas le bastan para
                 "dónde lo dejo" — no necesita ni pretende llenar una columna
@@ -1065,18 +1211,24 @@ export const OverlayHud = (): React.JSX.Element | null => {
               <SectionIcon icon={History} color={VIOLET} />
               <span className="text-[13.5px] font-bold text-foreground">Your history</span>
               <span className="ml-auto text-[10.5px] font-semibold text-muted-foreground/60">
-                {live.lastPlayedAt !== null
-                  ? `last played ${humanizeSpan(daysBetween(live.lastPlayedAt, new Date()))} ago`
+                {previousEndedAt !== null
+                  ? `last played ${humanizeSpan(daysBetween(previousEndedAt, new Date()))} ago`
                   : 'first time here'}
               </span>
             </div>
             <div className="mt-3 flex-none grid grid-cols-3 gap-2">
-              {/* +1 por la de ahora: sessionCount solo cuenta las cerradas. */}
+              {/* La MISMA lista que se pinta debajo, la viva incluida — así el
+                  número y las filas no pueden discrepar. El sessionCount+1 de
+                  antes partía de un comentario falso ("solo cuenta las
+                  cerradas"): getGames cuenta TODAS las sesiones, la abierta
+                  también, así que jugando siempre salía una de más. Con 36
+                  sesiones nadie lo nota; en la PRIMERA sesión de un juego era
+                  un "2" clavado sobre una lista de una fila. */}
               <HistoryStat
                 icon={Play}
                 color={GREEN}
                 label="Sessions"
-                value={String(live.sessionCount + 1)}
+                value={String(gameSessions.length)}
               />
               <HistoryStat
                 icon={Timer}

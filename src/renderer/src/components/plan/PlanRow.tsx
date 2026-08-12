@@ -19,6 +19,7 @@ import { formatHours } from '../../lib/format';
 import { STATUS_META } from '../../lib/gameStatus';
 import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../lib/ratings';
 import { isUnreleased, releaseCountdown } from '../../lib/releaseDate';
+import { RefreshGameButton } from '../RefreshGameButton';
 import { RatingChip } from './RatingChip';
 import { ReleaseBadge } from './ReleaseBadge';
 
@@ -195,6 +196,12 @@ export const PlanRow = ({
           </div>
           <div className="flex flex-none items-center gap-2">
             {(unreleased || justOut) && <ReleaseBadge game={game} />}
+            {/* El "actualízalo todo" de ESTE juego, sin salir de la lista —
+                el mismo gesto que su ficha (PlanGameDetail) ofrece dentro.
+                Aquí porque el Plan es una pantalla de COMPARAR: si para
+                refrescar una fila hay que entrar y volver, se pierde el sitio
+                en la lista y con él la comparación que estabas haciendo. */}
+            <RefreshGameButton gameId={game.id} title={game.title} />
             <PinButton pinned={pinned} onToggle={onTogglePin} />
           </div>
         </div>

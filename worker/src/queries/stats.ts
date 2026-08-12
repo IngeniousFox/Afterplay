@@ -21,6 +21,14 @@ import { buildLibraryData } from './library';
 export const getStatsSummary = async (db: TenantDb): Promise<StatsSummary> => {
   const { games, manualByGame, sessions } = await buildLibraryData(db);
 
+  // OJO, desfase conocido con el escritorio: un Worker no tiene zona horaria,
+  // así que este `getFullYear()` —y el de cada sesión, y el del ancla de las
+  // horas manuales en library.ts— es UTC, mientras que el PC calcula el mismo
+  // año en local. Una fecha con precisión de año se guardó como el 1 de enero
+  // a las 00:00 locales y desde España se lee aquí como el 31 de diciembre
+  // anterior: esas horas caen un año antes que en el escritorio. El arreglo
+  // está en library.ts, y pide un helper en src/shared + que la PWA mande su
+  // zona; ninguno de los dos se puede tocar desde este fichero.
   const thisYear = new Date().getFullYear();
 
   const trackedSecondsThisYear = sessions
@@ -34,14 +42,25 @@ export const getStatsSummary = async (db: TenantDb): Promise<StatsSummary> => {
 
   const hoursThisYear = trackedSecondsThisYear / 3600 + manualHoursThisYear;
 
-  const counts = { beaten: 0, playing: 0, dropped: 0, unplayed: 0 };
+  // Los SEIS cajones, no cuatro: on_hold y resting existen en el modelo y sin
+  // ellos la suma no daba totalGames, así que la portada los estimaba por
+  // resta y los pintaba juntos. Un juego cae en uno y solo uno — currentState
+  // ya viene derivado con la regla compartida, que ignora 'plan_to_play', y
+  // los planeados no entran en la biblioteca.
+  const counts = { beaten: 0, playing: 0, dropped: 0, onHold: 0, resting: 0, unplayed: 0 };
   for (const game of games) {
     if (game.currentState === 'completed') counts.beaten++;
     else if (game.currentState === 'started') counts.playing++;
     else if (game.currentState === 'dropped') counts.dropped++;
+    else if (game.currentState === 'on_hold') counts.onHold++;
+    else if (game.currentState === 'resting') counts.resting++;
     else if (game.currentState === null) counts.unplayed++;
   }
 
+  // `isLive` ya viene con la regla de frescura del §7.4 aplicada
+  // (buildLibraryData), así que un cronómetro que alguien se dejó puesto el
+  // viernes no pinta "jugando ahora" en la portada del sábado por el simple
+  // hecho de que su fila siga sin endedAt.
   const liveGame = games.find((game) => game.isLive && game.liveSince !== null);
 
   return {

@@ -88,6 +88,32 @@ export const useStartGameSession = (): UseMutationResult<Session | null, Error, 
 // Diario de sesión ("dónde lo dejé"). Solo toca el texto de una sesión: ni
 // horas, ni estados, ni nada derivado — de ahí que invalide sessions y
 // games (la ficha del juego pinta sus sesiones), pero no stateEvents.
+//
+// OJO con las DOS ventanas: este mismo hook lo usa el HUD del overlay
+// (OverlayHud), que corre en otra ventana con OTRO QueryClient (ver
+// main/overlay.ts), y estas invalidaciones solo alcanzan la caché de SU
+// ventana. Para que una nota escrita en el overlay llegue a la principal, el
+// handler 'sessions:setNote' del main tiene que avisar a las dos ventanas
+// (mainWindow.webContents.send + sendToOverlay, como runPlanMailboxDrain);
+// hoy es un handleDb pelado que no emite nada, así que con ['sessions'] a
+// staleTime Infinity la principal se queda enseñando la sesión "sin nota".
+//
+// El daño NO es el que decía aquí antes ("abrir el editor allí siembra un
+// borrador vacío y lo machaca al confirmar"): SessionNote corta antes con
+// `if ((draft.trim() || null) === note)`, y contra un prop rancio a null el
+// borrador vacío compara igual, así que confirmar no manda nada. Los dos que
+// sí ocurren son estos:
+//   - Escribir a ciegas. No ves lo que hay escrito en el HUD, escribes otra
+//     cosa y el UPDATE reemplaza la nota entera. Nada avisa de que había
+//     texto debajo.
+//   - Que la caché se ponga al día CON EL EDITOR ABIERTO. Cualquier
+//     'games:changed' (el cierre de sesión del watcher, un pull de Turso)
+//     invalida ['sessions'], el prop `note` pasa a valer el texto del HUD y
+//     el borrador sigue en el '' del montaje —SessionNote no resincroniza—,
+//     así que ahora la guarda ya no coincide, se manda '' y updateSessionNote
+//     lo guarda como null: borrado. Es exactamente el fallo que OverlayHud
+//     parchea en su fila viva con `key={session.note ?? ''}`; las listas de la
+//     ventana principal (SessionRow, SessionHistoryList) no llevan esa key.
 export const useSetSessionNote = (): UseMutationResult<
   Session | null,
   Error,

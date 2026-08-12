@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/memory/chapters';
 import type { MemorySession } from '../../../../shared/memory/moments';
 import { manualHoursAnchor } from '../../../../shared/playthroughState';
+import { mergeUnlocksByAchievement } from '../achievements/mergeUnlocks';
 import {
   achievementsTable,
   achievementUnlocksTable,
@@ -104,9 +105,9 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     manualHoursByGame.set(row.gameId, (manualHoursByGame.get(row.gameId) ?? 0) + hours);
   }
 
-  // Desbloqueos con su definición, para fundirlos por logro con la MISMA
-  // regla que getGameAchievements: fecha fiable gana; empatadas, la más
-  // temprana. Al capítulo solo viajan los que quedan con fecha fiable.
+  // Desbloqueos con su definición, para fundirlos por logro con la regla de la
+  // casa (mergeUnlocks.ts: fecha fiable gana; empatadas, la más temprana). Al
+  // capítulo solo viajan los que quedan con fecha fiable.
   const unlockRows = await db
     .select({
       achievementId: achievementUnlocksTable.achievementId,
@@ -120,23 +121,10 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     .from(achievementUnlocksTable)
     .innerJoin(achievementsTable, eq(achievementUnlocksTable.achievementId, achievementsTable.id));
 
-  const mergedUnlocks = new Map<number, (typeof unlockRows)[number]>();
-  for (const row of unlockRows) {
-    const existing = mergedUnlocks.get(row.achievementId);
-    if (!existing) {
-      mergedUnlocks.set(row.achievementId, row);
-      continue;
-    }
-    if (row.dateReliable && !existing.dateReliable) {
-      mergedUnlocks.set(row.achievementId, row);
-      continue;
-    }
-    if (!row.dateReliable && existing.dateReliable) continue;
-    if (row.unlockedAt.getTime() < existing.unlockedAt.getTime()) {
-      mergedUnlocks.set(row.achievementId, row);
-    }
-  }
-  const unlocks: ChapterUnlock[] = [...mergedUnlocks.values()]
+  // Aquí solo hace falta la ganadora: un capítulo cuenta que sacaste el logro
+  // y cuándo, no por cuántas vías lo tienes.
+  const unlocks: ChapterUnlock[] = [...mergeUnlocksByAchievement(unlockRows).values()]
+    .map((merged) => merged.winner)
     .filter((row) => row.dateReliable)
     .map((row) => ({
       gameId: row.gameId,

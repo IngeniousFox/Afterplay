@@ -42,18 +42,44 @@ export type PendingAchievementsGame = {
 // vacíe: es justo entonces cuando el botón de "reintentar" tiene sentido.
 const failedGames = new Map<number, PendingAchievementsGame>();
 
+// La intención VIVA de cada juego: con qué elemento hay que sincronizarlo
+// cuando le llegue el turno. Hace falta porque la reserva de createClaimQueue
+// es por clave y tira el elemento ENTERO cuando el juego ya estaba encolado.
+// Su "encolar dos veces lo mismo es inofensivo" vale para curiosidades y
+// recaps, donde el elemento es solo un id; aquí no: el segundo encolado puede
+// traer notify=true (acabas de cerrar el juego) y el primero venir de la
+// pasada masiva de "Sync now", que no avisa. Ganaba siempre el primero, así
+// que los logros que acababas de sacar se guardaban BIEN pero sin tarjeta
+// flotante y sin el broche dorado del 100%. Fusionando, el aviso no se pierde.
+const intents = new Map<number, PendingAchievementsGame>();
+
+// El juego que se está sincronizando AHORA MISMO. Su intención ya se leyó, así
+// que fusionar sobre él ya no llega a tiempo: se guarda para no mentir en el
+// valor de retorno de enqueueAchievements.
+let inFlightId: number | null = null;
+
 const queue = createClaimQueue<PendingAchievementsGame>({
   keyOf: (game) => game.id,
   canRun: () => hasSteamKey(),
   process: async (game) => {
-    const result = await syncGameAchievements(game, game.notify === true);
-    failedGames.delete(game.id);
-    notifyAchievementsActivity({
-      kind: 'synced',
-      gameId: game.id,
-      catalogCount: result.catalogCount,
-      unlockedCount: result.unlockedCount,
-    });
+    // La intención fusionada manda sobre el elemento con el que se encoló:
+    // trae el notify de todos los que pidieron este juego y los datos de la
+    // lectura más reciente.
+    const intent = intents.get(game.id) ?? game;
+    inFlightId = game.id;
+    try {
+      const result = await syncGameAchievements(intent, intent.notify === true);
+      failedGames.delete(game.id);
+      notifyAchievementsActivity({
+        kind: 'synced',
+        gameId: game.id,
+        catalogCount: result.catalogCount,
+        unlockedCount: result.unlockedCount,
+      });
+      intents.delete(game.id);
+    } finally {
+      inFlightId = null;
+    }
   },
   onProgress: (progress) => {
     notifyAchievementsActivity({
@@ -69,7 +95,10 @@ const queue = createClaimQueue<PendingAchievementsGame>({
   // sin repetir la pasada entera. Se guarda el título además del id: cuando
   // se reintenten, la lista ya no se vuelve a consultar.
   onItemError: (game, error) => {
-    failedGames.set(game.id, game);
+    // Se recuerda la intención FUSIONADA, no el elemento con el que se encoló:
+    // si no, el reintento perdería el notify por segunda vez.
+    failedGames.set(game.id, intents.get(game.id) ?? game);
+    intents.delete(game.id);
     console.error(`[steam] fallo sincronizando logros de "${game.title}":`, error);
   },
   onWorkerError: (error) => {
@@ -95,18 +124,61 @@ export const requestAchievementsStop = (): void => {
   queue.requestStop();
 };
 
-// Reintentar SOLO los que fallaron. Devuelve cuántos se encolaron — 0 si no
-// hay ninguno pendiente de reintento.
+// Reintentar SOLO los que fallaron. Devuelve cuántos se encolaron de verdad —
+// 0 si no hay ninguno pendiente de reintento. Es el número del encolado y no
+// el tamaño del registro porque un fallido puede haber vuelto a la cola por su
+// cuenta (cerraste ese juego) y estar EN VUELO ahora mismo: ese no se reintenta
+// con este clic, y decir que sí sería mentir en el botón. Sale del registro
+// igual — si vuelve a fallar, onItemError lo devuelve.
 export const retryFailedAchievements = (): number => {
   const games = [...failedGames.values()];
   if (games.length === 0) return 0;
   failedGames.clear();
-  enqueueAchievements(games);
-  return games.length;
+  return enqueueAchievements(games);
 };
 
 // Encola los que aún no estén reservados y arranca el worker si estaba
 // parado. Devuelve enseguida: la sincronización va por su cuenta.
-export const enqueueAchievements = (games: PendingAchievementsGame[]): void => {
+//
+// Lo que devuelve es cuántos juegos DISTINTOS de los que acabas de pedir van a
+// sincronizarse con lo que traes — los ya reservados cuentan igual, porque su
+// intención se fusiona (ver `intents`) y el notify llega a tiempo. Quedan
+// fuera el juego que ya está en vuelo (su intención se leyó antes de que
+// llegaras) y todos si no hay clave de Steam. Quien encola necesita eso para
+// no prometer un refresco que se tiró: hoy lo usa
+// queueAchievementsRefreshForGame (backfill.ts), que es quien contesta al
+// botón de la ficha.
+//
+// Es una promesa sobre la intención de AHORA, no una garantía. Si a mitad de
+// racha se pide parar o desaparece la clave en Ajustes, la cola suelta TODO lo
+// pendiente de golpe (releasePending en lib/claimQueue.ts), incluido lo que
+// este número acaba de dar por aceptado. Desde aquí no hay forma de verlo
+// —claimQueue no expone su stop—, y para lo que se usa el error cae del lado
+// bueno: se promete de más solo cuando el usuario ya ha pedido parar.
+export const enqueueAchievements = (games: PendingAchievementsGame[]): number => {
+  // Misma puerta que la cola, comprobada aquí antes de anotar nada: si no hay
+  // clave, queue.enqueue es un no-op y las intenciones se quedarían colgadas.
+  if (!hasSteamKey()) return 0;
+
+  // Con la cola parada no queda nada encolado ni en vuelo, así que cualquier
+  // intención que sobreviva es de una racha que se soltó a medias (la clave
+  // desapareció en Ajustes a mitad) y no debe contaminar a la siguiente.
+  if (!queue.isRunning()) intents.clear();
+
+  // Por CLAVE y no por elemento: la cola reserva por id, así que el mismo
+  // juego repetido dentro de la misma llamada es UNA sincronización. Contando
+  // por elemento, un array con duplicados devolvía más juegos de los que iban
+  // a pasar.
+  const accepted = new Set<number>();
+  for (const game of games) {
+    const previous = intents.get(game.id);
+    // Gana el dato más reciente (rutas, hero, título: quien encola acaba de
+    // leer la fila), pero el aviso NUNCA se pierde — si alguien pidió notify,
+    // se avisa.
+    intents.set(game.id, { ...game, notify: previous?.notify === true || game.notify === true });
+    if (game.id !== inFlightId) accepted.add(game.id);
+  }
+
   queue.enqueue(games);
+  return accepted.size;
 };

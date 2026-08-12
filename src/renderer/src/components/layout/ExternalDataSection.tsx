@@ -136,14 +136,31 @@ export const ExternalDataSection = (): React.JSX.Element => {
     // este modal estuviera cerrado cuando la pasada acabó.
     const summary = progress?.summary;
     if (summary && summary.total > 0) {
-      // Lo primero, si pasó: es la única noticia de la pasada que abre datos
-      // NUEVOS (etiquetas, reseñas y logros de un juego que hasta hoy la app
-      // daba por no-Steam), y pasa callada si no se dice. El caso típico es un
-      // juego que se dio de alta antes de salir.
-      if (summary.appIdsFound > 0) {
-        return summary.appIdsFound === 1
-          ? 'Done. 1 game just turned up on Steam — its tags and reviews are in.'
-          : `Done. ${summary.appIdsFound} games just turned up on Steam — their tags and reviews are in.`;
+      // Lo primero, si pasó: son las dos noticias de la pasada que abren
+      // datos NUEVOS y pasan calladas si no se dicen. Los ESTRENOS (un juego
+      // que la app daba por no-Steam y ya tiene appid — el caso típico es uno
+      // dado de alta antes de salir) y las CORRECCIONES (un appid guardado
+      // que apuntaba al playtest o a otro producto: sus reseñas y etiquetas
+      // eran de otra cosa). Frases separadas porque son noticias distintas —
+      // sumarlas hacía cantar "43 games just turned up on Steam" en una
+      // pasada donde no había entrado ninguno.
+      if (summary.appIdsFound > 0 || summary.appIdsFixed > 0) {
+        const parts: string[] = [];
+        if (summary.appIdsFound > 0) {
+          parts.push(
+            summary.appIdsFound === 1
+              ? '1 game just turned up on Steam — its tags and reviews are in'
+              : `${summary.appIdsFound} games just turned up on Steam — their tags and reviews are in`,
+          );
+        }
+        if (summary.appIdsFixed > 0) {
+          parts.push(
+            summary.appIdsFixed === 1
+              ? '1 game was pointing at the wrong Steam app and got fixed'
+              : `${summary.appIdsFixed} games were pointing at the wrong Steam app and got fixed`,
+          );
+        }
+        return `Done. ${parts.join('. ')}.`;
       }
       const skipped = summary.total - summary.updated;
       return skipped > 0

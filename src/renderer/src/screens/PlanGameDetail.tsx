@@ -1,4 +1,4 @@
-import { ArrowRight, ImagePlus, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { ArrowRight, ImagePlus, Pencil, Pin, PinOff, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { AchievementsSection } from '../components/library/detail/AchievementsSection';
@@ -18,6 +18,7 @@ import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCar
 import { AddGameModal } from '../components/library/AddGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { useGame, useSetPlanPinned } from '../hooks/games';
+import { useRefreshGame } from '../hooks/useRefreshGame';
 import { STATUS_META } from '../lib/gameStatus';
 import {
   accentGradientStyle,
@@ -51,6 +52,11 @@ export const PlanGameDetail = ({
 }: PlanGameDetailProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
   const setPinned = useSetPlanPinned();
+  // `game?.title` y no `game.title`: este hook va ANTES de la guarda de carga
+  // (los hooks no pueden llamarse condicionalmente) y ahí el juego todavía
+  // puede no haber llegado. El título solo se usa en el aviso de éxito, que
+  // para entonces ya existe.
+  const refreshGame = useRefreshGame(gameId, game?.title ?? '');
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [addPlannedOpen, setAddPlannedOpen] = useState(false);
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
@@ -152,6 +158,26 @@ export const PlanGameDetail = ({
                 className={squareIconButtonClass}
               >
                 <Pencil size={17} />
+              </button>
+
+              {/* Actualizar este juego ENTERO — el mismo gesto y la misma
+                  lógica que el de la ficha de biblioteca (useRefreshGame).
+                  Aquí importa incluso más: un planeado es justo el juego cuyos
+                  datos envejecen solos — sale, estrena fecha, acumula reseñas
+                  y entra por fin en Steam — y hasta ahora la única forma de
+                  ponerlo al día era refrescar el Plan entero. */}
+              <button
+                type="button"
+                onClick={refreshGame.refresh}
+                disabled={refreshGame.refreshing}
+                title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
+                aria-label="Refresh everything for this game"
+                className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-white/[0.03]`}
+              >
+                <RefreshCw
+                  size={17}
+                  className={refreshGame.refreshing ? 'animate-spin' : undefined}
+                />
               </button>
 
               <button

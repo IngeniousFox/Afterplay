@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { achievementsTable, achievementUnlocksTable, gamesTable } from '../db/schema';
 import {
@@ -7,6 +7,8 @@ import {
   getPlayerUnlocks,
   getSteamUserId,
 } from './api';
+import type { SteamAchievementDef } from './api';
+import { getLocalAchievementTexts } from './localSchema';
 import { ensureGoldbergCatalog } from './emu/goldbergCatalog';
 import { readEmuUnlocksForGame } from './emu/readUnlocks';
 import { getSessionWindows, placeUnlock } from './matchSessions';
@@ -185,6 +187,112 @@ export const storeUnlocks = async (
   return fresh;
 };
 
+export type EmuUnlocksApplied = {
+  // Cuántos desbloqueos hay en disco para este juego — no cuántos son nuevos.
+  unlockedCount: number;
+  // Los que no constaban por ninguna fuente antes de esta llamada: lo único
+  // que puede merecer un aviso en pantalla.
+  fresh: AchievementToast[];
+};
+
+// Los desbloqueos que algún emulador de Steam haya dejado en este PC para UNA
+// fila de juego (LOGROS.md §7). Lo comparten los tres sitios que los leen: la
+// sincronización de un juego (aquí abajo), el barrido del arranque
+// (backfill.ts) y el vigilante en vivo (emu/watcher.ts).
+//
+// Está junto porque la regla ya se desincronizó una vez y el síntoma no se ve
+// hasta que alguien compara dos pantallas: la lectura va por FILA y no por
+// appid, porque dos de los formatos viven junto al EXE (emu/locations.ts) y
+// executablePath es de la fila — y el schema permite a propósito varias fichas
+// con el mismo appid (juego y edición). Con un find() por appid los logros
+// acababan colgados de la edición que NO estabas jugando, y el estado "en
+// vivo" ni siquiera coincidía con el de después de reiniciar.
+//
+// Lo que NO hace es escribir el catálogo de Goldberg: eso toca la carpeta del
+// juego y solo lo hacen los dos caminos lentos, no el vigilante, que salta con
+// cada fichero que escribe un crack.
+export const applyEmuUnlocksForGame = async (
+  game: { id: number; steamAppId: number; executablePath: string | null },
+  // Para los desbloqueos sin fecha propia. Cada llamante trae la suya: la
+  // sincronización usa el mismo instante que estampa en el juego; el barrido y
+  // el vigilante, el de ahora.
+  fallbackDate: Date,
+): Promise<EmuUnlocksApplied> => {
+  const emu = readEmuUnlocksForGame(game.steamAppId, game.executablePath);
+  if (emu.unlocks.length === 0) return { unlockedCount: 0, fresh: [] };
+
+  const fresh = await storeUnlocks(game.id, 'emu', emu.unlocks, fallbackDate);
+  return { unlockedCount: emu.unlocks.length, fresh };
+};
+
+// Rellena con el schema local de Steam las descripciones de los logros
+// OCULTOS que la Web API dejó mudos (nunca las da, ni siquiera de los que ya
+// tienes desbloqueados). Es el escalón 2 de los tres que documenta
+// hiddenDescriptions.ts, y hasta ahora no lo llamaba nadie: se saltaba una
+// fuente local y gratis para irse al tercero por cada juego con ocultos,
+// incluidos aquellos cuyo .bin está en este disco.
+//
+// Esto SÍ se guarda en la base de datos, al revés que Steam Hunters: es tu
+// propio Steam hablando de tu propio juego, no un tercero.
+//
+// Solo AÑADE, y solo lo que cambia. Si el .bin no existe (juego que tu cliente
+// no ha cacheado) o no trae texto para ese logro, la fila se queda como estaba
+// — un "no" de una fuente no borra lo que ya había.
+const fillHiddenDescriptions = async (
+  gameId: number,
+  appId: number,
+  definitions: SteamAchievementDef[],
+): Promise<void> => {
+  const mute = definitions.filter(
+    (definition) => definition.hidden && definition.description === null,
+  );
+  if (mute.length === 0) return;
+
+  // La lectura (registro de Windows + fichero) va FUERA del candado de la DB,
+  // igual que la red: es I/O que puede tardar y nadie más debería esperarla.
+  const texts = await getLocalAchievementTexts(appId);
+  if (texts.size === 0) return;
+
+  // Contra lo GUARDADO, no contra lo que trae la API. Mirar la API no sirve de
+  // filtro: de un oculto siempre devuelve null, así que cada "Sync now"
+  // completo repetía los 253 UPDATE con el mismo texto que ya estaba, más su
+  // línea de consola por juego. Escrituras que no cambian nada, sobre el mismo
+  // fichero que el ciclo de Turso sincroniza cada minuto — justo el churn que
+  // el breatheMs de la cola (queue.ts) existe para no provocar.
+  const stored = await withDbAccess(async () =>
+    getDb()
+      .select({ apiName: achievementsTable.apiName, description: achievementsTable.description })
+      .from(achievementsTable)
+      .where(eq(achievementsTable.gameId, gameId)),
+  );
+  const current = new Map(stored.map((row) => [row.apiName, row.description]));
+
+  const filled = mute.flatMap((definition) => {
+    const description = texts.get(definition.apiName)?.description;
+    if (!description || current.get(definition.apiName) === description) return [];
+    return [{ apiName: definition.apiName, description }];
+  });
+  if (filled.length === 0) return;
+
+  await withDbAccess(async () =>
+    getDb().transaction(async (tx) => {
+      for (const row of filled) {
+        await tx
+          .update(achievementsTable)
+          .set({ description: row.description })
+          .where(
+            and(eq(achievementsTable.gameId, gameId), eq(achievementsTable.apiName, row.apiName)),
+          );
+      }
+    }),
+  );
+
+  // Solo ASCII en los console.log: la consola de Windows no siempre usa UTF-8.
+  console.log(
+    `[steam] ${filled.length} descripcion(es) oculta(s) nueva(s) del schema local para el appid ${appId}`,
+  );
+};
+
 export const syncGameAchievements = async (
   game: PendingAchievementsGame,
   // Solo los refrescos EN VIVO (cerrar el juego, jugar con la app abierta)
@@ -201,6 +309,39 @@ export const syncGameAchievements = async (
   ]);
 
   const syncedAt = new Date();
+
+  // Un catálogo vacío tiene DOS lecturas y getAchievementSchema las aplasta en
+  // el mismo []: "este juego existe y no tiene logros" (legítimo) y el 400/403
+  // de un appid sin stats, que casi siempre es un juego que TODAVIA no ha
+  // salido — Enter the kOS anuncia logros en su ficha de Steam y aun así da
+  // 403. Estampar achievementsSyncedAt en el segundo caso graba como
+  // definitivo un "no" que caduca el día del lanzamiento: la pasada del
+  // arranque (la única automática) filtra por isNull(achievementsSyncedAt), así
+  // que ese juego no se vuelve a preguntar NUNCA y el día que salga sus 34
+  // logros no aparecen — salvo que el usuario adivine que tiene que darle a
+  // "Sync now". Mismo bug que refresh.ts ya arregló para el appid.
+  //
+  // La rareza hace de testigo para distinguir los dos casos: es otro endpoint
+  // del mismo ISteamUserStats, contesta 200 (mapa vacío) para un juego con
+  // stats y cero logros, y se niega igual que el schema para el que aún no ha
+  // salido, donde devuelve null. Si el testigo tampoco sabe (o simplemente
+  // falló la red) no se marca nada y el arranque lo vuelve a coger: preguntar
+  // de más es gratis, perder el juego para siempre no. Lo limpio del todo
+  // sería que getAchievementSchema devolviera null en SteamNoStatsError, como
+  // ya hacen sus dos hermanas de api.ts.
+  //
+  // El precio no son solo las peticiones de más: la tarjeta de Ajustes cuenta
+  // "sincronizados" por isNotNull(achievementsSyncedAt) y "elegibles" por
+  // tener appid (db/queries/achievements/getAchievementsStatus.ts), así que
+  // cada juego sin publicar deja ahí un "540 de 541" que no se cierra hasta
+  // que salga. Se acepta a sabiendas —el otro camino es perder sus logros el
+  // día del lanzamiento—, pero es del tipo de denominador incompleto contra el
+  // que avisa el propio comentario de esa consulta ("541 de 527"), y el
+  // arreglo va ahí: descontar del denominador los que sabemos que hoy no
+  // tienen stats, no fingir aquí que sí se sincronizaron.
+  if (definitions.length === 0 && percentages === null) {
+    return { catalogCount: 0, unlockedCount: 0, unlocksKnown: false };
+  }
 
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
@@ -220,12 +361,26 @@ export const syncGameAchievements = async (
         // iconos y rareza sin duplicar el catálogo ni perder los desbloqueos
         // que cuelgan de estas filas.
         //
-        // La rareza es la ÚNICA columna que se queda fuera del set cuando su
-        // llamada falló (percentages === null): en las demás, lo que trae el
-        // schema es la verdad de ahora mismo, pero un porcentaje que no se ha
-        // podido leer no es un porcentaje nuevo — pisarlo con null borraría
-        // un dato bueno a cambio de nada. En un alta el null va igual: no hay
-        // nada guardado que conservar.
+        // La rareza es una de las dos columnas que se quedan fuera del set
+        // cuando su llamada falló (percentages === null): en las demás, lo que
+        // trae el schema es la verdad de ahora mismo, pero un porcentaje que no
+        // se ha podido leer no es un porcentaje nuevo — pisarlo con null
+        // borraría un dato bueno a cambio de nada. En un alta el null va igual:
+        // no hay nada guardado que conservar.
+        //
+        // La otra es la descripción. El motivo es el logro OCULTO: la API
+        // NUNCA da la suya, así que ahí siempre llega null, y lo que hay
+        // guardado puede venir del schema local de Steam
+        // (fillHiddenDescriptions, más abajo) — escribir ese null volvía a
+        // dejar mudos los 253 ocultos en cada "Sync now".
+        //
+        // Pero la guarda mira el VALOR, no el `hidden`, así que alcanza también
+        // a los visibles: a un logro al que su desarrollador le borre la
+        // descripción en Steam, la app le conserva la vieja para siempre. Es a
+        // propósito (un texto que ya tienes vale más que un hueco), y es la
+        // diferencia con la rareza: aquella se acota por si su llamada falló
+        // —percentages === null, una decisión por TANDA— y esta por lo que trae
+        // cada logro.
         await tx
           .insert(achievementsTable)
           .values(values)
@@ -233,7 +388,7 @@ export const syncGameAchievements = async (
             target: [achievementsTable.gameId, achievementsTable.apiName],
             set: {
               displayName: values.displayName,
-              description: values.description,
+              ...(values.description === null ? {} : { description: values.description }),
               iconUrl: values.iconUrl,
               iconGrayUrl: values.iconGrayUrl,
               hidden: values.hidden,
@@ -254,6 +409,9 @@ export const syncGameAchievements = async (
     return { catalogCount: 0, unlockedCount: 0, unlocksKnown: false };
   }
 
+  // ── Descripciones de los OCULTOS, del Steam de este PC (LOGROS.md §6) ────
+  await fillHiddenDescriptions(gameId, appId, definitions);
+
   // ── Emuladores de Steam (LOGROS.md §7) ──────────────────────────────────
   // ANTES que la API de jugador a propósito: es lectura local (no puede
   // fallar por red) y así un juego pirata queda completo aunque Steam luego
@@ -265,15 +423,15 @@ export const syncGameAchievements = async (
   // grabados) — escribírselo es lo que hace que empiece a apuntar.
   await withDbAccess(async () => ensureGoldbergCatalog(gameId, game.installDirectory));
 
-  const emu = readEmuUnlocksForGame(appId, game.executablePath);
-  const fresh = await storeUnlocks(gameId, 'emu', emu.unlocks, syncedAt);
+  const emu = await applyEmuUnlocksForGame(game, syncedAt);
+  const fresh = emu.fresh;
 
   // ── Tus desbloqueos por la API ──────────────────────────────────────────
   if (!getSteamUserId()) {
     if (notify) toastFresh(game, fresh);
     return {
       catalogCount: definitions.length,
-      unlockedCount: emu.unlocks.length,
+      unlockedCount: emu.unlockedCount,
       unlocksKnown: false,
     };
   }
@@ -286,7 +444,7 @@ export const syncGameAchievements = async (
     if (notify) toastFresh(game, fresh);
     return {
       catalogCount: definitions.length,
-      unlockedCount: emu.unlocks.length,
+      unlockedCount: emu.unlockedCount,
       unlocksKnown: false,
     };
   }
@@ -304,7 +462,7 @@ export const syncGameAchievements = async (
 
   return {
     catalogCount: definitions.length,
-    unlockedCount: unlocks.length + emu.unlocks.length,
+    unlockedCount: unlocks.length + emu.unlockedCount,
     unlocksKnown: true,
   };
 };

@@ -62,15 +62,41 @@ export const useTvButtons = (handlers: TvButtonHandlers): void => {
 export type TvHintAction = TvContextButton | 'a' | 'start' | 'lbrb' | 'ltrt';
 export type TvHint = { action: TvHintAction; label: string };
 
-export const TvLegendContext = createContext<((hints: TvHint[]) => () => void) | null>(null);
+// Un HUECO en la pila de leyendas, no una lista de pistas: cada consumidor
+// ocupa el suyo al montar y lo conserva mientras viva, cambien sus pistas las
+// veces que cambien. Antes el registro era el array a pelo, y cambiar de
+// pistas era darse de baja y volver a entrar — POR ARRIBA. Caso real: la
+// leyenda de TvLibrary depende del dispositivo, así que soltar el ratón y
+// coger el mando con el OSK abierto la re-registraba y aterrizaba ENCIMA de
+// la del teclado — el pie anunciaba "LB·RB Filter / Y Search" bajo un velo
+// donde esos botones están capados y la Y es Espacio.
+export type TvLegendSlot = { hints: TvHint[] };
+
+export type TvLegendRegistry = {
+  // Reserva el hueco (al montar) y lo libera (al desmontar).
+  register: (slot: TvLegendSlot) => () => void;
+  // El contenido cambió: re-pinta si este hueco es el visible. NUNCA recoloca.
+  refresh: (slot: TvLegendSlot) => void;
+};
+
+export const TvLegendContext = createContext<TvLegendRegistry | null>(null);
 
 export const useTvLegend = (hints: TvHint[]): void => {
-  const register = useContext(TvLegendContext);
+  const registry = useContext(TvLegendContext);
   // La leyenda es presentación pura: basta la del último render montado.
   const hintsKey = JSON.stringify(hints);
+  // El hueco es UNO por componente montado — la identidad que la pila usa
+  // para mantener el orden de capas.
+  const slotRef = useRef<TvLegendSlot>({ hints: [] });
 
   useEffect(() => {
-    if (!register) return;
-    return register(JSON.parse(hintsKey) as TvHint[]);
-  }, [register, hintsKey]);
+    if (!registry) return;
+    return registry.register(slotRef.current);
+  }, [registry]);
+
+  useEffect(() => {
+    if (!registry) return;
+    slotRef.current.hints = JSON.parse(hintsKey) as TvHint[];
+    registry.refresh(slotRef.current);
+  }, [registry, hintsKey]);
 };

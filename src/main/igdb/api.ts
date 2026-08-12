@@ -7,6 +7,7 @@ import {
   igdbDetailResponseSchema,
   igdbExternalBatchResponseSchema,
   igdbExternalGamesResponseSchema,
+  igdbParentGamesResponseSchema,
   igdbGameVersionsResponseSchema,
   igdbSearchResponseSchema,
 } from './schemas';
@@ -226,16 +227,61 @@ const pickTrailer = (
   return { videoId: best.video_id, name: best.name ?? null };
 };
 
-const steamAppIdFromExternals = (
-  externals: { uid: string; external_game_source?: number }[] | undefined,
+// EL PLAYTEST, y por qué "el primero que salga" no vale.
+//
+// Un mismo juego de IGDB puede tener VARIAS entradas de Steam, y no son
+// intercambiables. El caso real (auditado sobre una biblioteca de 952 juegos
+// con appid: 38 lo tenían mal):
+//
+//   Atomic Heart -> 668580  "Atomic Heart"            <- el juego
+//                -> 2026960 "Atomic Heart Playtest"   <- una beta cerrada
+//
+// Un playtest es una app APARTE: sin página de tienda, sin etiquetas y sin
+// logros. Quedarse con esa es dejar el juego mudo — y el orden lo decide
+// IGDB, así que era una moneda al aire. El síntoma que lo destapó era además
+// engañoso: SteamSpy sí contesta al appid del playtest (con las reseñas DE LA
+// BETA, unas cien), así que un juego podía enseñar reseñas y no etiquetas.
+//
+// La regla: descartar los que se anuncien como prueba... salvo que eso deje
+// la lista vacía. Eso último no es un detalle — IGDB llama "A Hat in Time -
+// Beta Build" a la ÚNICA entrada de ese juego, y es la buena. Cuando no hay
+// alternativa, un nombre feo no es motivo para tirar el único dato que hay.
+//
+// Lo que esta regla NO arregla, dicho aquí para que no se busque: si la única
+// entrada de Steam es de verdad la equivocada (el caso encontrado: "The
+// Stanley Parable: Ultra Deluxe" apunta a la demo del original), no hay
+// sibling limpio y se queda como está.
+const PLAYTEST_NAME = /\b(playtest|demo|beta|test\s?server)\b/i;
+
+const pickSteamAppId = <T extends { uid: string; name?: string }>(
+  candidates: T[],
 ): number | null => {
-  for (const external of externals ?? []) {
-    if (external.external_game_source !== STEAM_SOURCE_ID) continue;
-    const appId = parseSteamUid(external.uid);
-    if (appId !== null) return appId;
-  }
-  return null;
+  const parsed = candidates
+    .map((candidate) => ({ appId: parseSteamUid(candidate.uid), name: candidate.name ?? '' }))
+    .filter((candidate): candidate is { appId: number; name: string } => candidate.appId !== null);
+  if (parsed.length === 0) return null;
+
+  const real = parsed.filter((candidate) => !PLAYTEST_NAME.test(candidate.name));
+  const pool = real.length > 0 ? real : parsed;
+
+  // Y entre los que quedan, EL PRIMERO — el mismo criterio de siempre, a
+  // propósito. El primer intento desempataba por appid más bajo ("el más
+  // antiguo es el original") y se comprobó contra la biblioteca real antes de
+  // darlo por bueno: movía 45 juegos en vez de 38, y entre ellos Far Cry 5,
+  // que estaba BIEN. Cuando un mismo juego de IGDB tiene varias entradas de
+  // Steam legítimas —secuelas, remakes y ediciones cuelgan a veces de la
+  // misma ficha— elegir por número es elegir otro producto. Esta función
+  // arregla playtests, y nada más: para todo lo demás se comporta igual que
+  // antes.
+  return pool[0].appId;
 };
+
+const steamAppIdFromExternals = (
+  externals: { uid: string; external_game_source?: number; name?: string }[] | undefined,
+): number | null =>
+  pickSteamAppId(
+    (externals ?? []).filter((external) => external.external_game_source === STEAM_SOURCE_ID),
+  );
 
 // Tope de la búsqueda. Ningún título real se acerca (el más largo del mundo
 // ronda los 130 caracteres); lo que sí llega más largo es un accidente — el
@@ -340,7 +386,7 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     `fields ${SEARCH_FIELDS}, artworks.image_id, screenshots.image_id, ` +
     `collections.id, collections.name, release_dates.date, release_dates.date_format, ` +
     `involved_companies.company.name, involved_companies.developer, involved_companies.publisher, ` +
-    `external_games.uid, external_games.external_game_source, ` +
+    `external_games.uid, external_games.external_game_source, external_games.name, ` +
     `videos.video_id, videos.name, ` +
     `aggregated_rating, aggregated_rating_count, rating, rating_count; ` +
     `where id = ${igdbId};`;
@@ -498,7 +544,8 @@ const fetchSteamAppIdsDirect = async (igdbIds: number[]): Promise<Map<number, nu
   if (igdbIds.length === 0) return result;
 
   const body =
-    `fields game, uid; ` +
+    // `name` es lo que separa el juego de su playtest — ver pickSteamAppId.
+    `fields game, uid, name; ` +
     `where game = (${igdbIds.join(',')}) & external_game_source = ${STEAM_SOURCE_ID}; ` +
     `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`;
   const rows = igdbExternalGamesResponseSchema.parse(await igdbRequest('external_games', body));
@@ -515,12 +562,138 @@ const fetchSteamAppIdsDirect = async (igdbIds: number[]): Promise<Map<number, nu
     );
   }
 
+  // Se agrupan TODAS las filas de cada juego antes de elegir. Antes ganaba la
+  // primera ("cualquiera sirve"), y no era verdad: entre esas filas puede
+  // estar el playtest, que no tiene ni tienda ni logros. Ver pickSteamAppId.
+  const byGame = new Map<number, { uid: string; name?: string }[]>();
   for (const row of rows) {
-    // El primero gana: con varias entradas de Steam para el mismo juego
-    // (paquetes regionales), cualquiera sirve de puente a los logros.
-    if (result.has(row.game)) continue;
-    const appId = parseSteamUid(row.uid);
-    if (appId !== null) result.set(row.game, appId);
+    const list = byGame.get(row.game);
+    if (list) list.push(row);
+    else byGame.set(row.game, [row]);
+  }
+  for (const [game, candidates] of byGame) {
+    const appId = pickSteamAppId(candidates);
+    if (appId !== null) result.set(game, appId);
+  }
+  return result;
+};
+
+// Cuáles de estos juegos cuelgan de otro (expansiones, DLC, remasters). Solo
+// se necesita el SÍ/NO, no de quién — ver el porqué en el uso.
+const fetchParentIgdbIds = async (igdbIds: number[]): Promise<Set<number>> => {
+  const withParent = new Set<number>();
+  if (igdbIds.length === 0) return withParent;
+
+  const rows = igdbParentGamesResponseSchema.parse(
+    await igdbRequest(
+      'games',
+      `fields id, parent_game; where id = (${igdbIds.join(',')}) & parent_game != null; ` +
+        `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`,
+    ),
+  );
+  for (const row of rows) withParent.add(row.id);
+  return withParent;
+};
+
+// EL RESCATE DE LOS QUE YA ESTÁN MAL GUARDADOS.
+//
+// La regla de pickSteamAppId solo actúa al RESOLVER, y un juego que ya tiene
+// appid no se re-resuelve nunca: "teniéndolo, es identidad del juego". Esa
+// frase valía cuando el appid guardado solo podía ser el bueno o ninguno —
+// con el playtest de por medio hay un tercer estado, "tiene uno y es el
+// equivocado", y por su cuenta no salía nunca de ahí.
+//
+// Corrige DOS cosas y ninguna más (ver los dos motivos dentro del bucle): un
+// appid que apunta al playtest del propio juego, y uno que apunta a un
+// producto que no es este. Un appid que sí figura en la ficha y no es una
+// prueba no se toca jamás: eso es identidad del juego.
+//
+// Quien la llame para UN juego (refreshGame.ts) tiene que contar además que
+// la identidad de Steam ha cambiado: el veredicto 'had-it' de
+// GameFullRefreshResult no lo distingue todavía — ver su comentario en
+// types.ts.
+export const findSteamAppIdCorrections = async (
+  games: { igdbId: number; steamAppId: number }[],
+): Promise<Map<number, number>> => {
+  const result = new Map<number, number>();
+  if (games.length === 0) return result;
+
+  // QUIÉN TIENE PADRE, antes que nada. Sin esto, el MOTIVO 2 de abajo
+  // deshacía a traición la regla del parent_game: para una expansión con
+  // ficha propia, resolveAchievementsSteamAppId guarda A PROPÓSITO el appid
+  // del JUEGO BASE (es donde vive el catálogo de logros; ver su cabecera y el
+  // caso Binding of Isaac: Repentance). Ese appid del padre no aparece jamás
+  // entre las filas del hijo, así que `current` salía undefined, se declaraba
+  // "apunta a otro producto" y se estampaba el appid propio — justo el que la
+  // otra regla descarta por venir con el catálogo de logros VACÍO.
+  const parents = await fetchParentIgdbIds(games.map((game) => game.igdbId));
+
+  const body =
+    `fields game, uid, name; ` +
+    `where game = (${games.map((game) => game.igdbId).join(',')}) & ` +
+    `external_game_source = ${STEAM_SOURCE_ID}; ` +
+    `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`;
+  const rows = igdbExternalGamesResponseSchema.parse(await igdbRequest('external_games', body));
+
+  // Techo tocado = respuesta CORTADA. Aquí eso no es un silencio como en sus
+  // dos gemelas (allí una fila que falta significa "no se encontró appid" y
+  // el juego se queda como estaba): aquí una fila que falta es exactamente lo
+  // que dispara el MOTIVO 2, o sea una ESCRITURA que sustituye un appid bueno
+  // por otro. Con la respuesta cortada no se corrige nada.
+  if (rows.length === EXTERNAL_GAMES_PAGE_LIMIT) {
+    // Solo ASCII, convencion de la casa.
+    console.warn(
+      `[steam] la revision de appids toco el limite de ${EXTERNAL_GAMES_PAGE_LIMIT} filas - no se corrige nada en este lote`,
+    );
+    return result;
+  }
+
+  const byGame = new Map<number, { uid: string; name?: string }[]>();
+  for (const row of rows) {
+    const list = byGame.get(row.game);
+    if (list) list.push(row);
+    else byGame.set(row.game, [row]);
+  }
+
+  for (const game of games) {
+    const candidates = byGame.get(game.igdbId);
+    if (!candidates || candidates.length === 0) continue;
+
+    const current = candidates.find((c) => parseSteamUid(c.uid) === game.steamAppId);
+
+    // MOTIVO 1: el guardado es una entrada de prueba de este mismo juego.
+    const isPlaytest = current !== undefined && PLAYTEST_NAME.test(current.name ?? '');
+
+    // MOTIVO 2: el guardado NO figura entre las entradas de Steam de este
+    // juego. O sea, apunta a OTRO producto.
+    //
+    // Al principio este caso se dejaba en paz por prudencia ("no sabemos
+    // quién tiene razón"). Lo que lo cambió fue mirar los cinco de la
+    // biblioteca real, y que los cinco eran el mismo patrón: el appid del
+    // juego VIEJO en una ficha que es la NUEVA. "Trails in the Sky 2nd
+    // Chapter" —el remake, sin salir— llevaba el appid del original de 2015,
+    // así que la ficha enseñaba su fecha de estreno futura y, debajo, tres
+    // mil reseñas. Un juego que no ha salido no tiene reseñas: ese número no
+    // era un hueco, era una mentira con aplomo. Igual Brothers (original en
+    // vez de remake), Stanley Parable (la demo del original en vez de Ultra
+    // Deluxe), Miles Morales y Atlas Fallen.
+    //
+    // Y es seguro justo donde daba miedo: un juego dado de alta SOLO con
+    // Steam no puede caer aquí. Su igdbId se resuelve preguntando POR SU
+    // APPID (adoptIgdb), así que si tiene ficha de IGDB es porque IGDB
+    // relaciona ese appid con ella — y entonces `current` existe. Este motivo
+    // solo alcanza a appids que nunca estuvieron anclados a un juego de Steam
+    // de verdad.
+    //
+    // Y NUNCA para un juego con padre: ahí "no figura entre sus filas" es lo
+    // NORMAL y lo correcto (ver fetchParentIgdbIds arriba). A esos se les
+    // sigue mirando el playtest, que esa comprobación sí es válida.
+    const isForeign = current === undefined && !parents.has(game.igdbId);
+
+    if (!isPlaytest && !isForeign) continue;
+
+    const better = pickSteamAppId(candidates);
+    if (better !== null && better !== game.steamAppId) result.set(game.igdbId, better);
   }
   return result;
 };

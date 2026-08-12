@@ -9,9 +9,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
-import type { GameDetail, GameFullRefreshResult } from '../../../../../shared/types';
-import { useRefreshGameEverything } from '../../../hooks/external';
+import type { GameDetail } from '../../../../../shared/types';
+import { useRefreshGame } from '../../../hooks/useRefreshGame';
 import { useLaunchExecutable, useOpenInstallDirectory } from '../../../hooks/games';
 import { useCloseSession, useStartGameSession } from '../../../hooks/sessions';
 import {
@@ -38,23 +37,9 @@ type ActionBarProps = {
 const editButtonClass =
   'flex items-center gap-2 rounded-[11px] border border-input bg-white/[0.03] px-4.5 text-[14px] font-semibold text-foreground hover:bg-white/[0.06]';
 
-// Qué entró de verdad en el refresco completo, en una frase.
-//
-// Se enumera lo que SÍ llegó y no lo que faltó, a propósito: aquí terminar a
-// medias es lo normal (un juego de consola no tiene nada de Steam, HLTB no
-// reconoce a los muy raros) y una lista de "no pudo con esto, ni con esto"
-// leería como un fallo cada vez que se pulsa un botón que funciona bien.
-const describeRefresh = (result: GameFullRefreshResult): string => {
-  const got: string[] = [];
-  if (result.igdb === 'updated') got.push('ratings, summary and release date');
-  if (result.hltb === 'updated') got.push('how long to beat');
-  if (result.steamSpy === 'updated') got.push('Steam tags and reviews');
-  if (result.achievements === 'queued') got.push('achievements');
-  if (got.length === 0) return 'Nothing new came back — everything is kept as it was.';
-  const list =
-    got.length === 1 ? got[0] : `${got.slice(0, -1).join(', ')} and ${got[got.length - 1]}`;
-  return `Updated ${list}.`;
-};
+// describeRefresh y el gesto entero viven en components/RefreshGameButton.tsx
+// desde que las filas del Plan ofrecen el mismo botón: los planeados no
+// tienen ficha, así que no pueden llegar a esta barra.
 
 // SPEC 10.7 — Play/Stop (según haya sesión activa), Edit, Añadir gasto,
 // Cambiar carátula/hero, Delete. El prototipo solo tiene Play/Edit/Delete —
@@ -72,7 +57,7 @@ export const ActionBar = ({
   const startGameSession = useStartGameSession();
   const launchExecutable = useLaunchExecutable();
   const openInstallDirectory = useOpenInstallDirectory();
-  const refreshEverything = useRefreshGameEverything();
+  const { refresh: handleRefreshEverything, refreshing } = useRefreshGame(game.id, game.title);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [dirError, setDirError] = useState<string | null>(null);
   const isLive = liveSessionId !== null;
@@ -90,28 +75,6 @@ export const ActionBar = ({
           : `Couldn't open the folder — ${result.message}`,
       );
     }
-  };
-
-  const handleRefreshEverything = (): void => {
-    refreshEverything.mutate(game.id, {
-      onSuccess: (result) => {
-        if (!result) {
-          toast.error("This game isn't in the library anymore.");
-          return;
-        }
-        // El appid recién encontrado es LA noticia, y se dice como tal: es lo
-        // que acaba de abrirle a este juego sus etiquetas, sus reseñas y sus
-        // logros, que hasta hoy la app daba por imposibles.
-        if (result.steam === 'found') {
-          toast.success('Found this game on Steam', { description: describeRefresh(result) });
-          return;
-        }
-        toast.success(`${game.title} refreshed`, { description: describeRefresh(result) });
-      },
-      // Solo salta si falla el viaje entero: cada fuente se cae sola por
-      // dentro y eso ya lo cuenta el parte de arriba.
-      onError: () => toast.error("Couldn't refresh — data kept as it was."),
-    });
   };
 
   const handleTogglePlay = async (): Promise<void> => {
@@ -207,15 +170,12 @@ export const ActionBar = ({
         <button
           type="button"
           onClick={handleRefreshEverything}
-          disabled={refreshEverything.isPending}
+          disabled={refreshing}
           title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
           aria-label="Refresh everything for this game"
           className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-white/[0.03]`}
         >
-          <RefreshCw
-            size={17}
-            className={refreshEverything.isPending ? 'animate-spin' : undefined}
-          />
+          <RefreshCw size={17} className={refreshing ? 'animate-spin' : undefined} />
         </button>
 
         <button

@@ -418,7 +418,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const { id } = useParams();
   const navigate = useNavigate();
   const gameId = Number(id);
-  const { data: game } = useGame(gameId);
+  const { data: game, isLoading: gameLoading, isError: gameFailed } = useGame(gameId);
   const { data: curiosityRows = [] } = useCuriosities();
   const { data: achievements } = useGameAchievements(gameId);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -522,13 +522,30 @@ export const TvGameDetail = (): React.JSX.Element | null => {
     { action: 'x', label: 'Set status' },
   ]);
 
+  // "Todavía no ha llegado" NO es "ya no existe": la key ['games', id] no
+  // está en caché la primera vez que se abre CADA juego (nadie prefetchea ni
+  // hace setQueryData en el renderer), así que `game` es undefined durante
+  // todo el viaje IPC de getGameById — que resuelve iteraciones, sesiones y
+  // estados, no es 1 ms. Sin esta rama, el panel rojo de abajo acusaba de
+  // borrado en la apertura MÁS común de la pantalla. Mismo reparto de tres
+  // estados que GameDetail.tsx y PlanGameDetail.tsx con QueryStatePlaceholder.
+  if (gameLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <span className="text-[0.9em] font-semibold text-muted-foreground">Loading…</span>
+      </div>
+    );
+  }
+
   // El equivalente de escritorio (GameDetail.tsx) usa QueryStatePlaceholder
   // para esto mismo: un mensaje y un camino de vuelta. Aquí antes era un
   // `return null` a secas — con la query bajo el prefijo ['games'], que
   // CUALQUIER sync o mutation invalida en bloque, un juego que desaparece
   // (o que una carrera deja momentáneamente sin datos) dejaba la pantalla
   // entera en negro desde el sofá, sin mensaje y sin nada que enfocar con el
-  // mando salvo adivinar B.
+  // mando salvo adivinar B. Aquí abajo ya solo se llega con la query
+  // resuelta: o falló (y entonces el juego sigue ahí, solo que no se ha
+  // podido leer) o de verdad no hay fila.
   if (!game) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-[1.1em] text-center">
@@ -542,7 +559,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           <TriangleAlert className="h-[1.4em] w-[1.4em]" style={{ color: '#e85d72' }} />
         </div>
         <div className="text-[1.1em] font-extrabold text-foreground">
-          This game is no longer in your library
+          {gameFailed ? 'Couldn’t load this game' : 'This game is no longer in your library'}
         </div>
         <BackButton
           autoFocus

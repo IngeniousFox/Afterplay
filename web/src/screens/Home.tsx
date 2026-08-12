@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Clock3, Gamepad2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { fetchSessions, fetchStats } from '../api';
-import type { StatsSummary } from '../api';
+import type { StateType, StatsSummary } from '../api';
 import { Cover } from '../components/Cover';
 import { LiveBadge, LiveTimer } from '../components/LiveBadge';
 import { ErrorState, Loading } from '../components/States';
@@ -62,37 +62,65 @@ const Tile = ({
 // El reparto por estado, en una barra apilada. Es el resumen que de verdad
 // cabe en un móvil: cuánto has terminado frente a cuánto te queda, de un
 // vistazo y sin leer un solo número.
+//
+// El denominador es la biblioteca ENTERA (totalGames), no la suma de los
+// estados que manda el Worker. Antes se repartía sobre esos cuatro y los que
+// no cuenta (On Hold y Resting) desaparecían: con 100 juegos y 12 en On Hold,
+// la leyenda sumaba 88 justo debajo de un tile de "Games" que decía 100, y el
+// tramo de Beaten se dibujaba al 34% (30/88) en vez de al 30%.
+//
+// Van juntos en un solo tramo porque StatsSummary todavía no manda esas dos
+// cifras por separado (worker/src/queries/stats.ts solo cuenta cuatro); el día
+// que las mande, esto se parte en dos con su color de la tabla de estados. El
+// hueco que queda sin pintar en la barra sigue siendo Unplayed.
 const StatusBar = ({ stats }: { stats: StatsSummary }): React.JSX.Element | null => {
-  const segments = [
-    { key: 'completed', count: stats.beaten },
-    { key: 'started', count: stats.playing },
-    { key: 'dropped', count: stats.dropped },
-  ] as const;
+  const paused = Math.max(
+    0,
+    stats.totalGames - stats.beaten - stats.playing - stats.dropped - stats.unplayed,
+  );
 
-  const known = segments.reduce((sum, segment) => sum + segment.count, 0) + stats.unplayed;
+  const counted: { state: StateType; count: number }[] = [
+    { state: 'completed', count: stats.beaten },
+    { state: 'started', count: stats.playing },
+    { state: 'dropped', count: stats.dropped },
+  ];
+
+  const segments: { key: string; label: string; color: string; count: number }[] = counted.map(
+    ({ state, count }) => ({
+      key: state,
+      label: statusOf(state).label,
+      color: statusOf(state).color,
+      count,
+    }),
+  );
+
+  if (paused > 0) {
+    segments.push({
+      key: 'paused',
+      label: 'On Hold + Resting',
+      color: statusOf('on_hold').color,
+      count: paused,
+    });
+  }
+
+  const known = stats.totalGames;
   if (known === 0) return null;
 
   return (
     <div className="afterplay-reveal">
       <div className="flex h-2 overflow-hidden rounded-full bg-white/8">
-        {segments.map(({ key, count }) => (
-          <div
-            key={key}
-            style={{ width: `${(count / known) * 100}%`, background: statusOf(key).color }}
-          />
+        {segments.map(({ key, count, color }) => (
+          <div key={key} style={{ width: `${(count / known) * 100}%`, background: color }} />
         ))}
       </div>
       <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
-        {segments.map(({ key, count }) => {
-          const meta = statusOf(key);
-          return (
-            <span key={key} className="flex items-center gap-1.5 text-[11px] font-bold">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />
-              <span className="text-muted-foreground">{meta.label}</span>
-              <span className="tabular-nums">{count}</span>
-            </span>
-          );
-        })}
+        {segments.map(({ key, label, color, count }) => (
+          <span key={key} className="flex items-center gap-1.5 text-[11px] font-bold">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+            <span className="text-muted-foreground">{label}</span>
+            <span className="tabular-nums">{count}</span>
+          </span>
+        ))}
         <span className="flex items-center gap-1.5 text-[11px] font-bold">
           <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
           <span className="text-muted-foreground">Unplayed</span>

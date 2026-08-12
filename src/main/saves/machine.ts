@@ -141,9 +141,15 @@ export const getPruneFloor = (): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-// Tras recuperar el índice desde el bucket pasa lo mismo que al adoptar: el
-// índice conoce versiones que esta máquina no tiene en local, y la poda las
-// borraría por "caducadas".
+// Lo llaman los dos sitios en los que la carpeta local deja de ser un relato
+// completo de lo que hay arriba, que es la premisa de la que vive la poda:
+//
+//   - recovery.ts, al recuperar el índice desde el bucket: pasa lo mismo que
+//     al adoptar, el índice conoce versiones que esta máquina no tiene en
+//     local y la poda las borraría por "caducadas".
+//   - localUsage.ts, al vaciar save-backups/ para liberar disco: eso no es la
+//     retención de ludusavi hablando, es el usuario, y esta instalación deja
+//     de tener autoridad para afirmar que lo de antes caducó.
 export const setPruneFloor = (when: Date): void => {
   const file = read();
   const floor = when.toISOString();

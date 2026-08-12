@@ -99,6 +99,30 @@ export const latestRealStateEvent = <T extends RealStateEventCandidate>(
   return latest;
 };
 
+// Dar de alta un juego escribe su estado inicial en la MISMA transacción que
+// la fila del juego (writeInitialPlaythrough), así que ese primer evento no
+// dice cuándo lo jugaste: dice cuándo lo metiste. Se reconoce porque su fecha
+// cae pegada al `addedAt` — y no por comparación exacta, porque son dos
+// escrituras distintas de la misma transacción y caen con unos milisegundos de
+// diferencia. Una fecha tecleada por ti nunca aterriza ahí: se guarda a
+// medianoche de ese día, a horas de distancia del alta.
+//
+// La regla vive aquí porque la necesitan los dos lados y tenerla por duplicado
+// ya se pagó: getGames la usa para que el respaldo de "Last played" no
+// convierta el orden de la biblioteca en "los últimos que añadí" disfrazado de
+// "los últimos que jugué" (medido en la BD real: 6 juegos de 331, y los seis
+// salían arriba del todo), y el Journey del renderer para que un juego que no
+// has tocado nunca no aparezca como hito del mes en que lo metiste.
+//
+// La tolerancia se queda privada a propósito: el número no es un parámetro que
+// nadie deba pasar, es el margen de una transacción.
+const ADDED_AT_TOLERANCE_MS = 5_000;
+
+// Sin `addedAt` no hay con qué comparar, y "no lo sé" es NO artefacto: tirar
+// un evento por si acaso pierde una fecha buena, que es peor.
+export const isAddedAtArtifact = (occurredAt: Date, addedAt: Date | null | undefined): boolean =>
+  addedAt != null && Math.abs(occurredAt.getTime() - addedAt.getTime()) < ADDED_AT_TOLERANCE_MS;
+
 // A qué momento del calendario se atribuyen unas horas que nadie midió. Las
 // horas manuales no tienen fecha propia — son un número suelto en la
 // iteración —, así que se cuelgan del log de estados de su playthrough: su

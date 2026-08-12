@@ -768,8 +768,14 @@ export type SessionClosedEvent = {
   durationSec: number;
   // Total del juego TRAS esta sesión — el "llevas 43h" del aviso.
   totalHours: number;
-  // Esta sesión ha sido la más larga de este juego. Es la clase de dato que
-  // convierte un registro en un pequeño momento.
+  // Esta sesión ha batido el récord del juego, pero con el matiz de
+  // deriveMoments (shared/memory/moments.ts) y no "la más larga" a secas: solo
+  // cuenta el tiempo MEDIDO —las filas manuales son horas tecleadas, no
+  // partidas— y hacen falta al menos LONGEST_MIN_PRIOR_SESSIONS sesiones
+  // medidas antes, para que la segunda partida de cualquier juego no sea
+  // "récord". El toast lo calcula con esa misma lib justamente para decir lo
+  // que el diario va a reconocer después. Es la clase de dato que convierte un
+  // registro en un pequeño momento.
   isLongest: boolean;
   // Solo cuando el evento viene de PULSAR la notificación de Windows: ahí no
   // toca enseñar un toast, sino abrir la ficha del juego con esa sesión

@@ -49,15 +49,35 @@ export const useSavesUsage = (): UseQueryResult<SaveBackupsUsage, Error> =>
   });
 
 // Espacio ocupado en DISCO por save-backups/ (Ajustes) — no confundir con
-// useSavesUsage, que es el mismo dato pero en R2. Se recalcula recorriendo
-// la carpeta, así que no es gratis como la de arriba — por eso, a diferencia
-// de esa, no se invalida con cada mutation de saves.all: solo cuando algo
-// puede haberla cambiado de verdad (el propio Clean up, más abajo).
+// useSavesUsage, que es el mismo dato pero en R2. Se recalcula recorriendo la
+// carpeta (un mapping.yaml por cada una), así que no es gratis como la de
+// arriba.
+//
+// CICATRIZ: aquí ponía que, a diferencia de useSavesUsage, esta query "no se
+// invalida con cada mutation de saves.all". Era MENTIRA: su key es
+// ['saves','localUsage'] y TanStack invalida por prefijo, así que la alcanza
+// cualquiera de la docena de mutations que invalidan queryKeys.saves.all
+// (scan, backup, detect, restore, adopt, recover...). Con Ajustes abierto —
+// que es cuando está montada— el recorrido se repite entero aunque en disco
+// no haya cambiado un byte.
+//
+// Se queda DENTRO del árbol de saves a sabiendas, y no fuera como
+// savesLibraryScan (queryKeys.ts): invalidar de más cuesta un recorrido local
+// sin red, invalidar de menos cuesta una cifra falsa, y el censo de "quién
+// escribe save-backups/" no lo puede cerrar el renderer — el que más escribe
+// ahí no es ninguna mutation, es la copia automática al cerrar sesión (con la
+// poda de retención de ludusavi dentro), que ocurre entera en el main.
+//
+// Y por ESE escritor el staleTime es acotado y no Infinity, igual que en
+// useSavesUsage y por el mismo motivo: juegas, la copia se sube sola, no
+// tocas nada de Saves en toda la sesión y la cifra de disco se quedaba
+// clavada en la de la última vez hasta reiniciar. Ninguna invalidación por
+// prefijo llega si nadie dispara una mutation de saves.
 export const useLocalBackupsUsage = (): UseQueryResult<LocalBackupsUsage, Error> =>
   useQuery({
     queryKey: queryKeys.saves.localUsage,
     queryFn: () => window.api.saves.getLocalUsage(),
-    staleTime: Infinity,
+    staleTime: 5 * 60 * 1000,
   });
 
 // Borra lo prescindible de save-backups/ (ya sincronizado, o huérfano). La

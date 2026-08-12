@@ -87,7 +87,48 @@ export type ChapterStateEvent = {
   gameId: number;
   type: string;
   occurredAt: Date;
+  // Cuándo se dio de alta el juego, lo único que hace falta para reconocer el
+  // papeleo del alta (ver isMeaningfulStateEvent). Opcional porque un dato que
+  // falta no puede borrar historia — pero hoy no lo trae NADIE: la única
+  // fuente real es getMemoryFacts (main/db/queries/memories/getMemoryFacts.ts),
+  // que selecciona iteración, juego, tipo y fecha y no toca games.addedAt.
+  // Mientras siga así, la mitad "alta" del filtro no se aplica en la app.
+  addedAt?: Date | null;
 };
+
+// Alta y evento inicial son dos escrituras de la MISMA transacción: caen con
+// unos milisegundos de diferencia, nunca con el mismo timestamp, así que la
+// comparación exacta no vale. Misma cifra que getGames (ADDED_AT_TOLERANCE_MS)
+// y que el Journey — es el mismo hecho medido en tres sitios.
+const ADDED_AT_TOLERANCE_MS = 5_000;
+
+// "Aquí pasó algo de verdad", escrito con el criterio del Journey
+// (meaningfulEvents, renderer/src/lib/journeyEntries.ts): fuera 'plan_to_play',
+// que es intención y no juego, y fuera lo que caiga pegado al alta del juego,
+// que es un efecto secundario de darlo de alta y no un hito.
+//
+// Vive aquí porque el Loop y el Journey tienen que estar de acuerdo en qué
+// meses existen: meter 30 juegos viejos marcados "Beaten" sin teclear fechas
+// abre marzo en el Loop y le cobra un recap ("you finished thirty games in
+// March") de un mes en el que el Journey no pinta NI UNA carátula, así que ese
+// recap pagado no se puede leer en ninguna parte.
+//
+// OJO, PORQUE HOY NO ARREGLA ESE CASO: sin addedAt solo cae el 'plan_to_play',
+// y quien alimenta al Loop (getMemoryFacts) no trae la fecha de alta todavía
+// — el Journey siempre la tiene, el Loop nunca. O sea que las dos pantallas
+// SIGUEN sin estar de acuerdo, y lo estarán el día que getMemoryFacts añada
+// games.addedAt a su select y lo cuelgue de cada evento. La regla se escribe
+// aquí, y no en el consumidor, para que ese día sea una línea.
+//
+// Peaje que se paga UNA vez: un mes que llevara un 'plan_to_play' dentro cambia
+// sus hechos, así que su firma cambia y su recap sale obsoleto la primera vez
+// que se mira (medido: solo cambia en esos meses). Es correcto —esa prosa
+// narraba algo que ya no cuenta como hecho—, pero si aparece una tanda de
+// obsoletos sin haber tocado nada, viene de aquí.
+export const isMeaningfulStateEvent = (event: ChapterStateEvent): boolean =>
+  event.type !== 'plan_to_play' &&
+  (!event.addedAt ||
+    Math.abs(event.occurredAt.getTime() - event.addedAt.getTime()) >= ADDED_AT_TOLERANCE_MS);
 
 // Un desbloqueo tal como llega del main (getMemoryFacts): ya FUNDIDO por
 // logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de
@@ -148,9 +189,11 @@ export type Chapter = {
   // se puede calcular mirando un mes suelto.
   moments: Moment[];
   // Los logros del periodo, curados (ver ChapterAchievements). null = ninguno
-  // con fecha fiable dentro del rango. Entra en el sourceHash como todo lo
-  // demás: un desbloqueo nuevo en un mes viejo deja su recap 'stale', que es
-  // exactamente lo que significa "los hechos cambiaron".
+  // con fecha fiable dentro del rango. Alimenta el prompt (generate.ts) pero
+  // NO sella el capítulo todavía: la firma que se sella hoy no los mira, así
+  // que un desbloqueo que aparezca meses después en un mes viejo no marca su
+  // recap como obsoleto. Está a medio camino a propósito y el porqué está
+  // contado en canonicalChapterFacts — leerlo antes de "arreglarlo".
   achievements: ChapterAchievements | null;
 };
 
@@ -158,6 +201,16 @@ const isMeasured = (session: MemorySession): boolean =>
   !session.isManual && session.endedAt !== null && (session.durationSec ?? 0) > 0;
 
 const inRange = (date: Date, start: Date, end: Date): boolean => date >= start && date < end;
+
+// Orden por unidades de código UTF-16 y no localeCompare: el colador del
+// sistema depende de la locale y de la versión de ICU que traiga cada Electron,
+// y a nivel primario declara IGUALES cadenas distintas (una "é" precompuesta y
+// su forma combinante, mayúsculas y minúsculas según el idioma). Los nombres de
+// logro son Unicode arbitrario, así que es un riesgo real: se usan para decidir
+// qué logros se citan y para desempatar dentro de la firma de hechos, y este
+// fichero ya se cuida (ver localDate) de que dos máquinas del mismo usuario
+// calculen lo MISMO. Un desempate no puede ser lo que rompa esa promesa.
+const byCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 // Construye el capítulo de un periodo, o null si no hay NADA que contar (ni
 // sesiones medidas, ni completados, ni horas manuales ancladas dentro): un
@@ -219,7 +272,12 @@ export const buildChapter = (
     perGame.set(block.gameId, entry);
   }
 
-  const completions: ChapterCompletion[] = events
+  // Ni las intenciones ni el papeleo del alta son hechos del periodo: el
+  // capítulo tiene que contar lo mismo que el Journey pinta al lado. Hoy solo
+  // caen las intenciones — el porqué, en isMeaningfulStateEvent.
+  const realEvents = events.filter(isMeaningfulStateEvent);
+
+  const completions: ChapterCompletion[] = realEvents
     .filter((event) => event.type === 'completed' && inRange(event.occurredAt, start, end))
     .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
     .map((event) => ({
@@ -228,7 +286,7 @@ export const buildChapter = (
       occurredAt: event.occurredAt,
     }));
 
-  const stateChanges: ChapterStateChange[] = events
+  const stateChanges: ChapterStateChange[] = realEvents
     .filter((event) => event.type !== 'completed' && inRange(event.occurredAt, start, end))
     .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
     .map((event) => ({
@@ -271,10 +329,17 @@ export const buildChapter = (
           total: periodUnlocks.length,
           rareCount: rareUnlocks.length,
           highlights: [...periodUnlocks]
+            // Los empates se rompen por juego y nombre a propósito: con el
+            // solo criterio de rareza, QUÉ seis logros sobreviven al slice
+            // dependería del orden en que la DB los devolvió, y el mismo mes
+            // regenerado dos veces citaría logros distintos sin que nada
+            // hubiera cambiado. (Sellar, no sellan: ver canonicalChapterFacts.)
             .sort(
               (a, b) =>
                 (a.globalPercent ?? Number.POSITIVE_INFINITY) -
-                (b.globalPercent ?? Number.POSITIVE_INFINITY),
+                  (b.globalPercent ?? Number.POSITIVE_INFINITY) ||
+                a.gameId - b.gameId ||
+                byCodeUnits(a.name, b.name),
             )
             .slice(0, 6)
             .map((unlock) => ({
@@ -320,11 +385,17 @@ export const listClosedPeriodsWithActivity = (
     if (!isMeasured(session)) continue;
     activityKeys.add(session.startedAt.getFullYear() * 12 + session.startedAt.getMonth());
   }
-  // CUALQUIER cambio de estado abre mes, no solo los completados: empezar,
-  // aparcar o soltar un juego es historia igual (ver ChapterStateChange), y
-  // es la misma vara que usa el Journey para abrir página — las dos
-  // pantallas tienen que estar de acuerdo en qué meses existen.
+  // CUALQUIER cambio de estado REAL abre mes, no solo los completados:
+  // empezar, aparcar o soltar un juego es historia igual (ver
+  // ChapterStateChange). "Real" es lo que dice isMeaningfulStateEvent, que
+  // aspira a ser la misma vara con la que el Journey abre página — las dos
+  // pantallas tienen que estar de acuerdo en qué meses existen. Todavía no lo
+  // están: aquí los eventos llegan sin addedAt y solo cae el 'plan_to_play',
+  // así que el Loop sigue abriendo (y cobrando) meses cuyo único contenido es
+  // el papeleo de dar juegos de alta. El hueco y su tapa, en
+  // isMeaningfulStateEvent.
   for (const event of events) {
+    if (!isMeaningfulStateEvent(event)) continue;
     activityKeys.add(event.occurredAt.getFullYear() * 12 + event.occurredAt.getMonth());
   }
   // Un mes cuyo único contenido son horas manuales también tiene historia
@@ -377,17 +448,40 @@ const localDate = (date: Date): string =>
 //   · Fechas en local y solo a nivel de día — la hora exacta de un evento no
 //     cambia la historia que se narra.
 //   · Arrays con orden fijo (ya vienen ordenados de buildChapter; aquí se
-//     reordenan por si acaso, que un hash no debe fiarse de nadie).
+//     reordenan por si acaso, que un hash no debe fiarse de nadie), y los
+//     desempates de texto por unidades de código (byCodeUnits) y nunca por el
+//     colador del sistema — mismo motivo que localDate: dos máquinas del mismo
+//     usuario tienen que sacar el mismo hex.
 //
-// El parámetro `withStateChanges` existe por COMPATIBILIDAD, no por gusto:
-// las decisiones (empezar/aparcar/soltar) se incorporaron a los hechos
-// después de que ya hubiera recaps escritos, y meterlas en el hash habría
-// marcado obsoletos de golpe todos los recaps anteriores — decenas de
-// regeneraciones que cuestan dinero para reescribir prosa que estaba bien.
-// Con esto, status.ts acepta también la firma ANTIGUA (ver ahí): lo viejo
-// sigue vigente, lo nuevo se sella con la firma completa. La firma sin
-// decisiones queda congelada para siempre — no se toca ni se "mejora".
-export const canonicalChapterFacts = (chapter: Chapter, withStateChanges = true): string => {
+// Las GENERACIONES de la firma existen por COMPATIBILIDAD, no por gusto: cada
+// vez que un hecho nuevo entra en la cadena, TODOS los recaps ya escritos dejan
+// de casar y aparecen obsoletos de golpe — decenas de regeneraciones que
+// cuestan dinero para reescribir prosa que estaba bien. Por eso una firma que
+// ya ha sellado recaps no se toca ni se "mejora" jamás: se añade otra al lado y
+// status.ts acepta cualquiera de ellas (ver allí el precio de aceptar las
+// viejas: un hecho que la firma vieja no lleva nunca marcará obsoleto a un
+// recap sellado con ella).
+//
+//   · 'noDecisions'    — la primera, anterior a que empezar/aparcar/soltar
+//                        fueran hechos del capítulo. Congelada. hash.ts la pide
+//                        como `false` (legacyChapterHash).
+//   · 'noAchievements' — la que se sella y se compara HOY; por eso es el
+//                        default, que es como la llama hash.ts (chapterHash).
+//   · 'full'           — añade los logros. Todavía no la pide nadie, y
+//                        encenderla NO es cambiar este default a solas: ver el
+//                        bloque de logros de aquí abajo.
+export type ChapterFactsGeneration = 'full' | 'noAchievements' | 'noDecisions';
+
+export const canonicalChapterFacts = (
+  chapter: Chapter,
+  generation: ChapterFactsGeneration | boolean = 'noAchievements',
+): string => {
+  // El parámetro nació booleano (`withStateChanges`) y hash.ts sigue llamando
+  // con `false`: se sigue aceptando tal cual en vez de arrastrar a un fichero
+  // ajeno a un renombre.
+  const wanted: ChapterFactsGeneration =
+    generation === true ? 'noAchievements' : generation === false ? 'noDecisions' : generation;
+  const withStateChanges = wanted !== 'noDecisions';
   const round = (value: number): number => Math.round(value * 100) / 100;
 
   const stateChanges = chapter.stateChanges
@@ -396,13 +490,44 @@ export const canonicalChapterFacts = (chapter: Chapter, withStateChanges = true)
       (a, b) =>
         a.occurredAt.getTime() - b.occurredAt.getTime() ||
         a.gameId - b.gameId ||
-        a.type.localeCompare(b.type),
+        // Por unidades de código como todo lo que entra en la firma (ver
+        // byCodeUnits). Aquí no cambia ninguna cadena ya sellada: los tipos son
+        // un puñado de identificadores ASCII que salen igual con las dos varas,
+        // y este desempate solo entra si dos eventos del MISMO juego caen en el
+        // mismo milisegundo.
+        byCodeUnits(a.type, b.type),
     )
     .map((change) => ({
       id: change.gameId,
       type: change.type,
       on: localDate(change.occurredAt),
     }));
+
+  // Los logros son lo que MÁS se rellena a posteriori: conectas RA en agosto y
+  // entran 40 desbloqueos con fecha de junio. La firma que se sella hoy no los
+  // mira, así que el hash de junio sale idéntico, el recap se queda para
+  // siempre sin mencionarlos y Ajustes sigue diciendo "0 desactualizados".
+  // Sellarlos es la única forma de que ese relleno marque el mes.
+  //
+  // Se sella SOLO cuántos cayeron. Nada que salga de globalPercent: ni la
+  // cuenta de raros (que no es más que un filtro sobre el porcentaje — un
+  // recálculo de Steam que cruce el 10% movería el hash sin que tú hayas
+  // tocado el mando) ni QUÉ seis destacan (se eligen ordenando por rareza, así
+  // que los mueve el mismo ruido). El precio, dicho claro: si Steam re-puntúa,
+  // el recap puede seguir diciendo "three of them rare" cuando hoy serían dos y
+  // nada lo marcará; a cambio, ningún mes se marca obsoleto por una cifra que
+  // mueve un servidor ajeno. Un intercambio exacto (un desbloqueo sale del mes
+  // y otro entra) tampoco mueve el total y tampoco marca — es rarísimo al lado
+  // de los rellenos masivos, que son el caso que duele.
+  //
+  // Y HOY NO SELLA NADA: la clave solo sale en la generación 'full', que no
+  // pide nadie. Encenderla es un cambio de tres ficheros A LA VEZ — este, y
+  // main/memories/hash.ts + status.ts para que status acepte ADEMÁS la firma
+  // 'noAchievements'. Si se enciende sin eso, todo recap ya escrito de un mes
+  // con logros pasa a obsoleto de un día para otro: justo lo que la escalera
+  // de generaciones existe para evitar.
+  const achievements =
+    wanted === 'full' && chapter.achievements ? { total: chapter.achievements.total } : null;
 
   return JSON.stringify({
     scope: chapter.scopeKey,
@@ -423,11 +548,11 @@ export const canonicalChapterFacts = (chapter: Chapter, withStateChanges = true)
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.gameId - b.gameId)
       .map((completion) => ({ id: completion.gameId, on: localDate(completion.occurredAt) })),
     // Las decisiones entran en el hash como cualquier otro hecho — salvo
-    // cuando se está reconstruyendo la firma ANTIGUA para comparar con un
-    // recap escrito antes de que existieran (ver la cabecera). La clave va
-    // aquí en medio a propósito: JSON.stringify respeta el orden de
-    // inserción y la firma antigua tiene que salir carácter por carácter
-    // como salía entonces.
+    // cuando se está reconstruyendo 'noDecisions' para comparar con un recap
+    // escrito antes de que existieran (ver la cabecera). La clave va aquí en
+    // medio a propósito: JSON.stringify respeta el orden de inserción y una
+    // generación vieja tiene que salir carácter por carácter como salía
+    // entonces.
     ...(withStateChanges ? { stateChanges } : {}),
     moments: chapter.moments
       .slice()
@@ -447,5 +572,8 @@ export const canonicalChapterFacts = (chapter: Chapter, withStateChanges = true)
                   ? moment.count
                   : 0,
       })),
+    // Al final y solo en 'full': las generaciones anteriores tienen que salir
+    // carácter por carácter como salían cuando se escribieron aquellos recaps.
+    ...(achievements ? { achievements } : {}),
   });
 };

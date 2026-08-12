@@ -126,6 +126,18 @@ export const scopeLabel = (scope: ChapterScope): string =>
       })
     : String(scope.year);
 
+// CICATRIZ ABIERTA: esto siempre imprime un día concreto, y el capítulo no
+// trae la precisión de la fecha. Un final registrado "en 2019" se guarda como
+// 2019-01-01 con datePrecision 'year' (DateWithPrecisionPicker), pero
+// getMemoryFacts no selecciona esa columna y ChapterCompletion /
+// ChapterStateChange no la llevan, así que aquí llega indistinguible de un 1
+// de enero de verdad — y el prompt, que ordena afirmar las fechas dadas, hace
+// que el recap jure un día que nadie tecleó. El Journey sí lo respeta
+// (renderer/src/lib/journeyEntries.ts, firstPrecision/lastPrecision).
+// NO se adivina desde aquí: tratar todo día 1 como precisión de año sería
+// inventarse el dato en la otra dirección. Cuando la precisión viaje hasta el
+// capítulo, esta función la recibe y degrada — 'month' → "January", 'year' →
+// solo el año o sin fecha.
 const shortDate = (date: Date): string =>
   date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 
@@ -303,7 +315,12 @@ const parsePayload = (raw: string): RecapPayload | null => {
 // Genera y guarda el recap de UN capítulo. Lanza si algo impidió generar
 // (sin clave, red, respuesta rota): el periodo queda pendiente y otra pasada
 // lo recoge — solo un payload real marca el periodo como contado.
-export const generateMemoryForChapter = async (chapter: Chapter): Promise<void> => {
+//
+// Devuelve si se escribió fila: true = hay recap guardado, false = el modelo
+// rechazó y no hay nada que leer. Quien llama NO puede dar por hecho que
+// "sin excepción" significa "hay recap" — anunciarlo era el toast mentiroso
+// de "Your June story is ready" hacia un mes sin panel (ver el rechazo abajo).
+export const generateMemoryForChapter = async (chapter: Chapter): Promise<boolean> => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('Anthropic API key not configured');
 
@@ -332,9 +349,15 @@ export const generateMemoryForChapter = async (chapter: Chapter): Promise<void> 
   // transitorio, así que dejarlo pendiente para un reintento futuro es lo
   // correcto — a diferencia de curiosidades, aquí no hay marcador de "hecho
   // vacío" que persista, y no se añade uno en este pase.)
+  //
+  // Salir limpio NO es salir en silencio: se devuelve false para que la cola
+  // no anuncie un recap que no existe. Cuando esto devolvía void, el aviso
+  // 'generated' salía igual y el toast de aterrizaje llevaba al Journey de un
+  // mes que seguía vacío — y, al no persistir nada, la detección diaria lo
+  // reencolaba y el toast mentiroso volvía cada día.
   if (response.stop_reason === 'refusal') {
     console.warn('[memories] el modelo rechazo generar el recap, se omite este periodo');
-    return;
+    return false;
   }
 
   if (response.stop_reason === 'max_tokens') {
@@ -361,4 +384,5 @@ export const generateMemoryForChapter = async (chapter: Chapter): Promise<void> 
       promptVersion: PROMPT_VERSION,
     }),
   );
+  return true;
 };

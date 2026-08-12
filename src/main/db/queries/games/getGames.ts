@@ -1,6 +1,10 @@
 import { eq, sql } from 'drizzle-orm';
 import { getDb } from '../..';
-import { latestRealStateEvent, manualHoursAnchor } from '../../../../shared/playthroughState';
+import {
+  isAddedAtArtifact,
+  latestRealStateEvent,
+  manualHoursAnchor,
+} from '../../../../shared/playthroughState';
 import type { GameListItem, StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, sessionsTable, stateEventsTable } from '../../schema';
 import { resolveIterationHours } from './iterationHours';
@@ -118,6 +122,11 @@ export const getGames = async (): Promise<GameListItem[]> => {
     );
     // Modelo v2: toda fila de sessions es tiempo jugado real — ya no existen
     // los marcadores de borde que antes había que descontar aquí.
+    //
+    // Y cuenta TODAS, la ABIERTA incluida — aquí no hay filtro por endedAt.
+    // Dicho explícitamente porque ya costó un fallo real: el overlay le
+    // sumaba +1 "por la sesión de ahora" asumiendo que esto contaba solo las
+    // cerradas, y todo juego en marcha enseñaba una sesión de más.
     sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
     if (row.endedAt === null) {
       liveSinceByGame.set(row.gameId, row.startedAt);
@@ -205,15 +214,10 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // Un evento de estado vale como "cuándo lo jugué" SOLO si su fecha la
   // pusiste tú. Al añadir un juego con estado pero sin fechas,
   // writeInitialPlaythrough deja que occurredAt caiga al $defaultFn del
-  // schema, o sea AHORA: ese evento no dice cuándo lo jugaste, dice cuándo
-  // lo diste de alta. Colarlo aquí convertía el orden en "los últimos que
-  // añadí" disfrazado de "los últimos que jugué" — medido en la BD real: 6
-  // juegos de 331, y los seis salían arriba del todo.
-  //
-  // Se reconocen porque su fecha coincide al segundo con el addedAt del
-  // juego (mismo insert). Una fecha tecleada por ti nunca cae ahí: se
-  // guarda a medianoche de ese día, a horas de distancia del alta.
-  const ADDED_AT_TOLERANCE_MS = 5_000;
+  // schema, o sea AHORA: ese evento no dice cuándo lo jugaste, dice cuándo lo
+  // diste de alta. Reconocerlos es isAddedAtArtifact (shared/playthroughState,
+  // que es donde está el porqué y el margen) — la misma regla que aplica el
+  // Journey del renderer, escrita una sola vez.
   const addedAtByGame = new Map(games.map((game) => [game.id, game.addedAt]));
 
   const lastEventByGame = new Map<number, Date>();
@@ -223,12 +227,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       // 'plan_to_play' fuera por lo mismo que en currentState: planear no es
       // jugar.
       if (event.type === 'plan_to_play') continue;
-      if (
-        addedAt &&
-        Math.abs(event.occurredAt.getTime() - addedAt.getTime()) < ADDED_AT_TOLERANCE_MS
-      ) {
-        continue;
-      }
+      if (isAddedAtArtifact(event.occurredAt, addedAt)) continue;
       // Se mira TODO el log, no solo el último: si el evento más reciente es
       // uno de esos sin fecha propia pero un 'started' anterior sí la tiene,
       // esa fecha sigue siendo un dato bueno que no hay que tirar.

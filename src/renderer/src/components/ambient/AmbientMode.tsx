@@ -125,11 +125,19 @@ export const AmbientMode = (): React.JSX.Element | null => {
   // hacerlo en un efecto pinta primero un fotograma con el estado viejo.
   const [wasIdle, setWasIdle] = useState(idle);
   const [mounted, setMounted] = useState(idle);
+  // Opacidad de la capa, separada de `mounted` a propósito: ver el efecto de
+  // más abajo. Cada ENTRADA arranca de cero — si no, la segunda vez que
+  // entrara el modo ambiente se seguiría el `shown` de la anterior y volvería
+  // a aparecer de golpe.
+  const [shown, setShown] = useState(false);
   if (wasIdle !== idle) {
     setWasIdle(idle);
     // Al entrar se monta ya; al salir NO se desmonta aquí — lo hará el
     // final de la transición.
-    if (idle) setMounted(true);
+    if (idle) {
+      setMounted(true);
+      setShown(false);
+    }
   }
 
   // LA RED DE SEGURIDAD del desmontaje. transitionend solo llega si la
@@ -147,6 +155,28 @@ export const AmbientMode = (): React.JSX.Element | null => {
     return () => clearTimeout(timer);
   }, [idle, mounted]);
 
+  // El fundido de ENTRADA necesita un fotograma previo con opacidad 0. Como
+  // `mounted` e `idle` se ponen a true en el MISMO commit (el ajuste durante
+  // el render de arriba), el div entraba en el DOM ya con opacity:1 escrito:
+  // una transición CSS necesita un valor ANTERIOR sobre un elemento que ya
+  // existía, y un nodo insertado con su valor final no transiciona. El velo
+  // aparecía entero de un fotograma al otro y la rama de 1100ms de abajo solo
+  // llegaba a correr en la SALIDA (lo que se veía moverse por dentro son las
+  // animaciones de la diapositiva, que sí arrancan al insertarse).
+  // Doble requestAnimationFrame porque con uno solo el cambio puede acabar
+  // en el mismo estilo calculado que la inserción.
+  useEffect(() => {
+    if (!mounted || !idle) return undefined;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setShown(true));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [mounted, idle]);
+
   if (!mounted || candidates.length === 0) return null;
 
   return (
@@ -154,7 +184,9 @@ export const AmbientMode = (): React.JSX.Element | null => {
       // La capa entera se atenúa: al entrar con calma (te has ido, no hay
       // prisa) y al salir rápido, porque has vuelto y quieres tu app. Pero
       // rápido no es instantáneo — 420ms bastan para que se sienta como que
-      // se aparta, no como un corte.
+      // se aparta, no como un corte. La entrada la dispara `shown` un
+      // fotograma después de montar (ver arriba); sin ese paso el 1100ms no
+      // corría y el velo aparecía de golpe.
       //
       // El fondo es TU PROPIA APP desenfocada, no una imagen: backdrop-filter
       // difumina lo que hay detrás de esta capa (la pantalla en la que estabas)
@@ -168,7 +200,7 @@ export const AmbientMode = (): React.JSX.Element | null => {
       style={{
         background: 'rgba(8,9,8,.42)',
         backdropFilter: 'blur(15px) saturate(0.95) brightness(0.78)',
-        opacity: idle ? 1 : 0,
+        opacity: shown && idle ? 1 : 0,
         transition: `opacity ${idle ? 1100 : 420}ms ${idle ? 'ease-out' : 'cubic-bezier(.4,0,1,1)'}`,
         // Mientras el salvapantallas está puesto, el velo ABSORBE los clics:
         // el mousedown que lo despierta no puede pulsar a la vez el botón que

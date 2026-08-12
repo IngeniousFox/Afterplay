@@ -1,5 +1,6 @@
 import { basename, join } from 'node:path';
-import { existsSync, rmSync, statSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
+import { parse, stringify } from 'yaml';
 import type { SaveBackupRow } from '../db/schema';
 import type { SaveGame } from '../db/queries/saves/getSaveGames';
 import { createSaveBackup } from '../db/queries/saves/createSaveBackup';
@@ -42,7 +43,12 @@ import {
   previewGame,
   restoreGame,
 } from './service';
-import type { LudusaviCustomGame, LudusaviRedirect } from './types';
+import type {
+  BackupMapping,
+  LudusaviCustomGame,
+  LudusaviRedirect,
+  MappingBackupNode,
+} from './types';
 
 // Orquestación: ludusavi (local) + R2 (nube) + la tabla save_backups
 // (índice). Aquí es donde se cumplen las reglas de PARTIDAS-GUARDADAS.md que
@@ -126,7 +132,8 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // caracteres ilegales sustituidos por "_" (bug real con "Motor Town:
   // Behind The Wheel" — el zip se creaba y el espejo no lo encontraba).
   const dir = findGameBackupDir(ludusaviName);
-  const versions = listVersions(readMapping(dir));
+  const localMapping = readMapping(dir);
+  const versions = listVersions(localMapping);
   const localNames = new Set(versions.map((version) => version.name));
 
   // Solo se toca la carpeta de ESTA máquina. Lo que hayan subido otros PCs
@@ -134,25 +141,13 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   const machineId = getMachineId();
   const prefix = r2.gamePrefix(requireIgdbId(game), machineId);
   const remote = await r2.listKeys(prefix);
-  const remoteNames = new Set(remote.map((object) => basename(object.key)));
 
-  // 1. Subir los zips que falten.
-  for (const version of versions) {
-    if (remoteNames.has(version.name)) continue;
-    const filePath = join(dir, version.name);
-    if (!existsSync(filePath)) continue;
-    await r2.uploadFile(`${prefix}${version.name}`, filePath);
-  }
-
-  // 2. El mapping.yaml se sube SIEMPRE: es el índice y cambia en cada
-  // backup. Sin él, la carpeta materializada en otro PC es un montón de
-  // zips que ludusavi no sabe interpretar.
-  const mappingPath = join(dir, MAPPING_FILE);
-  if (existsSync(mappingPath)) await r2.uploadFile(`${prefix}${MAPPING_FILE}`, mappingPath);
-
-  // 3. Retirar de la nube lo que la retención local ya no conserva. Al estar
-  // dentro del prefijo de esta máquina, "lo que ya no está en local" es una
-  // afirmación cierta: nadie más escribe aquí.
+  // Qué versiones caducaron. Se decide UNA vez y lo consultan tanto el
+  // mapping.yaml que se sube como la poda del bucket: si los dos no cuentan la
+  // misma historia, arriba quedan zips que ningún nodo describe (o nodos que
+  // apuntan a zips borrados). El paso 4 aplica el mismo suelo a las filas del
+  // índice, con su propio respaldo para las que no se pueden fechar por el
+  // nombre.
   //
   // El suelo de poda (pruneFloor) protege lo anterior a esta instalación: al
   // reclamar la carpeta de una reinstalación previa, la carpeta LOCAL está
@@ -161,15 +156,74 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // adopción existe para salvar. Un nombre que no sepamos fechar tampoco se
   // toca: ante la duda, no borrar.
   const floor = getPruneFloor();
-  const staleKeys = remote
-    .map((object) => object.key)
-    .filter((key) => {
-      const name = basename(key);
-      if (name === MAPPING_FILE || localNames.has(name)) return false;
-      if (!floor) return true;
-      const when = backupTimestamp(name);
-      return when !== null && when.getTime() >= floor.getTime();
-    });
+  const isStale = (name: string): boolean => {
+    if (name === MAPPING_FILE || localNames.has(name)) return false;
+    if (!floor) return true;
+    const when = backupTimestamp(name);
+    return when !== null && when.getTime() >= floor.getTime();
+  };
+
+  // 1. Subir los zips que falten, anotando el tamaño REAL de todo lo que hay
+  // arriba: el del listado si ya estaba, el de la subida si es nuevo. Esta es
+  // la única lista de "qué está de verdad en el bucket" y de ella dependen
+  // tanto el mapping.yaml fusionado como las filas del índice — una versión
+  // cuyo zip no llegó a subirse (Defender lo puso en cuarentena, un borrado a
+  // medias) no puede aparecer en ninguno de los dos.
+  const bytesInBucket = new Map<string, number>(
+    remote.map((object) => [basename(object.key), object.size]),
+  );
+  for (const version of versions) {
+    if (bytesInBucket.has(version.name)) continue;
+    const filePath = join(dir, version.name);
+    if (!existsSync(filePath)) continue;
+    bytesInBucket.set(version.name, await r2.uploadFile(`${prefix}${version.name}`, filePath));
+  }
+  const survives = (name: string): boolean => bytesInBucket.has(name) && !isStale(name);
+
+  // 2. El mapping.yaml: el índice sin el cual la carpeta materializada en otro
+  // PC es un montón de zips que ludusavi no sabe interpretar. Cambia en cada
+  // backup, así que se reescribe en cada uno — pero NO a pelo cuando arriba
+  // quedan versiones que la carpeta local ya no tiene (ver mergeRemoteMapping),
+  // y hay un camino en el que directamente no se sube: si esa fusión no se
+  // puede hacer, arriba se queda el mapping viejo. Eso último se anota, porque
+  // decide si el paso 4 puede indexar (una versión sin su nodo allí arriba no
+  // se puede restaurar).
+  const rescuable = [...bytesInBucket.keys()].some(
+    (name) => name !== MAPPING_FILE && !localNames.has(name) && !isStale(name),
+  );
+  let mappingDescribesLocal = true;
+  const mappingPath = join(dir, MAPPING_FILE);
+  if (!rescuable) {
+    // El fichero local ya describe todo lo que va a quedar en el bucket, así
+    // que se sube tal cual. Es el caso normal —un PC con su historia local
+    // continua— y así el índice de allí arriba es byte a byte el que mantiene
+    // ludusavi, sin pasar por una reserialización.
+    if (existsSync(mappingPath)) await r2.uploadFile(`${prefix}${MAPPING_FILE}`, mappingPath);
+  } else {
+    const remoteMapping = parseMapping(await r2.readText(`${prefix}${MAPPING_FILE}`));
+    if (!localMapping || !remoteMapping) {
+      // Falta un lado que fusionar y arriba hay versiones que dependen de ese
+      // fichero: subirlo a pelo las dejaría ilegibles para siempre. Un "no"
+      // —de la red, o de un mapping.yaml que no se deja leer— no borra lo que
+      // ya había; el siguiente backup del juego lo reintenta y hasta entonces
+      // el índice remoto sigue siendo el bueno (le faltará, como mucho, la
+      // versión recién subida).
+      mappingDescribesLocal = false;
+      console.warn(
+        `[saves] no se pudo fusionar el mapping.yaml de ${prefix}: se deja el remoto para no dejar ilegibles las versiones antiguas`,
+      );
+    } else {
+      await r2.uploadText(
+        `${prefix}${MAPPING_FILE}`,
+        stringify(mergeRemoteMapping(localMapping, remoteMapping, survives)),
+      );
+    }
+  }
+
+  // 3. Retirar de la nube lo que la retención local ya no conserva. Al estar
+  // dentro del prefijo de esta máquina, "lo que ya no está en local" es una
+  // afirmación cierta: nadie más escribe aquí.
+  const staleKeys = remote.map((object) => object.key).filter((key) => isStale(basename(key)));
   await r2.deleteKeys(staleKeys);
 
   // 4. Reconciliar el índice con lo que ha quedado en el bucket. Se hace
@@ -196,6 +250,17 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
     .map((row) => row.id);
   await deleteSaveBackups(staleRowIds);
 
+  // Y no se indexa NADA si el mapping.yaml de allí arriba no describe estas
+  // versiones (la fusión imposible del paso 2). El zip nuevo SÍ está subido y
+  // cuenta en bytesInBucket, pero su nodo no: materializeBackup baja el
+  // mapping viejo, listLocalVersions no encuentra la versión —se cae a
+  // row.locations y a skipRegistryKeys vacío— y restoreGame acaba invocando a
+  // ludusavi con un --backup que su índice no conoce. Es la misma fila
+  // no-restaurable que impide el filtro de bytesInBucket de abajo, entrando
+  // por el otro lado. Se cura sola en el primer backup que consiga fusionar:
+  // ahí entran de golpe todas las versiones que sigan en la carpeta.
+  if (!mappingDescribesLocal) return [];
+
   const knownNames = new Set(
     ownRows.filter((row) => localNames.has(row.backupName)).map((row) => row.backupName),
   );
@@ -203,13 +268,29 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   const created: SaveBackupRow[] = [];
   for (const version of versions) {
     if (knownNames.has(version.name)) continue;
+    // Una fila SOLO si su objeto está de verdad en el bucket, la misma regla
+    // que recoverIndexFromCloud aplica al reconstruir el índice desde la nube:
+    // el paso 1 se salta los zips que no están en disco, y crear su fila
+    // igualmente dejaba en la ficha una versión fantasma de "0 B",
+    // indistinguible de las buenas, que solo daba un error crudo de R2 al
+    // intentar restaurarla.
+    //
+    // Ojo: esto solo impide CREARLAS. Una fila anterior a esta regla cuyo zip
+    // nunca llegó al bucket sigue viva —staleRowIds mira la carpeta local y el
+    // suelo de poda, no el bucket— y a día de hoy no se limpia desde aquí a
+    // propósito: un listado vacío por apuntar a otro bucket borraría el índice
+    // entero de esta máquina, y ese índice viaja por Turso al otro PC.
+    if (!bytesInBucket.has(version.name)) continue;
     created.push(
       await createSaveBackup({
         gameId: game.id,
         createdAt: version.when ? new Date(version.when) : new Date(),
         backupName: version.name,
         r2Key: `${prefix}${version.name}`,
-        sizeBytes: fileSize(join(dir, version.name)),
+        // El tamaño del OBJETO, no el del fichero local: es lo que se está
+        // pagando, y una versión que ya solo existe arriba no tiene fichero
+        // que medir (statSync fallaba y la fila salía con 0 bytes).
+        sizeBytes: bytesInBucket.get(version.name) ?? 0,
         ludusaviName,
         differential: version.differential,
         parentBackupName: version.differential ? version.chain[0] : null,
@@ -224,12 +305,86 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   return created;
 };
 
-const fileSize = (path: string): number => {
+const parseMapping = (raw: string | null): BackupMapping | null => {
+  if (!raw) return null;
   try {
-    return statSync(path).size;
+    return (parse(raw) as BackupMapping | null) ?? null;
   } catch {
-    return 0;
+    return null;
   }
+};
+
+// Orden cronológico, que es como ludusavi mantiene la lista: el completo más
+// antiguo primero. Un nodo sin fecha se va al principio — es lo más viejo que
+// puede ser, y así nunca desplaza a uno que sí sabemos fechar.
+const sortByWhen = <T extends { when?: string }>(nodes: T[]): T[] =>
+  [...nodes].sort((a, b) => (a.when ?? '').localeCompare(b.when ?? ''));
+
+// El mapping.yaml remoto no se puede PISAR con el local: hay que fusionarlo.
+//
+// Cada prefijo de máquina tiene UN solo mapping.yaml y el espejo lo reescribe
+// en cada backup, pero el suelo de poda decide sobre los zips y sobre las
+// filas del índice, no sobre este fichero. Con el suelo puesto (una adopción
+// tras reinstalar, o una recuperación del índice desde la nube) el bucket
+// conserva versiones que la carpeta local ya no tiene: sus zips siguen arriba
+// y sus filas siguen en save_backups, pero el primer backup nuevo las dejaba
+// sin nodo aquí dentro y con eso ilegibles — materializeBackup baja este
+// fichero y, sin el nodo, ludusavi no reconoce ese --backup. Se salvaban los
+// bytes y se destruía el índice que los hace restaurables: justo los backups
+// que la adopción existe para salvar.
+//
+// Así que manda el mapping local (es el que mantiene ludusavi y el que
+// describe la carpeta real) y del remoto se rescatan los nodos de las
+// versiones que sigan en el bucket. Un completo que ya no está se lleva sus
+// diferenciales por delante, misma regla que removeBackupsFromMapping: sin él
+// no se pueden restaurar de todas formas.
+// `remote` es no-nulo a propósito (y no `BackupMapping | null`, que es lo que
+// devuelve parseMapping): con null esta función devolvería `local` tal cual y
+// el llamante subiría un mapping que borra los nodos remotos — el bug que
+// existe para arreglar. Que lo impida el compilador y no la disciplina.
+const mergeRemoteMapping = (
+  local: BackupMapping,
+  remote: BackupMapping,
+  survives: (backupName: string) => boolean,
+): BackupMapping => {
+  const remoteFulls = remote.backups ?? [];
+  if (remoteFulls.length === 0) return local;
+
+  const localFulls = new Set((local.backups ?? []).map((full) => full.name));
+
+  // Diferenciales que el completo local ya no lista pero el bucket conserva:
+  // la retención de ludusavi puede llevarse un hijo dejando vivo a su padre.
+  const merged: MappingBackupNode[] = (local.backups ?? []).map((full) => {
+    const twin = remoteFulls.find((candidate) => candidate.name === full.name);
+    if (!twin) return full;
+    const known = new Set((full.children ?? []).map((child) => child.name));
+    const rescued = (twin.children ?? []).filter(
+      (child) => !known.has(child.name) && survives(child.name),
+    );
+    if (rescued.length === 0) return full;
+    return { ...full, children: sortByWhen([...(full.children ?? []), ...rescued]) };
+  });
+
+  // Y los completos que ya solo existen en el bucket.
+  for (const full of remoteFulls) {
+    if (localFulls.has(full.name) || !survives(full.name)) continue;
+    merged.push({
+      ...full,
+      children: sortByWhen((full.children ?? []).filter((child) => survives(child.name))),
+    });
+  }
+
+  // Se reescribe el objeto entero del mapping LOCAL cambiando solo lo justo:
+  // así las claves que no conocemos (lo que añadan futuras versiones de
+  // ludusavi) sobreviven, igual que en removeBackupsFromMapping.
+  //
+  // `drives` es la excepción que sí hay que fusionar: dentro del zip las rutas
+  // van por clave de unidad y es esa tabla la que las devuelve a su letra al
+  // restaurar, así que rescatar un nodo sin la unidad que usa lo dejaría igual
+  // de ilegible. Si la misma clave está en los dos manda la local, que es la
+  // del fichero vivo.
+  const drives = remote.drives ? { ...remote.drives, ...(local.drives ?? {}) } : local.drives;
+  return { ...local, drives, backups: sortByWhen(merged) };
 };
 
 // Serializa las copias a la nube POR JUEGO. syncGameToR2 hace un

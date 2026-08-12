@@ -2,6 +2,8 @@ import { and, asc, eq, isNull, notInArray } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { createPlannedGame } from '../db/queries/games/createPlannedGame';
 import { reorderUpNext, setPlanPinned } from '../db/queries/games/getPlannedGames';
+import { warmImageCache, warmSteamData } from '../external/warmNewGame';
+import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { planMailboxTable } from '../db/schema';
 import type { PlanMailboxEntry } from '../../shared/planMailbox';
 
@@ -16,10 +18,19 @@ import type { PlanMailboxEntry } from '../../shared/planMailbox';
 // escribió el Worker en el remoto, así que en local no existen hasta que el
 // sync las baja.
 
-// Tope por pasada. No es por rendimiento —el buzón nunca va a tener cientos de
-// filas— sino por contención: cada alta es una llamada de red a IGDB y a HLTB
-// dentro del candado de la DB, y drenar cincuenta de golpe dejaría la interfaz
-// esperando en el primer arranque tras un fin de semana apuntando juegos.
+// Tope por pasada. No es por la DB —el buzón nunca va a tener cientos de
+// filas— sino por la red: cada alta pide IGDB, HLTB, SteamGridDB y la tienda de
+// Steam de una en una, y drenar cincuenta de golpe encadena cincuenta rondas
+// justo en el arranque tras un fin de semana apuntando juegos, que es cuando el
+// resto de la app también está pidiendo lo suyo.
+//
+// Cicatriz de la que conviene enterarse aquí: cada orden se aplica DENTRO de
+// withDbAccess, red incluida, porque createPlannedGame enriquece y escribe de
+// una pieza y desde este lado no hay por dónde partirlo. El candado se suelta
+// entre orden y orden, así que el tope no le acorta la espera a nadie: quien
+// espera es el swap de conexión en caliente, que necesita la DB ociosa (y si no
+// la consigue a tiempo, se pospone). Lo único que el tope acorta es cuánto dura
+// la pasada entera.
 const MAX_PER_PASS = 25;
 
 // Cuántas veces se reintenta una orden que falló por algo PASAJERO antes de
@@ -43,6 +54,12 @@ class NothingMatched extends Error {}
 // Reintentarlos tiene sentido; quemarlos es destruir un alta perfectamente
 // buena porque IGDB tuvo un mal minuto. La lista es de firmas, no de tipos,
 // porque cada capa (fetch, axios, undici) envuelve el error a su manera.
+//
+// Aquí vivían además 'devolvió 5' y 'devolvió 429', que no las produce NINGÚN
+// error del main: axios habla en inglés y no hay un solo `throw` con ese
+// texto. Eran dos firmas muertas que daban una sensación falsa de cobertura
+// del 5xx y del 429; lo que sí los pilla de verdad es el `status` de la
+// respuesta, que ahora se mira aparte y por estructura.
 const TRANSIENT_HINTS = [
   'fetch failed',
   'network',
@@ -55,20 +72,98 @@ const TRANSIENT_HINTS = [
   'socket hang up',
   'request failed with status code 5',
   'status code 429',
-  'devolvió 5',
-  'devolvió 429',
 ];
 
-const isTransient = (error: unknown): boolean => {
-  const message = (
-    (error as { cause?: unknown })?.cause instanceof Error
-      ? ((error as { cause: Error }).cause.message ?? '')
-      : error instanceof Error
-        ? error.message
-        : String(error)
-  ).toLowerCase();
-  return TRANSIENT_HINTS.some((hint) => message.includes(hint));
+// Las mismas firmas de arriba, pero por ESTRUCTURA en vez de por texto: el
+// mensaje de axios ("Request failed with status code 502") es cosa de la
+// versión de axios de turno, mientras que `response.status` y `code` son el
+// dato de verdad. Y hay huecos que el texto no tapa: "connect ETIMEDOUT
+// 1.2.3.4:443" no contiene ninguno de los HINTS —'timed out' lleva espacio—
+// así que un timeout de conexión seco se colaba como definitivo.
+const TRANSIENT_CODES = [
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ERR_NETWORK',
+];
+
+const hasTransientShape = (error: unknown): boolean => {
+  const status = (error as { response?: { status?: unknown } })?.response?.status;
+  if (typeof status === 'number' && (status >= 500 || status === 429)) return true;
+  const code = (error as { code?: unknown })?.code;
+  return typeof code === 'string' && TRANSIENT_CODES.includes(code.toUpperCase());
 };
+
+// Tope de eslabones al recorrer las causas. `cause` es un campo cualquiera y
+// nada impide que alguien monte un ciclo; un bucle infinito aquí congelaría el
+// drenado entero, que corre después de cada pull.
+const MAX_CAUSE_DEPTH = 5;
+
+// El error de fuera Y toda su cadena de causas.
+//
+// Antes se miraba UNO de los dos: si había `cause`, solo la causa; si no, solo
+// el mensaje de fuera. Con eso, una capa que envuelva un fallo de red en un
+// error propio —o que envuelva dos veces— llega al drenado disfrazada de
+// veredicto definitivo, y un alta perfectamente buena se sella con
+// `processedAt` sin gastar ni uno de los tres intentos.
+const causeChain = (error: unknown): unknown[] => {
+  const chain: unknown[] = [];
+  let current: unknown = error;
+  for (
+    let depth = 0;
+    depth < MAX_CAUSE_DEPTH && current !== null && current !== undefined;
+    depth++
+  ) {
+    chain.push(current);
+    current = (current as { cause?: unknown }).cause;
+  }
+  return chain;
+};
+
+// El texto de un eslabón cualquiera, sin poder lanzar.
+//
+// `String(...)` NO es una operación segura: un valor con prototipo nulo
+// (Object.create(null)) o con un toString propio que revienta tira una
+// excepción al convertirlo. Suena a laboratorio, pero esto corre DENTRO del
+// `catch` del bucle de órdenes, y ahí una excepción no la para nadie hasta
+// runPlanMailboxDrain: se lleva por delante el resto de la pasada y deja la
+// fila a medias, sin processedAt y sin el error guardado. Mientras solo se
+// miraba el mensaje del error de fuera el riesgo no existía; recorrer la
+// cadena entera lo trajo, porque un `cause` puede ser literalmente cualquier
+// valor. Un eslabón ilegible no ciega a los demás: se queda sin texto y la
+// cadena sigue.
+const textOf = (value: unknown): string => {
+  if (value instanceof Error) return value.message;
+  try {
+    return String(value);
+  } catch {
+    return '';
+  }
+};
+
+// PUNTO CIEGO conocido, y no se tapa desde aquí: esto solo puede clasificar lo
+// que le LLEGA. Un 502 o un timeout de la tienda de Steam durante un alta con
+// source { steamAppId } no llega — getSteamStoreDetails (steam/store.ts) se
+// traga cualquier error en su catch y devuelve null, y resolveFromSteam
+// (db/queries/games/resolveGameEnrichment.ts) convierte ese null en un Error
+// pelado, sin cause, sin response.status y sin code, e indistinguible del juego
+// retirado de la tienda de verdad. Así que se clasifica como definitivo y la
+// orden se quema sin gastar ni uno de los tres intentos.
+//
+// El arreglo vive en esos dos ficheros: que el fallo original viaje como
+// `cause`, o que la tienda devuelva un resultado discriminado. En cuanto
+// llegue, lo de aquí ya lo ve sin tocar nada. Casar el texto en castellano
+// desde este lado sería peor: ata el drenado a la redacción exacta de otro
+// módulo y reintentaría tres veces de más los juegos retirados de verdad.
+const isTransient = (error: unknown): boolean =>
+  causeChain(error).some((link) => {
+    if (hasTransientShape(link)) return true;
+    const message = textOf(link).toLowerCase();
+    return TRANSIENT_HINTS.some((hint) => message.includes(hint));
+  });
 
 // El error que se GUARDA, que no es el que se registra en consola.
 //
@@ -81,8 +176,9 @@ const MAX_STORED_ERROR = 200;
 
 const conciseError = (error: unknown): string => {
   const cause = (error as { cause?: unknown })?.cause;
-  const message =
-    cause instanceof Error ? cause.message : error instanceof Error ? error.message : String(error);
+  // Por textOf y no por String() por lo mismo que arriba: esto también se
+  // llama dentro del catch del bucle.
+  const message = cause instanceof Error ? cause.message : textOf(error);
   // La primera línea: los errores del motor traen la buena delante y el stack
   // detrás.
   const firstLine = message.split('\n')[0].trim();
@@ -98,7 +194,7 @@ const conciseError = (error: unknown): string => {
 // repartir las marcas que YA existen en vez de inventar fechas nuevas.
 const applyEntry = async (entry: PlanMailboxEntry): Promise<void> => {
   if (entry.type === 'add') {
-    await createPlannedGame({
+    const game = await createPlannedGame({
       source: entry.source,
       note: entry.note,
       // El alta desde el móvil no pregunta notas del juego ni arte a medida:
@@ -109,6 +205,19 @@ const applyEntry = async (entry: PlanMailboxEntry): Promise<void> => {
       heroUrl: null,
       steamGridDbId: null,
     });
+    // LO MISMO que hace el botón "Add" del escritorio, ni más ni menos.
+    // Faltaba: createPlannedGame resuelve el appid, pero las etiquetas, las
+    // reseñas y el catálogo de logros los pedía el handler IPC, y por aquí no
+    // se pasa. Un juego añadido desde el móvil se quedaba a medias hasta el
+    // siguiente refresco general — Ōkami HD era exactamente eso.
+    //
+    // Los tres, y con las MISMAS opciones que el handler (ver ipc/games.ts,
+    // 'games:createPlanned'): sin aviso en pantalla para los logros, porque
+    // planear un juego no es haberlo jugado. Curiosidades no, por lo mismo
+    // que allí — se generan al pasar a la biblioteca.
+    warmImageCache(game);
+    warmSteamData(game);
+    void queueAchievementsRefreshForGame(game.id, { notify: false });
     return;
   }
 

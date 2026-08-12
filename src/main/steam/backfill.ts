@@ -7,13 +7,12 @@ import type { AchievementsStatus } from '../../shared/types';
 import { refreshRaForGame } from '../ra/backfill';
 import { hasSteamKey } from './api';
 import { ensureGoldbergCatalog } from './emu/goldbergCatalog';
-import { readEmuUnlocksForGame } from './emu/readUnlocks';
 import {
   enqueueAchievements,
   getFailedAchievementsCount,
   isAchievementsQueueRunning,
 } from './queue';
-import { storeUnlocks } from './syncAchievements';
+import { applyEmuUnlocksForGame } from './syncAchievements';
 
 // La pasada de logros: encuentra los juegos pendientes y los encola. Mismo
 // papel que curiosities/backfill.ts — el trabajo real lo hace la cola, esto
@@ -33,8 +32,11 @@ export const runAchievementsBackfill = async (full: boolean): Promise<number> =>
   const pending = await withDbAccess(async () => getPendingAchievementsGames(full));
   if (pending.length === 0) return 0;
 
-  enqueueAchievements(pending);
-  return pending.length;
+  // Lo que devuelve el encolado, no los candidatos: este número acaba en la
+  // tarjeta de Ajustes ("N juegos encolados") vía ipc/achievements.ts, y el
+  // juego que ya estuviera en vuelo no va a volver a pasar por lo que acabas
+  // de pedir.
+  return enqueueAchievements(pending);
 };
 
 // Una pasada suave al arrancar, encadenada tras el primer sync (main/index.ts)
@@ -107,10 +109,15 @@ export const runEmuUnlocksSweep = async (): Promise<void> => {
 
       await withDbAccess(async () => ensureGoldbergCatalog(game.id, game.installDirectory));
 
-      const emu = readEmuUnlocksForGame(game.steamAppId, game.executablePath);
-      if (emu.unlocks.length === 0) continue;
-      await storeUnlocks(game.id, 'emu', emu.unlocks, new Date());
-      withUnlocks++;
+      // Fila a fila y por el helper compartido: es la MISMA regla que aplica
+      // el vigilante en vivo (emu/watcher.ts), y tenerla escrita dos veces ya
+      // hizo que los dos caminos discreparan sobre a qué ficha colgar los
+      // logros de un appid con varias ediciones.
+      const { unlockedCount } = await applyEmuUnlocksForGame(
+        { id: game.id, steamAppId: game.steamAppId, executablePath: game.executablePath },
+        new Date(),
+      );
+      if (unlockedCount > 0) withUnlocks++;
     }
 
     if (withUnlocks > 0) {
@@ -133,9 +140,10 @@ export const runEmuUnlocksSweep = async (): Promise<void> => {
 // forceRaRematch: solo el botón de la ficha — re-intenta el emparejado de RA
 // aunque ya se hubiera preguntado (ver refreshRaForGame).
 //
-// Devuelve si ALGUNA pata hizo trabajo: false = ni Steam ni RA tienen nada
-// que decir de este juego. El botón de la ficha lo necesita para no quedarse
-// girando eternamente esperando algo que nunca va a pasar.
+// Devuelve si ALGUNA pata hizo trabajo: false = ni Steam ni RA van a decir
+// nada de este juego. El botón de la ficha lo necesita para no quedarse
+// girando eternamente esperando algo que nunca va a pasar — por eso la pata de
+// Steam mira lo que devolvió el encolado y no da por hecho que entró.
 export const queueAchievementsRefreshForGame = async (
   gameId: number,
   { notify = true, forceRaRematch = false }: { notify?: boolean; forceRaRematch?: boolean } = {},
@@ -159,18 +167,22 @@ export const queueAchievementsRefreshForGame = async (
           .limit(1),
       );
       if (game && game.steamAppId !== null) {
-        enqueueAchievements([
-          {
-            id: game.id,
-            title: game.title,
-            steamAppId: game.steamAppId,
-            executablePath: game.executablePath,
-            installDirectory: game.installDirectory,
-            heroUrl: game.heroUrl,
-            notify,
-          },
-        ]);
-        steamQueued = true;
+        // El valor de retorno, no un true fijo: si este juego ya está EN VUELO
+        // su intención se leyó antes de que llegáramos, así que el refresco que
+        // el usuario acaba de pedir no va a pasar por él. Prometerlo dejaba al
+        // botón de la ficha girando por algo que nunca iba a llegar.
+        steamQueued =
+          enqueueAchievements([
+            {
+              id: game.id,
+              title: game.title,
+              steamAppId: game.steamAppId,
+              executablePath: game.executablePath,
+              installDirectory: game.installDirectory,
+              heroUrl: game.heroUrl,
+              notify,
+            },
+          ]) > 0;
       }
     } catch (error) {
       console.warn('[steam] fallo encolando el refresco tras la sesion:', error);

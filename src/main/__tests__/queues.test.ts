@@ -11,6 +11,14 @@ import { scopeKeyOf } from '../../shared/memory/chapters';
 // refactor (orden de eventos, contadores, reservas, stop, reintentos), esto
 // lo canta.
 //
+// Ojo con ese "sin tocar una línea": vale para las ASERCIONES, no para los
+// dobles. El 2026-08-12 generateMemoryForChapter pasó de Promise<void> a
+// Promise<boolean> ("¿se escribió fila?") y el doble se quedó devolviendo
+// undefined: tres tests de memories en rojo por el nuevo `if (written)` de la
+// cola, sin que el ciclo de vida caracterizado hubiera cambiado nada. Un doble
+// que se queda con la firma vieja miente sobre el mundo real; actualizarlo es
+// obligatorio, tocar una aserción para que pase no lo es.
+//
 // Ataca los módulos REALES de las colas. Lo único mockeado son los cuatro
 // módulos de dominio que arrastran Electron/DB (los generate/status/sync) —
 // las funciones que la cola llama por cada elemento. Los notify NO se mockean:
@@ -26,7 +34,10 @@ type AnyGame = { id: number; title: string };
 
 let generateCuriositiesImpl: (game: AnyGame) => Promise<void> = async () => {};
 
-let generateMemoryImpl: (chapter: unknown) => Promise<void> = async () => {};
+// Devuelve si se GUARDO un recap. La cola solo anuncia 'generated' cuando
+// esto es true (un rechazo del modelo sale limpio y sin fila), asi que el
+// doble por defecto simula el camino feliz.
+let generateMemoryImpl: (chapter: unknown) => Promise<boolean> = async () => true;
 let loadFactsSnapshotImpl: () => Promise<unknown> = async () => ({ facts: true });
 let chapterForImpl: (snapshot: unknown, scope: ChapterScope) => unknown = () => ({
   soFar: false,
@@ -168,7 +179,7 @@ beforeEach(() => {
   achievementEvents.length = 0;
   // Implementaciones por defecto, inofensivas.
   generateCuriositiesImpl = async () => {};
-  generateMemoryImpl = async () => {};
+  generateMemoryImpl = async () => true;
   loadFactsSnapshotImpl = async () => ({ facts: true });
   chapterForImpl = () => ({ soFar: false });
   syncGameAchievementsImpl = async () => ({ catalogCount: 0, unlockedCount: 0 });
@@ -383,6 +394,7 @@ test('memories: stop a mitad — termina el periodo en vuelo, suelta el resto y 
   const gate = deferred();
   generateMemoryImpl = async () => {
     await gate.promise;
+    return true;
   };
   chapterForImpl = () => ({ soFar: false });
 
@@ -403,7 +415,7 @@ test('memories: stop a mitad — termina el periodo en vuelo, suelta el resto y 
   assert.deepEqual([final?.running, final?.done, final?.total], [false, 1, 1]);
 
   // Los soltados quedaron libres y el stop no arrastra: se reencolan y corren.
-  generateMemoryImpl = async () => {};
+  generateMemoryImpl = async () => true;
   memoryEvents.length = 0;
   memoriesQueue.enqueueMemories([monthScope(2026, 4)], 'manual');
   await waitUntil(() => !memoriesQueue.isMemoriesQueueRunning(), 'racha post-stop');
@@ -421,6 +433,7 @@ test('memories: sin capítulo no se genera (pero el periodo cuenta como procesad
   const generatedChapters: unknown[] = [];
   generateMemoryImpl = async (chapter) => {
     generatedChapters.push(chapter);
+    return true;
   };
   chapterForImpl = (_snapshot, scope) =>
     scopeKeyOf(scope) === '2026-08' ? null : { soFar: false };
@@ -439,6 +452,23 @@ test('memories: sin capítulo no se genera (pero el periodo cuenta como procesad
   assert.deepEqual([final?.done, final?.total], [2, 2]);
 });
 
+test('memories: un rechazo del modelo no anuncia "generated" (pero el periodo cuenta como procesado)', async () => {
+  // El único guardián del contrato que TypeScript no puede vigilar: generate
+  // devuelve si escribió fila y la cola solo anuncia lo escrito. Si alguien
+  // vuelve a llamar sin mirar el valor, aquí salta — y en la app volvería el
+  // toast "Your June story is ready" hacia un mes sin panel, todos los días,
+  // porque un rechazo no persiste nada y la detección diaria lo reencola.
+  generateMemoryImpl = async () => false;
+
+  memoriesQueue.enqueueMemories([monthScope(2026, 11)], 'auto');
+  await waitUntil(() => !memoriesQueue.isMemoriesQueueRunning(), 'racha con rechazo');
+
+  assert.equal(memoryEvents.filter((e) => e.kind === 'generated').length, 0);
+  // Rechazar no es fallar: el periodo se procesó y no cuenta como error.
+  const final = progressOf(memoryEvents).at(-1);
+  assert.deepEqual([final?.running, final?.done, final?.total, final?.failed], [false, 1, 1, 0]);
+});
+
 test('memories: reserva por scope, currentLabel en el progreso, y fallo que no tumba', async () => {
   const gate = deferred();
   let calls = 0;
@@ -448,6 +478,7 @@ test('memories: reserva por scope, currentLabel en el progreso, y fallo que no t
       await gate.promise;
       throw new Error('boom recap');
     }
+    return true;
   };
 
   memoriesQueue.enqueueMemories([monthScope(2026, 9)], 'manual');

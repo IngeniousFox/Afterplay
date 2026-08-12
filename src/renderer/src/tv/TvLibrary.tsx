@@ -7,12 +7,13 @@ import { useImageSrc } from '../hooks/useImageSrc';
 import { BLUE } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import { useTvBackdrop } from './backdropContext';
-import { useTvFocusable } from './focusContext';
+import { useTvFocusable, useTvLayerIsActive } from './focusContext';
 import { forgetLibrary, recallLibrary, rememberLibrary } from './screenMemory';
 import { tvRevealClass, tvRevealStyle } from './styles';
 import { TvGameTile } from './TvGameTile';
 import { TvScreenTitle } from './TvScreenTitle';
 import { TvKeyboard } from './TvKeyboard';
+import { useTvInputDevice } from './inputDevice';
 import { useTvButtons, useTvLegend } from './tvInput';
 
 // La biblioteca entera a escala TV (BIG-PICTURE.md §5.2): parrilla de
@@ -34,6 +35,26 @@ const FILTERS: { key: FilterKey; label: string; match: (game: GameListItem) => b
 // (El filterByTitle de lib/search.ts no normaliza diacríticos; aquí, con un
 // OSK sin tildes a propósito, la normalización no es opcional.)
 const normalize = (text: string): string => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// QUEDARSE UNA TECLA CUESTA DOS COSAS, y las dos van juntas siempre:
+//
+//  · preventDefault además de parar la propagación: frenar a los otros
+//    listeners no frena la activación NATIVA (un Espacio con el foco DOM en
+//    un botón lo clicaría en el keyup).
+//  · avisar de la actividad a mano. stopImmediatePropagation en fase de
+//    CAPTURA sobre window mata el evento en el PRIMER nodo del recorrido:
+//    ningún listener de BURBUJA de window vuelve a verlo, y uno de ellos es
+//    el bump de useIdle ('keydown' está en sus ACTIVITY_EVENTS, registrado
+//    sin capture). Sin esta línea, teclear la búsqueda dejaba de contar como
+//    tocar la app: entrabas con las flechas, escribías un rato mirando la
+//    parrilla y el modo ambiente se te echaba encima a media palabra. Es el
+//    mismo canal sintético que usa el mando (tv/gamepad.ts), que tampoco
+//    genera eventos DOM.
+const swallowKey = (event: KeyboardEvent): void => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  window.dispatchEvent(new CustomEvent('afterplay:activity'));
+};
 
 const FilterPill = ({
   label,
@@ -240,10 +261,91 @@ export const TvLibrary = (): React.JSX.Element => {
     y: () => setKeyboardOpen(true),
     ...(query.length > 0 && !keyboardOpen ? { b: () => setQuery('') } : {}),
   });
-  useTvLegend([
-    { action: 'lbrb', label: 'Filter' },
-    { action: 'y', label: 'Search' },
-  ]);
+  // LA LEYENDA NO PUEDE ANUNCIAR LO QUE ESTA PANTALLA SE TRAGA. Con teclado
+  // el pie pinta los glifos de KEY_GLYPHS (BigPictureLayout): LB/RB serían
+  // "Q·E" e Y sería "F"... y aquí abajo el capture se queda esas tres letras
+  // para escribirlas en la búsqueda, antes de que el espejo del shell pudiera
+  // traducirlas a botones. Anunciarlas sería vender tres atajos muertos, así
+  // que con teclado esta pantalla no promete nada extra: la búsqueda se abre
+  // TECLEANDO (y el chip de arriba está ahí para verse), y el filtro son
+  // pills que son botones de verdad, a un par de flechas. Mismo reparto y
+  // mismo motivo que el OSK (TvKeyboard).
+  //
+  // Lo que la leyenda NO dice, y es a sabiendas: mientras hay texto escrito,
+  // B limpia en vez de salir, pero el pie sigue anunciando "Back". Una pista
+  // que dependa de la query sería otra fuente de parpadeo en el pie por un
+  // matiz que se descubre solo al usarlo.
+  //
+  // Cambiar de pistas aquí (esto depende del dispositivo) ya NO recoloca la
+  // leyenda: la pila de BigPictureLayout es de huecos estables y un cambio de
+  // contenido se queda en su capa (ver TvLegendSlot en tvInput.ts). El caso
+  // que obligó a arreglarla fue exactamente esta línea — coger el mando con
+  // el OSK abierto re-registraba esta leyenda ENCIMA de la del teclado y el
+  // pie anunciaba "Filter"/"Search" bajo un velo que se come esos botones.
+  const device = useTvInputDevice();
+  useTvLegend(
+    device === 'gamepad'
+      ? [
+          { action: 'lbrb', label: 'Filter' },
+          { action: 'y', label: 'Search' },
+        ]
+      : [],
+  );
+
+  // TECLEAR FILTRA (§5.2, el caso literal de Moonlight: teclado físico
+  // reenviado a la tele). Sin esto las letras caían en el espejo de teclado
+  // del shell (BigPictureLayout), que las lee como BOTONES: escribir "quest"
+  // no buscaba nada y encima movía cosas — la 'q' saltaba al filtro anterior,
+  // la 'e' al siguiente, la 'f' abría el OSK, la 'x' disparaba la acción
+  // secundaria y la 'm' el menú Start. Se acababa con otro filtro y sin
+  // búsqueda.
+  //
+  // Mismo embudo que el OSK (TvKeyboard) y por el mismo motivo en CAPTURA:
+  // ese espejo escucha en burbuja sobre window, así que hay que llegar antes
+  // que él y cortarle el paso (con las dos deudas que paga swallowKey).
+  //
+  // El texto se acumula con el updater funcional, no leyendo `query` del
+  // closure: así lo escrito no depende de que React vacíe la actualización de
+  // un keydown antes de que llegue el siguiente, y el efecto puede declarar
+  // dependencias en vez de re-suscribirse en CADA render. De la query solo
+  // hace falta saber si está vacía (`searching`), que es lo único que cambia
+  // el comportamiento de Backspace y del Espacio.
+  //
+  // El precio, asumido (es la misma renuncia que ya hace el OSK mientras está
+  // abierto): en ESTA pantalla las letras del espejo dejan de ser atajos —
+  // por eso la leyenda de arriba no las anuncia con teclado. El filtro se
+  // cicla con LB/RB (mando) y todo lo demás sigue en teclas que no son letras
+  // — flechas, Enter, Escape (que además limpia la búsqueda antes de salir).
+  const layerActive = useTvLayerIsActive();
+  const searching = query.length > 0;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // Solo cuando manda ESTA pantalla: con el OSK o el menú Start apilados
+      // encima, las teclas son suyas. Y con el salvapantallas puesto la tecla
+      // solo despierta — misma regla que el mando (gamepad.ts); por eso estas
+      // salidas se van SIN tragarse nada: el evento tiene que seguir su
+      // camino hasta el bump de useIdle.
+      if (!layerActive || keyboardOpen) return;
+      if (document.querySelector('[data-afterplay-ambient]') !== null) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === 'Backspace') {
+        if (!searching) return;
+        swallowKey(event);
+        setQuery((previous) => previous.slice(0, -1));
+        return;
+      }
+      // El Espacio sigue siendo A (confirmar) mientras no haya nada escrito:
+      // solo CONTINÚA una búsqueda ya empezada, para poder teclear "final
+      // fantasy" entero. Un espacio suelto sobre la parrilla abre la ficha
+      // enfocada, como siempre.
+      if (event.key === ' ' && !searching) return;
+      if (event.key.length !== 1) return;
+      swallowKey(event);
+      setQuery((previous) => previous + event.key);
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [layerActive, keyboardOpen, searching]);
 
   // El conjunto visible como Set para decidir POR CELDA si está desplegada —
   // la parrilla monta SIEMPRE todos los juegos y solo anima anchura/opacidad

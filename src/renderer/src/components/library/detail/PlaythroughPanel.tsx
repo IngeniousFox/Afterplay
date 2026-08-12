@@ -13,14 +13,13 @@ import type { GameDetail, IterationDetail, TimeFormat } from '../../../../../sha
 import { useUpdateIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { useCountUp } from '../../../hooks/useCountUp';
-import { AMBER } from '../../../lib/colors';
+import { AMBER, BLUE, GREEN } from '../../../lib/colors';
 import { humanizeSpanByPrecision } from '../../../lib/dateMath';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { InfoChip } from './InfoChip';
 import { StatTile } from './StatTile';
-import { GREEN } from '../../../lib/colors';
 
 // Píldoras por página — las que caben en el ancho del sidebar sin apretarse.
 const PER_PAGE = 4;
@@ -302,7 +301,7 @@ export const PlaythroughPanel = ({
             <span className="capitalize">{iteration.origin}</span>
           </InfoChip>
           {iteration.extraContent && (
-            <InfoChip Icon={Package} color="#85a3d6">
+            <InfoChip Icon={Package} color={BLUE}>
               Extra content only
             </InfoChip>
           )}

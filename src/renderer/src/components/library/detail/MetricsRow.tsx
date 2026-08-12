@@ -2,6 +2,7 @@ import { Calendar, Clock, DollarSign, Gauge } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
+import { AMBER, BLUE, GREEN, VIOLET } from '../../../lib/colors';
 import { formatHours, formatMoney } from '../../../lib/format';
 
 type MetricsRowProps = {
@@ -15,8 +16,12 @@ export type MetricCardProps = {
   value: string;
   liveHint?: string;
   // Color de identidad de la métrica (verde tiempo, ámbar dinero, azul
-  // conteos, violeta ratios — mismo vocabulario que el resto de Stats).
-  // Tiñe el chip del icono y el brillo decorativo de la esquina.
+  // conteos, violeta ratios — SPEC 10.2, el vocabulario que esta fila define
+  // para el resto de Stats). Los tokens salen SIEMPRE de lib/colors: los
+  // cuatro hex estaban copiados aquí a mano, así que cambiar el verde de la
+  // app dejaba esta fila (y sus clones) con el viejo. Esta fila y la de
+  // GameStats ya tiran de los tokens; screens/Sessions.tsx sigue con sus
+  // cuatro hex a pelo. Tiñe el chip del icono y el brillo de la esquina.
   accent?: string;
 };
 
@@ -27,7 +32,7 @@ export const MetricCard = ({
   label,
   value,
   liveHint,
-  accent = '#2fdc7e',
+  accent = GREEN,
 }: MetricCardProps): React.JSX.Element => (
   <div className="relative min-w-42 flex-1 overflow-hidden rounded-[13px] border border-border bg-card px-4.5 py-4">
     {/* Brillo suave del color de la métrica en la esquina — decorativo,
@@ -72,20 +77,20 @@ export const MetricsRow = ({ game, liveSince }: MetricsRowProps): React.JSX.Elem
         label="TOTAL HOURS"
         value={formatHours(game.totalHours)}
         liveHint={liveSince ? `+${liveMinutes}m this session` : undefined}
-        accent="#2fdc7e"
+        accent={GREEN}
       />
       <MetricCard
         Icon={Gauge}
         label="COST / HOUR"
         value={game.costPerHour !== null ? formatMoney(game.costPerHour) : '—'}
-        accent="#7c86c8"
+        accent={VIOLET}
       />
-      <MetricCard Icon={Calendar} label="SESSIONS" value={String(sessionCount)} accent="#85a3d6" />
+      <MetricCard Icon={Calendar} label="SESSIONS" value={String(sessionCount)} accent={BLUE} />
       <MetricCard
         Icon={DollarSign}
         label="TOTAL SPENT"
         value={formatMoney(game.totalSpend)}
-        accent="#e3b24a"
+        accent={AMBER}
       />
     </div>
   );

@@ -34,14 +34,27 @@ const RING_STROKE = 6;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_RADIUS;
 
+// `fraction` es la proporción SIN redondear (0..1): el arco se dibuja con
+// ella y el redondeo se queda solo para el número. Cuando el arco salía del
+// porcentaje redondeado, 1 conseguido de 300 daba 0 y la guarda de abajo ni
+// llegaba a pintarlo — como si no tuvieras ninguno.
 const ProgressRing = ({
-  percent,
+  fraction,
   complete,
 }: {
-  percent: number;
+  fraction: number;
   complete: boolean;
 }): React.JSX.Element => {
   const color = complete ? AMBER : GREEN;
+  // Los dos topes son la misma regla, por arriba y por abajo: el número no
+  // puede contradecir al arco que tiene detrás. Con 199 de 200, Math.round
+  // cantaba 100 justo al lado del marcador "199 / 200"; con 1 de 300 cantaba
+  // 0 mientras el arco YA se pintaba (la guarda de abajo es `fraction > 0`),
+  // o sea un "0%" con un trocito de anillo encendido alrededor. Redondeo
+  // normal en medio; 1 y 99 solo como topes.
+  const percent = complete
+    ? 100
+    : Math.min(99, Math.max(fraction > 0 ? 1 : 0, Math.round(fraction * 100)));
   return (
     <div className="relative flex-none" style={{ width: RING_SIZE, height: RING_SIZE }}>
       <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90">
@@ -53,7 +66,7 @@ const ProgressRing = ({
           stroke="rgba(255,255,255,.07)"
           strokeWidth={RING_STROKE}
         />
-        {percent > 0 && (
+        {fraction > 0 && (
           <circle
             cx={RING_SIZE / 2}
             cy={RING_SIZE / 2}
@@ -64,7 +77,7 @@ const ProgressRing = ({
             strokeLinecap="round"
             style={{
               strokeDasharray: RING_C,
-              strokeDashoffset: RING_C * (1 - percent / 100),
+              strokeDashoffset: RING_C * (1 - fraction),
               ['--afterplay-ring-c' as string]: `${RING_C}`,
               animation: 'afterplay-ring-in 1s cubic-bezier(.22,1,.36,1) 150ms backwards',
             }}
@@ -139,7 +152,8 @@ const RarestMedal = ({ entry }: { entry: AchievementEntry }): React.JSX.Element 
 const TrophyCase = ({
   unlockedCount,
   total,
-  percent,
+  fraction,
+  complete,
   rareCount,
   ultraCount,
   medals,
@@ -148,14 +162,19 @@ const TrophyCase = ({
 }: {
   unlockedCount: number;
   total: number;
-  percent: number;
+  fraction: number;
+  // Del CONTEO, no del porcentaje pintado: manda el anillo, la píldora
+  // "COMPLETED" y el degradado de la barra, y con `percent === 100` un juego
+  // de 199 de 200 logros se declaraba completado con la fila bloqueada aún
+  // en la lista de abajo. La invariante es trivial: completado <=> los tienes
+  // todos (ver AchievementsSection).
+  complete: boolean;
   rareCount: number;
   ultraCount: number;
   medals: AchievementEntry[];
   onRefresh: () => void;
   refreshing: boolean;
 }): React.JSX.Element => {
-  const complete = percent === 100;
   return (
     <div
       className="relative overflow-hidden rounded-[16px] border border-white/[0.08] px-5 py-4"
@@ -176,7 +195,7 @@ const TrophyCase = ({
       />
 
       <div className="relative flex flex-wrap items-center gap-x-5 gap-y-3">
-        <ProgressRing percent={percent} complete={complete} />
+        <ProgressRing fraction={fraction} complete={complete} />
 
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -267,7 +286,7 @@ const TrophyCase = ({
         <div
           className="h-full rounded-full transition-[width] duration-700 ease-out"
           style={{
-            width: `${percent}%`,
+            width: `${fraction * 100}%`,
             background: complete
               ? `linear-gradient(90deg, ${GREEN}, ${AMBER})`
               : `linear-gradient(90deg, ${GREEN}99, ${GREEN})`,
@@ -525,7 +544,11 @@ export const AchievementsSection = ({
   // Expandir solo AÑADE al final — nada se reordena bajo el cursor.
   const sorted = sortForDisplay(data.entries);
   const unlockedCount = sorted.filter((entry) => entry.unlockedAt !== null).length;
-  const percent = Math.round((unlockedCount / sorted.length) * 100);
+  // Estado derivado del CONTEO, no del porcentaje redondeado: el anillo, la
+  // píldora y la barra tienen que decir lo mismo que el marcador
+  // "unlockedCount / total" que se pinta al lado.
+  const fraction = unlockedCount / sorted.length;
+  const complete = unlockedCount === sorted.length;
   const rareUnlocked = sorted.filter(
     (entry) => entry.unlockedAt !== null && isRare(entry.globalPercent),
   );
@@ -548,7 +571,8 @@ export const AchievementsSection = ({
         <TrophyCase
           unlockedCount={unlockedCount}
           total={sorted.length}
-          percent={percent}
+          fraction={fraction}
+          complete={complete}
           rareCount={rareUnlocked.length - ultraCount}
           ultraCount={ultraCount}
           medals={medals}

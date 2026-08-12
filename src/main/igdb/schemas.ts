@@ -62,7 +62,16 @@ export const igdbDetailGameSchema = igdbSearchGameSchema.extend({
   // Identidades del juego en tiendas externas — de aquí sale el appid de
   // Steam, filtrando por external_game_source (ver el porqué en igdb/api.ts).
   external_games: z
-    .array(z.object({ uid: z.string(), external_game_source: z.number().optional() }))
+    .array(
+      z.object({
+        uid: z.string(),
+        external_game_source: z.number().optional(),
+        // El nombre de la app EN LA TIENDA, que es lo único que distingue el
+        // juego de su playtest — los dos son entradas de Steam del mismo
+        // juego de IGDB (ver pickSteamAppId en igdb/api.ts).
+        name: z.string().optional(),
+      }),
+    )
     .optional(),
   involved_companies: z
     .array(
@@ -104,7 +113,16 @@ export const igdbExternalBatchResponseSchema = z.array(
 // Respuesta del endpoint external_games para el backfill por lotes: una fila
 // por (juego, tienda), ya filtrada a Steam en la propia query.
 export const igdbExternalGamesResponseSchema = z.array(
-  z.object({ game: z.number(), uid: z.string() }),
+  z.object({ game: z.number(), uid: z.string(), name: z.string().optional() }),
+);
+
+// Solo el id de los juegos que TIENEN padre — para saber a quién NO se le
+// puede aplicar la regla de "su appid no figura entre sus filas" (ver
+// findSteamAppIdCorrections en igdb/api.ts). Para una expansión con ficha
+// propia, el appid bueno es el del PADRE, así que no figurar entre las suyas
+// es lo normal, no un error.
+export const igdbParentGamesResponseSchema = z.array(
+  z.object({ id: z.number(), parent_game: z.number() }),
 );
 
 // Ediciones de un juego (version_parent apunta al juego base) — el respaldo

@@ -8,6 +8,7 @@ import { getSteamTags } from '../steam/tags';
 import { adoptIgdbForCandidates, findAdoptionCandidates } from './adoptIgdb';
 import { fillMissingSgdbIds } from './sgdbBackfill';
 import { notifyExternalActivity } from './notify';
+import { findSteamAppIdFixes } from './steamAppIdFix';
 import { mergeSteamPatch, type SteamGamePatch } from './steamData';
 
 // Datos externos de la biblioteca (PLAN-TO-PLAY.md §5): UN solo mecanismo con
@@ -71,8 +72,22 @@ import { mergeSteamPatch, type SteamGamePatch } from './steamData';
 // Así que el refresco general, que es justo el botón de "ponlo todo al día",
 // re-pregunta el appid de los que aún no lo tienen. Es barato: getSteamAppIds
 // va por lotes de 150 y la biblioteca entera son 2-3 peticiones, escondidas
-// detrás de la pasada de reseñas, que dura minutos. Los que YA tienen appid
-// ni se tocan: eso es identidad del juego y no se re-resuelve por gusto.
+// detrás de la pasada de reseñas, que dura minutos.
+//
+// Y desde el 9-ago-2026 mira TAMBIÉN a los que ya tienen appid, para dos
+// casos y ni uno más (los dos los decide findSteamAppIdCorrections, en
+// igdb/api.ts):
+//  · Que sea el appid de un PLAYTEST del propio juego. IGDB enlaza a menudo
+//    dos entradas al mismo juego —"Atomic Heart" y "Atomic Heart Playtest"— y
+//    quedarse con la beta cerrada deja al juego sin tienda, sin etiquetas y
+//    sin logros (38 juegos de 952 en la biblioteca real).
+//  · Que apunte a OTRO producto, o sea que ni siquiera figure entre las
+//    entradas de Steam de su ficha. Cinco en la biblioteca real y todos el
+//    mismo patrón: el appid del juego viejo en la ficha del nuevo ("Trails in
+//    the Sky 2nd Chapter", el remake sin salir, con las tres mil reseñas del
+//    original de 2015).
+// Para todo lo demás sigue en pie lo de siempre: un appid bueno es identidad
+// del juego y no se re-resuelve por gusto.
 
 // Mismo tamaño que el backfill de arranque y por el mismo motivo (ver
 // appIdBackfill.ts): un juego puede tener VARIAS entradas de Steam, así que
@@ -97,6 +112,7 @@ const EMPTY_SUMMARY: ExternalRefreshSummary = {
   withFullDate: 0,
   adoptedFromSteam: 0,
   appIdsFound: 0,
+  appIdsFixed: 0,
   steamChecked: 0,
   steamFound: 0,
 };
@@ -122,13 +138,68 @@ const selectTargets = async (scope: RefreshScope): Promise<TargetGame[]> =>
 // El progreso viaja por 'external:activity': una biblioteca entera son
 // minutos de reseñas y ningún invoke debe quedarse colgado tanto rato (misma
 // decisión que el backfill de curiosidades y la redescarga de imágenes).
+//
+// 0 = no arrancó nada, y no dice por qué: puede ser "ya había una pasada en
+// marcha" o "no hay ni un juego que refrescar". Quien necesite distinguirlo
+// pregunta antes por isExternalRefreshRunning() — lo hace el radar en
+// radar/pass.ts, y la tarjeta de Ajustes lo lee por 'external:status'.
 export const startExternalRefresh = async (scope: RefreshScope): Promise<number> => {
   // Dos pasadas a la vez se pisarían las mismas filas y doblarían las
   // peticiones a un servicio gratuito que pide ir despacio.
+  //
+  // La guarda y la TOMA del candado van juntas y SIN await en medio. Estaban
+  // separadas —el `running = true` vivía después de leer los juegos— y ese
+  // hueco era real: `selectTargets` es un SELECT de la tabla entera que cede
+  // el bucle de eventos y encima puede quedarse encolado tras otro trabajo de
+  // DB. Un doble clic normal, o el clic del Plan mientras la pasada semanal
+  // dispara la suya al arrancar, colaban dos pasadas a la vez — el doble de
+  // peticiones contra un servicio gratuito, y la primera en acabar cantando
+  // "done" con la otra todavía corriendo.
+  //
+  // Y que sigan pegadas no es solo cosa de aquí: el radar (radar/pass.ts) lee
+  // isExternalRefreshRunning() en la línea de justo antes de llamar y sella su
+  // semana según eso. Un await colado entre estas dos líneas se lleva por
+  // delante esa garantía, no solo esta.
   if (running) return 0;
+  running = true;
 
-  const games = await selectTargets(scope);
+  // Con el candado ya tomado, TODO lo que pueda fallar antes de que runPass se
+  // haga cargo tiene que soltarlo. Sin este try, un SELECT que rechace —la DB
+  // en pleno swap de conexión, el disco lleno— dejaba `running` en true para
+  // siempre, y "para siempre" aquí es literal: la app vive semanas en la
+  // bandeja. A partir de ese momento ningún refresco volvía a arrancar, y el
+  // radar —que solo sella la semana si el externo arrancó— repetía su pasada
+  // entera cada hora sin sellarla nunca.
+  let games: TargetGame[];
+  try {
+    games = await selectTargets(scope);
+  } catch (caught) {
+    running = false;
+    // Y se avisa como en un final normal: 'external:status' saca su `running`
+    // de este candado, así que una pantalla que lo hubiera leído en este hueco
+    // se queda pintando "Refreshing…". Cuando lo arranca un botón, su propia
+    // mutación acaba refrescando el estado; cuando lo arranca el radar no hay
+    // botón detrás, y este evento es lo único que la despierta.
+    notifyExternalActivity({
+      running: false,
+      scope,
+      phase: 'done',
+      done: 0,
+      total: 0,
+      currentTitle: null,
+      summary: null,
+      error: caught instanceof Error ? caught.message : String(caught),
+    });
+    // Y se relanza: leer la lista es lo único que este invoke hace de verdad
+    // antes de contestar, así que su fallo tiene que llegar al renderer
+    // (ipc/external.ts cuenta con ello; el radar lo recoge en su .catch).
+    throw caught;
+  }
+
   if (games.length === 0) {
+    // Salida temprana: hay que soltar el candado A MANO, porque runPass —que
+    // es quien lo suelta en su finally— no llega a arrancar.
+    running = false;
     notifyExternalActivity({
       running: false,
       scope,
@@ -142,7 +213,6 @@ export const startExternalRefresh = async (scope: RefreshScope): Promise<number>
     return 0;
   }
 
-  running = true;
   // Sin await: el trabajo sigue por su cuenta y el invoke contesta ya. El
   // catch de dentro se encarga de todo error — aquí no queda ninguna promesa
   // rechazada suelta.
@@ -162,12 +232,21 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
   // transacción del final, como todo lo demás: si IGDB o Steam fallan a
   // mitad, no se ha tocado ni una fila.
   const foundAppIds = new Map<number, number>();
+  // De esos, cuales son CORRECCIONES de un appid que ya existia (apuntaba al
+  // playtest o a otro producto) y no estrenos. foundAppIds los lleva juntos
+  // porque la fontaneria de la pasada es identica para los dos; el parte
+  // final NO puede mezclarlos -- ver appIdsFixed en ExternalRefreshSummary.
+  const correctedGameIds = new Set<number>();
   // EL appid de un juego a estas alturas de la pasada: el que ya tenía o el
   // que acaba de aparecer. Un solo sitio que lo decida, porque lo preguntan
   // tres: a quién se le pide a Steam, con qué appid, y a quién se le estampa
   // el steamSpyCheckedAt al guardar.
+  // foundAppIds PRIMERO, no el guardado: además de los que estaban a null,
+  // ahora lleva las CORRECCIONES de los que apuntaban donde no debian. Al reves
+  // (como estaba) se le pedirian las etiquetas del juego equivocado, que es
+  // exactamente lo que se viene a arreglar.
   const appIdOf = (game: TargetGame): number | null =>
-    game.steamAppId ?? foundAppIds.get(game.id) ?? null;
+    foundAppIds.get(game.id) ?? game.steamAppId ?? null;
   let summary: ExternalRefreshSummary = { ...EMPTY_SUMMARY, total: games.length };
   let error: string | null = null;
 
@@ -235,12 +314,40 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
         if (appId !== undefined) foundAppIds.set(game.id, appId);
       }
     }
+    // Y los que TIENEN appid pero apunta donde no debe: al playtest del propio
+    // juego, o directamente a otro producto (findSteamAppIdCorrections explica
+    // los dos casos). Este botón es "ponlo todo al día", y un juego que enseña
+    // las reseñas de OTRO juego es justo lo que hay que poner al día. No se
+    // re-resuelve nada más: el guardado se comprueba contra las entradas de
+    // Steam de su propia ficha.
+    const withAppId = inIgdb.filter(
+      (game): game is typeof game & { steamAppId: number } => game.steamAppId !== null,
+    );
+    for (let start = 0; start < withAppId.length; start += APPID_BATCH_SIZE) {
+      const batch = withAppId.slice(start, start + APPID_BATCH_SIZE);
+      // El aviso por consola de cada corrección lo da el helper: es el mismo
+      // en las tres rutas de refresco (ver external/steamAppIdFix.ts).
+      const replacements = await findSteamAppIdFixes(batch);
+      for (const game of batch) {
+        const better = replacements.get(game.igdbId);
+        if (better !== undefined) {
+          foundAppIds.set(game.id, better);
+          correctedGameIds.add(game.id);
+        }
+      }
+    }
+
     // Los recién encontrados entran en la pasada de Steam DE ESTA MISMA
     // vuelta: sería absurdo descubrir el appid y hacer esperar sus etiquetas y
     // sus reseñas a que el usuario vuelva a pulsar el botón mañana.
     if (foundAppIds.size > 0) {
       steamTargets = games.filter((game) => game.steamAppId !== null || foundAppIds.has(game.id));
-      console.log(`[steam] el refresco externo encontro ${foundAppIds.size} appids nuevos`);
+      // Solo los ESTRENOS: las correcciones ya cantaron una a una por consola
+      // (el aviso vive en steamAppIdFix.ts) y tienen su propio contador.
+      const discovered = foundAppIds.size - correctedGameIds.size;
+      if (discovered > 0) {
+        console.log(`[steam] el refresco externo encontro ${discovered} appids nuevos`);
+      }
     }
 
     // Las ETIQUETAS de todos, de golpe: la API de la tienda acepta lotes (de
@@ -283,14 +390,30 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
 
           // Todo lo de Steam de este juego, igual tanto si IGDB contestó como
           // si no. El appid recién resuelto se guarda AQUÍ, en la misma
-          // transacción que el resto: foundAppIds solo lleva los que estaban a
-          // null, así que esto no puede pisar un appid bueno.
+          // transacción que el resto. foundAppIds lleva dos cosas: los que
+          // estaban a null y los que apuntaban a otro juego y se corrigen —
+          // ningún appid bueno entra ahí, así que esto no puede pisar uno.
+          //
+          // Y esas dos cosas no se escriben igual. Un appid CORREGIDO cambia
+          // de producto: las etiquetas y las reseñas guardadas son las del
+          // juego viejo, no un dato de este que haya envejecido. Por eso van a
+          // null ANTES de esparcir lo que Steam haya contestado —el orden de
+          // estas líneas ES la regla—: lo que traiga las pisa, y lo que no se
+          // queda vacío. El caso real es el remake sin salir ("Trails in the
+          // Sky 2nd Chapter" llevaba el appid del original de 2015): su página
+          // existe, así que hay etiquetas, pero aún no tiene ni una reseña — y
+          // sin esto la ficha seguiría enseñando los tres mil votos del juego
+          // de 2015 colgados ya del appid bueno. La regla de la casa ("un no
+          // externo no borra lo que había") protege un dato de este juego, y
+          // esos números nunca lo fueron.
           const foundAppId = foundAppIds.get(game.id);
+          const corrected = foundAppId !== undefined && game.steamAppId !== null;
           const steamFields = {
             ...(foundAppId !== undefined
               ? { steamAppId: foundAppId, steamAppIdCheckedAt: now }
               : {}),
             ...(appIdOf(game) !== null ? { steamSpyCheckedAt: now } : {}),
+            ...(corrected ? { steamTags: null, steamPositive: null, steamNegative: null } : {}),
             ...(steam ?? {}),
           };
 
@@ -343,7 +466,8 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
       withSummary,
       withFullDate,
       adoptedFromSteam: adoptedCount,
-      appIdsFound: foundAppIds.size,
+      appIdsFound: foundAppIds.size - correctedGameIds.size,
+      appIdsFixed: correctedGameIds.size,
       steamChecked: steamTargets.length,
       steamFound,
     };
