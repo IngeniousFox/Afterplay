@@ -18,6 +18,14 @@ import {
 // un archivo u otro según qué se compiló antes). Con proyecciones explícitas
 // el tipo del resultado se construye directo del objeto, barato y estable.
 // Si se añade una columna a una tabla, hay que añadirla también aquí.
+//
+// No son un problema de peso, y está medido para no volver a mirarlo: todas se
+// usan sobre UNA fila (los .returning() de las mutations) o sobre la ficha de
+// un juego, y la ficha entera —fila de games + iteraciones + sesiones +
+// eventos + gastos— son 3 KB de media y 8,2 KB el peor de los 333 juegos de la
+// biblioteca real. Estrechar gameColumns para ahorrar bytes de IPC ahorraría
+// menos de 1 KB y costaría la estabilidad de tipos que las justifica. El
+// payload gordo de la app es games:getPlanned, 928 KB (ver ipc/games.ts).
 
 export const gameColumns = {
   id: gamesTable.id,

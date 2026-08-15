@@ -58,6 +58,12 @@ const CoverageRow = ({
   <div className="flex items-center gap-2.5">
     <span className="w-26 flex-none text-[11px] text-muted-foreground">{label}</span>
     <div className={BAR_CLASS}>
+      {/* width y no transform A PROPÓSITO (a diferencia de la barra de
+          progreso de abajo): estas son frías — solo transicionan cuando
+          cambia la cobertura, unas pocas veces por pasada — y pueden REPOSAR
+          en anchos menores que su alto (p.ej. 5/994), donde el rounded-full
+          encoge los casquetes y el truco del relleno desplazado ya no es
+          idéntico píxel a píxel. */}
       <div
         className="h-full rounded-full transition-[width] duration-500 ease-[cubic-bezier(.16,1,.3,1)]"
         style={{ width: `${total > 0 ? (have / total) * 100 : 0}%`, background: color }}
@@ -217,11 +223,26 @@ export const ExternalDataSection = (): React.JSX.Element => {
                   : 'Fetching IGDB'}
             </span>
             <div className={BAR_CLASS}>
+              {/* transform y no width: en la fase de Steam llega un evento
+                  por juego con appid (emit('steam', index, …) en
+                  external/refresh.ts, cientos en esta biblioteca, con la
+                  pasada durando minutos) y cada evento redirige esta
+                  transición de 500ms, así que la barra está en transición
+                  casi continua — con width eso era layout + paint en el hilo
+                  principal en cada frame; translateX corre entero en el
+                  compositor. Idéntico en pantalla: el relleno va a ancho
+                  completo y se desplaza a la izquierda lo que le falte, y el
+                  overflow-hidden + rounded-full del contenedor recorta su
+                  borde izquierdo con el mismo radio (3px, mitad de h-1.5)
+                  que tenía el casquete propio del relleno cuando era width. */}
               <div
-                className={`h-full rounded-full transition-[width] duration-500 ease-out ${
+                className={`h-full w-full rounded-full transition-transform duration-500 ease-out ${
                   measurable ? '' : 'animate-pulse'
                 }`}
-                style={{ width: measurable ? `${percent}%` : '100%', background: TEAL }}
+                style={{
+                  transform: `translateX(${measurable ? percent - 100 : 0}%)`,
+                  background: TEAL,
+                }}
               />
             </div>
             <span

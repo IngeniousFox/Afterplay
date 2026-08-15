@@ -284,6 +284,11 @@ export const ScreenshotsCarousel = ({
                 aria-label={
                   slide.kind === 'trailer' ? 'Go to trailer' : `Go to screenshot ${i + 1}`
                 }
+                // width y no transform A PROPÓSITO: scaleX deformaría los
+                // casquetes del rounded-full, y los puntos vecinos se
+                // recolocan al crecer el activo (fila justify-center) — eso
+                // es parte del gesto y solo lo da el layout. Transición fría
+                // (un clic, 200ms, una fila de puntos): barata donde está.
                 className="h-1.75 cursor-pointer rounded-full transition-[width,background-color,box-shadow] duration-200"
                 style={{
                   width: active ? 18 : 7,

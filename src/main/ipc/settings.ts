@@ -1,9 +1,16 @@
 import { app, ipcMain } from 'electron';
-import { getCredentials, setCredentials } from '../config/credentials';
+import {
+  exportCredentialsTo,
+  getCredentials,
+  importCredentialsFromFile,
+  setCredentials,
+  takeStartupKeysImport,
+} from '../config/credentials';
 import { getConfigValue, setConfigValue } from '../config/store';
 import { getLastSyncFailure, runSyncCycle } from '../db';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
+import { openPathResult } from '../lib/openPath';
 import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
 import { resetR2Client } from '../saves/r2';
 import { resetSgdbClient } from '../sgdb/client';
@@ -21,6 +28,21 @@ import type { CredentialsValues, TimeFormat } from '../../shared/types';
 // `openAtLogin` viene mal (así lo dice la propia documentación de Electron).
 const loginItemQueryOptions =
   process.platform === 'win32' ? { args: [HIDDEN_LAUNCH_ARG] } : undefined;
+
+// Lo que hay que despertar cada vez que CAMBIAN las credenciales, vengan de
+// teclearlas o de importar un fichero: los clientes cacheados capturaron la
+// clave vieja al construirse y seguirían usándola hasta reiniciar la app.
+const applyCredentialsChange = (): void => {
+  invalidateToken();
+  resetSgdbClient();
+  // Lo mismo con el cliente de R2: se construyó con las claves viejas y
+  // seguiría firmando con ellas (PARTIDAS-GUARDADAS.md §9).
+  resetR2Client();
+  // Si acaban de aparecer credenciales de Turso, esto enciende el sync ya
+  // mismo (attemptSyncUpgrade relee process.env) en vez de esperar al
+  // siguiente ciclo de 60s. Fire-and-forget: nunca lanza.
+  void runSyncCycle();
+};
 
 export const registerSettingsHandlers = (): void => {
   ipcMain.handle(
@@ -99,17 +121,35 @@ export const registerSettingsHandlers = (): void => {
 
   ipcMain.handle('settings:setCredentials', (_event, input: CredentialsValues) => {
     setCredentials(input);
-    // Los clientes cacheados capturaron la clave vieja al construirse — se
-    // tiran para que la siguiente llamada use la recién guardada.
-    invalidateToken();
-    resetSgdbClient();
-    // Lo mismo con el cliente de R2: se construyó con las claves viejas y
-    // seguiría firmando con ellas (PARTIDAS-GUARDADAS.md §9).
-    resetR2Client();
-    // Si acaban de aparecer credenciales de Turso, esto enciende el sync ya
-    // mismo (attemptSyncUpgrade relee process.env) en vez de esperar al
-    // siguiente ciclo de 60s. Fire-and-forget: nunca lanza.
-    void runSyncCycle();
+    applyCredentialsChange();
     return getCredentials();
+  });
+
+  // Llevarse las claves a otro PC (config/credentials.ts). La carpeta de
+  // destino y el fichero de origen los pide el renderer con los MISMOS
+  // diálogos que ya usan Backups y Game saves (dialog:pickFolder y
+  // dialog:pickFile), así que aquí no hay diálogo propio que mantener.
+  ipcMain.handle('settings:exportCredentials', (_event, directory: string) =>
+    exportCredentialsTo(directory),
+  );
+
+  ipcMain.handle('settings:importCredentials', (_event, filePath: string) => {
+    const result = importCredentialsFromFile(filePath);
+    applyCredentialsChange();
+    return result;
+  });
+
+  // El fichero soltado en la carpeta de datos se importa en el arranque,
+  // cuando todavía no hay ventana: el renderer pregunta al montarse si pasó
+  // algo que contar. Se entrega una vez y se olvida.
+  ipcMain.handle('settings:getStartupKeysImport', () => takeStartupKeysImport());
+
+  // Para el camino automático hay que saber DÓNDE se suelta el fichero, y la
+  // ruta de userData no se la sabe nadie de memoria — este botón la abre.
+  ipcMain.handle('settings:openDataFolder', async (): Promise<void> => {
+    const result = await openPathResult(app.getPath('userData'));
+    if (!result.ok) {
+      console.warn('[settings] no se pudo abrir la carpeta de datos:', result);
+    }
   });
 };

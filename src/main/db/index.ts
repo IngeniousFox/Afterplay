@@ -59,8 +59,11 @@ const remoteLabel = (): string => {
 
 // getDb() sigue siendo síncrono a propósito — lo llaman decenas de queries
 // existentes sin esperar nada. Solo es seguro llamarlo después de
-// runMigrations(), que es lo primero que toca la DB en el arranque (SPEC
-// 6: el main resuelve todo antes de que nada más la use).
+// runMigrations(), y quien lo garantiza ya no es el ORDEN del arranque (la
+// ventana se crea antes de migrar, así que el renderer puede pedir datos con
+// la conexión todavía sin abrir) sino la PUERTA DE ARRANQUE de withDbAccess:
+// esperar ahí es lo que hace que aquí abajo siempre haya conexión. Llamar a
+// getDb() por fuera de withDbAccess sigue siendo un error, y por eso lanza.
 export const getDb = (): Db => {
   if (!dbInstance) {
     throw new Error('getDb() llamado antes de runMigrations() — la DB todavía no está conectada.');
@@ -292,6 +295,21 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
   }
 };
 
+// Cronómetro de las FASES del arranque de la base — la contraparte de las
+// marcas [startup] de main/index.ts. Aquí dentro se va el grueso de lo que el
+// usuario ve como splash, y hasta medirlo no se sabía cuál de las tres fases
+// era la cara: con la biblioteca real resultó ser "comprobar Turso" con 470 ms
+// de los 481 totales (conectar 6, migrar 5). Se queda puesto: el arranque pasa
+// una vez y no hay dónde mirarlo después.
+const phase = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+  const started = Date.now();
+  try {
+    return await fn();
+  } finally {
+    console.log(`[db] fase ${label}: ${Date.now() - started} ms`);
+  }
+};
+
 // PROTOCOLO PARA CAMBIOS DE ESQUEMA QUE ALTER NO SOPORTA
 // (quitar un constraint, cambiar un tipo… — todo lo que drizzle-kit resuelve
 // generando una reconstrucción CREATE __new_x + INSERT + DROP + RENAME).
@@ -329,7 +347,7 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 //     fila. Y de paso se llevó por delante la columna muerta que este bloque
 //     ponía de ejemplo vivo (la vieja steamGridDbId): hoy solo queda sgdbId,
 //     ver schema.ts.
-export const runMigrations = async (): Promise<void> => {
+const connectAndMigrate = async (): Promise<void> => {
   const remoteConfigured = hasRemoteConfigured();
   // Sondeo barato ANTES de pagar dos timeouts de red completos (push de
   // migraciones + connectWithSync, 4s cada uno de CONNECT_TIMEOUT_MS): sin
@@ -347,12 +365,14 @@ export const runMigrations = async (): Promise<void> => {
   // la conexión de abajo A PROPÓSITO: la de sync no debe engancharse a Turso
   // mientras el DDL está a medias.
   migrationPushPending =
-    remoteConfigured && !(online && (await pushMigrationsToRemote(CONNECT_TIMEOUT_MS)));
+    remoteConfigured &&
+    !(online && (await phase('comprobar Turso', () => pushMigrationsToRemote(CONNECT_TIMEOUT_MS))));
 
-  const { db, capable } =
+  const { db, capable } = await phase('conectar', async () =>
     remoteConfigured && !online
       ? { db: await connectLocalOnly(), capable: false }
-      : await attemptInitialConnect();
+      : attemptInitialConnect(),
+  );
   dbInstance = db;
   syncCapable = capable;
 
@@ -381,7 +401,19 @@ export const runMigrations = async (): Promise<void> => {
     return;
   }
 
-  await applyMigrationsGuarded(db);
+  await phase('migrar', () => applyMigrationsGuarded(db));
+};
+
+// El arranque de la base, visto desde fuera: conectar + migrar y ABRIR LA
+// PUERTA (ver startupGate más abajo) para que las consultas que el renderer ya
+// haya dejado esperando entren en cuanto haya conexión.
+//
+// La puerta NO se abre si esto lanza, y es a propósito: main/index.ts enseña
+// el diálogo de error y cierra la app: dejar pasar consultas contra una base
+// que no se pudo preparar solo añadiría errores encima del que importa.
+export const runMigrations = async (): Promise<void> => {
+  await connectAndMigrate();
+  openStartupGate();
 };
 
 // EL ARREGLO DE LA DOBLE APLICACIÓN — la pieza que faltaba desde el 7-ago-2026.
@@ -639,10 +671,55 @@ let releaseSwapGate: (() => void) | null = null;
 let queriesInFlight = 0;
 const idleWaiters: Array<() => void> = [];
 
+// ---- Puerta del ARRANQUE (para la ventana que nace antes que la conexión) --
+//
+// Hasta hoy el orden era rígido: primero runMigrations(), y solo después se
+// creaba la ventana — porque antes de runMigrations() no hay conexión y
+// getDb() LANZA. El precio medido de esa rigidez: la ventana esperaba a la
+// comprobación de Turso (470 ms con la base despierta, hasta los 4000 ms de
+// CONNECT_TIMEOUT_MS con la base dormida) sin que el renderer, que tarda otros
+// ~155 ms en arrancar, hubiera empezado siquiera.
+//
+// Ahora main/index.ts crea la ventana ANTES de migrar, así que las primeras
+// consultas del renderer pueden llegar con la conexión todavía sin abrir. En
+// vez de reventar, ESPERAN aquí: la puerta se cierra al cargar el módulo y la
+// abre runMigrations() al terminar. Es el mismo mecanismo que el swap en
+// caliente y por la misma razón de fondo (no hay conexión utilizable ahora
+// mismo), solo que una vez y al principio.
+//
+// getDb() sigue lanzando a propósito: quien llegue a la DB sin pasar por
+// withDbAccess se está saltando también el swap, y eso tiene que doler.
+//
+// La línea que deja al abrirla dice CUÁNTAS consultas se encontraron la puerta
+// cerrada, y no es adorno: es lo que demuestra que la carrera es real. Medido
+// sobre arranques seguidos con la base despierta salen entre 0 y 4 según lo
+// que tarde cada lado (el renderer no pide datos hasta bien entrado su montaje,
+// así que a veces llega después). Con Turso dormido gana siempre el renderer y
+// esperan aquí todas. Sin esta puerta, esas mismas consultas reventarían con
+// "getDb() llamado antes de runMigrations()".
+let startupGate: Promise<void> | null = null;
+let releaseStartupGate: (() => void) | null = null;
+let waitedAtStartupGate = 0;
+
+startupGate = new Promise<void>((resolve) => {
+  releaseStartupGate = resolve;
+});
+
+const openStartupGate = (): void => {
+  console.log(
+    `[db] puerta de arranque abierta: ${waitedAtStartupGate} consulta(s) esperaban a que hubiera conexion`,
+  );
+  releaseStartupGate?.();
+  releaseStartupGate = null;
+  startupGate = null;
+};
+
 // Todo acceso a la DB desde fuera del arranque (handlers IPC de dominios con
 // DB, ciclo del watcher) entra por aquí. Las migraciones corren en el
 // arranque, antes de que exista el timer de sync, así que no lo necesitan.
 export const withDbAccess = async <T>(fn: () => Promise<T>): Promise<T> => {
+  if (startupGate) waitedAtStartupGate++;
+  while (startupGate) await startupGate;
   while (swapGate) await swapGate;
   queriesInFlight++;
   try {

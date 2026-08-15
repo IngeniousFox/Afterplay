@@ -34,6 +34,28 @@ const dbLabel = (url: string): string => {
   }
 };
 
+// EN QUÉ RELOJ VIVE EL QUE ESTÁ MIRANDO. Un Worker no tiene zona horaria, así
+// que cualquier `getFullYear()` de aquí es UTC, mientras que el escritorio lee
+// el mismo instante en local. Con una fecha de precisión de AÑO —que se guarda
+// como el 1 de enero a las 00:00 LOCALES, o sea las 23:00Z del 31 de diciembre
+// anterior desde España— las mismas horas caían en 2018 en la portada del
+// móvil y en 2019 en Stats del PC.
+//
+// Cloudflare ya trae la zona del que hace la petición, deducida de su IP, y es
+// justo lo que hace falta: el año que espera ver quien mira la pantalla, igual
+// que en el escritorio. No es un dato perfecto —de viaje se lee la del sitio
+// donde estés, no la de casa—, pero es el mismo criterio que aplica el PC y
+// deja de haber dos respuestas para la misma pregunta. `cf` no está tipado
+// campo a campo aquí, de ahí el acceso estrecho en vez de un cast a la
+// interfaz entera.
+//
+// null cuando no viene (tests, `wrangler dev` a secas): entonces cada lado
+// vuelve a leer en el reloj de su proceso, que es como estaba antes.
+const readTimeZone = (request: Request): string | null => {
+  const zone = (request.cf as { timezone?: unknown } | undefined)?.timezone;
+  return typeof zone === 'string' && zone.length > 0 ? zone : null;
+};
+
 const readInt = (value: string | null): number | undefined => {
   if (value === null) return undefined;
   const parsed = Number(value);
@@ -320,7 +342,7 @@ export default {
       }
 
       if (url.pathname === '/api/library') {
-        return json(await listLibrary(db));
+        return json(await listLibrary(db, readTimeZone(request)));
       }
 
       if (url.pathname === '/api/plan') {
@@ -341,7 +363,7 @@ export default {
       }
 
       if (url.pathname === '/api/stats/summary') {
-        return json(await getStatsSummary(db));
+        return json(await getStatsSummary(db, readTimeZone(request)));
       }
 
       if (url.pathname === '/api/sessions') {

@@ -4,6 +4,16 @@ import type { GetSgdbImagesInput } from '../../../shared/types';
 // ['games', 5], ['games', 5, 'spend']... cualquier key que empiece igual.
 // Por eso casi ninguna mutation necesita saber la key exacta de lo que
 // afecta — con invalidar games.all (['games']) ya cascada a todo lo demás.
+//
+// EL PRECIO DE ESA COMODIDAD, medido sobre la biblioteca real (994 juegos):
+// invalidar ['games'] con la app abierta cuesta getGames (8,8 ms y 186 KB de
+// 333 filas cruzando el IPC) + getPlannedGames (14 ms, 893 KB) + la ficha
+// abierta. La lista de la biblioteca está montada en TODAS las pantallas (la
+// tarjeta de Now playing vive en el shell de MiddleColumn), así que ese refetch
+// no se lo ahorra nadie por estar en otra sección. Merece la pena para lo que
+// de verdad toca varias tablas; para un cambio de UNA columna que solo lee UNA
+// consulta, no — ver invalidatePlanPinned en hooks/games.ts, que es el caso
+// donde ya se notaba.
 export const queryKeys = {
   games: {
     all: ['games'] as const,

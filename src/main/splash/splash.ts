@@ -5,9 +5,14 @@ import icon from '../../../resources/icon.png?asset';
 // Pantalla de arranque (no confundir con los "Loading…" de dentro de la
 // app, que son cosa del renderer/TanStack Query) — cubre el hueco real
 // entre "el usuario hace doble clic" y "la ventana de verdad tiene algo que
-// enseñar": migraciones + conexión con Turso (hasta 4s si hay que
-// reintentar, ver db/index.ts) + arranque del bundle del renderer. Sin
-// esto, esos segundos se ven como una ventana en blanco.
+// enseñar". Sin esto, esos segundos se ven como una ventana en blanco.
+//
+// Ese hueco ya NO es la suma de las dos esperas, que es lo que ponía aquí:
+// desde que main/index.ts crea la ventana antes de migrar, el arranque del
+// renderer (~155 ms) corre EN PARALELO con la preparación de la base
+// (comprobación de Turso, 470 ms con la base despierta y hasta 4 s con ella
+// dormida — ver db/index.ts). Lo que este splash tapa es la más larga de las
+// dos, casi siempre la de Turso.
 //
 // HTML inline (data: URL) a propósito — nada de fichero aparte que haya
 // que resolver bien tanto en dev como ya empaquetado; unas pocas líneas de

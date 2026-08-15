@@ -37,6 +37,80 @@ import { GameStats } from './GameStats';
 // la comparten esta pantalla y la del modo TV — dos sitios pintando el mismo
 // número no pueden calcularlo cada uno por su cuenta.)
 
+// Las 4 cifras de cabecera con su contador animado. Componente aparte por
+// RENDIMIENTO, no por orden — y el porqué es sutil, así que va escrito:
+//
+// useCountUp reprinta a 60 fps durante 700 ms, o sea unos 42 renders seguidos
+// justo mientras entra la pantalla. El compilador de React memoiza POR
+// EXPRESIÓN, y toda la rama de overview de abajo es UNA sola expresión (el
+// `view === 'journey' ? … : <>…</>`), así que vive en una única entrada de
+// caché. Con los cuatro valores animados leídos ahí dentro, esos 42 frames
+// invalidaban esa entrada entera: se volvían a crear las 18 tarjetas de la
+// pantalla (heatmap, las cuatro gráficas, galería, vitrina de logros, flujo
+// de backlog…) y a reinvocar sus 18 componentes, 42 veces, para que subieran
+// cuatro números. Construir ese árbol cuesta 35 ms en frío con la biblioteca
+// real (333 juegos, 3.000 sesiones, medido con react-dom/server); caliente es
+// bastante menos, pero se pagaba en la peor ventana posible — la de la
+// animación de entrada, donde cualquier frame perdido se ve.
+//
+// Con los contadores encerrados aquí, el árbol de Stats se construye UNA vez
+// y los 42 frames solo tocan estas cuatro tarjetas.
+const HeaderMetrics = ({
+  totalGames,
+  totalHours,
+  totalSpent,
+  costPerHour,
+  gamesLabel,
+  spentLabel,
+}: {
+  totalGames: number;
+  totalHours: number;
+  totalSpent: number;
+  costPerHour: number | null;
+  gamesLabel: string;
+  spentLabel: string;
+}): React.JSX.Element => {
+  // Contadores animados de las 4 métricas — mismo count-up que las stats de
+  // un juego; al cambiar el filtro de año vuelven a subir hacia el valor
+  // nuevo (el key por año de la pantalla remonta este componente).
+  const animatedGames = useCountUp(totalGames);
+  const animatedHours = useCountUp(totalHours);
+  const animatedSpent = useCountUp(totalSpent);
+  const animatedCost = useCountUp(costPerHour ?? 0);
+
+  return (
+    <div
+      className={`grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
+      style={revealStyle(0)}
+    >
+      <MetricCard
+        Icon={Gamepad2}
+        label={gamesLabel}
+        value={String(Math.round(animatedGames))}
+        accent="#85a3d6"
+      />
+      <MetricCard
+        Icon={Clock}
+        label="TOTAL PLAYTIME"
+        value={formatHours(animatedHours)}
+        accent="#2fdc7e"
+      />
+      <MetricCard
+        Icon={DollarSign}
+        label={spentLabel}
+        value={formatMoney(animatedSpent)}
+        accent="#e3b24a"
+      />
+      <MetricCard
+        Icon={Gauge}
+        label="AVG COST / HOUR"
+        value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
+        accent="#7c86c8"
+      />
+    </div>
+  );
+};
+
 // Bloque 5B/5C/5D/5E — panel global de Stats: 4 métricas + año activo,
 // heatmap de actividad, Most/Top Played, Status Breakdown y Genre Radar.
 // Filtrar a un juego concreto (columna de nav) lleva a GameStats.tsx, un
@@ -114,14 +188,6 @@ export const Stats = (): React.JSX.Element => {
   // información real (ej. el primer año que usas la app).
   const showYearCompare =
     previousYear !== null && previousYearStats !== null && years.includes(previousYear);
-
-  // Contadores animados de las 4 métricas — mismo count-up que las stats de
-  // un juego; al cambiar el filtro de año vuelven a subir hacia el valor
-  // nuevo (el target cambia y el hook re-anima).
-  const animatedGames = useCountUp(totalGames);
-  const animatedHours = useCountUp(totalHours);
-  const animatedSpent = useCountUp(totalSpent);
-  const animatedCost = useCountUp(costPerHour ?? 0);
 
   const playedEntries = useMemo(
     () =>
@@ -243,35 +309,14 @@ export const Stats = (): React.JSX.Element => {
           />
         ) : (
           <>
-            <div
-              className={`grid grid-cols-2 gap-3.5 sm:grid-cols-4 ${revealClass}`}
-              style={revealStyle(0)}
-            >
-              <MetricCard
-                Icon={Gamepad2}
-                label={gamesLabel}
-                value={String(Math.round(animatedGames))}
-                accent="#85a3d6"
-              />
-              <MetricCard
-                Icon={Clock}
-                label="TOTAL PLAYTIME"
-                value={formatHours(animatedHours)}
-                accent="#2fdc7e"
-              />
-              <MetricCard
-                Icon={DollarSign}
-                label={spentLabel}
-                value={formatMoney(animatedSpent)}
-                accent="#e3b24a"
-              />
-              <MetricCard
-                Icon={Gauge}
-                label="AVG COST / HOUR"
-                value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
-                accent="#7c86c8"
-              />
-            </div>
+            <HeaderMetrics
+              totalGames={totalGames}
+              totalHours={totalHours}
+              totalSpent={totalSpent}
+              costPerHour={costPerHour}
+              gamesLabel={gamesLabel}
+              spentLabel={spentLabel}
+            />
 
             {showYearCompare && previousYear !== null && previousYearStats !== null && (
               <div className={revealClass} style={revealStyle(1)}>

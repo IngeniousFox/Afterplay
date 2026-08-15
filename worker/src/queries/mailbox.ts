@@ -34,16 +34,25 @@ export const parseEntry = (raw: unknown): PlanMailboxEntry | null => {
     if (hasIgdb === hasSteam) return null;
     if (typeof entry.title !== 'string' || entry.title.trim() === '') return null;
 
+    // Se guarda lo MISMO que se juzga: el `trim()` de arriba decidía si el
+    // título estaba vacío y luego se encolaba el original con sus espacios, o
+    // sea que ' Celeste ' viajaba a la tabla tal cual. Hoy da igual —el título
+    // de verdad lo resuelve IGDB al drenar— pero el día que ese texto se use
+    // para casar contra algo, el fallo aparece en la otra máquina y días
+    // después, que es el peor sitio posible. Lo mismo con la nota.
+    //
+    // Y el recorte va DESPUÉS del trim: cortar primero dejaría 300 caracteres
+    // de los que algunos podrían ser espacios del borde.
     return {
       type: 'add',
       source: hasIgdb
         ? { igdbId: source.igdbId as number }
         : { steamAppId: source.steamAppId as number },
-      title: entry.title.slice(0, 300),
+      title: entry.title.trim().slice(0, 300),
       coverUrl: typeof entry.coverUrl === 'string' ? entry.coverUrl.slice(0, 500) : null,
       note:
         typeof entry.note === 'string' && entry.note.trim() !== ''
-          ? entry.note.slice(0, 500)
+          ? entry.note.trim().slice(0, 500)
           : null,
     };
   }

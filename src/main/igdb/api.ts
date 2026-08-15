@@ -247,14 +247,20 @@ const pickTrailer = (
 // Beta Build" a la ÚNICA entrada de ese juego, y es la buena. Cuando no hay
 // alternativa, un nombre feo no es motivo para tirar el único dato que hay.
 //
-// Lo que esta regla NO arregla, dicho aquí para que no se busque: si la única
-// entrada de Steam es de verdad la equivocada (el caso encontrado: "The
-// Stanley Parable: Ultra Deluxe" apunta a la demo del original), no hay
-// sibling limpio y se queda como está.
+// PERO ese respaldo vale SOLO cuando se está RELLENANDO un hueco. Ahí "una
+// beta es mejor que nada" es verdad; sobrescribiendo un appid que ya existía
+// no lo es: cambia un appid equivocado por otro, y encima por uno sin tienda,
+// sin reseñas y sin logros del juego real. Por eso el rescate
+// (findSteamAppIdCorrections) pasa `allowPlaytestFallback: false` y se queda
+// sin candidato en vez de estampar la prueba — que es justo lo que este
+// comentario ya prometía para el caso encontrado ("The Stanley Parable: Ultra
+// Deluxe" apunta a la demo del original): no hay sibling limpio y se queda
+// como está.
 const PLAYTEST_NAME = /\b(playtest|demo|beta|test\s?server)\b/i;
 
 const pickSteamAppId = <T extends { uid: string; name?: string }>(
   candidates: T[],
+  { allowPlaytestFallback = true }: { allowPlaytestFallback?: boolean } = {},
 ): number | null => {
   const parsed = candidates
     .map((candidate) => ({ appId: parseSteamUid(candidate.uid), name: candidate.name ?? '' }))
@@ -262,6 +268,7 @@ const pickSteamAppId = <T extends { uid: string; name?: string }>(
   if (parsed.length === 0) return null;
 
   const real = parsed.filter((candidate) => !PLAYTEST_NAME.test(candidate.name));
+  if (real.length === 0 && !allowPlaytestFallback) return null;
   const pool = real.length > 0 ? real : parsed;
 
   // Y entre los que quedan, EL PRIMERO — el mismo criterio de siempre, a
@@ -369,6 +376,22 @@ export const searchGames = async (query: string): Promise<IgdbSearchResult[]> =>
 const DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 const detailCache = new Map<number, { detail: IgdbGameDetail | null; expiresAt: number }>();
 
+// Un TTL que solo se IGNORA no desaloja nada: la entrada caducada se quedaba
+// en el mapa para siempre (el get la saltaba, pero nadie la borraba), y este
+// proceso vive dias en la bandeja. Medido con la forma real de las entradas
+// (script suelto, process.memoryUsage): 994 detalles retenidos en detailCache
+// son 5,4 MB, y 300 sagas x 25 juegos en collectionCache, 5,3 MB — RAM muerta
+// tras los 5 minutos de TTL. Barrer las caducadas al tocar el mapa deja vivo
+// solo lo del ultimo TTL, y recorrer un mapa que tras cada barrido queda en
+// unas pocas entradas cuesta microsegundos contra la llamada de red que viene
+// detras.
+const sweepExpired = <K, V extends { expiresAt: number }>(cache: Map<K, V>): void => {
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key);
+  }
+};
+
 export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | null> => {
   // El id va interpolado en el body: entero obligatorio, que por ahí no se
   // cuele texto arbitrario hacia la query.
@@ -376,6 +399,9 @@ export const getGameDetails = async (igdbId: number): Promise<IgdbGameDetail | n
     throw new Error(`igdbId inválido: ${igdbId}`);
   }
 
+  // El barrido va ANTES del get: si esta entrada caducó, aquí es donde se
+  // borra de verdad en vez de quedarse ocupando sitio hasta nunca.
+  sweepExpired(detailCache);
   const cached = detailCache.get(igdbId);
   if (cached && cached.expiresAt > Date.now()) return cached.detail;
 
@@ -539,7 +565,15 @@ export const getIgdbIdsBySteamAppIds = async (appIds: number[]): Promise<Map<num
 };
 
 // Los appids de Steam ATADOS DIRECTAMENTE a estos juegos.
-const fetchSteamAppIdsDirect = async (igdbIds: number[]): Promise<Map<number, number>> => {
+//
+// `allowPlaytestFallback` viaja tal cual hasta pickSteamAppId: en false, un
+// juego cuyas únicas filas son pruebas se queda FUERA del mapa en vez de
+// entrar con la prueba. Lo usa el rescate, que escribe encima de un appid ya
+// guardado; el camino de resolver (que rellena huecos) lo deja en true.
+const fetchSteamAppIdsDirect = async (
+  igdbIds: number[],
+  { allowPlaytestFallback = true }: { allowPlaytestFallback?: boolean } = {},
+): Promise<Map<number, number>> => {
   const result = new Map<number, number>();
   if (igdbIds.length === 0) return result;
 
@@ -572,17 +606,29 @@ const fetchSteamAppIdsDirect = async (igdbIds: number[]): Promise<Map<number, nu
     else byGame.set(row.game, [row]);
   }
   for (const [game, candidates] of byGame) {
-    const appId = pickSteamAppId(candidates);
+    const appId = pickSteamAppId(candidates, { allowPlaytestFallback });
     if (appId !== null) result.set(game, appId);
   }
   return result;
 };
 
-// Cuáles de estos juegos cuelgan de otro (expansiones, DLC, remasters). Solo
-// se necesita el SÍ/NO, no de quién — ver el porqué en el uso.
-const fetchParentIgdbIds = async (igdbIds: number[]): Promise<Set<number>> => {
-  const withParent = new Set<number>();
-  if (igdbIds.length === 0) return withParent;
+// Cuáles de estos juegos cuelgan de otro (expansiones, DLC, remasters) y DE
+// QUIÉN: el rescate necesita el id del padre, no solo el sí/no, porque para un
+// hijo el appid bueno es el del padre (ver findSteamAppIdCorrections).
+//
+// `truncated` no es adorno. Esta query lleva el mismo `limit 500` que sus
+// hermanas, pero aquí una fila que falta no es un silencio: un hijo que se
+// queda fuera de la respuesta pasa por huérfano, entra por el MOTIVO 2 y se
+// lleva ESCRITO su propio appid — justo el que se descarta a propósito porque
+// su catálogo de logros viene vacío. Durante un tiempo lo único que separaba
+// eso de un fallo real era APPID_BATCH_SIZE (150) en external/refresh.ts: una
+// constante de OTRO fichero, que un llamador nuevo se salta sin enterarse. Se
+// devuelve el aviso y decide quien llama.
+type ParentGames = { parentOf: Map<number, number>; truncated: boolean };
+
+const fetchParentGames = async (igdbIds: number[]): Promise<ParentGames> => {
+  const parentOf = new Map<number, number>();
+  if (igdbIds.length === 0) return { parentOf, truncated: false };
 
   const rows = igdbParentGamesResponseSchema.parse(
     await igdbRequest(
@@ -591,8 +637,8 @@ const fetchParentIgdbIds = async (igdbIds: number[]): Promise<Set<number>> => {
         `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`,
     ),
   );
-  for (const row of rows) withParent.add(row.id);
-  return withParent;
+  for (const row of rows) parentOf.set(row.id, row.parent_game);
+  return { parentOf, truncated: rows.length === EXTERNAL_GAMES_PAGE_LIMIT };
 };
 
 // EL RESCATE DE LOS QUE YA ESTÁN MAL GUARDADOS.
@@ -603,10 +649,15 @@ const fetchParentIgdbIds = async (igdbIds: number[]): Promise<Set<number>> => {
 // con el playtest de por medio hay un tercer estado, "tiene uno y es el
 // equivocado", y por su cuenta no salía nunca de ahí.
 //
-// Corrige DOS cosas y ninguna más (ver los dos motivos dentro del bucle): un
-// appid que apunta al playtest del propio juego, y uno que apunta a un
-// producto que no es este. Un appid que sí figura en la ficha y no es una
-// prueba no se toca jamás: eso es identidad del juego.
+// Corrige TRES cosas y ninguna más (ver los motivos dentro del bucle): un
+// appid que apunta al playtest del propio juego, uno que apunta a un producto
+// que no es este, y —en un juego CON juego base— uno que no es el del base.
+// Un appid que sí figura en la ficha y no es una prueba no se toca jamás:
+// para un juego sin padre eso es identidad del juego.
+//
+// El criterio de todo esto es UNO: dejar guardado lo que
+// resolveAchievementsSteamAppId habría elegido hoy. Cualquier divergencia
+// entre las dos deja un subgrupo atrapado en el tercer estado sin salida.
 //
 // Quien la llame para UN juego (refreshGame.ts) tiene que contar además que
 // la identidad de Steam ha cambiado: el veredicto 'had-it' de
@@ -626,14 +677,43 @@ export const findSteamAppIdCorrections = async (
   // entre las filas del hijo, así que `current` salía undefined, se declaraba
   // "apunta a otro producto" y se estampaba el appid propio — justo el que la
   // otra regla descarta por venir con el catálogo de logros VACÍO.
-  const parents = await fetchParentIgdbIds(games.map((game) => game.igdbId));
+  const { parentOf, truncated } = await fetchParentGames(games.map((game) => game.igdbId));
+
+  // Y si esa respuesta vino CORTADA, no se corrige nada: los hijos que se
+  // quedaron fuera pasarían por huérfanos y el MOTIVO 2 les estamparía su
+  // propio appid. Mismo criterio que el techo de external_games de abajo — con
+  // datos a medias no se escribe.
+  if (truncated) {
+    // Solo ASCII, convencion de la casa.
+    console.warn(
+      `[steam] la consulta de juegos base toco el limite de ${EXTERNAL_GAMES_PAGE_LIMIT} filas - no se corrige nada en este lote`,
+    );
+    return result;
+  }
 
   const body =
     `fields game, uid, name; ` +
     `where game = (${games.map((game) => game.igdbId).join(',')}) & ` +
     `external_game_source = ${STEAM_SOURCE_ID}; ` +
     `limit ${EXTERNAL_GAMES_PAGE_LIMIT};`;
-  const rows = igdbExternalGamesResponseSchema.parse(await igdbRequest('external_games', body));
+
+  // Las dos peticiones que quedan son independientes, así que van a la vez: la
+  // de los padres solo se paga si en el lote hay alguno (fetchSteamAppIdsDirect
+  // sale sin pedir nada con la lista vacía), que en una biblioteca normal es un
+  // puñado de juegos.
+  //
+  // Esta segunda no necesita su propia guarda de techo: como arriba ya se
+  // devolvió si la respuesta de padres venía cortada, aquí hay como mucho 499
+  // padres, y un padre que se quedara fuera de todos modos solo significa "no
+  // sé su appid" — o sea NO corregir, que es el lado seguro.
+  const parentIds = [...new Set(parentOf.values())];
+  const [rawRows, parentAppIds] = await Promise.all([
+    igdbRequest('external_games', body),
+    // Sin respaldo de prueba: aquí se ESCRIBE encima de un appid que ya
+    // existía, y una demo del padre no es mejor que el appid propio del hijo.
+    fetchSteamAppIdsDirect(parentIds, { allowPlaytestFallback: false }),
+  ]);
+  const rows = igdbExternalGamesResponseSchema.parse(rawRows);
 
   // Techo tocado = respuesta CORTADA. Aquí eso no es un silencio como en sus
   // dos gemelas (allí una fila que falta significa "no se encontró appid" y
@@ -656,6 +736,29 @@ export const findSteamAppIdCorrections = async (
   }
 
   for (const game of games) {
+    // MOTIVO 3: el juego TIENE juego base y no lleva el appid del base.
+    //
+    // Aquí no hace falta mirar sus filas ni preguntarse nada: para un hijo,
+    // resolveAchievementsSteamAppId manda SIEMPRE el appid del padre, porque el
+    // propio devuelve el catálogo de logros vacío (Repentance 1426300 existe y
+    // GetSchemaForGame lo da vacío; los logros están en Rebirth, 250900). Sin
+    // este motivo quedaba un subgrupo atrapado: el hijo cuyo appid guardado es
+    // su PROPIO appid limpio no caía ni por el motivo 1 (no es una prueba) ni
+    // por el 2 (sí figura entre sus filas), o sea que el "tiene uno y es el
+    // equivocado" que motivó todo el rescate no salía nunca de ahí — y encima
+    // discrepando de lo que la resolución habría elegido ese mismo día.
+    //
+    // Solo cuando el padre tiene appid: si no lo tiene, no hay nada mejor que
+    // ofrecer y se sigue con los otros dos motivos.
+    const parentIgdbId = parentOf.get(game.igdbId);
+    if (parentIgdbId !== undefined) {
+      const parentAppId = parentAppIds.get(parentIgdbId);
+      if (parentAppId !== undefined) {
+        if (parentAppId !== game.steamAppId) result.set(game.igdbId, parentAppId);
+        continue;
+      }
+    }
+
     const candidates = byGame.get(game.igdbId);
     if (!candidates || candidates.length === 0) continue;
 
@@ -686,13 +789,20 @@ export const findSteamAppIdCorrections = async (
     // de verdad.
     //
     // Y NUNCA para un juego con padre: ahí "no figura entre sus filas" es lo
-    // NORMAL y lo correcto (ver fetchParentIgdbIds arriba). A esos se les
-    // sigue mirando el playtest, que esa comprobación sí es válida.
-    const isForeign = current === undefined && !parents.has(game.igdbId);
+    // NORMAL y lo correcto (ver fetchParentGames arriba). A esos se les sigue
+    // mirando el playtest, que esa comprobación sí es válida. (Solo llegan aquí
+    // los hijos cuyo padre no tiene appid conocido: los demás ya salieron por
+    // el MOTIVO 3.)
+    const isForeign = current === undefined && !parentOf.has(game.igdbId);
 
     if (!isPlaytest && !isForeign) continue;
 
-    const better = pickSteamAppId(candidates);
+    // SIN respaldo de prueba, al revés que al resolver: aquí ya hay un appid
+    // guardado, y cambiarlo por una demo es cambiar un appid equivocado por
+    // otro peor —sin tienda, sin reseñas y sin logros del juego real—. Si de
+    // sus filas no sale ninguna limpia, no hay corrección que hacer. Ver la
+    // cabecera de pickSteamAppId (el caso Stanley Parable).
+    const better = pickSteamAppId(candidates, { allowPlaytestFallback: false });
     if (better !== null && better !== game.steamAppId) result.set(game.igdbId, better);
   }
   return result;
@@ -915,6 +1025,8 @@ export const getCollectionGames = async (collectionIds: number[]): Promise<Colle
   if (collectionIds.length === 0) return [];
 
   const key = [...collectionIds].sort((a, b) => a - b).join(',');
+  // Mismo barrido que detailCache y por el mismo motivo — ver sweepExpired.
+  sweepExpired(collectionCache);
   const cached = collectionCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.games;
 

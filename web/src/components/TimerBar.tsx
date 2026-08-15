@@ -13,6 +13,22 @@ import { Cover } from './Cover';
 // ganar nada.
 const BEAT_MS = 60_000;
 
+// El tick de 1s vive en su propia hoja. Antes useLiveSeconds estaba en el
+// cuerpo de TimerBar y cada segundo re-renderizaba la barra ENTERA — unos 13
+// elementos (Link, Cover con su img, dos divs de texto, el botón y su icono
+// svg) más la rama del aviso de error — para cambiar UN texto. Esta web no
+// lleva el compilador de React (eso es del escritorio), así que la hoja es la
+// memoización: mismo DOM y mismas clases, pero el tick re-renderiza 1
+// componente con 1 div.
+const ElapsedTime = ({ since }: { since: number }): React.JSX.Element => {
+  const seconds = useLiveSeconds(since);
+  return (
+    <div className="text-[15px] font-extrabold text-primary tabular-nums">
+      {formatElapsed(seconds)}
+    </div>
+  );
+};
+
 // La barra del cronómetro en marcha, encima de las pestañas.
 //
 // Va en el armazón y no dentro de una pantalla a propósito: un cronómetro
@@ -101,8 +117,6 @@ export const TimerBar = (): React.JSX.Element | null => {
     }
   }, [active, stop]);
 
-  const seconds = useLiveSeconds(active?.startedAt ?? null);
-
   // El armazón sigue en pie sin cronómetro si hay un aviso que leer. No es un
   // capricho: el fallo MÁS común del parar es el 409 "esa sesión ya estaba
   // parada", y ese mismo fallo hace que el refetch de onSettled devuelva null,
@@ -126,9 +140,7 @@ export const TimerBar = (): React.JSX.Element | null => {
             <Cover url={active.coverUrl} title={active.gameTitle} className="w-8" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] font-bold">{active.gameTitle}</div>
-              <div className="text-[15px] font-extrabold text-primary tabular-nums">
-                {formatElapsed(seconds)}
-              </div>
+              <ElapsedTime since={active.startedAt} />
             </div>
           </Link>
 

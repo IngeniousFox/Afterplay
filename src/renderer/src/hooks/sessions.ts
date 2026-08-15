@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PendingSession, Session, SessionWithGame } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
@@ -86,8 +86,28 @@ export const useStartGameSession = (): UseMutationResult<Session | null, Error, 
   );
 
 // Diario de sesión ("dónde lo dejé"). Solo toca el texto de una sesión: ni
-// horas, ni estados, ni nada derivado — de ahí que invalide sessions y
-// games (la ficha del juego pinta sus sesiones), pero no stateEvents.
+// horas, ni estados, ni nada derivado — de ahí que invalide sessions y la
+// FICHA del juego (que pinta sus sesiones), pero no stateEvents.
+//
+// Y solo la ficha, no el prefijo ['games'] entero, que es lo que hacía antes.
+// Una nota no puede cambiar ni la lista de la biblioteca (GameListItem no
+// tiene notas: horas, estado, última jugada y poco más) ni la del Plan (un
+// planeado no tiene sesiones), y sin embargo las refetcheaba las dos. Medido
+// sobre la biblioteca real, en la ficha de un juego con saga (que monta la
+// lista del Plan para el "esto ya lo tienes"): 5 consultas y 25 ms, con algo
+// más de 1 MB cruzando el IPC —893 KB de ellos, los 661 planeados— contra
+// 3 consultas y 2 ms ahora.
+//
+// No es un gesto raro que se pague una vez al mes: el aviso de sesión cerrada
+// (SessionClosedToast) trae el campo de la nota, así que esto corre JUSTO al
+// cerrar cada partida — el momento en el que el main ya está cerrando la
+// sesión, sincronizando logros y copiando la partida guardada.
+//
+// El predicate en vez de una key: la mutation recibe el id de la SESIÓN, no el
+// del juego, así que no puede componer queryKeys.games.detail(id). Marcar
+// todas las fichas cacheadas (['games', <número>]) es exacto por otro lado —
+// la única que refetchea de verdad es la que esté abierta, y las demás se
+// quedan marcadas viejas para cuando se visiten.
 //
 // OJO con las DOS ventanas: este mismo hook lo usa el HUD del overlay
 // (OverlayHud), que corre en otra ventana con OTRO QueryClient (ver
@@ -119,8 +139,17 @@ export const useSetSessionNote = (): UseMutationResult<
   Error,
   { id: number; note: string },
   unknown
-> =>
-  useInvalidatingMutation(
-    ({ id, note }: { id: number; note: string }) => window.api.sessions.setNote(id, note),
-    [queryKeys.games.all, queryKeys.sessions.all],
-  );
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string }) =>
+      window.api.sessions.setNote(id, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.games.all,
+        predicate: (query) => typeof query.queryKey[1] === 'number',
+      });
+    },
+  });
+};

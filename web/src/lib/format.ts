@@ -45,17 +45,32 @@ export const formatMoney = (amount: number): string => `€${amount.toFixed(2)}`
 // Un CONTEO grande en un hueco pequeño: "416K reviews" en vez de "415,946".
 // Redondear una MUESTRA no pierde nada: lo que informa de ella es el orden de
 // magnitud.
+//
+// Cada tramo se elige por lo que se va a ESCRIBIR, no por el valor crudo, y
+// esa es la corrección: mirando el valor crudo, 99.999 caía en el tramo del
+// decimal y su redondeo lo sacaba de él — "100.0K" justo antes de que 100.000
+// dijera "100K". El mismo escalón un piso más arriba escribía "1000K" para
+// 999.999 en vez de "1.0M". Los cortes son los valores a partir de los cuales
+// el redondeo YA cambia de tramo (99,95 millares redondean a 100; 999,5
+// millares redondean a 1,0 millones). Arreglado a la vez en el escritorio.
 export const formatCount = (value: number): string => {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 100_000) return `${Math.round(value / 1000)}K`;
-  if (value >= 10_000) return `${(value / 1000).toFixed(1)}K`;
+  const thousands = value / 1000;
+  if (thousands >= 999.5) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (thousands >= 99.95) return `${Math.round(thousands)}K`;
+  if (value >= 10_000) return `${thousands.toFixed(1)}K`;
   return value.toLocaleString('en-US');
 };
 
 // GB si llega a 1000MB, MB si llega a 1, KB por debajo. El salto a GB es a los
 // 1000 y no a los 1024: los 24 MB de tierra de nadie salían como "1009 MB",
 // que nadie lee como una talla.
+//
+// El cero se contesta antes que nada: el suelo de 1 KB de la última línea
+// está para que una partida guardada diminuta no se redondee a "0", no para
+// inventarle tamaño a lo que no existe — sin esta guarda una carpeta vacía
+// decía "1 KB". Arreglado a la vez en el escritorio.
 export const formatBytes = (bytes: number): string => {
+  if (bytes <= 0) return '0 KB';
   const mb = bytes / (1024 * 1024);
   if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
   if (mb >= 1) return `${mb.toFixed(0)} MB`;
@@ -68,6 +83,21 @@ export const formatBytes = (bytes: number): string => {
 export const formatDate = (ms: number): string =>
   new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
+// 24h SIEMPRE, y a diferencia del escritorio no es un ajuste. El gemelo
+// (src/renderer/src/lib/format.ts) recibe un TimeFormat obligatorio porque
+// allí hay un slider 12h/24h en Settings; aquí ese parámetro no existe, y esa
+// asimetría es deliberada aunque no estuviera escrita en ningún sitio — que
+// es lo que la hacía parecer un descuido:
+//
+//   · El ajuste no es un DATO, es configuración de una máquina: vive en el
+//     electron-store del PC, al lado de las medidas de la ventana, y nunca
+//     entra en Turso. La PWA lee lo que hay en la nube (REMOTO.md §1.1) y ahí
+//     no hay nada que leer. Traerlo significaría sincronizar preferencias de
+//     escritorio, que es una tubería entera para elegir dos puntos.
+//   · Se clava el DEFAULT del escritorio ('24h', src/main/config/store.ts),
+//     así que las dos mitades coinciden mientras nadie mueva el slider. Solo
+//     quien lo cambia a mano en su PC ve el mismo evento como "06:30 PM" allí
+//     y "18:30" aquí.
 export const formatTime = (ms: number): string =>
   new Date(ms).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 

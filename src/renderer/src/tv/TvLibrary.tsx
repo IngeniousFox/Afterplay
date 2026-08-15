@@ -56,6 +56,16 @@ const swallowKey = (event: KeyboardEvent): void => {
   window.dispatchEvent(new CustomEvent('afterplay:activity'));
 };
 
+// Cuántas celdas VISIBLES a cada lado de la enfocada se registran siempre en
+// el motor de foco, pase lo que pase con el observador de la ventana (ver
+// dentro del componente). Son tres filas de seis a cada lado: el foco se
+// mueve de fila en fila, así que con este colchón la pulsación contra el
+// borde SIEMPRE tiene destino aunque el scroll venga todavía en camino. Sin
+// él se perdían pulsaciones — medido: 23 de cada 40 flechas abajo no movían
+// nada, porque el observador mide contra el scroll de AHORA y el conductor de
+// scroll llega más tarde a propósito (es un muelle).
+const FOCUS_NEIGHBOURS = 18;
+
 const FilterPill = ({
   label,
   active,
@@ -347,20 +357,104 @@ export const TvLibrary = (): React.JSX.Element => {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
   }, [layerActive, keyboardOpen, searching]);
 
-  // El conjunto visible como Set para decidir POR CELDA si está desplegada —
-  // la parrilla monta SIEMPRE todos los juegos y solo anima anchura/opacidad
+  // El conjunto visible para decidir POR CELDA si está desplegada — la
+  // parrilla monta SIEMPRE todos los juegos y solo anima anchura/opacidad
   // (ver abajo): filtrar es plegar y desplegar, no desmontar.
-  const visibleIds = useMemo(() => new Set(visible.map((game) => game.id)), [visible]);
+  //
+  // Y con el PUESTO que ocupa cada una en la parrilla desplegada (0, 1, 2…),
+  // no solo la pertenencia: la ventana de foco de más abajo se cuenta en
+  // celdas VISIBLES, que son las que ocupan sitio. Contarla por índice de
+  // biblioteca era un bug real: con un filtro que deja 1 de cada 7, ±18 de
+  // índice son dos celdas y media de parrilla — media fila — y el foco se
+  // quedaba sin vecinos registrados hacia abajo.
+  const visibleRank = useMemo(
+    () => new Map(visible.map((game, rank) => [game.id, rank])),
+    [visible],
+  );
   // El foco inicial: la carátula desde la que te fuiste a la ficha (si
   // sigue visible con el filtro restaurado) — si no, la primera del match.
   const firstMatchId =
-    snapshot && visibleIds.has(snapshot.focusGameId)
+    snapshot && visibleRank.has(snapshot.focusGameId)
       ? snapshot.focusGameId
       : (visible[0]?.id ?? null);
 
   // El acento del estado vacío cuenta el PORQUÉ está vacío: violeta si fue la
   // búsqueda, verde si fue el filtro.
   const emptyAccent = needle ? '#7c86c8' : '#2fdc7e';
+
+  // SOLO SE REGISTRA EN EL MOTOR DE FOCO LO QUE ESTÁ CERCA DEL VIEWPORT, y
+  // esto arregla el peor parón medido de todo el modo TV: 600 ms.
+  //
+  // El motor de foco (focus.tsx) decide el destino de cada pulsación por
+  // GEOMETRÍA: en cada move() mide el rect de TODOS los registrados de la
+  // capa. Con la parrilla entera montada eso eran 1001 getBoundingClientRect
+  // — y ahí choca con el content-visibility de las celdas: consultar la
+  // geometría de una celda SALTADA la obliga a maquetarse, y como maquetarla
+  // cambia su alto, ensucia la parrilla entera para la siguiente. Medido con
+  // los 994 juegos reales: la PRIMERA pulsación de mando al entrar en Library
+  // costaba 619 ms (y 694 ms al volver a entrar, porque la pantalla remonta y
+  // Chromium vuelve a saltarse lo de fuera del viewport) — medio segundo de
+  // pantalla congelada, que en una tele por Moonlight son 40 frames perdidos.
+  // El desglose deja claro dónde estaba: los 48 primeros botones (los que ya
+  // están maquetados porque caen dentro o cerca del viewport) 0,9 ms; los 52
+  // siguientes 31 ms; los 800 restantes 526 ms.
+  //
+  // Con la ventana, el motor solo ve las celdas que Chromium ya tiene
+  // maquetadas de todas formas: esa primera pulsación baja a 4,4 ms y las de
+  // después de 7,0 ms a 4,4 ms (el escaneo de rects pasa de 3,3 ms a
+  // décimas). Nada más cambia: las celdas siguen TODAS montadas (el FLIP las
+  // necesita), se pintan igual, el montaje de la pantalla cuesta lo mismo
+  // (126 ms) y el ratón sigue pudiendo clicar lo que ve.
+  //
+  // La ventana son DOS cosas sumadas, y hacen falta las dos:
+  //
+  //  · Lo que el observador ve cerca del viewport (un viewport de margen
+  //    arriba y abajo). Es lo que el RATÓN puede señalar: el hover mueve el
+  //    foco, y solo puede hacerlo sobre algo registrado.
+  //  · Las FOCUS_NEIGHBOURS celdas a cada lado de la enfocada. El observador
+  //    mide contra el scroll de ahora mismo y el conductor de scroll llega
+  //    tarde a propósito (es un muelle): sin este colchón, bajar deprisa
+  //    dejaba al foco sin destino registrado justo debajo — 23 de cada 40
+  //    flechas se perdían.
+  //
+  // Mientras el observador no ha hablado — el primer commit — el ancla es el
+  // foco inicial: sin eso la pantalla nacería sin nada que enfocar.
+  const [nearIds, setNearIds] = useState<Set<number> | null>(null);
+  const [focusedGameId, setFocusedGameId] = useState<number | null>(null);
+  const focusAnchor =
+    (focusedGameId !== null ? visibleRank.get(focusedGameId) : undefined) ??
+    (firstMatchId !== null ? (visibleRank.get(firstMatchId) ?? 0) : 0);
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const near = new Set<number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let changed = false;
+        for (const entry of entries) {
+          const id = Number((entry.target as HTMLElement).dataset.cellId);
+          if (entry.isIntersecting) {
+            if (!near.has(id)) {
+              near.add(id);
+              changed = true;
+            }
+          } else if (near.delete(id)) changed = true;
+        }
+        if (changed) setNearIds(new Set(near));
+      },
+      { root: grid, rootMargin: '100% 0px' },
+    );
+    for (const cell of grid.querySelectorAll('[data-cell-id]')) observer.observe(cell);
+    return () => observer.disconnect();
+    // Se rearma cuando cambia el CENSO de celdas (la biblioteca crece o
+    // encoge), no cuando cambia el filtro: filtrar no monta ni desmonta nada.
+    // Un juego que se sustituye por otro sin cambiar el total dejaría su celda
+    // nueva sin observar hasta el siguiente rearme, y da igual: la ventana de
+    // vecinos del foco no depende del observador, así que el mando nunca se
+    // queda sin destino — como mucho el ratón no puede robarle el foco a esa
+    // carátula concreta hasta que la lista cambie de tamaño.
+  }, [games.length]);
 
   // EL FLIP de la parrilla: React asienta el layout nuevo de golpe (un solo
   // reflow) y aquí, ANTES del paint, cada celda superviviente que cambió de
@@ -371,7 +465,7 @@ export const TvLibrary = (): React.JSX.Element => {
   // APARECEN entran con un pop de opacidad+escala en su sitio final; las que
   // se van desaparecen al instante — su hueco ya se está cerrando con el
   // deslizamiento de las demás, y ese gesto es el que se lee.
-  const gridRef = useRef<HTMLDivElement>(null);
+  //
   // El scroll vuelve a su sitio ANTES del primer paint (layout effect): la
   // parrilla remonta ya colocada, sin fogonazo del principio de la lista. El
   // foco restaurado no lo pelea: su scrollIntoView es 'nearest' y la
@@ -444,12 +538,12 @@ export const TvLibrary = (): React.JSX.Element => {
       // A '' — vuelve al 1 que pinta React; el inline solo vive un frame.
       el.style.opacity = '';
     }
-    // visibleIds y NO sin array: sin dependencias esto forzaba un reflow
+    // visibleRank y NO sin array: sin dependencias esto forzaba un reflow
     // completo (querySelectorAll + offsetLeft/Top de CADA celda montada, la
     // biblioteca entera) en CUALQUIER re-render — una sync de logros de
     // fondo, el watcher, cualquier mutation ajena — no solo al filtrar o
     // buscar, que es lo único que de verdad puede haber movido algo.
-  }, [visibleIds]);
+  }, [visibleRank]);
 
   // El billete de vuelta (screenMemory): al abrir una ficha se guarda el
   // sitio exacto — filtro, query, scroll y qué carátula era. Solo este
@@ -522,13 +616,20 @@ export const TvLibrary = (): React.JSX.Element => {
           style={{ scrollbarWidth: 'none' }}
         >
           {games.map((game, index) => {
-            const match = visibleIds.has(game.id);
+            const rank = visibleRank.get(game.id);
+            const match = rank !== undefined;
+            // Ver la ventana de foco arriba: fuera de ella la celda sigue
+            // montada y visible, pero no entra en el motor de foco.
+            const near =
+              (match && Math.abs(rank - focusAnchor) <= FOCUS_NEIGHBOURS) ||
+              (nearIds?.has(game.id) ?? false);
             return (
               <div
                 key={game.id}
                 aria-hidden={!match}
                 data-cell-id={game.id}
                 data-cell-visible={match ? 'true' : 'false'}
+                data-cell-near={near ? 'true' : 'false'}
                 className="min-w-0"
                 style={{
                   width: match ? 'calc(100%/6)' : '0%',
@@ -548,10 +649,13 @@ export const TvLibrary = (): React.JSX.Element => {
                   <TvGameTile
                     game={game}
                     fill
-                    disabled={!match}
+                    disabled={!match || !near}
                     autoFocus={game.id === firstMatchId}
                     revealIndex={index}
                     onOpen={() => openGame(game.id)}
+                    // El ancla de la ventana de foco: la parrilla necesita
+                    // saber DÓNDE está el foco para registrar a sus vecinos.
+                    onFocusSpot={() => setFocusedGameId(game.id)}
                   />
                 </div>
               </div>

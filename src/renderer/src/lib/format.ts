@@ -29,15 +29,30 @@ export const formatMoney = (amount: number): string => `€${amount.toFixed(2)}`
 // 'en-US' fijo, mismo motivo que las fechas de este archivo: el resto de la
 // UI está en inglés sin i18n, y con el locale del sistema en español "415,946"
 // salía como "415.946", que un lector inglés lee como un decimal.
+//
+// Cada tramo se elige por lo que se va a ESCRIBIR, no por el valor crudo, y
+// esa es la corrección: mirando el valor crudo, 99.999 caía en el tramo del
+// decimal y su redondeo lo sacaba de él — "100.0K" justo antes de que
+// 100.000 dijera "100K". El mismo escalón un piso más arriba escribía
+// "1000K" para 999.999 en vez de "1.0M". Los cortes de abajo son los valores
+// a partir de los cuales el redondeo YA cambia de tramo (99,95 millares
+// redondean a 100; 999,5 millares redondean a 1,0 millones).
 export const formatCount = (value: number): string => {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 100_000) return `${Math.round(value / 1000)}K`;
-  if (value >= 10_000) return `${(value / 1000).toFixed(1)}K`;
+  const thousands = value / 1000;
+  if (thousands >= 999.5) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (thousands >= 99.95) return `${Math.round(thousands)}K`;
+  if (value >= 10_000) return `${thousands.toFixed(1)}K`;
   return value.toLocaleString('en-US');
 };
 
 // 'en-US' fijo (mismo motivo que abajo) — hour12 es lo único que cambia
 // según el ajuste de Settings (slider 12h/24h, 24h por defecto).
+//
+// La copia de la PWA (web/src/lib/format.ts) NO tiene este parámetro: clava
+// 24h porque el ajuste vive en el electron-store de esta máquina y no viaja a
+// Turso. Está razonado allí; lo que importa aquí es que las dos mitades
+// coinciden mientras el default siga siendo 24h, así que cambiarlo (en
+// src/main/config/store.ts) es cambiar también lo que ve el móvil.
 export const formatTime = (date: Date, timeFormat: TimeFormat): string =>
   date.toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -100,7 +115,14 @@ export const formatSessionEndTime = (
 // en base 1024 (0.99 GB, no 1.01), solo se cambia CUÁNDO se cambia de unidad.
 // Los 24 MB de tierra de nadie salían como "1009 MB", que nadie lee como una
 // talla — se lee como un número suelto.
+//
+// El cero se contesta antes que nada: el suelo de 1 KB de la última línea
+// está para que una partida guardada diminuta no se redondee a "0", no para
+// inventarle tamaño a lo que no existe. Sin esta guarda una carpeta vacía
+// decía "1 KB", y el "Freed 1 KB" de una limpieza que no liberó nada era el
+// mismo texto que el de una que liberó un fichero de verdad.
 export const formatBytes = (bytes: number): string => {
+  if (bytes <= 0) return '0 KB';
   const mb = bytes / (1024 * 1024);
   if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
   if (mb >= 1) return `${mb.toFixed(0)} MB`;

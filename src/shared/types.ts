@@ -362,17 +362,43 @@ export type GameListItem = {
   sessionCount: number;
 };
 
-// Un juego del Plan, con TODO lo que su pantalla necesita para que la lista
-// se pueda decidir sin entrar a ninguna ficha (PLAN-TO-PLAY.md §2.3).
+// ── La lista del Plan viaja en DOS canales ─────────────────────────────────
 //
-// Extiende GameListItem en vez de sustituirlo: los otros tres consumidores de
-// la lista de planeados (la columna de navegación, el Backlog debt de Stats y
-// el "esto ya lo tienes" del buscador de Add Game) siguen recibiendo lo mismo
-// de siempre sin enterarse. Y estos campos extra NO se le añaden a
-// GameListItem a secas a propósito: la biblioteca puede tener cientos de
-// juegos y arrastrar una sinopsis por cada uno hasta el renderer sería peso
-// puro; el Plan son unas decenas y su pantalla los usa TODOS.
-export type PlannedGameItem = GameListItem & {
+// games:getPlanned era EL payload más gordo de la app: 661 planeados × 928 KB
+// por cada 'games:changed', y el 63% eran campos que SOLO mira la pantalla
+// del Plan (summary 220 KB, steamTags 171 KB, las seis notas 85 KB, heroUrl
+// 47 KB, releaseDate 43 KB). Sus otros tres consumidores (la columna de
+// navegación, el Backlog flow de Stats y el "esto ya lo tienes" del buscador)
+// solo leen identidad/título/carátula/géneros/año — y SagaSection mantiene la
+// query VIVA desde cualquier ficha abierta, así que el canal que TODOS pagan
+// tiene que ser el escueto. Medido con JSON.stringify sobre la biblioteca
+// real (661 planeados):
+//
+//   games:getPlanned       PlannedGameListItem[]  354 KB — para todos
+//   games:getPlannedExtras PlannedGameExtras[]    591 KB — solo pantalla Plan
+//
+// La pantalla del Plan junta los dos canales por id (usePlannedGamesWithExtras
+// en hooks/games.ts) y vuelve a ver PlannedGameItem, la forma de siempre.
+export type PlannedGameListItem = GameListItem & {
+  // "Up next" (§2.2): fijado a mano como prioridad de verdad. null = cola.
+  // En el canal escueto a propósito: las mutations optimistas de fijar y
+  // reordenar (hooks/games.ts) reescriben este campo sobre la caché de ESTA
+  // lista, y el reparto de marcas del arrastre necesita verlas todas.
+  planPinnedAt: Date | null;
+};
+// OJO: en el canal escueto heroUrl viaja SIEMPRE null. GameListItem lo exige
+// por forma (Stats tipa la lista de planeados como GameListItem[]), pero
+// ningún consumidor escueto lo pinta — verificado con Grep: los banners y las
+// caras traseras salen de getGames/getGameById. El heroUrl real de un
+// planeado viaja en PlannedGameExtras.
+
+// Los campos que SOLO mira la pantalla del Plan (PLAN-TO-PLAY.md §2.3) — el
+// 63% del peso de la lista vieja, ahora en su propio canal para que los
+// consumidores escuetos no lo paguen en cada 'games:changed'.
+export type PlannedGameExtras = {
+  id: number;
+  // El heroUrl real del planeado (ver el aviso sobre el canal escueto).
+  heroUrl: string | null;
   // La sinopsis de IGDB — la segunda línea de la fila, siempre con
   // line-clamp: la respuesta a "¿qué era esto que apunté hace 8 meses?".
   summary: string | null;
@@ -380,8 +406,6 @@ export type PlannedGameItem = GameListItem & {
   // el historial de la ficha. "Me lo recomendó Dani" en la fila cambia la
   // sección entera — de lista de deuda a lista de ilusiones.
   planNote: string | null;
-  // "Up next" (§2.2): fijado a mano como prioridad de verdad. null = cola.
-  planPinnedAt: Date | null;
   // Fecha de salida completa y su precisión (§7bis) — lo que hace posible la
   // sección "On the horizon" y su cuenta atrás.
   releaseDate: Date | null;
@@ -400,6 +424,13 @@ export type PlannedGameItem = GameListItem & {
   // hueco que explicar.
   steamTags: SteamTagValue[] | null;
 };
+
+// Un juego del Plan COMPLETO — la unión de los dos canales, con TODO lo que
+// su pantalla necesita para decidir sin entrar a ninguna ficha. Es la misma
+// forma que tenía la lista cuando viajaba en un solo canal: PlanRow,
+// UpNextList y lib/plan.ts siguen tipando contra esto sin enterarse del
+// reparto.
+export type PlannedGameItem = PlannedGameListItem & Omit<PlannedGameExtras, 'id'>;
 
 // ── El radar de secuelas (PLAN-TO-PLAY.md §4) ─────────────────────────────
 // Un juego ANUNCIADO de una saga tuya que todavía no tienes. No es un juego
@@ -469,6 +500,23 @@ export type CredentialsValues = {
   raUsername: string | null;
   raApiKey: string | null;
 };
+
+// Resultado de importar un fichero de claves — desde Ajustes o desde el que
+// se suelta en la carpeta de datos (main/config/credentials.ts). Importar
+// FUSIONA, así que lo que interesa contar es cuántas traía el fichero; los
+// valores resultantes viajan de vuelta para que el renderer no tenga que
+// volver a pedirlos.
+export type CredentialsImportResult = {
+  imported: number;
+  values: CredentialsValues;
+};
+
+// Lo que pasó con el fichero de claves soltado en la carpeta de datos, si
+// había alguno: ocurre en el arranque, antes de que exista la ventana, así
+// que el renderer lo pregunta al montarse. El fallo viaja igual que el
+// acierto — un fichero soltado que no hace nada y no dice nada es peor que
+// no haberlo soltado.
+export type StartupKeysImport = { ok: true; imported: number } | { ok: false; message: string };
 
 // ── Curiosidades de juego (modo ambiente) ──────────────────────────────────
 // Hechos reales generados una vez por juego (ver main/curiosities) que el
@@ -585,10 +633,18 @@ export type AchievementsOverview = {
   totalCatalog: number;
   // Con año filtrado: cuántos cayeron ESE año (solo fechas fiables). null en
   // All Time.
-  yearTotals: { total: number; rare: number } | null;
+  //
+  // `rare` y `ultra` son los MISMOS cubos disjuntos de rarityProfile —raro es
+  // el 5-10%, ultra el <5%— en TODAS las cifras de este objeto. Antes aquí (y
+  // en unlockedByYear y topGames) `rare` valía "por debajo del 10%", ultras
+  // incluidos, mientras rarityProfile.rare y los meses dejaban los ultra
+  // fuera: el mismo nombre para dos cosas dentro de la misma respuesta, y el
+  // mismo ámbar para dos números distintos en el mismo bloque de Stats. Si
+  // alguna vista quiere "todo lo que baja del 10%", lo DERIVA: rare + ultra.
+  yearTotals: { total: number; rare: number; ultra: number } | null;
   // Solo fechas FIABLES (regla 1 del documento): los rescates de cracks no
   // fabrican años.
-  unlockedByYear: { year: number; total: number; rare: number }[];
+  unlockedByYear: { year: number; total: number; rare: number; ultra: number }[];
   // El año elegido desglosado por mes (0-11, los 12 siempre — los ceros
   // también cuentan la forma del año), con los tres cubos de rareza para la
   // barra apilada. null en All Time.
@@ -597,7 +653,14 @@ export type AchievementsOverview = {
   // Los juegos del año por desbloqueos (todos los que tengan alguno, orden
   // descendente). null en All Time.
   topGames:
-    | { gameId: number; title: string; coverUrl: string | null; total: number; rare: number }[]
+    | {
+        gameId: number;
+        title: string;
+        coverUrl: string | null;
+        total: number;
+        rare: number;
+        ultra: number;
+      }[]
     | null;
   // Tus conseguidos más raros de toda la biblioteca, rareza ascendente.
   hallOfFame: {

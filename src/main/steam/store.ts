@@ -104,34 +104,47 @@ export type SteamStoreDetails = {
   releaseDatePrecision: ReleaseDatePrecision | null;
 };
 
-// null = Steam no sabe de este appid, o contestó algo ilegible. Quien llama
-// decide qué hacer; aquí no se inventa nada.
+// null = STEAM CONTESTÓ y no hay ficha de este appid (retirada, invisible, o
+// una respuesta que no se puede leer). Quien llama decide qué hacer; aquí no
+// se inventa nada.
+//
+// Y LO QUE NO ES null: un fallo de TRANSPORTE —un 502, un timeout, un DNS que
+// no resuelve— SALE tal cual, con su `response.status` y su `code` intactos.
+// Antes todo el cuerpo iba dentro de un try que devolvía null pasara lo que
+// pasara, y eso hacía indistinguible "Steam retiró el juego" de "Steam tuvo un
+// mal minuto". El precio lo pagaba el buzón del Plan (plan/drainMailbox.ts):
+// clasificaba el mal minuto como veredicto definitivo y QUEMABA un alta buena
+// del móvil en el primer intento, sin gastar ninguno de sus tres reintentos.
+// La diferencia no se puede recuperar aguas abajo, así que tiene que nacer
+// aquí.
 export const getSteamStoreDetails = async (appId: number): Promise<SteamStoreDetails | null> => {
   if (!Number.isInteger(appId) || appId <= 0) return null;
 
-  try {
-    const [itemsResponse, detailsResponse] = await Promise.all([
-      axios.get<unknown>('https://api.steampowered.com/IStoreBrowseService/GetItems/v1/', {
-        params: {
-          input_json: JSON.stringify({
-            ids: [{ appid: appId }],
-            context: { language: 'english', country_code: 'US' },
-            data_request: { include_assets: true, include_basic_info: true, include_release: true },
-          }),
-        },
-        timeout: 15_000,
-      }),
-      // Los géneros solo están aquí. Su fallo NO tumba el alta: un juego sin
-      // géneros se da de alta igual, como cualquier otro al que le falte un
-      // dato accesorio.
-      axios
-        .get<unknown>('https://store.steampowered.com/api/appdetails', {
-          params: { appids: appId, l: 'english' },
-          timeout: 10_000,
-        })
-        .catch(() => null),
-    ]);
+  // FUERA del try a propósito: lo de arriba.
+  const [itemsResponse, detailsResponse] = await Promise.all([
+    axios.get<unknown>('https://api.steampowered.com/IStoreBrowseService/GetItems/v1/', {
+      params: {
+        input_json: JSON.stringify({
+          ids: [{ appid: appId }],
+          context: { language: 'english', country_code: 'US' },
+          data_request: { include_assets: true, include_basic_info: true, include_release: true },
+        }),
+      },
+      timeout: 15_000,
+    }),
+    // Los géneros solo están aquí. Su fallo NO tumba el alta: un juego sin
+    // géneros se da de alta igual, como cualquier otro al que le falte un
+    // dato accesorio. Este .catch sí se queda, y por eso mismo: es el único
+    // de los dos que es accesorio.
+    axios
+      .get<unknown>('https://store.steampowered.com/api/appdetails', {
+        params: { appids: appId, l: 'english' },
+        timeout: 10_000,
+      })
+      .catch(() => null),
+  ]);
 
+  try {
     const item = getItemsSchema.parse(itemsResponse.data).response.store_items?.[0];
     if (!item || item.visible === false || !item.name) return null;
 
@@ -168,8 +181,10 @@ export const getSteamStoreDetails = async (appId: number): Promise<SteamStoreDet
       releaseDatePrecision: releaseDate ? 'day' : null,
     };
   } catch (error) {
-    // Solo ASCII, misma convención que el resto de logs del main.
-    console.warn(`[steam] sin ficha de tienda para el appid ${appId}:`, error);
+    // Aquí dentro ya solo queda LEER lo que Steam contestó: si no se puede
+    // leer, no hay ficha. Solo ASCII, misma convención que el resto de logs
+    // del main.
+    console.warn(`[steam] respuesta ilegible de la tienda para el appid ${appId}:`, error);
     return null;
   }
 };

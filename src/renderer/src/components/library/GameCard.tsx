@@ -4,6 +4,7 @@ import type { GameListItem } from '../../../../shared/types';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useNearViewport } from '../../hooks/useNearViewport';
+import { useOffscreenAnimation } from '../../hooks/useOffscreenAnimation';
 import { DAY_MS, humanizeSpan, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
@@ -236,6 +237,14 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
   // Desestructurado: ver el porqué en PlanRow, mismo caso.
   const { observe: observeCard, near: cardNear } = useNearViewport();
+  // Pausa lo de EN MARCHA cuando la card sale de la vista: glow-card y
+  // pulse-badge animan box-shadow (categoría paint — style+paint en el main
+  // thread CADA frame, estén donde estén). Medido en el estado típico (333
+  // cards, 3 live bajo el fold): las 9 animaciones seguían `running`
+  // invisibles; con esto quedan 0 fuera y las mismas 9, idénticas y en su
+  // fase, dentro. El observador solo se engancha en las cards live (el ref
+  // vive en el overlay condicional), así que las otras 330 no pagan nada.
+  const { observe: observeLive, playState: livePlayState } = useOffscreenAnimation();
   const elapsedSeconds = useLiveTimer(game.isLive ? game.liveSince : null);
   const [flipped, setFlipped] = useState(false);
   // La trasera se monta en el PRIMER hover y se suelta cuando el giro de
@@ -312,8 +321,12 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
           {game.isLive && (
             <>
               <div
+                ref={observeLive}
                 className="absolute inset-0 rounded-[13px]"
-                style={{ animation: 'afterplay-glow-card 2.6s ease-in-out infinite' }}
+                style={{
+                  animation: 'afterplay-glow-card 2.6s ease-in-out infinite',
+                  animationPlayState: livePlayState,
+                }}
               />
               <div
                 className="absolute top-2.75 right-2.75 flex items-center gap-1.25 rounded-[7px] border px-2 py-0.75"
@@ -321,11 +334,15 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
                   background: 'rgba(8,20,13,.78)',
                   borderColor: 'rgba(47,220,126,.55)',
                   animation: 'afterplay-pulse-badge 2.4s infinite',
+                  animationPlayState: livePlayState,
                 }}
               >
                 <span
                   className="h-1.5 w-1.5 rounded-full bg-primary"
-                  style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
+                  style={{
+                    animation: 'afterplay-pulse-dot 1.4s infinite',
+                    animationPlayState: livePlayState,
+                  }}
                 />
                 <span className="text-[9.5px] font-extrabold tracking-widest text-primary">
                   LIVE

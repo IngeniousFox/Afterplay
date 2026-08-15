@@ -398,12 +398,17 @@ export const TvFocusLayer = ({ children }: { children: React.ReactNode }): React
   const context = useTvFocusContext();
   const key = useId();
 
+  // push/pop una vez por vida del panel: pushLayer/popLayer salen del api
+  // estable del provider (useMemo []), así que declararlos como deps es
+  // gratis — nunca cambian de identidad. Antes esto era un eslint-disable de
+  // exhaustive-deps sobre [key], y esa supresión hacía que el React Compiler
+  // se saltara el componente entero (bail confirmado con
+  // panicThreshold:'all_errors'); mismas garantías, sin supresión.
+  const { pushLayer, popLayer } = context;
   useEffect(() => {
-    context.pushLayer(key);
-    return () => context.popLayer(key);
-    // push/pop una vez por vida del panel — el api es estable (ver provider).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    pushLayer(key);
+    return () => popLayer(key);
+  }, [key, pushLayer, popLayer]);
 
   return <TvLayerContext.Provider value={key}>{children}</TvLayerContext.Provider>;
 };

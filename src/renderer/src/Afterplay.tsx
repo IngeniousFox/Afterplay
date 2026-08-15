@@ -8,7 +8,9 @@ import { useCuriositiesActivity } from './hooks/curiosities';
 import { useExternalRefreshActivity } from './hooks/external';
 import { useRadarActivity } from './hooks/radar';
 import { useBigPicture } from './hooks/useBigPicture';
+import { useKeysImportToast } from './hooks/useKeysImportToast';
 import { useWatcherSync } from './hooks/useWatcherSync';
+import { useStartupContentSignal } from './hooks/useStartupContentSignal';
 import { BLUE, GREEN, RED } from './lib/colors';
 import { router } from './router';
 import { TvModeTransition } from './tv/TvModeTransition';
@@ -55,6 +57,14 @@ const Afterplay = (): React.JSX.Element => {
   // del main detecta (arranques/cierres de juegos), una sola suscripción para
   // toda la app.
   useWatcherSync();
+  // El tercer reloj del arranque: avisa al main cuando la biblioteca tiene
+  // datos y sus primeras carátulas decodificadas, que es cuando de verdad
+  // hay algo que enseñar — el splash aguanta hasta entonces (ver el hook).
+  useStartupContentSignal();
+  // Y si dejaste un fichero de claves en la carpeta de datos, el main ya lo
+  // importó en ese mismo arranque — esto es lo que te lo cuenta, en cuanto
+  // hay ventana donde contarlo.
+  useKeysImportToast();
   // Curiosidades generadas de fondo (alta de un juego, backfill): invalida
   // sus queries en cuanto el main avisa — aquí y no solo en Ajustes, porque
   // un juego recién añadido genera con el modal de Ajustes cerrado.

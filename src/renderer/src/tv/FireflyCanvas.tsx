@@ -22,6 +22,17 @@ import { useEffect, useRef } from 'react';
 //
 // Los datos (posición base, color por estado, tamaño, cuáles son auroras)
 // vienen del layout, que es quien conoce la biblioteca.
+//
+// MEDIDO (banco de pruebas en el mismo Electron, ventana 1920x1080, réplica
+// exacta de este bucle): el draw cuesta 0,7 ms de CPU con las 994 luces de la
+// biblioteca real, 1,3 ms a 2000 y 2,6 ms a 4000 — lineal y sin un solo frame
+// perdido en ninguna de las tallas. A 30 fps eso son ~2% de un núcleo con la
+// biblioteca real. O sea: el enjambre NO es el que se come los frames en la
+// tele; no hay nada que optimizar aquí, y si algún día lo parece, mídelo
+// antes de tocarlo. (Lo único que sí se paga por frame dibujado es el
+// querySelector del modo ambiente de abajo: 0,12 ms con la parrilla de
+// Library montada — 10.000 nodos —, o sea 0,4% de un núcleo. Se queda: la
+// alternativa es cablear un estado global para ahorrar cuatro décimas.)
 
 export type FireflySpec = {
   // Posición base en % del viewport — la deriva orbita alrededor.
@@ -123,7 +134,20 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       context.globalCompositeOperation = 'lighter';
 
       const list = orbsRef.current;
-      const total = list.length || 1;
+      const total = list.length;
+      // CIELO VACÍO = CIELO VACÍO, y punto. El `|| 1` que había aquí (para no
+      // dividir entre cero en el damp) hacía que con la lista vacía el bucle
+      // entrara UNA vuelta y leyera list[0].big de un undefined: excepción en
+      // CADA frame — 30 por segundo — mientras la biblioteca no ha llegado
+      // (arranque en frío directo al modo TV: useGames aún no ha resuelto y
+      // orbs es []) o si de verdad no hay juegos. Se ve en la consola del
+      // banco de pruebas: "Cannot read properties of undefined (reading
+      // 'big')". El lienzo ya está limpio aquí arriba, así que salir es
+      // exactamente lo que hay que pintar.
+      if (total === 0) {
+        context.globalCompositeOperation = 'source-over';
+        return;
+      }
       // LA LEY DEL ENJAMBRE: se conserva la ENERGÍA total de luz, no la de
       // cada luciérnaga. Con 'lighter' las luces SUMAN, y a miles el cielo
       // saturaba a supernova — así que la intensidad individual cae con

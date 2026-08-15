@@ -22,7 +22,6 @@ import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { applyYoutubeReferer } from './lib/youtubeReferer';
 import { createSplashWindow } from './splash/splash';
 import { createAppTray, setTrayActiveGames } from './tray/tray';
-import { startAutoUpdater } from './updater';
 import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { setCuriositiesNotifier } from './curiosities/notify';
 import { setExternalNotifier } from './external/notify';
@@ -51,6 +50,29 @@ import { ScanWatcher, setScanWatcher } from './scan/watcher';
 import { setSessionClosedNotifier } from './watcher/notifySession';
 import { setRunningGamesProbe } from './watcher/runningGames';
 import { ProcessWatcher } from './watcher/watcher';
+
+// ── Cronómetro del arranque ──────────────────────────────────────────────
+// El arranque es la única parte de la app que no se puede medir a posteriori:
+// pasa una vez, antes de que exista ventana donde enseñar nada. Estas marcas
+// van a consola SIEMPRE (un Date.now por línea, trece líneas en total) porque
+// la alternativa —añadirlas el día que arranca mal— obliga a recompilar justo
+// el binario que hay que observar.
+//
+// El origen es la creación del PROCESO y no la carga de este módulo: entre
+// las dos está el arranque de Electron/Chromium, que en frío es la mayor
+// tajada del total y no aparece en ninguna otra medida.
+const PROCESS_START = process.getCreationTime?.() ?? Date.now();
+
+const mark = (label: string): void => {
+  console.log(
+    `[startup] ${String(Math.round(Date.now() - PROCESS_START)).padStart(6)} ms  ${label}`,
+  );
+};
+
+// La primera sentencia del cuerpo del módulo corre cuando TODOS los imports
+// (los de arriba y su árbol entero) ya están evaluados: esta marca separa el
+// arranque de Electron/Chromium del coste de cargar nuestro propio código.
+mark('imports del main evaluados');
 
 // "1h 47m" para el cuerpo de la notificación de Windows. Aquí y no en
 // lib/format del renderer: el main no puede importar del renderer, y son tres
@@ -89,7 +111,7 @@ const MEMORIES_TICK_MS = 60 * 60 * 1000;
 let isQuitting = false;
 // Arranque a bandeja con estado guardado "maximizada": la ventana queda
 // oculta SIN maximizar (maximize() sobre una ventana oculta la muestra, ver
-// ready-to-show) — esta marca lo deja pendiente para la primera apertura
+// revealWhenReady) — esta marca lo deja pendiente para la primera apertura
 // desde el tray.
 let pendingMaximize = false;
 // Notificaciones nativas todavía en pantalla. Electron NO retiene sus propias
@@ -131,22 +153,71 @@ registerImageProtocolScheme();
 // instancia ahora es un mensajero: entrega sus argv a la primera por
 // 'second-instance' y se va en milisegundos, sin ventana ni DB.
 //
-// El candado se toma a nivel de módulo, así que el mensaje puede llegar ANTES
-// de que exista la ventana: whenReady se pasa segundos dentro de
-// initCredentials + runMigrations (con la base de Turso dormida es justo la
-// espera larga y visible por la que existe el splash — y por tanto justo el
-// hueco en el que a uno le da por hacer doble clic otra vez). Ahí no hay
-// ventana NI handlers IPC, así que la petición se APARCA en vez de
-// atenderse.
-// Atenderla ahí fabricaba una ventana principal que cargaba la SPA antes de
-// registerIpcHandlers() —todos sus invoke rechazando con "No handler
-// registered for 'games:getAll'"— y que se quedaba huérfana pero visible en
-// cuanto el final del arranque creaba la de verdad: imposible de cerrar (su
-// 'close' solo la esconde a la bandeja), con dos trackWindowState peleándose
-// por guardar los bounds, y si la cerrabas su 'closed' ponía mainWindow a
-// null aunque la buena siguiera viva.
+// El candado se toma a nivel de módulo, así que el mensaje puede llegar
+// mientras el arranque todavía va por dentro de runMigrations (con la base de
+// Turso dormida es justo la espera larga y visible por la que existe el splash
+// — y por tanto justo el hueco en el que a uno le da por hacer doble clic otra
+// vez). Durante ese hueco la petición se APARCA en vez de atenderse, y la
+// recoge revealWhenReady al enseñar la ventana.
+//
+// Aparcar sigue siendo obligatorio aunque la ventana ya exista desde antes de
+// migrar (ver el bloque "LA VENTANA, ANTES DE MIGRAR"): atender ahí una
+// petición significa ENSEÑAR la ventana, y enseñarla a medio cargar es
+// exactamente lo que el splash evita. Y antes de que la ventana se creara
+// pronto era aún peor: atenderla fabricaba una ventana principal que cargaba
+// la SPA antes de registerIpcHandlers() —todos sus invoke rechazando con "No
+// handler registered for 'games:getAll'"— y que se quedaba huérfana pero
+// visible en cuanto el final del arranque creaba la de verdad: imposible de
+// cerrar (su 'close' solo la esconde a la bandeja), con dos trackWindowState
+// peleándose por guardar los bounds, y si la cerrabas su 'closed' ponía
+// mainWindow a null aunque la buena siguiera viva. Ese segundo desastre ya no
+// puede pasar (createWindow se defiende solo, y los handlers se registran
+// antes), pero el primero sí.
 let startupFinished = false;
 let pendingWindowRequest: 'show' | 'bigpicture' | null = null;
+
+// El segundo de los TRES relojes que deciden cuándo se enseña la ventana (el
+// primero es 'ready-to-show'): la base de datos, lista al terminar
+// runMigrations. Ver revealWhenReady en createWindow.
+let dbReady = false;
+let revealPendingWindow: (() => void) | null = null;
+
+// Y EL TERCER RELOJ: contenido de verdad pintable. Nació de una regresión de
+// percepción real — al crear la ventana antes de esperar a la base (la
+// optimización del arranque), 'ready-to-show' pasó a disparar con el primer
+// frame del CASCARÓN: el splash se cerraba y los segundos de biblioteca
+// poblándose (query + decodificar carátulas) ocurrían delante del usuario en
+// vez de detrás del splash. El renderer avisa por
+// 'window:startup-content-ready' cuando la lista de juegos resolvió y las
+// primeras carátulas están decodificadas (ver useStartupContentSignal).
+//
+// Con RED DE SEGURIDAD, porque este reloj depende de que el renderer llegue a
+// avisar: si la query falla o el aviso se pierde, un temporizador lo da por
+// cumplido a los CONTENT_GATE_MAX_MS de que los otros dos relojes estén — el
+// peor caso es exactamente el comportamiento de antes, nunca un splash
+// eterno. Una vez cumplido se queda cumplido: las ventanas recreadas después
+// (activate, tray) no pagan la puerta, que es solo del primer arranque.
+let startupContentPainted = false;
+let contentGateDeadline: ReturnType<typeof setTimeout> | null = null;
+// 12s y no menos: en PRODUCCION la cadena entera (chunk de la app + query +
+// decodificar caratulas) es sub-segundo y esta red no llega a correr nunca.
+// En DESARROLLO, con Vite transformando cientos de modulos en frio, la
+// cadena puede pasar de 8s — con la red a 4s disparaba ANTES de que hubiera
+// contenido y ensenaba la ventana negra, que es justo lo que la puerta
+// existe para impedir. El precio de 12s solo se paga si el renderer esta
+// ROTO de verdad (y entonces 12s de splash es el menor de los problemas).
+const CONTENT_GATE_MAX_MS = 12_000;
+
+ipcMain.on('window:startup-content-ready', () => {
+  if (startupContentPainted) return;
+  startupContentPainted = true;
+  if (contentGateDeadline) {
+    clearTimeout(contentGateDeadline);
+    contentGateDeadline = null;
+  }
+  mark('contenido pintable (datos + caratulas decodificadas)');
+  revealPendingWindow?.();
+});
 
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) {
@@ -183,17 +254,6 @@ function createWindow(): void {
   // pero el invariante se defiende en el sitio donde se rompe.
   if (mainWindow && !mainWindow.isDestroyed()) return;
 
-  // Si Windows/macOS arrancó la app sola por el login item, no se enseña la
-  // ventana — arranca directa a la bandeja (SPEC 3E). Ver lib/loginItem.ts
-  // para el porqué esto no es tan simple como parece en Windows.
-  // `--bigpicture` GANA sobre el arranque oculto (BIG-PICTURE.md §2): si
-  // pediste el modo TV, lo que quieres es pantalla, no bandeja. Y una
-  // petición de segunda instancia aparcada durante el arranque gana igual:
-  // alguien acaba de pedir la ventana a mano, esconderla en la bandeja es lo
-  // contrario de lo que ha pedido.
-  const wasOpenedAtLogin =
-    wasOpenedHiddenAtLogin() && !bigPictureMode && pendingWindowRequest === null;
-
   // Mismo tamaño/posición que tenía al cerrarla la última vez (o el de
   // siempre si es la primera vez, o si el monitor de entonces ya no está
   // conectado) — ver lib/windowState.ts.
@@ -225,9 +285,68 @@ function createWindow(): void {
   const window = mainWindow;
   trackWindowState(window);
 
-  window.on('ready-to-show', () => {
-    // Se cierra aquí y no antes: este es el primer momento en que la
-    // ventana real tiene algo pintado que enseñar en su lugar. En llamadas
+  // DOS RELOJES, y hasta hoy iban en fila: el renderer (~155 ms medidos desde
+  // que se crea la ventana hasta su primer frame) y la base de datos (470 ms
+  // de comprobación de Turso con la base despierta, hasta 4 s con ella
+  // dormida). La ventana se creaba DESPUÉS de migrar, así que esos dos tiempos
+  // se sumaban. Ahora se crea antes y corren a la vez: enseña el que llegue
+  // SEGUNDO. Medido sobre seis arranques de cada: la ventana pasaba de
+  // aparecer 161 ms después de que la base estuviera lista a aparecer 6 ms
+  // después.
+  //
+  // Enseñarla en cuanto el renderer esté, sin esperar a la base, se descartó a
+  // propósito: la app aparecería con todo vacío mientras las consultas esperan
+  // en la puerta de withDbAccess, que es exactamente el hueco que el splash
+  // existe para tapar (ver splash/splash.ts).
+  let rendererReady = false;
+  let revealed = false;
+  const revealWhenReady = (): void => {
+    if (!rendererReady || !dbReady || revealed) return;
+
+    // El tercer reloj (ver startupContentPainted arriba): con los otros dos
+    // cumplidos, se espera a que el renderer tenga contenido de verdad — y se
+    // ARMA aquí la red de seguridad, no antes: contarla desde que hay
+    // renderer Y base es lo que garantiza que nunca añade más de
+    // CONTENT_GATE_MAX_MS al peor caso, esté la base dormida lo que esté.
+    if (!startupContentPainted) {
+      if (!contentGateDeadline) {
+        contentGateDeadline = setTimeout(() => {
+          contentGateDeadline = null;
+          startupContentPainted = true;
+          mark('contenido pintable NO llego: se enseña igual (red de seguridad)');
+          revealWhenReady();
+        }, CONTENT_GATE_MAX_MS);
+      }
+      return;
+    }
+    revealed = true;
+
+    // La petición de una segunda instancia aparcada durante el arranque (ver
+    // pendingWindowRequest) se resuelve AQUÍ, que es el único momento en que
+    // se sabe cuál fue la última: antes se resolvía justo antes de crear la
+    // ventana, y ahora la ventana ya existe desde hace medio segundo.
+    // setFullScreen sobre una ventana OCULTA no la muestra (comprobado; a
+    // diferencia de maximize(), ver más abajo), así que el modo TV sigue
+    // apareciendo ya a pantalla completa, sin parpadeo de ventana normal.
+    if (pendingWindowRequest === 'bigpicture') {
+      bigPictureMode = true;
+      if (!window.isFullScreen()) window.setFullScreen(true);
+    }
+
+    // Si Windows/macOS arrancó la app sola por el login item, no se enseña la
+    // ventana — arranca directa a la bandeja (SPEC 3E). Ver lib/loginItem.ts
+    // para el porqué esto no es tan simple como parece en Windows.
+    // `--bigpicture` GANA sobre el arranque oculto (BIG-PICTURE.md §2): si
+    // pediste el modo TV, lo que quieres es pantalla, no bandeja. Y una
+    // petición de segunda instancia aparcada durante el arranque gana igual:
+    // alguien acaba de pedir la ventana a mano, esconderla en la bandeja es lo
+    // contrario de lo que ha pedido.
+    const wasOpenedAtLogin =
+      wasOpenedHiddenAtLogin() && !bigPictureMode && pendingWindowRequest === null;
+    pendingWindowRequest = null;
+
+    // El splash se cierra aquí y no antes: este es el primer momento en que la
+    // ventana real tiene algo pintado Y una base que responder. En llamadas
     // posteriores a createWindow() (activate del dock, tray) splashWindow ya
     // está a null — cerrar null no hace nada.
     splashWindow?.close();
@@ -244,6 +363,18 @@ function createWindow(): void {
     } else {
       pendingMaximize = isMaximized;
     }
+    mark('VENTANA A LA VISTA');
+  };
+
+  // El final del arranque (whenReady) llama por aquí cuando la base ya está:
+  // se guarda una referencia porque el otro reloj —ready-to-show— vive dentro
+  // de esta función y no hay forma de alcanzarlo desde fuera.
+  revealPendingWindow = revealWhenReady;
+
+  window.on('ready-to-show', () => {
+    mark('renderer con su primer frame (ready-to-show)');
+    rendererReady = true;
+    revealWhenReady();
   });
 
   window.on('maximize', () => {
@@ -429,6 +560,8 @@ app.whenReady().then(async () => {
   // splash, ni migrar, ni nada: morir en silencio es todo su trabajo.
   if (!isPrimaryInstance) return;
 
+  mark('electron listo (whenReady)');
+
   // Sin menú de aplicación: era invisible (frame:false + autoHideMenuBar)
   // y solo aportaba accelerators fantasma — el F11 de fullscreen que ahora
   // es el toggle de Big Picture (ver before-input-event en createWindow).
@@ -442,6 +575,7 @@ app.whenReady().then(async () => {
   // mismo chequeo que createWindow() usa para decidir si mostrarse, con la
   // misma excepción: --bigpicture quiere pantalla.
   if (!wasOpenedHiddenAtLogin() || bigPictureMode) splashWindow = createSplashWindow();
+  mark('splash creado');
 
   // Identidad de la app para Windows. TIENE que coincidir con el appId de
   // electron-builder.yml (com.afterplay.app): Windows resuelve el nombre que
@@ -471,6 +605,52 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.warn('[credentials] fallo cargando credenciales (sigo sin ellas):', error);
   }
+  mark('credenciales cargadas');
+
+  registerIpcHandlers();
+  mark('handlers IPC registrados');
+  registerImageProtocolHandler();
+  // Antes de crear la ventana: los tráilers de la ficha no se reproducen en la
+  // app instalada sin esto (ver lib/youtubeReferer.ts para el porqué).
+  applyYoutubeReferer();
+
+  // IPC de Big Picture y del quit real, registrados AQUÍ y no en ipc/ — su
+  // estado (bigPictureMode, isQuitting) vive en este módulo, que es el dueño
+  // del ciclo de vida de la ventana.
+  ipcMain.handle('bigpicture:get', () => bigPictureMode);
+  ipcMain.on('bigpicture:enter', () => enterBigPicture());
+  ipcMain.on('bigpicture:exit', () => exitBigPicture());
+  // El "Quit Afterplay" del menú del modo TV: el MISMO cierre real que el
+  // "Quit" del tray — sin marcar isQuitting, el interceptor de la X lo
+  // convertiría en un simple esconderse a la bandeja.
+  ipcMain.on('app:quit', () => {
+    isQuitting = true;
+    app.quit();
+  });
+
+  // LA VENTANA, ANTES DE MIGRAR — y esto es un cambio de orden con motivo
+  // medido, no una reordenación estética.
+  //
+  // Aquí antes se esperaba a runMigrations() y solo después se creaba la
+  // ventana, así que dos esperas que no dependen la una de la otra se sumaban:
+  // la comprobación de Turso (470 ms medidos con la base despierta; hasta los
+  // 4 s de CONNECT_TIMEOUT_MS con ella dormida) y el arranque del renderer
+  // (~155 ms hasta su primer frame). Creándola aquí corren a la vez y el
+  // arranque paga solo la más larga: mediana de 6 arranques de cada, 1034 ms
+  // -> 898 ms desde que se lanza el .exe hasta ver la ventana.
+  //
+  // Lo que hace que esto sea seguro y no una carrera es la puerta de arranque
+  // de withDbAccess (db/index.ts): las consultas que el renderer dispara al
+  // montar ya no revientan con "getDb() llamado antes de runMigrations()", se
+  // quedan esperando y entran solas en cuanto hay conexión. La ventana no se
+  // ENSEÑA hasta que las dos cosas están (ver revealWhenReady): el splash
+  // sigue tapando exactamente el mismo hueco que tapaba antes.
+  //
+  // Lo que NO se ha tocado: el orden interno de las migraciones ni el
+  // protocolo de sync. Ahí dentro todo pasa exactamente igual y en el mismo
+  // orden, solo que con la ventana ya cargando por su cuenta.
+  createWindow();
+  mark('ventana creada (el renderer empieza a cargar)');
 
   // Apply pending DB migrations before anything else touches the database.
   // A failed migration means the app can't run correctly, so it quits
@@ -495,50 +675,31 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  mark('migraciones + conexion con Turso');
 
-  // Sin await: VACUUM INTO copia el fichero .db entero y con una biblioteca
-  // grande puede tardar un buen puñado de segundos — nada de lo que sigue
-  // (handlers IPC, la ventana) depende de que esta copia exista ya, así que
-  // esperarla aquí solo retrasaba el primer pintado sin ganar nada. Ahora
-  // corre en paralelo, gateada por su propio withDbAccess (ver dailyBackup.ts).
+  // Desde aquí ya hay ventana, handlers IPC Y base: 'second-instance' vuelve a
+  // atenderse en el acto en vez de aparcarse. Se marca ANTES de enseñar la
+  // ventana y no después, para que no quede ni un hueco entre "revealWhenReady
+  // ya consumió pendingWindowRequest" y "las peticiones nuevas se atienden":
+  // una aparcada en ese hueco no la recogería nadie. Entre estas dos líneas no
+  // hay await, así que no puede colarse ningún evento.
+  startupFinished = true;
+  // El otro reloj de la ventana (ver revealWhenReady en createWindow): si el
+  // renderer ya terminó —lo normal ahora, porque tarda menos que Turso— esto
+  // la enseña en el acto; si no, la enseñará su propio 'ready-to-show'.
+  dbReady = true;
+  revealPendingWindow?.();
+
+  // Sin await: VACUUM INTO copia el fichero .db entero — 133 ms medidos sobre
+  // la base real (18 MB) — y nada de lo que sigue depende de que esa copia
+  // exista ya. Va DESPUÉS de enseñar la ventana, y no antes como estaba: las
+  // sentencias de una misma conexión libsql se sirven en fila, así que lanzarlo
+  // junto a las migraciones ponía esos 133 ms por delante de las primeras
+  // consultas del renderer los arranques en que tocaba copia (una cada 6 h por
+  // defecto). Gateado por su propio withDbAccess (ver dailyBackup.ts).
   void runDailyBackup().catch((error: unknown) => {
     console.warn('[backup] fallo inesperado en la copia diaria (sigo igualmente):', error);
   });
-
-  registerIpcHandlers();
-  registerImageProtocolHandler();
-  // Antes de crear la ventana: los tráilers de la ficha no se reproducen en la
-  // app instalada sin esto (ver lib/youtubeReferer.ts para el porqué).
-  applyYoutubeReferer();
-
-  // IPC de Big Picture y del quit real, registrados AQUÍ y no en ipc/ — su
-  // estado (bigPictureMode, isQuitting) vive en este módulo, que es el dueño
-  // del ciclo de vida de la ventana.
-  ipcMain.handle('bigpicture:get', () => bigPictureMode);
-  ipcMain.on('bigpicture:enter', () => enterBigPicture());
-  ipcMain.on('bigpicture:exit', () => exitBigPicture());
-  // El "Quit Afterplay" del menú del modo TV: el MISMO cierre real que el
-  // "Quit" del tray — sin marcar isQuitting, el interceptor de la X lo
-  // convertiría en un simple esconderse a la bandeja.
-  ipcMain.on('app:quit', () => {
-    isQuitting = true;
-    app.quit();
-  });
-
-  // Lo que pidió una segunda instancia mientras se migraba (ver
-  // pendingWindowRequest) se aplica sobre la ventana BUENA, no sobre una
-  // propia. El modo TV se resuelve ANTES de crearla para que nazca ya a
-  // pantalla completa: así el camino queda idéntico al del arranque en frío
-  // con --bigpicture (el renderer pregunta por bigpicture:get al montar, así
-  // que no hay que avisarle de nada aparte).
-  if (pendingWindowRequest === 'bigpicture') bigPictureMode = true;
-
-  createWindow();
-
-  // Desde aquí ya hay ventana Y handlers IPC: 'second-instance' vuelve a
-  // atenderse en el acto en vez de aparcarse.
-  startupFinished = true;
-  pendingWindowRequest = null;
 
   // Bandeja del sistema (SPEC 3E): icono persistente con "Open"/"Quit" — la
   // app sigue vigilando procesos aunque la ventana esté oculta, y solo se
@@ -731,6 +892,7 @@ app.whenReady().then(async () => {
   });
   setScanWatcher(scanWatcher);
   scanWatcher.start();
+  mark('bandeja + watchers en marcha');
 
   // Bloque 3G / SPEC-2.md §7.2 — bloquear o suspender el PC no es tiempo
   // jugado, siga el proceso vivo detrás o no. 'lock-screen'/'unlock-screen'
@@ -770,44 +932,76 @@ app.whenReady().then(async () => {
   // que los recaps, por el mismo motivo: si el otro PC ya lo hizo, aquí no
   // queda nada que preguntar. Tras la primera pasada es un no-op.
   void runSyncCycle().then(async () => {
+    mark('primer ciclo de sync terminado');
     // El buzón ya se ha drenado aquí dentro: runSyncCycle lo dispara solo tras
     // el pull (ver onSyncCompleted arriba). Un alta encolada existe por tanto
     // como juego ANTES de que pasen por encima el backfill de appids y las
     // pasadas de logros, que es justo lo que hace falta para que no se quede
     // esperando al siguiente arranque.
-    void runMemoriesDailyTick();
-    // El radar mira si toca (una vez por semana) y no hace nada el resto de
-    // los arranques — la comprobacion es leer una fecha de config.json.
-    void runRadarTick();
+    //
+    // De aquí para abajo el orden ya no es una fila: cada pasada corre en
+    // paralelo con las que no comparten NI api NI filas, y en fila con las
+    // que sí. Las promesas se recogen en const (antes eran void) solo para
+    // poder estampar la marca de "terminadas" del final — la medida de cuándo
+    // la app se queda quieta, que con los void no existía.
+    const memoriesTick = runMemoriesDailyTick();
     // El catálogo de logros necesita el appid, así que va DESPUÉS del
     // backfill de appids y no en paralelo: un juego cuyo appid acaba de
     // llegar entra en la misma pasada en vez de esperar al próximo arranque.
     await runSteamAppIdBackfill();
-    void runAchievementsStartupPass();
+    // El radar mira si toca (una vez por semana) y no hace nada el resto de
+    // los arranques — la comprobacion es leer una fecha de config.json. TRAS
+    // el backfill de appids y no antes (donde estaba): los dos preguntan a
+    // IGDB, que NO tiene cola propia (igdb/client.ts es un axios.post a
+    // pelo), así que la semana en que el radar sí trabaja los dos disparaban
+    // a la vez contra la misma API gratuita. Esperarse cuesta lo que el
+    // backfill en régimen: una consulta sin filas (~ms).
+    const radarTick = runRadarTick();
+    // La pasada de logros de Steam es DB + encolar y nada más (la red la pone
+    // su cola, steam/queue.ts): se recoge su promesa porque la de RA se ata a
+    // ella dos bloques más abajo.
+    const steamPass = runAchievementsStartupPass();
     // Y el barrido de emuladores (LOGROS.md §7): disco local puro, recoge lo
     // que los cracks apuntaron con la app cerrada. Después queda la
-    // vigilancia en vivo, que es la que los pilla mientras juegas.
-    await runEmuUnlocksSweep();
-    startEmuWatcher();
-    // RetroAchievements (RETROACHIEVEMENTS.md): emparejado + catálogos de lo
-    // emulado retro, y su sondeo en vivo — que solo pregunta mientras el
-    // watcher vea un emulador corriendo.
+    // vigilancia en vivo, que es la que los pilla mientras juegas — el
+    // watcher arranca cuando el barrido termina, como siempre.
     //
-    // Después de la pasada de Steam, y ese orden sostiene algo: la marca
+    // En paralelo con la pasada de RA porque no comparten nada: el barrido es
+    // disco+DB sin una sola petición, y sus juegos son disjuntos de los de RA
+    // (elige achievementsSyncedAt NOT NULL; el nivel 3 de RA sincroniza justo
+    // los NULL). Hasta hoy sus ~420 ms medidos de tráfico contra la base (957
+    // withDbAccess sobre ~478 juegos con catálogo, RENDIMIENTO.md) iban por
+    // DELANTE de toda la pasada de RA, que mientras tanto no hacía nada.
+    const emuSweep = runEmuUnlocksSweep().then(() => startEmuWatcher());
+    // RetroAchievements (RETROACHIEVEMENTS.md): emparejado + catálogos de lo
+    // emulado retro.
+    //
+    // ENCADENADA a la pasada de Steam, y ese orden sostiene algo: la marca
     // achievementsSyncedAt es UNA sola para las dos fuentes, así que
     // sincronizar por RA un juego que además está en Steam la estampa igual y
     // lo saca de la lista de catálogos pendientes de Steam hasta un "Sync
     // now" (getPendingAchievementsGames filtra por
-    // isNull(achievementsSyncedAt)). Hoy no muerde porque la pasada de Steam
-    // ya eligió su lista antes —entre las dos hay el await del barrido de
-    // emuladores—, pero es una carrera ganada por margen, no una garantía:
-    // adelantar esta línea deja juegos sin catálogo sin que nada lo cante.
-    void runRaStartupPass();
+    // isNull(achievementsSyncedAt)). Hasta hoy ese orden era una carrera
+    // ganada por margen (la pasada de Steam iba con void y solo el barrido de
+    // emuladores por medio le daba ventaja); el .then lo vuelve garantía: RA
+    // no arranca hasta que la de Steam eligió su lista y encoló. Lo que se
+    // espera es solo su DB, no su cola: 21 ms en régimen y 40 con iconos que
+    // limpiar, medidos con el volumen real (994 juegos / 39.808 logros).
+    const raPass = steamPass.then(() => runRaStartupPass());
+    // Su sondeo en vivo — solo pregunta mientras el watcher vea un emulador
+    // corriendo, así que no choca con la pasada de arriba.
     startRaLivePoll(() => watcher?.hasActiveEmulator() ?? false);
     // Y el gemelo para Steam: los logros del juego que estés jugando AHORA,
     // sin esperar a cerrarlo. Solo pregunta mientras el watcher vea juegos
     // corriendo, igual que el de RA con los emuladores.
     startSteamLivePoll(() => watcher?.getActiveGameIds() ?? []);
+    mark('pasadas de arranque lanzadas');
+    // allSettled por blindaje (ninguna pasada lanza: todas atrapan dentro), y
+    // la marca es LA medida de este bloque: cuándo terminó la última pasada y
+    // la app se queda de verdad quieta. Con los void de antes no había forma
+    // de saberlo sin recompilar.
+    await Promise.allSettled([memoriesTick, radarTick, emuSweep, raPass]);
+    mark('pasadas de arranque terminadas');
   });
   // Cada ciclo sincroniza Y drena (el drenado va dentro, ver onSyncCompleted).
   //
@@ -836,7 +1030,18 @@ app.whenReady().then(async () => {
   // Auto-actualización (solo app empaquetada — ver updater.ts). Al final del
   // arranque a propósito: comprobar una release jamás debe retrasar la
   // ventana, el watcher ni el sync.
-  startAutoUpdater();
+  //
+  // Y por import() dinámico, no arriba con los demás — que es la parte que el
+  // párrafo anterior prometía y no cumplía. `electron-updater` cuesta 53 ms de
+  // require MEDIDOS (el más caro de todo el árbol del main), y un import
+  // estático se paga al cargar el módulo, o sea ANTES de whenReady: retrasaba
+  // justo la ventana que esto no debía retrasar. Aquí se paga cuando ya no
+  // hay nadie esperando.
+  void import('./updater')
+    .then(({ startAutoUpdater }) => startAutoUpdater())
+    .catch((error: unknown) => {
+      console.warn('[updater] no se pudo arrancar el auto-actualizador:', error);
+    });
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

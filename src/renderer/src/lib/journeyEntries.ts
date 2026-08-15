@@ -9,7 +9,11 @@ import type {
   SessionWithGame,
   StateEventSummary,
 } from '../../../shared/types';
-import { latestRealStateEvent, manualHoursAnchor } from '../../../shared/playthroughState';
+import {
+  isAddedAtArtifact,
+  latestRealStateEvent,
+  manualHoursAnchor,
+} from '../../../shared/playthroughState';
 
 export type JourneySession = Pick<
   SessionWithGame,
@@ -71,14 +75,16 @@ type JourneyMonthBucket = {
 // juego de la biblioteca aparecía en el mes en que lo metiste aunque no lo
 // hubieras tocado nunca.
 //
-// 5 segundos y no una comparación exacta porque el alta y el evento son dos
-// escrituras distintas de la misma transacción: caen con unos milisegundos de
-// diferencia, nunca con el mismo timestamp.
+// El margen del alta lo decide isAddedAtArtifact (shared/playthroughState),
+// que es donde está el porqué y el número. Aquí estuvo copiado a mano ("5_000"
+// en línea) mientras el comentario de shared afirmaba que el Journey usaba la
+// función compartida: cuatro copias del mismo margen —esta, el Loop y el
+// worker— que coincidían por costumbre. Mover el número en shared habría
+// dejado a esta pantalla con el criterio viejo, y el mismo juego sería hito
+// del mes en Library y no en el Journey.
 const meaningfulEvents = (events: StateEventSummary[], game: GameListItem): StateEventSummary[] =>
   events.filter(
-    (event) =>
-      event.type !== 'plan_to_play' &&
-      Math.abs(event.occurredAt.getTime() - game.addedAt.getTime()) >= 5_000,
+    (event) => event.type !== 'plan_to_play' && !isAddedAtArtifact(event.occurredAt, game.addedAt),
   );
 
 // De los datos crudos de Stats a las carátulas de la línea temporal. Dos

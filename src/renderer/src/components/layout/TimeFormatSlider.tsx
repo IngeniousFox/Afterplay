@@ -15,9 +15,15 @@ export const TimeFormatSlider = ({ value, onChange }: TimeFormatSliderProps): Re
   return (
     <div className="relative flex h-8 w-31 flex-none rounded-full border border-input bg-white/[0.03] p-0.5">
       <div
-        className="absolute top-0.5 bottom-0.5 w-15 rounded-full transition-[left] duration-200 ease-out"
+        // transform y no left: animar `left` corre en el hilo principal
+        // (layout + paint en cada frame de los 200ms); translateX corre en el
+        // compositor. Posiciones idénticas a las de antes: left fijo en 2px y
+        // el destino era calc(50% - 2px) sobre los 122px de padding box del
+        // contenedor (w-31 = 124px menos 1px de borde por lado) = 59px, o sea
+        // un desplazamiento de 59 - 2 = 57px. Si cambia w-31, recalcula.
+        className="absolute top-0.5 bottom-0.5 left-0.5 w-15 rounded-full transition-transform duration-200 ease-out"
         style={{
-          left: is24h ? 'calc(50% - 2px)' : '2px',
+          transform: is24h ? 'translateX(57px)' : 'translateX(0)',
           background: accentGradientStyle.background,
         }}
       />

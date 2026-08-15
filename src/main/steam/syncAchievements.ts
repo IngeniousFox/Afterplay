@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { achievementsTable, achievementUnlocksTable, gamesTable } from '../db/schema';
 import {
@@ -51,24 +51,61 @@ export type GameAchievementSyncResult = {
 
 type UnlockInput = { apiName: string; unlockedAt: Date | null };
 
+// Una fila de desbloqueo que YA estaba guardada, para el censo de instantes.
+type StoredInstant = { achievementId: number; unlockedAt: Date };
+
 // A partir de cuántos desbloqueos con el MISMO segundo exacto se considera
 // que la fecha es del rescate y no de la hazaña. Cinco es holgado: sacar dos
 // o tres logros a la vez es normal (los encadenados de final de misión), pero
 // cinco en el mismo segundo no le pasa a nadie jugando.
 const BULK_SAME_SECOND = 5;
 
-// Marca como "fecha no fiable" los desbloqueos que llegan en bloque con el
-// mismo instante. Ver el porqué largo en el comentario de dateReliable
-// (db/schema.ts): es la firma de un juego re-reportando su historial entero.
-const unreliableTimestamps = (unlocks: UnlockInput[]): Set<number> => {
-  const counts = new Map<number, number>();
-  for (const unlock of unlocks) {
+// Marca como "fecha no fiable" los instantes que llegan en bloque. Ver el
+// porqué largo en el comentario de dateReliable (db/schema.ts): es la firma de
+// un juego re-reportando su historial entero.
+//
+// Se cuenta por LOGRO distinto y sumando lo que YA hay guardado de la MISMA
+// fuente con ese mismo instante. Antes solo miraba la lista que entraba, y eso
+// apagaba la regla en cuanto la tanda venía troceada: el sondeo de RA manda
+// ventanas parciales por diseño (ra/livePoll.ts), así que un rescate repartido
+// en varios ticks entraba como veinticinco momentos buenos. Es una protección
+// que se caía sola sin que nadie la tocara.
+//
+// Contar LOGROS y no filas es lo que hace que sumar lo guardado siga siendo
+// idempotente: el sondeo de Steam manda la lista ENTERA cada 30 s, y un logro
+// que ya constaba con ese instante es el mismo logro, no uno más — cuatro en
+// el mismo segundo siguen siendo cuatro por muchas veces que se repita la
+// tanda. Por lo mismo, un apiName repetido DENTRO de la tanda cuenta una vez.
+//
+// Lo guardado cuenta con independencia de su dateReliable, y eso tiene un
+// precio conocido: los desbloqueos sin fecha propia se guardan todos con la
+// fecha de respaldo de su llamada, así que si media docena de ellos quedó en
+// el instante F, un desbloqueo legítimo que caiga exactamente en F en una
+// llamada POSTERIOR se marcará como bloque. Se acepta a sabiendas, porque la
+// alternativa (contar solo las filas fiables) apaga la regla justo en la
+// llamada siguiente a detectar el bloque: para entonces ya están degradadas y
+// el sexto de la tanda troceada volvería a pasar por fiable. Dentro de una
+// misma tanda los nulos siguen sin contar (no tienen instante propio).
+const unreliableTimestamps = (
+  batch: { key: number | string; unlockedAt: Date | null }[],
+  stored: StoredInstant[],
+): Set<number> => {
+  const keysByTime = new Map<number, Set<number | string>>();
+  for (const unlock of batch) {
     if (!unlock.unlockedAt) continue;
     const time = unlock.unlockedAt.getTime();
-    counts.set(time, (counts.get(time) ?? 0) + 1);
+    const keys = keysByTime.get(time) ?? new Set<number | string>();
+    keys.add(unlock.key);
+    keysByTime.set(time, keys);
   }
+  // Solo los instantes que nombra ESTA tanda: censar el historial entero del
+  // juego en cada llamada sería reabrir filas que nadie ha tocado.
+  for (const row of stored) keysByTime.get(row.unlockedAt.getTime())?.add(row.achievementId);
+
   return new Set(
-    [...counts.entries()].filter(([, count]) => count >= BULK_SAME_SECOND).map(([time]) => time),
+    [...keysByTime.entries()]
+      .filter(([, keys]) => keys.size >= BULK_SAME_SECOND)
+      .map(([time]) => time),
   );
 };
 
@@ -104,32 +141,84 @@ export const storeUnlocks = async (
   const byApiName = new Map(stored.map((row) => [row.apiName, row]));
 
   const windows = await withDbAccess(async () => getSessionWindows(gameId));
-  const bulkTimes = unreliableTimestamps(unlocks);
   const fresh: AchievementToast[] = [];
 
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
-      // Qué logros YA constaban desbloqueados (de cualquier fuente) — la foto
-      // de "antes" contra la que se decide qué es nuevo. Se lee DENTRO de la
-      // transacción que inserta, con el mismo tx: "decidir qué es nuevo" y
-      // "escribirlo" quedan atómicos. Fuera (como antes) dos storeUnlocks
-      // solapados del mismo juego —cierre de sesión vs. vigilante de emulador,
-      // o livePoll de RA vs. refresco— leían la misma foto sin el insert del
-      // otro y daban el mismo logro por nuevo: toast y tarjeta del 100%
-      // duplicados. SQLite serializa las transacciones de una misma conexión,
-      // así que la segunda ya ve el insert de la primera. (withDbAccess es un
-      // contador, no un mutex — por eso no bastaba con envolver por fuera.)
-      const already = new Set(
-        (
-          await tx
-            .select({ achievementId: achievementUnlocksTable.achievementId })
-            .from(achievementUnlocksTable)
-            .innerJoin(
-              achievementsTable,
-              eq(achievementUnlocksTable.achievementId, achievementsTable.id),
-            )
-            .where(eq(achievementsTable.gameId, gameId))
-        ).map((row) => row.achievementId),
+      // Qué desbloqueos YA constaban de este juego (de cualquier fuente) — la
+      // foto de "antes" contra la que se decide qué es nuevo, si el instante
+      // huele a rescate y si la fecha guardada vale más que la que entra. Se
+      // lee DENTRO de la transacción que inserta, con el mismo tx: "decidir
+      // qué es nuevo" y "escribirlo" quedan atómicos. Fuera (como antes) dos
+      // storeUnlocks solapados del mismo juego —cierre de sesión vs. vigilante
+      // de emulador, o livePoll de RA vs. refresco— leían la misma foto sin el
+      // insert del otro y daban el mismo logro por nuevo: toast y tarjeta del
+      // 100% duplicados. SQLite serializa las transacciones de una misma
+      // conexión, así que la segunda ya ve el insert de la primera.
+      // (withDbAccess es un contador, no un mutex — por eso no bastaba con
+      // envolver por fuera.)
+      const storedUnlocks = await tx
+        .select({
+          id: achievementUnlocksTable.id,
+          achievementId: achievementUnlocksTable.achievementId,
+          source: achievementUnlocksTable.source,
+          unlockedAt: achievementUnlocksTable.unlockedAt,
+          dateReliable: achievementUnlocksTable.dateReliable,
+        })
+        .from(achievementUnlocksTable)
+        .innerJoin(
+          achievementsTable,
+          eq(achievementUnlocksTable.achievementId, achievementsTable.id),
+        )
+        .where(eq(achievementsTable.gameId, gameId));
+
+      // "Nuevo" es del LOGRO, no de la fuente: enterarte otra vez del mismo
+      // Grimm porque ahora lo ha visto también Steam sería un fallo visible.
+      const already = new Set(storedUnlocks.map((row) => row.achievementId));
+      // Lo demás (el censo del bloque y la fecha que ya había) se mira solo
+      // contra ESTA fuente: cada fuente tiene su reloj y su fila propia, y una
+      // no puede degradar el momento que la otra tenga bien guardado.
+      const sameSource = storedUnlocks.filter((row) => row.source === source);
+
+      const bulkTimes = unreliableTimestamps(
+        unlocks.map((unlock) => ({
+          // La identidad es el LOGRO. Los que no están en el catálogo se
+          // ignoran más abajo, pero cuentan para el censo por su apiName: si
+          // un fichero de crack re-reporta en bloque, lo hace entero.
+          key: byApiName.get(unlock.apiName)?.id ?? unlock.apiName,
+          unlockedAt: unlock.unlockedAt,
+        })),
+        sameSource,
+      );
+
+      // Rescate descubierto A POSTERIORI. Si el instante ya se sabe de bloque,
+      // las filas que se guardaron antes con ese mismo instante dejan de ser
+      // un momento: se colaron por fiables solo porque su tanda venía troceada
+      // (el sondeo de RA manda ventanas parciales). Sin esto, el arreglo del
+      // censo dejaría media tanda colgada de la sesión y la otra media no.
+      const degradadas = sameSource.filter(
+        (row) => row.dateReliable && bulkTimes.has(row.unlockedAt.getTime()),
+      );
+      if (degradadas.length > 0) {
+        await tx
+          .update(achievementUnlocksTable)
+          .set({ dateReliable: false, sessionId: null, iterationId: null })
+          .where(
+            inArray(
+              achievementUnlocksTable.id,
+              degradadas.map((row) => row.id),
+            ),
+          );
+      }
+
+      // Con qué fiabilidad quedó guardada la fecha de cada logro de esta
+      // fuente, ya contando el degradado de arriba. Es lo que impide que un
+      // rescate en bloque pise un momento bueno (ver el upsert).
+      const storedReliable = new Map(
+        sameSource.map((row) => [
+          row.achievementId,
+          row.dateReliable && !bulkTimes.has(row.unlockedAt.getTime()),
+        ]),
       );
 
       for (const unlock of unlocks) {
@@ -143,6 +232,25 @@ export const storeUnlocks = async (
         // fecha existe (hay que guardar algo) pero no vale como momento.
         const dateReliable =
           unlock.unlockedAt !== null && !bulkTimes.has(unlock.unlockedAt.getTime());
+
+        // UN "NO SÉ CUÁNDO" NO BORRA UN "SÉ CUÁNDO". El upsert de abajo pisa
+        // las cuatro columnas del momento, y eso es lo que arregla un
+        // emparejado obsoleto (la sesión que aparece después de la
+        // sincronización) — pero era también lo que destruía el momento bueno
+        // en la secuencia real del 007: el crack tenía las fechas buenas, se
+        // le escribe el achievements.json que le faltaba, el juego re-reporta
+        // los 25 con el mismo segundo y el fichero pasa a tener SOLO la fecha
+        // del rescate. Al leerlo se perdía lo ya guardado: fecha del rescate,
+        // dateReliable a false y el logro descolgado de su sesión, para
+        // siempre. Si lo que entra no vale como momento y lo guardado sí
+        // valía, esta fila no se toca: las cuatro columnas del set son justo
+        // las que no deben cambiar, así que no escribir es el UPDATE correcto
+        // (y de paso no ensucia el ciclo de sincronización con Turso).
+        //
+        // Solo protege lo FIABLE: una fecha no fiable sí se deja pisar, que es
+        // como un rescate se corrige el día que llega la fecha de verdad.
+        if (!dateReliable && storedReliable.get(definition.id) === true) continue;
+
         // Un desbloqueo sin fecha fiable no se cuelga de ninguna sesión:
         // colgarlo sería inventarse que lo sacaste en ese rato concreto.
         const placement = dateReliable
@@ -180,6 +288,17 @@ export const storeUnlocks = async (
             gameHeroUrl: null,
           });
         }
+
+        // La foto se actualiza AL INSERTAR, no solo al abrir la transacción:
+        // dentro de una misma tanda un apiName repetido es el MISMO logro. Con
+        // la foto congelada salía dos veces en `fresh` —dos tarjetas flotantes
+        // para un solo logro y el unlockedCount del evento 'synced' inflado—
+        // aunque guardada quedara una sola fila, porque el UNIQUE (logro,
+        // fuente) sí hacía su trabajo. Hoy ninguna fuente entrega duplicados,
+        // pero el día que alguien junte las tandas de dos ficheros esto es lo
+        // que evita el aviso doble.
+        already.add(definition.id);
+        storedReliable.set(definition.id, dateReliable);
       }
     }),
   );
@@ -473,6 +592,17 @@ export const syncGameAchievements = async (
 // llega después — pero también al contrario, cuando alguien asigna a mano una
 // sesión de emulador o corrige fechas. Recolocar es barato y deja los momentos
 // bien pegados sin repreguntar nada.
+//
+// Respeta dateReliable EXACTAMENTE igual que storeUnlocks (arriba, en el
+// insert): son los dos únicos escritores de sessionId/iterationId en
+// achievement_unlocks y la regla tiene que ser la misma en los dos, o el que
+// pase después deshace la honestidad del otro. Antes esta función recolocaba
+// TODAS las filas mirando solo la fecha: los 25 logros que Goldberg re-reporta
+// sellados con el mismo segundo llevan un segundo que cae DENTRO de la sesión
+// que estabas jugando, así que una sola llamada a 'achievements:replacePlacements'
+// se los colgaba a esa sesión y la pantalla de Sesiones se inventaba que los
+// habías sacado en ese rato — justo lo que prohíbe la regla 1 de
+// LOGROS-IDEAS §1 ("ni en sesiones").
 export const replaceUnlockPlacements = async (gameId: number): Promise<number> => {
   const windows = await withDbAccess(async () => getSessionWindows(gameId));
   if (windows.length === 0) return 0;
@@ -482,6 +612,7 @@ export const replaceUnlockPlacements = async (gameId: number): Promise<number> =
       .select({
         id: achievementUnlocksTable.id,
         unlockedAt: achievementUnlocksTable.unlockedAt,
+        dateReliable: achievementUnlocksTable.dateReliable,
         sessionId: achievementUnlocksTable.sessionId,
       })
       .from(achievementUnlocksTable)
@@ -493,7 +624,12 @@ export const replaceUnlockPlacements = async (gameId: number): Promise<number> =
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
       for (const row of rows) {
-        const placement = placeUnlock(row.unlockedAt, windows);
+        // Sin fecha fiable no hay rato al que pegarlo — y el null se ESCRIBE,
+        // no se salta la fila: así una pasada de esta misma función también
+        // descuelga lo que una versión anterior hubiera colgado mal.
+        const placement = row.dateReliable
+          ? placeUnlock(row.unlockedAt, windows)
+          : { sessionId: null, iterationId: null };
         if (placement.sessionId === row.sessionId) continue;
         await tx
           .update(achievementUnlocksTable)

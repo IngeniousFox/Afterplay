@@ -10,8 +10,9 @@ import { findSteamAppIdCorrections } from '../igdb/api';
 // alguien afine el mensaje o el criterio en una sola.
 //
 // Qué corrige y qué no lo decide findSteamAppIdCorrections (igdb/api.ts): el
-// appid que apunta al playtest del propio juego o a otro producto distinto se
-// sustituye por el de su ficha, y uno bueno no se toca jamás.
+// appid que apunta al playtest del propio juego, a otro producto distinto o
+// —en un juego con juego base— a cualquier cosa que no sea el appid del base;
+// y uno bueno no se toca jamás.
 //
 // El AVISO por consola vive aquí y no en quien llama porque hoy es el único
 // rastro visible de que a un juego le ha cambiado la identidad de Steam —y
@@ -37,9 +38,12 @@ export const findSteamAppIdFixes = async (
     const better = fixes.get(game.igdbId);
     // Solo ASCII en consola, convencion de la casa: la consola de Windows no
     // siempre usa UTF-8.
+    // "no es el que debe usar" y no "no era el de este juego": desde el MOTIVO
+    // 3 la correccion tambien alcanza al hijo que llevaba su PROPIO appid, que
+    // si es suyo — lo que pasa es que sus logros viven en el del juego base.
     if (better !== undefined) {
       console.log(
-        `[steam] ${game.title}: el appid ${game.steamAppId} no era el de este juego, se corrige a ${better}`,
+        `[steam] ${game.title}: el appid ${game.steamAppId} no es el que este juego debe usar, se corrige a ${better}`,
       );
     }
   }

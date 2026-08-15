@@ -1,7 +1,9 @@
 import { ipcRenderer } from 'electron';
 import type {
+  CredentialsImportResult,
   CredentialsValues,
   OverlayShortcutStatus,
+  StartupKeysImport,
   SyncFailureInfo,
   TimeFormat,
 } from '../../shared/types';
@@ -42,4 +44,16 @@ export const settingsApi = {
   // Devuelve los valores ya guardados (normalizados: '' pasa a null).
   setCredentials: (input: CredentialsValues): Promise<CredentialsValues> =>
     ipcRenderer.invoke('settings:setCredentials', input),
+  // Llevarse las claves a otro PC (main/config/credentials.ts): exportar
+  // escribe afterplay-keys.json en la carpeta elegida y devuelve su ruta;
+  // importar lo lee del fichero elegido y FUSIONA con lo que ya hubiera.
+  exportCredentials: (directory: string): Promise<string> =>
+    ipcRenderer.invoke('settings:exportCredentials', directory),
+  importCredentials: (filePath: string): Promise<CredentialsImportResult> =>
+    ipcRenderer.invoke('settings:importCredentials', filePath),
+  // Qué pasó con el fichero soltado en la carpeta de datos, si lo había:
+  // null cuando no había ninguno (o cuando ya se preguntó una vez).
+  getStartupKeysImport: (): Promise<StartupKeysImport | null> =>
+    ipcRenderer.invoke('settings:getStartupKeysImport'),
+  openDataFolder: (): Promise<void> => ipcRenderer.invoke('settings:openDataFolder'),
 };

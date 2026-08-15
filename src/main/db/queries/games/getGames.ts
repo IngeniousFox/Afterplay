@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { getDb } from '../..';
 import {
   isAddedAtArtifact,
@@ -21,6 +21,15 @@ type StateEventCandidate = {
   occurredAt: Date;
   id: number;
 };
+
+// Los enteros de una agregación (`count`, `sum`, `max` sobre timestamps) no
+// pasan por el mapeo de columna de drizzle: llegan crudos del driver, y los
+// dos que usa esta app no son el mismo (@tursodatabase/sync en producción,
+// @libsql/client en los tests). Un `sum()` que volviera como bigint
+// convertiría una suma en un TypeError, y una fecha en un Date inválido, así
+// que se normalizan aquí una vez en vez de confiar en el driver de turno.
+const toNumber = (value: number | bigint | null): number | null =>
+  value === null ? null : Number(value);
 
 export const getGames = async (): Promise<GameListItem[]> => {
   const db = getDb();
@@ -76,67 +85,131 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // sumar, era el bug real: un playthrough con horas manuales al que el
   // watcher le seguía colgando sesiones se quedaba clavado en el número
   // manual para siempre).
+  //
+  // SOLO las de los juegos de la biblioteca, igual que la lista de arriba:
+  // esta consulta se traía la tabla ENTERA y dos tercios eran de juegos
+  // planeados (997 filas de las que 661 lo eran, en la base real) cuyo
+  // gameId no aparece en `games` y que por tanto nadie llegaba a leer nunca.
+  // Eso y el mismo filtro en el log de estados bajan getGames de 12,5 a
+  // 8,5 ms sobre la base real de hoy (2.623 filas -> 1.252).
+  // El `order by id` mantiene el orden de rowid que daba el escaneo completo
+  // de antes: las horas de un juego se suman iteración a iteración y en coma
+  // flotante el orden de la suma puede cambiar el último bit.
   const iterations = await db
     .select({
       id: iterationsTable.id,
       gameId: iterationsTable.gameId,
       manualTotalPlayed: iterationsTable.manualTotalPlayed,
     })
-    .from(iterationsTable);
+    .from(iterationsTable)
+    .innerJoin(gamesTable, eq(iterationsTable.gameId, gamesTable.id))
+    .where(eq(gamesTable.planned, false))
+    .orderBy(asc(iterationsTable.id));
 
-  // Todas las sesiones del juego (vía sus iteraciones), sin agregar. De aquí
-  // salen CUATRO cosas a la vez en el mismo bucle de abajo: horas trackeadas
-  // (agrupadas por ITERACIÓN, para sumarlas a las manuales), nº de sesiones,
-  // si hay alguna sesión abierta ahora mismo (LIVE), y desde cuándo (para el
-  // contador en vivo de la card — SPEC 10.7 lo pide junto al badge PLAYING,
-  // no basta con saber que está en marcha).
-  const sessionRows = await db
+  // Las sesiones, YA AGREGADAS POR ITERACIÓN: una fila por playthrough CON
+  // sesiones en vez de una fila por sesión.
+  //
+  // ESTE ERA EL COSTE DE LA CONSULTA, medido sobre una copia de la base real
+  // con cinco años de tracking simulados encima (5.098 sesiones): traerse las
+  // filas crudas costaba 16,7 ms de los 37,4 que tardaba getGames entera, y
+  // las mismas cuentas hechas por SQLite cuestan 4,0 ms sobre 336 filas.
+  // getGames pasó de 37,4 a 16,8 ms ahí, y de 92,6 a 28,9 ms con 15.178
+  // sesiones — o sea que su coste ya no crece con las sesiones, sino con los
+  // playthroughs. No es el SQL, es cuántas filas cruzan el driver; y esta
+  // consulta corre en CADA 'games:changed', o sea cada vez que el watcher
+  // abre o cierra una sesión.
+  //
+  // Las cinco columnas agregadas son exactamente las cinco cosas que el
+  // bucle de JS sacaba de las filas crudas, ni una más:
+  //  · sessionCount — cuenta TODAS, la abierta incluida (ya costó un fallo
+  //    real: el overlay sumaba +1 "por la de ahora" creyendo que aquí solo
+  //    entraban las cerradas, y todo juego en marcha enseñaba una de más).
+  //  · trackedSeconds — por ITERACIÓN, para sumarlas a las manuales con
+  //    resolveIterationHours. `sum` ignora los NULL igual que hacía el
+  //    `?? 0` de antes; el coalesce es para la iteración cuyas sesiones son
+  //    todas de duración nula.
+  //  · liveSince — el arranque de la sesión ABIERTA. SPEC 4.5 dice que hay
+  //    como mucho una por juego, pero la BD no lo impone (una que el watcher
+  //    nunca cerró más otra abierta después son dos filas abiertas), así que
+  //    se declara el criterio: gana el arranque MÁS RECIENTE, que es la que
+  //    de verdad está en marcha. Antes ganaba la última fila que devolviera
+  //    la query —sin ORDER BY— y el contador en vivo de la card arrancaba en
+  //    un sitio distinto según el día.
+  //  · lastSessionAt — cuándo se DEJÓ la última sesión, la base de "Last
+  //    played": se toma endedAt y no startedAt para que una partida larga
+  //    cuente por cuándo se soltó; en una abierta el arranque es lo más
+  //    reciente que hay. Nunca es null: startedAt es NOT NULL.
+  //  · firstSessionAt — el arranque más temprano del PLAYTHROUGH (no del
+  //    juego), último recurso para fechar sus horas manuales. Basta el
+  //    mínimo porque manualHoursAnchor se queda con la sesión más antigua
+  //    de las que le pasen; mandarle la lista entera era mandarle 5.000
+  //    fechas para que eligiera una.
+  //
+  // El `group by` es por iteración y no por juego porque las horas se
+  // resuelven por iteración (manual + trackeado de ESA iteración); lo que
+  // sea del juego entero se pliega en el bucle de abajo, que ahora recorre
+  // playthroughs y no sesiones.
+  const sessionsByIterationRows = await db
     .select({
-      id: sessionsTable.id,
-      gameId: iterationsTable.gameId,
       // iterationsTable.id y no sessionsTable.iterationId — mismo valor bajo
       // el inner join, pero el tipo sale number (no nullable) sin guardas.
       iterationId: iterationsTable.id,
-      startedAt: sessionsTable.startedAt,
-      durationSec: sessionsTable.durationSec,
-      endedAt: sessionsTable.endedAt,
+      gameId: iterationsTable.gameId,
+      sessionCount: sql<number>`count(*)`,
+      trackedSeconds: sql<number>`coalesce(sum(${sessionsTable.durationSec}), 0)`,
+      liveSince: sql<
+        number | null
+      >`max(case when ${sessionsTable.endedAt} is null then ${sessionsTable.startedAt} end)`,
+      lastSessionAt: sql<number>`max(coalesce(${sessionsTable.endedAt}, ${sessionsTable.startedAt}))`,
+      firstSessionAt: sql<number>`min(${sessionsTable.startedAt})`,
     })
     .from(sessionsTable)
-    .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id));
+    .innerJoin(iterationsTable, eq(sessionsTable.iterationId, iterationsTable.id))
+    .innerJoin(gamesTable, eq(iterationsTable.gameId, gamesTable.id))
+    .where(eq(gamesTable.planned, false))
+    .groupBy(iterationsTable.id);
 
+  // Modelo v2: toda fila de sessions es tiempo jugado real — ya no existen
+  // los marcadores de borde que antes había que descontar aquí.
   const trackedSecondsByIteration = new Map<number, number>();
   const sessionCountByGame = new Map<number, number>();
-  // startedAt de la sesión abierta del juego (SPEC 4.5: como mucho un
-  // playthrough activo por juego, así que como mucho una sesión abierta).
   const liveSinceByGame = new Map<number, Date>();
-  // Cuándo acabó la última sesión de cada juego — la base de "Last played".
-  // Se toma endedAt y no startedAt para que una partida larga cuente por
-  // cuándo se dejó, no por cuándo se empezó; en una sesión abierta (que aún
-  // no tiene fin) el arranque ES lo más reciente que hay.
   const lastSessionByGame = new Map<number, Date>();
+  // El arranque de la PRIMERA sesión de cada playthrough (no de cada juego):
+  // último recurso para fechar sus horas manuales cuando el log de estados no
+  // dice nada. Ver manualHoursAnchor — el juego que el watcher detectó solo y
+  // al que le tecleaste las horas de la otra máquina no tenía año en ninguna
+  // vista, teniendo sesiones fechadas delante.
+  const firstSessionByIteration = new Map<number, Date>();
 
-  for (const row of sessionRows) {
-    trackedSecondsByIteration.set(
-      row.iterationId,
-      (trackedSecondsByIteration.get(row.iterationId) ?? 0) + (row.durationSec ?? 0),
+  // Este bucle recorre PLAYTHROUGHS, no sesiones: lo que agrega es lo que
+  // sube de iteración a juego (contar, y quedarse con la fecha mayor), que
+  // es lo único que el `group by` de arriba no puede hacer por sí solo.
+  for (const row of sessionsByIterationRows) {
+    trackedSecondsByIteration.set(row.iterationId, toNumber(row.trackedSeconds) ?? 0);
+    sessionCountByGame.set(
+      row.gameId,
+      (sessionCountByGame.get(row.gameId) ?? 0) + (toNumber(row.sessionCount) ?? 0),
     );
-    // Modelo v2: toda fila de sessions es tiempo jugado real — ya no existen
-    // los marcadores de borde que antes había que descontar aquí.
-    //
-    // Y cuenta TODAS, la ABIERTA incluida — aquí no hay filtro por endedAt.
-    // Dicho explícitamente porque ya costó un fallo real: el overlay le
-    // sumaba +1 "por la sesión de ahora" asumiendo que esto contaba solo las
-    // cerradas, y todo juego en marcha enseñaba una sesión de más.
-    sessionCountByGame.set(row.gameId, (sessionCountByGame.get(row.gameId) ?? 0) + 1);
-    if (row.endedAt === null) {
-      liveSinceByGame.set(row.gameId, row.startedAt);
+
+    const liveSince = toNumber(row.liveSince);
+    if (liveSince !== null) {
+      const liveKnown = liveSinceByGame.get(row.gameId);
+      if (!liveKnown || liveSince > liveKnown.getTime()) {
+        liveSinceByGame.set(row.gameId, new Date(liveSince));
+      }
     }
 
-    const playedAt = row.endedAt ?? row.startedAt;
-    const known = lastSessionByGame.get(row.gameId);
-    if (!known || playedAt.getTime() > known.getTime()) {
-      lastSessionByGame.set(row.gameId, playedAt);
+    const playedAt = toNumber(row.lastSessionAt);
+    if (playedAt !== null) {
+      const known = lastSessionByGame.get(row.gameId);
+      if (!known || playedAt > known.getTime()) {
+        lastSessionByGame.set(row.gameId, new Date(playedAt));
+      }
     }
+
+    const firstAt = toNumber(row.firstSessionAt);
+    if (firstAt !== null) firstSessionByIteration.set(row.iterationId, new Date(firstAt));
   }
 
   // Horas por juego = suma de las horas de cada una de sus iteraciones, cada
@@ -148,11 +221,17 @@ export const getGames = async (): Promise<GameListItem[]> => {
     hoursByGame.set(iteration.gameId, (hoursByGame.get(iteration.gameId) ?? 0) + hours);
   }
 
-  // Todos los stateEvents del juego (vía sus iteraciones), sin agregar
-  // todavía. El "estado actual" es otro caso de 1-fila-por-grupo (la más
-  // reciente por gameId), así que lo resuelvo igual que las horas: traigo las
-  // candidatas y me quedo con la mejor en JS. Nada de JOIN plano (repite
-  // filas) ni ROW_NUMBER — para esto es matar moscas a cañonazos.
+  // Los stateEvents de los juegos de la biblioteca (vía sus iteraciones), sin
+  // agregar. Y aquí el log ENTERO se queda: de estas mismas filas salen tres
+  // derivaciones distintas —el estado actual, el respaldo de "Last played" y
+  // el año de las horas manuales— y las dos últimas miran TODO el historial,
+  // no solo su última fila. El "estado actual" sí es un 1-fila-por-grupo, pero
+  // resolverlo aparte con un ROW_NUMBER sería una segunda pasada por la misma
+  // tabla para ahorrar filas que de todas formas hay que traer.
+  //
+  // Lo que sí se queda fuera es el log de los juegos PLANEADOS: eran 661 de
+  // las 1.236 filas de la base real, todas de gameId que no está en `games`,
+  // o sea agrupadas en un Map que nadie lee.
   const stateEventRows: StateEventCandidate[] = await db
     .select({
       gameId: iterationsTable.gameId,
@@ -162,12 +241,15 @@ export const getGames = async (): Promise<GameListItem[]> => {
       id: stateEventsTable.id,
     })
     .from(stateEventsTable)
-    .innerJoin(iterationsTable, eq(stateEventsTable.iterationId, iterationsTable.id));
+    .innerJoin(iterationsTable, eq(stateEventsTable.iterationId, iterationsTable.id))
+    .innerJoin(gamesTable, eq(iterationsTable.gameId, gamesTable.id))
+    .where(eq(gamesTable.planned, false));
 
   // Playthroughs con horas manuales, con el año al que atribuirlas para las
-  // vistas por año de Stats (modelo v2: la fecha sale del LOG de estados, no
-  // de sesiones ancla). La regla de a qué fecha se cuelgan vive en
-  // manualHoursAnchor, compartida con el Journey del renderer.
+  // vistas por año de Stats. Manda el LOG de estados (modelo v2: la fecha de
+  // fin ya no vive en una sesión ancla) y solo si el log calla se mira la
+  // primera sesión medida. La regla de a qué fecha se cuelgan vive en
+  // manualHoursAnchor, compartida con el Journey del renderer y con el móvil.
   const eventsByIteration = new Map<number, StateEventCandidate[]>();
   for (const row of stateEventRows) {
     const list = eventsByIteration.get(row.iterationId) ?? [];
@@ -175,13 +257,38 @@ export const getGames = async (): Promise<GameListItem[]> => {
     eventsByIteration.set(row.iterationId, list);
   }
 
+  // addedAt por juego: lo necesitan los DOS derivados que tienen que
+  // reconocer el evento artefacto del alta — el año de las horas manuales
+  // (justo aquí abajo) y el respaldo de "Last played" (más abajo). Vivía solo
+  // en el segundo, y esa era exactamente la grieta: un juego dado de alta hoy
+  // como "completado, 50 h, jugado hace años y sin fecha" salía con
+  // lastPlayedAt null (bien) y con esas 50 horas colgadas del año en curso
+  // (mal), porque manualHoursAnchor recibía el log SIN filtrar. La misma
+  // fecha no puede ser mentira para una cosa y verdad para la otra.
+  const addedAtByGame = new Map(games.map((game) => [game.id, game.addedAt]));
+
   const manualIterationsByGame = new Map<
     number,
     { iterationId: number; hours: number; year: number | null }[]
   >();
   for (const iteration of iterations) {
     if (iteration.manualTotalPlayed === null) continue;
-    const anchorDate = manualHoursAnchor(eventsByIteration.get(iteration.id) ?? []);
+    // El `addedAt` va para que el artefacto del alta no cuente como fecha
+    // (si al playthrough no le queda ninguna de verdad, el ancla es null y
+    // esas horas solo pueden contar en All Time), y el arranque de sesión
+    // como último recurso cuando el log entero se queda sin decir nada. El
+    // orden entre las tres pistas lo decide manualHoursAnchor, que es el
+    // único sitio donde está escrito.
+    //
+    // Va UNA sola fecha en la lista de sesiones y no todas: manualHoursAnchor
+    // se queda con la más antigua, así que el min(startedAt) que ya calculó
+    // SQLite es esa misma respuesta sin traer las demás.
+    const firstSessionAt = firstSessionByIteration.get(iteration.id);
+    const anchorDate = manualHoursAnchor(
+      eventsByIteration.get(iteration.id) ?? [],
+      addedAtByGame.get(iteration.gameId),
+      firstSessionAt ? [firstSessionAt] : undefined,
+    );
     const list = manualIterationsByGame.get(iteration.gameId) ?? [];
     list.push({
       iterationId: iteration.id,
@@ -217,9 +324,8 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // schema, o sea AHORA: ese evento no dice cuándo lo jugaste, dice cuándo lo
   // diste de alta. Reconocerlos es isAddedAtArtifact (shared/playthroughState,
   // que es donde está el porqué y el margen) — la misma regla que aplica el
-  // Journey del renderer, escrita una sola vez.
-  const addedAtByGame = new Map(games.map((game) => [game.id, game.addedAt]));
-
+  // Journey del renderer, escrita una sola vez, y la misma que filtra el ancla
+  // de las horas manuales ahí arriba (addedAtByGame se construye allí).
   const lastEventByGame = new Map<number, Date>();
   for (const [gameId, candidates] of candidatesByGame) {
     const addedAt = addedAtByGame.get(gameId);
@@ -237,6 +343,26 @@ export const getGames = async (): Promise<GameListItem[]> => {
       }
     }
   }
+
+  // "Last played" = la última vez que toqué este juego, venga el dato de donde
+  // venga: el fin de la última sesión o el último evento CON FECHA PROPIA, lo
+  // que sea más reciente. Antes era `sesión ?? evento`, o sea que en cuanto
+  // había una sola sesión el log dejaba de mirarse: trackeas en enero,
+  // terminas el juego en la consola y lo marcas completado con fecha de junio
+  // — y la biblioteca seguía ordenándolo por enero, por debajo de juegos que
+  // tocaste menos. Las dos fuentes ya vienen limpias (la del log ignora
+  // 'plan_to_play' y el artefacto del alta), así que quedarse con el máximo no
+  // puede subir un juego por una fecha que nadie escribió.
+  //
+  // null cuando no hay ni una cosa ni la otra: es "no lo sé", y como tal se va
+  // al final de la lista en vez de inventarse una fecha.
+  const lastPlayedAtFor = (gameId: number): Date | null => {
+    const bySession = lastSessionByGame.get(gameId) ?? null;
+    const byEvent = lastEventByGame.get(gameId) ?? null;
+    if (!bySession) return byEvent;
+    if (!byEvent) return bySession;
+    return byEvent.getTime() > bySession.getTime() ? byEvent : bySession;
+  };
 
   return games.map((game) => {
     const latestStateEvent = latestStateEventByGame.get(game.id);
@@ -262,13 +388,8 @@ export const getGames = async (): Promise<GameListItem[]> => {
       executablePath: game.executablePath,
       manualIterations: manualIterationsByGame.get(game.id) ?? [],
       currentState: latestStateEvent?.type ?? null,
-      // Manda la sesión; si no hay ninguna, el último evento CON FECHA
-      // PROPIA (ver arriba). Un juego que marcaste como completado sin
-      // haberlo trackeado nunca SÍ se jugó — usar solo sesiones lo mandaría
-      // al fondo junto a los que ni has tocado. null cuando no hay ni una
-      // cosa ni la otra: es "no lo sé", y como tal se va al final de la
-      // lista en vez de inventarse una fecha.
-      lastPlayedAt: lastSessionByGame.get(game.id) ?? lastEventByGame.get(game.id) ?? null,
+      // La más reciente de las dos fuentes — ver lastPlayedAtFor arriba.
+      lastPlayedAt: lastPlayedAtFor(game.id),
       isLive: liveSince !== null,
       liveSince,
       sessionCount: sessionCountByGame.get(game.id) ?? 0,
