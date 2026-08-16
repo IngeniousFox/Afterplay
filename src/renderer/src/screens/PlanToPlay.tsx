@@ -18,7 +18,7 @@ import {
   useIsExternalRefreshRunning,
   useRefreshPlanData,
 } from '../hooks/external';
-import { usePlannedGames, useSetPlanPinned } from '../hooks/games';
+import { usePlannedGamesWithExtras, useSetPlanPinned } from '../hooks/games';
 import { useDismissRadarGame, useRadarGames } from '../hooks/radar';
 import { getStoredScroll, useScrollMemory } from '../hooks/useScrollMemory';
 import { AMBER, GRAY, GREEN, TEAL, VIOLET } from '../lib/colors';
@@ -133,7 +133,11 @@ const scheduleIdle = (run: () => void): (() => void) => {
 // ficha del planeado y toda la fontanería. La divergencia es de PRESENTACIÓN.
 export const PlanToPlay = (): React.JSX.Element => {
   const navigate = useNavigate();
-  const { data: games = [], isLoading, isError, refetch } = usePlannedGames();
+  // WithExtras y no usePlannedGames a secas: esta pantalla es LA consumidora
+  // del canal de extras (sinopsis, porqué, notas, etiquetas, fecha completa).
+  // Los demás consumidores de la lista van con el canal escueto — el porqué
+  // y la medida están en hooks/games.ts e ipc/games.ts.
+  const { data: games = [], isLoading, isError, refetch } = usePlannedGamesWithExtras();
   const { attachRef, onScroll } = useScrollMemory<HTMLDivElement>(PLAN_SCROLL_KEY);
   const [queueLimit, setQueueLimit] = useState(initialQueueRows);
   const [addModalOpen, setAddModalOpen] = useState(false);

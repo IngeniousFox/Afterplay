@@ -372,6 +372,10 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
                 onClick={() => setIndex(i)}
                 aria-label={`Go to ${slot.shown.title}`}
                 title={slot.shown.title}
+                // width y no transform A PROPÓSITO, mismo motivo que los
+                // puntos de ScreenshotsCarousel: scaleX deformaría los
+                // casquetes del rounded-full y los vecinos se recolocan al
+                // crecer el activo. Fría (un clic): barata donde está.
                 className="h-1.75 cursor-pointer rounded-full transition-[width,background-color,box-shadow] duration-200"
                 style={{
                   width: active ? 18 : 7,

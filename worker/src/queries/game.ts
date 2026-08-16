@@ -14,6 +14,7 @@ import {
 } from '../../../src/shared/playthroughState';
 import type { EventDatePrecision, GameDetail, IterationDetail, StateType } from '../api-types';
 import type { TenantDb } from '../db';
+import { isSessionLive } from './timer';
 
 // La ficha completa, portada de getGameById.ts del escritorio.
 //
@@ -104,6 +105,10 @@ export const getGameDetail = async (db: TenantDb, id: number): Promise<GameDetai
           durationSec: sessionsTable.durationSec,
           datePrecision: sessionsTable.datePrecision,
           note: sessionsTable.note,
+          // Los dos últimos no se pintan: son para isSessionLive, que necesita
+          // saber quién abrió la sesión y cuándo latió por última vez.
+          startedBy: sessionsTable.startedBy,
+          lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
         })
         .from(sessionsTable)
         .where(inArray(sessionsTable.iterationId, iterationIds))
@@ -259,7 +264,21 @@ export const getGameDetail = async (db: TenantDb, id: number): Promise<GameDetai
 
   const totalHours = iterationDetails.reduce((sum, iteration) => sum + iteration.hours, 0);
   const totalSpend = spendEvents.reduce((sum, spend) => sum + spend.amount, 0);
-  const liveSession = sessions.find((session) => session.endedAt === null) ?? null;
+  // "En vivo" es la MISMA vara que la lista y el barrido del cronómetro
+  // (isSessionLive, queries/timer.ts): abierta Y fresca. Miraba solo
+  // `endedAt === null`, y con eso la ficha pintaba LIVE un cronómetro que la
+  // lista ya había dejado de pintar — dos pantallas de la misma app
+  // contestando distinto a "¿está jugando?" hasta que alguien pedía
+  // /api/timer, que es el único que barre.
+  //
+  // El reloj sale de Date.now() y no de un parámetro, igual que en
+  // buildLibraryData: la ficha no es una puerta del cronómetro (esas cuatro sí
+  // reciben `now` para no decidir la frescura con un reloj distinto del que el
+  // router tiene en la mano), es una lectura más. Y no cierra nada: esto es un
+  // GET que lee.
+  const now = Date.now();
+  const liveSession =
+    sessions.find((session) => session.endedAt === null && isSessionLive(session, now)) ?? null;
   const latestStateEvent = latestRealStateEvent(stateEvents);
 
   return {

@@ -14,6 +14,7 @@
 //
 // Lib PURA, como moments.ts: sin DB, sin Electron, testable a pelo.
 
+import { isAddedAtArtifact } from '../playthroughState';
 import type { MemorySession, Moment } from './moments';
 
 export type ChapterScope =
@@ -88,47 +89,38 @@ export type ChapterStateEvent = {
   type: string;
   occurredAt: Date;
   // Cuándo se dio de alta el juego, lo único que hace falta para reconocer el
-  // papeleo del alta (ver isMeaningfulStateEvent). Opcional porque un dato que
-  // falta no puede borrar historia — pero hoy no lo trae NADIE: la única
-  // fuente real es getMemoryFacts (main/db/queries/memories/getMemoryFacts.ts),
-  // que selecciona iteración, juego, tipo y fecha y no toca games.addedAt.
-  // Mientras siga así, la mitad "alta" del filtro no se aplica en la app.
+  // papeleo del alta (ver isMeaningfulStateEvent). Sigue siendo opcional
+  // porque un dato que falta no puede borrar historia, pero YA LO TRAE quien
+  // alimenta al Loop: getMemoryFacts (main/db/queries/memories/getMemoryFacts.ts)
+  // cuelga games.addedAt de cada evento. Antes no lo traía nadie y la mitad
+  // "alta" del filtro no llegaba a aplicarse nunca en la app.
   addedAt?: Date | null;
 };
 
-// Alta y evento inicial son dos escrituras de la MISMA transacción: caen con
-// unos milisegundos de diferencia, nunca con el mismo timestamp, así que la
-// comparación exacta no vale. Misma cifra que getGames (ADDED_AT_TOLERANCE_MS)
-// y que el Journey — es el mismo hecho medido en tres sitios.
-const ADDED_AT_TOLERANCE_MS = 5_000;
-
-// "Aquí pasó algo de verdad", escrito con el criterio del Journey
+// "Aquí pasó algo de verdad", el mismo criterio que el Journey
 // (meaningfulEvents, renderer/src/lib/journeyEntries.ts): fuera 'plan_to_play',
 // que es intención y no juego, y fuera lo que caiga pegado al alta del juego,
 // que es un efecto secundario de darlo de alta y no un hito.
 //
+// El margen del alta NO se escribe aquí: se pregunta a isAddedAtArtifact
+// (shared/playthroughState), que es donde está el porqué y el número. Esta
+// función llegó a llevar su propia copia del 5_000, igual que el Journey y que
+// el worker — cuatro copias que coincidían por costumbre y que nada obligaba a
+// seguir coincidiendo.
+//
 // Vive aquí porque el Loop y el Journey tienen que estar de acuerdo en qué
 // meses existen: meter 30 juegos viejos marcados "Beaten" sin teclear fechas
-// abre marzo en el Loop y le cobra un recap ("you finished thirty games in
+// abría marzo en el Loop y le cobraba un recap ("you finished thirty games in
 // March") de un mes en el que el Journey no pinta NI UNA carátula, así que ese
-// recap pagado no se puede leer en ninguna parte.
+// recap pagado no se podía leer en ninguna parte.
 //
-// OJO, PORQUE HOY NO ARREGLA ESE CASO: sin addedAt solo cae el 'plan_to_play',
-// y quien alimenta al Loop (getMemoryFacts) no trae la fecha de alta todavía
-// — el Journey siempre la tiene, el Loop nunca. O sea que las dos pantallas
-// SIGUEN sin estar de acuerdo, y lo estarán el día que getMemoryFacts añada
-// games.addedAt a su select y lo cuelgue de cada evento. La regla se escribe
-// aquí, y no en el consumidor, para que ese día sea una línea.
-//
-// Peaje que se paga UNA vez: un mes que llevara un 'plan_to_play' dentro cambia
-// sus hechos, así que su firma cambia y su recap sale obsoleto la primera vez
-// que se mira (medido: solo cambia en esos meses). Es correcto —esa prosa
-// narraba algo que ya no cuenta como hecho—, pero si aparece una tanda de
-// obsoletos sin haber tocado nada, viene de aquí.
+// Peaje que se paga UNA vez: un mes que llevara dentro un 'plan_to_play' —o,
+// desde que el addedAt llega de verdad, papeleo de altas— cambia sus hechos,
+// así que su firma cambia y su recap sale obsoleto la primera vez que se mira.
+// Es correcto —esa prosa narraba algo que ya no cuenta como hecho—, pero si
+// aparece una tanda de obsoletos sin haber tocado nada, viene de aquí.
 export const isMeaningfulStateEvent = (event: ChapterStateEvent): boolean =>
-  event.type !== 'plan_to_play' &&
-  (!event.addedAt ||
-    Math.abs(event.occurredAt.getTime() - event.addedAt.getTime()) >= ADDED_AT_TOLERANCE_MS);
+  event.type !== 'plan_to_play' && !isAddedAtArtifact(event.occurredAt, event.addedAt);
 
 // Un desbloqueo tal como llega del main (getMemoryFacts): ya FUNDIDO por
 // logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de
@@ -273,8 +265,9 @@ export const buildChapter = (
   }
 
   // Ni las intenciones ni el papeleo del alta son hechos del periodo: el
-  // capítulo tiene que contar lo mismo que el Journey pinta al lado. Hoy solo
-  // caen las intenciones — el porqué, en isMeaningfulStateEvent.
+  // capítulo tiene que contar lo mismo que el Journey pinta al lado. Las dos
+  // mitades del filtro se aplican de verdad desde que los eventos llegan con
+  // su addedAt — el porqué, en isMeaningfulStateEvent.
   const realEvents = events.filter(isMeaningfulStateEvent);
 
   const completions: ChapterCompletion[] = realEvents
@@ -387,13 +380,12 @@ export const listClosedPeriodsWithActivity = (
   }
   // CUALQUIER cambio de estado REAL abre mes, no solo los completados:
   // empezar, aparcar o soltar un juego es historia igual (ver
-  // ChapterStateChange). "Real" es lo que dice isMeaningfulStateEvent, que
-  // aspira a ser la misma vara con la que el Journey abre página — las dos
-  // pantallas tienen que estar de acuerdo en qué meses existen. Todavía no lo
-  // están: aquí los eventos llegan sin addedAt y solo cae el 'plan_to_play',
-  // así que el Loop sigue abriendo (y cobrando) meses cuyo único contenido es
-  // el papeleo de dar juegos de alta. El hueco y su tapa, en
-  // isMeaningfulStateEvent.
+  // ChapterStateChange). "Real" es lo que dice isMeaningfulStateEvent, la
+  // misma vara con la que el Journey abre página — las dos pantallas tienen
+  // que estar de acuerdo en qué meses existen. Durante un tiempo NO lo
+  // estuvieron: los eventos llegaban sin addedAt, solo caía el 'plan_to_play',
+  // y el Loop abría (y cobraba recap de) meses cuyo único contenido era el
+  // papeleo de dar juegos de alta.
   for (const event of events) {
     if (!isMeaningfulStateEvent(event)) continue;
     activityKeys.add(event.occurredAt.getFullYear() * 12 + event.occurredAt.getMonth());

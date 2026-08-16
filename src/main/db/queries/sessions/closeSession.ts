@@ -36,6 +36,20 @@ export const closeSessionIfOpen = async (id: number, endedAt: Date): Promise<Ses
     .limit(1);
   if (!session || session.endedAt !== null) return null;
 
+  // Un fin ANTERIOR a su propio inicio no se guarda: la fila quedaba con
+  // endedAt < startedAt y durationSec 0 (por el Math.max(0) de
+  // computeDurationSec), un dato imposible que ninguna lectura de la app sabe
+  // interpretar — y como cerrar es idempotente, esas horas medidas no se
+  // recuperaban nunca. Se deja ABIERTA, que es reversible: el watcher la
+  // cerrará bien cuando muera el proceso.
+  //
+  // La misma guarda que addStateEvent ya tenía para el mismo cálculo ("solo si
+  // el hito cae DESPUÉS del inicio de esa sesión"). Estaba en un sitio y no en
+  // el otro, y aquí la puerta la cerraba solo la convención: hoy nadie manda
+  // una fecha del pasado (el renderer manda new Date(), el watcher
+  // lastHeartbeatAt ?? startedAt).
+  if (endedAt.getTime() < session.startedAt.getTime()) return null;
+
   const durationSec = computeDurationSec(session.startedAt, endedAt);
 
   const [updated] = await db

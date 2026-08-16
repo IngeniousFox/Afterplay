@@ -36,12 +36,20 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
         planPinnedAt: null,
         endless: input.endless,
         isEmulated: input.isEmulated,
-        notes: input.gameNotes,
         executablePath: input.executablePath,
         installDirectory: input.installDirectory,
         installSizeBytes: input.installSizeBytes,
-        // null = "sin elección propia en el picker" — se conserva la que el
+        // null = "sin elección propia en el picker" — se conserva lo que el
         // juego ya tenía de cuando se planeó, no se pisa con null.
+        //
+        // `notes` entró aquí tarde y por eso: escribirlo siempre BORRABA las
+        // notas del planeado cuando el que promociona no manda ninguna. No se
+        // notaba desde el escritorio solo porque el modal se abre prellenado
+        // con ellas (AddGameModal.tsx:228) — o sea, la salvaguarda vivía en un
+        // componente del renderer y cualquier otro camino (el móvil, un
+        // script, un modal futuro) borraba en silencio. Vaciarlas a propósito
+        // sigue siendo posible desde la ficha, con updateGame({ notes: null }).
+        ...(input.gameNotes !== null ? { notes: input.gameNotes } : {}),
         ...(input.coverUrl ? { coverUrl: input.coverUrl } : {}),
         ...(input.heroUrl ? { heroUrl: input.heroUrl } : {}),
         ...(input.steamGridDbId !== null ? { steamGridDbId: input.steamGridDbId } : {}),

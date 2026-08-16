@@ -144,20 +144,22 @@ const textOf = (value: unknown): string => {
   }
 };
 
-// PUNTO CIEGO conocido, y no se tapa desde aquí: esto solo puede clasificar lo
-// que le LLEGA. Un 502 o un timeout de la tienda de Steam durante un alta con
-// source { steamAppId } no llega — getSteamStoreDetails (steam/store.ts) se
-// traga cualquier error en su catch y devuelve null, y resolveFromSteam
-// (db/queries/games/resolveGameEnrichment.ts) convierte ese null en un Error
-// pelado, sin cause, sin response.status y sin code, e indistinguible del juego
-// retirado de la tienda de verdad. Así que se clasifica como definitivo y la
-// orden se quema sin gastar ni uno de los tres intentos.
+// ESTO SOLO PUEDE CLASIFICAR LO QUE LE LLEGA, y ahí hubo un punto ciego que
+// destruía órdenes: un 502 o un timeout de la tienda de Steam durante un alta
+// con source { steamAppId } NO llegaba. getSteamStoreDetails (steam/store.ts)
+// se tragaba cualquier error y devolvía null, y resolveFromSteam
+// (db/queries/games/resolveGameEnrichment.ts) convertía ese null en un Error
+// pelado —sin cause, sin response.status y sin code— indistinguible del juego
+// retirado de la tienda de verdad: se clasificaba como definitivo y la orden se
+// quemaba sin gastar ni uno de los tres intentos.
 //
-// El arreglo vive en esos dos ficheros: que el fallo original viaje como
-// `cause`, o que la tienda devuelva un resultado discriminado. En cuanto
-// llegue, lo de aquí ya lo ve sin tocar nada. Casar el texto en castellano
-// desde este lado sería peor: ata el drenado a la redacción exacta de otro
-// módulo y reintentaría tres veces de más los juegos retirados de verdad.
+// Arreglado donde tenía que arreglarse, en esos dos ficheros: la tienda ya no
+// se traga los fallos de TRANSPORTE (los deja salir con su response.status y su
+// code), y resolveFromSteam los envuelve conservándolos en `cause`. El null
+// quedó para lo que de verdad significa "no hay ficha". Aquí no hizo falta
+// tocar nada, que era justo la idea: casar el texto en castellano desde este
+// lado ataría el drenado a la redacción exacta de otro módulo y reintentaría
+// tres veces de más los juegos retirados de verdad.
 const isTransient = (error: unknown): boolean =>
   causeChain(error).some((link) => {
     if (hasTransientShape(link)) return true;
@@ -176,9 +178,21 @@ const MAX_STORED_ERROR = 200;
 
 const conciseError = (error: unknown): string => {
   const cause = (error as { cause?: unknown })?.cause;
+  // La causa gana AUNQUE NO SEA UNA Error. Antes sólo contaba si era
+  // `instanceof Error`, y con una causa string —lo que sueltan algunas
+  // librerías, y lo que deja un `throw 'texto'`— se guardaba el mensaje del
+  // envoltorio y el dato bueno desaparecía. isTransient ya leía la cadena
+  // entera con textOf sin mirar el tipo: las dos funciones discrepaban sobre
+  // qué era "el error", y la que decide lo que ve el móvil era la miope.
+  //
+  // Lo que NO gana: una causa que no es ni Error ni texto. String() de un
+  // objeto cualquiera es '[object Object]', que dice menos que el envoltorio,
+  // así que en ese caso se sigue guardando el mensaje de fuera.
+  //
   // Por textOf y no por String() por lo mismo que arriba: esto también se
   // llama dentro del catch del bucle.
-  const message = cause instanceof Error ? cause.message : textOf(error);
+  const fromCause = cause instanceof Error || typeof cause === 'string' ? textOf(cause) : '';
+  const message = fromCause.trim().length > 0 ? fromCause : textOf(error);
   // La primera línea: los errores del motor traen la buena delante y el stack
   // detrás.
   const firstLine = message.split('\n')[0].trim();
@@ -187,12 +201,61 @@ const conciseError = (error: unknown): string => {
     : firstLine;
 };
 
+// La marca que el móvil puso al FIJAR, no el instante del drenado.
+//
+// planPinnedAt ES el orden de Up next, y una pasada aplica de golpe pines que
+// en el teléfono se hicieron con minutos de diferencia. Sellándolos con `new
+// Date()` quedaban separados sólo por lo que tardase SQLite, pudiendo empatar
+// al milisegundo — que es justo el empate contra el que reorderUpNext se
+// protege a mano subiendo los stamps (getPlannedGames.ts). El orden que
+// arrastraste en el teléfono se lo jugaba ahí, y el campo viajaba del móvil al
+// escritorio (el Worker hasta se molesta en validarlo) para que nadie lo mirase.
+//
+// El Worker ya valida el campo, pero esto es el borde con un payload JSON que
+// escribió otro proceso: un número imposible metería un Invalid Date en la
+// columna, así que si no es un instante creíble se cae al comportamiento de
+// antes (lo pone setPlanPinned: ahora).
+//
+// El futuro NO se recorta a propósito: un teléfono con el reloj adelantado deja
+// su juego al final de Up next, que es raro pero es SU orden, y reordenar desde
+// cualquiera de los dos lados lo arregla repartiendo las marcas que ya existen.
+const pinStamp = (pinnedAt: number): Date | undefined =>
+  Number.isFinite(pinnedAt) && pinnedAt > 0 ? new Date(pinnedAt) : undefined;
+
+// Los remates del alta son "si sale, sale": ninguno forma parte del juego que
+// el móvil pidió, así que ninguno puede tumbar la orden NI a los otros dos. Hoy
+// los warm* se tragan sus propios errores por dentro, pero eso es cosa suya y
+// no una garantía de la que se pueda depender desde aquí.
+const bestEffort = (what: string, run: () => void): void => {
+  try {
+    run();
+  } catch (error) {
+    // Solo ASCII, misma convención que el resto de logs del main.
+    console.warn(`[plan] ${what} fallo tras el alta (sigo):`, error);
+  }
+};
+
+// Lo que queda por hacer DESPUÉS de sellar la fila. Ver el porqué en applyEntry.
+type AfterSeal = () => void;
+
 // Aplica UNA orden llamando al código de verdad.
 //
 // Nada de UPDATEs a mano: setPlanPinned y reorderUpNext ya existen y llevan
 // dentro invariantes que a pelo se pierden — acotar por `planned = true`, y
 // repartir las marcas que YA existen en vez de inventar fechas nuevas.
-const applyEntry = async (entry: PlanMailboxEntry): Promise<void> => {
+//
+// Devuelve lo que hay que hacer DESPUÉS de que la fila esté sellada, o null.
+// EL ALTA NO ERA ATÓMICA RESPECTO AL SELLADO: createPlannedGame escribe el
+// juego y la fila no se marca procesada hasta el final del bucle, así que
+// cualquier cosa que lanzara entre medias —los remates de aquí abajo— hacía que
+// la orden se reintentase con el juego YA creado, y como games.steamAppId no
+// lleva UNIQUE salía duplicado. El mismo duplicado que la guarda de
+// reentrancia se puso a evitar, por otra puerta. Sacando los remates a después
+// del sello, entre el alta y el UPDATE no queda nada que pueda fallar.
+//
+// Regalo de la misma forma: los remates corren FUERA de withDbAccess, o sea
+// que su red ya no se hace con el candado de la DB echado.
+const applyEntry = async (entry: PlanMailboxEntry): Promise<AfterSeal | null> => {
   if (entry.type === 'add') {
     const game = await createPlannedGame({
       source: entry.source,
@@ -215,10 +278,14 @@ const applyEntry = async (entry: PlanMailboxEntry): Promise<void> => {
     // 'games:createPlanned'): sin aviso en pantalla para los logros, porque
     // planear un juego no es haberlo jugado. Curiosidades no, por lo mismo
     // que allí — se generan al pasar a la biblioteca.
-    warmImageCache(game);
-    warmSteamData(game);
-    void queueAchievementsRefreshForGame(game.id, { notify: false });
-    return;
+    return () => {
+      bestEffort('calentar la cache de imagenes', () => warmImageCache(game));
+      bestEffort('calentar los datos de Steam', () => warmSteamData(game));
+      bestEffort(
+        'encolar el catalogo de logros',
+        () => void queueAchievementsRefreshForGame(game.id, { notify: false }),
+      );
+    };
   }
 
   // El `false` de estas dos SÍ importa: significa que el juego ya no está
@@ -226,24 +293,25 @@ const applyEntry = async (entry: PlanMailboxEntry): Promise<void> => {
   // fijado que reordenar. Dejarlo pasar marcaba la orden como aplicada con
   // error null, y entonces no aparecía ni en pendientes ni en fallos.
   if (entry.type === 'pin') {
-    if (!(await setPlanPinned(entry.gameId, true))) {
+    // Con la marca del MÓVIL: ver pinStamp.
+    if (!(await setPlanPinned(entry.gameId, true, pinStamp(entry.pinnedAt)))) {
       throw new NothingMatched('el juego ya no está en tu plan');
     }
-    return;
+    return null;
   }
 
   if (entry.type === 'unpin') {
     if (!(await setPlanPinned(entry.gameId, false))) {
       throw new NothingMatched('el juego ya no está en tu plan');
     }
-    return;
+    return null;
   }
 
   if (entry.type === 'reorder') {
     if (!(await reorderUpNext(entry.orderedIds))) {
       throw new NothingMatched('ya no quedan suficientes juegos fijados que reordenar');
     }
-    return;
+    return null;
   }
 
   // Sin este `throw`, el `if` de arriba era un `else` implícito y CUALQUIER
@@ -299,8 +367,9 @@ export const drainPlanMailbox = async (): Promise<DrainResult> => {
 
     for (const row of pending) {
       let failure: string | null = null;
+      let afterSeal: AfterSeal | null = null;
       try {
-        await withDbAccess(async () => applyEntry(row.payload));
+        afterSeal = await withDbAccess(async () => applyEntry(row.payload));
         result.applied++;
         transientAttempts.delete(row.id);
       } catch (error) {
@@ -351,6 +420,11 @@ export const drainPlanMailbox = async (): Promise<DrainResult> => {
           .set({ processedAt: new Date(), error: failure })
           .where(eq(planMailboxTable.id, row.id)),
       );
+
+      // Y SOLO AHORA los remates del alta, con la orden ya fuera de peligro:
+      // lo que falle aquí no puede repetirla (ver applyEntry). Ninguno lanza
+      // —bestEffort los envuelve uno a uno—, así que esto no necesita catch.
+      afterSeal?.();
     }
 
     console.log(

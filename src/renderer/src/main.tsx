@@ -1,18 +1,54 @@
 import './assets/main.css';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RouterProvider } from 'react-router-dom';
-import Afterplay from './Afterplay';
 import TitleBar from './components/TitleBar';
 import { queryClient } from './lib/queryClient';
-import { router } from './router';
+
+// LAS DOS VENTANAS SE PARTEN AQUÍ, Y ESO ES TODO EL TRUCO DE ARRANQUE.
+//
+// index.html es UNA sola entrada para DOS ventanas muy distintas (la app y el
+// HUD del overlay), así que lo que este módulo importe de forma ESTÁTICA lo
+// pagan las dos. Antes importaba `Afterplay` y `router` arriba del todo, y el
+// resultado era un único chunk de 4,55 MB (2,08 MB ya con minificado) que
+// había que descargar, parsear y ejecutar ENTERO antes del primer píxel — en
+// las dos ventanas, incluida la del overlay, que de ahí usa el 3%.
+//
+// Con los dos `lazy` de abajo el chunk de entrada baja a 253,75 KB (React,
+// react-dom, react-query y la TitleBar) y cada ventana se trae solo su árbol:
+//   · la app      → + Afterplay, ~1749 KB (router + pantallas de escritorio)
+//   · el overlay  → + OverlayHud, 36,02 KB (+ SessionNote, 74,72 KB, que
+//                   comparte con la ficha de la app)
+// El total que carga la ventana principal no cambia (son los mismos ~2,08 MB,
+// solo que en dos trozos), pero el primer píxel ya no espera a los 2 MB: sale
+// en cuanto están los 253 KB de entrada. Y el overlay pasa de arrastrar
+// 2080,49 KB a 364,49 KB — un 82% menos, y no es un detalle: esa ventana nace
+// CON UN JUEGO YA CORRIENDO, peleando por CPU con él.
+const Afterplay = lazy(() => import('./Afterplay'));
+
+// El HUD del overlay se monta AQUÍ DIRECTAMENTE y no a través del router, a
+// propósito. La ruta '/overlay' de router.tsx renderiza exactamente esto
+// (<Suspense fallback={null}><OverlayHud /></Suspense>) — pero pasar por el
+// router obligaba a cargar el módulo del router, y ese arrastra RootLayout,
+// Library, Stats, PlanToPlay... la app de escritorio entera, para una ventana
+// que no navega a ningún sitio.
+//
+// CICATRIZ / AVISO AL SIGUIENTE: esto solo es válido mientras NADA del árbol
+// de OverlayHud consuma contexto de react-router. Se comprobó recorriendo su
+// cierre de imports (31 módulos, 0 usos de react-router). Si algún día metes
+// un <Link>, useNavigate o useLocation ahí dentro, reventará con "useX may be
+// used only in the context of a Router" — y la solución NO es volver a montar
+// el router entero, sino un router propio y mínimo para esta ventana.
+const OverlayHud = lazy(() =>
+  import('./overlay/OverlayHud').then((m) => ({ default: m.OverlayHud })),
+);
 
 // ¿Es esta la ventana del overlay in-game (OVERLAY.md §8.1)? Es la MISMA SPA
 // cargada por otra BrowserWindow con #/overlay, y aquí se decide qué monta:
-// el HUD necesita el router y NADA más. El hash ya está puesto cuando este
-// módulo evalúa — lo pone loadURL/loadFile del main antes de cargar.
+// el HUD y NADA más — ni siquiera el router (ver arriba). El hash ya está
+// puesto cuando este módulo evalúa — lo pone loadURL/loadFile del main antes
+// de cargar.
 const isOverlayWindow = window.location.hash.startsWith('#/overlay');
 
 // LA HERENCIA ENVENENADA DEL SHELL, neutralizada ANTES del primer pintado.
@@ -51,11 +87,24 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       {isOverlayWindow ? (
-        <RouterProvider router={router} />
+        // fallback null: la ventana es transparente y nace oculta — igual que
+        // hacía la ruta '/overlay' del router. No hay nada que cubrir.
+        <Suspense fallback={null}>
+          <OverlayHud />
+        </Suspense>
       ) : (
         <>
+          {/* La TitleBar se queda ESTÁTICA (su cierre de imports son 4
+              módulos) para que el marco de la ventana se pinte en el primer
+              commit, mientras el chunk gordo de Afterplay aún se está
+              parseando. fallback null y no un spinner: así el hueco de
+              contenido se ve igual que antes —vacío— solo que ahora la app
+              llega a pintar algo mucho antes en vez de estar en blanco hasta
+              tener los 2 MB ejecutados. */}
           <TitleBar />
-          <Afterplay />
+          <Suspense fallback={null}>
+            <Afterplay />
+          </Suspense>
         </>
       )}
     </QueryClientProvider>

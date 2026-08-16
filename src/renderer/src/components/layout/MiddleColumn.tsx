@@ -1,5 +1,5 @@
 import { BarChart3, ChevronDown, LayoutGrid, Search } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { GameListItem } from '../../../../shared/types';
 import { useGames, usePlannedGames } from '../../hooks/games';
@@ -175,11 +175,17 @@ const StatusSubtitle = ({ game }: { game: GameListItem }): React.JSX.Element => 
   );
 };
 
+// Qué se dice debajo del título. Un IDENTIFICADOR, no el nodo ya montado:
+// antes cada columna pasaba el subtítulo hecho un elemento JSX, y un elemento
+// nuevo por render bastaba para tirar abajo el memo de la fila (ver
+// GameRowBody). Con una cadena, la prop es igual de render a render.
+type RowSubtitle = 'status' | 'sessions';
+
 type RowProps = {
   game: GameListItem;
   selected: boolean;
   onClick: () => void;
-  subtitle: React.ReactNode;
+  subtitle: RowSubtitle;
   rightLabel: string;
   // Solo la fila seleccionada lo recibe — es el ancla para llevarla a la
   // vista (ver useSelectedRowScroll).
@@ -203,6 +209,65 @@ const SelectedOverlay = (): React.JSX.Element => (
     }}
   />
 );
+
+// TODO lo que hay DENTRO de la fila, tras un memo. Es la mitad cara —
+// carátula (useImageSrc), icono de estado (un <svg> de lucide), título — y es
+// también la que casi nunca cambia: al moverte de juego con las flechas o al
+// teclear en el buscador, la inmensa mayoría de las filas enseña exactamente
+// lo mismo que enseñaba.
+//
+// Medido en Chromium con 333 juegos (mediana de 5-7 pasadas), cambiando de
+// juego seleccionado con la lista INTACTA — o sea, sin que cambie ni una fila:
+//   sin memo   5,2 ms   <- las 333 filas se re-renderizaban enteras
+//   con memo   0,6 ms   <- 8x
+// Eso es lo que cuesta cada flecha arriba/abajo y cada clic en la lista. Al
+// teclear en el buscador también se nota, porque las filas que sobreviven al
+// filtro son las mismas de antes: la peor tecla (borrar la búsqueda de golpe,
+// 24 -> 333 filas) pasó de 16,2 ms a 13,8 ms, y la mediana de una ráfaga de 8
+// pulsaciones de 2,5 ms a 1,4 ms.
+//
+// El memo solo funciona si TODAS estas props son estables entre renders, y
+// por eso el subtítulo entra como cadena ('status' | 'sessions') en vez de
+// como nodo ya montado: un elemento JSX nuevo por render no es igual a sí
+// mismo y habría dejado el memo en decoración. Las dos props que SÍ cambian
+// cada render (onClick, rowRef) se quedan fuera, en la cáscara de abajo:
+// crear un <div> y comparar cuatro props es lo único que se paga por fila.
+const GameRowBody = memo(
+  ({
+    game,
+    selected,
+    subtitle,
+    rightLabel,
+  }: Pick<RowProps, 'game' | 'selected' | 'subtitle' | 'rightLabel'>): React.JSX.Element => (
+    <>
+      {/* En marcha DEBAJO de la selección: si el juego que juegas es además
+          el que tienes abierto, manda el marco de "estás aquí". */}
+      {game.isLive && <LiveOverlay />}
+      {selected && <SelectedOverlay />}
+      <GameCover
+        url={game.coverUrl}
+        className="relative z-1 h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border"
+        iconSize={14}
+      />
+      <div className="relative z-1 min-w-0 flex-1">
+        <div className="truncate text-[13.5px] font-semibold text-foreground">{game.title}</div>
+        <div className="mt-0.75 flex items-center gap-1.25">
+          {subtitle === 'status' ? (
+            <StatusSubtitle game={game} />
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {pluralize(game.sessionCount, 'session')}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="relative z-1 flex-none text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+        {rightLabel}
+      </div>
+    </>
+  ),
+);
+GameRowBody.displayName = 'GameRowBody';
 
 // Fila de juego con carátula — comparte marcado entre las 3 variantes,
 // solo cambia el contenido del subtítulo (estado vs nº de sesiones) y el
@@ -228,22 +293,7 @@ const GameRow = ({
       onClick={onClick}
       className="relative mb-0.5 flex cursor-pointer items-center gap-2.75 rounded-[10px] px-2.5 py-2.25 [contain-intrinsic-size:auto_66px] [content-visibility:auto] hover:bg-white/[0.04]"
     >
-      {/* En marcha DEBAJO de la selección: si el juego que juegas es además
-          el que tienes abierto, manda el marco de "estás aquí". */}
-      {game.isLive && <LiveOverlay />}
-      {selected && <SelectedOverlay />}
-      <GameCover
-        url={game.coverUrl}
-        className="relative z-1 h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border"
-        iconSize={14}
-      />
-      <div className="relative z-1 min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-semibold text-foreground">{game.title}</div>
-        <div className="mt-0.75 flex items-center gap-1.25">{subtitle}</div>
-      </div>
-      <div className="relative z-1 flex-none text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-        {rightLabel}
-      </div>
+      <GameRowBody game={game} selected={selected} subtitle={subtitle} rightLabel={rightLabel} />
     </div>
   );
 };
@@ -404,7 +454,7 @@ const LibraryNavColumn = (): React.JSX.Element => {
         onManualSelect(game.id);
         navigate(`/games/${game.id}`);
       }}
-      subtitle={<StatusSubtitle game={game} />}
+      subtitle="status"
       rightLabel={formatHours(game.totalHours)}
     />
   );
@@ -533,7 +583,7 @@ const PlanNavColumn = (): React.JSX.Element => {
               onManualSelect(game.id);
               navigate(`/plan/${game.id}`);
             }}
-            subtitle={<StatusSubtitle game={game} />}
+            subtitle="status"
             rightLabel=""
           />
         ))}
@@ -612,11 +662,7 @@ const SessionsNavColumn = (): React.JSX.Element => {
               onManualSelect(game.id);
               setSearchParams({ game: String(game.id) });
             }}
-            subtitle={
-              <span className="text-xs text-muted-foreground">
-                {pluralize(game.sessionCount, 'session')}
-              </span>
-            }
+            subtitle="sessions"
             rightLabel={formatHours(game.totalHours)}
           />
         ))}
@@ -696,7 +742,7 @@ const StatsNavColumn = (): React.JSX.Element => {
               onManualSelect(game.id);
               setSearchParams({ game: String(game.id) });
             }}
-            subtitle={<StatusSubtitle game={game} />}
+            subtitle="status"
             rightLabel={formatHours(game.totalHours)}
           />
         ))}

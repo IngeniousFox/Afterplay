@@ -26,6 +26,12 @@
 //   · PROGRESO: onProgress(running=true) al empezar cada elemento y
 //     onProgress(running=false) al acabar la racha, con done/total/failed
 //     calculados igual que siempre (total = hechos + en cola + en vuelo).
+//     Ningún aviso sale REENTRANTE desde enqueue(): el worker se cede un tick
+//     antes de arrancar, así que cuando el oyente recibe running=true la cola
+//     ya está asignada e isRunning() le dice lo mismo que el evento.
+//   · MUERTE: si revienta algo de FUERA del try por elemento (canRun,
+//     onProgress, keyOf) la racha se pierde entera, pero suelta la fila y sus
+//     reservas antes de avisar por onWorkerError — nada queda varado.
 
 export type ClaimQueueProgress<T> = {
   running: boolean;
@@ -94,6 +100,19 @@ export const createClaimQueue = <T>(options: ClaimQueueOptions<T>): ClaimQueue<T
     queue.length = 0;
   };
 
+  // Lo que se suelta cuando la racha muere de golpe. Vacía la fila y limpia el
+  // Set ENTERO en vez de recorrerla como releasePending(): keyOf() es una de
+  // las tres cosas capaces de haber matado al worker, y una limpieza que
+  // volviera a llamarlo podría reventar dentro del propio catch (dejando la
+  // fila entera dentro y una promesa rechazada suelta). Barrer el Set es
+  // además exacto: con el worker muerto no hay nadie en vuelo ni fila que
+  // atender, así que no queda ninguna reserva legítima que respetar.
+  const abandonRun = (): void => {
+    queue.length = 0;
+    claimed.clear();
+    current = null;
+  };
+
   const drain = async (): Promise<void> => {
     while (queue.length > 0) {
       // La puerta puede cerrarse a mitad de racha (clave borrada en Ajustes)
@@ -157,8 +176,27 @@ export const createClaimQueue = <T>(options: ClaimQueueOptions<T>): ClaimQueue<T
       failed = 0;
       stopRequested = false;
       options.onRunStart?.();
-      worker = drain()
+      // El arranque se cede un tick A PROPÓSITO. drain() corre en síncrono
+      // hasta su primer await —que es process()—, así que llamarlo aquí
+      // disparaba el primer onProgress de la racha DENTRO de esta misma
+      // llamada a enqueue y antes de que `worker` existiera: el oyente recibía
+      // running=true y, si preguntaba, isRunning() le contestaba false. Con el
+      // Promise.resolve() de por medio la asignación de aquí abajo ya ha
+      // ocurrido cuando drain empieza. No lo quites por "limpiarlo".
+      worker = Promise.resolve()
+        .then(drain)
         .catch((error) => {
+          // El camino de muerte del worker: todo lo que corre FUERA del try por
+          // elemento (canRun, onProgress, keyOf) tumba a drain() entero. Antes
+          // esto solo avisaba, y lo que quedaba en la fila se quedaba dentro y
+          // sobre todo RESERVADO: reencolar esos mismos elementos era un no-op
+          // (seguían reservados, así que `added` quedaba en false y tampoco
+          // arrancaba worker) y se quedaban varados hasta reiniciar la app, o
+          // resucitaban de tapadillo en la racha de cualquier otro elemento,
+          // mezclados en su cuenta; y el progreso final anunciaba un total que
+          // ya nunca se alcanzaría. Ahora la muerte suelta lo pendiente igual
+          // que la puerta o el stop: se pierde la racha, no los elementos.
+          abandonRun();
           options.onWorkerError(error);
         })
         .finally(() => {

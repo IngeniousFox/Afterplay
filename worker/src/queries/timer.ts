@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { gamesTable, iterationsTable, sessionsTable } from '../../../src/main/db/schema';
 import { computeDurationSec } from '../../../src/main/db/queries/sessions/sessionDuration';
 import { endsPlaythrough, latestRealStateEvent } from '../../../src/shared/playthroughState';
+import { TIMER_STALE_MS, isTimerStale, timerLastBeat } from '../../../src/shared/timerFreshness';
 import { stateEventsTable } from '../../../src/main/db/schema';
 import type { ActiveTimer } from '../api-types';
 import type { TenantDb } from '../db';
@@ -137,21 +138,35 @@ const resolveIterationForTimer = async (
   return { iterationId: last.id, needsStartEvent: true };
 };
 
-// Cuánto puede callarse un cronómetro antes de darlo por abandonado (§7.4).
+// "Sigue jugando AHORA", que no es lo mismo que "la fila no tiene endedAt".
 //
-// Seis horas, el MISMO número que ProcessWatcher.TIMER_STALE_HOURS, y por el
-// mismo motivo: los navegadores móviles suspenden las pestañas de fondo sin
-// piedad, así que el latido se para MIENTRAS SIGUES JUGANDO (§7.5). Un umbral
-// corto partiría por la mitad una tarde de consola con el móvil en el
-// bolsillo; el precio opuesto —dormirse con el cronómetro puesto suma hasta
-// seis horas de más— está asumido en el §7.6 y se corrige editando la sesión.
+// Vive aquí, junto al resto del cronómetro, y lo aplican los TRES que
+// contestan esa pregunta: la lista (buildLibraryData), la ficha
+// (getGameDetail) y el barrido de aquí abajo. Estuvo solo en dos de los tres
+// y el resultado era que la ficha pintaba LIVE un cronómetro que la lista ya
+// no pintaba: dos pantallas de la misma app contestando distinto a "¿está
+// jugando?" hasta que alguien pedía /api/timer.
 //
-// Está escrito dos veces, aquí y en el watcher (ProcessWatcher.
-// TIMER_STALE_HOURS). El sitio bueno es src/shared, junto a playthroughState,
-// que es donde ya viven las reglas que los dos lados comparten: mientras siga
-// aquí, tocar un número obliga a tocar el otro. Dentro del Worker se exporta
-// para que la biblioteca aplique la MISMA vara sin una tercera copia.
-export const TIMER_STALE_MS = 6 * 3_600_000;
+// Las de CRONÓMETRO llevan pegada la regla de frescura del §7.4 —la
+// compartida con el watcher, ver src/shared/timerFreshness—: se abren desde el
+// móvil y se olvidan (§7.6), así que un latido de hace horas significa
+// abandonada.
+//
+// Las del WATCHER se quedan como estaban, y no es un olvido: su regla no es un
+// umbral de tiempo sino "¿sigue vivo el proceso?", y eso solo lo puede
+// contestar el PC. Su latido además se pausa cuando la pantalla se bloquea, o
+// sea que un latido viejo ahí no significa nada. Una que quede abierta por un
+// corte de luz sigue pintando LIVE hasta que el PC arranque y reconcilie:
+// mismo comportamiento que el escritorio, y no es una consulta quien lo
+// cambia.
+//
+// Cerrarlas tampoco es cosa de quien pregunta: la lista y la ficha son
+// LECTURAS. El único que cierra es getActiveTimer, y que un GET escriba ya es
+// bastante excepción con una.
+export const isSessionLive = (
+  session: { startedBy: 'watcher' | 'timer'; startedAt: Date; lastHeartbeatAt: Date | null },
+  now: number,
+): boolean => (session.startedBy !== 'timer' ? true : !isTimerStale(session, now));
 
 // La sesión de cronómetro VIVA ahora mismo, si la hay. Como mucho una: el
 // §7 no contempla cronometrar dos juegos a la vez, y permitirlo sería casi
@@ -165,14 +180,15 @@ export const TIMER_STALE_MS = 6 * 3_600_000;
 //
 // Los otros que lo preguntan, y cómo quedan:
 //   - isLive de /api/library y el `live` de /api/stats/summary: NO esperan a
-//     este barrido, aplican la misma vara ellos mismos (buildLibraryData
-//     importa TIMER_STALE_MS). Sin eso, abrir la portada pintaba LIVE un
-//     cronómetro rancio si la carga llegaba antes que este GET.
+//     este barrido, aplican la misma vara ellos mismos (isSessionLive, aquí
+//     arriba). Sin eso, abrir la portada pintaba LIVE un cronómetro rancio si
+//     la carga llegaba antes que este GET.
+//   - isLive de /api/games/:id (queries/game.ts): lo mismo, y por lo mismo.
+//     Antes miraba solo `endedAt === null` y era la puerta que quedaba
+//     abierta: hasta el primer barrido, la ficha enseñaba LIVE un cronómetro
+//     que la lista ya no enseñaba.
 //   - la guarda de startTimer: llama aquí primero, así que barre y decide con
 //     la base ya limpia.
-//   - isLive de /api/games/:id (queries/game.ts): ese sigue mirando solo
-//     `endedAt === null`. Es la puerta que queda abierta; hasta el primer
-//     barrido, la ficha enseña LIVE un cronómetro que la lista ya no enseña.
 //
 // ESTO ESCRIBE, y es el handler de un GET. Es a propósito y no hay otro sitio:
 // el barrido tiene que ocurrir en el hueco en que el PC está apagado, y en ese
@@ -209,9 +225,10 @@ export const getActiveTimer = async (db: TenantDb, now: number): Promise<ActiveT
 
   for (const row of rows) {
     // Si nunca llegó a latir (la pestaña murió en el primer minuto), el
-    // arranque hace de latido: es lo mismo que hace el watcher.
-    const lastBeat = row.lastHeartbeatAt ?? row.startedAt;
-    if (now - lastBeat.getTime() < TIMER_STALE_MS) {
+    // arranque hace de latido: no es "lo mismo que hace el watcher", es
+    // LITERALMENTE la función del watcher (src/shared/timerFreshness).
+    const lastBeat = timerLastBeat(row);
+    if (!isTimerStale(row, now)) {
       // Vienen ordenadas por id descendente: la primera fresca es la última.
       if (!live) live = row;
       continue;
@@ -343,7 +360,63 @@ export const startTimer = async (
 // El latido. Frecuencia de ~1 por minuto: una sesión de tres horas son 180
 // peticiones, nada frente a las 100.000 diarias del plan gratuito. El watcher
 // late cada ~5s porque puede; aquí sería quemar peticiones sin ganar nada.
+//
+// UN LATIDO QUE LLEGA TARDE NO RESUCITA NADA (§7.4). Antes esto era un UPDATE
+// pelado con `endedAt IS NULL`, así que la PWA volviendo del limbo a las diez
+// horas —el caso NORMAL, no el raro: el §7.5 dice justo que los navegadores
+// móviles suspenden las pestañas de fondo— declaraba fresca otra vez una
+// sesión que ya estaba abandonada, y esas diez horas de silencio acababan
+// contadas como jugadas. Bastaba con que ese latido llegara antes de que
+// alguien pidiera /api/timer.
+//
+// Ese latido CIERRA, no reanuda, y la tabla del §7.4 no deja otra lectura:
+// "latido rancio (horas sin latir) → abandonada: se cierra en el último
+// latido". Se cierra igual que el barrido —en el último latido, no ahora— y se
+// contesta `false`, que es lo que la PWA ya sabe leer (TimerBar invalida su
+// consulta y el contador desaparece). El "parar" explícito sigue mandando
+// (§7.5): eso es un gesto tuyo y llega por stopTimer, esto es una pestaña que
+// despierta sola.
 export const beatTimer = async (db: TenantDb, sessionId: number, now: number): Promise<boolean> => {
+  const [session] = await db
+    .select({
+      id: sessionsTable.id,
+      startedAt: sessionsTable.startedAt,
+      lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
+    })
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.id, sessionId),
+        isNull(sessionsTable.endedAt),
+        eq(sessionsTable.startedBy, 'timer'),
+      ),
+    )
+    .limit(1);
+
+  // Ni existe, ni es del cronómetro, ni sigue abierta: nada que latir. Sin
+  // distinguir cuál de los tres, igual que antes — el latido no es sitio para
+  // contarle al móvil qué pasó con su sesión.
+  if (!session) return false;
+
+  if (isTimerStale(session, now)) {
+    const lastBeat = timerLastBeat(session);
+    // El MISMO cierre que el barrido de getActiveTimer, con la misma guarda:
+    // el `endedAt IS NULL` deja ganar a un "parar" que llegue a la vez en vez
+    // de pisarle la hora de fin.
+    const closed = await db
+      .update(sessionsTable)
+      .set({ endedAt: lastBeat, durationSec: computeDurationSec(session.startedAt, lastBeat) })
+      .where(and(eq(sessionsTable.id, sessionId), isNull(sessionsTable.endedAt)))
+      .returning({ id: sessionsTable.id });
+
+    if (closed.length > 0) {
+      console.log(
+        `[timer] [info] latido tardio en la sesion ${sessionId} tras ${TIMER_STALE_MS / 3_600_000}h mudo - cerrada en su ultimo latido`,
+      );
+    }
+    return false;
+  }
+
   const rows = await db
     .update(sessionsTable)
     .set({ lastHeartbeatAt: new Date(now) })

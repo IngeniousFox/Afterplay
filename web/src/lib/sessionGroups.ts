@@ -8,8 +8,14 @@ const startOfDayMs = (value: Date | number): number => {
   return date.getTime();
 };
 
-// Cubos de fecha para las cabeceras, portados TAL CUAL de Sessions.tsx del
-// escritorio. Cuanto más lejos en el tiempo, más grueso el cubo: nadie
+// Cubos de fecha para las cabeceras, portados TAL CUAL del escritorio
+// (src/renderer/src/lib/sessionGroups.ts, que es donde vive el original desde
+// que salió de dentro de la pantalla de Sesiones). La diferencia de firma es
+// el monthScopeKey: allí acompaña al label para enganchar la tarjeta de recap
+// del diario, y aquí no hay diario que enganchar, así que solo viaja el label.
+// El test de paridad compara los labels de los dos, uno a uno.
+//
+// Cuanto más lejos en el tiempo, más grueso el cubo: nadie
 // necesita saber el día exacto de hace dos años, pero sí el de ayer.
 //
 // Mi primera versión inventaba otra escala (Today / Yesterday / la fecha

@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useImageSrc } from '../../../hooks/useImageSrc';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
+import { useOffscreenAnimation } from '../../../hooks/useOffscreenAnimation';
 import { formatElapsed } from '../../../lib/format';
 import { getGameStatusMeta, STATUS_META } from '../../../lib/gameStatus';
 import { CoverThumb } from '../add-game/CoverThumb';
@@ -62,6 +63,13 @@ export const HeroBanner = ({
   // el evento de plan — ver getGameById) — su badge es el del Plan.
   const status = game.planned ? STATUS_META.plan : getGameStatusMeta(game.currentState);
   const elapsedSeconds = useLiveTimer(liveSince);
+  // El badge PLAYING pulsa box-shadow (pulse-badge — categoría paint: pasa
+  // por style+paint en el main thread cada frame) y el hero vive arriba del
+  // todo de una ficha que scrollea: leyendo logros o notas del juego EN
+  // MARCHA, el badge seguía repintando fuera de pantalla los ~2 nodos, 60
+  // veces por segundo. Pausado fuera de la vista, idéntico dentro (mismos
+  // keyframes, misma fase al volver) — ver useOffscreenAnimation.
+  const { observe: observeBadge, playState: badgePlayState } = useOffscreenAnimation();
 
   const meta = [
     game.genres?.join(', '),
@@ -109,16 +117,21 @@ export const HeroBanner = ({
 
           {liveSince && (
             <div
+              ref={observeBadge}
               className="flex items-center gap-1.75 rounded-[9px] border px-2.75 py-1.5"
               style={{
                 background: 'rgba(8,20,13,.7)',
                 borderColor: 'rgba(47,220,126,.55)',
                 animation: 'afterplay-pulse-badge 2.4s infinite',
+                animationPlayState: badgePlayState,
               }}
             >
               <span
                 className="h-1.5 w-1.5 rounded-full bg-primary"
-                style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
+                style={{
+                  animation: 'afterplay-pulse-dot 1.4s infinite',
+                  animationPlayState: badgePlayState,
+                }}
               />
               <span className="text-[10px] font-extrabold tracking-[.1em] text-primary">
                 PLAYING

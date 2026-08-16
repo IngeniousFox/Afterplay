@@ -3,6 +3,7 @@ import { getDb } from '../..';
 import { endsPlaythrough, latestRealStateEvent } from '../../../../shared/playthroughState';
 import type { StateEvent } from '../../../../shared/types';
 import { gamesTable, iterationsTable, stateEventsTable } from '../../schema';
+import { nextPlaythroughLabel } from '../iterations/nextPlaythroughLabel';
 
 // El `tx` de una transacción de drizzle — mismo query builder que la
 // conexión, tipado desde ella para no importar internos de drizzle.
@@ -11,6 +12,12 @@ type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 export type ResolvedIteration = {
   iterationId: number;
 };
+
+// El día natural LOCAL de una fecha, para preguntar "¿esto es de hoy?". Local
+// y no UTC porque el usuario ve —y teclea— días locales: una sesión de las
+// 23:30 es de hoy aunque en UTC ya sea mañana.
+const startOfLocalDay = (date: Date): number =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 // "¿En qué playthrough cae jugar a este juego AHORA (o en `at`)?" — la regla
 // única de SPEC 4/4.5 que antes vivía dentro de startGameSession, extraída
@@ -44,15 +51,35 @@ export type ResolvedIteration = {
 //     que no estuviera ya activo, solo deja un "Started" de más en el Journey
 //     y mueve el ancla de las horas manuales.
 //
-// SIEMPRE dentro de una transacción del que llama — esto escribe (evento, y
+// Y `at` tampoco es siempre "ahora": si la jugada es de un DÍA ANTERIOR a
+// `now` es HISTORIA, y un playthrough que nace de historia nace con su
+// desenlace puesto ('completed'). Sin eso, asignar una sesión de hace un mes
+// dejaba el juego en "Playing" HOY —su último evento era el 'started' fechado
+// en julio— y así se quedaba hasta que alguien lo cerrase a mano: la misma
+// forma de fantasma que se describe arriba, por el otro camino. Beaten por
+// defecto es decisión del dueño: un playthrough histórico tiene que nacer con
+// un estado, y si en realidad lo dropeaste se edita después (lo que no puede
+// pasar es que el juego se quede Playing por una sesión vieja).
+//
+// El corte es el DÍA natural y no un margen en minutos: la sesión de emulador
+// que asignas por la noche es la de esta tarde, y ese juego SÍ es el que estás
+// jugando; la de la semana pasada ya no.
+//
+// `now` es un parámetro y no `new Date()` a pelo para que el reloj sea
+// inyectable: los tests fijan las dos fechas y así no cambian de resultado
+// según el día en que se ejecuten (con las dos fechas iguales se prueba la
+// puerta del watcher/Play, que siempre juega AHORA).
+//
+// SIEMPRE dentro de una transacción del que llama — esto escribe (eventos, y
 // a veces la iteración nueva) y no debe quedar a medias.
 export const resolveIterationForPlay = async (
   tx: Tx,
   gameId: number,
   at: Date,
+  now: Date = new Date(),
 ): Promise<ResolvedIteration> => {
   const iterations = await tx
-    .select({ id: iterationsTable.id })
+    .select({ id: iterationsTable.id, label: iterationsTable.label })
     .from(iterationsTable)
     .where(eq(iterationsTable.gameId, gameId))
     .orderBy(asc(iterationsTable.id));
@@ -68,6 +95,15 @@ export const resolveIterationForPlay = async (
   // Iteraciones que ya tienen un 'started' en `at` o después: para ellas el
   // insert de abajo sobra, la activación ya está escrita y con mejor fecha.
   const startedFromAt = new Set<number>();
+  // Los playthroughs históricos que fabricó ESTA función: log de exactamente
+  // dos eventos, 'started' y 'completed', en el MISMO instante. Es una firma
+  // que una mano no produce (las fechas tecleadas caen a medianoche del día y
+  // el desenlace nunca coincide al milisegundo con el arranque) y hace falta
+  // para no partir un mismo tirón en N playthroughs: las sesiones pendientes
+  // de emulador se asignan de varias en varias, y si cada una viera "el último
+  // terminó" abriría otro Playthrough — cinco tardes de la misma partida,
+  // cinco playthroughs Beaten. Ver el bloque de creación de abajo.
+  const autoClosedRuns = new Set<number>();
 
   if (iterations.length > 0) {
     const events = await tx
@@ -113,6 +149,16 @@ export const resolveIterationForPlay = async (
         (event) => event.type === 'started' && event.occurredAt.getTime() >= atMs,
       );
       if (alreadyStarted) startedFromAt.add(iterationId);
+
+      // Los eventos vienen ordenados por fecha y, a igualdad, por id: el
+      // 'completed' que se escribe justo después del 'started' es el segundo.
+      const real = iterationEvents.filter((event) => event.type !== 'plan_to_play');
+      const isAutoClosedRun =
+        real.length === 2 &&
+        real[0].type === 'started' &&
+        real[1].type === 'completed' &&
+        real[0].occurredAt.getTime() === real[1].occurredAt.getTime();
+      if (isAutoClosedRun) autoClosedRuns.add(iterationId);
     }
   }
 
@@ -164,20 +210,44 @@ export const resolveIterationForPlay = async (
     .where(eq(gamesTable.id, gameId))
     .limit(1);
 
+  // ¿Se está jugando AHORA o se está registrando algo que ya pasó? Solo lo
+  // segundo puede dejar el estado de hoy mintiendo (ver cabecera).
+  const isPastPlay = startOfLocalDay(at) < startOfLocalDay(now);
+  // Si el playthrough nace de una jugada del pasado, nace terminado.
+  let bornClosed = false;
+
   if (!lastIteration || (endsPlaythrough(lastType) && !game?.endless)) {
     // Sin iteraciones o la última terminó (Beaten/Dropped): retomar es un
-    // playthrough NUEVO (SPEC 4).
+    // playthrough NUEVO (SPEC 4)...
+
+    // ...salvo que la última sea uno de los históricos que esta misma función
+    // cerró al vuelo y esto sea otra sesión vieja del mismo tirón: la segunda
+    // tarde no estrena partida, se cuelga de la misma. Sin evento nuevo — el
+    // playthrough ya tiene su arranque y su desenlace, y las horas van por la
+    // sesión, no por el log.
+    if (isPastPlay && lastIteration && autoClosedRuns.has(lastIteration.id)) {
+      return { iterationId: lastIteration.id };
+    }
+
     const [created] = await tx
       .insert(iterationsTable)
       .values({
         gameId,
-        label: `Playthrough ${iterations.length + 1}`,
+        label: nextPlaythroughLabel(iterations.map((iteration) => iteration.label)),
         playedPlatform: game?.isEmulated ? 'Emulated' : (game?.officialPlatforms?.[0] ?? 'PC'),
         origin: 'Purchased',
         format: 'digital',
       })
       .returning({ id: iterationsTable.id });
     targetIterationId = created.id;
+    // Nace cerrado solo si es historia Y venía de un desenlace: una segunda
+    // vuelta a algo que ya te habías pasado, registrada a toro pasado, es una
+    // partida terminada. Se deja fuera a propósito el primer playthrough de un
+    // juego que no tenía ninguno (asignarle una sesión vieja a un juego recién
+    // metido en la biblioteca): ahí no hay ningún desenlace previo que diga
+    // que su historia está cerrada, y lo más probable es que esa partida siga
+    // en marcha.
+    bornClosed = isPastPlay && endsPlaythrough(lastType);
   } else {
     // Reanudar la última iteración: un on_hold/resting, un Playthrough
     // recién creado por Add Game que nunca se tocó, o el contenedor único de
@@ -185,7 +255,8 @@ export const resolveIterationForPlay = async (
     targetIterationId = lastIteration.id;
   }
 
-  // Evento 'started' para dejar el playthrough activo. Va por insert directo y
+  // Evento 'started' para dejar el playthrough activo (salvo que nazca ya
+  // cerrado: el 'completed' de justo debajo). Va por insert directo y
   // no por addStateEvent —o sea, sin su auto-pausa de hermanos— y eso solo es
   // legítimo porque aquí arriba ya se ha descartado que haya ninguno activo,
   // ni a fecha `at` ni hoy: no queda nadie a quien pausar.
@@ -203,6 +274,22 @@ export const resolveIterationForPlay = async (
       datePrecision: 'datetime',
       note: null,
     });
+
+    // Y su desenlace, en el mismo instante, si el playthrough acaba de nacer
+    // para una jugada del pasado. Mismo instante y no "al final de la sesión"
+    // porque aquí no se sabe cuánto duró (`at` es el arranque y la sesión la
+    // cuelga el que llama): la fecha honesta es la de la partida, y el orden
+    // lo desempata el id (latestRealStateEvent), así que el estado que se
+    // deriva es Beaten y no Playing.
+    if (bornClosed) {
+      await tx.insert(stateEventsTable).values({
+        iterationId: targetIterationId,
+        type: 'completed',
+        occurredAt: at,
+        datePrecision: 'datetime',
+        note: null,
+      });
+    }
   }
 
   return { iterationId: targetIterationId };

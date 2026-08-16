@@ -61,9 +61,22 @@ const segmentsOf = (usage: ImageCacheUsage): UsageSegment[] =>
 // empezar ni al terminar.
 const RedownloadBar = ({ done, total }: { done: number; total: number }): React.JSX.Element => (
   <div className={`${BAR_CLASS} bg-white/[0.06]`}>
+    {/* transform y no width: la redescarga emite un evento cada 25 imágenes
+        (decenas de miles entre carátulas, heroes y los dos iconos de cada uno
+        de los 39.808 logros) y cada evento redirige esta transición de 500ms,
+        así que la barra está en transición casi continua durante toda la
+        pasada de minutos — con width eso era layout + paint en el hilo
+        principal en cada frame; translateX corre entero en el compositor.
+        Idéntico en pantalla: relleno a ancho completo desplazado a la
+        izquierda lo que le falte, con el overflow-hidden + rounded-full del
+        contenedor recortando el borde izquierdo con el mismo radio (5px,
+        mitad de h-2.5) que tenía el casquete propio del relleno. */}
     <div
-      className="h-full rounded-full transition-[width] duration-500 ease-out"
-      style={{ width: `${total === 0 ? 0 : (done / total) * 100}%`, background: AMBER }}
+      className="h-full w-full rounded-full transition-transform duration-500 ease-out"
+      style={{
+        transform: `translateX(${(total === 0 ? 0 : (done / total) * 100) - 100}%)`,
+        background: AMBER,
+      }}
     />
   </div>
 );

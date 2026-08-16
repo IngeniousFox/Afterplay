@@ -307,6 +307,17 @@ const SeeAllTile = ({
   );
 };
 
+// El cronómetro de PLAYING NOW en su propio componente: useLiveTimer vivía
+// en la raíz de TvHome y su tick de 1s re-renderizaba el árbol entero — 49
+// componentes POR SEGUNDO con el hero en vivo (medido con el harness de 994
+// juegos contando fibers que trabajaron en cada commit). Aquí el tick
+// re-renderiza SOLO este span: 1 componente. Mismo texto, misma clase —
+// cero cambio visual.
+const HeroLiveClock = ({ since }: { since: Date | null }): React.JSX.Element => {
+  const seconds = useLiveTimer(since);
+  return <span className="tabular-nums">{formatElapsed(seconds)}</span>;
+};
+
 // La puerta al Journey al pie del Home: el recap más reciente del Loop en
 // una tarjeta violeta (violeta = memoria, como en toda la casa) que con A
 // abre el libro entero. La historia generada deja de vivir escondida en su
@@ -440,7 +451,6 @@ export const TvHome = (): React.JSX.Element => {
   const spotHeroSrc = useImageSrc(spotGame?.heroUrl ?? null, 'heroes');
   const spotCoverSrc = useImageSrc(spotGame?.coverUrl ?? null, 'covers');
   useTvBackdrop(spotHeroSrc ?? spotCoverSrc);
-  const liveSeconds = useLiveTimer(hero?.isLive ? (hero.liveSince ?? null) : null);
 
   const playing = useMemo(
     () =>
@@ -553,10 +563,20 @@ export const TvHome = (): React.JSX.Element => {
   // llevaba esa carátula de abajo — y el glideIntoView del foco arrastraba el
   // scroll hasta la estantería, pisando el scrollTop que el useLayoutEffect
   // acababa de restaurar. Volvías a un sitio en el que nunca estuviste.
-  const openGame = (game: GameListItem, focusOnReturn: number | null = game.id): void => {
+  //
+  // El "sin pasar nada = el propio juego" se resuelve DENTRO del cuerpo, no
+  // con un valor por defecto en la firma: `focusOnReturn = game.id` (default
+  // que lee otro parámetro) es una MemberExpression no reordenable para el
+  // React Compiler y le hacía saltarse TvHome ENTERO. Con la raíz sin
+  // memoizar, cada cambio de spotId (cada movimiento de foco por las
+  // estanterías) re-renderizaba el árbol otra vez: 50 componentes en ese
+  // commit, 91 por pulsación sumando sus 3 commits. Compilado, la pulsación
+  // baja a 41 — y 39 de esos son el fanout del contexto de foco, que vive en
+  // focusContext.ts (medido con el harness de 994 juegos).
+  const openGame = (game: GameListItem, focusOnReturn?: number | null): void => {
     rememberHome({
       scrollTop: scrollRef.current?.scrollTop ?? 0,
-      focusGameId: focusOnReturn,
+      focusGameId: focusOnReturn === undefined ? game.id : focusOnReturn,
     });
     void navigate(`/tv/game/${game.id}`);
   };
@@ -774,7 +794,7 @@ export const TvHome = (): React.JSX.Element => {
                   </span>
                   PLAYING NOW
                   <span aria-hidden className="h-[0.9em] w-px bg-[#2fdc7e]/30" />
-                  <span className="tabular-nums">{formatElapsed(liveSeconds)}</span>
+                  <HeroLiveClock since={hero.liveSince ?? null} />
                 </div>
               ) : (
                 <div

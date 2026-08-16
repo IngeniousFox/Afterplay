@@ -1,6 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  CredentialsImportResult,
   CredentialsValues,
   OverlayShortcutStatus,
   SyncFailureInfo,
@@ -197,6 +198,31 @@ export const useSetCredentials = (): UseMutationResult<
     onSuccess: (saved) => {
       // El main devuelve los valores ya normalizados — se fijan directos.
       queryClient.setQueryData(queryKeys.settings.credentials, saved);
+    },
+  });
+};
+
+// Exportar no cambia NADA de la app: solo escribe un fichero fuera de ella,
+// igual que el backup manual — nada que invalidar ni que fijar.
+export const useExportCredentials = (): UseMutationResult<string, Error, string, unknown> =>
+  useMutation({
+    mutationFn: (directory: string) => window.api.settings.exportCredentials(directory),
+  });
+
+// Importar sí: deja las credenciales en otro sitio, y el main devuelve las
+// resultantes ya fusionadas y normalizadas, así que se fijan igual que en
+// useSetCredentials en vez de invalidar y volver a pedirlas.
+export const useImportCredentials = (): UseMutationResult<
+  CredentialsImportResult,
+  Error,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filePath: string) => window.api.settings.importCredentials(filePath),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.settings.credentials, result.values);
     },
   });
 };

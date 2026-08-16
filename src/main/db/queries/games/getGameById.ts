@@ -26,14 +26,21 @@ import { resolveIterationHours } from './iterationHours';
 // (SPEC 4.4): aquí es donde el log de eventos se convierte en las fechas, el
 // estado y las horas que enseña la app. Nada de eso está almacenado.
 //
-// Cinco SELECTs y todo el trabajo en JS, igual que getGames y por el mismo
-// motivo: agrupar en memoria una vez es más simple y más barato que pelearse
-// con JOINs que repiten filas.
+// Cinco SELECTs y todo el trabajo en JS: agrupar en memoria una vez es más
+// simple y más barato que pelearse con JOINs que repiten filas.
+//
+// Y aquí NO se agrega en SQL como sí hace ya getGames con las sesiones, a
+// propósito: esta consulta no se trae ni una fila que no acabe VIAJANDO al
+// renderer — las sesiones son el Session History, los stateEvents el Journey
+// y los spendEvents el historial de gasto. No hay nada que colapsar. Medido
+// sobre la biblioteca real: 1,0 ms de media y 1,4 ms el peor de los 333 (el
+// juego con 20 sesiones); con 95 sesiones en un solo juego, 2,7 ms. El coste
+// crece con lo que la ficha ENSEÑA, que es lo justo.
 //
 // Por iteración salen: las horas (manual + trackeado), la fecha de inicio (lo
-// más temprano entre su primera sesión y su primer 'started'), la de fin (el
-// último evento terminal, y SOLO si sigue en ese estado ahora — uno reabierto
-// no tiene fin), su estado actual y su parte del gasto.
+// más temprano entre su primera sesión MEDIDA y su primer 'started'), la de
+// fin (el último evento terminal, y SOLO si sigue en ese estado ahora — uno
+// reabierto no tiene fin), su estado actual y su parte del gasto.
 export const getGameById = async (id: number): Promise<GameDetail | null> => {
   const db = getDb();
 
@@ -98,12 +105,20 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   // (SPEC 4, el gasto es del juego, no de un playthrough concreto), así que
   // se infiere por fecha: cada gasto cae en el primer playthrough que
   // seguía "abierto" (sin terminar en completed/dropped) en su fecha. Un
-  // playthrough ya terminado no puede reclamar gasto posterior a su cierre
-  // — eso pasa al siguiente playthrough (o al último si no hay más). Un
-  // gasto muy anterior al primer playthrough (el juego comprado semanas
-  // antes de arrancarlo) cae en ese primer playthrough. on_hold/resting no
-  // cierran la ventana (mismo criterio que crear una iteración nueva al
-  // volver a "Playing", ver StatusCard.tsx/ActionBar.tsx).
+  // playthrough ya terminado no puede reclamar gasto ESTRICTAMENTE posterior
+  // a su cierre — eso pasa al siguiente playthrough (o al último si no hay
+  // más). Un gasto muy anterior al primer playthrough (el juego comprado
+  // semanas antes de arrancarlo) cae en ese primer playthrough. on_hold/
+  // resting no cierran la ventana (mismo criterio que crear una iteración
+  // nueva al volver a "Playing", ver StatusCard.tsx/ActionBar.tsx).
+  //
+  // El instante del cierre entra TODAVÍA en su propia ventana ('<=' y no
+  // '<'), y eso es una corrección, no un detalle: la fecha del completed y la
+  // del gasto se teclean las dos con precisión de día (medianoche), así que
+  // comprar el DLC el mismo día que te pasas el juego empata exacto. Con el
+  // '<' estricto ese dinero se le colgaba al playthrough siguiente, que ese
+  // día ni existía —el siguiente puede arrancar meses después—. El día que lo
+  // cerraste todavía estabas jugándolo.
   //
   // El "último" sale del helper compartido y no de la última fila del array:
   // ignora 'plan_to_play' (historial de intención, nunca estado) y desempata
@@ -130,7 +145,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     for (const iteration of iterations) {
       chosen = iteration;
       const terminalAt = terminalAtByIteration.get(iteration.id) ?? null;
-      if (terminalAt === null || spend.occurredAt < terminalAt) break;
+      if (terminalAt === null || spend.occurredAt <= terminalAt) break;
     }
     if (chosen) {
       spendByIteration.set(chosen.id, (spendByIteration.get(chosen.id) ?? 0) + spend.amount);
@@ -153,15 +168,25 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     const latestEvent = latestRealStateEvent(iterationStateEvents);
 
     // Modelo v2 — fechas DERIVADAS, el log de estados es la fuente de
-    // verdad. Inicio: lo más temprano entre la primera sesión real y el
+    // verdad. Inicio: lo más temprano entre la primera sesión MEDIDA y el
     // primer evento 'started' (los eventos vienen ya ordenados asc de la
     // query). Fin: la fecha del último evento terminal, solo si el
     // playthrough ESTÁ en un estado terminal ahora (uno reabierto no tiene
     // "fin" aunque tuviera un completed antiguo en el log).
+    //
+    // El '!isManual' no es cosmético: una sesión manual es un bloque de horas
+    // TECLEADO (filas heredadas del modelo v1), no algo que el watcher viera
+    // pasar. Sin el filtro, una de esas filas de 2020 arrastraba el inicio
+    // hasta su fecha gruesa y, peor, ponía startedBySession=true — que es
+    // justo la señal con la que el Edit bloquea la fecha "porque una medición
+    // no se falsea" (IterationSection.tsx, EditGameModal.tsx, handleSave.ts):
+    // se bloqueaba la edición de una fecha que nadie midió, y encima sin
+    // ningún evento que corregir. Mismo criterio que Stats y
+    // shared/memory/moments.ts, que ya descartaban esas filas.
     const startEventRow = iterationStateEvents.find((event) => event.type === 'started') ?? null;
     const firstSessionAt = iterationSessions.reduce<Date | null>(
       (earliest, session) =>
-        earliest === null || session.startedAt.getTime() < earliest.getTime()
+        !session.isManual && (earliest === null || session.startedAt.getTime() < earliest.getTime())
           ? session.startedAt
           : earliest,
       null,

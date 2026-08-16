@@ -1,7 +1,23 @@
-import { AlertTriangle, ChevronDown, Eye, EyeOff, KeyRound, Save } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  HardDriveDownload,
+  KeyRound,
+  Save,
+  Upload,
+} from 'lucide-react';
 import { useState } from 'react';
 import type { CredentialsValues } from '../../../../shared/types';
-import { useCredentials, useSetCredentials, useSyncFailure } from '../../hooks/settings';
+import {
+  useCredentials,
+  useExportCredentials,
+  useImportCredentials,
+  useSetCredentials,
+  useSyncFailure,
+} from '../../hooks/settings';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
 import { accentGradientStyle, expandClass } from '../../lib/styles';
 import { AMBER, BLUE } from '../../lib/colors';
@@ -134,6 +150,13 @@ const draftFrom = (read: (key: FieldKey) => string): Record<FieldKey, string> =>
 
 const EMPTY_DRAFT = draftFrom(() => '');
 
+// Los tres botones del traslado son SECUNDARIOS: la acción principal de esta
+// sección sigue siendo Save keys (el único con el degradado de acento).
+// Mismo botón de contorno que el "Back up now" de Data backups, que es el
+// gesto hermano — escribir/leer un fichero fuera de la app.
+const transferButtonClass =
+  'flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+
 // Credenciales de APIs externas, editables sin .env (main/config/credentials
 // las guarda cifradas en userData). Vive en su propia pestaña de Ajustes
 // (Connections), así que ya no se pliega entera como antes — lo que se
@@ -142,6 +165,8 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
   const { data: creds } = useCredentials();
   const { data: syncFailure } = useSyncFailure();
   const setCredentials = useSetCredentials();
+  const exportCredentials = useExportCredentials();
+  const importCredentials = useImportCredentials();
 
   // Acordeón: un servicio abierto a la vez. Rellenar claves es una tarea de
   // uno en uno, y así la sección no crece a lo alto. Si Ajustes se abrió por
@@ -158,6 +183,13 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
     setDraft(draftFrom((key) => creds[key] ?? ''));
   }
   const [savedFlash, setSavedFlash] = useState(false);
+  // El resultado del traslado (exportar/importar), en su propia línea: son
+  // dos gestos que terminan FUERA de la app —un fichero escrito, un fichero
+  // leído— y sin decirlo no se ve absolutamente nada. El error se muestra
+  // aquí igual que el acierto en vez de dejarlo en la mutation: los dos
+  // botones comparten la misma línea de respuesta.
+  const [transferFlash, setTransferFlash] = useState<{ text: string; ok: boolean } | null>(null);
+  const transferBusy = exportCredentials.isPending || importCredentials.isPending;
 
   const handleSave = async (): Promise<void> => {
     setSavedFlash(false);
@@ -167,6 +199,38 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
       ) as unknown as CredentialsValues,
     );
     setSavedFlash(true);
+  };
+
+  const handleExport = async (): Promise<void> => {
+    setTransferFlash(null);
+    const directory = await window.api.dialog.pickFolder();
+    if (!directory) return;
+    try {
+      const path = await exportCredentials.mutateAsync(directory);
+      setTransferFlash({ text: `Saved to ${path}`, ok: true });
+    } catch (error) {
+      setTransferFlash({ text: (error as Error).message, ok: false });
+    }
+  };
+
+  const handleImport = async (): Promise<void> => {
+    setTransferFlash(null);
+    const filePath = await window.api.dialog.pickFile();
+    if (!filePath) return;
+    try {
+      const result = await importCredentials.mutateAsync(filePath);
+      // El borrador de arriba seguiría enseñando lo de antes: se resiembra
+      // con lo importado, que es lo que ya está guardado de verdad. Y el
+      // "Saved" del guardado se apaga, que ya no habla de esto.
+      setDraft(draftFrom((key) => result.values[key] ?? ''));
+      setSavedFlash(false);
+      setTransferFlash({
+        text: `Imported ${result.imported} ${result.imported === 1 ? 'key' : 'keys'} — applied immediately.`,
+        ok: true,
+      });
+    } catch (error) {
+      setTransferFlash({ text: (error as Error).message, ok: false });
+    }
   };
 
   return (
@@ -358,6 +422,56 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             <span className="text-[12px] text-destructive">
               Couldn&apos;t save — {setCredentials.error.message}
             </span>
+          )}
+        </div>
+
+        {/* Llevarse las claves a otro PC. Debajo del guardado y separado por
+            una línea: no es parte de rellenar claves, es lo que se hace
+            DESPUÉS — y una sola vez por instalación. */}
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <div className="text-[11px] leading-relaxed text-muted-foreground">
+            Moving to another PC? Export puts every key above into a single{' '}
+            <span className="font-mono text-[10.5px] text-foreground/70">afterplay-keys.json</span>.
+            On the other one, import it here — or just drop it into the app folder and it loads
+            itself on the next start. That file is readable, so keep it somewhere safe and delete it
+            when you&apos;re done.
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={transferBusy}
+              className={transferButtonClass}
+            >
+              <HardDriveDownload size={13} />
+              {exportCredentials.isPending ? 'Exporting…' : 'Export keys'}
+            </button>
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={transferBusy}
+              className={transferButtonClass}
+            >
+              <Upload size={13} />
+              {importCredentials.isPending ? 'Importing…' : 'Import from file'}
+            </button>
+            {/* La ruta de userData no se la sabe nadie de memoria, y sin ella
+                el camino automático ("déjalo en la carpeta") no es seguible. */}
+            <button
+              type="button"
+              onClick={() => void window.api.settings.openDataFolder()}
+              className={transferButtonClass}
+            >
+              <FolderOpen size={13} />
+              Open app folder
+            </button>
+          </div>
+          {transferFlash && (
+            <div
+              className={`text-[11.5px] break-all ${transferFlash.ok ? 'text-primary' : 'text-destructive'}`}
+            >
+              {transferFlash.text}
+            </div>
           )}
         </div>
       </div>

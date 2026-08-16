@@ -217,6 +217,22 @@ const dateRange = (entry: JourneyEntry): string => {
   return first === last ? first : `${first} - ${last}`;
 };
 
+// Alto aproximado de un mes, para el hueco que reserva content-visibility
+// (ver el porqué en el bloque del mes). No hace falta que acierte: en cuanto
+// un mes se pinta una vez, `contain-intrinsic-size: auto` recuerda su tamaño
+// real y este número deja de usarse para él. Solo tiene que ser lo bastante
+// parecido como para que la barra de scroll no mienta antes de bajar.
+const FEATURED_HEIGHT_PX = 148;
+const COVER_ROW_HEIGHT_PX = 180;
+const COVERS_PER_ROW = 5;
+const MONTH_PADDING_PX = 52;
+const MONTH_MIN_HEIGHT_PX = 180;
+const monthIntrinsicHeight = (entryCount: number): number => {
+  const coverRows = Math.ceil(Math.max(0, entryCount - 1) / COVERS_PER_ROW);
+  const content = FEATURED_HEIGHT_PX + coverRows * COVER_ROW_HEIGHT_PX;
+  return Math.max(MONTH_MIN_HEIGHT_PX, content) + MONTH_PADDING_PX;
+};
+
 const monthLabel = (month: number): string =>
   new Date(2020, month, 1).toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
 
@@ -939,8 +955,29 @@ export const Journey = ({
                         if (element) monthRefs.current.set(key, element);
                         else monthRefs.current.delete(key);
                       }}
-                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 ${revealClass}`}
-                      style={revealStyle(yearIndex + monthIndex + 1)}
+                      // content-visibility:auto, el mismo remedio que la cola
+                      // del Plan y la columna de navegación: el Journey monta
+                      // el viaje ENTERO de golpe — 689 carátulas y 11.933
+                      // nodos del DOM con la biblioteca real, 33.511 con
+                      // cinco años de uso (medido serializando el árbol con
+                      // react-dom/server) — y de eso caben dos meses en
+                      // pantalla. Sin esto, Chromium maqueta y pinta los 41
+                      // meses al entrar en la pestaña. Con esto solo trabaja
+                      // los que se ven, y el resto queda como un hueco del
+                      // alto estimado.
+                      //
+                      // El precio, dicho claro: mientras un mes no se ha
+                      // pintado nunca, su alto es una ESTIMACIÓN, así que
+                      // saltar desde el índice a un año muy lejano puede
+                      // aterrizar algo desviado antes de asentarse. Por eso
+                      // el hueco se estima por número de entradas y no con
+                      // una constante, y por eso `auto`: en cuanto un mes se
+                      // pinta una vez, Chromium recuerda su alto de verdad.
+                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 [content-visibility:auto] ${revealClass}`}
+                      style={{
+                        ...revealStyle(yearIndex + monthIndex + 1),
+                        containIntrinsicSize: `auto ${monthIntrinsicHeight(monthEntries.length)}px`,
+                      }}
                     >
                       <div className="relative border-r border-border/80 pr-4 text-right">
                         <div className="sticky top-3 pt-1">

@@ -14,78 +14,12 @@ import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
 import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
-import { DAY_MS, startOfDayMs } from '../lib/dateMath';
 import { formatHours, pluralize } from '../lib/format';
+import { groupPageByDate } from '../lib/sessionGroups';
 import { sessionDurationStats } from '../lib/sessionStats';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
 
 const PAGE_SIZE = 20;
-
-// Cubos de fecha para las cabeceras — de "Today" a un año concreto, cuanto
-// más lejos en el tiempo más grueso el cubo (nadie necesita saber el día
-// exacto de hace dos años, pero sí el de ayer). `now` se calcula UNA vez por
-// render (no una por sesión) para que todas las filas de la misma pasada
-// usen el mismo "hoy", sin desajustes de un milisegundo entre unas y otras.
-//
-// monthScopeKey acompaña al label solo cuando el cubo ES un mes cerrado
-// entero ("Last Month", "June", "March 2025"): es el gancho de la tarjeta de
-// recap del diario (AFTERPLAY-LOOP.md §5). Los cubos del presente (Today...
-// This Month) van a null — el mes en curso jamás se narra (§3.4), y un cubo
-// de semana no es un mes aunque alguna fila caiga en el anterior.
-const getSessionGroup = (
-  date: Date,
-  now: Date,
-): { label: string; monthScopeKey: string | null } => {
-  const diffDays = Math.round((startOfDayMs(now) - startOfDayMs(date)) / DAY_MS);
-
-  if (diffDays <= 0) return { label: 'Today', monthScopeKey: null };
-  if (diffDays === 1) return { label: 'Yesterday', monthScopeKey: null };
-  if (diffDays <= 7) return { label: 'This Week', monthScopeKey: null };
-  if (diffDays <= 14) return { label: 'Last Week', monthScopeKey: null };
-
-  if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
-    return { label: 'This Month', monthScopeKey: null };
-  }
-
-  // '2026-06' — la clave con la que generated_memories conoce el periodo.
-  const monthScopeKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  if (date.getFullYear() === lastMonth.getFullYear() && date.getMonth() === lastMonth.getMonth()) {
-    return { label: 'Last Month', monthScopeKey };
-  }
-
-  if (date.getFullYear() === now.getFullYear()) {
-    return { label: date.toLocaleDateString('en-US', { month: 'long' }), monthScopeKey };
-  }
-
-  // Años anteriores: siempre desglosado por mes ("March 2025", "January
-  // 2025"...), no un cubo único por año.
-  return {
-    label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-    monthScopeKey,
-  };
-};
-
-type SessionGroup = { label: string; monthScopeKey: string | null; sessions: SessionWithGame[] };
-
-// Agrupa una PÁGINA de sesiones, no la lista entera — la cabecera del primer
-// registro de la página SIEMPRE se pinta, siga o no el mismo grupo que
-// terminaba la página anterior. Sin esto, cambiar de página podía dejar una
-// tanda de filas "This Week" arrancando a mitad, sin ningún titulito encima
-// (el grupo ya se había impreso en la página anterior y no volvía a salir).
-// (Y de regalo para el diario: un mes partido en dos páginas enseña su
-// tarjeta de recap en las dos, que es donde su cabecera vuelve a pintarse.)
-const groupPageByDate = (sessions: SessionWithGame[], now: Date): SessionGroup[] => {
-  const groups: SessionGroup[] = [];
-  for (const session of sessions) {
-    const { label, monthScopeKey } = getSessionGroup(session.startedAt, now);
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.sessions.push(session);
-    else groups.push({ label, monthScopeKey, sessions: [session] });
-  }
-  return groups;
-};
 
 // Bloque 5A — todas las sesiones, o filtradas a un juego vía el ?game= que
 // pone SessionsNavColumn (MiddleColumn.tsx) al hacer clic en la columna de

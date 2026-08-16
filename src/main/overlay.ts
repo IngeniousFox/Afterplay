@@ -294,6 +294,17 @@ const showOverlay = async (): Promise<void> => {
   // PINTAR PRIMERO, ENSEÑAR DESPUÉS: el estado viaja con la ventana aún
   // oculta (backgroundThrottling:false la mantiene pintando) y el show()
   // presenta la composición ya terminada.
+  //
+  // Estos 32ms son UNA APUESTA a que al renderer le da tiempo, y hasta ahora
+  // la perdía en los juegos con catálogo grande: medido en un banco de
+  // Electron con el HUD real y los 1.328 logros de Payday 2, el árbol tardaba
+  // 159-225 ms en pintar, así que el show() enseñaba una composición a medias
+  // y "la capa tarda en aparecer" no era de esta espera, era del renderer.
+  // Con el catálogo montándose por tandas (OverlayHud.tsx,
+  // INITIAL_ACHIEVEMENT_ROWS) el primer pintado baja a 13-33 ms y la apuesta
+  // vuelve a estar bien hecha. Si algún día se vuelve a meter trabajo pesado
+  // en el primer render del HUD, el síntoma reaparece AQUÍ sin que este
+  // fichero haya cambiado.
   sendState();
   await new Promise((resolve) => setTimeout(resolve, 32));
   if (!overlayVisible || window.isDestroyed()) return;

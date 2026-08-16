@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { GameCover } from '../components/GameCover';
 import { useGameAchievements, useSessionUnlocks } from '../hooks/achievements';
@@ -397,57 +397,229 @@ const HltbPanel = ({
 
 // Una fila de logro con hover de lista de verdad: icono, nombre, descripción
 // (o el secreto de los ocultos) y la rareza con su acento.
-const AchievementRow = ({
-  entry,
-  unlocked,
-}: {
-  entry: AchievementEntry;
-  unlocked: boolean;
-}): React.JSX.Element => {
-  const src = useImageSrc(
-    unlocked ? entry.iconUrl : (entry.iconGrayUrl ?? entry.iconUrl),
-    'achievements',
-  );
-  const accent = rarityAccent(entry.globalPercent);
-  return (
-    // flex-none por lo mismo que en SessionRow: dentro de un contenedor flex
-    // con altura acotada, un hijo se encoge antes que desbordar — y una fila
-    // de logro estrujada pierde su icono y su texto en vez de provocar el
-    // scroll que toca.
-    <div className="group -mx-2 flex flex-none items-center gap-2.75 rounded-[10px] px-2 py-1.75 transition-colors duration-150 hover:bg-white/[0.05]">
-      <span
-        className={`h-9 w-9 flex-none overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.04] transition-[opacity,filter] duration-150 ${
-          unlocked ? '' : 'opacity-55 grayscale group-hover:opacity-80'
-        }`}
-      >
-        {src ? (
-          <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center">
-            <Trophy size={14} className="text-muted-foreground/40" />
-          </span>
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
+//
+// Envuelta en memo() A PROPÓSITO, y sí, con el compilador de React activo:
+// esto no es sembrar memos por si acaso, es la frontera que hace lineal el
+// montaje por tandas de AchievementsPanel. Cada tanda cambia `rowLimit`, o
+// sea el estado del panel, así que el panel rehace su lista y React vuelve a
+// llamar a TODAS las filas ya montadas para añadir 24 — con 1.328 logros son
+// 55 tandas sobre una lista que crece: ~36.000 llamadas de fila. El
+// compilador memoiza DENTRO de cada fila, que no es lo mismo: la fila se
+// llama igual. Con memo(), una fila cuyo `entry` no ha cambiado (son los
+// objetos de la query, estables) ni se llama.
+// Medido en el banco con esos 1.328 logros: el montaje progresivo completo
+// pasa de 281 ms a 241 ms de trabajo repartido. Es el 15%, y crece con el
+// cuadrado del catálogo — que es justo lo que no se quiere sobre un juego.
+const AchievementRow = memo(
+  ({ entry, unlocked }: { entry: AchievementEntry; unlocked: boolean }): React.JSX.Element => {
+    const src = useImageSrc(
+      unlocked ? entry.iconUrl : (entry.iconGrayUrl ?? entry.iconUrl),
+      'achievements',
+    );
+    const accent = rarityAccent(entry.globalPercent);
+    return (
+      // flex-none por lo mismo que en SessionRow: dentro de un contenedor flex
+      // con altura acotada, un hijo se encoge antes que desbordar — y una fila
+      // de logro estrujada pierde su icono y su texto en vez de provocar el
+      // scroll que toca.
+      <div className="group -mx-2 flex flex-none items-center gap-2.75 rounded-[10px] px-2 py-1.75 transition-colors duration-150 hover:bg-white/[0.05]">
         <span
-          className={`block truncate text-[12.5px] font-semibold ${
-            unlocked ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground/80'
+          className={`h-9 w-9 flex-none overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.04] transition-[opacity,filter] duration-150 ${
+            unlocked ? '' : 'opacity-55 grayscale group-hover:opacity-80'
           }`}
         >
-          {entry.displayName}
+          {src ? (
+            <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center">
+              <Trophy size={14} className="text-muted-foreground/40" />
+            </span>
+          )}
         </span>
-        <span className="block truncate text-[10.5px] text-muted-foreground/60">
-          {entry.description ?? (entry.hidden ? 'Hidden achievement' : '')}
+        <span className="min-w-0 flex-1">
+          <span
+            className={`block truncate text-[12.5px] font-semibold ${
+              unlocked ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground/80'
+            }`}
+          >
+            {entry.displayName}
+          </span>
+          <span className="block truncate text-[10.5px] text-muted-foreground/60">
+            {entry.description ?? (entry.hidden ? 'Hidden achievement' : '')}
+          </span>
         </span>
-      </span>
-      {entry.globalPercent !== null && (
-        <span
-          className="flex-none text-[11px] font-bold tabular-nums"
-          style={{ color: unlocked ? accent : 'var(--muted-foreground)' }}
-        >
-          {percentLabel(entry.globalPercent)}
+        {entry.globalPercent !== null && (
+          <span
+            className="flex-none text-[11px] font-bold tabular-nums"
+            style={{ color: unlocked ? accent : 'var(--muted-foreground)' }}
+          >
+            {percentLabel(entry.globalPercent)}
+          </span>
+        )}
+      </div>
+    );
+  },
+);
+AchievementRow.displayName = 'AchievementRow';
+
+// Cuántas filas de logro entran en el PRIMER render y cuántas por tanda
+// después. El patrón —y sus dos constantes— es el de la cola del Plan
+// (PlanToPlay.tsx:76): montar solo lo que llena el primer pantallazo y colar
+// el resto en el TIEMPO SOBRANTE de los frames siguientes.
+//
+// Aquí pesa más que en el Plan, porque este árbol se monta ENCIMA DE UN JUEGO
+// EN MARCHA. Medido en el banco de Electron con el catálogo más grande de la
+// biblioteca real (Payday 2, 1.328 logros): montar el catálogo entero de golpe
+// eran 148 ms de render de React y 159-225 ms hasta el primer pintado —diez
+// frames de 60fps robados al juego, y la capa apareciendo tarde—, más 1.334
+// idas y vueltas IPC a `images.getSrc` (una por icono) contra el MISMO proceso
+// main que lleva la base de datos y el vigilante de procesos. Por tandas, el
+// primer pintado baja a 14-29 ms y las 1.300 filas restantes entran por los
+// huecos de los frames siguientes, sin quitarle uno entero a nadie.
+//
+// 28 de salida: en el panel se ven ~8 filas (mide unos 380px y la fila ~48px),
+// así que son tres pantallazos y medio de colchón — ni un scroll rápido
+// alcanza a la cola de tandas. Las tandas son las mismas 24 que el Plan: es lo
+// que cabe holgado en un respiro de frame, medido allí.
+const INITIAL_ACHIEVEMENT_ROWS = 28;
+const ACHIEVEMENT_ROWS_PER_BATCH = 24;
+const ACHIEVEMENT_BATCH_TIMEOUT_MS = 120;
+
+// requestIdleCallback y NO requestAnimationFrame — la diferencia entre "entra
+// rápido" y "entra rápido Y suave", explicada entera en PlanToPlay.tsx:62:
+// rAF dispara DENTRO del presupuesto del frame que está pintando la animación
+// de entrada; el idle callback corre en lo que sobra DESPUÉS de pintar. Con un
+// juego detrás la diferencia deja de ser estética. El respaldo a rAF es por si
+// el runtime no trae requestIdleCallback: peor cadencia, nunca una lista a
+// medias.
+const scheduleIdle = (run: () => void): (() => void) => {
+  if (typeof requestIdleCallback === 'function') {
+    const handle = requestIdleCallback(run, { timeout: ACHIEVEMENT_BATCH_TIMEOUT_MS });
+    return () => cancelIdleCallback(handle);
+  }
+  const handle = requestAnimationFrame(run);
+  return () => cancelAnimationFrame(handle);
+};
+
+// El panel de logros ENTERO, como COMPONENTE PROPIO y no como un trozo de
+// JSX dentro de OverlayHud. La separación es de rendimiento, no de orden:
+//
+// React Compiler memoiza el cuerpo de OverlayHud en UN SOLO bloque —el
+// `return null` del telón bajado obliga a ello: no se puede saltar por trozos
+// un código que puede salirse por el medio—, así que ese bloque tiene entre
+// sus dependencias a `elapsed`, que cambia CADA SEGUNDO. Con el catálogo
+// dentro, cada tic del cronómetro reconstruía las 1.328 filas de Payday 2:
+// 23 ms de React por segundo, para siempre, sobre el juego. Fuera, el bloque
+// del padre se rehace igual pero este componente tiene su PROPIO caché, sus
+// dependencias (`entries`, `closing`) no cambian con el reloj, devuelve el
+// mismo árbol y React se para ahí: 23 ms → 0,8 ms por tic.
+//
+// El día que alguien lo vuelva a meter en línea "para leerlo todo junto", el
+// coste vuelve entero y sin avisar.
+const AchievementsPanel = ({
+  entries,
+  closing,
+}: {
+  entries: AchievementEntry[];
+  closing: boolean;
+}): React.JSX.Element | null => {
+  const [rowLimit, setRowLimit] = useState(INITIAL_ACHIEVEMENT_ROWS);
+
+  const unlocked = entries
+    .filter((entry) => entry.unlockedAt !== null)
+    .sort((a, b) => (b.unlockedAt as Date).getTime() - (a.unlockedAt as Date).getTime());
+  const locked = entries
+    .filter((entry) => entry.unlockedAt === null)
+    .sort((a, b) => (b.globalPercent ?? -1) - (a.globalPercent ?? -1));
+  const achievementsPercent =
+    entries.length > 0 ? Math.round((unlocked.length / entries.length) * 100) : 0;
+  // Los raros que YA tienes — el dato del que uno presume, con el mismo
+  // umbral y color que usa la app en la ficha y en Stats.
+  const rareCount = unlocked.filter((entry) => isRare(entry.globalPercent)).length;
+
+  // La siguiente tanda, en el primer hueco libre tras pintar la anterior. El
+  // cleanup cancela la pendiente si el panel se va a mitad (cerrar el telón).
+  useEffect(() => {
+    if (rowLimit >= entries.length) return;
+    return scheduleIdle(() => setRowLimit((limit) => limit + ACHIEVEMENT_ROWS_PER_BATCH));
+  }, [rowLimit, entries.length]);
+
+  // El límite se reparte en cascada: primero los desbloqueados, y lo que sobre
+  // para los bloqueados. Las CUENTAS de los dos rótulos siguen saliendo de las
+  // listas enteras (unlocked.length / locked.length), nunca de lo montado —
+  // que el catálogo entre por tandas no puede cambiar lo que dice.
+  const shownUnlocked = rowLimit >= unlocked.length ? unlocked : unlocked.slice(0, rowLimit);
+  const lockedBudget = Math.max(0, rowLimit - unlocked.length);
+  const shownLocked = lockedBudget >= locked.length ? locked : locked.slice(0, lockedBudget);
+
+  if (entries.length === 0) return null;
+
+  return (
+    <div
+      className={`${PANEL_CLASS} flex min-h-0 flex-1 flex-col px-5.5 py-4.5 ${enterClass(closing)}`}
+      style={panelStyle(AMBER)}
+    >
+      {/* La cifra RESPIRA: el conteo iba pegado al porcentaje en
+          un solo bloque ("6/24 · 25%") y se leía como un número
+          raro. Ahora el porcentaje manda en grande con el acento, y
+          el conteo va debajo en pequeño — el mismo reparto
+          cifra-gorda/rótulo que las cards de Stats. */}
+      <div className="flex flex-none items-start gap-2">
+        <SectionIcon icon={Trophy} color={AMBER} />
+        <span className="text-[13.5px] font-bold text-foreground">Achievements</span>
+        <span className="ml-auto text-right">
+          <span
+            className="block text-[17px] leading-none font-extrabold tabular-nums"
+            style={{ color: AMBER }}
+          >
+            {achievementsPercent}%
+          </span>
+          <span className="mt-1 block text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+            {unlocked.length} of {entries.length}
+            {rareCount > 0 && <span style={{ color: rarityAccent(1) }}> · {rareCount} rare</span>}
+          </span>
         </span>
-      )}
+      </div>
+      <div className="mt-2.5 h-1.5 flex-none overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full transition-[width] duration-700 ease-out"
+          style={{
+            width: `${achievementsPercent}%`,
+            background: `linear-gradient(90deg, ${AMBER}88, ${AMBER})`,
+          }}
+        />
+      </div>
+
+      {/* El catálogo ENTERO. Antes tenía un max-h fijo (264px);
+          ahora el panel ENTERO crece con flex-1 hasta el hueco real
+          de la columna ("hazlo más alto"), y este scroll interno es
+          quien absorbe lo que sobre por encima de esa altura. */}
+      <div className="-mr-2 mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
+        {unlocked.length > 0 && (
+          <>
+            <div className="text-[9.5px] font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
+              Unlocked · {unlocked.length}
+            </div>
+            <div className="mt-1.5 mb-3 flex flex-col">
+              {shownUnlocked.map((entry) => (
+                <AchievementRow key={entry.id} entry={entry} unlocked />
+              ))}
+            </div>
+          </>
+        )}
+        {locked.length > 0 && (
+          <>
+            <div className="text-[9.5px] font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
+              Still locked · {locked.length} — most common first
+            </div>
+            <div className="mt-1.5 flex flex-col">
+              {shownLocked.map((entry) => (
+                <AchievementRow key={entry.id} entry={entry} unlocked={false} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -488,6 +660,10 @@ const HistoryStat = ({
   </div>
 );
 
+// La lista vacía COMPARTIDA de trofeos de una sesión — ver el memo de
+// SessionRow y su sitio de uso.
+const NO_UNLOCKS: SessionAchievementEntry[] = [];
+
 // Una sesión del historial — CLON literal de SessionRow en
 // SessionHistoryList.tsx (la ficha del juego): mismas clases, mismos
 // tamaños, mismos colores, misma pieza SessionAchievements y el mismo
@@ -497,78 +673,89 @@ const HistoryStat = ({
 // coverUrl de más, que aquí no hacen falta) y la ausencia del borrar/
 // destellar dorado del aviso de cierre, que no tienen sentido sobre el
 // juego en marcha.
-const SessionRow = ({
-  session,
-  liveSeconds,
-  maxDurationSec,
-  isRecord,
-  achievements,
-  timeFormat,
-}: {
-  session: SessionWithGame;
-  liveSeconds: number;
-  maxDurationSec: number;
-  isRecord: boolean;
-  achievements: SessionAchievementEntry[];
-  timeFormat: TimeFormat;
-}): React.JSX.Element => {
-  const isLive = session.endedAt === null;
-  const durationSec = isLive ? liveSeconds : (session.durationSec ?? 0);
-  const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
-  // Igual que en la ficha: el relleno proporcional SOLO en sesiones
-  // cerradas — la viva no compite contra sí misma.
-  const fillPct =
-    !isLive && maxDurationSec > 0 ? Math.max(3, (durationSec / maxDurationSec) * 100) : 0;
+//
+// Y en memo(), por el segundo que pasa: `elapsed` cambia cada tic y hasta
+// ahora entraba en TODAS las filas (`liveSeconds`), así que el historial
+// entero se re-renderizaba una vez por segundo para mover una sola fila, la
+// viva. Ahora la duración ya llega calculada —la viva con el cronómetro, las
+// cerradas con su número de siempre— y memo() para en seco a las que no han
+// cambiado. Las cerradas solo vuelven a pintarse cuando de verdad les toca:
+// cuando la sesión de hoy pasa a ser la más larga y `maxDurationSec` empieza a
+// crecer, que es justo cuando sus barras tienen que reescalarse.
+// Con las 20 sesiones del juego más jugado de la biblioteca real, el tic pasó
+// de 1,7-2,5 ms a ~1 ms.
+const SessionRow = memo(
+  ({
+    session,
+    durationSec,
+    maxDurationSec,
+    isRecord,
+    achievements,
+    timeFormat,
+  }: {
+    session: SessionWithGame;
+    durationSec: number;
+    maxDurationSec: number;
+    isRecord: boolean;
+    achievements: SessionAchievementEntry[];
+    timeFormat: TimeFormat;
+  }): React.JSX.Element => {
+    const isLive = session.endedAt === null;
+    const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
+    // Igual que en la ficha: el relleno proporcional SOLO en sesiones
+    // cerradas — la viva no compite contra sí misma.
+    const fillPct =
+      !isLive && maxDurationSec > 0 ? Math.max(3, (durationSec / maxDurationSec) * 100) : 0;
 
-  return (
-    <div
-      // flex-none es OBLIGATORIO, no decorativo: esta fila es hija de un
-      // contenedor flex con altura acotada, y un hijo de flex se ENCOGE por
-      // defecto (flex-shrink: 1) para caber. Sin esto, las filas se
-      // aplastaban unas contra otras —la fecha cortada por arriba, la nota
-      // por abajo— y el overflow-y-auto del padre no llegaba a dispararse
-      // nunca, porque el contenido "cabía" a base de estrujarse. Con
-      // flex-none cada sesión conserva su alto natural y lo que no cabe lo
-      // resuelve el scroll del contenedor, que es lo que se quería.
-      className="group/session relative flex flex-none items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
-      style={
-        isLive
-          ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
-      }
-    >
-      {fillPct > 0 && (
-        <div
-          className="pointer-events-none absolute inset-y-0 left-0"
-          style={{
-            width: `${fillPct}%`,
-            background: 'linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.01))',
-            borderRight: '1.5px solid rgba(255,255,255,.14)',
-          }}
-        />
-      )}
-      <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-white/5">
-        <Timer size={15} className="text-muted-foreground" />
-      </div>
-      <div className="relative z-1 min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold text-foreground">
-          {formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}
-        </div>
-        {endTime && (
-          <div className="mt-0.25 text-[11.5px] text-muted-foreground/70">→ {endTime}</div>
+    return (
+      <div
+        // flex-none es OBLIGATORIO, no decorativo: esta fila es hija de un
+        // contenedor flex con altura acotada, y un hijo de flex se ENCOGE por
+        // defecto (flex-shrink: 1) para caber. Sin esto, las filas se
+        // aplastaban unas contra otras —la fecha cortada por arriba, la nota
+        // por abajo— y el overflow-y-auto del padre no llegaba a dispararse
+        // nunca, porque el contenido "cabía" a base de estrujarse. Con
+        // flex-none cada sesión conserva su alto natural y lo que no cabe lo
+        // resuelve el scroll del contenedor, que es lo que se quería.
+        className="group/session relative flex flex-none items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
+        style={
+          isLive
+            ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
+            : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
+        }
+      >
+        {fillPct > 0 && (
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0"
+            style={{
+              width: `${fillPct}%`,
+              background: 'linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.01))',
+              borderRight: '1.5px solid rgba(255,255,255,.14)',
+            }}
+          />
         )}
-        <div
-          className="mt-0.5 text-xs"
-          style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
-        >
-          {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
+        <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-white/5">
+          <Timer size={15} className="text-muted-foreground" />
         </div>
+        <div className="relative z-1 min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold text-foreground">
+            {formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}
+          </div>
+          {endTime && (
+            <div className="mt-0.25 text-[11.5px] text-muted-foreground/70">→ {endTime}</div>
+          )}
+          <div
+            className="mt-0.5 text-xs"
+            style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
+          >
+            {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
+          </div>
 
-        {/* Los trofeos de la noche — la misma pieza que la ficha y la
+          {/* Los trofeos de la noche — la misma pieza que la ficha y la
             vista global de Sesiones. */}
-        <SessionAchievements entries={achievements} />
+          <SessionAchievements entries={achievements} />
 
-        {/* El diario de ESTA sesión, editable aquí igual que en la ficha —
+          {/* El diario de ESTA sesión, editable aquí igual que en la ficha —
             no solo la de ahora mismo (esa la cubre el panel "Where are you?"
             grande de al lado): cualquier sesión pasada de este juego.
 
@@ -597,20 +784,22 @@ const SessionRow = ({
             editor, dentro de SessionNote, que curaría esto y además cubriría a
             la ficha del juego— NO está hecho: ese fichero es de otra zona. Esta
             key es una tirita local al overlay, no la cura. */}
-        <SessionNote key={session.note ?? ''} sessionId={session.id} note={session.note} />
+          <SessionNote key={session.note ?? ''} sessionId={session.id} note={session.note} />
+        </div>
+        <div className="relative z-1 flex flex-none items-center gap-1.5">
+          {isRecord && <Flame size={13} color="#e85d72" />}
+          <span
+            className="text-[13px] font-semibold tabular-nums"
+            style={{ color: isLive ? '#2fdc7e' : 'var(--foreground)' }}
+          >
+            {formatElapsed(durationSec)}
+          </span>
+        </div>
       </div>
-      <div className="relative z-1 flex flex-none items-center gap-1.5">
-        {isRecord && <Flame size={13} color="#e85d72" />}
-        <span
-          className="text-[13px] font-semibold tabular-nums"
-          style={{ color: isLive ? '#2fdc7e' : 'var(--foreground)' }}
-        >
-          {formatElapsed(durationSec)}
-        </span>
-      </div>
-    </div>
-  );
-};
+    );
+  },
+);
+SessionRow.displayName = 'SessionRow';
 
 export const OverlayHud = (): React.JSX.Element | null => {
   const queryClient = useQueryClient();
@@ -619,7 +808,24 @@ export const OverlayHud = (): React.JSX.Element | null => {
   const { data: sessionUnlocks = [] } = useSessionUnlocks();
   const { data: shortcut = '' } = useOverlayShortcut();
   const { data: timeFormat = '24h' } = useTimeFormat();
-  const setNote = useSetSessionNote();
+  // DESESTRUCTURADA, y no `const setNote = useSetSessionNote()`. Esto no es
+  // estilo: era el mayor coste por segundo de esta pantalla.
+  //
+  // useMutation de react-query devuelve `{ ...result, mutate, mutateAsync }`
+  // (useMutation.js:40) — un OBJETO NUEVO en cada render, siempre. React
+  // Compiler memoiza por identidad de dependencias, y como `setNote` entraba
+  // como dependencia del bloque memoizado que envuelve MEDIA PANTALLA (el
+  // hero, HowLongToBeat, la nota y el catálogo de logros entero), ese bloque
+  // no acertaba NUNCA: cada render reconstruía el árbol completo. Y hay un
+  // render por segundo, el del cronómetro. Medido con el catálogo de Payday 2
+  // (1.328 logros) en el banco de Electron: 23 ms de trabajo de React CADA
+  // SEGUNDO, sobre un juego en marcha. Con `mutate` (estable, useCallback) e
+  // `isPending` (un booleano) como dependencias, el bloque acierta y el mismo
+  // tick baja a 0,6 ms.
+  //
+  // Si alguien vuelve a juntar esto en una sola variable "porque se lee
+  // mejor", el catálogo entero vuelve a renderizarse sesenta veces por minuto.
+  const { mutate: saveNoteMutation, isPending: savingNote } = useSetSessionNote();
   const [phase, setPhase] = useState<Phase>('hidden');
   const [openCount, setOpenCount] = useState(0);
   const [draft, setDraft] = useState<string | null>(null);
@@ -635,16 +841,32 @@ export const OverlayHud = (): React.JSX.Element | null => {
   const heroSrc = useImageSrc(live?.heroUrl ?? null, 'heroes');
   const coverSrc = useImageSrc(live?.coverUrl ?? null, 'covers');
 
-  // Este renderer es OTRO QueryClient: el push del watcher se engancha aquí
-  // igual que hace useWatcherSync en la ventana principal.
+  // CON EL TELÓN BAJADO NO SE PIDE NADA (OVERLAY.md §9.1, Regla 1: "oculto =
+  // coste cero"). Esa regla la cumplía el tick del contador —que se para al
+  // ocultar— pero NO el caché: cada aviso del main con el HUD escondido
+  // relanzaba las cuatro consultas de esta ventana. Medido sobre la
+  // biblioteca real (994 juegos, 39.808 logros), un solo aviso son getGames
+  // 9 ms / 1.252 filas + getAllSessions 1 ms / 57 + getGameAchievements 9 ms
+  // / 1.348 (Payday 2) + getSessionUnlocks 1 ms, más serializar esas ~2.700
+  // filas por IPC y volver a derivarlas aquí — todo en el mismo proceso main
+  // que lleva la base y el vigilante de procesos, y todo para repintar un
+  // árbol que devuelve null. Y los avisos no son raros mientras juegas: el
+  // sondeo de logros en vivo late cada 30s (steam/livePoll.ts) y el ciclo de
+  // sync cada 60s.
+  //
+  // Así que oculto solo se MARCA el caché como viejo (refetchType 'none') y
+  // el barrido lo hace la apertura del telón, más abajo — que es cuando
+  // alguien va a mirar los datos.
+  const curtainDown = phase === 'hidden';
   useEffect(
     () =>
       window.api.watcher.onGamesChanged(() => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+        const refetchType = curtainDown ? 'none' : 'active';
+        void queryClient.invalidateQueries({ queryKey: queryKeys.games.all, refetchType });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all, refetchType });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all, refetchType });
       }),
-    [queryClient],
+    [queryClient, curtainDown],
   );
 
   // Y el aviso de LOGROS, que es el que de verdad importa aquí: los
@@ -661,13 +883,17 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // 'progress' son la barra de la tarjeta de Ajustes, que aquí no se pinta:
   // atenderlos sería recargar el catálogo 300 veces durante una pasada
   // completa para no cambiar nada.
+  // Mismo trato con el telón bajado que el aviso de arriba: marcar, no pedir.
   useEffect(
     () =>
       window.api.achievements.onActivity((event) => {
         if (event.kind !== 'synced') return;
-        void queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.achievements.all,
+          refetchType: curtainDown ? 'none' : 'active',
+        });
       }),
-    [queryClient],
+    [queryClient, curtainDown],
   );
 
   // Y los AJUSTES, que aquí llegaban una vez y se quedaban fósiles: sus dos
@@ -684,10 +910,25 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // useOverlayShortcutStatus, que refresca al abrir Ajustes porque su valor
   // también cambia por fuera de las mutations. Son dos lecturas diminutas
   // contra un gesto que el usuario hace a mano.
+  //
+  // Y AQUÍ SE BARRE lo que se quedó marcado con el telón bajado: los dos
+  // ajustes se marcan igual que el resto (refetchType 'none') y un único
+  // refetchQueries pide SOLO lo viejo (stale: true). Si mientras no mirabas no
+  // pasó nada, no se pide nada — abrir el HUD no cuesta ni una consulta. Dos
+  // marcas y un barrido, y no un invalidate por su cuenta cada uno, porque
+  // invalidar con refetch por defecto Y barrer después pediría los ajustes dos
+  // veces.
   useEffect(() => {
     if (phase !== 'open') return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.settings.overlayShortcut });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.settings.timeFormat });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.settings.overlayShortcut,
+      refetchType: 'none',
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.settings.timeFormat,
+      refetchType: 'none',
+    });
+    void queryClient.refetchQueries({ type: 'active', stale: true });
   }, [phase, openCount, queryClient]);
 
   // El espejo del estado del main, patrón get()+onChange de la casa (ver la
@@ -801,11 +1042,11 @@ export const OverlayHud = (): React.JSX.Element | null => {
     }
     return map;
   }, [sessionUnlocks]);
-  // Del hook se quiere SOLO el tick: con el telón cerrándose (u oculto) su
+  // Del hook se quiere el tick: con el telón cerrándose (u oculto) su
   // intervalo se para (§9.1), y abierto, ese re-render por segundo es el que
   // mueve el contador y refresca el reloj de la marquesina — cero timers de
-  // más. Lo que se DESCARTA a propósito es su valor de retorno.
-  useLiveTimer(phase === 'open' && live ? live.liveSince : null);
+  // más.
+  const tickSeconds = useLiveTimer(phase === 'open' && live ? live.liveSince : null);
   // Porque ese valor miente en los DOS bordes del telón, y elapsed alimenta
   // media pantalla: el contador verde de 32px, el "· Xh total", el marcador de
   // HowLongToBeat, la baldosa "Longest", la fila viva del historial (y con ella
@@ -828,7 +1069,26 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // ahora) es exacta en los dos bordes: lo que baja es el TELÓN, no la partida
   // — la sesión sigue viva y su cuenta sigue siendo cierta. Sin intervalo
   // propio (§9.1) y sin ref, que leerlo en render lo prohíbe react-hooks/refs.
-  const elapsed = secondsSince(live?.liveSince ?? null);
+  //
+  // Y `tickSeconds` DENTRO de la fórmula, que no es adorno: es la DEPENDENCIA.
+  // React Compiler memoiza por identidad de dependencias, y Date.now() no es
+  // ninguna — `elapsed` y todo lo que cuelga de él (el cronómetro verde, el
+  // marcador de HowLongToBeat, la baldosa "Longest", la fila viva) viven
+  // dentro de un bloque memoizado cuyas dependencias NO cambian al pasar el
+  // segundo. Comprobado en el banco: quitando esta referencia, el tick sigue
+  // corriendo y el cronómetro se queda CLAVADO en la hora de la apertura (el
+  // banco muestra un único valor distinto en cinco segundos). Hasta ahora eso
+  // no se notaba por accidente: la mutación de la nota entraba sin
+  // desestructurar en ese mismo bloque, invalidaba el caché en cada render y
+  // reconstruía la pantalla entera cada segundo — el reloj andaba a costa de
+  // repintar 1.328 filas de logros por segundo.
+  //
+  // El máximo devuelve SIEMPRE secondsSince: es la misma fórmula del hook con
+  // el reloj más fresco, así que nunca es menor que el valor del tick, y en
+  // los dos bordes del telón (donde el hook devuelve 0 o la foto vieja) sigue
+  // siendo el bueno. El tick solo está para que el compilador VEA pasar el
+  // segundo. Si se quita "porque no hace nada", el cronómetro se para.
+  const elapsed = Math.max(tickSeconds, secondsSince(live?.liveSince ?? null));
 
   if (!live || phase === 'hidden') return null;
   const closing = phase === 'closing';
@@ -845,22 +1105,15 @@ export const OverlayHud = (): React.JSX.Element | null => {
     live.totalHours < live.hltbMain &&
     hoursWithLive >= live.hltbMain;
 
+  // Los dos repartos (desbloqueados/bloqueados), el porcentaje y la cuenta de
+  // raros viven DENTRO de AchievementsPanel: aquí arriba se rehacían con cada
+  // tic del cronómetro, dos filtrados y dos ordenaciones sobre el catálogo
+  // entero para devolver exactamente lo mismo.
   const entries = achievements?.entries ?? [];
-  const unlocked = entries
-    .filter((entry) => entry.unlockedAt !== null)
-    .sort((a, b) => (b.unlockedAt as Date).getTime() - (a.unlockedAt as Date).getTime());
-  const locked = entries
-    .filter((entry) => entry.unlockedAt === null)
-    .sort((a, b) => (b.globalPercent ?? -1) - (a.globalPercent ?? -1));
-  const achievementsPercent =
-    entries.length > 0 ? Math.round((unlocked.length / entries.length) * 100) : 0;
-  // Los raros que YA tienes — el dato del que uno presume, con el mismo
-  // umbral y color que usa la app en la ficha y en Stats.
-  const rareCount = unlocked.filter((entry) => isRare(entry.globalPercent)).length;
 
   const saveNote = (): void => {
     if (!openSession || draft === null) return;
-    setNote.mutate(
+    saveNoteMutation(
       { id: openSession.id, note: draft },
       {
         onSuccess: () => {
@@ -1109,11 +1362,11 @@ export const OverlayHud = (): React.JSX.Element | null => {
                 <button
                   type="button"
                   onClick={saveNote}
-                  disabled={!openSession || draft === null || setNote.isPending}
+                  disabled={!openSession || draft === null || savingNote}
                   className="flex items-center gap-1.5 rounded-[9px] px-3.5 py-1.75 text-[12.5px] font-bold text-[#08120c] shadow-[0_4px_14px_rgba(47,220,126,0.25)] transition-[opacity,transform,box-shadow] duration-150 hover:brightness-105 active:scale-[.97] disabled:opacity-40 disabled:shadow-none"
                   style={{ background: `linear-gradient(135deg, ${GREEN}, #24c96f)` }}
                 >
-                  {setNote.isPending ? (
+                  {savingNote ? (
                     <Loader2 size={13} className="animate-spin" />
                   ) : savedFlash ? (
                     <Check size={13} className="animate-in zoom-in-50 duration-200" />
@@ -1123,76 +1376,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
               </div>
             </div>
 
-            {entries.length > 0 && (
-              <div
-                className={`${PANEL_CLASS} flex min-h-0 flex-1 flex-col px-5.5 py-4.5 ${enterClass(closing)}`}
-                style={panelStyle(AMBER)}
-              >
-                {/* La cifra RESPIRA: el conteo iba pegado al porcentaje en
-                    un solo bloque ("6/24 · 25%") y se leía como un número
-                    raro. Ahora el porcentaje manda en grande con el acento, y
-                    el conteo va debajo en pequeño — el mismo reparto
-                    cifra-gorda/rótulo que las cards de Stats. */}
-                <div className="flex flex-none items-start gap-2">
-                  <SectionIcon icon={Trophy} color={AMBER} />
-                  <span className="text-[13.5px] font-bold text-foreground">Achievements</span>
-                  <span className="ml-auto text-right">
-                    <span
-                      className="block text-[17px] leading-none font-extrabold tabular-nums"
-                      style={{ color: AMBER }}
-                    >
-                      {achievementsPercent}%
-                    </span>
-                    <span className="mt-1 block text-[10.5px] font-semibold text-muted-foreground tabular-nums">
-                      {unlocked.length} of {entries.length}
-                      {rareCount > 0 && (
-                        <span style={{ color: rarityAccent(1) }}> · {rareCount} rare</span>
-                      )}
-                    </span>
-                  </span>
-                </div>
-                <div className="mt-2.5 h-1.5 flex-none overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-700 ease-out"
-                    style={{
-                      width: `${achievementsPercent}%`,
-                      background: `linear-gradient(90deg, ${AMBER}88, ${AMBER})`,
-                    }}
-                  />
-                </div>
-
-                {/* El catálogo ENTERO. Antes tenía un max-h fijo (264px);
-                    ahora el panel ENTERO crece con flex-1 hasta el hueco real
-                    de la columna ("hazlo más alto"), y este scroll interno es
-                    quien absorbe lo que sobre por encima de esa altura. */}
-                <div className="-mr-2 mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
-                  {unlocked.length > 0 && (
-                    <>
-                      <div className="text-[9.5px] font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
-                        Unlocked · {unlocked.length}
-                      </div>
-                      <div className="mt-1.5 mb-3 flex flex-col">
-                        {unlocked.map((entry) => (
-                          <AchievementRow key={entry.id} entry={entry} unlocked />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  {locked.length > 0 && (
-                    <>
-                      <div className="text-[9.5px] font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
-                        Still locked · {locked.length} — most common first
-                      </div>
-                      <div className="mt-1.5 flex flex-col">
-                        {locked.map((entry) => (
-                          <AchievementRow key={entry.id} entry={entry} unlocked={false} />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
+            <AchievementsPanel entries={entries} closing={closing} />
           </div>
 
           {/* La columna DERECHA, liberada de la nota: "Your history" con sus
@@ -1257,14 +1441,21 @@ export const OverlayHud = (): React.JSX.Element | null => {
                   <SessionRow
                     key={session.id}
                     session={session}
-                    liveSeconds={elapsed}
+                    // La duración YA resuelta aquí, y no un `liveSeconds` para
+                    // todas: el cronómetro solo es la duración de la fila VIVA
+                    // (ver el memo de SessionRow). Las cerradas reciben su
+                    // número de siempre, que no cambia con el segundo.
+                    durationSec={session.endedAt === null ? elapsed : (session.durationSec ?? 0)}
                     maxDurationSec={Math.max(longestPreviousSec, elapsed)}
                     isRecord={
                       session.durationSec !== null &&
                       session.durationSec > 0 &&
                       session.durationSec === longestPreviousSec
                     }
-                    achievements={unlocksBySession.get(session.id) ?? []}
+                    // NO_UNLOCKS y no `?? []`: un array nuevo por render le
+                    // rompía el memo a todas las sesiones sin trofeos, que son
+                    // la mayoría.
+                    achievements={unlocksBySession.get(session.id) ?? NO_UNLOCKS}
                     timeFormat={timeFormat}
                   />
                 ))}

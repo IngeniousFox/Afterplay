@@ -283,6 +283,12 @@ const TrophyCase = ({
       {/* La barra vive DENTRO de la vitrina (es su suelo), con marcas de
           cuarto para que el ojo sepa leer el 37% sin pensarlo. */}
       <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+        {/* width y no transform A PROPÓSITO (a diferencia de las barras de
+            progreso de Ajustes): el fondo es un degradado que abarca el ancho
+            del relleno, así que con width se ESTIRA con él — un relleno a
+            ancho completo desplazado enseñaría otro tramo del degradado y ya
+            no sería idéntico. Y es fría: solo transiciona cuando cambia el
+            conteo de logros, no en un bucle de eventos. */}
         <div
           className="h-full rounded-full transition-[width] duration-700 ease-out"
           style={{

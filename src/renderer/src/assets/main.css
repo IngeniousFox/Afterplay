@@ -183,7 +183,18 @@
 }
 
 /* SPEC 10.5 — animaciones exactas. Prefijo afterplay- para no chocar con
-   ningún nombre de animación que shadcn/tw-animate-css ya traigan de fábrica. */
+   ningún nombre de animación que shadcn/tw-animate-css ya traigan de fábrica.
+
+   Auditoría de fluidez (ago-2026): los 36 keyframes de este fichero, revisados
+   propiedad a propiedad. NINGUNO anima layout (width/height/top/left/margin):
+   29 son transform/translate/scale/opacity/filter puros (compositor), 4 animan
+   pintura sin equivalente compositor idéntico (pulse-badge, pin-land,
+   glow-card, flash-gold — un box-shadow que crece no es un anillo escalado
+   sobre una píldora redondeada), 2 animan letter-spacing una sola vez sobre la
+   cortina de cambio de modo (intro/outro-mark — scaleX deformaría los glifos)
+   y ring-in dibuja stroke-dashoffset (SVG: esa propiedad ES el efecto). No hay
+   nada que convertir aquí; no "arreglar" estos casos con scale(), que es el
+   camino contrario. */
 @keyframes afterplay-pulse-dot {
   0%,
   100% {
@@ -565,6 +576,11 @@
   .afterplay-ambient-backdrop {
     animation: none;
     transform: scale(1.3);
+    /* Sin animación, el will-change de la clase base solo fuerza una capa de
+       compositor sobre un elemento QUIETO: a pantalla completa son ~8 MB de
+       textura GPU (1920x1080x4 bytes) retenidos todo el rato que el modo
+       ambiente esté en pantalla — y puede estar horas. Se suelta la capa. */
+    will-change: auto;
   }
   .afterplay-ambient-cover {
     animation-name: afterplay-ambient-fade-in;

@@ -3,6 +3,13 @@ import { ipcRenderer } from 'electron';
 export const windowApi = {
   // La versión instalada — el pie de Ajustes.
   getVersion: (): Promise<string> => ipcRenderer.invoke('window:get-version'),
+  // El TERCER reloj del arranque (ver revealWhenReady en main/index.ts): el
+  // renderer avisa cuando la biblioteca tiene contenido DE VERDAD pintable —
+  // datos cargados y las primeras carátulas decodificadas. Sin esto, la
+  // ventana se enseñaba con el primer frame del cascarón y las carátulas
+  // aterrizaban delante del usuario, que es justo el hueco feo que el splash
+  // existe para tapar.
+  startupContentReady: (): void => ipcRenderer.send('window:startup-content-ready'),
   minimize: (): void => ipcRenderer.send('window:minimize'),
   maximize: (): void => ipcRenderer.send('window:maximize'),
   close: (): void => ipcRenderer.send('window:close'),

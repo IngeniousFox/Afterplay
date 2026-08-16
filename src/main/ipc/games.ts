@@ -13,7 +13,12 @@ import { deleteGame } from '../db/queries/games/deleteGame';
 import { purgeGameSaves } from '../saves/orchestrator';
 import { getGameById } from '../db/queries/games/getGameById';
 import { getGames } from '../db/queries/games/getGames';
-import { getPlannedGames, reorderUpNext, setPlanPinned } from '../db/queries/games/getPlannedGames';
+import {
+  getPlannedGameExtras,
+  getPlannedGames,
+  reorderUpNext,
+  setPlanPinned,
+} from '../db/queries/games/getPlannedGames';
 import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
 import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
@@ -25,6 +30,42 @@ import { warmImageCache, warmSteamData } from '../external/warmNewGame';
 // el alta desde el MÓVIL (que entra por el buzón del Plan, no por aquí) se
 // quedaba sin ellas. Ver el porqué allí.
 
+// ── LO QUE PESA CADA RESPUESTA DE ESTE DOMINIO ─────────────────────────────
+//
+// Cada `invoke` serializa (structured clone) TODO lo que el handler devuelve,
+// y estas dos listas se vuelven a pedir enteras en cada 'games:changed' (un
+// arranque o cierre de sesión del watcher, un pull de Turso que trae filas,
+// cualquier mutation). Medido sobre la biblioteca real —994 juegos: 333 en
+// biblioteca y 661 planeados— con el payload de verdad, no con datos de
+// prueba:
+//
+//   games:getAll            333 filas   212 KB   1,0 ms de clone (ida y vuelta)
+//   games:getPlanned        661 filas   354 KB   la lista escueta, para todos
+//   games:getPlannedExtras  661 filas   591 KB   SOLO con la pantalla del Plan montada
+//   games:getById             1 ficha     3 KB de media, 8,2 KB el peor de los 333
+//
+// getAll NO tiene grasa, y esto está escrito para que nadie vuelva a
+// intentarlo de oído: se auditaron sus 22 campos uno a uno contra el
+// renderer y todos tienen consumidor EN LA LISTA (heroUrl es la cara
+// trasera de la card, executablePath el Play del modo TV, los tres tramos
+// de HLTB el overlay, manualIterations las vistas por año de Stats…).
+// Quitar campos tampoco era el eje: lo caro son las FILAS, no el ancho.
+// 212 KB y 1 ms no son el problema de nadie — mira otra cosa.
+//
+// getPlanned ERA el payload más pesado de la app: 928 KB en un solo canal,
+// con el 63% en campos que solo mira la pantalla del Plan (summary 220 KB,
+// steamTags 171 KB, las seis notas de crítica/Steam 85 KB, heroUrl 47 KB,
+// releaseDate+precisión 43 KB). Sus otros tres consumidores (la columna de
+// navegación, el Backlog flow de Stats y el "esto ya lo tienes" del
+// buscador) solo leen id/igdbId/steamAppId/título/carátula/géneros/año — y
+// la lista está ACTIVA fuera del Plan: SagaSection llama a usePlannedGames()
+// antes de su early return, así que cualquier ficha abierta pagaba los
+// 928 KB en cada 'games:changed'. Por eso va partido en DOS canales (la
+// partición vive en getPlannedGames.ts, la forma en shared/types.ts y la
+// unión por id en hooks/games.ts): el caso común paga ahora 354 KB por aviso
+// (-62%, medido con JSON.stringify sobre los 661 reales), los extras solo
+// cruzan el IPC mientras la pantalla del Plan está montada, y un pin o un
+// arrastre de Up next refetchean solo la lista escueta.
 export const registerGamesHandlers = (): void => {
   handleDb('games:getAll', async () => {
     return getGames();
@@ -51,6 +92,13 @@ export const registerGamesHandlers = (): void => {
   // Sección Plan to Play (alta reducida + lista propia + paso a biblioteca).
   handleDb('games:getPlanned', async () => {
     return getPlannedGames();
+  });
+
+  // El segundo canal de la lista del Plan (ver la tabla de payloads de
+  // arriba): solo lo pide la query de extras del renderer, que únicamente
+  // está suscrita mientras la pantalla del Plan está montada.
+  handleDb('games:getPlannedExtras', async () => {
+    return getPlannedGameExtras();
   });
 
   handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {

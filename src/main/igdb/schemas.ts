@@ -116,11 +116,10 @@ export const igdbExternalGamesResponseSchema = z.array(
   z.object({ game: z.number(), uid: z.string(), name: z.string().optional() }),
 );
 
-// Solo el id de los juegos que TIENEN padre — para saber a quién NO se le
-// puede aplicar la regla de "su appid no figura entre sus filas" (ver
-// findSteamAppIdCorrections en igdb/api.ts). Para una expansión con ficha
-// propia, el appid bueno es el del PADRE, así que no figurar entre las suyas
-// es lo normal, no un error.
+// Los juegos que TIENEN padre y de quién (ver findSteamAppIdCorrections en
+// igdb/api.ts). Para una expansión con ficha propia el appid bueno es el del
+// PADRE, así que no figurar entre las suyas no es un error — y el id del padre
+// hace falta para poder darle el appid que sí le toca, no solo para eximirlo.
 export const igdbParentGamesResponseSchema = z.array(
   z.object({ id: z.number(), parent_game: z.number() }),
 );

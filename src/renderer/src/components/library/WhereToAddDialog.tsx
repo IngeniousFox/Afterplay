@@ -60,6 +60,10 @@ const DoorButton = ({
       {label}
       <ArrowRight
         size={12}
+        // margin y no transform A PROPÓSITO: el -ml-1 → ml-0 también ensancha
+        // el span del rótulo 4px y lo re-centra 2px a la izquierda — parte
+        // del gesto. Un translateX no re-centraría, y con ml-0 fijo el reposo
+        // cambiaría. Fría (hover en un diálogo minúsculo): barata donde está.
         className="-ml-1 opacity-0 transition-[opacity,margin] duration-150 group-hover:ml-0 group-hover:opacity-100"
       />
     </span>

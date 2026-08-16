@@ -1,6 +1,6 @@
 {
   "name": "Afterplay",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -13,7 +13,7 @@
     "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
     "typecheck:pwa": "tsc --noEmit -p web/tsconfig.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:worker && npm run typecheck:pwa",
-    "test": "tsx --test --experimental-test-module-mocks src/shared/memory/__tests__/moments.test.ts src/shared/memory/__tests__/chapters.test.ts src/main/__tests__/queues.test.ts src/main/saves/__tests__/localUsage.test.ts",
+    "test": "tsx --test --experimental-test-module-mocks \"src/**/*.test.ts\" \"worker/src/**/*.test.ts\" \"web/src/**/*.test.ts\"",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

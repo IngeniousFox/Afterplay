@@ -12,6 +12,9 @@ import { startGameSession } from '../db/queries/sessions/startGameSession';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { sendToOverlay } from '../overlay';
 import { notifySessionClosed } from './notifySession';
+// La regla de frescura del cronómetro (REMOTO.md §7.4) es la MISMA aquí y en
+// el Worker, así que se importa en vez de reescribirse: ver timerFreshness.ts.
+import { TIMER_STALE_MS, isTimerStale, timerLastBeat } from '../../shared/timerFreshness';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -60,7 +63,16 @@ const isScreenLocked = (): boolean => {
 };
 
 // Una sesión que el watcher tiene abierta ahora mismo.
-type ActiveSession = { pid: number; sessionId: number; title: string };
+//
+// `gameId` es a quién se le imputan las horas, y se guarda aparte porque NO se
+// puede deducir de la clave del mapa: una sesión de emulador vive bajo "emu:N"
+// y aun así puede tener juego asignado (la bandeja Pending asigna en caliente,
+// EMULADORES.md §5). Deducirlo del prefijo "game:" dejaba isGameRunning()
+// —la guarda que impide RESTAURAR una partida guardada encima del juego en
+// marcha, PARTIDAS-GUARDADAS.md §10bis.3— SIEMPRE abierta para los juegos
+// emulados. null = sesión de emulador todavía sin asignar (bandeja Pending):
+// se está jugando algo, pero aún no se sabe el qué.
+type ActiveSession = { pid: number; sessionId: number; title: string; gameId: number | null };
 
 // Un objetivo vigilado (juego o emulador) que está corriendo AHORA
 // (verificado por ruta en la Fase 2). Es la "foto actual" que se compara
@@ -81,6 +93,12 @@ type RunningTarget = { pid: number; target: WatchTarget };
 // reconciliación ni la adopción por ciclo la encontraban — se cerraba viva y
 // el mismo ciclo abría otra por el emulador. emulatorId es el registro de QUÉ
 // PROCESO vigila el watcher; gameId solo dice a quién se le imputan las horas.
+//
+// La consecuencia, que costó un fallo real: la clave NO sirve para saber qué
+// juego se está jugando. Un juego emulado vive bajo "emu:N" toda la partida,
+// así que isGameRunning() y getActiveGameIds() no pueden leer el prefijo — de
+// eso se encarga ActiveSession.gameId, que se refresca en cada ciclo
+// (refreshAssignedGames) porque la asignación llega por fuera del watcher.
 const openSessionKey = (session: OpenSession): string | null => {
   if (session.emulatorId !== null) return `emu:${session.emulatorId}`;
   if (session.gameId !== null) return `game:${session.gameId}`;
@@ -284,15 +302,24 @@ export class ProcessWatcher {
         // el getWatchTargets que ya se paga cada 5s.
         const openSessions = await getOpenSessions();
 
+        // Quién es el dueño de lo que ya se está siguiendo: puede haber
+        // cambiado por fuera del watcher desde el ciclo anterior.
+        this.refreshAssignedGames(openSessions);
+
         // Cronómetros abandonados (REMOTO.md §7.4): en CADA ciclo, no solo al
         // arrancar.
         changed = (await this.sweepStaleTimerSessions(openSessions)) || changed;
 
         // La primera vuelta reconcilia las sesiones que quedaron abiertas de una
-        // ejecución anterior o de un Play manual colgado.
+        // ejecución anterior o de un Play manual colgado. De la segunda en
+        // adelante manda la regla más estrecha del barrido: solo se cierran las
+        // de un objetivo QUE SE VIGILA y que lleva un rato sin aparecer.
         if (!this.reconciled) {
           this.reconciled = true;
           changed = (await this.reconcileOpenSessions(openSessions, running)) || changed;
+        } else {
+          changed =
+            (await this.sweepUnseenWatchedSessions(openSessions, running, targets)) || changed;
         }
 
         // Arranques: corriendo ahora y sin sesión que el watcher siga todavía.
@@ -336,6 +363,10 @@ export class ProcessWatcher {
                 pid: info.pid,
                 sessionId: existingOpen.sessionId,
                 title: info.target.title,
+                // De la sesión, no de la clave: bajo "emu:N" puede venir ya un
+                // juego asignado (bandeja Pending), y es el único sitio donde
+                // ese dato se conoce al adoptar.
+                gameId: existingOpen.gameId,
               });
               console.log(
                 `[watcher] [adopt] "${info.target.title}" (pid ${info.pid}) -> sesion ${existingOpen.sessionId}`,
@@ -371,7 +402,7 @@ export class ProcessWatcher {
               (session) =>
                 session.startedBy === 'timer' &&
                 openSessionKey(session) === key &&
-                !ProcessWatcher.isTimerStale(session, nowMs),
+                !isTimerStale(session, nowMs),
             );
             if (timerOpen) {
               timerHeldNow.add(key);
@@ -397,6 +428,10 @@ export class ProcessWatcher {
                 pid: info.pid,
                 sessionId: session.id,
                 title: info.target.title,
+                // Un emulador recién detectado nace SIN juego (bandeja
+                // Pending): hasta que se le asigne uno no hay a quién imputarle
+                // nada, y refreshAssignedGames lo recogerá en cuanto lo haya.
+                gameId: info.target.kind === 'game' ? info.target.refId : null,
               });
               console.log(
                 `[watcher] [start] "${info.target.title}" (pid ${info.pid}) -> sesion ${session.id}`,
@@ -474,38 +509,15 @@ export class ProcessWatcher {
     }
   }
 
-  // Cuánto puede callarse un cronómetro antes de darlo por abandonado.
-  //
-  // GENEROSO a propósito, y no los pocos minutos que sugeriría un latido de uno
-  // por minuto. El §7.5 avisa de por qué: los navegadores móviles suspenden las
-  // pestañas de fondo sin piedad, así que es normal que el latido se pare
-  // MIENTRAS SIGUES JUGANDO. Con un umbral corto, una tarde de consola con el
-  // móvil en el bolsillo se cortaría por la mitad.
-  //
-  // El precio es el opuesto y está asumido (§7.6): dormirse con el cronómetro
-  // puesto suma hasta seis horas de más. Pero eso se corrige después editando
-  // la sesión, y perder tiempo real no se corrige con nada.
-  //
-  // El número está escrito DOS veces, aquí y en TIMER_STALE_MS del Worker
-  // (worker/src/queries/timer.ts), que barre lo mismo contra Turso con esta
-  // misma regla. El sitio bueno es src/shared, junto a playthroughState, donde
-  // ya viven las reglas que los dos lados comparten; mientras siga duplicado,
-  // tocar un número obliga a tocar el otro.
-  private static readonly TIMER_STALE_HOURS = 6;
-
-  // El último latido de un cronómetro, o su arranque si nunca llegó a latir (la
-  // pestaña murió en el primer minuto). Es a la vez la vara de la regla de
-  // frescura y la hora en la que se cierra si está rancio — la misma pareja que
-  // usa el Worker.
-  private static readonly timerLastBeat = (session: OpenSession): Date =>
-    session.lastHeartbeatAt ?? session.startedAt;
-
-  // La regla de frescura del §7.4, en un solo sitio porque la miran dos: el
-  // barrido de rancios y el bucle de arranques, que necesita saber si el
-  // cronómetro sigue vivo antes de decidir no abrir sesión propia.
-  private static readonly isTimerStale = (session: OpenSession, now: number): boolean =>
-    now - ProcessWatcher.timerLastBeat(session).getTime() >=
-    ProcessWatcher.TIMER_STALE_HOURS * 3_600_000;
+  // Cuánto puede callarse un cronómetro antes de darlo por abandonado: el
+  // umbral, la vara del último latido y el predicado de "rancia" ya NO viven
+  // aquí, son los de src/shared/timerFreshness — los MISMOS que importa el
+  // Worker para barrer contra Turso. Estuvieron duplicados (un
+  // `TIMER_STALE_HOURS = 6` privado aquí y un `6 * 3_600_000` allí) y esa copia
+  // privada no se podía importar desde ningún test, así que bajarla dejaba la
+  // suite entera en verde mientras el PC y la web discrepaban durante horas
+  // sobre si seguías jugando. El porqué de las seis horas está en la cabecera
+  // de ese fichero.
 
   // Las sesiones de CRONÓMETRO (REMOTO.md §7) no tienen proceso: las abre el
   // móvil para una consola física, GeForce Now o cualquier cosa que este
@@ -540,13 +552,13 @@ export class ProcessWatcher {
 
     for (const session of openSessions) {
       if (session.startedBy !== 'timer') continue;
-      if (!ProcessWatcher.isTimerStale(session, now)) continue;
+      if (!isTimerStale(session, now)) continue;
 
-      const lastBeat = ProcessWatcher.timerLastBeat(session);
+      const lastBeat = timerLastBeat(session);
       const closed = await closeSessionIfOpen(session.sessionId, lastBeat);
       if (!closed) continue;
       console.log(
-        `[watcher] [info] sesion ${session.sessionId} de cronometro sin latir ${ProcessWatcher.TIMER_STALE_HOURS}h - cerrada en su ultimo latido`,
+        `[watcher] [info] sesion ${session.sessionId} de cronometro sin latir ${TIMER_STALE_MS / 3_600_000}h - cerrada en su ultimo latido`,
       );
       changed = true;
     }
@@ -584,6 +596,7 @@ export class ProcessWatcher {
           pid: runningTarget.pid,
           sessionId: session.sessionId,
           title: runningTarget.target.title,
+          gameId: session.gameId,
         });
       } else {
         const endedAt = session.lastHeartbeatAt ?? session.startedAt;
@@ -593,6 +606,97 @@ export class ProcessWatcher {
         );
         changed = true;
       }
+    }
+
+    return changed;
+  }
+
+  // Vuelve a preguntarle a la DB a QUÉ JUEGO pertenece cada sesión que ya se
+  // está siguiendo. El mapa `active` sobrevive entre ciclos y nunca se
+  // recalculaba, pero su dueño SÍ puede cambiar por fuera del watcher: la
+  // bandeja Pending deja asignar a un juego una sesión de emulador TODAVÍA
+  // VIVA (EMULADORES.md §5, badge LIVE). Sin este repaso, esa entrada se
+  // quedaba con gameId null el resto de la partida y el juego no figuraba en
+  // isGameRunning() — que es justo la guarda que impide RESTAURAR una partida
+  // guardada encima del juego en marcha (PARTIDAS-GUARDADAS.md §10bis.3).
+  //
+  // La foto es la del PRINCIPIO del ciclo, así que una asignación hecha
+  // mientras corría este ciclo se recoge en el siguiente (~5s). Lo que se abra
+  // o se adopte más abajo ya nace con su gameId puesto, así que no hay hueco.
+  // `undefined` (la sesión ya no está abierta) se deja como estaba: la cerró
+  // otro y este mismo ciclo la sacará de `active`.
+  private refreshAssignedGames(openSessions: OpenSession[]): void {
+    if (this.active.size === 0) return;
+
+    const gameBySessionId = new Map(
+      openSessions.map((session) => [session.sessionId, session.gameId]),
+    );
+    for (const activeSession of this.active.values()) {
+      const gameId = gameBySessionId.get(activeSession.sessionId);
+      if (gameId !== undefined) activeSession.gameId = gameId;
+    }
+  }
+
+  // Cuánto se espera a que aparezca el proceso de una sesión que el watcher no
+  // abrió antes de darla por muerta. Generoso a propósito y ATADO al armado del
+  // overlay: su gracia de Play son 90s (PLAY_ARM_GRACE_MS en overlay.ts) porque
+  // con un lanzador de por medio —Steam, EA, Ubisoft— el .exe de verdad tarda
+  // 20-40s en nacer, y a veces bastante más si toca compilar shaders. Cerrar
+  // antes que esa gracia sería matar la sesión del juego que todavía está
+  // arrancando, que es peor que el fallo que esto arregla.
+  private static readonly UNSEEN_GRACE_MS = 120_000;
+
+  // El agujero del guardián `reconciled`: la reconciliación solo corre en el
+  // PRIMER ciclo y la adopción por ciclo solo mira claves que están en
+  // `running`, así que una sesión abierta cuyo proceso no aparece NUNCA no la
+  // cerraba nadie — el juego pintado LIVE en la biblioteca y sus horas sin
+  // contar (durationSec null) hasta reiniciar Afterplay o pulsar Stop. Caso
+  // real: pulsas Play, el .exe arranca y revienta antes del siguiente tick.
+  //
+  // La regla es MÁS ESTRECHA que la del arranque, y la diferencia es el punto
+  // entero: aquí solo se cierran las sesiones de un objetivo QUE SE VIGILA (un
+  // juego con executablePath, o un emulador). Un Play manual sobre un juego sin
+  // .exe configurado —una consola, un juego que no se detecta— no tiene proceso
+  // que buscar y NO se toca: matarlo a los 5 segundos es justo lo que el
+  // guardián `reconciled` estaba protegiendo, y sigue protegido. Si hay .exe que
+  // vigilar y en dos minutos no ha aparecido, o murió o nunca llegó a nacer.
+  //
+  // Lo que está en `active` no es asunto de aquí: de eso se encarga la sección
+  // de "Cierres", que además canta el aviso de sesión cerrada y dispara el
+  // backup. Una sesión que nunca llegó a verse en marcha no tiene ninguna de
+  // las dos cosas que contar — se cierra en su último latido (que no lo hay:
+  // `startedAt`, duración 0), sin diario que pedir ni partida guardada que
+  // hubiera cambiado.
+  //
+  // closeSessionIfOpen y no closeSession, por lo mismo que el barrido de
+  // cronómetros: entre la foto y este UPDATE la puede haber cerrado el Stop
+  // manual o el pull del sync, y cantar un cierre ajeno sería mentir.
+  private async sweepUnseenWatchedSessions(
+    openSessions: OpenSession[],
+    running: Map<string, RunningTarget>,
+    targets: WatchTarget[],
+  ): Promise<boolean> {
+    const now = Date.now();
+    const watchedKeys = new Set(targets.map((target) => target.key));
+    let changed = false;
+
+    for (const session of openSessions) {
+      // Los cronómetros no tienen proceso por definición (REMOTO.md §7): de
+      // ellos se ocupa sweepStaleTimerSessions con su regla de frescura.
+      if (session.startedBy === 'timer') continue;
+
+      const key = openSessionKey(session);
+      if (key === null || !watchedKeys.has(key)) continue;
+      if (running.has(key) || this.active.has(key)) continue;
+      if (now - session.startedAt.getTime() < ProcessWatcher.UNSEEN_GRACE_MS) continue;
+
+      const endedAt = session.lastHeartbeatAt ?? session.startedAt;
+      const closed = await closeSessionIfOpen(session.sessionId, endedAt);
+      if (!closed) continue;
+      console.log(
+        `[watcher] [info] sesion ${session.sessionId} (${key}) sin proceso a la vista - cerrada, su .exe nunca aparecio`,
+      );
+      changed = true;
     }
 
     return changed;
@@ -674,20 +778,38 @@ export class ProcessWatcher {
   // ¿Está corriendo AHORA este juego? Sale del mapa en memoria, sin escanear
   // procesos ni tocar la DB. Lo consume la guarda de restauración de partidas
   // guardadas vía watcher/runningGames.ts.
+  //
+  // Se recorre el mapa por VALOR en vez de buscar la clave "game:N", que era lo
+  // que hacía antes: un juego emulado se sigue por el emulador ("emu:N", ver
+  // openSessionKey), así que su clave nunca empieza por "game:" y esta guarda
+  // —la que impide restaurar un backup encima del juego en marcha,
+  // PARTIDAS-GUARDADAS.md §10bis.3— estaba SIEMPRE abierta para él: Chrono
+  // Trigger corriendo bajo RetroArch dejaba restaurar por encima. El recorrido
+  // es de un puñado de entradas (lo que estés jugando a la vez), no hay nada
+  // que optimizar.
   isGameRunning(gameId: number): boolean {
-    return this.active.has(`game:${gameId}`);
+    for (const session of this.active.values()) {
+      if (session.gameId === gameId) return true;
+    }
+    return false;
   }
 
-  // Qué JUEGOS (no emuladores) están corriendo AHORA. Mismo mapa en memoria
-  // que isGameRunning, sin escanear procesos ni tocar la DB. Lo consume el
-  // sondeo en vivo de logros de Steam (steam/livePoll.ts): solo tiene
-  // sentido preguntarle a Steam por lo que se está jugando en este momento.
+  // Qué JUEGOS están corriendo AHORA — los nativos y también los emulados con
+  // su sesión ya asignada, por la misma razón que isGameRunning: quien decide
+  // es el dueño de la sesión, no el prefijo de la clave. Mismo mapa en memoria,
+  // sin escanear procesos ni tocar la DB. Un emulador sin juego asignado
+  // (bandeja Pending) no aporta ningún id: se está jugando algo, pero todavía
+  // no se sabe el qué.
+  //
+  // Lo consume el sondeo en vivo de logros de Steam (steam/livePoll.ts), que
+  // filtra por steamAppId y por eso no se inmuta con un juego de consola, y el
+  // conteo que arma el overlay (main/index.ts).
   getActiveGameIds(): number[] {
-    const ids: number[] = [];
-    for (const key of this.active.keys()) {
-      if (key.startsWith('game:')) ids.push(Number(key.slice('game:'.length)));
+    const ids = new Set<number>();
+    for (const session of this.active.values()) {
+      if (session.gameId !== null) ids.add(session.gameId);
     }
-    return ids;
+    return Array.from(ids);
   }
 
   // ¿Hay ALGÚN emulador en marcha? Lo consume el sondeo en vivo de

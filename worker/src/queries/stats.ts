@@ -1,3 +1,4 @@
+import { yearOf } from '../../../src/shared/yearOf';
 import type { StatsSummary } from '../api-types';
 import type { TenantDb } from '../db';
 import { buildLibraryData } from './library';
@@ -17,22 +18,40 @@ import { buildLibraryData } from './library';
 // se cuelgan sale del log de estados de su playthrough (manualHoursAnchor).
 //
 // Y el otro fallo que había: las sesiones venían con un tope de 200 filas, así
-// que el total del año dependía de cuántas cupieran. Ahora entran todas.
-export const getStatsSummary = async (db: TenantDb): Promise<StatsSummary> => {
-  const { games, manualByGame, sessions } = await buildLibraryData(db);
+// que el total del año dependía de cuántas cupieran. Ahora entran todas las
+// del año — el único recorte que queda es por FECHA y está calculado para no
+// poder dejarse fuera ninguna (SESSION_WINDOW_MS en library.ts).
+//
+// Lo que este fichero NO hace, y es a propósito: pedir su propia consulta.
+// Todo sale de buildLibraryData, que trae las seis en un solo viaje a Turso.
+// Un `await db.select()` aquí serían 49 ms más de red, medidos.
 
-  // OJO, desfase conocido con el escritorio: un Worker no tiene zona horaria,
-  // así que este `getFullYear()` —y el de cada sesión, y el del ancla de las
-  // horas manuales en library.ts— es UTC, mientras que el PC calcula el mismo
-  // año en local. Una fecha con precisión de año se guardó como el 1 de enero
-  // a las 00:00 locales y desde España se lee aquí como el 31 de diciembre
-  // anterior: esas horas caen un año antes que en el escritorio. El arreglo
-  // está en library.ts, y pide un helper en src/shared + que la PWA mande su
-  // zona; ninguno de los dos se puede tocar desde este fichero.
-  const thisYear = new Date().getFullYear();
+// `timeZone` es la zona del que está mirando, que la trae la petición
+// (index.ts). Sin ella el año se lee en el reloj del proceso, que en un Worker
+// es UTC — ver abajo por qué eso era un desfase visible y no un detalle.
+export const getStatsSummary = async (
+  db: TenantDb,
+  timeZone?: string | null,
+): Promise<StatsSummary> => {
+  const { games, manualByGame, recentSessions } = await buildLibraryData(db, timeZone);
 
-  const trackedSecondsThisYear = sessions
-    .filter((session) => session.startedAt.getFullYear() === thisYear)
+  // ARREGLADO, y era la divergencia Home/Stats en carne viva: un Worker no
+  // tiene zona horaria, así que `getFullYear()` aquí era UTC mientras el PC
+  // calculaba el mismo año en local. Una fecha con precisión de AÑO se guarda
+  // como el 1 de enero a las 00:00 LOCALES —o sea las 23:00Z del 31 de
+  // diciembre anterior desde España—, y esas horas caían en 2018 en la portada
+  // del móvil y en 2019 en Stats del escritorio. La misma pregunta con dos
+  // respuestas según la pantalla.
+  //
+  // Ahora el año lo decide yearOf con la zona del que mira, que es el mismo
+  // criterio que aplica el escritorio (allí la zona es la del proceso). Las
+  // TRES lecturas de año de esta pantalla van por ahí —el año en curso, el de
+  // cada sesión y el del ancla de las horas manuales (library.ts)—: si una se
+  // quedara en UTC, el año se partiría por dentro.
+  const thisYear = yearOf(new Date(), timeZone);
+
+  const trackedSecondsThisYear = recentSessions
+    .filter((session) => yearOf(session.startedAt, timeZone) === thisYear)
     .reduce((sum, session) => sum + (session.durationSec ?? 0), 0);
 
   const manualHoursThisYear = [...manualByGame.values()]
@@ -71,7 +90,7 @@ export const getStatsSummary = async (db: TenantDb): Promise<StatsSummary> => {
     hoursThisYear,
     // Los juegos que de verdad se tocaron ESTE año — la misma distinción que
     // hace Stats entre "GAMES TRACKED" (all time) y "GAMES PLAYED" (un año).
-    gamesThisYear: countGamesThisYear(games, manualByGame, sessions, thisYear),
+    gamesThisYear: countGamesThisYear(games, manualByGame, recentSessions, thisYear, timeZone),
     year: thisYear,
     ...counts,
     live: liveGame
@@ -88,12 +107,16 @@ export const getStatsSummary = async (db: TenantDb): Promise<StatsSummary> => {
 const countGamesThisYear = (
   games: { id: number }[],
   manualByGame: Map<number, { hours: number; year: number | null }[]>,
-  sessions: { gameId: number; startedAt: Date; durationSec: number | null }[],
+  recentSessions: { gameId: number; startedAt: Date; durationSec: number | null }[],
   year: number,
+  timeZone?: string | null,
 ): number => {
   const hoursByGame = new Map<number, number>();
-  for (const session of sessions) {
-    if (session.startedAt.getFullYear() !== year) continue;
+  for (const session of recentSessions) {
+    // Con la zona del que mira, igual que el año en curso: contar aquí en UTC
+    // y allí en local dejaría a GAMES PLAYED hablando de un año distinto que
+    // las horas que tiene al lado.
+    if (yearOf(session.startedAt, timeZone) !== year) continue;
     hoursByGame.set(
       session.gameId,
       (hoursByGame.get(session.gameId) ?? 0) + (session.durationSec ?? 0) / 3600,

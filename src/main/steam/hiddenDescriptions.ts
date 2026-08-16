@@ -40,13 +40,30 @@ const responseSchema = z.array(
 // apiName -> descripción, por appid. Vive lo que viva el proceso: no toca
 // disco ni base de datos.
 const memoryCache = new Map<number, Map<string, string>>();
+
+// Tope LRU del caché. "Mientras la app viva" sin techo era una fuga con otro
+// nombre en un proceso que pasa días en la bandeja: medido con volumen real
+// (script suelto, process.memoryUsage), 300 appids con 40 descripciones cada
+// uno retienen 6,1 MB. Con 64 appids el peor caso ronda 1,3 MB y el propósito
+// original —no repetir la misma pregunta al reabrir la misma ficha— sigue
+// cubierto de sobra: nadie alterna entre 64 fichas en una misma sesión.
+const MEMORY_CACHE_MAX_APPS = 64;
+
 // Los appid que ya fallaron, para no reintentar en bucle cada vez que se abre
-// la ficha de un juego que ese servicio no conoce.
+// la ficha de un juego que ese servicio no conoce. Sin tope a propósito, al
+// revés que memoryCache: son números pelados y 1.000 appids son 20 KB medidos
+// — capar esto costaría más código del que ahorra.
 const failed = new Set<number>();
 
 export const getHiddenDescriptions = async (appId: number): Promise<Map<string, string>> => {
   const cached = memoryCache.get(appId);
-  if (cached) return cached;
+  if (cached) {
+    // Reinsertar al usar: el orden de inserción del Map hace de cola LRU, y
+    // el que se acaba de usar pasa a ser el último candidato a salir.
+    memoryCache.delete(appId);
+    memoryCache.set(appId, cached);
+    return cached;
+  }
   if (failed.has(appId)) return new Map();
 
   try {
@@ -61,6 +78,12 @@ export const getHiddenDescriptions = async (appId: number): Promise<Map<string, 
       if (description) result.set(entry.apiName, description);
     }
 
+    // Lleno = fuera el menos usado, que es el primero en orden de inserción
+    // (el get de arriba reinserta al tocar).
+    if (memoryCache.size >= MEMORY_CACHE_MAX_APPS) {
+      const oldest = memoryCache.keys().next().value;
+      if (oldest !== undefined) memoryCache.delete(oldest);
+    }
     memoryCache.set(appId, result);
     return result;
   } catch {

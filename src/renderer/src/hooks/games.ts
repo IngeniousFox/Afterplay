@@ -1,5 +1,6 @@
-import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
+import type { QueryClient, UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import type {
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
@@ -8,6 +9,7 @@ import type {
   GameRow,
   LaunchExecutableResult,
   PlannedGameItem,
+  PlannedGameListItem,
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../../shared/types';
@@ -66,12 +68,122 @@ export const useGame = (id: number): UseQueryResult<GameDetail | null, Error> =>
 // planeados (que useGames() nunca trae). Mismo staleTime Infinity: su key
 // vive bajo el prefijo ['games'], así que todas las invalidaciones de
 // games.all la refrescan también.
-export const usePlannedGames = (): UseQueryResult<PlannedGameItem[], Error> =>
+//
+// Devuelve el canal ESCUETO (PlannedGameListItem, 354 KB de 661 filas): es
+// lo que pagan TODOS sus consumidores en cada 'games:changed' — la columna
+// de navegación, el Backlog flow de Stats, el "ya lo tienes" del buscador y
+// la SagaSection de cualquier ficha abierta. La pantalla del Plan, que sí
+// necesita sinopsis/notas/etiquetas, usa usePlannedGamesWithExtras (abajo).
+// Antes todo viajaba junto y cualquier ficha abierta pagaba 928 KB por
+// aviso; la medida completa está en ipc/games.ts.
+export const usePlannedGames = (): UseQueryResult<PlannedGameListItem[], Error> =>
   useQuery({
     queryKey: queryKeys.games.planned,
     queryFn: () => window.api.games.getPlanned(),
     staleTime: Infinity,
   });
+
+// La key del canal de extras. Bajo el prefijo ['games'] para heredar las
+// mismas invalidaciones anchas que la lista (mutations + watcher), pero
+// FUERA del prefijo de games.planned a propósito: fijar y reordenar Up next
+// solo invalidan la lista escueta (planPinnedAt vive allí), y arrastrar los
+// 591 KB de extras en cada pin sería recrear el problema que este canal
+// arregla.
+const plannedExtrasKey = ['games', 'plannedExtras'] as const;
+
+export type PlannedGamesWithExtras = {
+  data: PlannedGameItem[] | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => Promise<void>;
+};
+
+// La vista COMPLETA del Plan: la lista escueta + el canal de extras, unidos
+// por id. Solo la usa la pantalla del Plan — mientras no está montada, la
+// query de extras queda inactiva y sus 591 KB ni se piden ni se clonan en
+// los 'games:changed' (TanStack solo refetchea queries con suscriptores).
+//
+// La unión rellena con null los extras de un id que aún no ha llegado. Solo
+// puede pasar en la ventana entre los dos refetches de una invalidación
+// (llegan en paralelo pero no en el mismo tick) y solo para una fila RECIÉN
+// creada: las filas que ya existían conservan sus extras viejos hasta que
+// aterriza el lote nuevo, exactamente como con el canal único.
+export const usePlannedGamesWithExtras = (): PlannedGamesWithExtras => {
+  const list = usePlannedGames();
+  const extras = useQuery({
+    queryKey: plannedExtrasKey,
+    queryFn: () => window.api.games.getPlannedExtras(),
+    staleTime: Infinity,
+  });
+
+  // useMemo explícito (el compilador también memoizaría): la identidad del
+  // array importa — los useMemo de PlanToPlay (splitPlanSections/computePlanDebt)
+  // dependen de ella, y el montaje por tandas de esa pantalla repinta decenas
+  // de veces seguidas.
+  const data = useMemo((): PlannedGameItem[] | undefined => {
+    if (!list.data || !extras.data) return undefined;
+    const extrasById = new Map(extras.data.map((extra) => [extra.id, extra]));
+    return list.data.map((game): PlannedGameItem => {
+      const extra = extrasById.get(game.id);
+      return extra
+        ? { ...game, ...extra }
+        : {
+            ...game,
+            summary: null,
+            planNote: null,
+            releaseDate: null,
+            releaseDatePrecision: null,
+            ratingCritics: null,
+            ratingCriticsCount: null,
+            ratingUsers: null,
+            ratingUsersCount: null,
+            steamPositive: null,
+            steamNegative: null,
+            steamTags: null,
+          };
+    });
+  }, [list.data, extras.data]);
+
+  const refetch = async (): Promise<void> => {
+    await Promise.all([list.refetch(), extras.refetch()]);
+  };
+
+  return {
+    data,
+    isLoading: list.isLoading || extras.isLoading,
+    isError: list.isError || extras.isError,
+    refetch,
+  };
+};
+
+// Fijar y reordenar escriben UNA columna, planPinnedAt, y solo dos consultas
+// la leen: getPlannedGames (la lista del Plan) y getGameById (el botón del pin
+// en la ficha de un planeado, que la trae en su proyección). Ni getGames ni
+// nada más la miran — está fuera de GameListItem a propósito.
+//
+// Por eso esto NO invalida queryKeys.games.all, que era lo que hacían las dos
+// mutations de abajo y es la invalidación más ancha del archivo: el prefijo
+// ['games'] arrastra la lista de la biblioteca, que la tarjeta de Now playing
+// tiene montada en TODAS las pantallas (MiddleColumn), así que cada pin y cada
+// suelta de un arrastre pagaba un getGames entero —8,8 ms en el main y 186 KB
+// de las 333 filas cruzando el IPC, medido sobre la biblioteca real— para
+// recibir exactamente la misma lista, y encima con identidad de array nueva:
+// repintado de la columna de navegación, de Now playing y del modo ambiente
+// para nada. El arrastre tampoco es un gesto de una vez: recolocas tres o
+// cuatro filas seguidas y esto se pagaba en cada una.
+//
+// Y tampoco invalida plannedExtrasKey: planPinnedAt viaja en la lista
+// escueta, así que un pin no puede cambiar nada de lo que va en los extras —
+// refetchearlos aquí serían 591 KB por gesto para recibir lo mismo.
+const invalidatePlanPinned = (queryClient: QueryClient, ids: readonly number[]): void => {
+  queryClient.invalidateQueries({ queryKey: queryKeys.games.planned });
+  // La ficha de cada juego movido: PlanGameDetail pinta el estado del pin
+  // desde useGame(id), no desde la lista, así que sin esto el botón se
+  // quedaría al revés al entrar (o al volver) a la ficha.
+  for (const id of ids) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.games.detail(id) });
+  }
+};
 
 // "Up next" (PLAN-TO-PLAY.md 2.2) — fijar o soltar un planeado como
 // prioridad de verdad.
@@ -99,7 +211,7 @@ export const useSetPlanPinned = (): UseMutationResult<
       window.api.games.setPlanPinned(id, pinned),
     onMutate: async ({ id, pinned }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.games.planned });
-      const previous = queryClient.getQueryData<PlannedGameItem[]>(queryKeys.games.planned);
+      const previous = queryClient.getQueryData<PlannedGameListItem[]>(queryKeys.games.planned);
       if (previous) {
         queryClient.setQueryData(
           queryKeys.games.planned,
@@ -111,11 +223,11 @@ export const useSetPlanPinned = (): UseMutationResult<
       return { previous };
     },
     onError: (_error, _input, context) => {
-      const previous = (context as { previous?: PlannedGameItem[] } | undefined)?.previous;
+      const previous = (context as { previous?: PlannedGameListItem[] } | undefined)?.previous;
       if (previous) queryClient.setQueryData(queryKeys.games.planned, previous);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    onSettled: (_data, _error, { id }) => {
+      invalidatePlanPinned(queryClient, [id]);
     },
   });
 };
@@ -125,7 +237,10 @@ export const useSetPlanPinned = (): UseMutationResult<
 // reasignan en el orden nuevo. Duplicado aqui a proposito — es lo que hace
 // posible la actualizacion OPTIMISTA de abajo: la cache queda exactamente
 // como va a quedar la DB, asi que cuando llegue el refetch no se mueve nada.
-const reassignPinStamps = (games: PlannedGameItem[], orderedIds: number[]): PlannedGameItem[] => {
+const reassignPinStamps = (
+  games: PlannedGameListItem[],
+  orderedIds: number[],
+): PlannedGameListItem[] => {
   const byId = new Map(games.map((game) => [game.id, game]));
   const ids = orderedIds.filter((id) => byId.get(id)?.planPinnedAt != null);
   if (ids.length < 2) return games;
@@ -168,7 +283,7 @@ export const useReorderUpNext = (): UseMutationResult<boolean, Error, number[], 
     mutationFn: (orderedIds: number[]) => window.api.games.reorderUpNext(orderedIds),
     onMutate: async (orderedIds) => {
       const cancelled = queryClient.cancelQueries({ queryKey: queryKeys.games.planned });
-      const previous = queryClient.getQueryData<PlannedGameItem[]>(queryKeys.games.planned);
+      const previous = queryClient.getQueryData<PlannedGameListItem[]>(queryKeys.games.planned);
       if (previous) {
         queryClient.setQueryData(queryKeys.games.planned, reassignPinStamps(previous, orderedIds));
       }
@@ -176,11 +291,11 @@ export const useReorderUpNext = (): UseMutationResult<boolean, Error, number[], 
       return { previous };
     },
     onError: (_error, _ids, context) => {
-      const previous = (context as { previous?: PlannedGameItem[] } | undefined)?.previous;
+      const previous = (context as { previous?: PlannedGameListItem[] } | undefined)?.previous;
       if (previous) queryClient.setQueryData(queryKeys.games.planned, previous);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    onSettled: (_data, _error, orderedIds) => {
+      invalidatePlanPinned(queryClient, orderedIds);
     },
   });
 };

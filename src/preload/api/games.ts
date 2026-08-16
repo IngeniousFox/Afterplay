@@ -6,18 +6,23 @@ import type {
   GameListItem,
   GameRow,
   LaunchExecutableResult,
-  PlannedGameItem,
+  PlannedGameExtras,
+  PlannedGameListItem,
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
 
 export const gamesApi = {
   getAll: (): Promise<GameListItem[]> => ipcRenderer.invoke('games:getAll'),
-  // PlannedGameItem y no GameListItem: la pantalla del Plan necesita mas de
-  // cada juego (sinopsis, el porque de haberlo planeado, el pin, la fecha
-  // completa, las notas). Es un superconjunto, asi que sus otros tres
-  // consumidores siguen leyendo exactamente lo mismo que antes.
-  getPlanned: (): Promise<PlannedGameItem[]> => ipcRenderer.invoke('games:getPlanned'),
+  // La lista del Plan viaja en DOS canales (la medida que lo justifica esta
+  // en ipc/games.ts): getPlanned es el escueto que pagan todos sus
+  // consumidores en cada 'games:changed', y getPlannedExtras lleva los
+  // campos que SOLO mira la pantalla del Plan (sinopsis, porque, fecha
+  // completa, notas, etiquetas, hero) — la pantalla los junta por id con
+  // usePlannedGamesWithExtras.
+  getPlanned: (): Promise<PlannedGameListItem[]> => ipcRenderer.invoke('games:getPlanned'),
+  getPlannedExtras: (): Promise<PlannedGameExtras[]> =>
+    ipcRenderer.invoke('games:getPlannedExtras'),
   // "Up next" (PLAN-TO-PLAY.md 2.2) — fijar o soltar un planeado.
   setPlanPinned: (id: number, pinned: boolean): Promise<boolean> =>
     ipcRenderer.invoke('games:setPlanPinned', id, pinned),

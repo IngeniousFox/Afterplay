@@ -106,8 +106,28 @@ const matchesFlag = (game: GameListItem, flag: FlagKey): boolean =>
   // con el estado es cosa de los chips de STATUS, que ya están al lado.
   flag === 'emulated' ? game.isEmulated : game.endless;
 
+// UN colador para toda la app, creado una vez. `a.localeCompare(b, undefined,
+// {sensitivity:'base'})` hace EXACTAMENTE esto por dentro... pero construye un
+// Intl.Collator nuevo en CADA comparación: V8 solo tiene atajo cacheado para
+// localeCompare SIN opciones, y en cuanto le pasas un objeto de opciones se va
+// por el camino largo. Ordenar 333 juegos son ~2.800 comparaciones, o sea
+// ~2.800 colladores.
+//
+// Medido con 333 juegos (el tamaño de la biblioteca real), mediana de 5:
+//   .sort(localeCompare + opciones)   15,9 ms
+//   .sort(collator.compare)            0,27 ms     <- 58x
+// y applyFilters entero (que por defecto ordena por título) pasó de 8,43 ms a
+// 0,17 ms. Eso se pagaba en CADA tecla del buscador de la columna de
+// navegación, en cada chip de filtro y en cada refetch de react-query — y en
+// las cuatro columnas (Library/Sessions/Stats/Plan), que comparten este
+// módulo.
+//
+// Mismo resultado, letra por letra: localeCompare con opciones está definido
+// como "crea un Collator con esas opciones y compara". Aquí solo se reutiliza.
+const titleCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
+
 const SORTERS: Record<SortKey, (a: GameListItem, b: GameListItem) => number> = {
-  title: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
+  title: (a, b) => titleCollator.compare(a.title, b.title),
   // Lo más reciente arriba. `lastPlayedAt` ya viene resuelto del backend con
   // la regla "última sesión, y si no hay, último evento de estado" — ver
   // getGames.ts. Los que no se han tocado nunca van al final, no al

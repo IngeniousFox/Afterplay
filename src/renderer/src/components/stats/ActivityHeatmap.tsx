@@ -74,8 +74,15 @@ export const ActivityHeatmap = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   // Celda bajo el ratón + dónde anclar su tooltip (coordenadas relativas al
-  // contenedor de la rejilla, calculadas al entrar en la celda).
-  const [hovered, setHovered] = useState<{ dayMs: number; x: number; y: number } | null>(null);
+  // contenedor de la rejilla, calculadas al entrar en la celda). `x` va
+  // acotado para que el tooltip no se salga de la tarjeta; `cellLeft`/`y` son
+  // la esquina REAL de la celda, que es lo que necesita el aro de resalte.
+  const [hovered, setHovered] = useState<{
+    dayMs: number;
+    x: number;
+    y: number;
+    cellLeft: number;
+  } | null>(null);
   const { data: timeFormat = '24h' } = useTimeFormat();
 
   useLayoutEffect(() => {
@@ -205,6 +212,94 @@ export const ActivityHeatmap = ({
       ? Math.max(4, (containerWidth - DAY_LABEL_WIDTH_PX - weeks * GAP_PX) / weeks)
       : 0;
 
+  // La rejilla, FUERA del JSX de abajo y sin mirar `hovered` ni una vez.
+  //
+  // Esta separación es la optimización, no el orden: el compilador de React
+  // memoiza por expresión, así que con el `boxShadow` del resalte leyendo
+  // `hovered` dentro del map, las 371 celdas eran parte del mismo bloque
+  // cacheado que el tooltip — y CADA celda por la que pasaba el ratón volvía
+  // a crear las 371 (con sus 742 manejadores) para cambiar el aro de una. Son
+  // 0,6 ms de puro createElement por celda medidos en la biblioteca real (24
+  // ms en un barrido de 40 celdas), más la reconciliación de 371 nodos que
+  // React hace encima. Ahora el resalte es UN div superpuesto y las celdas
+  // solo se construyen cuando cambian de verdad los datos o el tamaño.
+  //
+  // La fila de meses sale por el mismo motivo: son otros 53 nodos que no
+  // tienen nada que ver con el ratón.
+  const monthRow =
+    cellPx > 0 ? (
+      <div
+        className="mb-1.5 grid text-[9.5px] whitespace-nowrap text-muted-foreground"
+        style={{
+          gridTemplateColumns: `${DAY_LABEL_WIDTH_PX}px repeat(${weeks}, ${cellPx}px)`,
+          columnGap: GAP_PX,
+          height: 14,
+        }}
+      >
+        <span style={{ minWidth: 0 }} />
+        {monthLabels.map((label, index) => (
+          <span key={index} style={{ minWidth: 0, overflow: 'visible' }}>
+            {label}
+          </span>
+        ))}
+      </div>
+    ) : null;
+
+  const grid =
+    cellPx > 0 ? (
+      <div
+        className="grid grid-flow-col"
+        style={{
+          gridTemplateColumns: `${DAY_LABEL_WIDTH_PX}px repeat(${weeks}, ${cellPx}px)`,
+          gridTemplateRows: `repeat(7, ${cellPx}px)`,
+          gap: GAP_PX,
+        }}
+      >
+        {DAY_LABELS.map((label, index) => (
+          <span
+            key={`day-${index}`}
+            className="flex items-center text-[9.5px] leading-none text-muted-foreground"
+          >
+            {label}
+          </span>
+        ))}
+        {cells.map((cell) => (
+          <div
+            key={cell.dayMs}
+            className="rounded-[3px]"
+            style={{ background: LEVEL_COLORS[cell.level] }}
+            // Solo días reales del rango — el futuro y los restos de
+            // diciembre anterior no tienen nada que contar.
+            onMouseEnter={
+              cell.inRange
+                ? (event) => {
+                    const container = containerRef.current;
+                    if (!container) return;
+                    const cellRect = event.currentTarget.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    const cellLeft = cellRect.left - containerRect.left;
+                    // Anclado al centro-arriba de la celda, con la X
+                    // acotada para que el tooltip no se salga de la
+                    // tarjeta en las columnas de los extremos.
+                    const x = Math.min(
+                      Math.max(cellLeft + cellRect.width / 2, 110),
+                      containerRect.width - 110,
+                    );
+                    setHovered({
+                      dayMs: cell.dayMs,
+                      x,
+                      y: cellRect.top - containerRect.top,
+                      cellLeft,
+                    });
+                  }
+                : undefined
+            }
+            onMouseLeave={cell.inRange ? () => setHovered(null) : undefined}
+          />
+        ))}
+      </div>
+    ) : null;
+
   return (
     <StatCard>
       <div className="mb-4 flex items-center justify-between">
@@ -231,81 +326,31 @@ export const ActivityHeatmap = ({
             {/* Fila de meses — mismas columnas de semana que la rejilla de
                 abajo, con un hueco al principio del ancho de la columna de
                 días. */}
-            <div
-              className="mb-1.5 grid text-[9.5px] whitespace-nowrap text-muted-foreground"
-              style={{
-                gridTemplateColumns: `${DAY_LABEL_WIDTH_PX}px repeat(${weeks}, ${cellPx}px)`,
-                columnGap: GAP_PX,
-                height: 14,
-              }}
-            >
-              <span style={{ minWidth: 0 }} />
-              {monthLabels.map((label, index) => (
-                <span key={index} style={{ minWidth: 0, overflow: 'visible' }}>
-                  {label}
-                </span>
-              ))}
-            </div>
+            {monthRow}
 
             {/* Rejilla ÚNICA (columna de días + celdas) — al compartir el
                 mismo grid, las filas se alinean solas entre las dos partes;
                 con dos contenedores separados (flex aparte para los días) se
                 desincronizaban fila a fila según avanzaba hacia abajo. */}
-            <div
-              className="grid grid-flow-col"
-              style={{
-                gridTemplateColumns: `${DAY_LABEL_WIDTH_PX}px repeat(${weeks}, ${cellPx}px)`,
-                gridTemplateRows: `repeat(7, ${cellPx}px)`,
-                gap: GAP_PX,
-              }}
-            >
-              {DAY_LABELS.map((label, index) => (
-                <span
-                  key={`day-${index}`}
-                  className="flex items-center text-[9.5px] leading-none text-muted-foreground"
-                >
-                  {label}
-                </span>
-              ))}
-              {cells.map((cell) => (
-                <div
-                  key={cell.dayMs}
-                  className="rounded-[3px]"
-                  style={{
-                    background: LEVEL_COLORS[cell.level],
-                    boxShadow:
-                      hovered?.dayMs === cell.dayMs
-                        ? '0 0 0 1.5px rgba(255,255,255,.55)'
-                        : undefined,
-                  }}
-                  // Solo días reales del rango — el futuro y los restos de
-                  // diciembre anterior no tienen nada que contar.
-                  onMouseEnter={
-                    cell.inRange
-                      ? (event) => {
-                          const container = containerRef.current;
-                          if (!container) return;
-                          const cellRect = event.currentTarget.getBoundingClientRect();
-                          const containerRect = container.getBoundingClientRect();
-                          // Anclado al centro-arriba de la celda, con la X
-                          // acotada para que el tooltip no se salga de la
-                          // tarjeta en las columnas de los extremos.
-                          const x = Math.min(
-                            Math.max(cellRect.left - containerRect.left + cellRect.width / 2, 110),
-                            containerRect.width - 110,
-                          );
-                          setHovered({
-                            dayMs: cell.dayMs,
-                            x,
-                            y: cellRect.top - containerRect.top,
-                          });
-                        }
-                      : undefined
-                  }
-                  onMouseLeave={cell.inRange ? () => setHovered(null) : undefined}
-                />
-              ))}
-            </div>
+            {grid}
+
+            {/* El aro de la celda señalada, superpuesto en vez de dentro de
+                la celda: mismo dibujo (box-shadow de 1,5 px sobre el hueco
+                vacío de la rejilla) sin meter `hovered` en el bloque de las
+                371 celdas — ver el comentario de `grid` arriba. */}
+            {hovered && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute rounded-[3px]"
+                style={{
+                  left: hovered.cellLeft,
+                  top: hovered.y,
+                  width: cellPx,
+                  height: cellPx,
+                  boxShadow: '0 0 0 1.5px rgba(255,255,255,.55)',
+                }}
+              />
+            )}
 
             {hovered &&
               (() => {

@@ -3,7 +3,11 @@ import { parse } from 'dotenv';
 import { existsSync, readFileSync, renameSync } from 'fs';
 import { writeFileAtomicSync } from '../lib/atomicWrite';
 import { join } from 'path';
-import type { CredentialsValues } from '../../shared/types';
+import type {
+  CredentialsImportResult,
+  CredentialsValues,
+  StartupKeysImport,
+} from '../../shared/types';
 
 // Credenciales de servicios externos (Twitch/IGDB, SteamGridDB, Turso),
 // guardadas en userData/credentials.json cifradas con safeStorage (DPAPI en
@@ -128,6 +132,188 @@ export const setCredentials = (input: CredentialsValues): void => {
   applyToEnv(normalized);
 };
 
+// El HOST de la base remota que traen unas credenciales, para el log. Los
+// dos caminos que IMPORTAN claves de fuera (el .env legado de abajo y el
+// fichero de traslado de más abajo) deciden con qué base habla la app, y el
+// 3-ago-2026 nos costó un susto: una instancia de prueba con carpeta de
+// datos nueva importó el .env del proyecto —que entonces tenía la base REAL
+// activa— y acabó empujándole una migración a producción. Desde entonces se
+// dice en voz alta QUÉ base entra. Solo el host, jamás el token: esto acaba
+// pegado en informes de error.
+const remoteLabel = (databaseUrl: string | null | undefined): string => {
+  if (!databaseUrl) return 'sin remota';
+  try {
+    return new URL(databaseUrl).hostname.split('.')[0];
+  } catch {
+    return 'remota desconocida';
+  }
+};
+
+// ── LLEVARSE LAS CLAVES A OTRO PC ──────────────────────────────────────────
+//
+// credentials.json NO se puede copiar y ya: safeStorage cifra con DPAPI, que
+// es por usuario y por máquina, así que en el PC de destino no descifra nada
+// (decryptValue lo trata como "sin valor" y te quedas sin claves creyendo
+// que las llevas). El traslado tiene por eso su propio fichero, en claro,
+// que la app vuelve a cifrar en cuanto lo importa.
+//
+// Que vaya en claro es deliberado y es la parte incómoda: el destino tiene
+// que poder leerlo sin saber nada del origen, y el camino automático
+// —soltarlo en la carpeta de datos— ocurre en el arranque, sin nadie delante
+// a quien pedirle una contraseña. Es el mismo trato que tenía el .env al que
+// esto sustituyó, con dos mejoras: vive donde tú lo dejes, y en cuanto se
+// aplica se retira.
+export const KEYS_FILE_NAME = 'afterplay-keys.json';
+
+// Se escribe con los NOMBRES DE ENTORNO, no con las claves internas del tipo:
+// son los que ya reconoce cualquiera que haya visto un .env de esto, así el
+// fichero se puede escribir a mano y sigue valiendo. De paso, renombrar un
+// campo de CredentialsValues no invalida los ficheros exportados ayer.
+type KeysFileShape = {
+  afterplayKeys: 1;
+  exportedAt: string;
+  keys: Record<string, string>;
+};
+
+// Escribe afterplay-keys.json en la carpeta elegida y devuelve la ruta. Si ya
+// había uno, se pisa a propósito: es el mismo fichero con las claves de
+// ahora, no una copia más que confunda sobre cuál es la buena.
+export const exportCredentialsTo = (directory: string): string => {
+  const current = getCredentials();
+  const keys: Record<string, string> = {};
+  for (const key of CREDENTIAL_KEYS) {
+    const value = current[key];
+    if (value) keys[ENV_BY_KEY[key]] = value;
+  }
+  // Exportar la nada escribiría un fichero de aspecto correcto que en el otro
+  // PC no importa nada — y ahí ya no hay forma de saber de quién fue la
+  // culpa. Mejor negarse aquí, con el usuario delante.
+  if (Object.keys(keys).length === 0) {
+    throw new Error('There are no keys to export yet — add some above first.');
+  }
+
+  const file: KeysFileShape = {
+    afterplayKeys: 1,
+    exportedAt: new Date().toISOString(),
+    keys,
+  };
+  const path = join(directory, KEYS_FILE_NAME);
+  writeFileAtomicSync(path, JSON.stringify(file, null, 2));
+  console.log(`[credentials] exportadas ${Object.keys(keys).length} claves a ${path}`);
+  return path;
+};
+
+// Qué se acepta al importar, en este orden: nuestro export (objeto con
+// `keys`), un JSON plano de NOMBRE -> valor (escrito a mano) y un .env de
+// toda la vida, que es lo que mucha gente ya tiene de antes y no cuesta nada
+// admitir. Lo que no sea una cadena se ignora en vez de reventar: un campo de
+// más en el fichero no puede tumbar la importación entera.
+const parseKeysFile = (text: string): Record<string, string> => {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{')) return parse(trimmed);
+
+  const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+  const source = (
+    typeof parsed.keys === 'object' && parsed.keys !== null ? parsed.keys : parsed
+  ) as Record<string, unknown>;
+  const values: Record<string, string> = {};
+  for (const [name, value] of Object.entries(source)) {
+    if (typeof value === 'string') values[name] = value;
+  }
+  return values;
+};
+
+// Importar FUSIONA, nunca reemplaza: un fichero que solo trae la key de Steam
+// no puede dejarte sin la de IGDB. Lo que no venga en el fichero se queda
+// exactamente como estaba.
+const importKeys = (raw: Record<string, string>): CredentialsImportResult => {
+  const current = getCredentials();
+  const merged: Partial<Record<keyof CredentialsValues, string>> = {};
+  let imported = 0;
+  for (const key of CREDENTIAL_KEYS) {
+    const incoming = raw[ENV_BY_KEY[key]]?.trim();
+    const existing = current[key];
+    if (incoming) {
+      merged[key] = incoming;
+      imported += 1;
+    } else if (existing) {
+      merged[key] = existing;
+    }
+  }
+  // Ni una sola clave conocida: casi seguro el fichero equivocado (otro json
+  // cualquiera, el export de otra cosa). Fallar aquí es lo único que
+  // distingue "te has traído el fichero que no era" de "ya estaba importado".
+  if (imported === 0) {
+    throw new Error("That file doesn't have any Afterplay keys in it.");
+  }
+
+  writeValues(merged);
+  const values = getCredentials();
+  applyToEnv(values);
+  return { imported, values };
+};
+
+export const importCredentialsFromFile = (path: string): CredentialsImportResult => {
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf-8');
+  } catch {
+    throw new Error("Couldn't read that file.");
+  }
+
+  let raw: Record<string, string>;
+  try {
+    raw = parseKeysFile(text);
+  } catch {
+    throw new Error("That file isn't a keys file — expected the JSON that Export writes.");
+  }
+
+  const result = importKeys(raw);
+  console.log(
+    `[credentials] importadas ${result.imported} claves de ${path} -> DB [${remoteLabel(result.values.databaseUrl)}]`,
+  );
+  return result;
+};
+
+// El aviso del fichero soltado, esperando a que exista un renderer al que
+// contárselo: la importación ocurre en el arranque, mucho antes de que haya
+// ventana. Se consume una vez (ver takeStartupKeysImport).
+let startupKeysImport: StartupKeysImport | null = null;
+
+export const takeStartupKeysImport = (): StartupKeysImport | null => {
+  const pending = startupKeysImport;
+  startupKeysImport = null;
+  return pending;
+};
+
+// El camino AUTOMÁTICO: dejas afterplay-keys.json en la carpeta de datos y
+// abres la app. Se mira en CADA arranque —no solo cuando faltan credenciales,
+// como el .env legado de abajo— porque soltar el fichero es una orden
+// explícita de "usa estas", y el caso normal es una app que ya tenía las
+// suyas: las viejas, o las de otra cuenta.
+const importDroppedKeysFile = (): void => {
+  const path = join(app.getPath('userData'), KEYS_FILE_NAME);
+  if (!existsSync(path)) return;
+
+  try {
+    const { imported } = importCredentialsFromFile(path);
+    startupKeysImport = { ok: true, imported };
+    // Retirado en cuanto se aplica: si se quedara, cada arranque volvería a
+    // pisar con él lo que hayas cambiado en Ajustes desde entonces.
+    try {
+      renameSync(path, `${path}.imported.bak`);
+    } catch (error) {
+      console.warn('[credentials] no se pudo retirar el fichero de claves importado:', error);
+    }
+  } catch (error) {
+    // NO se retira: se deja donde está para poder corregirlo y volver a
+    // arrancar. Y el fallo viaja al renderer, que es quien puede decirlo.
+    const message = error instanceof Error ? error.message : String(error);
+    startupKeysImport = { ok: false, message };
+    console.error(`[credentials] no se pudo importar ${path}: ${message}`);
+  }
+};
+
 // Migración única desde el mundo .env: si todavía no existe credentials.json
 // pero hay un .env con valores (el de userData que la app instalada usaba, o
 // el del proyecto en desarrollo), se importan y el de userData se renombra a
@@ -149,22 +335,12 @@ const importLegacyEnv = (): void => {
       if (Object.keys(values).length === 0) continue;
 
       writeValues(values);
-      // Se dice QUÉ base remota traen, no solo de dónde vienen. Este es el
-      // punto exacto donde un .env decide con qué base habla la app, y el
-      // 3-ago-2026 nos costó un susto: una instancia de prueba con carpeta de
-      // datos nueva importó el .env del proyecto —que entonces tenía la base
-      // REAL activa— y acabó empujándole una migración a producción. Solo el
-      // host, jamás el token: esto acaba pegado en informes de error.
-      const remote = values.databaseUrl
-        ? (() => {
-            try {
-              return new URL(values.databaseUrl).hostname.split('.')[0];
-            } catch {
-              return 'remota desconocida';
-            }
-          })()
-        : 'sin remota';
-      console.log(`[credentials] importadas del .env legado (${envPath}) -> DB [${remote}]`);
+      // Se dice QUÉ base remota traen, no solo de dónde vienen: este es el
+      // punto exacto donde un .env decide con qué base habla la app (ver
+      // remoteLabel para el susto que lo trajo).
+      console.log(
+        `[credentials] importadas del .env legado (${envPath}) -> DB [${remoteLabel(values.databaseUrl)}]`,
+      );
       if (envPath === userDataEnvPath) {
         // Solo se retira el de userData — el del proyecto es la fuente del
         // tooling de desarrollo (drizzle-kit/scripts) y no se toca.
@@ -201,5 +377,10 @@ export const initCredentials = (): void => {
   } else {
     importLegacyEnv();
   }
+  // Y el traslado desde otro PC, que va aparte del bloque de arriba a
+  // propósito: no se condiciona a que falten credenciales (ver
+  // importDroppedKeysFile). Nunca lanza — un fichero mal escrito no puede
+  // impedir que la app arranque con lo que ya tenía.
+  importDroppedKeysFile();
   applyToEnv(getCredentials());
 };
