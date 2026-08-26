@@ -7,7 +7,7 @@ import {
   useRefreshAllExternalData,
 } from '../../hooks/external';
 import { useCredentials } from '../../hooks/settings';
-import { AMBER, TEAL, VIOLET } from '../../lib/colors';
+import { AMBER, GREEN, TEAL, VIOLET } from '../../lib/colors';
 import { STEAM_BLUE } from '../../lib/ratings';
 import { SettingsCard } from './SettingsCard';
 
@@ -97,6 +97,13 @@ const Coverage = ({ status }: { status: ExternalDataStatus }): React.JSX.Element
         color={STEAM_BLUE}
       />
     )}
+    {/* Contra la biblioteca entera, sin denominador propio: a diferencia de
+        las etiquetas, cualquier juego puede tener tiempos de HLTB. Lo que
+        falte aquí son los huérfanos que la repesca de la pasada intenta
+        curar cada semana — esta fila es donde se ve que lo consigue. En el
+        verde de la casa, que además es el color del tramo 100% en la card
+        de la ficha. */}
+    <CoverageRow label="HLTB times" have={status.withHltb} total={status.total} color={GREEN} />
   </div>
 );
 
@@ -115,11 +122,13 @@ export const ExternalDataSection = (): React.JSX.Element => {
   // necesita ninguna, pero por sí solo no justifica el botón.
   const hasKey = Boolean(creds?.twitchClientId && creds?.twitchClientSecret);
 
-  // Solo la fase de Steam avanza juego a juego: IGDB entero son 1-2
-  // peticiones que terminan antes de que dé tiempo a leer la primera cifra, y
-  // la escritura es una transacción. Fingirles un porcentaje sería inventarse
-  // un progreso — esas dos fases se dicen con palabras y la barra latiendo.
-  const measurable = running && progress?.phase === 'steam' && progress.total > 0;
+  // Solo las fases de Steam y de HLTB avanzan juego a juego (cada una con su
+  // propio total): IGDB entero son 1-2 peticiones que terminan antes de que
+  // dé tiempo a leer la primera cifra, y la escritura es una transacción.
+  // Fingirles un porcentaje sería inventarse un progreso — esas dos fases se
+  // dicen con palabras y la barra latiendo.
+  const measurable =
+    running && (progress?.phase === 'steam' || progress?.phase === 'hltb') && progress.total > 0;
   const percent = measurable && progress ? (progress.done / progress.total) * 100 : 0;
 
   const statusLine = ((): string | null => {
@@ -129,6 +138,11 @@ export const ExternalDataSection = (): React.JSX.Element => {
       // mismo, y eso es lo único que hace que una espera de minutos se sienta
       // viva en vez de colgada.
       if (measurable && progress) {
+        if (progress.phase === 'hltb') {
+          return progress.currentTitle
+            ? `Asking HowLongToBeat about ${progress.currentTitle}…`
+            : 'Asking HowLongToBeat about the games missing times…';
+        }
         return progress.currentTitle
           ? `Now asking Steam about ${progress.currentTitle}…`
           : 'Asking Steam for reviews, game by game…';
@@ -150,7 +164,7 @@ export const ExternalDataSection = (): React.JSX.Element => {
       // eran de otra cosa). Frases separadas porque son noticias distintas —
       // sumarlas hacía cantar "43 games just turned up on Steam" en una
       // pasada donde no había entrado ninguno.
-      if (summary.appIdsFound > 0 || summary.appIdsFixed > 0) {
+      if (summary.appIdsFound > 0 || summary.appIdsFixed > 0 || summary.hltbFound > 0) {
         const parts: string[] = [];
         if (summary.appIdsFound > 0) {
           parts.push(
@@ -164,6 +178,16 @@ export const ExternalDataSection = (): React.JSX.Element => {
             summary.appIdsFixed === 1
               ? '1 game was pointing at the wrong Steam app and got fixed'
               : `${summary.appIdsFixed} games were pointing at the wrong Steam app and got fixed`,
+          );
+        }
+        // Tercera noticia posible: huérfanos de HowLongToBeat que por fin
+        // tienen tiempos (feed de la Deuda del Backlog). Solo cuando pasó:
+        // "0 recuperados" no es noticia, es la semana normal.
+        if (summary.hltbFound > 0) {
+          parts.push(
+            summary.hltbFound === 1
+              ? '1 game finally got its HowLongToBeat times'
+              : `${summary.hltbFound} games finally got their HowLongToBeat times`,
           );
         }
         return `Done. ${parts.join('. ')}.`;
@@ -218,9 +242,11 @@ export const ExternalDataSection = (): React.JSX.Element => {
             <span className="w-26 flex-none text-[11px] font-semibold" style={{ color: TEAL }}>
               {progress?.phase === 'saving'
                 ? 'Saving'
-                : measurable
-                  ? 'Fetching tags'
-                  : 'Fetching IGDB'}
+                : progress?.phase === 'hltb'
+                  ? 'Fetching HLTB'
+                  : measurable
+                    ? 'Fetching tags'
+                    : 'Fetching IGDB'}
             </span>
             <div className={BAR_CLASS}>
               {/* transform y no width: en la fase de Steam llega un evento

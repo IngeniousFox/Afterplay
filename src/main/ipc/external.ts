@@ -26,6 +26,7 @@ export const registerExternalHandlers = (): void => {
           neverChecked: sql<number>`count(*) filter (where ${isNull(gamesTable.ratingsCheckedAt)})`,
           steamEligible: sql<number>`count(*) filter (where ${isNotNull(gamesTable.steamAppId)})`,
           withSteamData: sql<number>`count(*) filter (where ${isNotNull(gamesTable.steamTags)} or ${isNotNull(gamesTable.steamPositive)})`,
+          withHltb: sql<number>`count(*) filter (where ${gamesTable.hltbMain} is not null or ${gamesTable.hltbMainExtras} is not null or ${gamesTable.hltbCompletionist} is not null)`,
         })
         .from(gamesTable),
     );

@@ -11,9 +11,11 @@ export const registerHltbHandlers = (): void => {
 
   // Volver a preguntarle a HowLongToBeat por UN juego ya dado de alta.
   //
-  // Hace falta porque estos tiempos se piden UNA sola vez en la vida del
-  // juego, en el alta (resolveGameEnrichment), y ahí se quedan: no hay
-  // pasada de arranque ni "Sync now" que los toque nunca. Y sí se mueven —
+  // Hace falta porque estos tiempos se piden en el alta
+  // (resolveGameEnrichment) y ahí se quedan: la única pasada que vuelve a
+  // tocarlos es la repesca de HUÉRFANOS del refresco externo (refresh.ts),
+  // que solo mira juegos con los tres tiempos a null — un juego que YA tiene
+  // tiempos no lo refresca nada automático. Y sí se mueven —
   // un juego recién salido tiene una media inestable (pocos envíos) que se
   // asienta con los meses, y uno que recibe contenido grande sube. Esa cifra
   // alimenta además la Deuda del Backlog, así que arrastrar estimaciones

@@ -1,6 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
+import { getHltbTimes } from '../hltb/api';
+import type { HltbTimes } from '../hltb/types';
 import { getGameExternalBatch, getSteamAppIds } from '../igdb/api';
 import type { ExternalRefreshSummary } from '../igdb/types';
 import { getSteamReviewCounts, STEAM_REVIEWS_DELAY_MS } from '../steam/reviews';
@@ -23,9 +25,19 @@ import { mergeSteamPatch, type SteamGamePatch } from './steamData';
 //    puerta de todo lo de Steam y hasta ahora era irrepetible.
 //  · Steam, solo para juegos con appid: etiquetas (por lotes) y reseñas
 //    (una a una) — ver external/steamData.ts.
-//  · HowLongToBeat queda FUERA a propósito (§5.2): sin API de lotes, con
-//    matching difuso y una API no oficial, 300 juegos serían una ráfaga
-//    frágil de fallos mudos. Su botón por-juego de la ficha es la vía buena.
+//  · HowLongToBeat, SOLO para los HUÉRFANOS: los juegos con los tres
+//    tiempos a null. La biblioteca entera sigue fuera a propósito (§5.2):
+//    sin API de lotes, con matching difuso y una API no oficial, 300 juegos
+//    serían una ráfaga frágil de fallos mudos — para refrescar un tiempo que
+//    YA existe está el botón de la ficha. Pero un juego sin tiempos no tiene
+//    nada que un mal match pueda pisar, y nadie va a recorrer la biblioteca
+//    ficha a ficha buscando cuáles son: son los que HLTB no conocía el día
+//    del alta (nicho, sin salir) o los que cayeron en una avería como la de
+//    ago-2026 (/api/bleed muerto y el alta siguió sin tiempos, como debe).
+//    Sin esta repesca, esos null eran PARA SIEMPRE — y la Deuda del Backlog,
+//    que suma estos tiempos, quedaba corta en silencio. Van uno a uno con
+//    pausa, y si HLTB está caído se rinde tras unos pocos fallos seguidos en
+//    vez de insistir con la lista entera.
 //
 // ── Por qué el estado de la pasada vive AQUÍ y no en el componente ──────────
 //
@@ -97,6 +109,17 @@ const APPID_BATCH_SIZE = 150;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+// La repesca de HowLongToBeat va con más calma que las reseñas de Steam: es
+// la API más frágil de todas las que toca la pasada (no oficial, con token
+// anti-bot) y aquí no hay prisa — los huérfanos son un puñado, no un lote.
+const HLTB_ORPHANS_DELAY_MS = 1_000;
+// Tres fallos SEGUIDOS = HLTB está caído (o rotó su API otra vez, ver
+// hltb/client.ts): seguir preguntando juego a juego sería exactamente la
+// ráfaga de fallos mudos que motivó dejar a HLTB fuera de la pasada. Un fallo
+// suelto no cuenta: un match raro o un timeout puntual no dicen nada del
+// servicio.
+const HLTB_ORPHANS_ABORT_AFTER = 3;
+
 export type RefreshScope = 'plan' | 'all';
 
 // igdbId null = juego que no está en el catálogo de IGDB (existe en Steam y
@@ -115,6 +138,8 @@ const EMPTY_SUMMARY: ExternalRefreshSummary = {
   appIdsFixed: 0,
   steamChecked: 0,
   steamFound: 0,
+  hltbChecked: 0,
+  hltbFound: 0,
 };
 
 let running = false;
@@ -132,6 +157,32 @@ const selectTargets = async (scope: RefreshScope): Promise<TargetGame[]> =>
       })
       .from(gamesTable);
     return scope === 'plan' ? query.where(eq(gamesTable.planned, true)) : query;
+  });
+
+// Los huérfanos de HowLongToBeat: ni main, ni extras, ni completionist. Los
+// TRES a null y no "alguno": un juego con parte de los tiempos es un juego
+// que HLTB ya reconoció (hay fichas con un solo tramo enviado), y re-pedirlo
+// es justo el refresco masivo que la cabecera descarta. Query aparte de
+// selectTargets a propósito: se lee justo antes de la repesca, con el estado
+// más fresco, y solo las filas que tocan.
+type HltbOrphan = { id: number; igdbId: number | null; title: string; releaseYear: number | null };
+
+const selectHltbOrphans = async (scope: RefreshScope): Promise<HltbOrphan[]> =>
+  withDbAccess(async () => {
+    const missing = and(
+      isNull(gamesTable.hltbMain),
+      isNull(gamesTable.hltbMainExtras),
+      isNull(gamesTable.hltbCompletionist),
+    );
+    return getDb()
+      .select({
+        id: gamesTable.id,
+        igdbId: gamesTable.igdbId,
+        title: gamesTable.title,
+        releaseYear: gamesTable.releaseYear,
+      })
+      .from(gamesTable)
+      .where(scope === 'plan' ? and(eq(gamesTable.planned, true), missing) : missing);
   });
 
 // Arranca la pasada y devuelve ENSEGUIDA, con cuántos juegos entran en ella.
@@ -369,6 +420,52 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
       );
     }
 
+    // ── HowLongToBeat, solo los huérfanos ──────────────────────────────────
+    // Después de las reseñas y antes de guardar (sus tiempos entran en la
+    // misma transacción). La lista se lee AHORA y no al principio: así un
+    // juego al que el botón de su ficha ya le encontró tiempos durante esta
+    // misma pasada no se re-pregunta.
+    const orphans = await selectHltbOrphans(scope);
+    const hltbByGameId = new Map<number, HltbTimes>();
+    let hltbChecked = 0;
+    let hltbFailureStreak = 0;
+    for (const [index, orphan] of orphans.entries()) {
+      if (index > 0) await sleep(HLTB_ORPHANS_DELAY_MS);
+      notifyExternalActivity({
+        running: true,
+        scope,
+        phase: 'hltb',
+        done: index,
+        // Total PROPIO (los huérfanos), no el de las reseñas: es otra cola y
+        // la barra tiene que contar lo que de verdad queda.
+        total: orphans.length,
+        currentTitle: orphan.title,
+        summary: null,
+        error: null,
+      });
+      hltbChecked++;
+      try {
+        // El año fresco de IGDB si esta pasada lo trajo, que para el match
+        // vale más que el guardado (los años bailan alrededor del anuncio).
+        const fresh = orphan.igdbId === null ? undefined : igdbByIgdbId.get(orphan.igdbId);
+        const times = await getHltbTimes(orphan.title, fresh?.releaseYear ?? orphan.releaseYear);
+        hltbFailureStreak = 0;
+        // null = HLTB sigue sin conocerlo (o sin tiempos enviados): se queda
+        // huérfano y la próxima pasada volverá a intentarlo. No es un fallo.
+        if (times) hltbByGameId.set(orphan.id, times);
+      } catch (caught) {
+        hltbFailureStreak++;
+        console.warn(`[hltb] la repesca no pudo con "${orphan.title}" (sigo):`, caught);
+        if (hltbFailureStreak >= HLTB_ORPHANS_ABORT_AFTER) {
+          // Nada de caps silenciosos: se dice cuántos se quedan sin mirar.
+          console.warn(
+            `[hltb] ${HLTB_ORPHANS_ABORT_AFTER} fallos seguidos - HLTB parece caido, la repesca se rinde con ${orphans.length - index - 1} huerfanos sin mirar`,
+          );
+          break;
+        }
+      }
+    }
+
     emit('saving', steamTargets.length, null);
 
     // ── Escritura, transaccional ────────────────────────────────────────────
@@ -426,6 +523,10 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
               .set({
                 ratingsCheckedAt: now,
                 ...steamFields,
+                // Los tiempos repescados, si este es uno de los huérfanos.
+                // Solo hay entrada cuando HLTB contestó CON tiempos, así que
+                // esto nunca pisa nada: el juego tenía los tres a null.
+                ...(hltbByGameId.get(game.id) ?? {}),
               })
               .where(eq(gamesTable.id, game.id));
             continue;
@@ -453,6 +554,8 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
               ...(igdb.releaseYear !== null ? { releaseYear: igdb.releaseYear } : {}),
               ratingsCheckedAt: now,
               ...steamFields,
+              // Los tiempos repescados de los huérfanos — ver la otra rama.
+              ...(hltbByGameId.get(game.id) ?? {}),
             })
             .where(eq(gamesTable.id, game.id));
         }
@@ -470,6 +573,8 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
       appIdsFixed: correctedGameIds.size,
       steamChecked: steamTargets.length,
       steamFound,
+      hltbChecked,
+      hltbFound: hltbByGameId.size,
     };
   } catch (caught) {
     // El invoke ya contestó, así que un error aquí no tiene promesa por la que

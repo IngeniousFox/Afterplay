@@ -1,10 +1,11 @@
-import { HLTBClient } from 'hltb-client';
+import { HLTBClient } from './client';
 import { findBestMatch } from './match';
 import { hltbSearchResultSchema } from './schemas';
 import type { HltbTimes } from './types';
 
 // Cliente singleton: cachea internamente el token anti-bot de HLTB (mismo
-// espíritu que getValidToken de IGDB, pero aquí lo gestiona el paquete).
+// espiritu que getValidToken de IGDB). Vive en ./client desde que el paquete
+// hltb-client se quedo con las URLs viejas de la API (ver client.ts).
 const client = new HLTBClient();
 
 // Busca los tiempos de HLTB para un juego de IGDB. Recibe el año además del

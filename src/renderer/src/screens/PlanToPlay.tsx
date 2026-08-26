@@ -267,12 +267,14 @@ export const PlanToPlay = (): React.JSX.Element => {
     });
   };
 
-  // Mientras corre, el botón cuenta por dónde va. Solo la fase de Steam
-  // avanza juego a juego (IGDB entero son 1-2 peticiones que vuelan), así que
-  // es la única a la que se le puede poner un porcentaje sin inventárselo: en
-  // las otras dos el botón lo dice con palabras y su barra late en vez de
-  // avanzar. Con un Plan grande esa fase son minutos.
-  const measurable = refreshing && progress?.phase === 'steam' && progress.total > 0;
+  // Mientras corre, el botón cuenta por dónde va. Solo las fases de Steam y
+  // de HLTB (la repesca de los sin-tiempos, con su propio total) avanzan
+  // juego a juego — IGDB entero son 1-2 peticiones que vuelan—, así que son
+  // las únicas con porcentaje sin inventárselo: en las otras el botón lo dice
+  // con palabras y su barra late en vez de avanzar. Con un Plan grande la de
+  // Steam son minutos.
+  const measurable =
+    refreshing && (progress?.phase === 'steam' || progress?.phase === 'hltb') && progress.total > 0;
   const refreshPercent = measurable && progress ? (progress.done / progress.total) * 100 : 0;
   const refreshLabel = !refreshing
     ? 'Refresh data'

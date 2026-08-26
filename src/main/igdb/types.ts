@@ -97,6 +97,10 @@ export type ExternalDataStatus = {
   // retro emulado no está en Steam, y eso no es un fallo que arreglar.
   steamEligible: number;
   withSteamData: number;
+  // Cuántos tienen ALGÚN tiempo de HowLongToBeat. El resto son los huérfanos
+  // que la repesca de la pasada intenta curar (refresh.ts) — esta fila es lo
+  // que permite ver cuántos quedan y que la cifra sube sola semana a semana.
+  withHltb: number;
   // ¿Hay una pasada en marcha AHORA? El candado vive en el main, así que una
   // pantalla recién montada (abrir Ajustes a mitad de pasada, volver al Plan)
   // lo sabe sin esperar al siguiente evento de progreso.
@@ -114,8 +118,10 @@ export type ExternalRefreshEvent = {
   // library"): la pasada es la misma.
   scope: 'plan' | 'all';
   // 'igdb' son 1-2 peticiones que vuelan; 'steam' es la larga y la que de
-  // verdad se ve avanzar; 'saving' es la transacción final.
-  phase: 'igdb' | 'steam' | 'saving' | 'done';
+  // verdad se ve avanzar; 'hltb' es la repesca de los juegos sin tiempos
+  // (normalmente un puñado, con su propio total); 'saving' es la transacción
+  // final.
+  phase: 'igdb' | 'steam' | 'hltb' | 'saving' | 'done';
   done: number;
   // El total es el de las reseñas (los juegos con appid): es la única parte que
   // avanza juego a juego.
@@ -157,6 +163,12 @@ export type ExternalRefreshSummary = {
   // Cuántos juegos con appid se le preguntaron a Steam y de cuántos supo.
   steamChecked: number;
   steamFound: number;
+  // La repesca de HowLongToBeat: a cuántos huérfanos (los tres tiempos a
+  // null) se les preguntó y cuántos ganaron tiempos en esta pasada. checked
+  // puede quedarse corto respecto a los huérfanos totales si HLTB está caído
+  // (la repesca se rinde tras unos fallos seguidos, ver refresh.ts).
+  hltbChecked: number;
+  hltbFound: number;
 };
 
 // El parte del ⟳ de la card Ratings (external/refreshRatings.ts) — las tres

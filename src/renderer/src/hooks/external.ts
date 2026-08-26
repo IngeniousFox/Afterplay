@@ -73,8 +73,10 @@ export const useExternalRefreshActivity = (): void => {
 
       const where = event.scope === 'plan' ? 'Plan' : 'Library';
       const steam = summary.steamFound > 0 ? ` · Steam tags for ${summary.steamFound}` : '';
+      // Solo cuando pasó: "HLTB times for 0" cada semana sería ruido.
+      const hltb = summary.hltbFound > 0 ? ` · HLTB times for ${summary.hltbFound}` : '';
       toast.success(`${where} data refreshed`, {
-        description: `${summary.withRatings} with ratings · ${summary.withSummary} with a summary · ${summary.withFullDate} with a full release date${steam}.`,
+        description: `${summary.withRatings} with ratings · ${summary.withSummary} with a summary · ${summary.withFullDate} with a full release date${steam}${hltb}.`,
       });
     });
   }, [queryClient]);

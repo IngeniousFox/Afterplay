@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-// hltb-client trae tipos de TS, pero es un scraper: la forma real en runtime
-// puede desviarse si HLTB cambia su web. Validamos defensivamente lo que
-// usamos, para fallar limpio (match descartado) en vez de propagar basura.
+// HowLongToBeat es un scraper: la forma real en runtime puede desviarse si
+// HLTB cambia su web (nuestro cliente en ./client ya la normaliza, pero es
+// un objetivo movil). Validamos defensivamente lo que usamos, para fallar
+// limpio (match descartado) en vez de propagar basura.
 export const hltbGameSchema = z.object({
   id: z.string(),
   name: z.string(),
