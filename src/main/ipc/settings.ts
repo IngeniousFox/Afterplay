@@ -10,6 +10,7 @@ import { getConfigValue, setConfigValue } from '../config/store';
 import { getLastSyncFailure, runSyncCycle } from '../db';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
+import { isE2E } from '../lib/e2e';
 import { openPathResult } from '../lib/openPath';
 import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
 import { resetR2Client } from '../saves/r2';
@@ -51,6 +52,11 @@ export const registerSettingsHandlers = (): void => {
   );
 
   ipcMain.handle('settings:setOpenAtLogin', (_event, enabled: boolean) => {
+    // Lo ÚNICO de la app que escribe fuera de la carpeta de datos (el
+    // registro de Windows), así que es lo único que el sandbox de e2e.ts no
+    // puede aislar por sí solo: aquí se corta. Un test puede pulsar el
+    // interruptor y comprobar la UI; el sistema operativo no se entera.
+    if (isE2E()) return;
     app.setLoginItemSettings(
       process.platform === 'win32'
         ? { openAtLogin: enabled, args: enabled ? [HIDDEN_LAUNCH_ARG] : [] }

@@ -160,14 +160,26 @@ export const getGameDetail = async (db: TenantDb, id: number): Promise<GameDetai
   // Reparto del gasto entre playthroughs. Los gastos NO llevan iterationId (el
   // gasto es del juego, no de un recorrido concreto), así que se infiere por
   // fecha: cada gasto cae en el primer playthrough que seguía ABIERTO en esa
-  // fecha. Uno ya terminado no puede reclamar gasto posterior a su cierre —
-  // eso pasa al siguiente. Un gasto anterior al primer playthrough (el juego
-  // comprado semanas antes de arrancarlo) cae en ese primero. on_hold y
-  // resting no cierran la ventana: son pausas, no finales.
+  // fecha. Uno ya terminado no puede reclamar gasto ESTRICTAMENTE posterior a
+  // su cierre — eso pasa al siguiente. Un gasto anterior al primer playthrough
+  // (el juego comprado semanas antes de arrancarlo) cae en ese primero.
+  // on_hold y resting no cierran la ventana: son pausas, no finales.
+  //
+  // El "último" sale de latestRealStateEvent y no de la última fila del array,
+  // y aquí eso se pagó DOS VECES: el escritorio lo arregló y este puerto se
+  // quedó con la versión vieja, así que la misma ficha repartía el dinero
+  // distinto en el móvil que en el PC. Cualquier juego promovido desde el Plan
+  // conserva su 'plan_to_play' —fechado AHORA por createPlannedGame— y, como
+  // los eventos llegan ordenados por occurredAt asc, ESA era la última fila:
+  // tapaba el completed/dropped tecleado con fecha del pasado, terminalAt
+  // salía null, la ventana del Playthrough 1 no se cerraba nunca y el DLC de
+  // años después se le colgaba a él. El helper ignora 'plan_to_play' (es
+  // historial de intención, nunca estado) y desempata por id, así que tampoco
+  // depende del ORDER BY de la query.
   const terminalAtByIteration = new Map<number, Date | null>();
   for (const iteration of iterations) {
     const events = eventsByIteration.get(iteration.id) ?? [];
-    const latest = events[events.length - 1];
+    const latest = latestRealStateEvent(events);
     terminalAtByIteration.set(
       iteration.id,
       latest && endsPlaythrough(latest.type) ? latest.occurredAt : null,
@@ -180,7 +192,14 @@ export const getGameDetail = async (db: TenantDb, id: number): Promise<GameDetai
     for (const iteration of iterations) {
       chosen = iteration;
       const terminalAt = terminalAtByIteration.get(iteration.id) ?? null;
-      if (terminalAt === null || spend.occurredAt < terminalAt) break;
+      // El instante del cierre entra TODAVÍA en su propia ventana ('<=' y no
+      // '<'): la fecha del completed y la del gasto se teclean las dos con
+      // precisión de día (medianoche), así que comprar el DLC el mismo día que
+      // te pasas el juego empata exacto. Con el '<' estricto —que es lo que
+      // este puerto arrastraba mientras el escritorio ya lo había corregido—
+      // ese dinero se le colgaba al playthrough siguiente, que ese día ni
+      // existía, y el móvil pintaba "Free" en el playthrough que sí lo pagó.
+      if (terminalAt === null || spend.occurredAt <= terminalAt) break;
     }
     if (chosen) {
       spendByIteration.set(chosen.id, (spendByIteration.get(chosen.id) ?? 0) + spend.amount);
@@ -200,13 +219,22 @@ export const getGameDetail = async (db: TenantDb, id: number): Promise<GameDetai
     const latestEvent = latestRealStateEvent(iterationEvents);
 
     // Modelo v2 — fechas DERIVADAS. Inicio: lo más temprano entre la primera
-    // sesión real y el primer evento 'started'. Fin: el último evento
+    // sesión MEDIDA y el primer evento 'started'. Fin: el último evento
     // terminal, y SOLO si el playthrough sigue en ese estado ahora — uno
     // reabierto no tiene fin aunque arrastre un 'completed' antiguo en el log.
+    //
+    // El '!isManual' no es cosmético y aquí faltaba: una sesión manual es un
+    // bloque de horas TECLEADO (filas heredadas del modelo v1), no algo que el
+    // watcher viera pasar. Sin el filtro, una de esas filas de 2020 arrastraba
+    // el inicio hasta su fecha gruesa y ponía startedBySession=true — que es
+    // justo el flag con el que la ficha del móvil pinta la fecha con precisión
+    // 'datetime' (PlaythroughPanel.tsx), o sea que el móvil enseñaba un
+    // instante exacto que nadie midió mientras el PC enseñaba el día tecleado
+    // en el evento.
     const startEventRow = iterationEvents.find((event) => event.type === 'started') ?? null;
     const firstSessionAt = iterationSessions.reduce<Date | null>(
       (earliest, session) =>
-        earliest === null || session.startedAt.getTime() < earliest.getTime()
+        !session.isManual && (earliest === null || session.startedAt.getTime() < earliest.getTime())
           ? session.startedAt
           : earliest,
       null,

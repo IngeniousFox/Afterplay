@@ -7,6 +7,11 @@ out
 *.log*
 .vscode
 .env
+# .env.test lleva credenciales REALES (la base de test de Turso, claves de
+# IGDB...) para que los E2E prueben las integraciones de verdad. Nunca se
+# commitea: lo que sí viaja es .env.test.example, con los nombres y sin los
+# valores.
+.env.test
 .db
 .db-wal
 # Secretos de desarrollo del Worker. Wrangler los lee de aquí para `wrangler
@@ -19,3 +24,6 @@ out
 # build a partir de ludusavi.lock.json. El repo son 3 MB y git guardaría
 # cada versión para siempre.
 ludusavi
+# Playwright (E2E)
+test-results/
+playwright-report/

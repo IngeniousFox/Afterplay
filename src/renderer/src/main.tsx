@@ -28,11 +28,15 @@ import { queryClient } from './lib/queryClient';
 const Afterplay = lazy(() => import('./Afterplay'));
 
 // El HUD del overlay se monta AQUÍ DIRECTAMENTE y no a través del router, a
-// propósito. La ruta '/overlay' de router.tsx renderiza exactamente esto
-// (<Suspense fallback={null}><OverlayHud /></Suspense>) — pero pasar por el
-// router obligaba a cargar el módulo del router, y ese arrastra RootLayout,
-// Library, Stats, PlanToPlay... la app de escritorio entera, para una ventana
-// que no navega a ningún sitio.
+// propósito: pasar por el router obligaba a cargar su módulo, y ese arrastra
+// RootLayout, Library, Stats, PlanToPlay... la app de escritorio entera, para
+// una ventana que no navega a ningún sitio.
+//
+// Y ESTE ES EL ÚNICO SITIO donde se dice cómo se monta esa ventana. Hubo una
+// ruta '/overlay' en router.tsx que hacía lo mismo y que ya no se alcanzaba
+// —esta rama corre antes, al evaluar el módulo—, pero seguía ahí como segunda
+// definición: la de abajo trae los arreglos del shell (transparencia, padding)
+// y aquella no, así que tocarla no cambiaba nada en la app. Se borró.
 //
 // CICATRIZ / AVISO AL SIGUIENTE: esto solo es válido mientras NADA del árbol
 // de OverlayHud consuma contexto de react-router. Se comprobó recorriendo su
@@ -87,8 +91,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       {isOverlayWindow ? (
-        // fallback null: la ventana es transparente y nace oculta — igual que
-        // hacía la ruta '/overlay' del router. No hay nada que cubrir.
+        // fallback null: la ventana es transparente y nace oculta, no hay nada
+        // que cubrir. (Los avisos de esta ventana los pinta un <Toaster>
+        // propio que monta el propio HUD — ver overlay/OverlayToaster.)
         <Suspense fallback={null}>
           <OverlayHud />
         </Suspense>

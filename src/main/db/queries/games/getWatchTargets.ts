@@ -35,6 +35,16 @@ export type WatchTarget = {
 // tiene sesiones (por definición aún no lo juegas dentro de la app), así que
 // el watcher no debe abrirle una aunque tuviera un exe configurado.
 //
+// Y otra excepción, esta vez de tipo: los juegos EMULADOS (isEmulated). El
+// formulario de alta oculta "Executable path" en cuanto se marca isEmulated
+// (EMULADORES.md §5), pero eso es una guarda de INTERFAZ, no del schema —
+// una fila con isEmulated=true puede llegar aquí con un executablePath
+// puesto (una edición previa a marcar el flag, un dato tocado a mano) y sin
+// este filtro colaría un SEGUNDO watcher sobre el mismo .exe que ya vigila
+// el emulador: dos sesiones abriéndose para la misma tarde jugada, una de
+// tipo 'game' y otra de tipo 'emulator'. Lo vigilado para un emulado es el
+// emulador, nunca el juego (§4).
+//
 // Y ADEMÁS todos los emuladores registrados (Ajustes) — al detectar uno, la
 // sesión nace sin juego asignado (ver createEmulatorSession).
 export const getWatchTargets = async (): Promise<WatchTarget[]> => {
@@ -47,7 +57,13 @@ export const getWatchTargets = async (): Promise<WatchTarget[]> => {
       executablePath: gamesTable.executablePath,
     })
     .from(gamesTable)
-    .where(and(isNotNull(gamesTable.executablePath), eq(gamesTable.planned, false)));
+    .where(
+      and(
+        isNotNull(gamesTable.executablePath),
+        eq(gamesTable.planned, false),
+        eq(gamesTable.isEmulated, false),
+      ),
+    );
 
   const emulators = await db
     .select({

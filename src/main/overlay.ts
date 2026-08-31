@@ -438,12 +438,14 @@ export const handleOverlayActiveGames = (activeCount: number): void => {
     // Hay algo vivo y el watcher ya manda su foto: la gracia sobra.
     //
     // Con un matiz que desde aquí no tiene arreglo limpio: esto es UN NÚMERO
-    // (index.ts pasa titles.length), no identidades, así que "hay algo vivo"
-    // no es lo mismo que "está vivo el juego que se acaba de armar". Con A ya
-    // corriendo y un Play sobre B, este uno es A y se come la gracia de B; si
-    // A muere antes de que B aparezca, el cero siguiente desarma en el acto y
-    // vuelve el síntoma que este camino existe para matar. Cerrarlo obliga a
-    // cambiar la firma del callback, que se decide en index.ts.
+    // (index.ts pasa getActiveGameIds().length — sesiones con juego, ver allí
+    // por qué no son los títulos de la bandeja), no identidades, así que "hay
+    // algo vivo" no es lo mismo que "está vivo el juego que se acaba de
+    // armar". Con A ya corriendo y un Play sobre B, este uno es A y se come
+    // la gracia de B; si A muere antes de que B aparezca, el cero siguiente
+    // desarma en el acto y vuelve el síntoma que este camino existe para
+    // matar. Cerrarlo obliga a cambiar la firma del callback, que se decide
+    // en index.ts.
     disarmPlay();
     setGameLive(true);
     return;

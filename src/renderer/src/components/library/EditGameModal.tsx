@@ -19,8 +19,7 @@ import {
   useDeleteStateEvent,
   useUpdateStateEvent,
 } from '../../hooks/stateEvents';
-import { ENDLESS_STATUS_OPTIONS, STATE_TO_STATUS_KEY } from '../../lib/gameStatus';
-import type { PastStatusKey } from '../../lib/gameStatus';
+import { ENDLESS_STATUS_OPTIONS, NORMAL_STATUS_OPTIONS } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { BLUE, GRAY, GREEN, TEAL, VIOLET } from '../../lib/colors';
@@ -44,7 +43,7 @@ import {
   saveNewPlaythroughs,
 } from './edit-game/handleSave';
 import { IterationSection } from './edit-game/IterationSection';
-import { edgeEventPickerValue } from './edit-game/types';
+import { iterationFormValues } from './edit-game/types';
 import type { EditGameFormValues } from './edit-game/types';
 
 type EditGameModalProps = {
@@ -54,7 +53,7 @@ type EditGameModalProps = {
 };
 
 const buildDefaults = (game: GameDetail): EditGameFormValues => {
-  const iteration = activeOrLastIteration(game.iterations);
+  const iteration = activeOrLastIteration(game.iterations) ?? null;
 
   return {
     title: game.title,
@@ -69,29 +68,11 @@ const buildDefaults = (game: GameDetail): EditGameFormValues => {
     // Los pendientes son de ESTA edición: cada apertura del modal arranca sin
     // ninguno, se hayan guardado los de la vez anterior o no.
     newPlaythroughs: [],
-    label: iteration?.label ?? '',
-    // Editables solo cuando la fecha viene de un EVENTO del log (modelo v2)
-    // — misma regla que loadIteration() en IterationSection.tsx; un inicio
-    // medido por sesión real queda en solo lectura (null aquí).
-    started:
-      iteration && !iteration.startedBySession ? edgeEventPickerValue(iteration.startEvent) : null,
-    finished: iteration ? edgeEventPickerValue(iteration.endEvent) : null,
-    extraContent: iteration?.extraContent ?? false,
-    // El fallback depende del tipo de juego: un endless sin estado arranca
-    // en 'resting' (su dropdown ni ofrece 'beaten'). El cast es seguro:
-    // currentState sale de latestRealStateEvent, que ignora 'plan_to_play'.
-    status: iteration?.currentState
-      ? (STATE_TO_STATUS_KEY[iteration.currentState] as PastStatusKey)
-      : game.endless
-        ? 'resting'
-        : 'beaten',
-    platform: iteration?.playedPlatform ?? 'Steam',
-    format: iteration?.format ?? 'digital',
-    origin: iteration?.origin ?? 'Purchased',
-    hoursPlayed:
-      iteration?.manualTotalPlayed !== null && iteration?.manualTotalPlayed !== undefined
-        ? String(iteration.manualTotalPlayed)
-        : '',
+    // Los campos que salen del playthrough, con la MISMA regla que aplica
+    // IterationSection.loadIteration al cambiar de playthrough dentro del
+    // modal — escrita a mano en los dos sitios ya había derivado (ver
+    // iterationFormValues).
+    ...iterationFormValues(iteration, game.endless),
   };
 };
 
@@ -108,6 +89,12 @@ export const EditGameModal = ({
   const { control, getValues, reset, setValue } = methods;
   const endless = useWatch({ control, name: 'endless' });
   const isEmulated = useWatch({ control, name: 'isEmulated' });
+  // Para el aviso de conversión a endless: los playthroughs manuales que se
+  // hayan preparado en ESTA edición no se crean (un endless no tiene runs
+  // discretos, el bucle de guardado los salta), y al marcar el checkbox
+  // desaparecen de la vista con IterationSection — sin decirlo, "Save
+  // changes" cerraba el modal como si se hubieran guardado.
+  const newPlaythroughs = useWatch({ control, name: 'newPlaythroughs' });
 
   // Se resetea al ABRIR y al cambiar de juego, nunca en cada refetch. Antes
   // el efecto dependía de la IDENTIDAD del objeto `game`: cualquier
@@ -297,11 +284,27 @@ export const EditGameModal = ({
               onToggle={() => {
                 const next = !endless;
                 setValue('endless', next);
-                // Al activarlo, el estado del formulario puede quedar apuntando
-                // a una opción que el dropdown endless ni ofrece ("Beaten") —
-                // mismo ajuste que hace AddGameModal con su handleEndlessToggle.
-                if (next && !ENDLESS_STATUS_OPTIONS.includes(getValues('status'))) {
-                  setValue('status', 'resting');
+                // El estado del formulario puede quedar apuntando a una opción
+                // que el dropdown del OTRO tipo de juego ni ofrece, y eso pasa
+                // en los DOS sentidos — mismo ajuste (y misma forma) que hace
+                // AddGameModal con su handleEndlessToggle. Corregir solo al
+                // ACTIVARLO dejaba el caso contrario roto: desmarcar "Endless"
+                // en un juego Resting (el estado por defecto de todo endless)
+                // dejaba status='resting' sobre NORMAL_STATUS_OPTIONS, que no
+                // lo incluye — el botón pintaba "Resting" con una fila que no
+                // existía en el panel, y al guardar no se escribía ningún
+                // evento (previousStatus también era 'resting'), así que el
+                // juego se quedaba NO endless y en un estado al que su propia
+                // ficha ya no podía volver.
+                const nextOptions = next ? ENDLESS_STATUS_OPTIONS : NORMAL_STATUS_OPTIONS;
+                if (!nextOptions.includes(getValues('status'))) {
+                  // Al MISMO default que iterationFormValues, no a options[0]:
+                  // un endless nuevo arranca en 'resting' (asi lo pinta
+                  // EndlessSection desde siempre) y un juego normal en
+                  // 'beaten'. Con options[0] a secas, marcar Endless sobre un
+                  // Beaten aterrizaba en 'playing' — un cambio visual que
+                  // nadie pidio y un estado que el usuario no eligio.
+                  setValue('status', next ? 'resting' : 'beaten');
                 }
               }}
               title="Endless game"
@@ -328,7 +331,7 @@ export const EditGameModal = ({
                     conservan) — avisar ANTES, no después. Mismo azul
                     informativo (y mismo Info) que el aviso de playthrough
                     manual de IterationSection. */}
-                {!game.endless && game.iterations.length > 0 && (
+                {!game.endless && (game.iterations.length > 0 || newPlaythroughs.length > 0) && (
                   <div
                     className="flex items-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
                     style={{ background: 'rgba(133,163,214,.1)', color: BLUE }}
@@ -336,6 +339,11 @@ export const EditGameModal = ({
                     <Info size={13} className="flex-none" />
                     Saving clears its status history and playthrough outcomes — tracked sessions and
                     hours are kept; an endless game just has no discrete runs.
+                    {/* Los pendientes preparados aquí tampoco sobreviven, y al
+                        marcar el checkbox ya no están a la vista para darse
+                        cuenta — se dice antes de guardar, no después. */}
+                    {newPlaythroughs.length > 0 &&
+                      ' The manual playthroughs you prepared will be discarded.'}
                   </div>
                 )}
                 <EndlessSection />

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { GameListItem } from '../../../shared/types';
 import { useGames } from '../hooks/games';
 import { useImageSrc } from '../hooks/useImageSrc';
+import { consumeAmbientWake } from '../lib/ambientWake';
 import { BLUE } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import { useTvBackdrop } from './backdropContext';
@@ -336,7 +337,10 @@ export const TvLibrary = (): React.JSX.Element => {
       // salidas se van SIN tragarse nada: el evento tiene que seguir su
       // camino hasta el bump de useIdle.
       if (!layerActive || keyboardOpen) return;
+      // El sello de lib/ambientWake es el respaldo del atributo — misma
+      // carrera de commit que en BigPictureLayout.
       if (document.querySelector('[data-afterplay-ambient]') !== null) return;
+      if (consumeAmbientWake()) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === 'Backspace') {
         if (!searching) return;

@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../../lib/utils';
-import { CURRENT_YEAR } from './precisionDate';
+import { currentYear } from './precisionDate';
 
 type YearGridProps = {
   value: number | null;
@@ -19,12 +19,16 @@ const PAGE_SIZE = 12;
 // allá del bloque que contiene el año actual, ni elegir un año posterior
 // dentro de ese bloque.
 export const YearGrid = ({ value, initialYear, onSelect }: YearGridProps): React.JSX.Element => {
+  // El año en curso se lee en cada render y no al importar el módulo: con la
+  // app abierta al cruzar el 1 de enero, el año nuevo no existía en la
+  // rejilla (ver precisionDate).
+  const thisYear = currentYear();
   const [pageStart, setPageStart] = useState(() => {
-    const base = value ?? initialYear ?? CURRENT_YEAR;
+    const base = value ?? initialYear ?? thisYear;
     return base - (base % PAGE_SIZE);
   });
   const years = Array.from({ length: PAGE_SIZE }, (_, index) => pageStart + index);
-  const isLastPage = pageStart + PAGE_SIZE > CURRENT_YEAR;
+  const isLastPage = pageStart + PAGE_SIZE > thisYear;
 
   return (
     <div className="w-56 p-3">
@@ -51,7 +55,7 @@ export const YearGrid = ({ value, initialYear, onSelect }: YearGridProps): React
       <div className="grid grid-cols-3 gap-1.5">
         {years.map((year) => {
           const isSelected = value === year;
-          const isFuture = year > CURRENT_YEAR;
+          const isFuture = year > thisYear;
           return (
             <button
               key={year}

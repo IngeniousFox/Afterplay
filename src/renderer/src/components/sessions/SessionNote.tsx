@@ -51,6 +51,20 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
     setEditing(false);
   };
 
+  // El borrador se siembra al ABRIR el editor, no solo al montar. El prop
+  // `note` cambia bajo una fila YA montada: escribir la nota desde el aviso de
+  // cierre o desde el HUD del overlay invalida ['sessions'] y la fila se
+  // repinta sin remontarse (las listas la keyean por session.id). Con el
+  // borrador congelado en el '' del montaje, pulsar el lapicero para releer la
+  // nota abría el input VACÍO y confirmar mandaba '' -> updateSessionNote lo
+  // guardaba como null: la nota recién escrita se BORRABA. Sembrar aquí cura
+  // a los tres consumidores (SessionRow, SessionHistoryList y el HUD) sin
+  // tirar un borrador a medias, que es lo que sí hace remontar por key.
+  const startEditing = (): void => {
+    setDraft(note ?? '');
+    setEditing(true);
+  };
+
   if (editing) {
     return (
       <div className="mt-1.5 flex items-center gap-1">
@@ -95,7 +109,7 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
       // larga siga cortando bien.
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={startEditing}
         title="Edit note"
         className="mt-1.5 flex w-fit max-w-full items-start gap-1.5 border-l-2 pl-2.5 text-left text-[12.5px] text-[#b7bdb8] hover:text-foreground"
         style={{ borderColor: `${AMBER}55` }}
@@ -114,7 +128,7 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
   return (
     <button
       type="button"
-      onClick={() => setEditing(true)}
+      onClick={startEditing}
       className="mt-1.5 flex w-fit items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-semibold transition-colors duration-150"
       style={{ borderColor: `${AMBER}40`, background: `${AMBER}12`, color: AMBER }}
     >

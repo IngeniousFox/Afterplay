@@ -101,7 +101,14 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
       if (!iterationId) {
         const iteration = await addIteration.mutateAsync({
           gameId: game.id,
-          playedPlatform: game.officialPlatforms?.[0] ?? 'PC',
+          // EMULADORES.md §5 — un juego emulado se juega en 'Emulated', venga
+          // el playthrough por donde venga. Esta rama miraba solo
+          // officialPlatforms, así que el MISMO juego emulado nacía con
+          // 'Nintendo 64' si el playthrough lo creaba este menú y con
+          // 'Emulated' si lo creaba el watcher (resolveIterationForPlay en el
+          // main sí mira isEmulated): el chip de plataforma del panel y el
+          // filtro de plataforma decían una cosa u otra según la puerta.
+          playedPlatform: game.isEmulated ? 'Emulated' : (game.officialPlatforms?.[0] ?? 'PC'),
           origin: 'Purchased',
           format: 'digital',
         });

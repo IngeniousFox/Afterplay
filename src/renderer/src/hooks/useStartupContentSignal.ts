@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useGames } from './games';
+import { resolveImageSrc } from './useImageSrc';
 
 // EL TERCER RELOJ DEL ARRANQUE (la pareja de revealWhenReady en main/index.ts).
 //
@@ -34,11 +35,15 @@ const RECENT_WARM_COUNT = 8;
 const WARM_TIMEOUT_MS = 1500;
 
 const decodeCover = async (url: string): Promise<void> => {
-  const src = await window.api.images.getSrc(url, 'covers');
-  // Solo la resolución local es pintable (mismo contrato que useImageSrc: el
-  // CSP bloquea http(s) en <img>). Un fallo de cacheo no se espera: esa card
+  // Por resolveImageSrc y no por window.api.images.getSrc a pelo: ese es el
+  // mismo camino que usan las cards, así que esta resolución queda SEMBRADA en
+  // la caché de módulo de useImageSrc. Antes se tiraba, y las primeras cards
+  // volvían a pedir por IPC exactamente lo que se acababa de resolver aquí —
+  // el doble de idas y vueltas justo en el instante que este hook existe para
+  // acortar. null = no pintable (fallo de cacheo, no se espera): esa card
   // saldrá con su placeholder, exactamente igual que hoy.
-  if (!src.startsWith('afterplay-image:')) return;
+  const src = await resolveImageSrc(url, 'covers');
+  if (src === null) return;
   const image = new Image();
   image.src = src;
   await image.decode();

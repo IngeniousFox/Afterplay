@@ -122,6 +122,16 @@ export const EmulatorsSection = (): React.JSX.Element => {
             Couldn&apos;t add the emulator — {createEmulator.error.message}
           </div>
         )}
+        {/* El borrado se miraba en ningún sitio: si el DELETE se rechaza (la
+            BD en pleno cambio de conexión, un fallo de IPC), la lista no se
+            invalida y la fila del emulador sigue exactamente donde estaba —
+            idéntico a no haber pulsado. El alta ya avisaba; quitar algo tiene
+            la misma obligación de decir que no se hizo. */}
+        {deleteEmulator.isError && (
+          <div className="text-[12px] text-destructive">
+            Couldn&apos;t remove the emulator — {deleteEmulator.error.message}
+          </div>
+        )}
       </div>
     </SettingsCard>
   );

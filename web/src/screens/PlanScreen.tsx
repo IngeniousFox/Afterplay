@@ -16,6 +16,13 @@ import {
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { PlanMailboxEntry } from '../../../src/shared/planMailbox';
+import {
+  computePlanDebt,
+  filterQueue,
+  sortHorizon,
+  sortUpNext,
+} from '../../../src/shared/planShelves';
+import type { PlanShelfReaders } from '../../../src/shared/planShelves';
 import { ApiFailure, dismissPlanFailure, enqueuePlan, fetchPlan, fetchPlanPending } from '../api';
 import type { PlannedGame } from '../api';
 import { Cover } from '../components/Cover';
@@ -30,8 +37,17 @@ import { AMBER, BLUE, GREEN, TEAL } from '../lib/status';
 
 const PLAN = BLUE;
 
-const byTitle = (a: PlannedGame, b: PlannedGame): number =>
-  a.title.localeCompare(b.title, 'en', { sensitivity: 'base' });
+// Cómo se lee un PlannedGame de la API para repartirlo en estanterías. El
+// REPARTO lo decide src/shared/planShelves —la misma función que el escritorio—
+// y esto es solo la traducción a la moneda de la PWA: milisegundos donde allí
+// hay Date. Estaba copiado a mano aquí dentro, con la parte sutil del horizonte
+// no excluyente incluida y sin nada que lo vigilara.
+const READ: PlanShelfReaders<PlannedGame> = {
+  pinnedAt: (game) => game.pinnedAt,
+  title: (game) => game.title,
+  unreleased: (game) => isUnreleased(game),
+  releaseSortKey: (game) => releaseSortKey(game),
+};
 
 // La marca de "esto todavía no ha llegado a tu PC". Discreta a propósito: el
 // cambio ya se ve aplicado, esto solo explica por qué aún no está en el
@@ -278,35 +294,24 @@ export const PlanScreen = (): React.JSX.Element => {
       ? overlay.games.filter((game) => game.title.toLowerCase().includes(needle))
       : overlay.games;
 
-    const pinnedOrder = (list: PlannedGame[]): PlannedGame[] =>
-      list
-        .filter((game) => game.pinnedAt !== null)
-        .sort((a, b) => (a.pinnedAt as number) - (b.pinnedAt as number) || byTitle(a, b));
-
     return {
-      upNext: pinnedOrder(games),
+      upNext: sortUpNext(games, READ),
       // El Up next COMPLETO, sin filtrar. Reordenar tiene que trabajar sobre
       // este y no sobre lo que se ve: con una búsqueda activa, mover una fila
       // reescribía el orden de solo los visibles y mandaba a los ocultos a
       // donde nadie había pedido.
-      upNextAll: pinnedOrder(overlay.games),
-      horizon: games
-        .filter((game) => isUnreleased(game))
-        .sort((a, b) => releaseSortKey(a) - releaseSortKey(b) || byTitle(a, b)),
-      queue: games.filter((game) => game.pinnedAt === null && !isUnreleased(game)),
+      upNextAll: sortUpNext(overlay.games, READ),
+      horizon: sortHorizon(games, READ),
+      // Sin ordenar después: la cola se queda con el alfabético que ya trae
+      // /api/plan. El escritorio le pasa aquí su lente, que la PWA no tiene.
+      queue: filterQueue(games, READ),
       ghosts: needle
         ? overlay.ghosts.filter((ghost) => ghost.title.toLowerCase().includes(needle))
         : overlay.ghosts,
       touched: overlay.touched,
-      debt: (() => {
-        const counted = overlay.games.filter((game) => !game.endless);
-        const withEstimate = counted.filter((game) => game.hltbMain !== null);
-        return {
-          totalGames: overlay.games.length,
-          totalHours: withEstimate.reduce((sum, game) => sum + (game.hltbMain ?? 0), 0),
-          withoutEstimate: counted.length - withEstimate.length,
-        };
-      })(),
+      // La deuda se mide sobre el plan ENTERO, no sobre lo que deja ver la
+      // búsqueda: es cuánto debes, no cuánto estás mirando.
+      debt: computePlanDebt(overlay.games),
     };
   }, [plan.data, pendingQuery.data, query]);
 

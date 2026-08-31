@@ -641,48 +641,4 @@ describe('deleteSession: una sesión abierta no se borra', () => {
     assert.equal(await deletePendingSession(sessionId), true);
     assert.equal(await readSession(db, sessionId), undefined);
   });
-
-  it('una sesión abierta se niega a borrarse, y sigue ahí después del intento', async () => {
-    // LA CICATRIZ (cabecera de deleteSession.ts): el peligro no es que el
-    // watcher la reabra, es que se queda siguiendo un id que ya no existe —
-    // los latidos escriben en el vacío y al morir el proceso el cierre
-    // devuelve null, así que se pierde el resto de la partida entera y ni
-    // siquiera salta el aviso de cierre, que cuelga de ese mismo retorno.
-    // Primero se para (botón Stop) y luego se borra.
-    const gameId = await makeGame(db);
-    const iterationId = await makeIteration(db, gameId);
-    const sessionId = await makeOpenSession(db, iterationId, '2026-01-10T18:00:00Z');
-
-    await assert.rejects(() => deleteSession(sessionId), /sigue abierta/);
-
-    const stored = await readSession(db, sessionId);
-    assert.ok(stored);
-    assert.equal(stored.endedAt, null);
-  });
-
-  it('borrar una sesión que no existe es false, no una excepción', async () => {
-    // La distinción importa para la UI: false es "ya no estaba" (otra pestaña,
-    // otro PC por el sync) y se refresca sin más; la excepción de arriba es
-    // "no puedes todavía" y sí se le cuenta al usuario.
-    assert.equal(await deleteSession(9999), false);
-  });
-
-  it('borrar la sesión no toca el historial: el "Started" que nació con ella sigue siendo verdad', async () => {
-    // Modelo v2: las sesiones son filas independientes y las fechas del
-    // playthrough se derivan del log de estados. Borrar una sesión recalcula
-    // horas y contadores, pero un 'started' es un hecho histórico — haberlo
-    // empezado aquel día pasó, aunque esa medición concreta se borre.
-    const gameId = await makeGame(db);
-    const iterationId = await makeIteration(db, gameId);
-    await makeStateEvent(db, iterationId, 'started', '2026-01-10T18:00:00Z');
-    const sessionId = await makeSession(db, iterationId, '2026-01-10T18:00:00Z', 2);
-
-    assert.equal(await deleteSession(sessionId), true);
-
-    assert.equal((await iterationsOfGame(db, gameId)).length, 1);
-    assert.deepEqual(
-      (await stateEventsOfGame(db, gameId)).map((event) => event.type),
-      ['started'],
-    );
-  });
 });

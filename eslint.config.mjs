@@ -37,5 +37,19 @@ export default defineConfig(
       'react/prop-types': 'off',
     },
   },
+  {
+    // Tests E2E (Playwright). Aqui no hay React ni una sola linea de JSX: el
+    // `use` que estas reglas confunden con un hook es el callback con el que
+    // Playwright entrega una fixture al test, y su firma —incluido el
+    // destructuring vacio de las dependencias— la fija su propia API, no
+    // nosotros. Apagarlas SOLO en esta carpeta es lo honesto; desactivarlas en
+    // todo el repo por culpa de un falso positivo seria pagar con el renderer,
+    // que es donde esas reglas de verdad protegen algo.
+    files: ['e2e/**/*.ts'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      'no-empty-pattern': 'off',
+    },
+  },
   eslintConfigPrettier,
 );

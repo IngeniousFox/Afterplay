@@ -60,35 +60,46 @@ const tick = async (isEmulatorRunning: () => boolean): Promise<void> => {
     }
 
     for (const [raGameId, unlocks] of byRaGame) {
-      const game = games.find((candidate) => candidate.raGameId === raGameId);
-      // Un appid de RA que no está en la biblioteca (o sin emparejar): no
-      // hay dónde colgarlo. Mismo silencio que el vigilante de emuladores.
-      if (!game) continue;
+      // TODAS las fichas emparejadas con ese set, no la primera: raGameId no
+      // lleva UNIQUE (dos fichas de la biblioteca —el juego y una edición o
+      // recopilatorio— pueden caer en el mismo set, y el emparejado se decide
+      // fila a fila), el select de arriba no lleva orderBy, y con un find() los
+      // logros acababan colgados de la que devolviera antes SQLite. El resto de
+      // caminos de RA (el nivel 3 del arranque y "Sync now", ra/backfill.ts) se
+      // los dan a TODAS, así que el estado en vivo y el de después de reiniciar
+      // ni siquiera coincidían — la misma cicatriz que arregló el vigilante de
+      // emuladores (steam/emu/watcher.ts).
+      //
+      // Un set de RA que no está en la biblioteca (o sin emparejar): no hay
+      // dónde colgarlo. Mismo silencio que ese vigilante.
+      const matched = games.filter((candidate) => candidate.raGameId === raGameId);
 
-      const fresh = await storeUnlocks(
-        game.id,
-        'ra',
-        unlocks.map((unlock) => ({
-          apiName: String(unlock.raAchievementId),
-          unlockedAt: unlock.unlockedAt,
-        })),
-        new Date(),
-      );
-      if (fresh.length === 0) continue;
+      for (const game of matched) {
+        const fresh = await storeUnlocks(
+          game.id,
+          'ra',
+          unlocks.map((unlock) => ({
+            apiName: String(unlock.raAchievementId),
+            unlockedAt: unlock.unlockedAt,
+          })),
+          new Date(),
+        );
+        if (fresh.length === 0) continue;
 
-      // Solo ASCII en los console.log, convencion de la casa.
-      console.log(`[ra] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
-      enqueueAchievementToasts(
-        fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
-      );
-      // ¿Acaba de caer el último? El broche dorado del 100%.
-      maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
-      notifyAchievementsActivity({
-        kind: 'synced',
-        gameId: game.id,
-        catalogCount: 0,
-        unlockedCount: fresh.length,
-      });
+        // Solo ASCII en los console.log, convencion de la casa.
+        console.log(`[ra] ${fresh.length} logro(s) nuevo(s) en vivo: ${game.title}`);
+        enqueueAchievementToasts(
+          fresh.map((toast) => ({ ...toast, gameTitle: game.title, gameHeroUrl: game.heroUrl })),
+        );
+        // ¿Acaba de caer el último? El broche dorado del 100%.
+        maybeCelebrateCompletion(game.id, game.title, game.heroUrl);
+        notifyAchievementsActivity({
+          kind: 'synced',
+          gameId: game.id,
+          catalogCount: 0,
+          unlockedCount: fresh.length,
+        });
+      }
     }
   } catch (error) {
     // Un tick fallido no tumba el sondeo: el siguiente reintenta, y la

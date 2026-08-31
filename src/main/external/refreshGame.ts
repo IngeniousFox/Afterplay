@@ -160,9 +160,18 @@ export const refreshGameEverything = async (
   const hltb: GameFullRefreshResult['hltb'] =
     times === undefined ? 'failed' : times === null ? 'no-match' : 'updated';
   if (times) {
-    patch.hltbMain = times.hltbMain;
-    patch.hltbMainExtras = times.hltbMainExtras;
-    patch.hltbCompletionist = times.hltbCompletionist;
+    // Tramo a tramo, y SOLO los que HLTB supo: escribir los tres en bloque
+    // borraba lo que ya había. getHltbTimes solo descarta el match cuando los
+    // TRES vienen null, así que un match parcial (una ficha de HLTB con un
+    // único tramo enviado, o la que elige findBestMatch cuando la buena no
+    // existe) entraba entero y sus dos null pisaban el "main extras" y el
+    // "completionist" del día del alta — justo lo contrario de la regla de la
+    // cabecera de este fichero: un "no" de una fuente NUNCA borra lo que ya
+    // había. Mismo criterio que mergeSteamPatch con las etiquetas y las
+    // reseñas (external/steamData.ts).
+    if (times.hltbMain !== null) patch.hltbMain = times.hltbMain;
+    if (times.hltbMainExtras !== null) patch.hltbMainExtras = times.hltbMainExtras;
+    if (times.hltbCompletionist !== null) patch.hltbCompletionist = times.hltbCompletionist;
   }
 
   // 'had-it' mira el appid con el que EMPEZÓ el refresco, así que un juego al

@@ -58,9 +58,36 @@ export const readLocalMigrations = (migrationsFolder: string): LocalMigration[] 
 
 export type PushResult = { applied: string[] };
 
-// FASE 1 — solo LEER qué falta. Barata y sin efectos: es la única parte que
-// el arranque puede permitirse correr con límite de tiempo (una base de Turso
-// dormida tarda en despertar, y el arranque no puede esperarla para siempre).
+// QUÉ LE FALTA A UNA BASE, y el criterio es EL NOMBRE de la carpeta.
+//
+// Aquí y no repetido en cada puerta porque las tres tienen que hablar del
+// mismo conjunto: esta (el remoto), el guardarraíl de reconstrucciones de
+// db/index.ts y el migrador de drizzle que acaba corriendo
+// (`localMigrations.filter(lm => !dbNamesSet.has(lm.name))`, migrator.utils.js).
+// El guardarraíl usaba otro —`folderMillis` por encima del max(created_at)
+// aplicado— y eso NO es lo que hace drizzle: bastaba una carpeta fuera de
+// orden (dos ramas fusionadas) o dos con el mismo segundo para que el
+// guardarraíl dijera "no hay nada pendiente" mientras el migrador SÍ ejecutaba
+// la reconstrucción — sin copia previa y sin conteo de filas, que es la única
+// vía legítima que este proyecto declara para una.
+export const selectPendingByName = (
+  migrations: LocalMigration[],
+  appliedNames: ReadonlySet<string>,
+): LocalMigration[] => migrations.filter((migration) => !appliedNames.has(migration.name));
+
+// FASE 1 — LEER qué falta. Es la única parte que el arranque puede permitirse
+// correr con límite de tiempo (una base de Turso dormida tarda en despertar, y
+// el arranque no puede esperarla para siempre).
+//
+// "Barata y sin efectos" decía aquí, y ni una cosa ni la otra: empieza por un
+// CREATE TABLE IF NOT EXISTS, que es DDL, y ese primer execute se ha medido en
+// 335 ms de los 468 de la fase (RENDIMIENTO.md: proceso en frío contra la
+// remota configurada — contra una base dormida o de otra región será más). Se
+// deja así y lo que se corrige es la promesa, porque cortar ESTE DDL a mitad
+// es inofensivo por dos motivos que la fase 2 no tiene: la sentencia es
+// idempotente (el reintento del ciclo de sync la vuelve a lanzar igual) y no
+// toca ni una fila de datos. Lo prohibido sigue siendo lo de abajo — matar la
+// conexión con el DDL de una MIGRACIÓN en vuelo.
 export const listRemotePending = async (
   client: Client,
   migrationsFolder: string,
@@ -78,9 +105,7 @@ export const listRemotePending = async (
   const { rows: appliedRows } = await client.execute(`SELECT name FROM ${MIGRATIONS_TABLE}`);
   const appliedNames = new Set(appliedRows.map((row) => row.name as string));
 
-  return readLocalMigrations(migrationsFolder).filter(
-    (migration) => !appliedNames.has(migration.name),
-  );
+  return selectPendingByName(readLocalMigrations(migrationsFolder), appliedNames);
 };
 
 // FASE 2 — aplicar lo pendiente. NUNCA se corre con timeout, nunca en una

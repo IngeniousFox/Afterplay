@@ -47,7 +47,7 @@ export const useExternalRefreshProgress = (): ExternalRefreshEvent | null => {
 };
 
 // La suscripción ÚNICA, montada en la raíz de la app (Afterplay.tsx). Vive
-// ahí y no en Ajustes por lo mismo que useCuriositiesActivity: la pasada
+// ahí y no en Ajustes por lo mismo que useCuriositiesActivitySync: la pasada
 // sobrevive al modal, así que su aviso tiene que sobrevivirlo también — y el
 // toast de "ya está" tiene que llegarte estés donde estés.
 export const useExternalRefreshActivity = (): void => {
@@ -164,4 +164,28 @@ export const useIsExternalRefreshRunning = (): boolean => {
   const progress = useExternalRefreshProgress();
   const { data: status } = useExternalDataStatus();
   return progress !== null ? progress.running : (status?.running ?? false);
+};
+
+// La regla de qué fase tiene porcentaje DE VERDAD, en un solo sitio. Solo
+// Steam y HLTB avanzan juego a juego (cada una con su propio total): IGDB
+// entero son 1-2 peticiones que terminan antes de que dé tiempo a leer la
+// primera cifra, y la escritura es una transacción. Fingirles un porcentaje
+// sería inventarse un progreso — esas fases se dicen con palabras y con la
+// barra latiendo en vez de avanzando.
+//
+// Vive aquí, junto al evento del que sale, porque las DOS puertas pintan la
+// misma barra (Ajustes → External data y la cabecera del Plan) y la regla
+// estaba copiada a mano en las dos: añadir una tercera fase medible —o
+// rebautizar 'hltb'— dejaba una de las dos barras latiendo para siempre, y de
+// eso no se entera nadie hasta verlo en pantalla.
+export const externalRefreshBar = (
+  progress: ExternalRefreshEvent | null,
+  running: boolean,
+): { measurable: boolean; percent: number } => {
+  const measurable =
+    running && (progress?.phase === 'steam' || progress?.phase === 'hltb') && progress.total > 0;
+  return {
+    measurable,
+    percent: measurable && progress ? (progress.done / progress.total) * 100 : 0,
+  };
 };

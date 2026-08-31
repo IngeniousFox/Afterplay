@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { asc, eq } from 'drizzle-orm';
+import { isAddedAtArtifact } from '../../../shared/playthroughState';
 import type { CreatePlannedGameInput, PromotePlannedGameInput } from '../../../shared/types';
 import type {
   EnrichmentSource,
@@ -837,6 +838,65 @@ describe('pasar un planeado a la biblioteca', () => {
       [['plan_to_play', 'Me lo recomendó Dani']],
     );
     assert.deepEqual(events[0].occurredAt, new Date('2026-01-02T12:00:00Z'));
+  });
+
+  it('sella promotedAt, y el papeleo del promote cae dentro de su margen', async () => {
+    // El agujero de la ronda 4: promocionar un planeado VIEJO marcandolo
+    // Beaten sin fechas escribia un 'completed' fechado hoy que nada podia
+    // reconocer como papeleo — addedAt es de cuando lo planeaste (y NO se
+    // toca al promocionar: el test de abajo lo protege), asi que el juego se
+    // subia a "Last played" y sus horas caian al año en curso. promotedAt se
+    // sella en la MISMA transaccion que esos eventos: isAddedAtArtifact los
+    // reconoce contra el con el mismo margen que el alta.
+    const { gameId } = await planned('Silksong', { plannedAt: '2026-01-02T12:00:00Z' });
+    const [antes] = await db
+      .select({ addedAt: gamesTable.addedAt })
+      .from(gamesTable)
+      .where(eq(gamesTable.id, gameId));
+
+    const game = await promotePlannedGame(
+      promoteInput(gameId, { initialStatus: 'completed', hoursPlayed: 50 }),
+    );
+
+    assert.ok(game.promotedAt instanceof Date, 'promotedAt debe quedar sellado');
+    // addedAt queda EXACTAMENTE como estaba: la pildora de espera no miente.
+    assert.deepEqual(game.addedAt, antes.addedAt);
+
+    // Los eventos del papeleo (started + completed, SPEC 4.5) nacen en la
+    // transaccion del promote: TODOS dentro del margen de promotedAt, y por
+    // tanto reconocibles como artefacto — que es todo el proposito del sello.
+    const events = await readEvents(gameId);
+    const paperwork = events.filter((event) => event.type !== 'plan_to_play');
+    assert.ok(paperwork.length >= 1, 'el promote sin fechas escribe su papeleo');
+    for (const event of paperwork) {
+      assert.equal(
+        isAddedAtArtifact(event.occurredAt, game.addedAt, game.promotedAt),
+        true,
+        `${event.type} deberia reconocerse como papeleo del promote`,
+      );
+      // Y contra addedAt SOLO (el mundo de antes), ninguno se reconocia: es
+      // exactamente el bug que esta columna vino a cerrar.
+      assert.equal(isAddedAtArtifact(event.occurredAt, game.addedAt), false);
+    }
+  });
+
+  it('promocionar un planeado viejo sin fechas no cuenta como jugada de hoy', async () => {
+    // La consecuencia visible del sello: el papeleo del promote no puede
+    // subir el juego a "Last played" ni colgar sus horas manuales del año en
+    // curso — el escenario Silksong de la ronda 4 (planeado en enero,
+    // promocionado en agosto como Beaten con 50 h y sin teclear fechas).
+    const { gameId } = await planned('Silksong', { plannedAt: '2026-01-02T12:00:00Z' });
+
+    await promotePlannedGame(promoteInput(gameId, { initialStatus: 'completed', hoursPlayed: 50 }));
+
+    const games = await getGames();
+    const game = games.find((row) => row.id === gameId);
+    assert.ok(game, 'el juego promocionado esta en la biblioteca');
+    // Sin sesiones y con el unico evento real siendo papeleo: nunca jugado.
+    assert.equal(game.lastPlayedAt, null);
+    // Y las 50 horas, sin año: solo pueden contar en All Time.
+    assert.equal(game.manualIterations.length, 1);
+    assert.equal(game.manualIterations[0].year, null);
   });
 
   it('el pin de Up next se limpia al promocionar', async () => {

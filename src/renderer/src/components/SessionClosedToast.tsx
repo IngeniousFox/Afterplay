@@ -1,6 +1,7 @@
 import { Check, Flame, Timer, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { splitSessionDuration } from '../../../shared/sessionDuration';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useGameAchievements } from '../hooks/achievements';
 import { useSetSessionNote } from '../hooks/sessions';
@@ -11,7 +12,8 @@ import { celebrateCompletion } from '../lib/celebrate';
 import { AMBER } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
-import { STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
+import { quickStatusOptions, STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
+import { requestAchievementFlash } from '../lib/achievementFlash';
 import { expandClass } from '../lib/styles';
 import { GameCover } from './GameCover';
 import { AchievementMiniIcon } from './sessions/SessionAchievements';
@@ -39,22 +41,10 @@ type SessionClosedToastProps = {
 };
 
 // AFTERPLAY-LOOP.md §6 — el estado rápido vive AQUÍ y no en una bandeja de
-// pendientes: "sigo jugando" es el defecto y no necesita botón (no tocar nada
-// ya lo dice), y si el toast se va sin pulsar, no queda nada esperándote — el
-// estado se cambia desde la ficha como toda la vida. Juego normal ofrece
-// Beaten/Dropped; endless, Resting (un endless no se "termina").
-const quickStatusOptions = (endless: boolean): PastStatusKey[] =>
-  endless ? ['resting'] : ['beaten', 'dropped'];
-
-// "1h 47m" partido en número y unidad, para poder pintar la cifra grande y la
-// unidad pequeña sin que el conjunto parezca un texto plano.
-const splitDuration = (seconds: number): { value: string; unit: string } => {
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return { value: `${hours}h ${minutes}`, unit: 'm' };
-  return { value: String(minutes), unit: 'm' };
-};
+// pendientes: si el toast se va sin pulsar, no queda nada esperándote — el
+// estado se cambia desde la ficha como toda la vida. QUÉ desenlaces se
+// ofrecen lo decide quickStatusOptions (lib/gameStatus), compartido con el
+// panel del modo TV: es el mismo gesto en dos pieles y estaba copiado.
 
 export const SessionClosedToast = ({
   event,
@@ -71,7 +61,9 @@ export const SessionClosedToast = ({
   const setSessionNote = useSetSessionNote();
   const addStateEvent = useAddStateEvent();
   const heroSrc = useImageSrc(event.heroUrl, 'heroes');
-  const duration = splitDuration(event.durationSec);
+  // Partida en cifra y unidad para pintar el número grande y la "m" pequeña
+  // sin que el conjunto parezca texto plano.
+  const duration = splitSessionDuration(event.durationSec);
 
   // Los trofeos de ESTA sesión, llegando EN VIVO al aviso (LOGROS-IDEAS.md
   // §2.2): el cierre dispara la sincronización del juego, que tarda un par
@@ -232,7 +224,23 @@ export const SessionClosedToast = ({
                 )
                 .slice(0, 6)
                 .map((entry) => (
-                  <AchievementMiniIcon key={entry.id} entry={entry} />
+                  <AchievementMiniIcon
+                    key={entry.id}
+                    entry={{
+                      achievementId: entry.id,
+                      displayName: entry.displayName,
+                      iconUrl: entry.iconUrl,
+                      globalPercent: entry.globalPercent,
+                    }}
+                    // Pulsar el trofeo lleva a SU logro, no a la ficha a
+                    // secas (LOGROS-REDISENO §1): se pide el parpadeo y se
+                    // reutiliza el mismo onOpenGame del toast, que ya navega
+                    // y lo descarta.
+                    onOpen={(achievementId) => {
+                      requestAchievementFlash(achievementId);
+                      onOpenGame();
+                    }}
+                  />
                 ))}
             </span>
           </div>

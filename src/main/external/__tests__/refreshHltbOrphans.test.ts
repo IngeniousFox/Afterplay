@@ -52,9 +52,17 @@ mock.module('../../igdb/api', {
   },
 });
 
+// Gancho para colar trabajo A MITAD de pasada: getSteamTags corre despues de
+// leer la lista de juegos y antes de la repesca, que es justo la ventana en la
+// que el usuario puede dar un juego de alta.
+let midPass: (() => Promise<void>) | null = null;
+
 mock.module('../../steam/tags', {
   namedExports: {
-    getSteamTags: async (): Promise<Map<number, never>> => new Map<number, never>(),
+    getSteamTags: async (): Promise<Map<number, never>> => {
+      await midPass?.();
+      return new Map<number, never>();
+    },
   },
 });
 
@@ -118,6 +126,7 @@ beforeEach(async () => {
   db = await freshDb();
   hltbAsked.length = 0;
   hltbImpl = async () => null;
+  midPass = null;
   doneEvent = null;
 });
 
@@ -199,6 +208,42 @@ describe('la repesca de huerfanos de HowLongToBeat', () => {
       'el de biblioteca no entra por la puerta del Plan',
     );
     assert.equal((await tiemposDe(planeado)).hltbMain, 8);
+  });
+
+  it('un juego dado de alta a mitad de pasada no se pregunta: no tendria donde escribirse', async () => {
+    // La lista de huerfanos se lee JUSTO antes de la repesca (a proposito: asi
+    // no se re-pregunta a uno al que el boton de su ficha acaba de encontrarle
+    // tiempos), pero la transaccion final recorre la lista de juegos que se
+    // leyo al ARRANCAR. Un alta durante la pasada —minutos, con la biblioteca
+    // entera— caia en el hueco: se le pedian los tiempos a HLTB gastando la
+    // peticion y su pausa, el parte los contaba como recuperados… y su fila no
+    // se escribia nunca. "N tiempos recuperados" con uno de ellos a null.
+    const deSiempre = await makeGame(db, { title: 'Huerfano de siempre' });
+    let recienLlegado = 0;
+    midPass = async () => {
+      recienLlegado = await makeGame(db, { title: 'Alta a mitad de pasada' });
+    };
+    hltbImpl = async () => ({ hltbMain: 9, hltbMainExtras: null, hltbCompletionist: null });
+
+    const done = waitForDone();
+    assert.equal(await startExternalRefresh('all'), 1, 'la pasada arranca con un solo juego');
+    await done;
+
+    assert.deepEqual(
+      hltbAsked.map((ask) => ask.title),
+      ['Huerfano de siempre'],
+      'al recien llegado no se le pregunta: esta pasada no puede guardarle nada',
+    );
+    assert.equal((await tiemposDe(deSiempre)).hltbMain, 9);
+    // Y el nuevo sigue huerfano de verdad, listo para la proxima pasada.
+    assert.deepEqual(await tiemposDe(recienLlegado), {
+      hltbMain: null,
+      hltbMainExtras: null,
+      hltbCompletionist: null,
+    });
+    // El parte cuenta lo que de verdad paso, no lo que se pidio y se tiro.
+    assert.equal(doneEvent?.summary?.hltbChecked, 1);
+    assert.equal(doneEvent?.summary?.hltbFound, 1);
   });
 
   it('se rinde tras tres fallos seguidos en vez de recorrer la lista entera', async () => {

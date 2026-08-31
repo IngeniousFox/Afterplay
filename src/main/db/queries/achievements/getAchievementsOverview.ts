@@ -137,6 +137,26 @@ export const getAchievementsOverview = async (
   const [catalog] = await db.select({ total: sql<number>`count(*)` }).from(achievementsTable);
 
   // Cuántos logros tiene cada juego, con lo que hace falta para pintarlo.
+  //
+  // LA POBLACIÓN SON TODOS LOS JUEGOS CON CATÁLOGO, PLANEADOS INCLUIDOS, y va
+  // escrito porque este innerJoin es el único de Stats que NO filtra
+  // planned=false: getGames.ts, getSaveGames.ts y getWatchTargets.ts sí lo
+  // hacen, y schema.ts dice que un planeado "vive SOLO en /plan". Aquí es a
+  // propósito, no un filtro que se olvidó:
+  //   · sus desbloqueos son TUYOS y son reales — pones en el Plan un juego que
+  //     ya tienes en Steam y sus 40 logros de hace años existen igual.
+  //     Esconderlos dejaría fuera del salón de la fama tu logro más raro por
+  //     una etiqueta de otra pantalla, y el total de desbloqueados dejaría de
+  //     cuadrar con la suma de las fichas (que sí los pintan);
+  //   · la sincronización ya los trata así y lo dice: getPendingAchievementsGames
+  //     "incluye los PLANEADOS a propósito", y ni steam/syncAchievements ni
+  //     ra/sync miran planned;
+  //   · y no sería la primera card de Stats que mira al Plan: BacklogDebtCard
+  //     recibe plannedGames enteros (PLAN-TO-PLAY.md §2.1).
+  // Lo que NO entra son sus HORAS ni sus sesiones, que siguen siendo de la
+  // biblioteca — de ahí la asimetría que se ve en la pantalla: un planeado
+  // puede salir en el muro del 100% sin aparecer en ningún otro bloque.
+  //
   // El ORDER BY por el PRIMER logro del juego no es cosmético: reproduce el
   // orden en que la versión anterior iba llenando su Map al recorrer la tabla
   // entera, y de ese orden dependen los desempates de "almost there" (dos
@@ -166,6 +186,10 @@ export const getAchievementsOverview = async (
   const unlockedRows = await db
     .with(merged)
     .select({
+      // El id viaja desde aqui para que Stats pueda ENLAZAR con el logro
+      // concreto de la ficha (el aterrizaje de LOGROS-REDISENO §1): sin el,
+      // el salon de la fama solo sabia abrir el juego.
+      achievementId: achievementsTable.id,
       gameId: achievementsTable.gameId,
       displayName: achievementsTable.displayName,
       iconUrl: achievementsTable.iconUrl,
@@ -181,6 +205,7 @@ export const getAchievementsOverview = async (
   // producción es otro (@tursodatabase/sync): Number() los normaliza sin
   // depender de eso.
   const unlockedDefs = unlockedRows.map((row) => ({
+    achievementId: row.achievementId,
     gameId: row.gameId,
     displayName: row.displayName,
     iconUrl: row.iconUrl,
@@ -265,6 +290,7 @@ export const getAchievementsOverview = async (
       ? []
       : await db
           .select({
+            id: achievementsTable.id,
             gameId: achievementsTable.gameId,
             displayName: achievementsTable.displayName,
             iconUrl: achievementsTable.iconUrl,
@@ -312,6 +338,7 @@ export const getAchievementsOverview = async (
       .sort((a, b) => (b.globalPercent ?? -1) - (a.globalPercent ?? -1))
       .slice(0, ALMOST_THERE_MISSING)
       .map((definition) => ({
+        achievementId: definition.id,
         displayName: definition.displayName,
         // El icono APAGADO a propósito: aún no es tuyo.
         iconUrl: definition.iconGrayUrl ?? definition.iconUrl,
@@ -336,6 +363,7 @@ export const getAchievementsOverview = async (
     .sort((a, b) => (a.globalPercent ?? 0) - (b.globalPercent ?? 0))
     .slice(0, HALL_OF_FAME_SIZE)
     .map((entry) => ({
+      achievementId: entry.achievementId,
       gameId: entry.gameId,
       gameTitle: perGame.get(entry.gameId)?.title ?? '',
       displayName: entry.displayName,

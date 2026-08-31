@@ -111,6 +111,18 @@ export const gamesTable = sqliteTable('games', {
   addedAt: int({ mode: 'timestamp_ms' })
     .notNull()
     .$defaultFn(() => new Date()),
+  // Cuándo pasó de Plan to Play a la biblioteca (null = nunca estuvo
+  // planeado, o se promocionó antes de existir esta columna). Existe por el
+  // papeleo del promote: isAddedAtArtifact reconoce los eventos-artefacto
+  // del alta porque nacen en la misma transacción que addedAt — pero al
+  // promocionar, addedAt es de CUANDO LO PLANEASTE (protegido por test:
+  // "promocionar no cambia la fecha de entrada", de él salen la píldora de
+  // espera y "Longest waiting"), así que el 'completed' sin fechas del
+  // modal de promote quedaba como jugada real de HOY: el juego se iba
+  // arriba de "Last played", sus horas manuales caían al año EN CURSO de
+  // Stats y el Loop le abría capítulo. Esta marca es la segunda referencia
+  // contra la que comparar ese papeleo — misma transacción, mismo margen.
+  promotedAt: int({ mode: 'timestamp_ms' }),
   // ── Partidas guardadas (PARTIDAS-GUARDADAS.md §7.1) ──────────────────
   // Capa PORTABLE: lo único de esta función que puede viajar entre PCs. Todo
   // lo que sea un hecho sobre una máquina concreta (dónde está instalado el
@@ -227,7 +239,8 @@ export const gamesTable = sqliteTable('games', {
   // juegos recientes y atrasados los demás — el recibo, en steam/tags.ts).
   // Renombrarla exigiría reconstruir la tabla, y eso en este stack ya costó
   // producción dos veces: se queda como está y ya. Ver también
-  // legacySteamGridDbId, arriba, por el mismo motivo.
+  // steamGridDbId, arriba: la columna se llama `sgdbId` y el nombre se queda
+  // por lo mismo.
   steamSpyCheckedAt: int({ mode: 'timestamp_ms' }),
   // "Up next" (§2.2): cuándo fijaste este juego como prioridad de verdad.
   // null = cola normal. SIEMPRE manual (un icono de pin tuyo), nunca derivado

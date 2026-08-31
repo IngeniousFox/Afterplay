@@ -327,6 +327,11 @@ export type GameListItem = {
   // Cuándo entró en Afterplay — el gráfico Backlog Flow de Stats acumula
   // altas por mes contra completados por mes.
   addedAt: Date;
+  // El sello del promote (null = nunca fue un Plan to Play, o se promocionó
+  // antes de existir la columna): el Journey lo usa junto a addedAt para
+  // descartar el papeleo de promocionar como si fuera un hito (ver
+  // isAddedAtArtifact en shared/playthroughState).
+  promotedAt: Date | null;
   // Main Story de HowLongToBeat — para el "You vs HLTB" de Stats (tus horas
   // frente al tiempo oficial en juegos completados). Null si HLTB no lo
   // tenía al enriquecer el juego.
@@ -664,6 +669,9 @@ export type AchievementsOverview = {
     | null;
   // Tus conseguidos más raros de toda la biblioteca, rareza ascendente.
   hallOfFame: {
+    // Para ENLAZAR con el logro concreto en la ficha (aterrizaje dorado):
+    // desde Stats se abre el juego Y se pide ese logro, no solo el juego.
+    achievementId: number;
     gameId: number;
     gameTitle: string;
     displayName: string;
@@ -690,6 +698,7 @@ export type AchievementsOverview = {
     unlocked: number;
     total: number;
     missing: {
+      achievementId: number;
       displayName: string;
       iconUrl: string | null;
       globalPercent: number | null;

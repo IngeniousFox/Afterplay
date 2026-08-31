@@ -27,12 +27,18 @@ const TvGameDetail = lazy(() =>
   import('./tv/TvGameDetail').then((m) => ({ default: m.TvGameDetail })),
 );
 const TvJourney = lazy(() => import('./tv/TvJourney').then((m) => ({ default: m.TvJourney })));
-// El HUD del overlay in-game (OVERLAY.md §8.1): otra BrowserWindow cargando
-// esta misma SPA por #/overlay. Lazy por lo mismo que el árbol de TV — el
-// arranque normal de la app nunca paga este chunk.
-const OverlayHud = lazy(() =>
-  import('./overlay/OverlayHud').then((m) => ({ default: m.OverlayHud })),
-);
+
+// AQUÍ NO HAY NADA DEL OVERLAY, y es a propósito. La ventana del HUD in-game
+// (OVERLAY.md §8.1) carga esta misma SPA con #/overlay, pero NO pasa por este
+// router: main.tsx mira el hash al evaluar el módulo y monta OverlayHud
+// directamente, para no arrastrar a esa ventana el árbol de escritorio entero
+// que este fichero importa de forma estática (RootLayout, Library, Stats...).
+// Había aquí una ruta '/overlay' que era exactamente eso, y era INALCANZABLE:
+// la rama de main.tsx corre antes que nada y no existe ni un navigate ni un
+// Link que apunte a ella. Lo peligroso no era el peso muerto, era que las dos
+// definiciones se habían separado —los arreglos de transparencia y de padding
+// del shell solo viven en la de main.tsx—, así que quien viniera a "arreglar el
+// overlay" tocando este fichero no cambiaría nada en la app.
 
 // Un solo Suspense en la raíz del árbol de TV: aunque BigPictureLayout y la
 // pantalla hija (TvHome, TvLibrary...) sean chunks distintos, React Router
@@ -63,19 +69,6 @@ const tvFallback = (
 // escritorio para la vuelta). La raíz redirige a /games porque la
 // biblioteca es la pantalla de entrada.
 export const router = createHashRouter([
-  {
-    // FUERA de ModeBridge a propósito: esta ruta solo la carga la ventana
-    // del overlay (main/overlay.ts), y el puente de Big Picture la
-    // redirigiría a /tv si el modo TV estuviera activo en el main — son
-    // ventanas distintas con estados distintos. Sin fallback de Suspense:
-    // la ventana es transparente y nace oculta, no hay nada que cubrir.
-    path: '/overlay',
-    element: (
-      <Suspense fallback={null}>
-        <OverlayHud />
-      </Suspense>
-    ),
-  },
   {
     element: <ModeBridge />,
     children: [

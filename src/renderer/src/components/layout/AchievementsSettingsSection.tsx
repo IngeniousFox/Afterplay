@@ -7,6 +7,7 @@ import {
   useSyncAchievements,
 } from '../../hooks/achievements';
 import { AMBER } from '../../lib/colors';
+import { missingKeyHint } from '../../lib/settingsTabs';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → Achievements: la pasada que trae el catálogo de logros de tus
@@ -39,7 +40,7 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
     // Con CUALQUIERA de las dos fuentes configuradas ya hay trabajo que
     // hacer; solo sin ninguna está esto de verdad apagado.
     if (!hasKey && !hasRa) {
-      return 'Add your Steam API key or your RetroAchievements login in API & Sync to turn this on.';
+      return missingKeyHint('Steam API key or your RetroAchievements login');
     }
     if (!status) return null;
     // Los fallidos mandan sobre el resumen normal: es lo único que pide una

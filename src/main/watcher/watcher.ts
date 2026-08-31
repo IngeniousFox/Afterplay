@@ -2,7 +2,6 @@ import { powerMonitor, type BrowserWindow } from 'electron';
 import { closeSync, openSync } from 'node:fs';
 import { withDbAccess } from '../db';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
-import { getIterationGameId } from '../db/queries/iterations/getIterationGameId';
 import { closeSession, closeSessionIfOpen } from '../db/queries/sessions/closeSession';
 import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
 import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
@@ -137,6 +136,11 @@ export class ProcessWatcher {
   // contraseña al despertar— y entonces despausa el sondeo, en cuanto el
   // sistema conteste que no, no hay bloqueo.
   private resumeRequested = false;
+  // GENERACIÓN del sondeo: pause() y stop() la incrementan, y cada ciclo se
+  // queda con la suya al empezar. Es lo que le permite a un ciclo EN VUELO
+  // saber que lo que está a punto de escribir ya no vale — ver isStale y la
+  // carrera que documenta.
+  private generation = 0;
   // Foto anterior: sesiones abiertas que el watcher sigue, indexadas por la
   // clave del objetivo ("game:12" / "emu:3" — SPEC 4.5: como mucho una
   // sesión abierta por juego, y el dedup de createEmulatorSession garantiza
@@ -180,10 +184,29 @@ export class ProcessWatcher {
 
   stop(): void {
     this.stopped = true;
+    this.generation += 1;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  // ¿Ha CADUCADO este ciclo? Pregunta obligatoria antes de cada escritura de
+  // poll(), porque withDbAccess es un contador y no un mutex (ver db/index.ts):
+  // no serializa nada, así que pause() puede colarse en cualquiera de los
+  // awaits del ciclo —cerrando las sesiones y vaciando `active` por debajo— y
+  // el ciclo reanudaría con la foto de ANTES: abriendo sesión nueva por un
+  // juego que el bloqueo acaba de cerrar (y latiéndola durante todo el
+  // bloqueo, que es justo el tiempo que SPEC-2 §7.2 dice que no se juega), o
+  // adoptando en `active` una sesión que en la DB ya está cerrada (bandeja y
+  // overlay pintando un juego en marcha, e isGameRunning bloqueando restaurar
+  // partidas hasta que muera el proceso).
+  //
+  // Una GENERACIÓN y no el booleano `paused`: un 'resume' rápido lo devuelve a
+  // false —lo hace el propio poll() que resume() lanza— y el ciclo viejo se
+  // creería vigente otra vez. El número no vuelve atrás nunca.
+  private isStale(generation: number): boolean {
+    return this.stopped || generation !== this.generation;
   }
 
   // PC bloqueado o suspendido (powerMonitor 'lock-screen'/'suspend'): cierra
@@ -195,6 +218,10 @@ export class ProcessWatcher {
     if (this.stopped || this.paused) return;
     this.paused = true;
     this.resumeRequested = false;
+    // Lo que haya en vuelo deja de valer AQUÍ, antes de cerrar nada: si el
+    // ciclo que corre ahora mismo llega tarde a enterarse, lo que escriba
+    // después contradice lo que closeAllActive está a punto de hacer.
+    this.generation += 1;
     // closeAllActive nunca rechaza (envuelve cada cierre en su try/catch),
     // pero el .catch queda por si acaso: un void sin red de seguridad sería
     // una promesa rechazada sin dueño si eso cambiara.
@@ -273,6 +300,9 @@ export class ProcessWatcher {
     // el sistema tiene muchos procesos) — evito que dos ciclos se solapen.
     if (this.polling) return;
     this.polling = true;
+    // Con qué generación corre este ciclo (ver isStale). Se toma aquí, con la
+    // decisión de pausa ya tomada y antes del primer await.
+    const generation = this.generation;
 
     try {
       // Los dos tramos que tocan la DB van dentro de withDbAccess() para no
@@ -287,9 +317,8 @@ export class ProcessWatcher {
       // este segundo control, seguiríamos con la foto PRE-pausa: todo lo que
       // corría se vería "sin seguir", abriríamos sesiones NUEVAS y las
       // latiríamos durante todo el bloqueo — justo lo que la pausa evita.
-      // withDbAccess es un contador, no un mutex: no serializa, hay que
-      // releer el flag aquí.
-      if (this.paused || this.stopped) return;
+      // Por generación y no por el booleano: ver isStale.
+      if (this.isStale(generation)) return;
 
       const changed = await withDbAccess(async () => {
         let changed = false;
@@ -301,6 +330,11 @@ export class ProcessWatcher {
         // SELECT diminuto por índice sobre el SQLite local, del mismo orden que
         // el getWatchTargets que ya se paga cada 5s.
         const openSessions = await getOpenSessions();
+
+        // Y otra vez, que este await también es un hueco por el que cabe una
+        // pausa: de aquí para abajo todo lo que hace este bloque es ESCRIBIR
+        // (adoptar, abrir, cerrar, latir) sobre una foto que ya no valdría.
+        if (this.isStale(generation)) return false;
 
         // Quién es el dueño de lo que ya se está siguiendo: puede haber
         // cambiado por fuera del watcher desde el ciclo anterior.
@@ -352,6 +386,10 @@ export class ProcessWatcher {
           // Ese "mientras" puede durar HORAS (hasta que el cronómetro se ponga
           // rancio), así que ese caso se corta abajo ANTES de llamar a la DB.
           for (const key of untrackedKeys) {
+            // Cada vuelta abre o adopta una sesión y cada una espera a la DB:
+            // una pausa a mitad del bucle no puede llevarse solo las que ya
+            // estaban hechas.
+            if (this.isStale(generation)) break;
             const info = running.get(key);
             if (!info) continue;
 
@@ -469,23 +507,36 @@ export class ProcessWatcher {
           // esperar: la subida corre por su cuenta con su propio retardo y
           // NUNCA lanza, así que un fallo de nube no puede tumbar el ciclo
           // del watcher ni retrasar el cierre de sesión.
-          const gameId = Number(key.slice('game:'.length));
-          if (key.startsWith('game:') && Number.isFinite(gameId)) {
-            void scheduleSaveBackup(gameId);
-          } else if (closed && closed.iterationId !== null) {
-            // Sesión de EMULADOR ("emu:N") que el usuario asignó a un juego
-            // emulado mientras seguía jugando: la clave no sabe de juegos,
-            // pero la sesión ya sí. Sin esta rama, ese juego se quedaba sin
-            // backup automático SIEMPRE — la clave nunca empieza por "game:"
-            // y el disparador de arriba ni lo miraba.
-            const assignedGameId = await getIterationGameId(closed.iterationId);
-            if (assignedGameId !== null) void scheduleSaveBackup(assignedGameId);
-          }
+          //
+          // La CONDICIÓN es la misma para el juego nativo y para el emulado, y
+          // ahí estaba la cicatriz: la rama del emulador exigía además que
+          // `closed` fuera truthy, o sea que la sesión siguiera abierta al
+          // llegar aquí. Pulsar Beaten/Dropped con el emulador todavía vivo la
+          // cierra en ese instante (addStateEvent), así que al cerrar RetroArch
+          // closeSessionIfOpen devolvía null y ese juego se quedaba SIEMPRE sin
+          // backup — justo lo contrario de lo que la rama nativa hace y sus
+          // tests fijan: la sesión estaba cerrada, pero la partida guardada
+          // acaba de cambiar en disco al salir del juego.
+          //
+          // El dueño sale de `active` cuando la clave no lo dice: un juego
+          // emulado vive bajo "emu:N" toda la partida y su gameId lo mantiene
+          // al día refreshAssignedGames en cada vuelta.
+          const keyGameId = Number(key.slice('game:'.length));
+          const backupGameId =
+            key.startsWith('game:') && Number.isFinite(keyGameId)
+              ? keyGameId
+              : activeSession.gameId;
+          if (backupGameId !== null) void scheduleSaveBackup(backupGameId);
         }
 
         // Latido de las sesiones que siguen vivas: deja constancia en la DB de
         // que llegaron hasta aquí, para poder cerrarlas en este punto si la app
         // muere de golpe antes del próximo ciclo (corte de luz, cuelgue).
+        //
+        // Latir es afirmar "esto seguía en marcha a esta hora", así que con una
+        // pausa por medio es justo lo que no hay que escribir: sería sellar
+        // como jugado el instante en que se bloqueó la pantalla.
+        if (this.isStale(generation)) return changed;
         await heartbeatSessions(
           Array.from(this.active.values(), (session) => session.sessionId),
           new Date(),
@@ -493,6 +544,19 @@ export class ProcessWatcher {
 
         return changed;
       });
+
+      // La red final: entre el último control y la escritura que le sigue
+      // siempre queda un hueco de un await, así que lo que este ciclo haya
+      // llegado a meter en `active` después de la pausa se deshace aquí — que
+      // es el único punto en el que ya no queda ningún await por delante.
+      // Cerrar es idempotente (closeSession devuelve la fila ya cerrada tal
+      // cual), así que repetirlo sobre lo que pause() ya cerró no toca nada.
+      // Con la app apagándose NO se toca la DB: se está desmontando.
+      if (this.stopped) return;
+      if (this.isStale(generation)) {
+        await this.closeAllActive('pausa a mitad de ciclo');
+        return;
+      }
 
       if (changed) this.notifyRenderer();
       // Barato — solo lee el Map en memoria — así que se llama siempre, no

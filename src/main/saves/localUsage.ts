@@ -55,7 +55,14 @@ export const getLocalBackupsUsage = async (): Promise<LocalBackupsUsage> => {
   if (!existsSync(root)) return EMPTY_USAGE;
 
   // Reclamable de verdad SOLO con nube configurada: sin R2, lo local es la
-  // ÚNICA copia que existe — nada aquí puede marcarse como prescindible.
+  // ÚNICA copia que existe — nada aquí puede marcarse como prescindible. Eso
+  // vale para las dos mitades del censo, huérfanas incluidas: la puerta solo
+  // cubría los zips ya sincronizados y el conteo de huérfanas corría siempre,
+  // mientras que cleanLocalBackups se va en seco sin R2 (línea de abajo) sin
+  // llegar nunca a su barrido. Resultado: Ajustes cantaba "1,2 GB
+  // reclaimable" con el botón activo, y el clic contestaba "Nothing to free"
+  // dejando el disco igual — el número decía que sobraba algo que ninguna
+  // acción de la app podía tocar.
   const r2Configured = isR2Configured();
   const own = r2Configured ? await getOwnBackupEntries(getMachineId()) : [];
   const reclaimablePaths = new Set(
@@ -95,7 +102,7 @@ export const getLocalBackupsUsage = async (): Promise<LocalBackupsUsage> => {
       }
     }
 
-    if (mappingName && !known.has(mappingName)) {
+    if (r2Configured && mappingName && !known.has(mappingName)) {
       usage.orphanBytes += dirBytes;
       usage.orphanFolders++;
     }
@@ -113,6 +120,12 @@ export const cleanLocalBackups = async (): Promise<{
   bytes: number;
   folders: number;
 }> => {
+  // La misma puerta que el censo, y por el mismo motivo: sin R2 nada de esta
+  // carpeta es prescindible —ni los zips ya subidos, que no existen, ni las
+  // huérfanas, que sin nube son la única copia de esa partida—. Las dos
+  // mitades tienen que gatearse igual aquí y en getLocalBackupsUsage o el
+  // botón de Ajustes se habilita con un número que este barrido no puede
+  // hacer bueno.
   if (!isR2Configured()) return { files: 0, bytes: 0, folders: 0 };
   const root = getBackupDir();
   if (!existsSync(root)) return { files: 0, bytes: 0, folders: 0 };

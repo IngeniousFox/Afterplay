@@ -128,13 +128,25 @@ export const requestAchievementsStop = (): void => {
 // 0 si no hay ninguno pendiente de reintento. Es el número del encolado y no
 // el tamaño del registro porque un fallido puede haber vuelto a la cola por su
 // cuenta (cerraste ese juego) y estar EN VUELO ahora mismo: ese no se reintenta
-// con este clic, y decir que sí sería mentir en el botón. Sale del registro
-// igual — si vuelve a fallar, onItemError lo devuelve.
+// con este clic, y decir que sí sería mentir en el botón. Ese sí sale del
+// registro con los demás — está ejecutándose, así que si vuelve a fallar
+// onItemError lo devuelve.
+//
+// Se encola PRIMERO y se vacía el registro DESPUÉS, y solo si la cola se quedó
+// con algo. Al revés se perdían en silencio: enqueueAchievements sale con 0 sin
+// tocar la cola cuando no hay clave de Steam, borrar la clave en Ajustes hace
+// efecto en caliente (sin reiniciar) y el botón de reintento del renderer sigue
+// pintado mientras haya fallidos y credenciales de RA. Un clic ahí con la clave
+// ya quitada borraba los doce del registro, el badge se ponía a 0 y esos juegos
+// no volvían a asomar por ningún camino automático — el del arranque solo mira
+// los que nunca trajeron catálogo.
 export const retryFailedAchievements = (): number => {
   const games = [...failedGames.values()];
   if (games.length === 0) return 0;
+  const enqueued = enqueueAchievements(games);
+  if (enqueued === 0) return 0;
   failedGames.clear();
-  return enqueueAchievements(games);
+  return enqueued;
 };
 
 // Encola los que aún no estén reservados y arranca el worker si estaba

@@ -6,6 +6,7 @@ import {
 } from '../../hooks/curiosities';
 import { useCredentials } from '../../hooks/settings';
 import { TEAL } from '../../lib/colors';
+import { missingKeyHint } from '../../lib/settingsTabs';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → Game trivia: el botón que genera las curiosidades de los juegos
@@ -30,7 +31,7 @@ export const TriviaSection = (): React.JSX.Element => {
       const who = progress.currentTitle ? ` · ${progress.currentTitle}` : '';
       return `Generating ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${who}`;
     }
-    if (!hasKey) return 'Add your Anthropic key in API & Sync to turn this on.';
+    if (!hasKey) return missingKeyHint('Anthropic key');
     if (status && pending === 0 && status.totalGames > 0)
       return 'Every game has its trivia already. New games get theirs on arrival.';
     if (progress && !progress.running && progress.failed > 0)

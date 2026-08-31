@@ -84,8 +84,36 @@ type JourneyMonthBucket = {
 // del mes en Library y no en el Journey.
 const meaningfulEvents = (events: StateEventSummary[], game: GameListItem): StateEventSummary[] =>
   events.filter(
-    (event) => event.type !== 'plan_to_play' && !isAddedAtArtifact(event.occurredAt, game.addedAt),
+    (event) =>
+      event.type !== 'plan_to_play' &&
+      !isAddedAtArtifact(event.occurredAt, game.addedAt, game.promotedAt),
   );
+
+// Las entradas repartidas en año -> mes, tal y como se leen: SIN futuro.
+//
+// La línea temporal es un historial, así que un mes que aún no ha llegado no
+// se enseña (diciembre en blanco esperando parece que falta algo), y un año
+// entero por delante tampoco — sale de una fecha mal tecleada ("2027" por
+// "2017"), no de haber jugado. El recorte vive aquí, y no en cada pantalla,
+// porque estaba escrito dos veces y solo una de las dos cortaba los AÑOS: el
+// Journey de escritorio abría la línea temporal con un capítulo "2027" entero
+// que en el modo TV no existía. Quien pinta ordena y decide el resto.
+export const groupEntriesByYearMonth = (
+  entries: JourneyEntry[],
+  now: Date = new Date(),
+): Map<number, Map<number, JourneyEntry[]>> => {
+  const grouped = new Map<number, Map<number, JourneyEntry[]>>();
+  for (const entry of entries) {
+    const year = entry.lastAt.getFullYear();
+    const month = entry.lastAt.getMonth();
+    if (year > now.getFullYear()) continue;
+    if (year === now.getFullYear() && month > now.getMonth()) continue;
+    const months = grouped.get(year) ?? new Map<number, JourneyEntry[]>();
+    months.set(month, [...(months.get(month) ?? []), entry]);
+    grouped.set(year, months);
+  }
+  return grouped;
+};
 
 // De los datos crudos de Stats a las carátulas de la línea temporal. Dos
 // recorridos distintos porque hay dos clases de juego (ver más abajo): los

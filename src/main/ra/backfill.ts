@@ -45,7 +45,9 @@ const BREATHE_MS = 1200;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-type MatchCandidate = {
+// Tipo exportado solo para que los tests puedan tipar sus fixtures (ver la
+// export de matchAgainstLists más abajo).
+export type MatchCandidate = {
   id: number;
   title: string;
   releaseYear: number | null;
@@ -55,7 +57,7 @@ type MatchCandidate = {
 
 // Un set candidato CON la consola de la que sale: el desempate y el aviso de
 // abajo razonan por consola, no por raGameId suelto.
-type ConsoleMatch = { consoleId: number; raGameId: number };
+export type ConsoleMatch = { consoleId: number; raGameId: number };
 
 // El veredicto del emparejado. 'ambiguous' es un caso aparte de 'none' a
 // propósito: quien llama todavía puede romper el empate con un dato que aquí
@@ -82,7 +84,12 @@ type RaMatch =
 // PURA y sin console a propósito: el empate no se decide aquí (falta el dato
 // que lo rompe) y avisar desde dentro metía la ráfaga de warns en mitad de la
 // transacción del nivel 2.
-const matchAgainstLists = (
+// Exportada SOLO para los tests unitarios (src/main/ra/__tests__/backfill.test.ts):
+// sigue sin usarse desde fuera de este fichero en producción. Es pura y no
+// toca la base, así que blindar el umbral y el margen de arriba directamente
+// es más preciso que forzarlos a través de refreshRaForGame con media docena
+// de dobles de por medio.
+export const matchAgainstLists = (
   game: MatchCandidate,
   lists: Map<number, RaGameListEntry[]>,
   consoleIds: number[],
@@ -136,7 +143,8 @@ const matchAgainstLists = (
 // consola de RA. Si no señala a EXACTAMENTE uno de los empatados, el empate
 // sigue en pie: desempatar con media pista es volver a la moneda al aire, que
 // es lo que se vino a quitar.
-const breakTieByPlayedPlatform = (
+// Exportada SOLO para tests, misma razón que matchAgainstLists de arriba.
+export const breakTieByPlayedPlatform = (
   tied: ConsoleMatch[],
   playedPlatforms: string[],
 ): number | null => {

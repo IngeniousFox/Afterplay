@@ -1,6 +1,7 @@
 import { Globe, RefreshCw } from 'lucide-react';
 import type { ExternalDataStatus } from '../../../../shared/types';
 import {
+  externalRefreshBar,
   useExternalDataStatus,
   useExternalRefreshProgress,
   useIsExternalRefreshRunning,
@@ -9,6 +10,7 @@ import {
 import { useCredentials } from '../../hooks/settings';
 import { AMBER, GREEN, TEAL, VIOLET } from '../../lib/colors';
 import { STEAM_BLUE } from '../../lib/ratings';
+import { missingKeyHint } from '../../lib/settingsTabs';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → External data (PLAN-TO-PLAY.md §5.1, la puerta de mantenimiento).
@@ -122,14 +124,11 @@ export const ExternalDataSection = (): React.JSX.Element => {
   // necesita ninguna, pero por sí solo no justifica el botón.
   const hasKey = Boolean(creds?.twitchClientId && creds?.twitchClientSecret);
 
-  // Solo las fases de Steam y de HLTB avanzan juego a juego (cada una con su
-  // propio total): IGDB entero son 1-2 peticiones que terminan antes de que
-  // dé tiempo a leer la primera cifra, y la escritura es una transacción.
-  // Fingirles un porcentaje sería inventarse un progreso — esas dos fases se
-  // dicen con palabras y la barra latiendo.
-  const measurable =
-    running && (progress?.phase === 'steam' || progress?.phase === 'hltb') && progress.total > 0;
-  const percent = measurable && progress ? (progress.done / progress.total) * 100 : 0;
+  // Qué fases tienen porcentaje y cuáles se dicen con palabras lo decide el
+  // helper compartido: la cabecera del Plan pinta esta misma barra con el
+  // mismo evento, y la regla escrita a mano en los dos sitios se desincroniza
+  // a la primera fase nueva (ver externalRefreshBar).
+  const { measurable, percent } = externalRefreshBar(progress, running);
 
   const statusLine = ((): string | null => {
     if (running) {
@@ -150,7 +149,7 @@ export const ExternalDataSection = (): React.JSX.Element => {
       if (progress?.phase === 'saving') return 'Saving what came back…';
       return 'Asking IGDB for ratings, summaries and release dates…';
     }
-    if (!hasKey) return 'Add your IGDB keys in Connections to turn this on.';
+    if (!hasKey) return missingKeyHint('IGDB keys');
     if (progress?.error) return null; // ya lo dice el renglón de error de abajo
     // Al terminar manda el resumen del evento, que es el que llega aunque
     // este modal estuviera cerrado cuando la pasada acabó.

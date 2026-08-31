@@ -1,4 +1,5 @@
-import type { IterationEdgeEvent } from '../../../../../shared/types';
+import type { IterationDetail, IterationEdgeEvent } from '../../../../../shared/types';
+import { STATE_TO_STATUS_KEY } from '../../../lib/gameStatus';
 import type { PastStatusKey } from '../../../lib/gameStatus';
 import type { PrecisionDateValue } from '../add-game/DateWithPrecisionPicker';
 import { toPickerValue } from '../add-game/precisionDate';
@@ -47,6 +48,63 @@ export const edgeEventPickerValue = (
   event: IterationEdgeEvent | null,
 ): PrecisionDateValue | null =>
   event ? toPickerValue(event.occurredAt, event.datePrecision) : null;
+
+// La parte del formulario que sale de UNA iteración.
+export type IterationFormValues = Pick<
+  EditGameFormValues,
+  | 'label'
+  | 'started'
+  | 'finished'
+  | 'extraContent'
+  | 'status'
+  | 'platform'
+  | 'format'
+  | 'origin'
+  | 'hoursPlayed'
+>;
+
+// El mapeo "iteración -> formulario", en UN solo sitio. Estas mismas nueve
+// reglas se escribían a mano en dos: buildDefaults (EditGameModal, al abrir
+// el modal) y loadIteration (IterationSection, al cambiar de playthrough en
+// el desplegable o tras "Remove playthrough"). Ya habían derivado — para una
+// iteración sin currentState, una caía a 'beaten' siempre y la otra a
+// 'resting'/'beaten' según el tipo de juego —, y con dos copias cualquier
+// campo nuevo (o cualquier cambio de la regla de startedBySession) carga el
+// formulario distinto según por dónde hayas llegado a él.
+//
+// `endless` es el del FORMULARIO (el checkbox), no el del juego en la DB:
+// decide el fallback de estado cuando la iteración no tiene ninguno, y ese
+// fallback tiene que casar con el dropdown que el usuario tiene DELANTE —
+// que sigue al checkbox, no a la fila de games.
+export const iterationFormValues = (
+  iteration: IterationDetail | null,
+  endless: boolean,
+): IterationFormValues => ({
+  label: iteration?.label ?? '',
+  // Modelo v2 — las fechas de borde SON eventos del log. Solo entran al
+  // formulario (editables) cuando su dueño es un evento: un inicio que viene
+  // de una sesión MEDIDA (startedBySession) se queda fuera (null) y su campo
+  // se pinta en solo lectura — una medición no se falsea.
+  started:
+    iteration && !iteration.startedBySession ? edgeEventPickerValue(iteration.startEvent) : null,
+  finished: iteration ? edgeEventPickerValue(iteration.endEvent) : null,
+  extraContent: iteration?.extraContent ?? false,
+  // El fallback depende del tipo de juego: un endless sin estado arranca en
+  // 'resting' (su dropdown ni ofrece 'beaten'). El cast es seguro:
+  // currentState sale de latestRealStateEvent, que ignora 'plan_to_play'.
+  status: iteration?.currentState
+    ? (STATE_TO_STATUS_KEY[iteration.currentState] as PastStatusKey)
+    : endless
+      ? 'resting'
+      : 'beaten',
+  platform: iteration?.playedPlatform ?? 'Steam',
+  format: iteration?.format ?? 'digital',
+  origin: iteration?.origin ?? 'Purchased',
+  hoursPlayed:
+    iteration?.manualTotalPlayed !== null && iteration?.manualTotalPlayed !== undefined
+      ? String(iteration.manualTotalPlayed)
+      : '',
+});
 
 // EMPTY_ITERATION_FIELDS desapareció con el modo 'new': ya no hace falta
 // vaciar el formulario para preparar un playthrough nuevo, porque los nuevos

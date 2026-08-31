@@ -59,8 +59,24 @@ export type HltbSearchGame = {
   };
 };
 
-const secondsToHours = (seconds: number | undefined): number | undefined =>
-  seconds && seconds > 0 ? Math.round(seconds / 3600) : undefined;
+// Se redondea PRIMERO y se descarta DESPUES, y ese orden es la cicatriz: la
+// guarda miraba los segundos CRUDOS y el redondeo venia detras, asi que un
+// juego corto de verdad (comp_main = 1500, o sea 25 minutos) pasaba la guarda
+// y salia convertido en 0 horas. Ese 0 no se quedaba en el aire: el `??` de
+// hltb/api.ts solo atrapa null/undefined, asi que se GUARDABA — y un 0
+// guardado es peor que un null, porque la repesca de huerfanos
+// (external/refresh.ts) solo recoge a los que tienen los TRES tiempos a null,
+// o sea que el juego salia de ella para siempre, la Deuda del Backlog lo
+// contaba como "con estimacion" sumandole cero horas y el modo ambiente
+// llegaba a escribir "most people finish this in 0 hours".
+//
+// Un tiempo que EXISTE se queda como 1 hora: una mentira pequena y curable
+// (el boton de la ficha la corrige) en vez de un 0 que miente y encima cierra
+// la puerta de la repesca.
+const secondsToHours = (seconds: number | undefined): number | undefined => {
+  if (!seconds || seconds <= 0) return undefined;
+  return Math.max(1, Math.round(seconds / 3600));
+};
 
 const transformGame = (raw: RawGame): HltbSearchGame => ({
   id: String(raw.game_id ?? ''),

@@ -83,14 +83,6 @@ export const usePlannedGames = (): UseQueryResult<PlannedGameListItem[], Error> 
     staleTime: Infinity,
   });
 
-// La key del canal de extras. Bajo el prefijo ['games'] para heredar las
-// mismas invalidaciones anchas que la lista (mutations + watcher), pero
-// FUERA del prefijo de games.planned a propósito: fijar y reordenar Up next
-// solo invalidan la lista escueta (planPinnedAt vive allí), y arrastrar los
-// 591 KB de extras en cada pin sería recrear el problema que este canal
-// arregla.
-const plannedExtrasKey = ['games', 'plannedExtras'] as const;
-
 export type PlannedGamesWithExtras = {
   data: PlannedGameItem[] | undefined;
   isLoading: boolean;
@@ -111,7 +103,7 @@ export type PlannedGamesWithExtras = {
 export const usePlannedGamesWithExtras = (): PlannedGamesWithExtras => {
   const list = usePlannedGames();
   const extras = useQuery({
-    queryKey: plannedExtrasKey,
+    queryKey: queryKeys.games.plannedExtras,
     queryFn: () => window.api.games.getPlannedExtras(),
     staleTime: Infinity,
   });
@@ -172,7 +164,7 @@ export const usePlannedGamesWithExtras = (): PlannedGamesWithExtras => {
 // para nada. El arrastre tampoco es un gesto de una vez: recolocas tres o
 // cuatro filas seguidas y esto se pagaba en cada una.
 //
-// Y tampoco invalida plannedExtrasKey: planPinnedAt viaja en la lista
+// Y tampoco invalida games.plannedExtras: planPinnedAt viaja en la lista
 // escueta, así que un pin no puede cambiar nada de lo que va en los extras —
 // refetchearlos aquí serían 591 KB por gesto para recibir lo mismo.
 const invalidatePlanPinned = (queryClient: QueryClient, ids: readonly number[]): void => {
@@ -237,12 +229,20 @@ export const useSetPlanPinned = (): UseMutationResult<
 // reasignan en el orden nuevo. Duplicado aqui a proposito — es lo que hace
 // posible la actualizacion OPTIMISTA de abajo: la cache queda exactamente
 // como va a quedar la DB, asi que cuando llegue el refetch no se mueve nada.
+//
+// Y "el MISMO" incluye el Set: el main deduplica antes de contar porque un
+// [A, A] con un solo juego fijado medía 2, se colaba por el guardián y le
+// corría la marca 1ms (el porqué entero está en getPlannedGames.ts). Sin el
+// Set aquí, esa misma orden malformada haría lo contrario en cada lado — el
+// main no escribe nada y devuelve false, mientras la cache se queda con una
+// marca inventada hasta que el refetch de onSettled la deshace. Que las dos
+// copias cuenten IGUAL es justo lo que sostiene la promesa de arriba.
 const reassignPinStamps = (
   games: PlannedGameListItem[],
   orderedIds: number[],
 ): PlannedGameListItem[] => {
   const byId = new Map(games.map((game) => [game.id, game]));
-  const ids = orderedIds.filter((id) => byId.get(id)?.planPinnedAt != null);
+  const ids = [...new Set(orderedIds)].filter((id) => byId.get(id)?.planPinnedAt != null);
   if (ids.length < 2) return games;
 
   const stamps = ids

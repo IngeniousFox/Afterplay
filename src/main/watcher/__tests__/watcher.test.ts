@@ -539,6 +539,46 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
     assert.deepEqual(watcher.getActiveGameIds(), []);
   });
 
+  it('el backup de un juego emulado se dispara aunque un hito terminal ya hubiera cerrado la sesion', async () => {
+    // El mismo caso que el test del juego nativo ("no vuelve a cantar el aviso
+    // si la sesion ya la habia cerrado un hito terminal") por el otro objetivo
+    // vigilado, y la regla tiene que ser LA MISMA: la partida guardada acaba de
+    // cambiar en disco al salir del emulador, la haya cerrado quien la haya
+    // cerrado. La rama del emulador exigia ademas que closeSessionIfOpen
+    // devolviera fila, asi que pulsar Beaten/Dropped con RetroArch todavia
+    // abierto —que cierra la sesion en ese instante— dejaba a ese juego SIN
+    // backup automatico para siempre.
+    const gameId = await makeGame(db, { title: 'Chrono Trigger', isEmulated: true });
+    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Emulated' });
+    const emulatorId = await makeEmulator(db, { executablePath: EXE_RETROARCH });
+
+    await cycle();
+
+    const sessionId = await makeOpenSession(db, iterationId, '2026-03-02T20:00:00Z', {
+      emulatorId,
+    });
+    launch(4340, EXE_RETROARCH);
+    await cycle();
+    assert.equal(watcher.isGameRunning(gameId), true, 'la sesion asignada se adopta con su juego');
+
+    // Beaten con el emulador vivo: addStateEvent cierra la sesion abierta de la
+    // iteracion en ese mismo instante.
+    await db
+      .update(sessionsTable)
+      .set({ endedAt: new Date('2026-03-02T22:00:00Z'), durationSec: 7200 })
+      .where(eq(sessionsTable.id, sessionId));
+
+    quit(4340);
+    await cycle();
+
+    assert.deepEqual(backupsScheduled, [gameId]);
+    // El aviso de sesion cerrada SI se calla: ese ya lo dio el hito, y repetirlo
+    // pediria el diario por segunda vez.
+    assert.deepEqual(closedEvents, []);
+    // Y la hora de fin que puso el hito se respeta.
+    assert.equal((await sessions())[0].endedAt?.toISOString(), '2026-03-02T22:00:00.000Z');
+  });
+
   it('asignar la sesion del emulador EN CALIENTE pone al juego en marcha en el ciclo siguiente', async () => {
     // El otro borde del mismo arreglo. La asignación llega por FUERA del
     // watcher (bandeja Pending, sesión con badge LIVE) y su mapa de sesiones
@@ -919,6 +959,47 @@ describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
     // El rato bloqueado quedó FUERA: es un hueco entre dos sesiones, no
     // tiempo dentro de una.
     assert.ok(rows[1].startedAt.getTime() >= (rows[0].endedAt?.getTime() ?? 0));
+  });
+
+  it('una pausa invalida el ciclo EN VUELO, aunque un resume rapido lo despause por debajo', async () => {
+    // La carrera: withDbAccess es un contador y no un mutex, asi que pause()
+    // puede colarse en cualquiera de los awaits de poll(). El ciclo en vuelo
+    // reanudaba con la foto de ANTES —`active` ya vaciado, la sesion ya
+    // cerrada— y volvia a abrir una sesion nueva por el mismo juego, que se
+    // quedaba viva durante todo el bloqueo: el rato con la pantalla bloqueada
+    // contado como jugado, que es justo lo que la pausa existe para impedir
+    // (SPEC-2 §7.2).
+    //
+    // Releer el booleano `paused` no bastaba, y por eso el ciclo lleva su
+    // GENERACION: al despertar con contrasena Windows manda 'resume' antes que
+    // 'unlock-screen', y ese resume despausa el booleano mientras el ciclo
+    // viejo sigue en vuelo — se creia vigente otra vez.
+    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4640, EXE_CELESTE);
+    await cycle();
+    assert.equal((await openSessions()).length, 1);
+
+    // El ciclo arranca y se queda en su primer await (la DB): a partir de aqui
+    // todo lo que pase, pasa "a mitad de ciclo".
+    const inflight = internals().poll();
+    screenLocked = true;
+    watcher.pause();
+    // Sin esperar a que la pausa termine de cerrar: el resume llega pisandole
+    // los talones, como el de Windows.
+    screenLocked = false;
+    watcher.resume();
+
+    await inflight;
+    await waitUntil(async () => (await openSessions()).length === 0, 'la pausa cerro lo activo');
+    await nextTick();
+
+    assert.equal(
+      (await sessions()).length,
+      1,
+      'el ciclo caducado no abre ninguna sesion despues de la pausa',
+    );
+    assert.equal((await openSessions()).length, 0);
+    assert.equal(watcher.isGameRunning(gameId), false);
   });
 
   it('resume() con la app apagandose no abre sesiones fantasma', async () => {

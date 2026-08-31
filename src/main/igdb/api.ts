@@ -659,6 +659,18 @@ const fetchParentGames = async (igdbIds: number[]): Promise<ParentGames> => {
 // resolveAchievementsSteamAppId habría elegido hoy. Cualquier divergencia
 // entre las dos deja un subgrupo atrapado en el tercer estado sin salida.
 //
+// DOS divergencias aceptadas, escritas para que no se lean como despistes.
+// Una: el respaldo de PRUEBA. Al resolver un hueco, quedarse con el appid de
+// un playtest es mejor que nada; aquí se escribe ENCIMA de uno guardado, así
+// que una prueba sería cambiar un appid equivocado por otro peor — por eso
+// las dos consultas de appids de abajo van con allowPlaytestFallback: false.
+// Y dos: las EDICIONES (las propias y las del padre), que
+// resolveAchievementsSteamAppId sí consulta y este rescate no — saltar de
+// caja para corregir un appid guardado puede adoptar el de otro producto, y
+// el criterio aquí es conservador: mejor dejar el hueco (o el appid que la
+// propia ficha justifica) que escribir encima uno de una caja que nadie
+// eligió.
+//
 // Quien la llame para UN juego (refreshGame.ts) tiene que contar además que
 // la identidad de Steam ha cambiado: el veredicto 'had-it' de
 // GameFullRefreshResult no lo distingue todavía — ver su comentario en
@@ -700,7 +712,8 @@ export const findSteamAppIdCorrections = async (
   // Las dos peticiones que quedan son independientes, así que van a la vez: la
   // de los padres solo se paga si en el lote hay alguno (fetchSteamAppIdsDirect
   // sale sin pedir nada con la lista vacía), que en una biblioteca normal es un
-  // puñado de juegos.
+  // puñado de juegos. (Puede caer una tercera más abajo, por las ediciones de
+  // los padres que no tengan appid directo — va después del techo a propósito.)
   //
   // Esta segunda no necesita su propia guarda de techo: como arriba ya se
   // devolvió si la respuesta de padres venía cortada, aquí hay como mucho 499
@@ -728,6 +741,29 @@ export const findSteamAppIdCorrections = async (
     return result;
   }
 
+  // Y el respaldo por EDICIONES de los padres que no tienen entrada directa,
+  // que es lo que le faltaba al MOTIVO 3 para cumplir el criterio de esta
+  // función. resolveAchievementsSteamAppId, para un hijo, prueba el appid
+  // directo del padre y DESPUÉS las ediciones del padre (el patrón Horizon
+  // Zero Dawn: el juego base no está en Steam, su "Complete Edition" sí); aquí
+  // se paraba en el directo, así que ese hijo se caía a los otros dos motivos
+  // y —si su appid guardado era el de su propio playtest— acababa con su appid
+  // PROPIO escrito, justo el que esta función descarta porque GetSchemaForGame
+  // lo devuelve vacío. O sea que las dos no solo dejaban de coincidir:
+  // escribían cosas DISTINTAS.
+  //
+  // Se pide después del techo de arriba (con la respuesta cortada no se
+  // corrige nada, así que sería una petición tirada) y solo por los padres que
+  // fallaron, igual que en getSteamAppIds: con la lista vacía no cuesta ni una
+  // petición, que es el caso normal. Sin respaldo de prueba, por lo mismo que
+  // la consulta directa de aquí arriba.
+  const parentsWithoutAppId = parentIds.filter((parentId) => !parentAppIds.has(parentId));
+  for (const [parentId, appId] of await fetchSteamAppIdsViaEditions(parentsWithoutAppId, {
+    allowPlaytestFallback: false,
+  })) {
+    parentAppIds.set(parentId, appId);
+  }
+
   const byGame = new Map<number, { uid: string; name?: string }[]>();
   for (const row of rows) {
     const list = byGame.get(row.game);
@@ -748,8 +784,11 @@ export const findSteamAppIdCorrections = async (
     // equivocado" que motivó todo el rescate no salía nunca de ahí — y encima
     // discrepando de lo que la resolución habría elegido ese mismo día.
     //
-    // Solo cuando el padre tiene appid: si no lo tiene, no hay nada mejor que
-    // ofrecer y se sigue con los otros dos motivos.
+    // Solo cuando el padre tiene appid —el suyo directo o el de alguna de sus
+    // ediciones, las dos vías que probaría la resolución—: si no lo tiene por
+    // ninguna, no hay nada mejor que ofrecer y se sigue con los otros dos
+    // motivos, que es también lo que haría ella (se quedaría con el appid
+    // propio del hijo).
     const parentIgdbId = parentOf.get(game.igdbId);
     if (parentIgdbId !== undefined) {
       const parentAppId = parentAppIds.get(parentIgdbId);
@@ -820,7 +859,14 @@ export const findSteamAppIdCorrections = async (
 // A propósito NO se usa parent_game (DLC, expansiones y remasters cuelgan de
 // ahí: un remaster es otro producto con otros logros) ni el emparejado por
 // nombre, que es justo como se cuelan juegos equivocados.
-const fetchSteamAppIdsViaEditions = async (igdbIds: number[]): Promise<Map<number, number>> => {
+//
+// `allowPlaytestFallback` viaja igual que en el camino directo, y por el mismo
+// motivo: el rescate de appids ya guardados no puede aceptar la prueba de una
+// edición como respuesta (ver findSteamAppIdCorrections).
+const fetchSteamAppIdsViaEditions = async (
+  igdbIds: number[],
+  { allowPlaytestFallback = true }: { allowPlaytestFallback?: boolean } = {},
+): Promise<Map<number, number>> => {
   const result = new Map<number, number>();
   if (igdbIds.length === 0) return result;
 
@@ -841,7 +887,10 @@ const fetchSteamAppIdsViaEditions = async (igdbIds: number[]): Promise<Map<numbe
   }
   if (versions.length === 0) return result;
 
-  const appIdByVersion = await fetchSteamAppIdsDirect(versions.map((version) => version.id));
+  const appIdByVersion = await fetchSteamAppIdsDirect(
+    versions.map((version) => version.id),
+    { allowPlaytestFallback },
+  );
 
   for (const version of versions) {
     if (result.has(version.version_parent)) continue;
@@ -1098,6 +1147,18 @@ export const getUpcomingCollectionGames = async (
       `& game_type = 0 & version_parent = null; ` +
       `sort first_release_date asc; limit ${UPCOMING_LIMIT};`;
     const rows = igdbCollectionGamesResponseSchema.parse(await igdbRequest('games', body));
+    // Techo tocado = respuesta CORTADA, igual que en sus tres hermanas de este
+    // fichero (fetchSteamAppIdsDirect, las ediciones y la revisión de appids):
+    // el radar descubriría MENOS anuncios de los que hay y no quedaría rastro
+    // en ninguna parte. Aquí no se puede hacer nada mejor que decirlo —lo que
+    // llegó vale igual—, pero decirlo es justo lo que el comentario de
+    // UPCOMING_LIMIT promete. Solo ASCII, que la consola de Windows no siempre
+    // usa UTF-8.
+    if (rows.length === UPCOMING_LIMIT) {
+      console.warn(
+        `[radar] la busqueda de anuncios toco el limite de ${UPCOMING_LIMIT} filas - hay anuncios sin leer, baja el tamano de COLLECTION_CHUNK`,
+      );
+    }
     for (const row of rows) found.set(row.id, toCollectionGame(row));
   }
   return [...found.values()].sort(byReleaseAsc);

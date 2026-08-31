@@ -1,17 +1,24 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { AchievementEntry, SessionWithGame } from '../../api';
+import type { AchievementEntry, PlannedGame, SessionWithGame, StateType } from '../../api';
 import * as movilLogros from '../achievements';
 import * as movilFormato from '../format';
 import * as movilNotas from '../ratings';
 import * as movilRelease from '../releaseDate';
 import * as movilCubos from '../sessionGroups';
 import * as movilPaleta from '../status';
-import type { AchievementEntry as LogroEscritorio } from '../../../../src/shared/types';
+import * as estanterias from '../../../../src/shared/planShelves';
+import type { PlanShelfReaders } from '../../../../src/shared/planShelves';
+import type {
+  AchievementEntry as LogroEscritorio,
+  PlannedGameItem,
+} from '../../../../src/shared/types';
 import * as pcLogros from '../../../../src/renderer/src/lib/achievements';
 import * as pcPaleta from '../../../../src/renderer/src/lib/colors';
 import * as pcFechas from '../../../../src/renderer/src/lib/dateMath';
 import * as pcFormato from '../../../../src/renderer/src/lib/format';
+import * as pcEstado from '../../../../src/renderer/src/lib/gameStatus';
+import * as pcPlan from '../../../../src/renderer/src/lib/plan';
 import * as pcNotas from '../../../../src/renderer/src/lib/ratings';
 import * as pcRelease from '../../../../src/renderer/src/lib/releaseDate';
 import * as pcCubos from '../../../../src/renderer/src/lib/sessionGroups';
@@ -155,6 +162,83 @@ const juego = (overrides: Partial<NotasDeJuego> = {}): NotasDeJuego => ({
 let siguienteSesion = 1;
 const sesion = (empezo: string): SessionWithGame =>
   ({ id: siguienteSesion++, startedAt: new Date(empezo).getTime() }) as unknown as SessionWithGame;
+
+// Un juego del Plan en las dos monedas. Solo lleva de verdad lo que el reparto
+// mira —fijado, título, salida, endless y la estimación de HLTB—; el resto de
+// campos de PlannedGameItem (que es GameListItem entero más los extras de la
+// pantalla del Plan) no lo toca nadie aquí, así que no se rellenan.
+type PlanGemelo = { movil: PlannedGame; pc: PlannedGameItem };
+
+const planeado = (spec: {
+  id: number;
+  title: string;
+  // ISO del fijado, o null si está en la cola.
+  fijado?: string | null;
+  // Las fechas de salida van MUY lejos a propósito (1994 / 2099): isUnreleased
+  // pregunta por el reloj de verdad, y un caso "sale la semana que viene"
+  // caducaría solo.
+  sale?: { iso: string; precision: 'year' | 'month' | 'day' } | null;
+  hltbMain?: number | null;
+  endless?: boolean;
+}): PlanGemelo => {
+  const fijado = spec.fijado ? new Date(spec.fijado) : null;
+  const sale = spec.sale ? new Date(spec.sale.iso) : null;
+  // Cada uno con SU día de alta, y distinto: la cola del escritorio pasa por
+  // una lente, y la de "longest waiting" ordena justo por esto.
+  const anadido = new Date(2026, 0, spec.id);
+  const comun = {
+    id: spec.id,
+    title: spec.title,
+    releaseYear: sale ? sale.getFullYear() : null,
+    releaseDatePrecision: spec.sale ? spec.sale.precision : null,
+    hltbMain: spec.hltbMain ?? null,
+    endless: spec.endless ?? false,
+  };
+  return {
+    movil: {
+      ...comun,
+      pinnedAt: fijado ? fijado.getTime() : null,
+      releaseDate: sale ? sale.getTime() : null,
+      addedAt: anadido.getTime(),
+    } as unknown as PlannedGame,
+    pc: {
+      ...comun,
+      planPinnedAt: fijado,
+      releaseDate: sale,
+      addedAt: anadido,
+    } as unknown as PlannedGameItem,
+  };
+};
+
+// Los mismos cuatro accesos que usa PlanScreen.tsx, y su gemelo del escritorio.
+// Aquí es donde se ve que lo único distinto entre las dos mitades es la MONEDA
+// (milisegundos contra Date), no el reparto.
+const LEE_MOVIL: PlanShelfReaders<PlannedGame> = {
+  pinnedAt: (game) => game.pinnedAt,
+  title: (game) => game.title,
+  unreleased: (game) => movilRelease.isUnreleased(game),
+  releaseSortKey: (game) => movilRelease.releaseSortKey(game),
+};
+
+const LEE_PC: PlanShelfReaders<PlannedGameItem> = {
+  pinnedAt: (game) => game.planPinnedAt?.getTime() ?? null,
+  title: (game) => game.title,
+  unreleased: (game) => pcRelease.isUnreleased(game),
+  releaseSortKey: (game) => pcRelease.releaseSortKey(game),
+};
+
+const ids = <T extends { id: number }>(games: T[]): number[] => games.map((game) => game.id);
+
+// El icono de un estado, por NOMBRE y no por identidad. Por identidad no se
+// puede: la PWA resuelve lucide-react desde web/node_modules y el escritorio
+// desde el de la raíz, así que el mismo dibujo son dos objetos distintos y un
+// `assert.equal` fallaría siempre. Lo que identifica al icono es el nombre que
+// lucide le pone a la función de dentro ('Play', 'Trophy'…), que es justo lo
+// que cambia si alguien elige otro dibujo para un estado.
+const nombreIcono = (Icon: unknown): string => {
+  const icono = Icon as { displayName?: string; render?: { displayName?: string; name?: string } };
+  return icono.displayName ?? icono.render?.displayName ?? icono.render?.name ?? '?';
+};
 
 // ══ FORMATO DE CIFRAS ══════════════════════════════════════════════════════
 
@@ -912,5 +996,148 @@ describe('salida: la honestidad de la precisión es la misma en los dos', () => 
         esperado,
       );
     }
+  });
+});
+
+// ══ TABLA DE ESTADOS ═══════════════════════════════════════════════════════
+
+describe('estados: la tabla copiada en el móvil dice lo mismo que la del PC', () => {
+  it('los seis estados (y el "sin estado") tienen la misma etiqueta, color e icono', () => {
+    // web/src/lib/status.ts repite fila a fila el STATUS_META del escritorio, y
+    // el único test que la rozaba comparaba los CINCO acentos de identidad
+    // contra colors.ts — o sea que los hex que solo viven en esta tabla
+    // (dropped, on_hold, unplayed) y las seis etiquetas no los miraba nadie.
+    // Cambiar el color o el texto de un estado en gameStatus.ts no rompía nada
+    // y dejaba el móvil con el estado viejo para siempre.
+    //
+    // La diferencia entre las dos mitades es de VOCABULARIO, no de tabla: el
+    // escritorio indexa por el suyo de UI ('playing'/'beaten') porque también
+    // ESCRIBE estados, y el móvil, que solo lee, indexa por el de la BD. Por eso
+    // se comparan a través de getGameStatusMeta, que es quien traduce.
+    const estados: (StateType | null)[] = [
+      'started',
+      'completed',
+      'dropped',
+      'on_hold',
+      'resting',
+      'plan_to_play',
+      null,
+    ];
+    for (const estado of estados) {
+      const movil = movilPaleta.statusOf(estado);
+      const pc = pcEstado.getGameStatusMeta(estado);
+      mismo(movil.label, pc.label);
+      mismo(movil.color, pc.color);
+      mismo(movil.filled, pc.filled);
+      assert.equal(
+        nombreIcono(movil.Icon),
+        nombreIcono(pc.Icon),
+        `otro icono para ${estado ?? 'unplayed'}`,
+      );
+    }
+  });
+
+  it('los tres hex que no son acentos de identidad siguen clavados', () => {
+    // Estos tres no aparecen en colors.ts, así que el test de la paleta no los
+    // alcanza: viven SOLO en la tabla de estados, en las dos copias.
+    mismo(movilPaleta.statusOf('dropped').color, pcEstado.STATUS_META.dropped.color, '#e85d72');
+    mismo(movilPaleta.statusOf('on_hold').color, pcEstado.STATUS_META.on_hold.color, '#8b93a3');
+    mismo(movilPaleta.statusOf(null).color, pcEstado.STATUS_META.unplayed.color, '#888f8a');
+  });
+});
+
+// ══ EL REPARTO DEL PLAN ════════════════════════════════════════════════════
+
+describe('plan: las estanterías y la deuda se reparten igual en los dos', () => {
+  // Un plan con los seis casos que separan una copia buena de una a medias.
+  const juegos = [
+    planeado({
+      id: 2,
+      title: 'Hollow Knight II',
+      fijado: '2026-01-10T12:00',
+      sale: { iso: '2099-06-15T00:00', precision: 'day' },
+    }),
+    planeado({
+      id: 3,
+      title: 'Celeste',
+      sale: { iso: '2018-01-25T00:00', precision: 'day' },
+      hltbMain: 8,
+    }),
+    planeado({
+      id: 1,
+      title: 'Zelda',
+      fijado: '2026-01-10T10:00',
+      sale: { iso: '2017-03-03T00:00', precision: 'day' },
+      hltbMain: 20,
+    }),
+    planeado({
+      id: 4,
+      title: 'Silksong',
+      sale: { iso: '2099-01-01T00:00', precision: 'month' },
+      hltbMain: 12,
+    }),
+    planeado({
+      id: 6,
+      title: 'Tetris',
+      sale: { iso: '1984-01-01T00:00', precision: 'year' },
+      hltbMain: 100,
+      endless: true,
+    }),
+    planeado({
+      id: 5,
+      title: 'Alan Wake',
+      fijado: '2026-01-10T10:00',
+      sale: { iso: '2010-05-18T00:00', precision: 'day' },
+      hltbMain: 5,
+    }),
+  ];
+
+  const movil = juegos.map((j) => j.movil);
+  const pc = juegos.map((j) => j.pc);
+  // La lente da igual para lo que se compara aquí (solo ordena la cola), pero
+  // hay que elegir una: el escritorio no tiene reparto sin lente.
+  const secciones = pcPlan.splitPlanSections(pc, 'oldest');
+
+  it('Up next es el orden de fijado, y un empate al milisegundo lo parte el título', () => {
+    // Zelda y Alan Wake se fijaron en el MISMO milisegundo — que es lo que pasa
+    // cuando el escritorio drena de golpe dos pines del móvil. Sin desempate por
+    // título la fila bailaría entre repintados.
+    mismo(ids(estanterias.sortUpNext(movil, LEE_MOVIL)), ids(secciones.upNext), [5, 1, 2]);
+    mismo(ids(estanterias.sortUpNext(pc, LEE_PC)), ids(secciones.upNext));
+  });
+
+  it('el horizonte NO es excluyente: un fijado sin salir sale en las DOS estanterías', () => {
+    // LA PARTE SUTIL, y la que ya costó un fallo real: fijar un juego que estaba
+    // en el horizonte lo hacía desaparecer de allí, y desde el sofá parecía que
+    // la app se había comido la cuenta atrás. Hollow Knight II está fijado Y sin
+    // salir, así que tiene que estar en upNext y en horizon a la vez.
+    mismo(ids(estanterias.sortHorizon(movil, LEE_MOVIL)), ids(secciones.horizon), [4, 2]);
+    mismo(ids(estanterias.sortHorizon(pc, LEE_PC)), ids(secciones.horizon));
+    assert.ok(ids(secciones.upNext).includes(2), 'el fijado sin salir se perdió de Up next');
+  });
+
+  it('la cola es lo jugable sin fijar, y el orden lo pone quien la pinta', () => {
+    // El reparto decide QUIÉNES están en la cola; el orden es de cada pantalla
+    // (el escritorio le pasa una lente, la PWA se queda con el alfabético que ya
+    // trae /api/plan). Por eso la pertenencia se compara con la cola ya
+    // ordenada, y la lente se aplica encima para ver que sale la misma lista.
+    const colaMovil = estanterias.filterQueue(movil, LEE_MOVIL);
+    mismo([...ids(colaMovil)].sort(), [...ids(secciones.queue)].sort(), [3, 6]);
+    mismo(
+      ids(pcPlan.sortByLens(estanterias.filterQueue(pc, LEE_PC), 'oldest')),
+      ids(secciones.queue),
+    );
+  });
+
+  it('la deuda no cuenta las horas de un endless, pero sí cuenta el juego', () => {
+    // El reparto asimétrico que una copia se deja por el camino: Tetris no tiene
+    // final que alcanzar, así que sus 100 h no son deuda — pero está en tu plan,
+    // así que cuenta en "across N games". Y Hollow Knight II, sin estimación, no
+    // inventa horas: se dice aparte, en pequeño.
+    mismo(estanterias.computePlanDebt(movil), pcPlan.computePlanDebt(pc), {
+      totalGames: 6,
+      totalHours: 45,
+      withoutEstimate: 1,
+    });
   });
 });

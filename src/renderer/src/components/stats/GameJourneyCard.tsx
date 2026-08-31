@@ -1,6 +1,6 @@
 import type { StateEvent } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
-import { daysBetween, humanizeSpan } from '../../lib/dateMath';
+import { calendarDaysBetween, daysBetween, humanizeSpan } from '../../lib/dateMath';
 import { formatByPrecision } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { StatusIcon } from '../StatusIcon';
@@ -81,7 +81,12 @@ export const GameJourneyCard = ({
     return latest === null || end.getTime() > latest.getTime() ? end : latest;
   }, null);
   if (lastPlayedAt) {
-    const ago = daysBetween(lastPlayedAt, new Date());
+    // Días de CALENDARIO, no horas transcurridas: con la resta cruda, una
+    // sesión cerrada ayer a las 20:00 daba 0,58 a las 10:00 de hoy y el chip
+    // anunciaba "Played today" un juego que hoy no habías tocado (y un día y
+    // pico se redondeaba a "2 days ago"). Es la cicatriz que GameCard y el
+    // modo TV ya tenían curada; esta card se había quedado con la vieja.
+    const ago = calendarDaysBetween(lastPlayedAt, new Date());
     chips.push(ago < 1 ? 'Played today' : `Last played ${humanizeSpan(ago)} ago`);
   }
 

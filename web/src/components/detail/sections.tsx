@@ -5,7 +5,6 @@ import {
   HardDrive,
   Lightbulb,
   Newspaper,
-  NotebookPen,
   Tag,
   ThumbsUp,
   Users,
@@ -312,6 +311,10 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
 // En markdown, igual que en el escritorio. Solo lectura: la web no escribe
 // (§1.1), así que sin notas la sección no existe — la invitación a escribirlas
 // que sí tiene el escritorio aquí sería un botón que no lleva a ninguna parte.
+//
+// Al final del fichero quedaba un `EmptyNotesHint` exportado "para el caso sin
+// nada" que no importaba nadie: era el placeholder que esta decisión ya había
+// rechazado, esperando a que alguien lo montara sin leer estas tres líneas.
 export const NotesSection = ({ notes }: { notes: string | null }): React.JSX.Element | null => {
   if (!notes) return null;
 
@@ -353,13 +356,3 @@ export const CuriositiesSection = ({
     </section>
   );
 };
-
-// ── Placeholder de notas vacías, exportado para el caso "sin nada" ─────────
-export const EmptyNotesHint = (): React.JSX.Element => (
-  <div className="flex items-center gap-2.5 rounded-[14px] border border-dashed border-white/14 bg-white/[0.015] px-4 py-4">
-    <NotebookPen size={15} className="flex-none text-muted-foreground" />
-    <span className="text-[12.5px] text-muted-foreground">
-      No notes yet — add them from Afterplay on your PC.
-    </span>
-  </div>
-);

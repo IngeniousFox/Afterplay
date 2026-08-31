@@ -15,8 +15,13 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { GameCover } from '../components/GameCover';
-import { useGameAchievements, useSessionUnlocks } from '../hooks/achievements';
+import {
+  createAchievementsActivityInvalidator,
+  useGameAchievements,
+  useSessionUnlocks,
+} from '../hooks/achievements';
 import { SessionAchievements } from '../components/sessions/SessionAchievements';
 import type { SessionAchievementEntry } from '../components/sessions/SessionAchievements';
 import { SessionNote } from '../components/sessions/SessionNote';
@@ -26,7 +31,14 @@ import { useOverlayShortcut, useTimeFormat } from '../hooks/settings';
 import { queryKeys } from '../hooks/queryKeys';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useLiveTimer } from '../hooks/useLiveTimer';
-import { isRare, percentLabel, rarityAccent } from '../lib/achievements';
+import {
+  isRare,
+  percentLabel,
+  rarityAccent,
+  sortForDisplay,
+  ULTRA_RARE,
+  ULTRA_VIOLET,
+} from '../lib/achievements';
 import { AMBER, BLUE, GREEN, VIOLET } from '../lib/colors';
 import { daysBetween, humanizeSpan } from '../lib/dateMath';
 import {
@@ -37,6 +49,7 @@ import {
   formatTime,
 } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
+import { OverlayToaster } from './OverlayToaster';
 import type {
   AchievementEntry,
   GameListItem,
@@ -416,7 +429,20 @@ const AchievementRow = memo(
       unlocked ? entry.iconUrl : (entry.iconGrayUrl ?? entry.iconUrl),
       'achievements',
     );
-    const accent = rarityAccent(entry.globalPercent);
+    const percent = entry.globalPercent;
+    const rare = unlocked && isRare(percent);
+    const ultra = rare && (percent as number) < ULTRA_RARE;
+    const accent = rarityAccent(percent);
+    // El mismo material que la lista de la ficha (LOGROS-REDISENO §2), en
+    // pequeño: el aro se gana con la rareza y el especular sube de grado.
+    // Cero blur, cero pulso — chapa esmaltada, no rótulo luminoso.
+    const iconShadow = unlocked
+      ? ultra
+        ? `inset 0 0 0 1.5px ${accent}, inset 0 1px 0 rgba(255,255,255,.3), 0 3px 8px rgba(0,0,0,.55)`
+        : rare
+          ? `inset 0 0 0 1px ${accent}b3, inset 0 1px 0 rgba(255,255,255,.24), 0 2px 6px rgba(0,0,0,.45)`
+          : 'inset 0 0 0 1px rgba(255,255,255,.12), inset 0 1px 0 rgba(255,255,255,.14)'
+      : 'inset 0 0 0 1px rgba(255,255,255,.07)';
     return (
       // flex-none por lo mismo que en SessionRow: dentro de un contenedor flex
       // con altura acotada, un hijo se encoge antes que desbordar — y una fila
@@ -424,9 +450,10 @@ const AchievementRow = memo(
       // scroll que toca.
       <div className="group -mx-2 flex flex-none items-center gap-2.75 rounded-[10px] px-2 py-1.75 transition-colors duration-150 hover:bg-white/[0.05]">
         <span
-          className={`h-9 w-9 flex-none overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.04] transition-[opacity,filter] duration-150 ${
+          className={`relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-white/[0.04] transition-[opacity,filter] duration-150 ${
             unlocked ? '' : 'opacity-55 grayscale group-hover:opacity-80'
           }`}
+          style={{ boxShadow: iconShadow }}
         >
           {src ? (
             <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -434,6 +461,15 @@ const AchievementRow = memo(
             <span className="flex h-full w-full items-center justify-center">
               <Trophy size={14} className="text-muted-foreground/40" />
             </span>
+          )}
+          {unlocked && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-[8px]"
+              style={{
+                background: `radial-gradient(120% 85% at 30% 12%, rgba(255,255,255,${ultra ? 0.28 : rare ? 0.22 : 0.14}), transparent 46%)`,
+              }}
+            />
           )}
         </span>
         <span className="min-w-0 flex-1">
@@ -525,17 +561,36 @@ const AchievementsPanel = ({
 }): React.JSX.Element | null => {
   const [rowLimit, setRowLimit] = useState(INITIAL_ACHIEVEMENT_ROWS);
 
-  const unlocked = entries
-    .filter((entry) => entry.unlockedAt !== null)
-    .sort((a, b) => (b.unlockedAt as Date).getTime() - (a.unlockedAt as Date).getTime());
-  const locked = entries
+  // Los conseguidos con EL orden de la casa (lib/achievements.ts), no con una
+  // ordenación propia por timestamp. La diferencia es `dateReliable`: cuando un
+  // catálogo llega en bloque, syncAchievements marca sus logros con la fecha
+  // del RESCATE, no la de la hazaña. Ordenando solo por fecha, esos falsos
+  // recientes se colaban arriba y empujaban hacia abajo justo lo que este panel
+  // existe para enseñar —lo que acabas de sacar esta noche—, mientras la ficha
+  // y el modo TV los mandaban al final. El mismo catálogo contando dos cosas
+  // distintas según la pantalla.
+  const sorted = sortForDisplay(entries);
+  const unlocked = sorted.filter((entry) => entry.unlockedAt !== null);
+  // Los pendientes SÍ llevan orden propio (los más comunes primero: aquí se
+  // mira "qué me falta que sea fácil", no el orden de Steam de la ficha).
+  const locked = sorted
     .filter((entry) => entry.unlockedAt === null)
     .sort((a, b) => (b.globalPercent ?? -1) - (a.globalPercent ?? -1));
   const achievementsPercent =
     entries.length > 0 ? Math.round((unlocked.length / entries.length) * 100) : 0;
-  // Los raros que YA tienes — el dato del que uno presume, con el mismo
-  // umbral y color que usa la app en la ficha y en Stats.
-  const rareCount = unlocked.filter((entry) => isRare(entry.globalPercent)).length;
+  // Los raros que YA tienes — el dato del que uno presume. En DOS cifras y con
+  // los dos colores de la ficha (AchievementsSection) y del modo TV, y no una
+  // sola: aquí se contaba con `isRare` a secas, que es "por debajo del 10%,
+  // ULTRAS INCLUIDOS", y se pintaba en violeta. Así, un juego con uno al 7% y
+  // dos al 3% decía "3 rare" en violeta mientras su propia ficha decía "1 rare"
+  // en ámbar y "2 ultra" en violeta — la misma palabra contando dos cosas según
+  // la ventana. La banda estrecha es la que comparten ficha, TV y el bloque de
+  // Stats (getAchievementsOverview), así que es la que manda.
+  const rareUnlocked = unlocked.filter((entry) => isRare(entry.globalPercent));
+  const ultraCount = rareUnlocked.filter(
+    (entry) => (entry.globalPercent as number) < ULTRA_RARE,
+  ).length;
+  const rareCount = rareUnlocked.length - ultraCount;
 
   // La siguiente tanda, en el primer hueco libre tras pintar la anterior. El
   // cleanup cancela la pendiente si el panel se va a mitad (cerrar el telón).
@@ -576,7 +631,8 @@ const AchievementsPanel = ({
           </span>
           <span className="mt-1 block text-[10.5px] font-semibold text-muted-foreground tabular-nums">
             {unlocked.length} of {entries.length}
-            {rareCount > 0 && <span style={{ color: rarityAccent(1) }}> · {rareCount} rare</span>}
+            {rareCount > 0 && <span style={{ color: AMBER }}> · {rareCount} rare</span>}
+            {ultraCount > 0 && <span style={{ color: ULTRA_VIOLET }}> · {ultraCount} ultra</span>}
           </span>
         </span>
       </div>
@@ -876,24 +932,35 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // panel seguía enseñándolo bloqueado hasta reiniciar la app, porque las
   // queries de logros son staleTime Infinity y nadie las invalidaba.
   //
-  // Es el mismo useAchievementsActivitySync de la ventana principal, montado
-  // a mano: aquel vive en la raíz de la app (Afterplay.tsx), un árbol que
-  // esta ventana no comparte.
-  // Solo 'synced', que es el único que significa "hay datos nuevos". Los
-  // 'progress' son la barra de la tarjeta de Ajustes, que aquí no se pinta:
-  // atenderlos sería recargar el catálogo 300 veces durante una pasada
-  // completa para no cambiar nada.
-  // Mismo trato con el telón bajado que el aviso de arriba: marcar, no pedir.
+  // Y ES LA REGLA DE LA CASA, no una copia: createAchievementsActivityInvalidator
+  // (hooks/achievements.ts) es la misma que monta la ventana principal, traída
+  // aquí porque aquel useAchievementsActivitySync vive en la raíz de la app
+  // (Afterplay.tsx), un árbol que esta ventana no comparte.
+  //
+  // Lo que había era una segunda regla escrita a mano que descartaba los
+  // 'progress' —diciendo que atenderlos sería "recargar el catálogo 300 veces",
+  // cuando es justo al revés: son ellos los que SUPRIMEN el barrido mientras la
+  // pasada corre— y ante cualquier 'synced' invalidaba el prefijo entero. Con
+  // el HUD abierto durante una pasada de logros (cierre de sesión, alta de un
+  // juego, vigilancia de emuladores), eso era un refetch del catálogo del juego
+  // EN MARCHA por cada juego sincronizado, contra el mismo proceso main que
+  // lleva la base y con el jugador delante.
+  //
+  // Lo único propio del overlay es el telón, y viaja como knob: bajado se marca
+  // y no se pide (igual que el aviso de arriba). Se lee por REF y el efecto no
+  // depende de él a propósito — volver a suscribirse en cada apertura recrearía
+  // el invalidador y perdería el `passRunning` de su cierre, que es justo lo
+  // que distingue una pasada de un desbloqueo suelto.
+  const curtainDownRef = useRef(curtainDown);
+  useEffect(() => {
+    curtainDownRef.current = curtainDown;
+  }, [curtainDown]);
   useEffect(
     () =>
-      window.api.achievements.onActivity((event) => {
-        if (event.kind !== 'synced') return;
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.achievements.all,
-          refetchType: curtainDown ? 'none' : 'active',
-        });
-      }),
-    [queryClient, curtainDown],
+      window.api.achievements.onActivity(
+        createAchievementsActivityInvalidator(queryClient, () => !curtainDownRef.current),
+      ),
+    [queryClient],
   );
 
   // Y los AJUSTES, que aquí llegaban una vez y se quedaban fósiles: sus dos
@@ -1119,6 +1186,17 @@ export const OverlayHud = (): React.JSX.Element | null => {
         onSuccess: () => {
           setDraft(null);
           setSavedFlash(true);
+        },
+        // Sin este onError, un fallo (DB en pleno swap del sync, IPC caído)
+        // dejaba el panel EXACTAMENTE igual que antes de pulsar: sin tick, sin
+        // "Saved", sin nada. Y como el borrador se conserva —el `setDraft(null)`
+        // solo corre en el éxito—, lo que se ve es tu texto ahí puesto, que es
+        // justo la foto de "guardado". Con el juego detrás, nadie vuelve a
+        // comprobarlo. Mismo aviso, palabra por palabra, que el editor de las
+        // filas del historial (SessionNote).
+        onError: (error) => {
+          console.error('[overlay] fallo guardando la nota:', error);
+          toast.error('Could not save the note — try again.');
         },
       },
     );
@@ -1492,6 +1570,15 @@ export const OverlayHud = (): React.JSX.Element | null => {
           </button>
         </div>
       </div>
+
+      {/* DENTRO del árbol del HUD y no en main.tsx, por dos motivos: aquí solo
+          existe con el telón arriba (Regla 1, "oculto = coste cero"), y viaja
+          en el chunk del HUD, que ya arrastra sonner por SessionNote — montarlo
+          arriba metería sonner en el chunk de ENTRADA, que pagan las dos
+          ventanas. Lo que se acepta a cambio: un guardado que falle DESPUÉS de
+          cerrar el telón levanta su aviso sin Toaster montado y se pierde; con
+          la ventana ya oculta tampoco había dónde enseñarlo. */}
+      <OverlayToaster />
     </div>
   );
 };

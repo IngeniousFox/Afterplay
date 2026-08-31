@@ -20,19 +20,24 @@ export type LatestMemory = {
   createdAt: Date;
 };
 
-export const getLatestMemories = async (): Promise<LatestMemory[]> => {
-  const rows = await getDb()
-    .select()
+// La proyección va ESCRITA y no un `.select()` pelado, que es lo que había:
+// el select sin argumentos infiere desde el modelo entero de la tabla y con
+// este tamaño de proyecto TypeScript se queda sin presupuesto de
+// instanciación — la inferencia se degrada a `any` de forma no determinista,
+// y el error salta en un fichero u otro según qué se compilara antes (el
+// porqué largo, en db/projections.ts). Este era el último select pelado que
+// quedaba en el main. Va aquí y no en projections.ts porque no es una fila
+// completa: `id` no sale de la consulta, solo ordena.
+export const getLatestMemories = async (): Promise<LatestMemory[]> =>
+  getDb()
+    .select({
+      scopeType: generatedMemoriesTable.scopeType,
+      scopeKey: generatedMemoriesTable.scopeKey,
+      payload: generatedMemoriesTable.payload,
+      sourceHash: generatedMemoriesTable.sourceHash,
+      promptVersion: generatedMemoriesTable.promptVersion,
+      model: generatedMemoriesTable.model,
+      createdAt: generatedMemoriesTable.createdAt,
+    })
     .from(generatedMemoriesTable)
     .orderBy(desc(generatedMemoriesTable.createdAt), desc(generatedMemoriesTable.id));
-
-  return rows.map((row) => ({
-    scopeType: row.scopeType,
-    scopeKey: row.scopeKey,
-    payload: row.payload,
-    sourceHash: row.sourceHash,
-    promptVersion: row.promptVersion,
-    model: row.model,
-    createdAt: row.createdAt,
-  }));
-};

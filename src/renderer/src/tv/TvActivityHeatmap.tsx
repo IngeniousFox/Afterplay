@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { SessionWithGame } from '../../../shared/types';
 import type { Year } from '../components/stats/YearPicker';
-import { addDays, startOfDay } from '../lib/dateMath';
+import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../lib/dateMath';
 import { formatHours } from '../lib/format';
 import { isMeasuredSession } from '../lib/sessionStats';
 
@@ -57,10 +57,15 @@ export const TvActivityHeatmap = ({
       rangeStart = mondayOf(new Date(year, 0, 1));
       rangeEnd = startOfDay(new Date(year, 11, 31));
     }
-    const weekCount = Math.max(
-      1,
-      Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (7 * 24 * 3600 * 1000)) + 1,
-    );
+    // Días INCLUSIVOS del rango → semanas justas, la fórmula EXACTA del
+    // escritorio (ActivityHeatmap). Aquí el +1 se sumaba después del ceil, o
+    // sea en semanas en vez de en días: 2024 salía con 54 columnas contra las
+    // 53 de Stats, y esa columna de más eran siete celdas siempre vacías
+    // (caen fuera de isPainted) que además estrechaban todas las demás por el
+    // repeat(weeks, 1fr). El redondeo es porque un rango que cruza un cambio
+    // de hora no es múltiplo exacto de 24h.
+    const daysInclusive = Math.round((startOfDayMs(rangeEnd) - rangeStart.getTime()) / DAY_MS) + 1;
+    const weekCount = Math.max(1, Math.ceil(daysInclusive / 7));
 
     // Un día CUENTA solo si de verdad se pinta, y esta es la única definición
     // de "se pinta": la usan tanto la acumulación como el nivel de cada celda,

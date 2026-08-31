@@ -18,6 +18,9 @@ import { SessionNote } from './SessionNote';
 
 type SessionRowProps = {
   session: SessionWithGame;
+  // Abrir UN logro concreto en la ficha (LOGROS-REDISENO §1): la pantalla
+  // pone la navegación; la fila solo dice cuál se pulsó.
+  onOpenAchievement?: (achievementId: number) => void;
   // Duración de la sesión más larga del filtro activo — la fila lleva un
   // relleno proporcional a ella (estilo Most Played: la fila ES la barra),
   // así el ojo compara duraciones sin leer un solo número. 0 = sin barra.
@@ -64,6 +67,7 @@ const momentBadge = (moment: Moment): { Icon: LucideIcon; color: string; label: 
 // componente.
 export const SessionRow = ({
   session,
+  onOpenAchievement,
   maxDurationSec = 0,
   isRecord = false,
   moments = [],
@@ -144,7 +148,7 @@ export const SessionRow = ({
         )}
         {/* Los trofeos de la noche (LOGROS-IDEAS.md §2.1): píldora + iconos,
             el mismo lenguaje de distintivos que los momentos de arriba. */}
-        <SessionAchievements entries={achievements} />
+        <SessionAchievements entries={achievements} onOpen={onOpenAchievement} />
         {/* Diario de sesión, igual que en la ficha del juego: si escribiste
             "dónde lo dejé" al cerrar, aquí se lee y se corrige. */}
         <SessionNote sessionId={session.id} note={session.note} />

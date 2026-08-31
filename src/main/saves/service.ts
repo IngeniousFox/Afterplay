@@ -218,11 +218,43 @@ export const deleteLocalBackups = (ludusaviName: string, names: string[]): void 
   const dir = findGameBackupDir(ludusaviName);
   if (!existsSync(dir)) return;
 
+  // El índice se lee ANTES de tocar un solo zip, y si está ahí pero no se deja
+  // leer no se borra NADA. Aquí abajo se tiraba la carpeta entera con un
+  // rmSync recursivo cuando removeBackupsFromMapping devolvía false, y ese
+  // false significa dos cosas que no se parecen en nada: "tras la poda no
+  // queda ninguna versión" y "no pude leer el mapping.yaml" (readMapping
+  // devuelve null también cuando el fichero existe y revienta el parse o el
+  // readFileSync — un EBUSY/EPERM del antivirus, o el fichero truncado a
+  // mitad de escritura de ludusavi, que no escribe atómicamente). Con eso,
+  // borrar UNA versión de un juego con tres se llevaba las otras dos y su
+  // mapping; y como este camino no sella el suelo de poda, el siguiente
+  // backup daba por caducado en R2 todo el historial del juego. Ante un
+  // índice ilegible la única respuesta segura es la que repite el resto del
+  // módulo: no borrar y avisar. El precio de fallar cerrado es que la versión
+  // pedida siga en disco y el espejo la vuelva a subir — recuperable con otro
+  // clic; el de fallar abierto son partidas que ya no están en ningún sitio.
+  const hasMapping = existsSync(join(dir, MAPPING_FILE));
+  const mapping = hasMapping ? readMapping(dir) : null;
+  if (hasMapping && !mapping) {
+    throw new Error(
+      `The local backup index for "${ludusaviName}" couldn't be read, so nothing was deleted from this PC's copy folder. Close whatever is holding it (antivirus, ludusavi) and try again.`,
+    );
+  }
+
   for (const name of names) rmSync(join(dir, name), { force: true });
 
   // Si no queda ninguna versión, la carpeta entera sobra: un mapping.yaml sin
-  // backups solo sirve para confundir a la siguiente lectura.
-  if (!removeBackupsFromMapping(dir, names)) rmSync(dir, { recursive: true, force: true });
+  // backups solo sirve para confundir a la siguiente lectura. Que no quede
+  // ninguna se decide con el índice leído ARRIBA (mismo criterio que
+  // removeBackupsFromMapping: un completo se lleva sus diferenciales por
+  // delante) y se exige que su propio false lo confirme: así ni un fallo de
+  // lectura en medio puede volver a significar "bórralo todo", ni una versión
+  // recién creada entre las dos lecturas se va con la carpeta.
+  const doomed = new Set(names);
+  const survivors = (mapping?.backups ?? []).filter((full) => !doomed.has(full.name));
+  if (!removeBackupsFromMapping(dir, names) && survivors.length === 0) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 };
 
 // Nota: la lista de versiones sale del mapping.yaml (listLocalVersions) y no

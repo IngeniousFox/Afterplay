@@ -5,13 +5,7 @@ import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { useDeleteIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, pluralize } from '../../../lib/format';
-import {
-  END_EVENT_STATUS_KEYS,
-  NORMAL_STATUS_OPTIONS,
-  STATE_TO_STATUS_KEY,
-  STATUS_META,
-} from '../../../lib/gameStatus';
-import type { PastStatusKey } from '../../../lib/gameStatus';
+import { END_EVENT_STATUS_KEYS, NORMAL_STATUS_OPTIONS, STATUS_META } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { CheckboxRow } from '../add-game/CheckboxRow';
 import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
@@ -29,7 +23,7 @@ import {
   AlertDialogTitle,
 } from '../../ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
-import { edgeEventPickerValue } from './types';
+import { iterationFormValues } from './types';
 import type { EditGameFormValues } from './types';
 
 type IterationSectionProps = {
@@ -46,7 +40,7 @@ type IterationSectionProps = {
 // falsea. Corregirla de verdad pediría editar sesiones sueltas, que no
 // existe.
 export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Element => {
-  const { control, setValue } = useFormContext<EditGameFormValues>();
+  const { control, setValue, getValues } = useFormContext<EditGameFormValues>();
   const iterationMode = useWatch({ control, name: 'iterationMode' });
   const selectedIterationId = useWatch({ control, name: 'selectedIterationId' });
   const status = useWatch({ control, name: 'status' });
@@ -60,32 +54,24 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
   const loadIteration = (iteration: IterationDetail): void => {
     setValue('iterationMode', 'existing');
     setValue('selectedIterationId', iteration.id);
-    setValue('label', iteration.label);
-    setValue('extraContent', iteration.extraContent);
-    // El cast es seguro: currentState sale de latestRealStateEvent, que
-    // ignora 'plan_to_play' — nunca llega aquí el estado 'plan'.
-    setValue(
-      'status',
-      iteration.currentState
-        ? (STATE_TO_STATUS_KEY[iteration.currentState] as PastStatusKey)
-        : 'beaten',
-    );
-    setValue('platform', iteration.playedPlatform);
-    setValue('format', iteration.format ?? 'digital');
-    setValue('origin', iteration.origin);
-    setValue(
-      'hoursPlayed',
-      iteration.manualTotalPlayed !== null ? String(iteration.manualTotalPlayed) : '',
-    );
-    // Modelo v2 — las fechas de borde SON eventos del log. Solo entran al
-    // formulario (editables) cuando su dueño es un evento: un inicio que
-    // viene de una sesión MEDIDA (startedBySession) se queda fuera (null) y
-    // su campo se pinta en solo lectura — una medición no se falsea.
-    setValue(
-      'started',
-      iteration.startedBySession ? null : edgeEventPickerValue(iteration.startEvent),
-    );
-    setValue('finished', edgeEventPickerValue(iteration.endEvent));
+    // Las reglas de cómo se lee un playthrough en este formulario (fechas de
+    // borde, fallback de estado, horas manuales…) viven UNA vez, compartidas
+    // con el buildDefaults de EditGameModal: escritas a mano en los dos
+    // sitios ya habían derivado — ver iterationFormValues.
+    // El endless del FORMULARIO, no game.endless: el dropdown de estados que
+    // el usuario tiene delante sigue al checkbox — con el checkbox desmarcado
+    // sobre un juego que en la DB sigue siendo endless, caer al default de
+    // endless ('resting') pintaria un estado que ese dropdown ni ofrece.
+    const next = iterationFormValues(iteration, getValues('endless'));
+    setValue('label', next.label);
+    setValue('extraContent', next.extraContent);
+    setValue('status', next.status);
+    setValue('platform', next.platform);
+    setValue('format', next.format);
+    setValue('origin', next.origin);
+    setValue('hoursPlayed', next.hoursPlayed);
+    setValue('started', next.started);
+    setValue('finished', next.finished);
   };
 
   const selectedIteration = game.iterations.find((it) => it.id === selectedIterationId) ?? null;

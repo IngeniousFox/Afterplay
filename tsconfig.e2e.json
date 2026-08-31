@@ -1,0 +1,9 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["e2e/**/*", "playwright.config.ts", "src/shared/**/*", "src/preload/**/*"],
+  "compilerOptions": {
+    "composite": false,
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"]
+  }
+}

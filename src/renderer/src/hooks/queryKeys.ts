@@ -21,6 +21,21 @@ export const queryKeys = {
     // Bajo el prefijo ['games'] a propósito: cualquier mutation que ya
     // invalide games.all refresca también la lista del Plan sin tocarla.
     planned: ['games', 'planned'] as const,
+    // La key del canal de extras. Bajo el prefijo ['games'] para heredar las
+    // mismas invalidaciones anchas que la lista (mutations + watcher), pero
+    // FUERA del prefijo de games.planned a propósito: fijar y reordenar Up next
+    // solo invalidan la lista escueta (planPinnedAt vive allí), y arrastrar los
+    // 591 KB de extras en cada pin sería recrear el problema que este canal
+    // arregla (ver invalidatePlanPinned en hooks/games.ts).
+    //
+    // Vivía suelta dentro de games.ts, y por eso está aquí: era la única key
+    // de la app fuera de este censo, así que quien venía a decidir si una
+    // mutation nueva tiene que refrescar los extras del Plan no la veía. De
+    // paso queda escrito lo que hoy solo se cumplía por suerte: el predicate
+    // de useSetSessionNote (hooks/sessions.ts) filtra ['games', <número>], y
+    // esta key lleva un STRING en esa posición — no entra, que es lo correcto
+    // (una nota de sesión no toca nada de lo que viaja en los extras).
+    plannedExtras: ['games', 'plannedExtras'] as const,
   },
   sessions: {
     all: ['sessions'] as const,
@@ -71,14 +86,14 @@ export const queryKeys = {
     // (ver useCollectionGames): la misma pregunta, una sola entrada.
     collection: (collectionIds: number[]) => ['igdb', 'collection', collectionIds] as const,
   },
-  // Datos externos de la biblioteca (PLAN-TO-PLAY.md 5): el estado que
-  // pinta la tarjeta de Ajustes. Los datos en si no viven aqui — van en la
-  // fila de cada juego, bajo ['games'].
   // El radar de secuelas (PLAN-TO-PLAY.md 4): los descubrimientos de la
   // pasada semanal, que alimentan la segunda fuente del horizonte del Plan.
   radar: {
     all: ['radar'] as const,
   },
+  // Datos externos de la biblioteca (PLAN-TO-PLAY.md 5): el estado que
+  // pinta la tarjeta de Ajustes. Los datos en si no viven aqui — van en la
+  // fila de cada juego, bajo ['games'].
   external: {
     status: ['external', 'status'] as const,
     // El ultimo evento de progreso de la pasada. No es una query de verdad

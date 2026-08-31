@@ -1,5 +1,6 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import { getDb } from '../..';
+import { lastPlayedAtFor } from '../../../../shared/lastPlayedAt';
 import {
   isAddedAtArtifact,
   latestRealStateEvent,
@@ -61,6 +62,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       endless: gamesTable.endless,
       releaseYear: gamesTable.releaseYear,
       addedAt: gamesTable.addedAt,
+      promotedAt: gamesTable.promotedAt,
       hltbMain: gamesTable.hltbMain,
       // Los otros dos tramos de HLTB viajan también: el overlay in-game
       // pinta la misma barra de tres tramos que la card de la ficha, y esta
@@ -266,6 +268,10 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // (mal), porque manualHoursAnchor recibía el log SIN filtrar. La misma
   // fecha no puede ser mentira para una cosa y verdad para la otra.
   const addedAtByGame = new Map(games.map((game) => [game.id, game.addedAt]));
+  // Y la segunda referencia del papeleo: el sello del promote. Sin ella, el
+  // 'completed' sin fechas de promocionar un planeado viejo pasaba por
+  // jugada real de hoy (ver isAddedAtArtifact).
+  const promotedAtByGame = new Map(games.map((game) => [game.id, game.promotedAt]));
 
   const manualIterationsByGame = new Map<
     number,
@@ -288,6 +294,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       eventsByIteration.get(iteration.id) ?? [],
       addedAtByGame.get(iteration.gameId),
       firstSessionAt ? [firstSessionAt] : undefined,
+      promotedAtByGame.get(iteration.gameId),
     );
     const list = manualIterationsByGame.get(iteration.gameId) ?? [];
     list.push({
@@ -333,7 +340,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
       // 'plan_to_play' fuera por lo mismo que en currentState: planear no es
       // jugar.
       if (event.type === 'plan_to_play') continue;
-      if (isAddedAtArtifact(event.occurredAt, addedAt)) continue;
+      if (isAddedAtArtifact(event.occurredAt, addedAt, promotedAtByGame.get(gameId))) continue;
       // Se mira TODO el log, no solo el último: si el evento más reciente es
       // uno de esos sin fecha propia pero un 'started' anterior sí la tiene,
       // esa fecha sigue siendo un dato bueno que no hay que tirar.
@@ -344,25 +351,11 @@ export const getGames = async (): Promise<GameListItem[]> => {
     }
   }
 
-  // "Last played" = la última vez que toqué este juego, venga el dato de donde
-  // venga: el fin de la última sesión o el último evento CON FECHA PROPIA, lo
-  // que sea más reciente. Antes era `sesión ?? evento`, o sea que en cuanto
-  // había una sola sesión el log dejaba de mirarse: trackeas en enero,
-  // terminas el juego en la consola y lo marcas completado con fecha de junio
-  // — y la biblioteca seguía ordenándolo por enero, por debajo de juegos que
-  // tocaste menos. Las dos fuentes ya vienen limpias (la del log ignora
-  // 'plan_to_play' y el artefacto del alta), así que quedarse con el máximo no
-  // puede subir un juego por una fecha que nadie escribió.
-  //
-  // null cuando no hay ni una cosa ni la otra: es "no lo sé", y como tal se va
-  // al final de la lista en vez de inventarse una fecha.
-  const lastPlayedAtFor = (gameId: number): Date | null => {
-    const bySession = lastSessionByGame.get(gameId) ?? null;
-    const byEvent = lastEventByGame.get(gameId) ?? null;
-    if (!bySession) return byEvent;
-    if (!byEvent) return bySession;
-    return byEvent.getTime() > bySession.getTime() ? byEvent : bySession;
-  };
+  // "Last played" sale de lastPlayedAtFor (src/shared): la más reciente de las
+  // dos fuentes, que aquí ya llegan limpias — la del log ignora 'plan_to_play'
+  // y el artefacto del alta, justo arriba. La regla vive en shared porque el
+  // móvil pinta la MISMA biblioteca y se había quedado con el `sesión ??
+  // evento` de antes; el porqué entero está allí.
 
   return games.map((game) => {
     const latestStateEvent = latestStateEventByGame.get(game.id);
@@ -382,14 +375,18 @@ export const getGames = async (): Promise<GameListItem[]> => {
       releaseYear: game.releaseYear,
       totalHours: hoursByGame.get(game.id) ?? 0,
       addedAt: game.addedAt,
+      promotedAt: game.promotedAt,
       hltbMain: game.hltbMain,
       hltbMainExtras: game.hltbMainExtras,
       hltbCompletionist: game.hltbCompletionist,
       executablePath: game.executablePath,
       manualIterations: manualIterationsByGame.get(game.id) ?? [],
       currentState: latestStateEvent?.type ?? null,
-      // La más reciente de las dos fuentes — ver lastPlayedAtFor arriba.
-      lastPlayedAt: lastPlayedAtFor(game.id),
+      // La más reciente de las dos fuentes — ver lastPlayedAtFor (src/shared).
+      lastPlayedAt: lastPlayedAtFor(
+        lastSessionByGame.get(game.id) ?? null,
+        lastEventByGame.get(game.id) ?? null,
+      ),
       isLive: liveSince !== null,
       liveSince,
       sessionCount: sessionCountByGame.get(game.id) ?? 0,

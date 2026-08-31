@@ -61,6 +61,19 @@ export const NORMAL_STATUS_OPTIONS: PastStatusKey[] = ['beaten', 'dropped', 'pla
 // también para endless (resting se añade, no sustituye a on_hold/dropped).
 export const ENDLESS_STATUS_OPTIONS: PastStatusKey[] = ['playing', 'resting', 'dropped'];
 
+// AFTERPLAY-LOOP.md §6 — los botones de "¿y cómo acabó?" del cierre de
+// sesión: "sigo jugando" es el defecto y no necesita botón (no tocar nada ya
+// lo dice), así que solo se ofrecen los desenlaces. Un juego normal ofrece
+// Beaten/Dropped; un endless, Resting — un endless no se "termina".
+//
+// Aquí, junto a las otras listas de opciones de estado, y no en cada
+// pantalla: estaba copiada carácter a carácter en el toast de escritorio y en
+// el panel del modo TV, que son el MISMO gesto en dos pieles. Añadir un
+// desenlace rápido en uno habría dejado al sofá y al escritorio ofreciendo
+// botones distintos para el mismo cierre de sesión, sin que nada avisara.
+export const quickStatusOptions = (endless: boolean): PastStatusKey[] =>
+  endless ? ['resting'] : ['beaten', 'dropped'];
+
 // Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
 export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
   playing: 'started',

@@ -95,6 +95,10 @@ export type ChapterStateEvent = {
   // cuelga games.addedAt de cada evento. Antes no lo traía nadie y la mitad
   // "alta" del filtro no llegaba a aplicarse nunca en la app.
   addedAt?: Date | null;
+  // Y el sello del promote — la segunda puerta del papeleo (ver
+  // isAddedAtArtifact): promocionar un planeado escribe sus eventos meses
+  // despues de addedAt, y sin esta marca abrian capitulo del Loop.
+  promotedAt?: Date | null;
 };
 
 // "Aquí pasó algo de verdad", el mismo criterio que el Journey
@@ -120,7 +124,8 @@ export type ChapterStateEvent = {
 // Es correcto —esa prosa narraba algo que ya no cuenta como hecho—, pero si
 // aparece una tanda de obsoletos sin haber tocado nada, viene de aquí.
 export const isMeaningfulStateEvent = (event: ChapterStateEvent): boolean =>
-  event.type !== 'plan_to_play' && !isAddedAtArtifact(event.occurredAt, event.addedAt);
+  event.type !== 'plan_to_play' &&
+  !isAddedAtArtifact(event.occurredAt, event.addedAt, event.promotedAt);
 
 // Un desbloqueo tal como llega del main (getMemoryFacts): ya FUNDIDO por
 // logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de

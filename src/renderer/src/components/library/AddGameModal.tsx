@@ -277,6 +277,8 @@ const AddGameModalBody = ({
   // con el MISMO igdbId, y eso revienta contra la unicidad de games.igdbId
   // con un error que no tiene nada que ver con lo que de verdad falló. Se
   // guarda el id ya creado para que el reintento se salte justo ese paso.
+  // OJO: esto cubre SOLO el paso primario — los playthroughs extra llevan su
+  // propia cuenta (la poda de `extraPlaythroughs` en el catch de handleSave).
   const [partialSave, setPartialSave] = useState<{ gameId: number } | null>(null);
   // El banner de error solo miraba la mutación PRIMARIA — un fallo en
   // assignSession/addIteration/addStateEvent (los pasos que corren DESPUÉS de
@@ -432,6 +434,8 @@ const AddGameModalBody = ({
     // playthroughs discretos que registrar).
     const extraPlaythroughs =
       values.playedBefore && !values.endless ? values.extraPlaythroughs : [];
+    // Cuántos de los extra han entrado YA en la base — lo lee el catch.
+    let createdExtras = 0;
 
     // Promote y New game encadenan varios pasos tras el principal
     // (assignSession/extraPlaythroughs), y NINGUNO de ellos puede reventar
@@ -457,6 +461,7 @@ const AddGameModalBody = ({
             { ...entry, status: entry.pastStatus },
             { addIteration, addStateEvent },
           );
+          createdExtras += 1;
         }
         resetAll();
         onOpenChange(false);
@@ -487,12 +492,23 @@ const AddGameModalBody = ({
           { ...entry, status: entry.pastStatus },
           { addIteration, addStateEvent },
         );
+        createdExtras += 1;
       }
 
       resetAll();
       onOpenChange(false);
       onCreated?.(gameId);
     } catch (error) {
+      // Los extra que SÍ entraron salen del formulario. La tanda no es
+      // atómica y el guard de partialSave solo cubre el paso primario, así
+      // que sin esta poda un segundo "Add to library" tras un fallo a mitad
+      // recorría la lista ENTERA otra vez y volvía a crear los playthroughs
+      // que ya existían -> duplicados, con sus mismos eventos de estado y
+      // auto-pausando hermanos al escribir su 'started'. Misma cuenta (y por
+      // el mismo motivo) que lleva EditGameModal con sus `newPlaythroughs`.
+      if (createdExtras > 0) {
+        setValue('extraPlaythroughs', values.extraPlaythroughs.slice(createdExtras));
+      }
       console.error('[add-game] fallo guardando:', error);
     }
   };
@@ -578,9 +594,16 @@ const AddGameModalBody = ({
               // habría que volver a señalar la misma carpeta con el picker.
               methods.setValue('installDirectory', folder.path);
               methods.setValue('installSizeBytes', folder.sizeBytes);
-              if (folder.executablePath) {
-                methods.setValue('executablePath', folder.executablePath);
-              }
+              // Los tres campos del disco entran SIEMPRE, el .exe incluido.
+              // Escribirlo solo cuando la carpeta traía uno dejaba que el
+              // ejecutable de OTRA carpeta sobreviviera: elegías la carpeta A
+              // (el escaneo le había encontrado su .exe), pulsabas "Change"
+              // porque el match de IGDB era otro juego, volvías al escaneo y
+              // elegías la carpeta B —para la que no se encontró ninguno—, y
+              // el juego se daba de alta con la carpeta de B y el .exe de A.
+              // A partir de ahí el watcher vigilaba el proceso del juego A y
+              // le colgaba a B sus sesiones.
+              methods.setValue('executablePath', folder.executablePath ?? '');
               setStepDirection(1);
               setSelected(toSelected(match));
             }}

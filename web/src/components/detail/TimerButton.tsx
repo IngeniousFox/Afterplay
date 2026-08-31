@@ -24,8 +24,21 @@ export const TimerButton = ({
 
   const start = useMutation({
     mutationFn: () => startTimer(gameId),
+    // LA MISMA lista que al parar (TimerBar), porque arrancar cambia lo mismo:
+    // no abre solo una sesión — si el playthrough no estaba en marcha, escribe
+    // además su 'started' en el mismo batch (queries/timer.ts). O sea que el
+    // juego pasa de Unplayed/On Hold a Playing, sube su sessionCount y aparece
+    // el bloque `live` del resumen.
+    //
+    // Sin esto, con staleTime de 30 s y sin refetch al navegar por dentro del
+    // router, volver a la portada dentro de esos 30 s la enseñaba SIN la tarjeta
+    // de "jugando ahora" y con el juego contado como Unplayed, mientras la barra
+    // de abajo ya contaba.
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['timer'] });
+      void queryClient.invalidateQueries({ queryKey: ['stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['library'] });
       void queryClient.invalidateQueries({ queryKey: ['game', gameId] });
     },
   });

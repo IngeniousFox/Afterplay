@@ -5,12 +5,16 @@ import { drizzle } from 'drizzle-orm/tursodatabase-sync';
 import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { remoteLabel } from '../config/credentials';
+import { e2eBlocksSync } from '../lib/e2e';
 import { removeEmptySidecars } from './sidecars';
 import {
   applyRemotePending,
   listRemotePending,
   readLocalMigrations,
   REBUILD_MARKER,
+  selectPendingByName,
+  type LocalMigration,
 } from './migrationSync';
 
 // Bloque 4 — @tursodatabase/sync sustituye por completo a @tursodatabase/
@@ -34,7 +38,10 @@ let syncCapable = false;
 const getDbPath = (): string => join(app.getPath('userData'), 'Afterplay.db');
 
 const hasRemoteConfigured = (): boolean =>
-  Boolean(process.env.DATABASE_URL && process.env.DATABASE_AUTH_TOKEN);
+  // En un test E2E, la remota está cerrada salvo que ese test la haya pedido
+  // con las dos llaves (credenciales de Turso en su sandbox Y la bandera; ver
+  // e2e.ts). Un test que teclee credenciales en Ajustes no abre nada.
+  !e2eBlocksSync() && Boolean(process.env.DATABASE_URL && process.env.DATABASE_AUTH_TOKEN);
 
 // QUÉ base de datos remota es esta, para decirlo en cada log de conexión.
 //
@@ -44,18 +51,10 @@ const hasRemoteConfigured = (): boolean =>
 // y le empujó una migración. El log decía solo "conectado con Turso", así
 // que el error tardó seis segundos en verse en vez de uno.
 //
-// Solo el nombre del host, nunca el token: esto va a una consola que se pega
-// en informes de error (hoy mismo ha pasado varias veces).
-const remoteLabel = (): string => {
-  const url = process.env.DATABASE_URL;
-  if (!url) return 'sin remota';
-  try {
-    // libsql://afterplay-test-xxx.turso.io -> afterplay-test-xxx
-    return new URL(url).hostname.split('.')[0];
-  } catch {
-    return 'remota desconocida';
-  }
-};
+// La función vive en config/credentials.ts —el otro sitio que anuncia base, al
+// importar claves de fuera— porque aquí había una copia idéntica, con este
+// mismo incidente contado dos veces. Aquí solo se le pasa de dónde sale la url.
+const currentRemoteLabel = (): string => remoteLabel(process.env.DATABASE_URL);
 
 // getDb() sigue siendo síncrono a propósito — lo llaman decenas de queries
 // existentes sin esperar nada. Solo es seguro llamarlo después de
@@ -139,6 +138,25 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 // tiempo: para entonces la ventana está abierta y nada le corre detrás.
 let migrationPushPending = false;
 
+// Y LA OTRA MITAD, que no es lo mismo aunque las dos salgan del mismo `false`:
+// ¿sabemos que el remoto quedó A MEDIO MIGRAR?
+//
+// applyRemotePending aplica y registra migración a migración, así que un lote
+// [16, 17] que reviente en la 17 deja el remoto con la 16 puesta y devuelve
+// fallo. Aquí la puerta de connectAndMigrate impide aplicar la 16 en local
+// (bien: aplicar a medias no es recuperable), y hasta hoy el ciclo de sync
+// seguía de largo hasta pull()/push() igualmente — replicando filas entre un
+// remoto con el layout nuevo y una local con el viejo, con el replicador
+// yendo POR POSICIÓN de columna. Eso es exactamente lo que SCHEMA_MISMATCH_HINTS
+// describe.
+//
+// Se distingue del caso NORMAL de migrationPushPending —el timeout benigno de
+// "no me dio tiempo a PREGUNTAR", donde remoto y local son idénticos— porque
+// plantarse en ese otro cortaría el sync de filas en cada arranque con Turso
+// dormido. Solo se apaga con un push COMPLETO: un fallo de LECTURA posterior
+// no la desarma, porque el remoto sigue tan a medias como antes.
+let remoteSchemaAhead = false;
+
 // out/main -> out -> project root -> drizzle. Misma profundidad relativa en
 // dev y en la app empaquetada.
 const MIGRATIONS_FOLDER = join(__dirname, '../../drizzle');
@@ -172,8 +190,23 @@ const pushMigrationsToRemote = async (timeoutMs: number | null): Promise<boolean
   });
 
   try {
-    const list = listRemotePending(client, MIGRATIONS_FOLDER);
-    const pending = timeoutMs === null ? await list : await withTimeout(list, timeoutMs);
+    // Los dos catch van SEPARADOS porque los dos fallos no significan lo
+    // mismo: no poder PREGUNTAR deja el remoto exactamente como estaba (y la
+    // local con él), mientras que fallar APLICANDO puede dejarlo con parte del
+    // lote puesta y por delante de la local. Con un solo catch los dos salían
+    // como un `false` indistinguible y el ciclo de sync no podía plantarse en
+    // el segundo sin plantarse también en el primero.
+    let pending: LocalMigration[];
+    try {
+      const list = listRemotePending(client, MIGRATIONS_FOLDER);
+      pending = timeoutMs === null ? await list : await withTimeout(list, timeoutMs);
+    } catch (error) {
+      console.warn(
+        '[db] no se pudo comprobar que le falta a Turso, se reintentara en segundo plano:',
+        error,
+      );
+      return false;
+    }
 
     if (pending.length > 0) {
       console.log(
@@ -181,16 +214,24 @@ const pushMigrationsToRemote = async (timeoutMs: number | null): Promise<boolean
           .map((migration) => migration.name)
           .join(', ')}`,
       );
-      const { applied } = await applyRemotePending(client, pending);
-      console.log(`[db] migraciones aplicadas directamente en Turso: ${applied.join(', ')}`);
+      try {
+        const { applied } = await applyRemotePending(client, pending);
+        console.log(`[db] migraciones aplicadas directamente en Turso: ${applied.join(', ')}`);
+      } catch (error) {
+        // Puede haber registrado alguna del lote antes de reventar: a partir de
+        // aquí el esquema remoto puede ir por delante del local, y replicar
+        // filas entre los dos es lo que hay que impedir (ver remoteSchemaAhead).
+        remoteSchemaAhead = true;
+        console.warn(
+          '[db] fallo aplicando migraciones en Turso: el remoto puede haber quedado A MEDIAS, no sincronizo filas hasta arreglarlo:',
+          error,
+        );
+        return false;
+      }
     }
+
+    remoteSchemaAhead = false;
     return true;
-  } catch (error) {
-    console.warn(
-      '[db] no se pudo dejar Turso al día en el arranque, se reintentara en segundo plano:',
-      error,
-    );
-    return false;
   } finally {
     client.close();
   }
@@ -267,7 +308,7 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
 
   try {
     const db = await connectWithSync();
-    console.log(`[db] conectado con Turso [${remoteLabel()}] - sync activado`);
+    console.log(`[db] conectado con Turso [${currentRemoteLabel()}] - sync activado`);
     return { db, capable: true };
   } catch (error) {
     if (isStaleMetadataError(error)) {
@@ -278,7 +319,7 @@ const attemptInitialConnect = async (): Promise<{ db: Db; capable: boolean }> =>
       try {
         const db = await connectWithSync();
         console.log(
-          `[db] conectado con Turso [${remoteLabel()}] tras limpiar metadatos huerfanos - sync activado`,
+          `[db] conectado con Turso [${currentRemoteLabel()}] tras limpiar metadatos huerfanos - sync activado`,
         );
         return { db, capable: true };
       } catch (retryError) {
@@ -593,23 +634,65 @@ const applyRebuildVerified = async (db: Db, rebuild: string): Promise<void> => {
 // por applyRebuildVerified (copia previa + conteo de filas) en vez de por el
 // migrador a pelo.
 //
-// El criterio de "pendiente" es el mismo que usa drizzle: created_at por
-// encima del último aplicado. Sin tabla de control no hay nada que proteger —
-// es una instalación nueva, que crea las tablas desde cero sin reconstruir.
+// El criterio de "pendiente" es EL NOMBRE, el mismo que usa drizzle y el mismo
+// que usa listRemotePending contra el remoto (por eso comparten helper,
+// selectPendingByName). Aquí se leía `max(created_at)` y se daba por pendiente
+// todo lo que tuviera folderMillis por encima, con un comentario que afirmaba
+// que era "el mismo criterio que usa drizzle" — y era falso: el migrador que
+// de verdad corre filtra por nombre (`localMigrations.filter(lm =>
+// !dbNamesSet.has(lm.name))`, drizzle-orm/migrator.utils.js). Los dos
+// criterios solo discrepan en el caso PELIGROSO —una carpeta fuera de orden al
+// fusionar ramas, o dos con el mismo segundo, que la comparación estricta `>`
+// se saltaba— y ahí este guardarraíl decía "nada pendiente" mientras drizzle
+// ejecutaba la reconstrucción entera sin copia previa ni conteo de filas.
+//
+// Y FALLA CERRADO. La lectura solo puede darse por buena cuando dice que no
+// hay tabla de control: eso sí es una instalación nueva, que crea las tablas
+// desde cero sin reconstruir nada. Cualquier OTRO fallo (una conexión a
+// medias, un "database tape error" del replicador, el fichero bloqueado) se
+// trata como "no sé qué hay aplicado", que es exactamente el arranque en el
+// que MÁS falta hace la protección: se asume que no hay nada aplicado y se
+// enruta por applyRebuildVerified. El precio de equivocarse por ese lado es
+// una copia del .db y un conteo de filas; por el otro, la base.
+const MISSING_MIGRATIONS_TABLE_HINT = 'no such table';
+
+// drizzle envuelve TODO fallo de db.all() en un DrizzleQueryError cuyo
+// .message es solo "Failed query: ..." — el texto del motor ("no such
+// table...") vive en error.cause. Mirar solo .message hacia que la deteccion
+// de instalacion nueva no acertara NUNCA y todo arranque virgen pasara por la
+// ruta de reconstruccion con copia y conteo. Se recorre la cadena de causas
+// entera (con tope, por si alguien encadena en circulo).
+const errorChainText = (error: unknown): string => {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current != null; depth++) {
+    if (current instanceof Error) {
+      parts.push(current.message);
+      current = current.cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return parts.join(' | ').toLowerCase();
+};
+
 const pendingTableRebuild = async (db: Db): Promise<string | null> => {
-  let lastApplied = 0;
+  let appliedNames = new Set<string>();
   try {
-    const rows = await db.all<{ created_at: number | null }>(
-      sql`select max(created_at) as created_at from __drizzle_migrations`,
+    const rows = await db.all<{ name: string | null }>(sql`select name from __drizzle_migrations`);
+    appliedNames = new Set(
+      rows.map((row) => row.name).filter((name): name is string => Boolean(name)),
     );
-    lastApplied = Number(rows[0]?.created_at ?? 0);
-  } catch {
-    return null;
+  } catch (error) {
+    if (errorChainText(error).includes(MISSING_MIGRATIONS_TABLE_HINT)) return null;
+    console.warn(
+      '[db] no se pudo leer __drizzle_migrations: doy por pendiente TODO lo que haya en la carpeta para no aplicar una reconstruccion sin red',
+      error,
+    );
   }
 
-  const pending = readLocalMigrations(MIGRATIONS_FOLDER).filter(
-    (migration) => migration.folderMillis > lastApplied,
-  );
+  const pending = selectPendingByName(readLocalMigrations(MIGRATIONS_FOLDER), appliedNames);
   return (
     pending.find((migration) =>
       migration.statements.some((statement) => statement.includes(REBUILD_MARKER)),
@@ -800,7 +883,7 @@ const attemptSyncUpgrade = async (): Promise<void> => {
       const db = await connectWithSync();
       dbInstance = db;
       syncCapable = true;
-      console.log(`[db] conexion con Turso [${remoteLabel()}] restablecida - sync activado`);
+      console.log(`[db] conexion con Turso [${currentRemoteLabel()}] restablecida - sync activado`);
     } catch (error) {
       console.warn('[db] reintento de conexion con Turso fallido, sigo en local:', error);
       dbInstance = await connectLocalOnly();
@@ -836,6 +919,21 @@ export type SyncFailure = {
 let lastSyncFailure: SyncFailure | null = null;
 
 export const getLastSyncFailure = (): SyncFailure | null => lastSyncFailure;
+
+// Apuntar un fallo para que Ajustes lo enseñe. En una función porque hay DOS
+// sitios que lo hacen: el catch del ciclo y la parada seca por esquema remoto
+// a medias, que no lanza pero tampoco es un ciclo bueno — y la racha
+// (`consecutive`, la que decide si esto va a consola) tiene que contarse igual
+// en los dos.
+const recordSyncFailure = (message: string, schemaMismatch: boolean): SyncFailure => {
+  lastSyncFailure = {
+    message,
+    at: new Date(),
+    schemaMismatch,
+    consecutive: (lastSyncFailure?.consecutive ?? 0) + 1,
+  };
+  return lastSyncFailure;
+};
 
 // Lo que hay que hacer DESPUÉS de un pull que de verdad ha traído cosas.
 //
@@ -874,7 +972,16 @@ export const onSyncCompleted = (task: () => Promise<void>): void => {
 // Se avisa a TODAS las ventanas: cada una tiene su propio caché de react-query
 // (la principal y el HUD del overlay), la referencia a la principal vive en
 // main/index.ts y no aquí, y un canal que una ventana no escucha es un no-op.
-const notifyPulledChanges = (): void => {
+//
+// Se EXPORTA porque este barrido es el único emisor que debe quedar. El
+// drenado del buzón del Plan tenía el suyo propio en main/index.ts (mainWindow
+// + sendToOverlay) y los dos disparaban en el MISMO ciclo: las filas del buzón
+// llegan por pull, así que el ciclo que aplica órdenes es casi siempre uno con
+// pulled=true. El overlay es un BrowserWindow más, o sea que aquel segundo
+// emisor no añadía ni un destinatario — solo una segunda invalidación del
+// caché — y encima ya discrepaban en el criterio (este alcanza cualquier
+// ventana futura; aquel, dos conocidas).
+export const notifyPulledChanges = (): void => {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send('games:changed');
   }
@@ -924,6 +1031,26 @@ export const runSyncCycle = async (): Promise<void> => {
     // siempre antes que las filas.
     await applyPendingLocalMigrations();
 
+    // Y si el remoto quedó A MEDIO MIGRAR (ver remoteSchemaAhead), este ciclo
+    // se planta aquí: acabamos de negarnos a poner la local a la par —la
+    // puerta de connectAndMigrate lo impide mientras el push no cierre— así
+    // que seguir a pull()/push() sería replicar filas entre dos esquemas
+    // distintos, con el replicador yendo por POSICIÓN de columna. No es
+    // permanente como dataLossBlocksSync: el reintento del push de arriba lo
+    // levanta en cuanto Turso acepte lo que le falta.
+    if (remoteSchemaAhead) {
+      const failure = recordSyncFailure(
+        'Turso se quedó a medio migrar: no se sincronizan filas hasta que se apliquen las migraciones que le faltan.',
+        true,
+      );
+      if (failure.consecutive === 1) {
+        console.warn(
+          '[db] remoto a medio migrar: ni pull ni push hasta que las migraciones que faltan entren en Turso',
+        );
+      }
+      return;
+    }
+
     const db = getDb();
     // pull() devuelve si de verdad ha aplicado cambios: sin eso, avisar en
     // cada tic de 60s invalidaría el caché entero de la ventana un minuto sí
@@ -946,16 +1073,14 @@ export const runSyncCycle = async (): Promise<void> => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const lower = message.toLowerCase();
-    lastSyncFailure = {
+    const failure = recordSyncFailure(
       message,
-      at: new Date(),
-      schemaMismatch: SCHEMA_MISMATCH_HINTS.some((hint) => lower.includes(hint)),
-      consecutive: (lastSyncFailure?.consecutive ?? 0) + 1,
-    };
+      SCHEMA_MISMATCH_HINTS.some((hint) => lower.includes(hint)),
+    );
     // Solo el PRIMERO de una racha va a consola: este ciclo corre cada minuto
     // y un fallo persistente llenaba el log de la misma línea repetida, que
     // es justo lo que hace que se deje de leer.
-    if (lastSyncFailure.consecutive === 1) {
+    if (failure.consecutive === 1) {
       console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
     }
   } finally {

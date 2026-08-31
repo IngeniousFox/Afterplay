@@ -6,13 +6,14 @@ import {
   sessionsTable,
   stateEventsTable,
 } from '../../../src/main/db/schema';
+import { lastPlayedAtFor } from '../../../src/shared/lastPlayedAt';
 import {
   isAddedAtArtifact,
   latestRealStateEvent,
   manualHoursAnchor,
 } from '../../../src/shared/playthroughState';
 import { yearOf } from '../../../src/shared/yearOf';
-import type { LibraryGame, StateType } from '../api-types';
+import type { LibraryGame, PlannedGame, StateType } from '../api-types';
 import type { TenantDb } from '../db';
 import { isSessionLive } from './timer';
 
@@ -116,6 +117,7 @@ export const buildLibraryData = async (
           coverUrl: gamesTable.coverUrl,
           releaseYear: gamesTable.releaseYear,
           addedAt: gamesTable.addedAt,
+          promotedAt: gamesTable.promotedAt,
         })
         .from(gamesTable)
         .where(eq(gamesTable.planned, false))
@@ -237,11 +239,18 @@ export const buildLibraryData = async (
     ]);
 
   const addedAtByGame = new Map(games.map((game) => [game.id, game.addedAt]));
+  // La segunda referencia del papeleo (el sello del promote) — misma regla
+  // que getGames en el escritorio, ver isAddedAtArtifact.
+  const promotedAtByGame = new Map(games.map((game) => [game.id, game.promotedAt]));
 
   const trackedSecondsByIteration = new Map<number, number>();
   const sessionCountByGame = new Map<number, number>();
   const liveSinceByGame = new Map<number, Date>();
-  const lastPlayedByGame = new Map<number, Date>();
+  // Las DOS fuentes de "última vez", cada una en su mapa: la del tracking y la
+  // del log de estados. Se funden al final con lastPlayedAtFor, no antes — ver
+  // abajo por qué mezclarlas aquí era el bug.
+  const lastSessionByGame = new Map<number, Date>();
+  const lastEventByGame = new Map<number, Date>();
   // Arranque MÁS ANTIGUO de cada playthrough: el último recurso para fechar
   // sus horas manuales cuando el log de estados no dice nada
   // (manualHoursAnchor se queda con el mínimo, así que basta con ese).
@@ -256,9 +265,9 @@ export const buildLibraryData = async (
     firstSessionByIteration.set(row.iterationId, new Date(row.firstStartedAt));
 
     const playedAt = new Date(row.lastPlayedAt);
-    const known = lastPlayedByGame.get(row.gameId);
+    const known = lastSessionByGame.get(row.gameId);
     if (!known || playedAt.getTime() > known.getTime()) {
-      lastPlayedByGame.set(row.gameId, playedAt);
+      lastSessionByGame.set(row.gameId, playedAt);
     }
   }
 
@@ -315,6 +324,7 @@ export const buildLibraryData = async (
       // Una sola fecha y no todas las de la iteración: manualHoursAnchor se
       // queda con la más antigua, así que el min() de SQL ya la ha elegido.
       firstSession ? [firstSession] : [],
+      promotedAtByGame.get(iteration.gameId),
     );
     const list = manualByGame.get(iteration.gameId) ?? [];
     list.push({
@@ -329,9 +339,17 @@ export const buildLibraryData = async (
     const latest = latestRealStateEvent(candidates);
     if (latest) stateByGame.set(gameId, latest.type as StateType);
 
-    // Respaldo de "última vez" para juegos sin ninguna sesión: un juego
-    // marcado como completado sin haberse trackeado nunca SÍ se jugó, y
-    // mirarlo solo por sesiones lo mandaría al fondo con los intactos.
+    // La otra fuente de "última vez": el log. Un juego marcado como completado
+    // sin haberse trackeado nunca SÍ se jugó, y mirarlo solo por sesiones lo
+    // mandaría al fondo con los intactos.
+    //
+    // Se mira SIEMPRE, tenga sesiones o no. Aquí había un `if
+    // (lastPlayedByGame.has(gameId)) continue;` — el `sesión ?? evento` que el
+    // escritorio ya había tirado: con una sola sesión el log dejaba de mirarse,
+    // así que un juego trackeado en enero y completado en la consola con fecha
+    // de junio salía por junio en el PC y por enero en el teléfono. La misma
+    // biblioteca ordenada de dos maneras. Quién gana lo decide ahora
+    // lastPlayedAtFor (src/shared), la misma función que llama getGames.
     //
     // El evento que escribe el alta no cuenta (isAddedAtArtifact): hereda la
     // hora del alta y convertiría "los últimos que jugué" en "los últimos que
@@ -339,14 +357,16 @@ export const buildLibraryData = async (
     // llevaba su propio ADDED_AT_TOLERANCE_MS, y una biblioteca que parta el
     // pelo distinto que el escritorio es exactamente lo que la cabecera de
     // arriba dice que este fichero existe para evitar.
-    if (lastPlayedByGame.has(gameId)) continue;
     const addedAt = addedAtByGame.get(gameId);
     for (const event of candidates) {
       if (event.type === 'plan_to_play') continue;
-      if (isAddedAtArtifact(event.occurredAt, addedAt)) continue;
-      const known = lastPlayedByGame.get(gameId);
+      if (isAddedAtArtifact(event.occurredAt, addedAt, promotedAtByGame.get(gameId))) continue;
+      // Se mira TODO el log, no solo el último: si el evento más reciente es
+      // uno de esos sin fecha propia pero un 'started' anterior sí la tiene,
+      // esa fecha sigue siendo un dato bueno que no hay que tirar.
+      const known = lastEventByGame.get(gameId);
       if (!known || event.occurredAt.getTime() > known.getTime()) {
-        lastPlayedByGame.set(gameId, event.occurredAt);
+        lastEventByGame.set(gameId, event.occurredAt);
       }
     }
   }
@@ -362,7 +382,12 @@ export const buildLibraryData = async (
         totalHours: hoursByGame.get(game.id) ?? 0,
         sessionCount: sessionCountByGame.get(game.id) ?? 0,
         currentState: stateByGame.get(game.id) ?? null,
-        lastPlayedAt: lastPlayedByGame.get(game.id)?.getTime() ?? null,
+        // La más reciente de las dos fuentes — ver lastPlayedAtFor (src/shared).
+        lastPlayedAt:
+          lastPlayedAtFor(
+            lastSessionByGame.get(game.id) ?? null,
+            lastEventByGame.get(game.id) ?? null,
+          )?.getTime() ?? null,
         isLive: liveSince !== null,
         liveSince: liveSince?.getTime() ?? null,
       };
@@ -424,29 +449,16 @@ export const findOwned = async (
 // Los juegos del Plan. Sección aparte de la biblioteca, igual que en el
 // escritorio: aquí no hay horas ni estado que derivar — un planeado es
 // intención, no historial.
-export const listPlanned = async (
-  db: TenantDb,
-): Promise<
-  {
-    id: number;
-    title: string;
-    coverUrl: string | null;
-    releaseYear: number | null;
-    releaseDate: number | null;
-    releaseDatePrecision: 'year' | 'month' | 'day' | null;
-    genres: string[] | null;
-    hltbMain: number | null;
-    endless: boolean;
-    addedAt: number;
-    pinnedAt: number | null;
-    ratingCritics: number | null;
-    ratingCriticsCount: number | null;
-    ratingUsers: number | null;
-    ratingUsersCount: number | null;
-    steamPositive: number | null;
-    steamNegative: number | null;
-  }[]
-> => {
+//
+// El tipo de vuelta es el PlannedGame del CONTRATO (api-types.ts), no una
+// lista de campos escrita aquí. Lo era, con los mismos 17 campos copiados a
+// mano, y nada ataba las dos formas: añadir un campo al contrato compilaba en
+// los dos lados y la PWA —que castea a ciegas, `request<PlannedGame[]>`— leía
+// undefined en tiempo de ejecución. Por lo mismo el objeto se construye campo
+// a campo y no con `...row`: el spread colaba en el JSON un `planPinnedAt` que
+// el contrato no declara, o sea que la respuesta ya no era el objeto que dice
+// ser.
+export const listPlanned = async (db: TenantDb): Promise<PlannedGame[]> => {
   const rows = await db
     .select({
       id: gamesTable.id,
@@ -472,9 +484,25 @@ export const listPlanned = async (
     .orderBy(sql`${gamesTable.title} collate nocase`);
 
   return rows.map((row) => ({
-    ...row,
-    addedAt: row.addedAt.getTime(),
+    id: row.id,
+    title: row.title,
+    coverUrl: row.coverUrl,
+    releaseYear: row.releaseYear,
     releaseDate: row.releaseDate ? row.releaseDate.getTime() : null,
+    releaseDatePrecision: row.releaseDatePrecision,
+    genres: row.genres,
+    hltbMain: row.hltbMain,
+    endless: row.endless,
+    addedAt: row.addedAt.getTime(),
+    // El nombre de la columna es planPinnedAt y el del contrato pinnedAt: es el
+    // único campo que se renombra al salir, y la razón de que el `...row` de
+    // antes filtrara los DOS al JSON.
     pinnedAt: row.planPinnedAt ? row.planPinnedAt.getTime() : null,
+    ratingCritics: row.ratingCritics,
+    ratingCriticsCount: row.ratingCriticsCount,
+    ratingUsers: row.ratingUsers,
+    ratingUsersCount: row.ratingUsersCount,
+    steamPositive: row.steamPositive,
+    steamNegative: row.steamNegative,
   }));
 };

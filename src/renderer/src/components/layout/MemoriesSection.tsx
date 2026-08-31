@@ -8,6 +8,7 @@ import {
 } from '../../hooks/memories';
 import { useCredentials } from '../../hooks/settings';
 import { VIOLET } from '../../lib/colors';
+import { missingKeyHint } from '../../lib/settingsTabs';
 import { SettingsCard } from './SettingsCard';
 
 // Ajustes → Your story (AFTERPLAY-LOOP.md §3.6): la tarjeta de los recaps,
@@ -39,7 +40,7 @@ export const MemoriesSection = (): React.JSX.Element => {
       const which = progress.currentLabel ? ` · ${progress.currentLabel}` : '';
       return `Writing ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${which}`;
     }
-    if (!hasKey) return 'Add your Anthropic key in API & Sync to turn this on.';
+    if (!hasKey) return missingKeyHint('Anthropic key');
     if (progress && !progress.running && progress.failed > 0)
       return `Done — ${progress.failed} of ${progress.total} failed, they stay pending for the next run.`;
     if (!status) return null;

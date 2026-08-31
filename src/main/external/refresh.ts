@@ -5,9 +5,11 @@ import { getHltbTimes } from '../hltb/api';
 import type { HltbTimes } from '../hltb/types';
 import { getGameExternalBatch, getSteamAppIds } from '../igdb/api';
 import type { ExternalRefreshSummary } from '../igdb/types';
+import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { getSteamReviewCounts, STEAM_REVIEWS_DELAY_MS } from '../steam/reviews';
 import { getSteamTags } from '../steam/tags';
 import { adoptIgdbForCandidates, findAdoptionCandidates } from './adoptIgdb';
+import { buildIgdbBatchPatch } from './igdbPatch';
 import { fillMissingSgdbIds } from './sgdbBackfill';
 import { notifyExternalActivity } from './notify';
 import { findSteamAppIdFixes } from './steamAppIdFix';
@@ -342,8 +344,10 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
 
     // Y el id de SteamGridDB de los que no lo tengan — mismo motivo que la
     // adopción de arriba: un juego dado de alta recién anunciado no tenía arte
-    // todavía, y ese "no" caduca (ver external/sgdbBackfill.ts).
-    await fillMissingSgdbIds();
+    // todavía, y ese "no" caduca (ver external/sgdbBackfill.ts). Con el
+    // ALCANCE de esta pasada: recorría la biblioteca entera incluso pulsando el
+    // botón del Plan, que promete tocar solo los planeados.
+    await fillMissingSgdbIds(scope);
 
     // ── Red, fuera del candado ──────────────────────────────────────────────
     // Solo los que TIENEN id de IGDB: a los de Steam sin ficha en IGDB no hay
@@ -425,7 +429,19 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
     // misma transacción). La lista se lee AHORA y no al principio: así un
     // juego al que el botón de su ficha ya le encontró tiempos durante esta
     // misma pasada no se re-pregunta.
-    const orphans = await selectHltbOrphans(scope);
+    //
+    // Y RECORTADA a los juegos de ESTA pasada, que no es lo mismo: la lista de
+    // huérfanos se lee ahora y `games` se leyó al principio, así que un juego
+    // dado de alta mientras corrían las reseñas (minutos, con la biblioteca
+    // entera) aparecía aquí y NO allí. Se le pedían los tiempos a HLTB —con su
+    // petición y su segundo de pausa—, hltbChecked lo contaba y el parte de
+    // Ajustes sumaba su hallazgo… y la transacción de abajo recorre `games`,
+    // así que su fila no se escribía nunca: "N tiempos recuperados" con uno de
+    // ellos todavía a null.
+    const idsInThisPass = new Set(games.map((game) => game.id));
+    const orphans = (await selectHltbOrphans(scope)).filter((orphan) =>
+      idsInThisPass.has(orphan.id),
+    );
     const hltbByGameId = new Map<number, HltbTimes>();
     let hltbChecked = 0;
     let hltbFailureStreak = 0;
@@ -539,20 +555,10 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
           await tx
             .update(gamesTable)
             .set({
-              ratingCritics: igdb.ratingCritics,
-              ratingCriticsCount: igdb.ratingCriticsCount,
-              ratingUsers: igdb.ratingUsers,
-              ratingUsersCount: igdb.ratingUsersCount,
-              summary: igdb.summary,
-              igdbCollections: igdb.igdbCollections,
-              releaseDate: igdb.releaseDate,
-              releaseDatePrecision: igdb.releaseDatePrecision,
-              // releaseYear se refresca también, pero NUNCA se pone a null: de
-              // él dependen las stats (el donut de edad) y el matching de
-              // HowLongToBeat, así que un juego al que IGDB haya dejado de
-              // ponerle fecha no puede perder el año que ya tenía.
-              ...(igdb.releaseYear !== null ? { releaseYear: igdb.releaseYear } : {}),
-              ratingsCheckedAt: now,
+              // Las columnas del lote de IGDB, con el radar semanal: las dos
+              // pasadas escriben lo MISMO y lo tenían copiado a mano (ver
+              // external/igdbPatch.ts, incluido lo de releaseYear y el null).
+              ...buildIgdbBatchPatch(igdb, now),
               ...steamFields,
               // Los tiempos repescados de los huérfanos — ver la otra rama.
               ...(hltbByGameId.get(game.id) ?? {}),
@@ -561,6 +567,33 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
         }
       }),
     );
+
+    // ── Y LOS LOGROS DE LOS APPIDS CORREGIDOS ──────────────────────────────
+    //
+    // Después de la transacción a propósito: la cola relee el appid de la base
+    // de datos, no de aquí (mismo orden que el botón de la ficha, ver el paso
+    // 5 de external/refreshGame.ts).
+    //
+    // Corregir el appid y no re-preguntar los logros era dejar la corrección a
+    // medias, y para siempre: el catálogo y los desbloqueos guardados son los
+    // del producto viejo, y la pasada de logros del arranque solo recoge a los
+    // que tienen `achievementsSyncedAt` a null (steam/backfill.ts), así que un
+    // juego ya sincronizado con el appid equivocado —el remake que llevaba el
+    // appid del original de 2015— no volvía a entrar jamás salvo pulsando
+    // "Sync now" a mano. Las etiquetas y las reseñas ya se re-piden aquí
+    // arriba; esto es la tercera cosa que cuelga del appid.
+    //
+    // notify: false porque esto es una pasada masiva y los avisos flotantes
+    // son para lo que ACABA de pasar, no para logros de hace años (mismo
+    // criterio que el alta y que el resto de barridos).
+    for (const gameId of correctedGameIds) {
+      // Con su propio catch: la transacción ya escribió todo, y un tropiezo
+      // encolando no puede convertir la pasada entera en "no se pudo".
+      await queueAchievementsRefreshForGame(gameId, { notify: false }).catch((error: unknown) => {
+        console.warn(`[steam] no se pudieron re-encolar los logros del juego ${gameId}:`, error);
+        return false;
+      });
+    }
 
     summary = {
       total: games.length,

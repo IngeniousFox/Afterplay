@@ -15,9 +15,16 @@ import { vacuumInto } from './backupCore';
 // Nombre con fecha Y hora (no solo fecha) porque, a diferencia de la
 // diaria, aquí no hay ningún criterio de "ya se hizo hoy" que evite un
 // choque de nombres si se pulsa el botón dos veces seguidas.
+//
+// Y con "manual" en el nombre, no "backup": el usuario elige la carpeta y
+// nada le impide elegir la de las automáticas (userData/backups). Ahí dentro
+// las dos familias tienen que distinguirse a simple vista y por patrón —
+// dailyBackup solo reconoce las suyas por el sello AAAA-MM-DD_HH-mm—, porque
+// mientras compartieron pinta esta copia se colaba en el censo de las
+// automáticas y le rompía el intervalo y la rotación.
 export const createManualBackup = async (directory: string): Promise<string> => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filePath = join(directory, `Afterplay-backup-${timestamp}.db`);
+  const filePath = join(directory, `Afterplay-manual-${timestamp}.db`);
 
   if (existsSync(filePath)) {
     throw new Error('Ya existe una copia con ese nombre — inténtalo de nuevo en un momento.');

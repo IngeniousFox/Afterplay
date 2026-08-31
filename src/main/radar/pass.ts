@@ -4,6 +4,7 @@ import { getDb, withDbAccess } from '../db';
 import { gamesTable, radarGamesTable } from '../db/schema';
 import { getGameExternalBatch, getUpcomingCollectionGames } from '../igdb/api';
 import { adoptIgdbForCandidates, findAdoptionCandidates } from '../external/adoptIgdb';
+import { buildIgdbBatchPatch } from '../external/igdbPatch';
 import { fillMissingSgdbIds } from '../external/sgdbBackfill';
 import { isExternalRefreshRunning, startExternalRefresh } from '../external/refresh';
 import { notifyRadarActivity } from './notify';
@@ -145,20 +146,13 @@ const refreshMembership = async (): Promise<number[]> => {
       for (const game of inIgdb) {
         const data = byIgdbId.get(game.igdbId);
         if (!data) continue;
+        // Las mismas columnas que escribe el refresco de biblioteca, por el
+        // MISMO helper: las dos pasadas piden este lote y lo guardaban con la
+        // lista copiada a mano, y el radar lanza a la otra justo después (ver
+        // external/igdbPatch.ts).
         await tx
           .update(gamesTable)
-          .set({
-            igdbCollections: data.igdbCollections,
-            ratingCritics: data.ratingCritics,
-            ratingCriticsCount: data.ratingCriticsCount,
-            ratingUsers: data.ratingUsers,
-            ratingUsersCount: data.ratingUsersCount,
-            summary: data.summary,
-            releaseDate: data.releaseDate,
-            releaseDatePrecision: data.releaseDatePrecision,
-            ...(data.releaseYear !== null ? { releaseYear: data.releaseYear } : {}),
-            ratingsCheckedAt: now,
-          })
+          .set(buildIgdbBatchPatch(data, now))
           .where(eq(gamesTable.id, game.id));
       }
     }),
@@ -322,8 +316,9 @@ const findAnnounced = async (collectionIds: number[]): Promise<number> => {
 // index.ts es el mismo patrón): startExternalRefresh SÍ
 // puede rechazar —su SELECT de juegos corre antes de soltar el trabajo de
 // fondo— y esa promesa cae fuera del try de runRadarPass, que promete no
-// lanzar nunca. Ese rechazo es además el que puede dejar el candado ajeno
-// tomado para siempre; de eso se ocupa la válvula del final de runRadarPass.
+// lanzar nunca. Ese rechazo YA NO deja el candado ajeno tomado: refresh.ts lo
+// suelta en su propio catch antes de relanzar (ver la válvula del final de
+// runRadarPass, donde está la historia entera).
 const claimExternalRefresh = (): boolean => {
   if (isExternalRefreshRunning()) return false;
   void startExternalRefresh('all').catch((error: unknown) => {
@@ -384,15 +379,22 @@ export const runRadarPass = async (force = false): Promise<RadarPassResult | nul
     // del 9-ago vino a arreglar.
     //
     // PERO "NO SELLAR NUNCA" TAMPOCO VALE, y esta es la cicatriz de la primera
-    // versión de este arreglo. El candado es de otro módulo y puede quedarse
-    // TOMADO PARA SIEMPRE: startExternalRefresh pone su `running = true` antes
-    // de leer los juegos y no lo suelta en un finally, así que si ese SELECT
-    // rechaza —el mismo rechazo que atrapa el .catch de claimExternalRefresh—
-    // se queda en true hasta que se reinicie el proceso, y esta app vive
-    // semanas en la bandeja. Atado a él sin más, esto no sellaba jamás y el
-    // tic horario (index.ts) disparaba la pasada COMPLETA cada hora para
-    // siempre. Y sale cara: repetirla es idempotente —los descubrimientos ya
-    // están en la tabla, `fresh` sale 0 y no se vuelve a avisar de nada— pero
+    // versión de este arreglo. Nació de un candado que se quedaba TOMADO PARA
+    // SIEMPRE: startExternalRefresh ponía su `running = true` antes de leer los
+    // juegos y no lo soltaba si ese SELECT rechazaba, así que se quedaba en
+    // true hasta reiniciar el proceso — y esta app vive semanas en la bandeja.
+    // ESO YA ESTÁ ARREGLADO EN SU SITIO (external/refresh.ts envuelve el
+    // SELECT en un try que suelta el candado, avisa con su evento 'done' y
+    // relanza), así que hoy lo único que deja esta mitad sin arrancar es una
+    // COLISIÓN legítima: otra pasada en marcha, normalmente la del Plan.
+    //
+    // La válvula se queda igualmente, y no por inercia: el candado es de otro
+    // módulo y esto no puede volver a depender de que allí no se cuele nunca
+    // una salida sin soltarlo. Atado a él sin más, si eso pasara esto no
+    // sellaría jamás y el tic horario (index.ts) dispararía la pasada COMPLETA
+    // cada hora para siempre. Y sale cara: repetirla es idempotente —los
+    // descubrimientos ya están en la tabla, `fresh` sale 0 y no se vuelve a
+    // avisar de nada— pero
     // no es gratis, y aquí llegó a decir que sí lo era: son otra vez la
     // adopción de IGDB + el relleno de ids de SteamGridDB + el lote de IGDB de
     // toda la biblioteca (esas sí, 1-2 peticiones) + una petición de anuncios
@@ -402,12 +404,13 @@ export const runRadarPass = async (force = false): Promise<RadarPassResult | nul
     //
     // De ahí la válvula: se aguanta sin sellar MAX_UNSEALED_PASSES veces
     // seguidas y a la siguiente se sella igual. Tres reintentos cubren de
-    // sobra la colisión de verdad (una pasada del Plan dura segundos, así que
-    // el tic de dentro de una hora la encuentra libre); si a la cuarta sigue
-    // ocupado no es una colisión, es un candado encallado, y esperar más no lo
-    // va a soltar. El contador se pone a cero al sellar: si dentro de una
-    // semana sigue encallado se vuelven a gastar los tres intentos, que es el
-    // precio de no dar por perdida una colisión legítima.
+    // sobra la colisión de verdad (una pasada del Plan dura segundos y la de
+    // biblioteca entera minutos, así que el tic de dentro de una hora la
+    // encuentra libre); si a la cuarta sigue ocupado ya no es una colisión —es
+    // un candado que alguien no ha soltado— y esperar más no lo va a soltar.
+    // El contador se pone a cero al sellar: si dentro de una semana sigue
+    // ocupado se vuelven a gastar los tres intentos, que es el precio de no
+    // dar por perdida una colisión legítima.
     //
     // ALCANCE HONESTO: todo esto cubre "no llegó a ARRANCAR". Un refresco que
     // arranca y se muere a mitad (fallo de red dentro de su propia pasada)

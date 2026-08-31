@@ -196,26 +196,12 @@ export const relativeDay = (ms: number): string => {
   return `${humanizeShort(days)} ago`;
 };
 
-// Cabecera de un GRUPO de sesiones, que no es lo mismo que "hace cuánto fue".
-//
-// relativeDay redondea a propósito, y como texto suelto está bien. Pero al
-// encabezar grupos, tres días distintos de la misma semana salían los tres
-// como "1 week ago", uno detrás de otro: el redondeo que hace amable una frase
-// vuelve ilegible una lista. Solo los dos días con nombre propio lo conservan.
-export const dayHeading = (ms: number): string => {
-  const days = Math.round((startOfDayMs(new Date()) - startOfDayMs(ms)) / DAY_MS);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-
-  const date = new Date(ms);
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    ...(sameYear ? {} : { year: 'numeric' }),
-  });
-};
+// Aquí vivía `dayHeading`, una segunda escala de etiquetas de día (Today /
+// Yesterday / la fecha suelta) que no llamaba nadie. Las cabeceras de grupo de
+// Sesiones las pinta lib/sessionGroups.ts, que es el gemelo portado del
+// escritorio y el que vigila el test de paridad — y esta escala es justo la
+// que él descartó por no coincidir con la de allí (ver su cabecera). Borrada:
+// tenerla exportada era invitar a usarla creyendo que era la buena.
 
 // La fecha de salida, con la HONESTIDAD de siempre: IGDB devuelve un timestamp
 // concreto incluso cuando solo conoce el año, así que sin la precisión al lado

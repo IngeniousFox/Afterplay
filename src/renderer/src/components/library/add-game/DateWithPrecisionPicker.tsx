@@ -6,14 +6,13 @@ import { Calendar } from '../../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { CalendarDropdown, CalendarDropdownGroup } from './CalendarDropdown';
 import { MonthGrid } from './MonthGrid';
-import { CURRENT_YEAR, parseIsoDate, TODAY, toIsoDate } from './precisionDate';
+import { currentYear, parseIsoDate, today, toIsoDate } from './precisionDate';
 import type { DatePrecision, PrecisionDateValue } from './precisionDate';
 import { YearGrid } from './YearGrid';
 
 export type { DatePrecision, PrecisionDateValue } from './precisionDate';
 
 const CALENDAR_START_MONTH = new Date(1970, 0);
-const CALENDAR_END_MONTH = new Date(CURRENT_YEAR, 11);
 
 type DateWithPrecisionPickerProps = {
   label: string;
@@ -50,6 +49,11 @@ export const DateWithPrecisionPicker = ({
   const [pendingPrecision, setPendingPrecision] = useState<DatePrecision>('day');
   const [open, setOpen] = useState(false);
   const precision = value?.precision ?? pendingPrecision;
+  // El tope se calcula en cada render y no una vez al importar el módulo: con
+  // la app abierta de un día para otro, un calendario topado al arranque
+  // dejaba HOY deshabilitado (y en enero, el año nuevo fuera del rango).
+  const maxDate = today();
+  const calendarEndMonth = new Date(currentYear(), 11);
 
   return (
     <div className="flex-1">
@@ -113,8 +117,8 @@ export const DateWithPrecisionPicker = ({
                   // así el popover no cambia de lado mes a mes.
                   fixedWeeks
                   startMonth={CALENDAR_START_MONTH}
-                  endMonth={CALENDAR_END_MONTH}
-                  disabled={{ after: TODAY }}
+                  endMonth={calendarEndMonth}
+                  disabled={{ after: maxDate }}
                   components={{ Dropdown: CalendarDropdown }}
                   selected={value ? parseIsoDate(value.isoDate) : undefined}
                   // Sin esto, aunque `selected` ya tenga una fecha, react-day-

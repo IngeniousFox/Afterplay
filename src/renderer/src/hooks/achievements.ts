@@ -133,7 +133,7 @@ export const useRefreshGameAchievements = (
 type AchievementsProgress = Extract<AchievementActivityEvent, { kind: 'progress' }>;
 
 // EL refresco de las queries de logros, montado UNA vez en la raíz de la app
-// (Afterplay.tsx) — igual que useCuriositiesActivity y por el mismo motivo
+// (Afterplay.tsx) — igual que useCuriositiesActivitySync y por el mismo motivo
 // escrito allí: la sincronización ocurre de fondo estés donde estés, y quien
 // la escuchaba antes era solo la tarjeta de Ajustes. Con el modal cerrado,
 // nadie invalidaba nada; y como las queries de logros son staleTime Infinity,
@@ -195,22 +195,52 @@ export const useAchievementsActivitySync = (): void => {
 // Exportado aparte del hook porque el estado de la racha vive en el cierre (no
 // hace falta un useRef para algo que nadie repinta) y porque así la cuenta de
 // consultas por aviso se puede medir sin montar React.
+//
+// Y hay un SEGUNDO inquilino, que es de dónde sale `shouldRefetch`: el HUD del
+// overlay (overlay/OverlayHud.tsx). Es otra ventana con su propio QueryClient y
+// llevaba una copia a mano de esta regla que no distinguía pasada de aviso
+// suelto — con el HUD abierto, cada uno de los 957 'synced' de una pasada
+// invalidaba el prefijo entero con refetch, así que el catálogo del juego EN
+// MARCHA (9 ms y 1.348 filas cruzando el IPC en Payday 2) se volvía a pedir una
+// vez por juego sincronizado. Lo único que de verdad es suyo es CUÁNDO se puede
+// pedir: con el telón bajado no se pide nada (OVERLAY.md §9.1, Regla 1: "oculto
+// = coste cero"), y ahí no vale con que el componente devuelva null — sus
+// queries siguen montadas, o sea ACTIVAS, así que un refetchType 'active' las
+// refetchearía igual. Ese es el knob, y solo ese: el QUÉ se invalida sigue
+// siendo esta regla, la de la casa, en un único sitio.
 export const createAchievementsActivityInvalidator = (
   queryClient: QueryClient,
+  // Si en ESTE instante se puede refrescar o solo marcar. Se pregunta por
+  // evento en vez de recibir un booleano porque quien lo usa cambia de opinión
+  // (el telón del overlay sube y baja), y recrear el invalidador para
+  // enterarse le borraría el `passRunning` de su cierre: a media pasada, cada
+  // 'synced' volvería a contar como suelto y con él volvería el barrido ancho
+  // que esta regla existe para evitar.
+  shouldRefetch: () => boolean = () => true,
 ): ((event: AchievementActivityEvent) => void) => {
   let passRunning = false;
+  // 'active' es exactamente lo que hace invalidateQueries por defecto
+  // (queryClient.js: refetchType ?? type ?? 'active'), así que quien no pasa
+  // knob —la ventana principal— se comporta igual que siempre.
+  const refetchType = (): 'active' | 'none' => (shouldRefetch() ? 'active' : 'none');
 
   return (event: AchievementActivityEvent): void => {
     if (event.kind === 'progress') {
       passRunning = event.running;
       if (!event.running) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.achievements.all,
+          refetchType: refetchType(),
+        });
       }
       return;
     }
 
     if (!passRunning) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.achievements.all,
+        refetchType: refetchType(),
+      });
       return;
     }
 
@@ -219,7 +249,10 @@ export const createAchievementsActivityInvalidator = (
     // borraría el `isInvalidated: false` que le acaba de dejar su refetch —
     // la ficha se quedaría marcada vieja y volvería a pedirse al primer foco.
     queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all, refetchType: 'none' });
-    queryClient.invalidateQueries({ queryKey: queryKeys.achievements.game(event.gameId) });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.achievements.game(event.gameId),
+      refetchType: refetchType(),
+    });
   };
 };
 

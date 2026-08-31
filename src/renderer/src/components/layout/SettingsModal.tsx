@@ -19,6 +19,7 @@ import {
   useTimeFormat,
 } from '../../hooks/settings';
 import { AMBER, BLUE, GRAY, GREEN, TEAL, VIOLET } from '../../lib/colors';
+import { KEYS_TAB } from '../../lib/settingsTabs';
 import { revealClass, revealStyle } from '../../lib/styles';
 import { CheckboxRow } from '../library/add-game/CheckboxRow';
 import { ModalShell } from '../ui/modal-shell';
@@ -77,7 +78,10 @@ const TABS: Tab[] = [
   },
   {
     id: 'connections',
-    label: 'Connections',
+    // Del sitio compartido: las tarjetas que dicen "te falta esta clave"
+    // mandan aquí por su nombre, y ya hubo un rebautizo que las dejó
+    // apuntando a una pestaña inexistente (ver lib/settingsTabs).
+    label: KEYS_TAB,
     blurb: 'Your API keys, and the cloud sync that ties your PCs together.',
     icon: KeyRound,
     color: BLUE,
@@ -127,10 +131,26 @@ export const SettingsModal = ({
   const setTimeFormat = useSetTimeFormat();
   const { data: appVersion } = useAppVersion();
 
-  // Radix desmonta el contenido al cerrar, así que esto se re-evalúa en cada
-  // apertura: normalmente General, y Connections si venimos del primer
-  // arranque sin claves.
+  // La pestaña abierta. El inicializador NO basta para aterrizar en
+  // Connections en el primer arranque, y esto costó un modal mudo: NavRail
+  // renderiza este componente SIEMPRE (no solo cuando está abierto), así que
+  // el useState se fija en el primer render — cuando useCredentials todavía no
+  // ha resuelto y credentialsSpotlight aún vale false. Lo que Radix desmonta
+  // al cerrar son los `children` del DialogContent, no este componente (que es
+  // quien guarda el estado), así que el inicializador tampoco vuelve a correr
+  // cuando llegan las claves: en una instalación virgen Ajustes se abría solo
+  // en General, sin el aviso de bienvenida ni el grupo de IGDB desplegado.
+  //
+  // De ahí el centinela: ajustar-estado-durante-render (sin useEffect), el
+  // patrón que usa el resto de la app, para SINCRONIZAR con la prop cuando
+  // cambia. Solo empuja al encenderse el spotlight — al apagarse deja la
+  // pestaña donde la tuvieras.
   const [tabId, setTabId] = useState<TabId>(credentialsSpotlight ? 'connections' : 'general');
+  const [spotlightSeen, setSpotlightSeen] = useState(credentialsSpotlight);
+  if (credentialsSpotlight !== spotlightSeen) {
+    setSpotlightSeen(credentialsSpotlight);
+    if (credentialsSpotlight) setTabId('connections');
+  }
   const tab = TABS.find((candidate) => candidate.id === tabId) ?? TABS[0];
 
   return (

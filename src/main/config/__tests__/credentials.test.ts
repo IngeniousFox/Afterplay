@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
@@ -17,7 +17,8 @@ import type { CredentialsValues } from '../../../shared/types';
 //   3. Importar FUSIONA: un fichero con una sola clave no borra las demás.
 //   4. Lo importado se vuelve a CIFRAR (el traslado va en claro, el reposo no).
 //   5. Un fichero que no es de esto falla y deja lo que había intacto.
-//   6. El fichero soltado en la carpeta de datos: se aplica, se retira, y se
+//   6. El fichero soltado en la carpeta de datos: se aplica, se BORRA (va en
+//      claro, así que renombrarlo dejaba las claves legibles para siempre) y se
 //      cuenta UNA vez — y si está roto se queda donde está para corregirlo.
 //
 // QUE ES REAL Y QUE ES DOBLE: el módulo es el de verdad, escribiendo ficheros
@@ -226,8 +227,12 @@ describe('el fichero soltado en la carpeta de datos', () => {
     return ruta;
   };
 
-  it('se aplica en el arranque, se retira y se cuenta una sola vez', () => {
-    const ruta = soltar(JSON.stringify({ keys: { TWITCH_CLIENT_ID: 'del-fichero' } }));
+  it('se aplica en el arranque, se BORRA y se cuenta una sola vez', () => {
+    const ruta = soltar(
+      JSON.stringify({
+        keys: { TWITCH_CLIENT_ID: 'del-fichero', DATABASE_AUTH_TOKEN: 'token-secreto' },
+      }),
+    );
 
     credenciales.initCredentials();
 
@@ -236,9 +241,20 @@ describe('el fichero soltado en la carpeta de datos', () => {
     // Retirado: si se quedara, cada arranque volveria a pisar lo que hayas
     // cambiado en Ajustes desde entonces.
     assert.ok(!existsSync(ruta));
-    assert.ok(existsSync(`${ruta}.imported.bak`));
+    // Y retirado quiere decir BORRADO, no renombrado. Esto fijaba lo contrario
+    // (`existsSync(`${ruta}.imported.bak`)`), y ese .bak era el fichero EN
+    // CLARO entero —token de Turso incluido— quedandose para siempre en la
+    // carpeta de datos, justo al lado del credentials.json que se cifra para
+    // que esos valores no esten legibles en reposo.
+    assert.ok(!existsSync(`${ruta}.imported.bak`));
+    assert.deepEqual(
+      readdirSync(userDataDir).filter((nombre) => nombre.includes('afterplay-keys')),
+      [],
+      'ninguna copia legible del fichero de claves sobrevive al arranque',
+    );
+    assert.equal(credenciales.getCredentials().databaseAuthToken, 'token-secreto');
 
-    assert.deepEqual(credenciales.takeStartupKeysImport(), { ok: true, imported: 1 });
+    assert.deepEqual(credenciales.takeStartupKeysImport(), { ok: true, imported: 2 });
     // Y una sola vez: el aviso ya se dio, un segundo montaje no lo repite.
     assert.equal(credenciales.takeStartupKeysImport(), null);
   });

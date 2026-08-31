@@ -12,6 +12,7 @@ import { useImageSrc } from '../hooks/useImageSrc';
 import { useLiveTimer } from '../hooks/useLiveTimer';
 import { formatElapsed, formatHours } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
+import { hasMeasuredDuration } from '../lib/sessionStats';
 import { useTvBackdrop } from './backdropContext';
 import { useTvFocusable } from './focusContext';
 import { forgetHome, recallHome, rememberHome } from './screenMemory';
@@ -497,11 +498,19 @@ export const TvHome = (): React.JSX.Element => {
   }, [games, stateEvents]);
 
   // Los números DEL MES en curso: la sala también cuenta lo que llevas.
+  //
+  // hasMeasuredDuration y no "endedAt !== null" a secas: el predicado de la
+  // casa descarta además las sesiones manuales del modelo antiguo, que pueden
+  // llevar precisión de solo mes o año (ver lib/sessionStats). Sin él, una
+  // fila heredada de 60 h fechada el día 1 hacía que el salón anunciara
+  // "AUGUST SO FAR: 60h" mientras la barra de agosto de Hours per month, en
+  // Stats, seguía a cero — dos pantallas de la misma app dando cifras
+  // distintas del mismo mes.
   const monthStats = useMemo(() => {
     const now = new Date();
     const rows = sessions.filter(
       (session) =>
-        session.endedAt !== null &&
+        hasMeasuredDuration(session) &&
         session.startedAt.getMonth() === now.getMonth() &&
         session.startedAt.getFullYear() === now.getFullYear(),
     );

@@ -276,11 +276,21 @@ test('sin R2 configurado, nada es reclamable ni se borra — es la unica copia',
   knownNames = []; // aunque "Ghost Game" sería huérfana según el índice...
   ownEntries = [{ ludusaviName: 'Alive Game', backupName: 'backup-1.zip', sizeBytes: 1000 }];
 
+  const mappingAlive = mappingSize('Alive Game');
+  const mappingGhost = mappingSize('Ghost Game');
+
   const usage = await getLocalBackupsUsage();
-  // getOwnBackupEntries ni se llama (r2Configured=false), así que nada
-  // aparece como sincronizado — pero el barrido de huérfanas SÍ sigue
-  // funcionando (no depende de R2, solo de qué reconoce la biblioteca/índice).
+  // getOwnBackupEntries ni se llama (r2Configured=false), asi que nada
+  // aparece como sincronizado. Y las huerfanas TAMPOCO cuentan: sin nube son
+  // la unica copia que existe de esa partida, y el barrido de aqui abajo sale
+  // en seco, asi que sumarlas solo servia para encender el boton de Ajustes
+  // con un numero que ninguna accion podia hacer bueno.
   assert.equal(usage.reclaimableBytes, 0);
+  assert.equal(usage.orphanFolders, 0);
+  assert.equal(usage.orphanBytes, 0);
+  // Lo que ocupa el disco se sigue diciendo entero: la puerta es sobre lo
+  // prescindible, no sobre el censo.
+  assert.equal(usage.totalBytes, 1777 + mappingAlive + mappingGhost);
 
   const result = await cleanLocalBackups();
   // cleanLocalBackups sale en seco sin R2: ni borra sincronizadas ni huérfanas.

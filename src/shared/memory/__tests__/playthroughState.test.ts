@@ -265,6 +265,22 @@ describe('isAddedAtArtifact — el papeleo del alta no es una jugada', () => {
     assert.equal(isAddedAtArtifact(cercaDelAlta(37), null), false);
     assert.equal(isAddedAtArtifact(cercaDelAlta(37), undefined), false);
   });
+
+  it('el papeleo del PROMOTE se reconoce contra promotedAt, no contra addedAt', () => {
+    // El agujero que trajo la segunda referencia: planeas en enero (addedAt),
+    // promocionas en agosto marcando Beaten SIN fechas — el 'completed' nace
+    // en la transacción del promote, a meses de addedAt, y pasaba por jugada
+    // real de hoy. promotedAt se sella en esa misma transacción, así que el
+    // papeleo cae dentro de su margen igual que el del alta cae en el suyo.
+    const PROMOTE = new Date('2026-08-26T18:00:00');
+    const papeleoDelPromote = new Date(PROMOTE.getTime() + 41);
+    assert.equal(isAddedAtArtifact(papeleoDelPromote, ALTA), false);
+    assert.equal(isAddedAtArtifact(papeleoDelPromote, ALTA, PROMOTE), true);
+    // Y las dos referencias conviven: el papeleo del ALTA sigue cayendo.
+    assert.equal(isAddedAtArtifact(cercaDelAlta(37), ALTA, PROMOTE), true);
+    // Un juego nunca promocionado (promotedAt null) responde como siempre.
+    assert.equal(isAddedAtArtifact(papeleoDelPromote, ALTA, null), false);
+  });
 });
 
 describe('manualHoursAnchor — a qué año van unas horas que nadie midió', () => {

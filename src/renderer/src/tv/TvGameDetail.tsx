@@ -291,8 +291,15 @@ const StatusPicker = ({
     try {
       const activeIteration = startedIteration(game.iterations);
       const lastIt = lastIteration(game.iterations);
+      // El `!game.endless` no es un detalle: un endless no tiene playthroughs
+      // discretos, así que volver a Playing tras un Dropped (desenlace que
+      // ENDLESS_STATUS_OPTIONS sí ofrece) retoma SIEMPRE su contenedor único.
+      // Sin él, el mismo gesto que en la ficha de escritorio reutiliza la
+      // iteración existente aquí abría un "Playthrough 2" en un juego cuyo
+      // modelo entero es que solo hay uno. Misma regla que StatusCard y que
+      // resolveIterationForPlay en el main (el camino del watcher/Play).
       const needsNewIteration =
-        !activeIteration && (!lastIt || (isTerminal(lastIt) && key === 'playing'));
+        !activeIteration && (!lastIt || (isTerminal(lastIt) && key === 'playing' && !game.endless));
 
       let iterationId = needsNewIteration ? undefined : (activeIteration?.id ?? lastIt?.id);
       if (!iterationId) {

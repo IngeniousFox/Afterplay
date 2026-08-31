@@ -5,6 +5,7 @@ import { gamesTable } from '../db/schema';
 import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
 import type { GameRatings, RatingsRefreshResult } from '../igdb/types';
 import type { UpdateGamePatch } from '../../shared/types';
+import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { getSteamReviewCounts } from '../steam/reviews';
 import { findSteamAppIdFix } from './steamAppIdFix';
 
@@ -19,7 +20,9 @@ import { findSteamAppIdFix } from './steamAppIdFix';
 //
 // Sigue SIN ser el botón de "actualiza este juego entero" (ese está en la
 // barra de acciones, ver refreshGame.ts): aquí no entran ni HowLongToBeat ni
-// los logros, que no son notas y no salen en esta card.
+// los logros, que no son notas y no salen en esta card. La única vez que esto
+// roza los logros es cuando el appid resulta ser de OTRO producto y se
+// corrige — ver el final, donde se explica por qué eso no es refrescarlos.
 //
 // De paso guarda todo lo que el detalle de IGDB ya trae en la MISMA respuesta
 // —sinopsis, sagas, fecha completa con su precisión— porque pedirlo cuesta
@@ -159,6 +162,27 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
 
   if (Object.keys(patch).length > 0) {
     await withDbAccess(async () => updateGame(gameId, patch));
+  }
+
+  // Y si el appid ha CAMBIADO DE PRODUCTO, sus logros también son de otro
+  // juego. Esto no contradice lo de arriba —este botón sigue sin refrescar
+  // logros—: no se re-piden porque toque ponerlos al día, se re-piden porque
+  // la identidad de Steam de la que cuelgan ya no es la misma, igual que dos
+  // líneas más arriba se tiran las reseñas del producto viejo.
+  //
+  // Y hace falta AQUÍ porque nadie más lo va a hacer: la pasada de logros del
+  // arranque solo recoge a los que tienen `achievementsSyncedAt` a null
+  // (steam/backfill.ts), y la revisión de appids de las otras dos rutas ya no
+  // encontrará nada que corregir en este juego — el appid quedó bueno. Sin
+  // esto, la sección de logros enseñaría el catálogo del otro juego para
+  // siempre. Después de escribir, que es cuando la cola relee el appid de la
+  // base de datos. notify: false, mismo criterio que el botón de la ficha:
+  // estás mirando este juego y no hace falta un aviso flotante.
+  if (correctedAppId) {
+    await queueAchievementsRefreshForGame(gameId, { notify: false }).catch((error: unknown) => {
+      console.warn('[refresh] no se pudieron re-encolar los logros del appid corregido:', error);
+      return false;
+    });
   }
 
   return { ratings, steam };

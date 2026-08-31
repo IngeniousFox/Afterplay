@@ -130,8 +130,24 @@ const ADDED_AT_TOLERANCE_MS = 5_000;
 
 // Sin `addedAt` no hay con qué comparar, y "no lo sé" es NO artefacto: tirar
 // un evento por si acaso pierde una fecha buena, que es peor.
-export const isAddedAtArtifact = (occurredAt: Date, addedAt: Date | null | undefined): boolean =>
-  addedAt != null && Math.abs(occurredAt.getTime() - addedAt.getTime()) < ADDED_AT_TOLERANCE_MS;
+//
+// DOS referencias y no una desde que existe promotedAt: el papeleo tiene dos
+// puertas. El alta escribe sus eventos en la misma transacción que addedAt —
+// pero PROMOCIONAR un Plan to Play escribe el mismo papeleo meses después,
+// cuando addedAt (la fecha de cuando lo planeaste, protegida por test) ya no
+// puede reconocerlo: un planeado viejo promocionado como Beaten sin fechas
+// pasaba por jugada real de HOY — arriba de "Last played", horas manuales en
+// el año en curso, capítulo del Loop. promotedAt (games.promotedAt, sellado
+// en la transacción del promote) es la segunda referencia, con el mismo
+// margen. Opcional por lo mismo de siempre: quien lo tenga, que lo pase.
+export const isAddedAtArtifact = (
+  occurredAt: Date,
+  addedAt: Date | null | undefined,
+  promotedAt?: Date | null,
+): boolean =>
+  (addedAt != null && Math.abs(occurredAt.getTime() - addedAt.getTime()) < ADDED_AT_TOLERANCE_MS) ||
+  (promotedAt != null &&
+    Math.abs(occurredAt.getTime() - promotedAt.getTime()) < ADDED_AT_TOLERANCE_MS);
 
 // A qué momento del calendario se atribuyen unas horas que nadie midió. Las
 // horas manuales no tienen fecha propia — son un número suelto en la
@@ -181,14 +197,15 @@ export const manualHoursAnchor = <T extends { type: StateEventType; occurredAt: 
   allEvents: readonly T[],
   addedAt?: Date | null,
   sessionStarts: readonly Date[] = [],
+  promotedAt?: Date | null,
 ): Date | null => {
   // Se filtra una sola vez y solo si hay con qué comparar: los dos recorridos
   // de abajo tienen que ver EXACTAMENTE el mismo log, o un artefacto colado en
   // el segundo cambiaría la respuesta cuando el primero no encuentra fin.
   const events =
-    addedAt == null
+    addedAt == null && promotedAt == null
       ? allEvents
-      : allEvents.filter((event) => !isAddedAtArtifact(event.occurredAt, addedAt));
+      : allEvents.filter((event) => !isAddedAtArtifact(event.occurredAt, addedAt, promotedAt));
 
   let latestEnd: Date | null = null;
   for (const event of events) {

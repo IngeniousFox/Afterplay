@@ -34,11 +34,25 @@ export const EditNotesModal = ({
 
   const handleClose = (): void => {
     if (updateGame.isPending) return;
+    // El componente NO se desmonta al cerrar (solo su contenido, que vive en
+    // el portal del Dialog), así que sin esto el banner de un guardado
+    // fallido reaparecería tal cual en la próxima apertura.
+    updateGame.reset();
     onOpenChange(false);
   };
 
   const handleSave = async (): Promise<void> => {
-    await updateGame.mutateAsync({ id: game.id, patch: { notes: notes.trim() || null } });
+    // Sin este try/catch la promesa rechazada se quedaba sin dueño
+    // (ModalFooter.onSubmit está tipado `() => void`) y el fallo no se veía
+    // por ningún sitio: el botón volvía de "Saving…" a "Save notes" como si
+    // nada y una nota larga recién escrita se perdía al cerrar. Ahora el
+    // rechazo se recoge y el banner de abajo lo cuenta.
+    try {
+      await updateGame.mutateAsync({ id: game.id, patch: { notes: notes.trim() || null } });
+    } catch (error) {
+      console.error('[edit-notes] fallo guardando las notas:', error);
+      return;
+    }
     onOpenChange(false);
   };
 
@@ -67,6 +81,12 @@ export const EditNotesModal = ({
           así que cada apertura lo monta de cero con la nota recién recargada;
           el key lo garantiza aunque eso cambie. */}
       <NotesEditor key={open ? 'open' : 'closed'} value={notes} onChange={setNotes} />
+
+      {updateGame.error && !updateGame.isPending && (
+        <div className="mt-4 rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+          Couldn&apos;t save your notes — {updateGame.error.message}
+        </div>
+      )}
     </ModalShell>
   );
 };

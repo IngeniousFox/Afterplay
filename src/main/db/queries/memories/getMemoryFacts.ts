@@ -31,8 +31,8 @@ export type MemoryFacts = {
   titlesByGame: Map<number, string>;
   // Un bloque por playthrough con horas manuales, anclado con la MISMA regla
   // que Stats y el Journey (manualHoursAnchor: el fin si lo hay, si no el
-  // inicio) — los capítulos deben contar lo mismo que las pantallas que
-  // tienen al lado.
+  // inicio, y si el log entero calla la primera sesión medida) — los capítulos
+  // deben contar lo mismo que las pantallas que tienen al lado.
   manualBlocks: ManualBlock[];
   // Suma por juego de esos bloques — la línea base de los hitos de horas de
   // deriveMoments (ahí no importa el ancla, solo cuánto había ya jugado).
@@ -51,6 +51,10 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     .select({
       id: sessionsTable.id,
       gameId: iterationsTable.gameId,
+      // Desde la tabla JOINEADA y no sessionsTable.iterationId: mismo valor
+      // bajo el inner join, pero el tipo sale number (no nullable) sin
+      // guardas. Lo necesita el ancla de las horas manuales, aquí abajo.
+      iterationId: iterationsTable.id,
       startedAt: sessionsTable.startedAt,
       endedAt: sessionsTable.endedAt,
       durationSec: sessionsTable.durationSec,
@@ -76,7 +80,12 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
   // cobraba un recap ("you finished thirty games in March") de un mes en el
   // que el Journey —que siempre tuvo el dato— no pinta ni una carátula.
   const games = await db
-    .select({ id: gamesTable.id, title: gamesTable.title, addedAt: gamesTable.addedAt })
+    .select({
+      id: gamesTable.id,
+      title: gamesTable.title,
+      addedAt: gamesTable.addedAt,
+      promotedAt: gamesTable.promotedAt,
+    })
     .from(gamesTable);
 
   const manualRows = await db
@@ -90,6 +99,9 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
 
   const titlesByGame = new Map(games.map((game) => [game.id, game.title]));
   const addedAtByGame = new Map(games.map((game) => [game.id, game.addedAt]));
+  // El sello del promote viaja igual que addedAt: son las dos referencias del
+  // papeleo que isMeaningfulStateEvent descarta (ver isAddedAtArtifact).
+  const promotedAtByGame = new Map(games.map((game) => [game.id, game.promotedAt]));
 
   // Cada evento sale de aquí con la fecha de alta de SU juego pegada. Es lo
   // único que le falta a isMeaningfulStateEvent para poder tirar el papeleo
@@ -98,6 +110,7 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
   const events = eventRows.map((row) => ({
     ...row,
     addedAt: addedAtByGame.get(row.gameId) ?? null,
+    promotedAt: promotedAtByGame.get(row.gameId) ?? null,
   }));
 
   // Eventos agrupados por playthrough, para calcular el ancla de cada bloque
@@ -110,11 +123,24 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     eventsByIteration.set(event.iterationId, list);
   }
 
+  // El arranque de la PRIMERA sesión de cada playthrough: la tercera pista de
+  // manualHoursAnchor, la que faltaba aquí. Sale del mismo array de sesiones
+  // que ya está en memoria —no hay que volver a la DB— y se manda UNA sola
+  // fecha porque el helper se queda con la más antigua de las que le pasen.
+  const firstSessionByIteration = new Map<number, Date>();
+  for (const session of sessions) {
+    const known = firstSessionByIteration.get(session.iterationId);
+    if (!known || session.startedAt.getTime() < known.getTime()) {
+      firstSessionByIteration.set(session.iterationId, session.startedAt);
+    }
+  }
+
   const manualBlocks: ManualBlock[] = [];
   const manualHoursByGame = new Map<number, number>();
   for (const row of manualRows) {
     const hours = row.hours ?? 0;
     if (hours <= 0) continue;
+    const firstSessionAt = firstSessionByIteration.get(row.iterationId);
     manualBlocks.push({
       gameId: row.gameId,
       hours,
@@ -122,9 +148,18 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
       // que escribió el alta no pertenecen a ningún mes (anchor null), igual
       // que ese evento no abre capítulo. Si no, el capítulo del mes en curso
       // se llevaba las 200 horas de un juego que llevas años sin tocar.
+      //
+      // Y la primera sesión detrás, como en getGames: sin ella el juego que
+      // el watcher detectó solo (sesiones sí, log de estados no) al que le
+      // tecleaste "ya le había echado 50 h en la otra máquina" salía con
+      // anchor null, y chapters.ts descarta los bloques sin ancla — o sea que
+      // Stats fechaba esas 50 h y el Loop no las contaba en ningún mes,
+      // teniendo delante sesiones que gritan de qué año son.
       anchor: manualHoursAnchor(
         eventsByIteration.get(row.iterationId) ?? [],
         addedAtByGame.get(row.gameId),
+        firstSessionAt ? [firstSessionAt] : undefined,
+        promotedAtByGame.get(row.gameId),
       ),
     });
     manualHoursByGame.set(row.gameId, (manualHoursByGame.get(row.gameId) ?? 0) + hours);

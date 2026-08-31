@@ -9,6 +9,23 @@ import type { TenantDb } from '../db';
 // getAllSessions trae la tabla entera y la pantalla pagina en local, porque la
 // base está en el disco de al lado y el coste es cero. Aquí cada fila cruza
 // internet hasta un móvil, así que la página se recorta antes de salir.
+//
+// QUÉ POBLACIÓN CUENTA, que no es la misma que la del resumen y conviene saber
+// antes de "arreglarlo": aquí entran TODAS las sesiones, las de los juegos del
+// Plan incluidas. No es un olvido del filtro `planned = false` que sí llevan las
+// consultas de buildLibraryData (library.ts): es lo mismo que hace el escritorio
+// —getAllSessions tampoco filtra— y la pantalla de Sesiones es un registro de lo
+// que pasó, no un inventario de la biblioteca. Devolver un juego al Plan después
+// de haberlo jugado deja sus sesiones donde estaban, y siguen siendo ratos que
+// existieron.
+//
+// El precio es una asimetría real y visible: el tile "Sessions" de la portada
+// sale de StatsSummary.totalSessions, que SÍ excluye a los planeados, así que
+// con un juego devuelto al Plan la portada dice 54 y esta pantalla 57. Filtrar
+// aquí las igualaría a costa de que la lista del móvil enseñara menos filas que
+// la del PC, que es la divergencia que este lado del repo existe para no tener;
+// cuadrarlas de verdad es decidir UNA población para las dos, y esa decisión
+// toca también a stats.ts.
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 200;
 

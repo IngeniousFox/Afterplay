@@ -21,6 +21,18 @@ export const addDays = (date: Date, days: number): Date => {
 export const daysBetween = (from: Date, to: Date): number =>
   (to.getTime() - from.getTime()) / DAY_MS;
 
+// Días de CALENDARIO (medianoche local a medianoche local), no tramos de 24h.
+// La diferencia importa justo donde uno dice "hoy" y "ayer": medir horas
+// transcurridas hacía que una sesión cerrada ayer a las 20:00 contara 0,58
+// días a las 10:00 de hoy, y el chip anunciara "Played today" un juego que
+// hoy no habías tocado. Redondeo (no truncado) porque cruzar un cambio de
+// hora deja el tramo en 23h o 25h y el cociente en 0,96 o 1,04.
+//
+// La misma regla que GameCard, Sessions y el humanizeAgoDays del modo TV —
+// que ahora sale de aquí para que no vuelva a haber dos aritméticas.
+export const calendarDaysBetween = (from: Date, to: Date): number =>
+  Math.round((startOfDayMs(to) - startOfDayMs(from)) / DAY_MS);
+
 // "3 days" / "8 months" — un tramo de tiempo en la unidad que mejor se lee:
 // días hasta ~2 meses, meses hasta ~2 años, años después. Vive aquí y no en
 // format.ts porque es aritmética de calendario, no formato de presentación:

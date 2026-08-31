@@ -28,6 +28,10 @@ type SteamRow = { game: number; uid: string; name?: string };
 
 let steamRows: SteamRow[] = [];
 let gamesWithParent = new Set<number>();
+// Ediciones por juego base (version_parent): el respaldo que sigue el MOTIVO 3
+// cuando el base no tiene entrada de Steam propia — el patrón Horizon Zero
+// Dawn, cuyo puerto de PC vive en su "Complete Edition".
+let editionsOf = new Map<number, number[]>();
 let igdbFailure: Error | null = null;
 const requests: { endpoint: string; body: string }[] = [];
 
@@ -56,8 +60,18 @@ mock.module('../../igdb/client', {
       if (igdbFailure !== null) throw igdbFailure;
       const ids = idsIn(body);
       const limit = limitIn(body);
-      // Por este camino la única query a `games` es la de "quién tiene padre".
+      // A `games` caen DOS consultas distintas y se separan por su cuerpo, que
+      // es lo único que las distingue también para IGDB: "quién tiene juego
+      // base" (parent_game) y "qué ediciones cuelgan de estos" (version_parent,
+      // el respaldo del MOTIVO 3).
       if (endpoint === 'games') {
+        if (body.includes('version_parent = (')) {
+          return ids
+            .flatMap((parentId) =>
+              (editionsOf.get(parentId) ?? []).map((id) => ({ id, version_parent: parentId })),
+            )
+            .slice(0, limit);
+        }
         return ids
           .filter((id) => gamesWithParent.has(id))
           .map((id) => ({ id, parent_game: 9000 + id }))
@@ -122,6 +136,7 @@ const stored = (igdbId: number, steamAppId: number, title: string): AppIdCandida
 beforeEach(() => {
   steamRows = [];
   gamesWithParent = new Set();
+  editionsOf = new Map();
   igdbFailure = null;
   requests.length = 0;
   logged.length = 0;
@@ -375,6 +390,48 @@ describe('el rescate: los tres unicos motivos por los que se cambia un appid gua
     const fixes = await findSteamAppIdFixes([stored(42, 111111, 'Expansion sin ficha en Steam')]);
 
     assert.deepEqual([...fixes], [[42, 420900]]);
+  });
+
+  it('MOTIVO 3: si el base no esta en Steam pero si una EDICION suya, es esa la que le llega', async () => {
+    // ARREGLADO, y era la última grieta de la paridad que promete la cabecera
+    // de findSteamAppIdCorrections. Para un hijo, resolveAchievementsSteamAppId
+    // prueba el appid directo del padre y DESPUÉS sus ediciones (el patrón
+    // Horizon Zero Dawn: el juego base no tiene entrada de Steam, la
+    // "Complete Edition" sí). El rescate se paraba en el directo, así que este
+    // hijo se caía al MOTIVO 1 y acababa con su appid PROPIO escrito — el que
+    // esta casa descarta porque GetSchemaForGame lo devuelve vacío. O sea: las
+    // dos no solo dejaban de coincidir, escribían cosas DISTINTAS.
+    steamRows = [
+      entry(44, 440100, 'Juego Hijo'),
+      entry(44, 440900, 'Juego Hijo Playtest'),
+      // El padre (9044) no tiene ninguna fila: no está en Steam por su cuenta.
+      entry(9144, 1151640, 'Juego Base - Complete Edition'),
+    ];
+    gamesWithParent = new Set([44]);
+    editionsOf = new Map([[9044, [9144]]]);
+
+    const fixes = await findSteamAppIdFixes([stored(44, 440900, 'Juego Hijo')]);
+
+    assert.deepEqual([...fixes], [[44, 1151640]]);
+  });
+
+  it('MOTIVO 3: la edicion del base tampoco puede ser una prueba', async () => {
+    // La misma guarda del respaldo, ahora también en la puerta de las
+    // ediciones: sobrescribir un appid guardado con la demo de una edición del
+    // padre sería cambiar un equivocado por otro peor. Sin candidata limpia por
+    // ahí, el juego sigue por los otros dos motivos — aquí el 1, que le deja su
+    // propia entrada limpia.
+    steamRows = [
+      entry(45, 450100, 'Juego Hijo'),
+      entry(45, 450900, 'Juego Hijo Playtest'),
+      entry(9145, 1151641, 'Juego Base - Complete Edition Demo'),
+    ];
+    gamesWithParent = new Set([45]);
+    editionsOf = new Map([[9045, [9145]]]);
+
+    const fixes = await findSteamAppIdFixes([stored(45, 450900, 'Juego Hijo')]);
+
+    assert.deepEqual([...fixes], [[45, 450100]]);
   });
 
   it('MOTIVO 3: si las unicas entradas del base son pruebas, al hijo no se le escribe una', async () => {

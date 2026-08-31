@@ -61,6 +61,10 @@ let window: BrowserWindow | null = null;
 let queue: AchievementToast[] = [];
 let showing = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+// Sube cada vez que se cierra el aviso. Es lo único que puede cortar un vaciado
+// EN VUELO: drain() ya se llevó su lote a una variable local, así que vaciar
+// `queue` no le llega. Ver closeAchievementOverlay.
+let generation = 0;
 
 const accentFor = (percent: number | null): string => {
   if (percent === null) return GREEN;
@@ -92,20 +96,32 @@ const toDataUri = async (
   }
 };
 
+// Esquina inferior derecha del monitor donde está el cursor — que es el
+// monitor en el que estás jugando. workArea y no bounds: así respeta la barra
+// de tareas en vez de quedar debajo.
+//
+// Se calcula por AVISO y no una vez al crear la ventana (ver present): la
+// ventana vive lo que viva el proceso —solo la cierra el before-quit— y la app
+// se queda en la bandeja durante días, así que con dos monitores el primer
+// logro de la sesión clavaba la esquina para siempre. Mueves el juego a la otra
+// pantalla y los avisos seguían saliendo en la que ya no estás mirando.
+const cornerBounds = (): { x: number; y: number; width: number; height: number } => {
+  const { x, y, width, height } = screen.getDisplayNearestPoint(
+    screen.getCursorScreenPoint(),
+  ).workArea;
+  return {
+    x: x + width - OVERLAY_WIDTH - 16,
+    y: y + height - OVERLAY_HEIGHT - 16,
+    width: OVERLAY_WIDTH,
+    height: OVERLAY_HEIGHT,
+  };
+};
+
 const ensureWindow = async (): Promise<BrowserWindow> => {
   if (window && !window.isDestroyed()) return window;
 
-  // Esquina inferior derecha del monitor donde está el cursor — que es el
-  // monitor en el que estás jugando. workArea y no bounds: así respeta la
-  // barra de tareas en vez de quedar debajo.
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const { x, y, width, height } = display.workArea;
-
   const created = new BrowserWindow({
-    width: OVERLAY_WIDTH,
-    height: OVERLAY_HEIGHT,
-    x: x + width - OVERLAY_WIDTH - 16,
-    y: y + height - OVERLAY_HEIGHT - 16,
+    ...cornerBounds(),
     show: false,
     frame: false,
     transparent: true,
@@ -142,8 +158,13 @@ const ensureWindow = async (): Promise<BrowserWindow> => {
   await created.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildOverlayHtml())}`);
 
   created.on('closed', () => {
+    // Solo la ventana. `showing` es del vaciado y lo suelta su propio finally:
+    // apagarlo aquí —con drain todavía dentro de un present()— dejaba que el
+    // siguiente enqueue arrancara un SEGUNDO vaciado en paralelo, dos tandas de
+    // tarjetas peleándose por la misma ventana. Y no hace falta como red: todo
+    // lo que drain espera acaba resolviendo (present tiene su temporizador de
+    // seguridad, toDataUri traga sus propios errores).
     window = null;
-    showing = false;
   });
 
   window = created;
@@ -153,8 +174,18 @@ const ensureWindow = async (): Promise<BrowserWindow> => {
 // Enseña UNA tarjeta y espera a que termine. La ventana avisa de que acabó
 // cambiando su document.title (page-title-updated) — la vía más simple de
 // hablar de vuelta sin montarle un preload propio a una ventana de 380px.
-const present = async (payload: OverlayPayload & { token: string }): Promise<void> => {
+const present = async (
+  payload: OverlayPayload & { token: string },
+  // La generación con la que arrancó el vaciado que pide esta tarjeta. Se
+  // comprueba AQUÍ y no solo en el bucle porque entre la comprobación de allí y
+  // esta llamada se esperan las imágenes (caché en disco, a veces descarga): un
+  // Quit que caiga en ese hueco encontraba window===null y ensureWindow creaba
+  // una ventana nueva a mitad del cierre de la app.
+  run: number,
+): Promise<void> => {
+  if (run !== generation) return;
   const target = await ensureWindow();
+  target.setBounds(cornerBounds());
 
   await new Promise<void>((resolve) => {
     let settled = false;
@@ -188,8 +219,17 @@ const drain = async (): Promise<void> => {
   if (showing) return;
   showing = true;
 
+  // Con qué generación se empezó: si closeAchievementOverlay la sube a mitad,
+  // este vaciado suelta lo que le quede. Sin esto, el Quit de la bandeja
+  // destruía la ventana pero el `for` seguía con la tarjeta siguiente y
+  // present() -> ensureWindow() CREABA UNA VENTANA NUEVA durante el cierre —
+  // justo lo que el before-quit de main/index.ts llama a
+  // closeAchievementOverlay para impedir ("una tarjeta en pantalla al salir
+  // mantendría el proceso vivo").
+  const run = generation;
+
   try {
-    while (queue.length > 0) {
+    while (queue.length > 0 && run === generation) {
       const batch = queue;
       queue = [];
 
@@ -197,42 +237,49 @@ const drain = async (): Promise<void> => {
         // Resumen: cuántos y de qué juego. Enseñar 25 seguidos sería un
         // castigo, no una celebración.
         const game = batch[0].gameTitle;
-        await present({
-          token: `c${Date.now()}`,
-          title: `${batch.length} achievements unlocked`,
-          subtitle: game,
-          gameTitle: game,
-          iconDataUri: await toDataUri(batch[0].iconUrl),
-          heroDataUri: await toDataUri(batch[0].gameHeroUrl, 'heroes'),
-          accent: GREEN,
-          rarity: null,
-          durationMs: COMBINED_MS,
-          rare: false,
-        });
+        await present(
+          {
+            token: `c${Date.now()}`,
+            title: `${batch.length} achievements unlocked`,
+            subtitle: game,
+            gameTitle: game,
+            iconDataUri: await toDataUri(batch[0].iconUrl),
+            heroDataUri: await toDataUri(batch[0].gameHeroUrl, 'heroes'),
+            accent: GREEN,
+            rarity: null,
+            durationMs: COMBINED_MS,
+            rare: false,
+          },
+          run,
+        );
         continue;
       }
 
       for (const toast of batch) {
+        if (run !== generation) break;
         // El 100% viste ORO fijo y su propia letra — es el final de una
         // cacería, no un logro más.
         const celebration = toast.celebration === true;
         const accent = celebration ? AMBER : accentFor(toast.globalPercent);
-        await present({
-          token: `s${Date.now()}-${toast.displayName}`,
-          title: toast.displayName,
-          subtitle: celebration ? '100% complete' : 'Achievement unlocked',
-          gameTitle: toast.gameTitle,
-          iconDataUri: await toDataUri(toast.iconUrl),
-          heroDataUri: await toDataUri(toast.gameHeroUrl, 'heroes'),
-          accent,
-          rarity: celebration
-            ? 'Every achievement unlocked'
-            : toast.globalPercent !== null && toast.globalPercent < RARE
-              ? `Only ${toast.globalPercent.toFixed(1)}% of players have this`
-              : null,
-          durationMs: celebration ? COMBINED_MS : SINGLE_MS,
-          rare: celebration || accent !== GREEN,
-        });
+        await present(
+          {
+            token: `s${Date.now()}-${toast.displayName}`,
+            title: toast.displayName,
+            subtitle: celebration ? '100% complete' : 'Achievement unlocked',
+            gameTitle: toast.gameTitle,
+            iconDataUri: await toDataUri(toast.iconUrl),
+            heroDataUri: await toDataUri(toast.gameHeroUrl, 'heroes'),
+            accent,
+            rarity: celebration
+              ? 'Every achievement unlocked'
+              : toast.globalPercent !== null && toast.globalPercent < RARE
+                ? `Only ${toast.globalPercent.toFixed(1)}% of players have this`
+                : null,
+            durationMs: celebration ? COMBINED_MS : SINGLE_MS,
+            rare: celebration || accent !== GREEN,
+          },
+          run,
+        );
         if (queue.length > 0 || batch.indexOf(toast) < batch.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, GAP_MS));
         }
@@ -262,6 +309,11 @@ export const enqueueAchievementToasts = (toasts: AchievementToast[]): void => {
 
 export const closeAchievementOverlay = (): void => {
   if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = null;
+  // El corte de verdad: `queue = []` solo alcanza a lo que aún no ha salido, y
+  // el vaciado en curso ya tiene su lote en la mano. Subir la generación es lo
+  // que hace que suelte el resto en vez de recrear la ventana detrás del Quit.
+  generation++;
   queue = [];
   if (window && !window.isDestroyed()) window.destroy();
   window = null;

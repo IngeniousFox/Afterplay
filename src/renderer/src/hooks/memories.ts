@@ -38,7 +38,10 @@ export const useStopMemories = (): UseMutationResult<void, Error, void, unknown>
 type MemoriesProgress = Extract<MemoryActivityEvent, { kind: 'progress' }>;
 
 // Progreso en vivo + refresco automático de las queries — doble papel a
-// propósito, mismo patrón que useCuriositiesActivity. El aviso 'generated'
+// propósito, y aquí sí se puede: este hook tiene UN solo consumidor, la
+// tarjeta de Ajustes. Las familias que además se escuchan desde la raíz
+// (curiosidades, logros) están partidas en dos precisamente porque el doble
+// papel montado dos veces invalida dos veces cada evento. El aviso 'generated'
 // con origen automático es además la señal del toast de aterrizaje ("Your
 // June story is ready"), pero ESO lo escucha su propio hook en la raíz
 // (useMemoryArrivalToast): este solo alimenta la tarjeta de Ajustes.

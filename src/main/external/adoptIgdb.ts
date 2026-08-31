@@ -123,18 +123,38 @@ export const adoptIgdbForGame = async (
 // El detalle sí va de uno en uno porque getGameDetails ya está cacheado y
 // porque los que aparecen de golpe son poquísimos: son juegos que llevaban
 // esperando a que IGDB los metiera, no la biblioteca entera.
+//
+// Y cada candidato se cae SOLO, igual que en la versión de un juego. El
+// try/catch envolvía el bucle entero y devolvía 0: cinco candidatos, los
+// cuatro primeros ya adoptados y escritos (cada UPDATE se commitea suelto, no
+// hay transacción del lote que deshacer) y un 503 de IGDB en el quinto se
+// llevaba por delante el contador. Quien llama lo usa para decidir cosas: la
+// pasada de biblioteca relee su lista SOLO si el número es > 0 (external/
+// refresh.ts), así que esos cuatro juegos seguían el resto de la pasada con
+// igdbId null en memoria — fuera del lote de notas, fuera de la ronda de
+// appids y guardados por la rama de "IGDB no lo conoce" — y el parte de
+// Ajustes cantaba "0 adoptados" en una pasada donde cuatro cambiaron de
+// fuente. Encima el quinto fallo cortaba la cola para los que venían detrás.
 export const adoptIgdbForCandidates = async (candidates: AdoptionCandidate[]): Promise<number> => {
   if (candidates.length === 0) return 0;
 
+  // La petición del LOTE sí es de todo o nada: sin ella no hay a quién
+  // adoptar, y no se ha tocado ninguna fila todavía.
+  let byAppId: Map<number, number>;
   try {
-    const byAppId = await getIgdbIdsBySteamAppIds(candidates.map((game) => game.steamAppId));
-    if (byAppId.size === 0) return 0;
+    byAppId = await getIgdbIdsBySteamAppIds(candidates.map((game) => game.steamAppId));
+  } catch (error) {
+    console.warn('[igdb] fallo comprobando los juegos que solo estaban en Steam:', error);
+    return 0;
+  }
+  if (byAppId.size === 0) return 0;
 
-    let adopted = 0;
-    for (const candidate of candidates) {
-      const igdbId = byAppId.get(candidate.steamAppId);
-      if (igdbId === undefined) continue;
+  let adopted = 0;
+  for (const candidate of candidates) {
+    const igdbId = byAppId.get(candidate.steamAppId);
+    if (igdbId === undefined) continue;
 
+    try {
       const patch = await buildIgdbAdoptionPatch(igdbId);
       if (!patch) continue;
 
@@ -145,10 +165,13 @@ export const adoptIgdbForCandidates = async (candidates: AdoptionCandidate[]): P
       console.log(
         `[igdb] el juego ${candidate.id} ya esta en IGDB (${igdbId}) - datos cambiados a su ficha`,
       );
+    } catch (error) {
+      // Solo ASCII, misma convención que el resto de logs del main.
+      console.warn(
+        `[igdb] no se pudo adoptar el juego ${candidate.id} (sigo con los demas):`,
+        error,
+      );
     }
-    return adopted;
-  } catch (error) {
-    console.warn('[igdb] fallo comprobando los juegos que solo estaban en Steam:', error);
-    return 0;
   }
+  return adopted;
 };

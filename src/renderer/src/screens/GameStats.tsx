@@ -121,8 +121,14 @@ export const GameStats = ({
   // completa, no hace falta pedirla dos veces. Modelo v2: toda sesión es
   // tiempo jugado real, ya no hay marcadores que filtrar.
   const realSessions = useMemo(() => game?.iterations.flatMap((it) => it.sessions) ?? [], [game]);
+  // Solo sesiones MEDIDAS: el heatmap descarta las manuales (tiempo tecleado
+  // sin dia real que pintar), asi que un año que solo tenga manuales no puede
+  // ofrecerse en el desplegable — salia elegido por defecto con la card vacia.
   const heatmapYears = useMemo(
-    () => yearsDesc(realSessions.map((session) => session.startedAt)),
+    () =>
+      yearsDesc(
+        realSessions.filter((session) => !session.isManual).map((session) => session.startedAt),
+      ),
     [realSessions],
   );
   // Propio de esta card, independiente del año que esté elegido (si acaso)

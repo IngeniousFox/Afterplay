@@ -127,6 +127,26 @@ describe('cliente de HowLongToBeat', () => {
     assert.equal(game.completionTimes.completionist, undefined);
   });
 
+  it('un juego de menos de media hora vale 1, nunca 0', async () => {
+    // ARREGLADO, y el 0 no era un redondeo feo: era incurable. La guarda del
+    // cero miraba los SEGUNDOS crudos y el redondeo venia detras, asi que
+    // comp_main = 1500 (25 minutos) la pasaba y salia 0 — y ese 0 se guardaba,
+    // porque el `??` de hltb/api.ts solo atrapa null. A partir de ahi el juego
+    // dejaba de ser huerfano (la repesca de external/refresh.ts solo mira a los
+    // que tienen los TRES a null), la Deuda del Backlog le sumaba cero horas
+    // como si tuviera estimacion, y el modo ambiente llegaba a escribir "most
+    // people finish this in 0 hours".
+    postResponse = () => ({
+      data: {
+        data: [{ game_id: 4, game_name: 'Corto', comp_main: 1500, comp_plus: 5400 }],
+      },
+    });
+    const [game] = await new HLTBClient().search('corto');
+    assert.equal(game.completionTimes.main, 1, '25 minutos es 1 hora, no 0');
+    // Y el redondeo normal sigue siendo el de siempre: 90 minutos -> 2.
+    assert.equal(game.completionTimes.mainExtra, 2);
+  });
+
   it('cachea el token: dos busquedas seguidas = un solo /init', async () => {
     const client = new HLTBClient();
     await client.search('a');

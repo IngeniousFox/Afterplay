@@ -38,11 +38,16 @@ const redistribute = (
   pinnedAt: Map<number, number | null>,
 ): Map<number, number> => {
   // Solo los que SIGUEN fijados: entre el gesto y el drenado pudo pasar
-  // cualquier cosa (un unpin desde otra máquina).
-  const ids = orderedIds.filter((id) => {
+  // cualquier cosa (un unpin desde otra máquina). Y REPETIDOS fuera, con el
+  // guardián de "menos de dos no es un reorden" — las MISMAS dos defensas que
+  // reorderUpNext en el escritorio (getPlannedGames.ts) y reassignPinStamps
+  // en el renderer: sin ellas, una orden malformada previsualizaba aquí un
+  // orden que el drenado luego rechazaba, y la estantería "saltaba".
+  const ids = [...new Set(orderedIds)].filter((id) => {
     const value = pinnedAt.get(id);
     return value !== null && value !== undefined;
   });
+  if (ids.length < 2) return new Map<number, number>();
 
   const stamps = ids.map((id) => pinnedAt.get(id) as number).sort((a, b) => a - b);
   // Estrictamente crecientes: dos fijados en el mismo milisegundo empatarían y
@@ -69,10 +74,19 @@ export const applyPending = (games: PlannedGame[], pending: PendingEntry[]): Pla
       continue;
     }
     if (entry.type === 'pin') {
-      // El escritorio usa setPlanPinned, que sella con "ahora": soltar y
-      // volver a fijar te manda al final de la estantería. Se imita para que
-      // la vista previa no mienta sobre dónde va a caer.
-      pinnedAt.set(entry.gameId, Date.now());
+      // La marca del GESTO, no la del render. Al drenar, el escritorio sella
+      // con `pinStamp(entry.pinnedAt)` (drainMailbox.ts) justo porque sellar
+      // con `new Date()` perdía el orden que arrastraste en el teléfono, así
+      // que previsualizar con Date.now() es prometer un orden distinto del que
+      // va a quedar: fijas A a las 10:00, B desde el PC a las 12:00, y a las
+      // 18:00 la PWA pinta A DETRÁS de B — hasta que drena y la fila salta.
+      // Peor con varios pines sin drenar: el bucle es síncrono, así que todos
+      // recibían el MISMO milisegundo y se desempataban por título.
+      //
+      // Va tal cual y sin red: el Worker no acepta la orden si `pinnedAt` no es
+      // un instante creíble (isTimestamp en mailbox.ts), que es exactamente la
+      // condición con la que pinStamp decide no caerse a "ahora".
+      pinnedAt.set(entry.gameId, entry.pinnedAt);
       touched.add(entry.gameId);
       continue;
     }

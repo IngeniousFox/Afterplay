@@ -50,6 +50,7 @@ export const gameColumns = {
   isEmulated: gamesTable.isEmulated,
   planned: gamesTable.planned,
   addedAt: gamesTable.addedAt,
+  promotedAt: gamesTable.promotedAt,
   saveBackupEnabled: gamesTable.saveBackupEnabled,
   saveDetectionSource: gamesTable.saveDetectionSource,
   saveLudusaviName: gamesTable.saveLudusaviName,

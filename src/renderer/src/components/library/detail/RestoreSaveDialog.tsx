@@ -88,6 +88,13 @@ export const RestoreSaveDialog = ({
   // entrada: quien lo configuró una vez no tiene que volver a buscarlo.
   const [target, setTarget] = useState<string | null>(currentTarget);
   const [plan, setPlan] = useState<RestoreResult | null>(null);
+  // Lo que la pasada REAL escribió, que no tiene por qué ser lo que el
+  // ensayo prometió: entre el preview y el confirm ludusavi puede saltarse
+  // ficheros (el juego que se acaba de cerrar todavía los tenía abiertos) o
+  // encontrar menos de los previstos. El resultado del confirm se descartaba
+  // y el "Done" cantaba el número del PLAN — justo el dato por el que este
+  // diálogo tiene dos pasos.
+  const [result, setResult] = useState<RestoreResult | null>(null);
   const [done, setDone] = useState(false);
 
   const needsTarget = mode !== 'in-place';
@@ -95,6 +102,7 @@ export const RestoreSaveDialog = ({
 
   const reset = (): void => {
     setPlan(null);
+    setResult(null);
     setDone(false);
   };
 
@@ -139,6 +147,7 @@ export const RestoreSaveDialog = ({
       })
       .catch(() => null);
     if (!outcome) return;
+    setResult(outcome);
     setDone(true);
     // Restaurar cambia lo que hay en disco: el estado local de la sección
     // (y el destino recordado, si el modo lo guarda) ya no valen.
@@ -302,7 +311,7 @@ export const RestoreSaveDialog = ({
             className="rounded-[10px] border px-3.5 py-3 text-[12.5px]"
             style={{ borderColor: `${BLUE}55`, background: `${BLUE}10` }}
           >
-            Done — {pluralize(plan?.files.length ?? 0, 'file')} restored.
+            Done — {pluralize(result?.files.length ?? 0, 'file')} restored.
             {mode !== 'in-place' && target && (
               <button
                 type="button"

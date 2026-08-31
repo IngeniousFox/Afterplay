@@ -213,7 +213,10 @@ export const storeUnlocks = async (
 
       // Con qué fiabilidad quedó guardada la fecha de cada logro de esta
       // fuente, ya contando el degradado de arriba. Es lo que impide que un
-      // rescate en bloque pise un momento bueno (ver el upsert).
+      // rescate en bloque pise un momento bueno (ver el upsert). Su PRESENCIA
+      // dice además si esta fuente ya tiene fila para el logro, que es la otra
+      // guarda del upsert: por eso las dos se leen de aquí y no de dos mapas
+      // que habría que mantener a la vez.
       const storedReliable = new Map(
         sameSource.map((row) => [
           row.achievementId,
@@ -250,6 +253,25 @@ export const storeUnlocks = async (
         // Solo protege lo FIABLE: una fecha no fiable sí se deja pisar, que es
         // como un rescate se corrige el día que llega la fecha de verdad.
         if (!dateReliable && storedReliable.get(definition.id) === true) continue;
+
+        // Y UN "NO SÉ CUÁNDO" TAMPOCO PISA A OTRO "NO SÉ CUÁNDO". Si lo que
+        // entra no trae fecha propia y esta fuente ya tiene fila para el logro,
+        // no hay nada nuevo que escribir: la fecha que se guardaría es el
+        // `fallbackDate` del llamante, o sea el `new Date()` de ESA pasada, así
+        // que el upsert cambiaba el dato en cada llamada sin decir nada nuevo
+        // (dateReliable sigue false y el emparejado sigue null, la ficha sigue
+        // pintando "date unknown"). Con el sondeo en vivo, que manda la lista
+        // ENTERA cada 30 s mientras el juego esté abierto, eso eran doce UPDATE
+        // por tick indefinidamente —los logros antiguos con unlocktime 0 son
+        // reales y vienen en manada, ver el comentario de unlocktime en
+        // steam/api.ts— sobre el mismo fichero que el ciclo de Turso sincroniza
+        // cada minuto. Es el mismo churn que fillHiddenDescriptions (más abajo)
+        // se toma la molestia de evitar leyendo lo guardado antes de escribir.
+        //
+        // La fecha vieja se conserva a propósito aunque tampoco fuera fiable:
+        // un instante que alguna vez se supo vale más que el de hoy, y un "no"
+        // de la fuente no borra lo que había.
+        if (unlock.unlockedAt === null && storedReliable.has(definition.id)) continue;
 
         // Un desbloqueo sin fecha fiable no se cuelga de ninguna sesión:
         // colgarlo sería inventarse que lo sacaste en ese rato concreto.
@@ -429,25 +451,36 @@ export const syncGameAchievements = async (
 
   const syncedAt = new Date();
 
-  // Un catálogo vacío tiene DOS lecturas y getAchievementSchema las aplasta en
-  // el mismo []: "este juego existe y no tiene logros" (legítimo) y el 400/403
-  // de un appid sin stats, que casi siempre es un juego que TODAVIA no ha
-  // salido — Enter the kOS anuncia logros en su ficha de Steam y aun así da
-  // 403. Estampar achievementsSyncedAt en el segundo caso graba como
-  // definitivo un "no" que caduca el día del lanzamiento: la pasada del
-  // arranque (la única automática) filtra por isNull(achievementsSyncedAt), así
-  // que ese juego no se vuelve a preguntar NUNCA y el día que salga sus 34
-  // logros no aparecen — salvo que el usuario adivine que tiene que darle a
-  // "Sync now". Mismo bug que refresh.ts ya arregló para el appid.
+  // Un catálogo vacío tiene TRES lecturas y getAchievementSchema las aplasta
+  // todas en el mismo []: "este juego existe y no tiene logros" (legítimo); el
+  // 400/403 de un appid sin stats, que casi siempre es un juego que TODAVIA no
+  // ha salido —Enter the kOS anuncia logros en su ficha de Steam y aun así da
+  // 403—; y el 403 de una CLAVE mal pegada o revocada, que solo le llega a este
+  // endpoint porque es el único de los tres que la manda.
   //
-  // La rareza hace de testigo para distinguir los dos casos: es otro endpoint
-  // del mismo ISteamUserStats, contesta 200 (mapa vacío) para un juego con
-  // stats y cero logros, y se niega igual que el schema para el que aún no ha
-  // salido, donde devuelve null. Si el testigo tampoco sabe (o simplemente
-  // falló la red) no se marca nada y el arranque lo vuelve a coger: preguntar
-  // de más es gratis, perder el juego para siempre no. Lo limpio del todo
-  // sería que getAchievementSchema devolviera null en SteamNoStatsError, como
-  // ya hacen sus dos hermanas de api.ts.
+  // Estampar achievementsSyncedAt en los dos últimos casos graba como
+  // definitivo un "no" que no lo es: la pasada del arranque (la única
+  // automática) filtra por isNull(achievementsSyncedAt), así que ese juego no
+  // se vuelve a preguntar NUNCA. Con el juego sin publicar se pierden sus 34
+  // logros el día que salga; con una errata en la clave se pierde la
+  // BIBLIOTECA ENTERA de una sentada —541 juegos marcados como sincronizados y
+  // con cero logros— y ni corregir la clave y reiniciar lo deshace, porque ya
+  // no queda ninguno pendiente que mirar. Mismo bug que refresh.ts ya arregló
+  // para el appid.
+  //
+  // La rareza hace de testigo, y hay que mirar CUÁNTA trae, no solo si
+  // contestó: es otro endpoint del mismo ISteamUserStats y NO manda la clave
+  // (api.ts), así que sobrevive a que la nuestra sea mala.
+  //   · null                 -> ni ella sabe: el juego que aún no ha salido, o
+  //                             simplemente falló la red. No se marca nada.
+  //   · un mapa VACÍO        -> el juego publica stats y no tiene ni un logro:
+  //                             el [] del schema es la verdad, y se marca.
+  //   · un mapa CON entradas -> este juego SÍ tiene logros, luego un catálogo
+  //                             vacío no es una respuesta, es que no se pudo
+  //                             leer. No se marca y el arranque lo vuelve a
+  //                             coger cuando la clave esté bien.
+  // Preguntar de más es gratis; perder la biblioteca hasta que el usuario
+  // adivine que tiene que pulsar "Sync now", no.
   //
   // El precio no son solo las peticiones de más: la tarjeta de Ajustes cuenta
   // "sincronizados" por isNotNull(achievementsSyncedAt) y "elegibles" por
@@ -458,7 +491,7 @@ export const syncGameAchievements = async (
   // que avisa el propio comentario de esa consulta ("541 de 527"), y el
   // arreglo va ahí: descontar del denominador los que sabemos que hoy no
   // tienen stats, no fingir aquí que sí se sincronizaron.
-  if (definitions.length === 0 && percentages === null) {
+  if (definitions.length === 0 && (percentages === null || percentages.size > 0)) {
     return { catalogCount: 0, unlockedCount: 0, unlocksKnown: false };
   }
 

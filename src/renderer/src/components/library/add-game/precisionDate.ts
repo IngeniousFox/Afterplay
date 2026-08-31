@@ -47,8 +47,17 @@ export const todayValue = (): PrecisionDateValue => ({
 // aquí (sesiones, gastos, cambios de estado) ya pasó, nunca es una fecha
 // futura — mismo criterio en los tres pickers (día/mes/año, ver
 // MonthGrid/YearGrid/YearDropdown).
-export const TODAY = new Date();
-export const CURRENT_YEAR = TODAY.getFullYear();
+//
+// FUNCIONES y no constantes de módulo, por el mismo motivo que todayValue()
+// justo aquí arriba: `new Date()` a nivel de módulo se congela al IMPORTAR,
+// o sea al arrancar la app. Y Afterplay se queda abierta días (watcher, modo
+// idle, modo TV): dejándola abierta el 31-ago, al registrar una partida el
+// 1-sep de madrugada el día de HOY salía deshabilitado en el calendario y
+// septiembre gris en la rejilla de meses, sin más salida que reiniciar; y
+// cruzando el 1 de enero el año nuevo directamente no existía ni en la
+// rejilla de años ni en el desplegable. Cada llamada mira el reloj real.
+export const today = (): Date => new Date();
+export const currentYear = (): number => new Date().getFullYear();
 
 // El valor de picker (fecha+precisión) de una fecha con precisión real de la
 // DB ('datetime' incluido) — 'datetime' (eventos creados en vivo, con hora)

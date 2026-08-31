@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { floatingPanelClass } from '../../../lib/styles';
 import { cn } from '../../../lib/utils';
-import { CURRENT_YEAR } from './precisionDate';
+import { currentYear } from './precisionDate';
 
 type YearDropdownProps = {
   year: number;
@@ -17,8 +17,11 @@ export const YearDropdown = ({ year, onSelectYear }: YearDropdownProps): React.J
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // El tope se calcula al pintar y no al importar el módulo: con la app
+  // abierta al cruzar el 1 de enero, el año nuevo no llegaba a existir en la
+  // lista (ver precisionDate).
   const years: number[] = [];
-  for (let y = 1970; y <= CURRENT_YEAR; y++) years.push(y);
+  for (let y = 1970, last = currentYear(); y <= last; y++) years.push(y);
 
   // Al abrir, salta directo al año actual en vez de dejar la lista
   // arrancando por el primero — mismo motivo y mismo patrón que

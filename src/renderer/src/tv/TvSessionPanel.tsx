@@ -1,6 +1,7 @@
 import { Check, Flame, Timer } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { formatSessionDuration } from '../../../shared/sessionDuration';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
@@ -8,7 +9,7 @@ import { celebrateCompletion } from '../lib/celebrate';
 import { AMBER, GREEN } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
-import { STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
+import { quickStatusOptions, STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
 import { GameCover } from '../components/GameCover';
 import { TV_MODAL_SWALLOW, useTvButtons } from './tvInput';
 import { TvFocusLayer } from './focus';
@@ -20,16 +21,12 @@ import { useTvFocusable } from './focusContext';
 // de nota (teclear es de escritorio; el hint lo recuerda). No se va solo:
 // un panel modal con mando se descarta con B o con Continue, sin cuenta
 // atrás que te meta prisa desde la otra punta del salón.
-
-const quickStatusOptions = (endless: boolean): PastStatusKey[] =>
-  endless ? ['resting'] : ['beaten', 'dropped'];
-
-const splitDuration = (seconds: number): string => {
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-};
+//
+// "El mismo remate" es literal donde importa: la duración la formatea
+// shared/sessionDuration y los desenlaces los da quickStatusOptions
+// (lib/gameStatus). Las dos reglas estaban copiadas aquí a mano, así que el
+// sofá y el escritorio podían acabar contando el mismo cierre de sesión de
+// dos maneras sin que nada lo cantara — no se ven nunca a la vez.
 
 const PanelButton = ({
   label,
@@ -179,7 +176,7 @@ export const TvSessionPanel = ({
                     className="text-[1.5em] leading-none font-extrabold text-primary tabular-nums"
                     style={{ textShadow: `0 0 1.1em ${GREEN}59` }}
                   >
-                    {splitDuration(event.durationSec)}
+                    {formatSessionDuration(event.durationSec)}
                   </span>
                   <span className="text-[0.75em] text-muted-foreground">
                     · {formatHours(event.totalHours)} total

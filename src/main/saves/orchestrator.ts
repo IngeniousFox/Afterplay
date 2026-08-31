@@ -538,6 +538,23 @@ const exportSubfolder = (location: string, used: Set<string>): string => {
   return name;
 };
 
+// Cada ubicación bajo su propio nombre dentro de la carpeta elegida. Con
+// varias, "una carpeta" no basta: se mezclarían entre ellas, y redirigir solo
+// una dejaría la partida a medias (§4.9-3).
+//
+// Vive aquí y no repetido en las dos ramas que lo usan: eran el mismo bucle
+// escrito dos veces, y el día que el esquema de subcarpetas cambiara en una
+// —y no en la otra— la misma versión aterrizaría en sitios distintos según se
+// exportase o se restaurase a otra carpeta.
+const spreadIntoSubfolders = (locations: string[], target: string): LudusaviRedirect[] => {
+  const used = new Set<string>();
+  return locations.map((location) => ({
+    kind: 'restore',
+    source: location,
+    target: `${target}/${exportSubfolder(location, used)}`,
+  }));
+};
+
 export const buildRedirects = (
   row: SaveBackupRow,
   mode: RestoreMode,
@@ -548,29 +565,14 @@ export const buildRedirects = (
 
   if (mode !== 'in-place' && target) {
     const normalizedTarget = toSlashes(target);
-    if (mode === 'export') {
-      const used = new Set<string>();
-      for (const location of locations) {
-        redirects.push({
-          kind: 'restore',
-          source: location,
-          target: `${normalizedTarget}/${exportSubfolder(location, used)}`,
-        });
-      }
-    } else if (locations.length === 1) {
+    // La única que aterriza tal cual en la carpeta elegida: una sola ubicación
+    // yendo a "otra carpeta de este PC", que es literalmente decir "el juego
+    // vive aquí". Exportar reparte SIEMPRE, también con una sola, para que la
+    // copia guardada diga de qué carpeta salió.
+    if (mode === 'custom-path' && locations.length === 1) {
       redirects.push({ kind: 'restore', source: locations[0], target: normalizedTarget });
     } else {
-      // Con varias ubicaciones, "una carpeta" no basta: cada una necesita su
-      // sitio o se mezclarían. Se reproduce su nombre bajo la carpeta
-      // elegida — redirigir solo una dejaría la partida a medias (§4.9-3).
-      const used = new Set<string>();
-      for (const location of locations) {
-        redirects.push({
-          kind: 'restore',
-          source: location,
-          target: `${normalizedTarget}/${exportSubfolder(location, used)}`,
-        });
-      }
+      redirects.push(...spreadIntoSubfolders(locations, normalizedTarget));
     }
   }
 

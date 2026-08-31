@@ -52,6 +52,14 @@ export const LocalSaveBackupsSection = (): React.JSX.Element => {
   const reclaimableBytes = (usage?.reclaimableBytes ?? 0) + (usage?.orphanBytes ?? 0);
 
   const badge = ((): { text: string; color: string; icon?: LucideIcon } | null => {
+    // El fallo va PRIMERO, misma cicatriz que ImagesSection: sin mirar
+    // clean.error, una limpieza rechazada (una carpeta agarrada por el
+    // antivirus, un mapping.yaml que no se deja leer) apagaba el spinner y
+    // devolvía el renglón a "412 MB reclaimable" con el botón otra vez
+    // activo — indistinguible de no haber pulsado nunca, y aquí lo que no se
+    // ha hecho es borrar ficheros.
+    if (clean.error)
+      return { text: `Failed — ${clean.error.message}`, color: 'var(--destructive)' };
     if (clean.isPending) return { text: 'Cleaning up…', color: AMBER };
     if (freed) {
       return freed.files === 0 && freed.folders === 0

@@ -14,6 +14,7 @@ import { RadarRow } from '../components/plan/RadarRow';
 import { UpNextList } from '../components/plan/UpNextList';
 import { WhereToAddDialog } from '../components/library/WhereToAddDialog';
 import {
+  externalRefreshBar,
   useExternalRefreshProgress,
   useIsExternalRefreshRunning,
   useRefreshPlanData,
@@ -267,15 +268,12 @@ export const PlanToPlay = (): React.JSX.Element => {
     });
   };
 
-  // Mientras corre, el botón cuenta por dónde va. Solo las fases de Steam y
-  // de HLTB (la repesca de los sin-tiempos, con su propio total) avanzan
-  // juego a juego — IGDB entero son 1-2 peticiones que vuelan—, así que son
-  // las únicas con porcentaje sin inventárselo: en las otras el botón lo dice
-  // con palabras y su barra late en vez de avanzar. Con un Plan grande la de
-  // Steam son minutos.
-  const measurable =
-    refreshing && (progress?.phase === 'steam' || progress?.phase === 'hltb') && progress.total > 0;
-  const refreshPercent = measurable && progress ? (progress.done / progress.total) * 100 : 0;
+  // Mientras corre, el botón cuenta por dónde va. Qué fases tienen porcentaje
+  // de verdad y cuáles se dicen con palabras lo decide el helper compartido:
+  // la tarjeta de Ajustes pinta esta misma barra desde el mismo evento, y la
+  // regla escrita a mano en los dos sitios se desincroniza a la primera fase
+  // nueva (ver externalRefreshBar). Con un Plan grande la de Steam son minutos.
+  const { measurable, percent: refreshPercent } = externalRefreshBar(progress, refreshing);
   const refreshLabel = !refreshing
     ? 'Refresh data'
     : measurable && progress
@@ -363,13 +361,19 @@ export const PlanToPlay = (): React.JSX.Element => {
       </div>
 
       {/* onCreated abre la ficha del recién añadido — mismo comportamiento
-          que tenía la pantalla vieja. */}
+          que tenía la pantalla vieja.
+
+          Sin onOpenExisting a propósito: ese atajo es el de "esto ya lo
+          tienes, ábrelo", y aquí abrir es openGame → /plan/:id, la sección
+          equivocada para un juego que está en la BIBLIOTECA (la ficha del
+          planeado le ofrecería "Add to library" a uno que ya está dentro). El
+          modal ya lo apaga en modo 'plan' —canLeaveForOwned—, así que pasarlo
+          era código muerto que además contradecía esa invariante escrita. */}
       <AddGameModal
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         mode="plan"
         onCreated={openGame}
-        onOpenExisting={openGame}
       />
 
       {isLoading ? (

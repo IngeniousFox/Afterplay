@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GeneratedMemorySummary } from '../../../shared/types';
 import type { JourneyEntry } from '../lib/journeyEntries';
-import { buildEntries } from '../lib/journeyEntries';
+import { buildEntries, groupEntriesByYearMonth } from '../lib/journeyEntries';
 import { GameCover } from '../components/GameCover';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
@@ -12,6 +12,7 @@ import { useStateEvents } from '../hooks/stateEvents';
 import { BLUE, VIOLET } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
+import { hasMeasuredDuration } from '../lib/sessionStats';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useTvBackdrop } from './backdropContext';
 import { useTvButtons, useTvLegend } from './tvInput';
@@ -404,21 +405,11 @@ export const TvJourney = (): React.JSX.Element => {
   );
 
   // Las mismas entradas y la misma agrupación año→mes (de nuevo a viejo, sin
-  // meses futuros del año en curso) que el Journey de escritorio — solo que
+  // futuro) que el Journey de escritorio — literalmente la misma función
+  // (groupEntriesByYearMonth), que es donde vive el recorte — solo que
   // aplanadas en una secuencia de PÁGINAS: [año, sus meses..., año, ...].
   const pages = useMemo<TvJourneyPage[]>(() => {
-    const entries = buildEntries(games, sessions, stateEvents);
-    const now = new Date();
-    const grouped = new Map<number, Map<number, JourneyEntry[]>>();
-    for (const entry of entries) {
-      const year = entry.lastAt.getFullYear();
-      const month = entry.lastAt.getMonth();
-      if (year === now.getFullYear() && month > now.getMonth()) continue;
-      if (year > now.getFullYear()) continue;
-      const months = grouped.get(year) ?? new Map<number, JourneyEntry[]>();
-      months.set(month, [...(months.get(month) ?? []), entry]);
-      grouped.set(year, months);
-    }
+    const grouped = groupEntriesByYearMonth(buildEntries(games, sessions, stateEvents));
 
     const list: TvJourneyPage[] = [];
     // La cubierta abre el libro: totales de TODO lo agrupado (los mismos
@@ -446,8 +437,13 @@ export const TvJourney = (): React.JSX.Element => {
         year,
         games: new Set(yearEntries.map((entry) => entry.gameId)).size,
         hours: yearEntries.reduce((sum, entry) => sum + entry.hours, 0),
+        // hasMeasuredDuration y no "endedAt !== null": el predicado de la casa
+        // descarta además las sesiones manuales heredadas, que es lo que hacen
+        // TODAS las gráficas de sesiones del escritorio. Contándolas, la
+        // portada del año anunciaba veces-que-te-sentaste que en Stats no
+        // existían.
         sessionCount: sessions.filter(
-          (session) => session.endedAt !== null && session.startedAt.getFullYear() === year,
+          (session) => hasMeasuredDuration(session) && session.startedAt.getFullYear() === year,
         ).length,
         topGame:
           topEntry && topEntry.hours > 0 ? { title: topEntry.title, hours: topEntry.hours } : null,

@@ -1,16 +1,21 @@
 import { ArrowRight, Flame, Timer, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AchievementEntry, Session } from '../../../../../shared/types';
+import type { Session } from '../../../../../shared/types';
 import { useGameAchievements } from '../../../hooks/achievements';
-import { SessionAchievements } from '../../sessions/SessionAchievements';
+import {
+  SessionAchievements,
+  type SessionAchievementEntry,
+} from '../../sessions/SessionAchievements';
 import { useTimeFormat } from '../../../hooks/settings';
+import { useFlashLanding } from '../../../hooks/useFlashLanding';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import {
   consumeSessionFlash,
   getPendingSessionFlash,
   subscribeSessionFlash,
 } from '../../../hooks/useSessionClosedToast';
+import { requestAchievementFlash } from '../../../lib/achievementFlash';
 import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
@@ -37,17 +42,21 @@ const SessionRow = ({
   isRecord,
   flash,
   achievements,
+  onOpenAchievement,
   onDelete,
 }: {
   session: Session;
   maxDurationSec: number;
   isRecord: boolean;
+  // Pulsar un trofeo de la fila salta a SU logro, unas secciones más abajo
+  // (LOGROS-REDISENO §1) — el módulo del flash hace de mensajero.
+  onOpenAchievement: (achievementId: number) => void;
   // Parpadeo dorado al llegar desde el aviso de cierre: "esta es la sesión de
   // la que te hablaba". Dos pulsos y se acaba (ver main.css).
   flash: boolean;
   // Los logros que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1) — ya
   // cruzados por el main (sessionId en cada desbloqueo); aquí solo se pintan.
-  achievements: AchievementEntry[];
+  achievements: SessionAchievementEntry[];
   // Solo llega para sesiones CERRADAS — una viva se para con Stop, no se
   // borra (el watcher la reabriría al ciclo siguiente).
   onDelete?: () => void;
@@ -65,30 +74,15 @@ const SessionRow = ({
   // El parpadeo no sirve de nada si pasa fuera de pantalla: al llegar desde
   // el aviso, la ficha se abre arriba del todo (hero, acciones…) y el
   // historial de sesiones queda mucho más abajo. Así que primero se lleva la
-  // fila a la vista y SOLO DESPUÉS empieza a parpadear.
-  const rowRef = useRef<HTMLDivElement>(null);
-  const [flashing, setFlashing] = useState(false);
-
-  useEffect(() => {
-    if (!flash) return;
-    rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // Margen para que el desplazamiento haya llegado (o casi) antes del
-    // primer pulso — si no, el destello se gasta mientras la fila todavía
-    // está entrando en pantalla.
-    const timer = setTimeout(() => {
-      setFlashing(true);
-      // Se consume AQUÍ y no antes: consumir vuelve `flash` a false y eso
-      // dispara la limpieza de este efecto — hacerlo al entrar cancelaría el
-      // temporizador y el parpadeo no llegaría a empezar nunca.
-      consumeSessionFlash();
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [flash]);
+  // fila a la vista y SOLO DESPUÉS empieza a parpadear (ver useFlashLanding,
+  // compartido con la sección de logros).
+  const { rowRef, flashClass, onAnimationEnd } = useFlashLanding(flash, consumeSessionFlash);
 
   return (
     <div
       ref={rowRef}
-      className={`group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5 ${flashing ? 'afterplay-flash-gold' : ''}`}
+      onAnimationEnd={onAnimationEnd}
+      className={`group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5 ${flashClass}`}
       style={
         isLive
           ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
@@ -125,7 +119,7 @@ const SessionRow = ({
         {/* Los trofeos de la noche (LOGROS-IDEAS.md §2.1): la misma pieza
             que las filas de la pantalla de Sesiones y el aviso de cierre —
             píldora teñida del más raro + los iconos de verdad. */}
-        <SessionAchievements entries={achievements} />
+        <SessionAchievements entries={achievements} onOpen={onOpenAchievement} />
 
         {/* Diario de sesión: "dónde lo dejé" — ver SessionNote. */}
         <SessionNote sessionId={session.id} note={session.note} />
@@ -174,11 +168,20 @@ export const SessionHistoryList = ({
   // la app, u otro PC) simplemente no aparecen en ninguna fila — regla 3 de
   // LOGROS-IDEAS.md: lo sesional solo cuenta lo sesional.
   const { data: achievementsData } = useGameAchievements(gameId);
-  const achievementsBySession = new Map<number, AchievementEntry[]>();
+  // Con el achievementId EXPLICITO: AchievementEntry lo llama `id` y la forma
+  // compartida `achievementId` — sin este mapeo el campo quedaba undefined
+  // por estructura y los trofeos de la fila no enlazaban a nada (el boton ni
+  // se pintaba), que es justo lo que el rediseño vino a arreglar.
+  const achievementsBySession = new Map<number, SessionAchievementEntry[]>();
   for (const entry of achievementsData?.entries ?? []) {
     if (entry.sessionId === null || entry.unlockedAt === null) continue;
     const list = achievementsBySession.get(entry.sessionId) ?? [];
-    list.push(entry);
+    list.push({
+      achievementId: entry.id,
+      displayName: entry.displayName,
+      iconUrl: entry.iconUrl,
+      globalPercent: entry.globalPercent,
+    });
     achievementsBySession.set(entry.sessionId, list);
   }
 
@@ -208,6 +211,10 @@ export const SessionHistoryList = ({
               }
               flash={session.id === flashSessionId}
               achievements={achievementsBySession.get(session.id) ?? []}
+              // Ya estamos en la ficha del juego: no hay ruta que cambiar. El
+              // flash viaja por el módulo y AchievementsSection (más abajo en
+              // esta misma pantalla) lo recoge en caliente.
+              onOpenAchievement={requestAchievementFlash}
               onDelete={session.endedAt !== null ? () => setPendingDelete(session) : undefined}
             />
           </div>

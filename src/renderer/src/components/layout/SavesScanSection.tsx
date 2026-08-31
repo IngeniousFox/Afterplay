@@ -11,6 +11,7 @@ import {
   useSetSaveBackupEnabled,
 } from '../../hooks/saves';
 import { formatBytes, pluralize } from '../../lib/format';
+import { KEYS_TAB } from '../../lib/settingsTabs';
 import { expandClass } from '../../lib/styles';
 import { CloudIdentitySection } from './CloudIdentitySection';
 import { CloudInventorySection } from './CloudInventorySection';
@@ -185,7 +186,10 @@ const UnavailableNotice = ({
     <span>
       {status && !status.binaryAvailable
         ? 'The save-backup engine is missing from this install — an antivirus may have quarantined it. Everything else works normally.'
-        : 'Scanning works, but nothing can be uploaded until you add your Cloudflare R2 keys in API & Sync above.'}
+        : /* Sin "above": esta tarjeta vive en la pestaña "Game saves" y las
+             claves en OTRA pestaña, así que mandar a mirar más arriba de esta
+             misma columna era mandar a ninguna parte. */
+          `Scanning works, but nothing can be uploaded until you add your Cloudflare R2 keys in ${KEYS_TAB}.`}
     </span>
   </div>
 );

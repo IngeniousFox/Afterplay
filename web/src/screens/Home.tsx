@@ -69,39 +69,35 @@ const Tile = ({
 // la leyenda sumaba 88 justo debajo de un tile de "Games" que decía 100, y el
 // tramo de Beaten se dibujaba al 34% (30/88) en vez de al 30%.
 //
-// Van juntos en un solo tramo porque StatsSummary todavía no manda esas dos
-// cifras por separado (worker/src/queries/stats.ts solo cuenta cuatro); el día
-// que las mande, esto se parte en dos con su color de la tabla de estados. El
-// hueco que queda sin pintar en la barra sigue siendo Unplayed.
+// On Hold y Resting van cada uno con SU color y SU etiqueta, no en un tramo
+// gris común. Aquí se deducían por RESTA (totalGames menos los otros cuatro),
+// que era la única opción cuando StatsSummary mandaba cuatro cifras; hoy manda
+// los seis cajones (worker/src/queries/stats.ts, y api-types dice que se
+// añadieron precisamente para esto), así que la resta pintaba un juego Resting
+// con el gris de On Hold — y cualquier estado nuevo habría caído mudo en ese
+// mismo tramo, bajo una etiqueta que ya no lo nombraba. El hueco que queda sin
+// pintar en la barra sigue siendo Unplayed.
 const StatusBar = ({ stats }: { stats: StatsSummary }): React.JSX.Element | null => {
-  const paused = Math.max(
-    0,
-    stats.totalGames - stats.beaten - stats.playing - stats.dropped - stats.unplayed,
-  );
-
-  const counted: { state: StateType; count: number }[] = [
-    { state: 'completed', count: stats.beaten },
-    { state: 'started', count: stats.playing },
-    { state: 'dropped', count: stats.dropped },
+  // Los tres primeros se pintan siempre —un 0 de Beaten también es una
+  // respuesta—; los dos últimos solo si los hay, igual que hacía el tramo que
+  // sustituyen: en la biblioteca de casi todo el mundo son cero, y dos entradas
+  // más de leyenda a cero serían ruido.
+  const counted: { state: StateType; count: number; always: boolean }[] = [
+    { state: 'completed', count: stats.beaten, always: true },
+    { state: 'started', count: stats.playing, always: true },
+    { state: 'dropped', count: stats.dropped, always: true },
+    { state: 'on_hold', count: stats.onHold, always: false },
+    { state: 'resting', count: stats.resting, always: false },
   ];
 
-  const segments: { key: string; label: string; color: string; count: number }[] = counted.map(
-    ({ state, count }) => ({
+  const segments = counted
+    .filter(({ count, always }) => always || count > 0)
+    .map(({ state, count }) => ({
       key: state,
       label: statusOf(state).label,
       color: statusOf(state).color,
       count,
-    }),
-  );
-
-  if (paused > 0) {
-    segments.push({
-      key: 'paused',
-      label: 'On Hold + Resting',
-      color: statusOf('on_hold').color,
-      count: paused,
-    });
-  }
+    }));
 
   const known = stats.totalGames;
   if (known === 0) return null;

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { createViewportPool } from '../lib/intersectionPool';
 
 // ¿Está este elemento lo bastante cerca de la parte visible como para que
 // valga la pena tener su imagen viva?
@@ -20,38 +21,13 @@ import { useCallback, useState } from 'react';
 // pantalla) de que este margen la alcance.
 const NEAR_MARGIN_PX = 800;
 
-const scrollerOf = (element: Element): Element | null => {
-  for (let node = element.parentElement; node; node = node.parentElement) {
-    const overflowY = getComputedStyle(node).overflowY;
-    if (overflowY === 'auto' || overflowY === 'scroll') return node;
-  }
-  return null;
-};
-
 // UN observador por scroller, compartido por todas las filas que cuelgan de
-// él. Uno por fila serían cientos de observadores midiendo exactamente el
-// mismo rectángulo — justo el coste que este módulo viene a quitar.
-const byRoot = new WeakMap<Element, IntersectionObserver>();
-let viewportObserver: IntersectionObserver | null = null;
-const callbacks = new WeakMap<Element, (near: boolean) => void>();
-
-const notify = (entries: IntersectionObserverEntry[]): void => {
-  for (const entry of entries) callbacks.get(entry.target)?.(entry.isIntersecting);
-};
-
-const observerFor = (root: Element | null): IntersectionObserver => {
-  const options = { root, rootMargin: `${NEAR_MARGIN_PX}px 0px` };
-  if (!root) {
-    viewportObserver ??= new IntersectionObserver(notify, options);
-    return viewportObserver;
-  }
-  let observer = byRoot.get(root);
-  if (!observer) {
-    observer = new IntersectionObserver(notify, options);
-    byRoot.set(root, observer);
-  }
-  return observer;
-};
+// él (lib/intersectionPool): uno por fila serían cientos de observadores
+// midiendo exactamente el mismo rectángulo — justo el coste que este módulo
+// viene a quitar. La fontanería está allí porque estaba copiada aquí y en
+// useOffscreenAnimation; aquí se queda solo lo que es POLÍTICA de este hook:
+// el margen y qué se hace al montar y al soltar.
+const pool = createViewportPool(NEAR_MARGIN_PX);
 
 // Arranca en `true` a propósito: una fila recién montada pinta su carátula ya,
 // y es el observador quien la apaga si resulta estar lejos. Al revés se vería
@@ -77,13 +53,7 @@ export const useNearViewport = (): {
     // React 19 no llama con null cuando la callback devuelve limpieza, pero el
     // tipo de RefCallback sigue admitiéndolo — y aquí no hay nada que hacer.
     if (!node) return undefined;
-    const observer = observerFor(scrollerOf(node));
-    callbacks.set(node, setNear);
-    observer.observe(node);
-    return () => {
-      observer.unobserve(node);
-      callbacks.delete(node);
-    };
+    return pool.observe(node, setNear);
   }, []);
 
   return { observe, near };

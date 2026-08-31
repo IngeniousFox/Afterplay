@@ -30,10 +30,11 @@ export const NavRail = (): React.JSX.Element => {
   const pendingCount = pendingSessions.length;
 
   // Primer arranque sin credenciales de IGDB (instalación virgen, sin .env
-  // que importar): se abre Ajustes UNA vez con la sección API & Sync
-  // expandida y el aviso de bienvenida — sin ellas no hay búsqueda de juegos
-  // y el porqué no es obvio. Ajustar-estado-durante-render (sin useEffect),
-  // como el resto de la app; una sola vez por sesión para no dar la lata.
+  // que importar): se abre Ajustes UNA vez en la pestaña Connections, con el
+  // grupo de IGDB desplegado y el aviso de bienvenida — sin ellas no hay
+  // búsqueda de juegos y el porqué no es obvio. Ajustar-estado-durante-render
+  // (sin useEffect), como el resto de la app; una sola vez por sesión para no
+  // dar la lata.
   const { data: credentials } = useCredentials();
   const [credentialsChecked, setCredentialsChecked] = useState(false);
   const [credentialsSpotlight, setCredentialsSpotlight] = useState(false);

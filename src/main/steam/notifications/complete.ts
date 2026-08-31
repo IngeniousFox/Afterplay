@@ -14,6 +14,30 @@ import { enqueueAchievementToasts } from './overlay';
 // broche — no fundida en el resumen "N achievements unlocked".
 const AFTER_BATCH_MS = 1500;
 
+// Los juegos que YA tienen su tarjeta dorada puesta.
+//
+// Cada llamada programa SU propia comprobación a AFTER_BATCH_MS y no había
+// memoria de nada, así que dos vaciados seguidos del vigilante de emuladores
+// —su rebote es de 900 ms, o sea que dos escrituras del crack separadas ~1,1 s
+// NO se funden— sacaban dos tarjetas idénticas del mismo 100%: cuando vencía el
+// temporizador del primero el último logro ya estaba guardado, y el del segundo
+// volvía a ver el juego completo un segundo después. storeUnlocks deduplica el
+// LOGRO (y por eso una segunda FUENTE no celebra dos veces); esto deduplica la
+// CELEBRACIÓN, que es otra cosa.
+//
+// Se recuerda CON QUE TOTAL se celebró, no solo que se celebró: un Set a
+// secas tenía un agujero con los DLC. Celebras 30/30; un DLC sube el catálogo
+// a 40 en un sync (que no pasa por aquí, así que nadie ve el juego
+// "incompleto" ni limpia nada); si los 10 nuevos entran luego en UNA sola
+// tanda, la única comprobación ya ve 40/40 con la marca puesta — y el
+// segundo 100%, que es de verdad, se quedaba sin tarjeta. Comparando el
+// total, un catálogo que creció desde la última celebración vuelve a
+// celebrar; el mismo total sigue deduplicando los dos vaciados seguidos del
+// vigilante. Vive en memoria y se pierde al reiniciar, y da igual: aquí solo
+// se llega con desbloqueos NUEVOS, y en un juego ya completo no queda
+// ninguno.
+const celebratedAtTotal = new Map<number, number>();
+
 export const maybeCelebrateCompletion = (
   gameId: number,
   gameTitle: string,
@@ -41,7 +65,12 @@ export const maybeCelebrateCompletion = (
             )
             .where(eq(achievementsTable.gameId, gameId)),
         );
-        if (!row || row.total === 0 || row.unlocked < row.total) return;
+        if (!row || row.total === 0 || row.unlocked < row.total) {
+          celebratedAtTotal.delete(gameId);
+          return;
+        }
+        if (celebratedAtTotal.get(gameId) === row.total) return;
+        celebratedAtTotal.set(gameId, row.total);
 
         // Solo ASCII en los console.log, convencion de la casa.
         console.log(`[steam] 100% de logros: ${gameTitle}`);

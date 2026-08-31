@@ -10,16 +10,23 @@ const SGDB_TIMEOUT_MS = 10_000;
 // propio cliente axios) y HLTB (30s ya incluidos en su paquete), una llamada
 // a SGDB que nunca responde se quedaría colgada sin límite. Esto le pone la
 // misma cota por fuera, sin tocar el paquete.
-const withSgdbTimeout = <T>(promise: Promise<T>): Promise<T> =>
-  Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error('SteamGridDB tardó demasiado en responder')),
-        SGDB_TIMEOUT_MS,
-      ),
-    ),
-  ]);
+//
+// El clearTimeout del finally NO es cosmético: sin él, cada llamada que
+// contesta a tiempo (o sea, casi todas) dejaba su temporizador de 10 s
+// armado. Un timer pendiente mantiene VIVO el bucle de eventos del proceso
+// main, así que cerrar la app justo después de una tanda podía quedarse
+// esperando; y el barrido de redescarga de imágenes hace cientos de llamadas
+// seguidas, o sea cientos de temporizadores conviviendo para nada.
+const withSgdbTimeout = <T>(promise: Promise<T>): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('SteamGridDB tardó demasiado en responder')),
+      SGDB_TIMEOUT_MS,
+    );
+  });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+};
 
 // Busca el juego en SteamGridDB y devuelve su id, o null si no hay match con
 // confianza suficiente. Mismo criterio que HLTB (nombre + año) — aquí hace

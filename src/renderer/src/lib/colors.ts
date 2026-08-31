@@ -9,10 +9,18 @@ export const AMBER = '#e3b24a';
 // cualquier color de estado, aunque algunos coincidan de casualidad.
 //
 // Estos hex estaban copiados byte a byte en dos docenas de componentes, cada
-// uno con su `const GREEN = '#2fdc7e'` arriba del archivo. AQUÍ es donde se
-// tocan: si un día cambia el verde de la app, cambia en un sitio y no en
-// veinticuatro (que en la práctica significa cambiarlo en veinte y dejarse
-// cuatro sin que nadie lo note).
+// uno con su `const GREEN = '#2fdc7e'` arriba del archivo. Este fichero es
+// donde vive el token para JS y el destino al que hay que ir llevándolos.
+//
+// PERO OJO, PORQUE AQUÍ ANTES SE PROMETÍA LO QUE NO SE CUMPLE: cambiar GREEN
+// aquí NO cambia el verde de la app. Hoy el literal `#2fdc7e` sigue escrito a
+// mano en una treintena de ficheros del renderer (styles.ts, NavRail,
+// GameCard, ActionBar, media Stats, el árbol de tv/ entero…) más `--primary`
+// en main.css. Y no son ficheros que ignoren este sitio: NavRail y GameCard
+// importan GREEN de aquí y unas líneas más abajo escriben el hex a mano, y
+// CredentialsSection importa AMBER y BLUE mientras se teclea el verde cuatro
+// veces. Cambiar el verde es cambiarlo aquí Y buscar el literal — hasta que
+// el último se haya mudado, tocar solo esta línea deja la app a dos verdes.
 export const GREEN = '#2fdc7e';
 export const VIOLET = '#7c86c8';
 export const BLUE = '#85a3d6';

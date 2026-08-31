@@ -5,7 +5,8 @@ import {
   curiositiesTable,
   gamesTable,
 } from '../../../src/main/db/schema';
-import type { AchievementEntry, AchievementSource, GameAchievements } from '../api-types';
+import { mergeUnlocksByAchievement } from '../../../src/shared/mergeUnlocks';
+import type { AchievementEntry, GameAchievements } from '../api-types';
 import type { TenantDb } from '../db';
 
 // Los logros de un juego, con las fuentes YA FUNDIDAS (LOGROS.md §2).
@@ -15,11 +16,14 @@ import type { TenantDb } from '../db';
 // emulador —jugaste una vuelta pirata y luego lo compraste— y las dos cosas
 // son ciertas a la vez. Se guardan por separado y se funden al leer.
 //
-// Portado entero, incluida la regla de desempate, porque no es obvia: una
-// fuente CON fecha fiable gana siempre a una sin ella, por temprana que sea
-// esta. El caso real es tener el logro por el arrastre masivo del crack (con
-// fecha inventada de hoy) y también por Steam con su fecha de verdad — la
-// buena es la de Steam aunque sea posterior.
+// El desempate NO se porta: se IMPORTA (mergeUnlocksByAchievement, src/shared).
+// Aquí había una copia a mano término a término, y la cabecera de este fichero
+// presumía de haberla "portado entera, incluida la regla de desempate" — que es
+// la confesión. La regla no es obvia (una fuente CON fecha fiable gana siempre a
+// una sin ella, por temprana que sea esta) y tiene una decisión pendiente encima
+// —RETROACHIEVEMENTS.md §8, hardcore contra softcore— que la va a cambiar. El
+// día que se cambie, esta ficha del móvil habría seguido fechando los logros con
+// el criterio viejo sin que nada fallara al compilar.
 export const getGameAchievements = async (
   db: TenantDb,
   gameId: number,
@@ -71,44 +75,18 @@ export const getGameAchievements = async (
     .innerJoin(achievementsTable, eq(achievementUnlocksTable.achievementId, achievementsTable.id))
     .where(eq(achievementsTable.gameId, gameId));
 
-  type Merged = { unlockedAt: Date; dateReliable: boolean; sources: AchievementSource[] };
-  const mergedById = new Map<number, Merged>();
-
-  for (const unlock of unlocks) {
-    const existing = mergedById.get(unlock.achievementId);
-    if (!existing) {
-      mergedById.set(unlock.achievementId, {
-        unlockedAt: unlock.unlockedAt,
-        dateReliable: unlock.dateReliable,
-        sources: [unlock.source],
-      });
-      continue;
-    }
-
-    existing.sources.push(unlock.source);
-
-    if (unlock.dateReliable && !existing.dateReliable) {
-      existing.unlockedAt = unlock.unlockedAt;
-      existing.dateReliable = true;
-      continue;
-    }
-    if (!unlock.dateReliable && existing.dateReliable) continue;
-
-    // Empatadas en fiabilidad: manda la más temprana. La pregunta que responde
-    // la ficha es "¿cuándo hiciste esto por primera vez?", y esa respuesta no
-    // cambia porque después lo compraras en Steam.
-    if (unlock.unlockedAt.getTime() < existing.unlockedAt.getTime()) {
-      existing.unlockedAt = unlock.unlockedAt;
-    }
-  }
+  // La ganadora decide la FECHA y la fiabilidad; las fuentes se enumeran todas,
+  // en el orden en que llegaron. Que un logro conste por dos sitios no es un
+  // duplicado que haya que resolver a favor de uno: las dos cosas pasaron.
+  const mergedById = mergeUnlocksByAchievement(unlocks);
 
   const entries: AchievementEntry[] = definitions.map((definition) => {
     const merged = mergedById.get(definition.id);
     return {
       ...definition,
-      unlockedAt: merged ? merged.unlockedAt.getTime() : null,
-      dateReliable: merged?.dateReliable ?? true,
-      sources: merged?.sources ?? [],
+      unlockedAt: merged ? merged.winner.unlockedAt.getTime() : null,
+      dateReliable: merged?.winner.dateReliable ?? true,
+      sources: merged?.rows.map((row) => row.source) ?? [],
     };
   });
 

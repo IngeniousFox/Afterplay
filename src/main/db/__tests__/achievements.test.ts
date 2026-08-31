@@ -817,7 +817,11 @@ describe('getAchievementsOverview — almost there (LOGROS-IDEAS §4.1)', () => 
     for (const id of ids.slice(0, 3)) await consta(id, 'steam', '2026-03-15T12:00:00Z');
 
     const [casi] = (await getAchievementsOverview(null)).almostThere;
+    // `achievementId` se sumo al enlazar Stats con la ficha (el aterrizaje
+    // dorado): un id no cuenta nada del final del juego. Lo que esta lista
+    // sigue prohibiendo es `description`, que si lo contaria.
     assert.deepEqual(Object.keys(casi.missing[0]).sort(), [
+      'achievementId',
       'displayName',
       'globalPercent',
       'hidden',

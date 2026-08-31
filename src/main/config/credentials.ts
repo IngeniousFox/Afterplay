@@ -1,7 +1,12 @@
 import { app, safeStorage } from 'electron';
 import { parse } from 'dotenv';
-import { existsSync, readFileSync, renameSync } from 'fs';
+import { existsSync, readFileSync, renameSync, unlinkSync } from 'fs';
 import { writeFileAtomicSync } from '../lib/atomicWrite';
+import { isE2E } from '../lib/e2e';
+import {
+  CREDENTIAL_KEYS as SHARED_CREDENTIAL_KEYS,
+  ENV_BY_CREDENTIAL_KEY,
+} from '../../shared/credentialKeys';
 import { join } from 'path';
 import type {
   CredentialsImportResult,
@@ -22,24 +27,12 @@ import type {
 // decide DE DÓNDE salen esos valores: los carga al arrancar y los actualiza
 // en caliente cuando se guardan desde Ajustes.
 
-const ENV_BY_KEY: Record<keyof CredentialsValues, string> = {
-  twitchClientId: 'TWITCH_CLIENT_ID',
-  twitchClientSecret: 'TWITCH_CLIENT_SECRET',
-  steamGridDbApiKey: 'STEAMGRIDDB_API_KEY',
-  databaseUrl: 'DATABASE_URL',
-  databaseAuthToken: 'DATABASE_AUTH_TOKEN',
-  r2AccountId: 'R2_ACCOUNT_ID',
-  r2Bucket: 'R2_BUCKET',
-  r2AccessKeyId: 'R2_ACCESS_KEY_ID',
-  r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
-  anthropicApiKey: 'ANTHROPIC_API_KEY',
-  steamApiKey: 'STEAM_API_KEY',
-  steamUserId64: 'STEAM_USER_ID64',
-  raUsername: 'RA_USERNAME',
-  raApiKey: 'RA_API_KEY',
-};
+// El mapa vive en shared/credentialKeys.ts: lo comparte el andamio de los
+// tests E2E, que fabrica el credentials.json de su sandbox desde un
+// .env.test y no puede importar este fichero (arrastra electron).
+const ENV_BY_KEY = ENV_BY_CREDENTIAL_KEY;
 
-const CREDENTIAL_KEYS = Object.keys(ENV_BY_KEY) as (keyof CredentialsValues)[];
+const CREDENTIAL_KEYS = SHARED_CREDENTIAL_KEYS;
 
 type CredentialsFile = {
   version: 1;
@@ -132,15 +125,22 @@ export const setCredentials = (input: CredentialsValues): void => {
   applyToEnv(normalized);
 };
 
-// El HOST de la base remota que traen unas credenciales, para el log. Los
-// dos caminos que IMPORTAN claves de fuera (el .env legado de abajo y el
-// fichero de traslado de más abajo) deciden con qué base habla la app, y el
-// 3-ago-2026 nos costó un susto: una instancia de prueba con carpeta de
-// datos nueva importó el .env del proyecto —que entonces tenía la base REAL
-// activa— y acabó empujándole una migración a producción. Desde entonces se
-// dice en voz alta QUÉ base entra. Solo el host, jamás el token: esto acaba
-// pegado en informes de error.
-const remoteLabel = (databaseUrl: string | null | undefined): string => {
+// El HOST de una base remota, para el log. Los dos caminos que IMPORTAN
+// claves de fuera (el .env legado de abajo y el fichero de traslado de más
+// abajo) deciden con qué base habla la app, y el 3-ago-2026 nos costó un
+// susto: una instancia de prueba con carpeta de datos nueva importó el .env
+// del proyecto —que entonces tenía la base REAL activa— y acabó empujándole
+// una migración a producción. Desde entonces se dice en voz alta QUÉ base
+// entra. Solo el host, jamás el token: esto acaba pegado en informes de error.
+//
+// EXPORTADA porque el tercer sitio que anuncia base —db/index.ts, en cada log
+// de conexión— tenía su propia copia byte a byte de esto, con este mismo
+// incidente contado otra vez encima. Es la función que decide qué base se
+// canta, o sea el dato exacto que costó el susto: cambiarle el formato (por
+// ejemplo, distinguir prod de test con algo más que el primer segmento del
+// host) tenía que hacerse dos veces o no servía de nada. Esta firma es la
+// buena de las dos: recibe la url en vez de leer process.env por dentro.
+export const remoteLabel = (databaseUrl: string | null | undefined): string => {
   if (!databaseUrl) return 'sin remota';
   try {
     return new URL(databaseUrl).hostname.split('.')[0];
@@ -162,7 +162,8 @@ const remoteLabel = (databaseUrl: string | null | undefined): string => {
 // —soltarlo en la carpeta de datos— ocurre en el arranque, sin nadie delante
 // a quien pedirle una contraseña. Es el mismo trato que tenía el .env al que
 // esto sustituyó, con dos mejoras: vive donde tú lo dejes, y en cuanto se
-// aplica se retira.
+// aplica se BORRA (ver importDroppedKeysFile — "retirarlo" fue durante un
+// tiempo renombrarlo, que dejaba las claves legibles ahí para siempre).
 export const KEYS_FILE_NAME = 'afterplay-keys.json';
 
 // Se escribe con los NOMBRES DE ENTORNO, no con las claves internas del tipo:
@@ -298,12 +299,22 @@ const importDroppedKeysFile = (): void => {
   try {
     const { imported } = importCredentialsFromFile(path);
     startupKeysImport = { ok: true, imported };
-    // Retirado en cuanto se aplica: si se quedara, cada arranque volvería a
-    // pisar con él lo que hayas cambiado en Ajustes desde entonces.
+    // BORRADO en cuanto se aplica, no renombrado.
+    //
+    // Retirarlo es obligatorio por lo de siempre: si se quedara, cada arranque
+    // volvería a pisar con él lo que hayas cambiado en Ajustes desde entonces.
+    // Pero aquí se renombraba a `.imported.bak` y eso dejaba el fichero EN
+    // CLARO —con el token de Turso, la key de Anthropic y las de R2 dentro—
+    // tirado para siempre en la misma carpeta userData, al lado del
+    // credentials.json que safeStorage cifra precisamente para que esos
+    // valores no estén legibles en reposo. Las claves ya están guardadas y
+    // cifradas cuando se llega aquí, así que la copia legible no salva nada
+    // que no esté salvado: solo alarga la ventana en la que basta con leer un
+    // fichero de texto.
     try {
-      renameSync(path, `${path}.imported.bak`);
+      unlinkSync(path);
     } catch (error) {
-      console.warn('[credentials] no se pudo retirar el fichero de claves importado:', error);
+      console.warn('[credentials] no se pudo borrar el fichero de claves importado:', error);
     }
   } catch (error) {
     // NO se retira: se deja donde está para poder corregirlo y volver a
@@ -319,6 +330,12 @@ const importDroppedKeysFile = (): void => {
 // el del proyecto en desarrollo), se importan y el de userData se renombra a
 // .env.imported.bak — a partir de ahí el .env deja de leerse para siempre.
 const importLegacyEnv = (): void => {
+  // En un test de extremo a extremo, JAMÁS. Su carpeta de datos es virgen, o
+  // sea que sin esta salida caería aquí y adoptaría el .env del proyecto —
+  // que lleva la base que el dueño tenga activa ese día. Es el escenario
+  // exacto del 3-ago-2026, y la razón de que el modo E2E exista (ver e2e.ts).
+  if (isE2E()) return;
+
   const userDataEnvPath = join(app.getPath('userData'), '.env');
   const candidates = [userDataEnvPath];
   if (!app.isPackaged) candidates.push(join(process.cwd(), '.env'));

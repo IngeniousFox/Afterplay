@@ -18,6 +18,7 @@ import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
 import { registerContextMenu } from './lib/contextMenu';
+import { applyE2EUserData, isE2E } from './lib/e2e';
 import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { applyYoutubeReferer } from './lib/youtubeReferer';
 import { createSplashWindow } from './splash/splash';
@@ -27,7 +28,7 @@ import { setCuriositiesNotifier } from './curiosities/notify';
 import { setExternalNotifier } from './external/notify';
 import { runMemoriesDailyTick } from './memories/detect';
 import { runPlanMailboxDrain } from './plan/drainMailbox';
-import { onSyncCompleted } from './db';
+import { notifyPulledChanges, onSyncCompleted } from './db';
 import { runSteamAppIdBackfill } from './steam/appIdBackfill';
 import {
   queueAchievementsRefreshForGame,
@@ -136,6 +137,12 @@ let preBigPictureState: { bounds: Electron.Rectangle; isMaximized: boolean } | n
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
 
+// Y, si esto es un test de extremo a extremo, la carpeta de datos AISLADA —
+// aquí y no más abajo por lo mismo que setName: todo lo que cuelga de
+// userData (la base, las credenciales, las copias, la caché) se calcula a
+// partir de esta línea. Sin la variable de entorno no hace nada. Ver e2e.ts.
+applyE2EUserData();
+
 // El aviso de logros suena SIN que nadie haya pulsado nada en su ventana — y
 // no puede pulsarse, porque ignora el ratón a propósito (LOGROS.md §8). Sin
 // esto, la política de autoreproducción de Chromium deja su AudioContext
@@ -173,7 +180,27 @@ registerImageProtocolScheme();
 // mainWindow a null aunque la buena siguiera viva. Ese segundo desastre ya no
 // puede pasar (createWindow se defiende solo, y los handlers se registran
 // antes), pero el primero sí.
-let startupFinished = false;
+//
+// Y LA PUERTA ES "¿SE HA ENSEÑADO YA LA VENTANA?", no "¿acabaron las
+// migraciones?". Aquí había un `startupFinished` marcado al terminar
+// runMigrations, y esa definición se quedó vieja el día que nació el TERCER
+// RELOJ (startupContentPainted, más abajo): desde entonces la ventana NO se
+// enseña al acabar de migrar, sino cuando además llega
+// 'window:startup-content-ready' (o vencen los CONTENT_GATE_MAX_MS). En ese
+// hueco —1-2 s en producción resolviendo games:getAll y decodificando
+// carátulas, hasta 12 s en desarrollo— un doble clic en el .exe se atendía en
+// el acto: showMainWindow() enseñaba la ventana SIN DATOS, con el splash
+// todavía vivo al lado, que es justo lo que el párrafo de arriba promete
+// evitar. La bandera es ahora la del reveal, la única que significa "ya hay
+// algo que enseñar"; y como el reveal tiene su propia red de seguridad (12 s
+// como mucho), una petición aparcada nunca se queda esperando para siempre.
+//
+// El "Open" del tray se queda FUERA de esta puerta a propósito, aunque el
+// icono nazca dentro de ese mismo hueco: es la única vía de escape a mano si
+// el reveal llegara a atascarse, y quien lo pulsa está mirando la app y sabe
+// que acaba de arrancar. El doble clic en el .exe es lo contrario — alguien
+// que cree que no está abierta— y por eso es el que se aparca.
+let windowRevealed = false;
 let pendingWindowRequest: 'show' | 'bigpicture' | null = null;
 
 // El segundo de los TRES relojes que deciden cuándo se enseña la ventana (el
@@ -228,13 +255,15 @@ if (!isPrimaryInstance) {
     // con la app ya corriendo = la primera instancia se pone en modo TV.
     // Sin el argumento, el clásico "doble clic": traerla delante y ya.
     const wantsBigPicture = argv.includes('--bigpicture');
-    if (!startupFinished) {
+    if (!windowRevealed) {
       // El modo TV gana sobre un "tráela delante" posterior: si Moonlight
       // pidió pantalla, el doble clic impaciente de después no debe degradar
       // la petición a ventana normal.
       if (wantsBigPicture) pendingWindowRequest = 'bigpicture';
       else if (pendingWindowRequest === null) pendingWindowRequest = 'show';
-      console.log('[startup] peticion de segunda instancia aparcada hasta que exista la ventana');
+      console.log(
+        '[startup] peticion de segunda instancia aparcada hasta que la ventana este a la vista',
+      );
       return;
     }
     if (wantsBigPicture) {
@@ -320,6 +349,11 @@ function createWindow(): void {
       return;
     }
     revealed = true;
+    // Y la misma marca fuera de este cierre, que es la puerta de las peticiones
+    // de segunda instancia (ver windowRevealed): se pone ANTES de consumir
+    // pendingWindowRequest y entre las dos no hay await, así que no queda ni un
+    // hueco en el que una petición nueva se aparque sin que nadie la recoja.
+    windowRevealed = true;
 
     // La petición de una segunda instancia aparcada durante el arranque (ver
     // pendingWindowRequest) se resuelve AQUÍ, que es el único momento en que
@@ -328,9 +362,19 @@ function createWindow(): void {
     // setFullScreen sobre una ventana OCULTA no la muestra (comprobado; a
     // diferencia de maximize(), ver más abajo), así que el modo TV sigue
     // apareciendo ya a pantalla completa, sin parpadeo de ventana normal.
+    //
+    // El AVISO al renderer no es opcional, y su falta era la mitad del modo TV
+    // que se perdía: aquí abajo el renderer YA está montado (el tercer reloj
+    // exige que haya pintado contenido, o sea que su bigpicture:get ya resolvió
+    // `false`) y solo cambia de árbol con 'bigpicture:changed'. Sin esta línea
+    // Moonlight dejaba la ventana a pantalla completa con la interfaz de
+    // ESCRITORIO dentro: sin menú TV ni navegación por mando, y sin arreglo
+    // salvo pulsar F11 dos veces. 'enter-full-screen' no cubre el hueco: manda
+    // 'window:fullscreen-change', que es otro canal y useBigPicture no escucha.
     if (pendingWindowRequest === 'bigpicture') {
       bigPictureMode = true;
       if (!window.isFullScreen()) window.setFullScreen(true);
+      sendBigPictureState();
     }
 
     // Si Windows/macOS arrancó la app sola por el login item, no se enseña la
@@ -534,6 +578,38 @@ function toggleBigPicture(): void {
   else enterBigPicture();
 }
 
+// ── Reenviar un evento de dominio a la ventana principal ─────────────────
+//
+// Este cierre estaba escrito SIETE veces (saves, curiosities, memories,
+// achievements, external, radar, images), idéntico salvo el canal. El
+// precedente de la casa ya estaba sentado del lado del DOMINIO —el mismo
+// patrón vivía copiado en cinco módulos y se extrajo a lib/makeNotifier—, pero
+// el lado del main seguía a mano: cambiar los destinatarios (lo que ya pasó
+// con los logros, que además tienen que llegar al HUD) era una edición en
+// siete sitios, y acordarse de los otros seis no lo garantizaba nadie.
+//
+// `unknown` en vez de un genérico a propósito: una función que acepta
+// `unknown` es asignable a cualquier `(event: E) => void`, así que cada setter
+// conserva SU tipo de evento sin que este helper tenga que conocerlos.
+const forwardToWindow =
+  (channel: string) =>
+  (event: unknown): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, event);
+    }
+  };
+
+// La variante que además llega al HUD del overlay, que es otra ventana con
+// otro caché (ver sendToOverlay). Hoy solo la usan los logros — ver allí la
+// cicatriz — pero está aquí para que sumar un destino siga siendo una línea.
+const forwardToWindowAndOverlay = (channel: string) => {
+  const toWindow = forwardToWindow(channel);
+  return (event: unknown): void => {
+    toWindow(event);
+    sendToOverlay(channel, event);
+  };
+};
+
 // El drenado del buzón del Plan (REMOTO.md §6.2), registrado UNA vez como
 // tarea posterior al sync.
 //
@@ -545,11 +621,14 @@ function toggleBigPicture(): void {
 //
 // Avisa al renderer al terminar porque los hooks de juegos usan
 // `staleTime: Infinity`, y eso solo se sostiene si todo el que escribe avisa.
+//
+// Con el MISMO emisor que usa el pull (notifyPulledChanges, en db/index.ts) y
+// no con una pareja mainWindow+sendToOverlay escrita aquí: los dos disparaban
+// en el mismo ciclo —las filas del buzón bajan por pull— y el overlay es un
+// BrowserWindow más, así que aquello no sumaba destinatarios, solo una segunda
+// invalidación del caché de react-query en las dos ventanas.
 onSyncCompleted(async () => {
-  await runPlanMailboxDrain(() => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('games:changed');
-    sendToOverlay('games:changed');
-  });
+  await runPlanMailboxDrain(notifyPulledChanges);
 });
 
 // This method will be called when Electron has finished
@@ -677,16 +756,15 @@ app.whenReady().then(async () => {
   }
   mark('migraciones + conexion con Turso');
 
-  // Desde aquí ya hay ventana, handlers IPC Y base: 'second-instance' vuelve a
-  // atenderse en el acto en vez de aparcarse. Se marca ANTES de enseñar la
-  // ventana y no después, para que no quede ni un hueco entre "revealWhenReady
-  // ya consumió pendingWindowRequest" y "las peticiones nuevas se atienden":
-  // una aparcada en ese hueco no la recogería nadie. Entre estas dos líneas no
-  // hay await, así que no puede colarse ningún evento.
-  startupFinished = true;
   // El otro reloj de la ventana (ver revealWhenReady en createWindow): si el
   // renderer ya terminó —lo normal ahora, porque tarda menos que Turso— esto
   // la enseña en el acto; si no, la enseñará su propio 'ready-to-show'.
+  //
+  // Y aquí NO se abre la puerta de las peticiones de segunda instancia: eso lo
+  // hace el propio reveal (ver windowRevealed). Que haya ventana, handlers IPC
+  // y base no significa todavía que haya nada que enseñar — entre esta línea y
+  // el reveal queda el tercer reloj, y atender ahí un doble clic es enseñar la
+  // biblioteca en blanco con el splash al lado.
   dbReady = true;
   revealPendingWindow?.();
 
@@ -757,27 +835,15 @@ app.whenReady().then(async () => {
   setRunningGamesProbe((gameId) => watcher?.isGameRunning(gameId) ?? false);
   // Copias automáticas al cerrar sesión: el renderer necesita enterarse en
   // vivo, o la ficha abierta se queda con la foto de antes (§10.2).
-  setSavesNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('saves:activity', event);
-    }
-  });
+  setSavesNotifier(forwardToWindow('saves:activity'));
   // Generación de curiosidades (backfill de Ajustes y altas nuevas): el
   // renderer necesita el progreso en vivo y el aviso de "este juego ya tiene
   // las suyas" para refrescar sin sondear nada.
-  setCuriositiesNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('curiosities:activity', event);
-    }
-  });
+  setCuriositiesNotifier(forwardToWindow('curiosities:activity'));
   // Recaps del Loop (AFTERPLAY-LOOP.md §3): mismo canal de progreso que las
   // curiosidades, y el aviso de "tu junio ya está contado" con el que el
   // renderer levanta su toast de aterrizaje.
-  setMemoriesNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('memories:activity', event);
-    }
-  });
+  setMemoriesNotifier(forwardToWindow('memories:activity'));
   // Logros (LOGROS.md): mismo canal de progreso que las curiosidades y los
   // recaps — la ficha abierta y la tarjeta de Ajustes se refrescan solas.
   //
@@ -786,35 +852,18 @@ app.whenReady().then(async () => {
   // esta segunda línea el catálogo del HUD se quedaba en la foto del momento
   // en que empezaste a jugar — la tarjeta cantaba el desbloqueo y el HUD
   // seguía enseñándolo bloqueado hasta reiniciar la app.
-  setAchievementsNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('achievements:activity', event);
-    }
-    sendToOverlay('achievements:activity', event);
-  });
+  setAchievementsNotifier(forwardToWindowAndOverlay('achievements:activity'));
   // Datos externos (PLAN-TO-PLAY.md §5): la parte de las reseñas va a ~2
   // petición por segundo, así que una pasada dura minutos — más de lo que
   // cualquiera deja Ajustes abierto. Por eso su estado es del main y viaja
   // por aquí: cerrar el modal o cambiar de pantalla no la para ni la pierde.
-  setExternalNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('external:activity', event);
-    }
-  });
+  setExternalNotifier(forwardToWindow('external:activity'));
   // El radar de secuelas (PLAN-TO-PLAY.md §4.4): un aviso agrupado cuando la
   // pasada semanal encuentra entregas nuevas de tus sagas.
-  setRadarNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('radar:activity', event);
-    }
-  });
+  setRadarNotifier(forwardToWindow('radar:activity'));
   // Redescarga de la caché de imágenes (Ajustes → Images): miles de ficheros
   // en una pasada, así que el progreso va por evento como todo lo largo.
-  setImagesNotifier((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('images:activity', event);
-    }
-  });
+  setImagesNotifier(forwardToWindow('images:activity'));
 
   // Cierre de un juego: el aviso va por una vía u otra según DÓNDE puedas
   // verlo. Con la ventana a la vista, un toast dentro de la app (Sonner);
@@ -829,7 +878,16 @@ app.whenReady().then(async () => {
     void queueAchievementsRefreshForGame(event.gameId);
 
     const window = mainWindow;
-    if (window && !window.isDestroyed() && window.isVisible()) {
+    // "A la vista" son DOS cosas en Windows, y aquí solo se miraba una:
+    // isVisible() mapea a IsWindowVisible(), que sigue diciendo `true` con la
+    // ventana MINIMIZADA (minimizar no quita el WS_VISIBLE). Dejar la app
+    // minimizada en la barra de tareas mientras juegas —no escondida en la
+    // bandeja— mandaba por tanto el toast a una ventana que nadie ve, y como
+    // dura 15 s y se va solo (useSessionClosedToast), el aviso de la sesión
+    // desaparecía sin que hubiera existido: la rama de la notificación nativa
+    // de aquí abajo ni se llegaba a mirar. Mismo predicado que ipc/window.ts
+    // usa para contestar "¿se ve la ventana?".
+    if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized()) {
       window.webContents.send('sessions:closed', event);
       return;
     }
@@ -933,6 +991,26 @@ app.whenReady().then(async () => {
   // queda nada que preguntar. Tras la primera pasada es un no-op.
   void runSyncCycle().then(async () => {
     mark('primer ciclo de sync terminado');
+    // EN UN TEST E2E, HASTA AQUI Y NO MAS.
+    //
+    // Todo lo de abajo son pasadas de fondo que SALEN A LA RED en cuanto hay
+    // credenciales — y un sandbox de test las tiene de verdad (.env.test).
+    // Costo medido el 29-ago-2026: el radar hacia su primera pasada de la
+    // vida contra IGDB y metia sus descubrimientos en el Plan, asi que una
+    // pantalla sembrada con tres juegos aparecia con un cuarto que nadie
+    // habia puesto ("Ascenxion") y el test de Up next fallaba sin que nada
+    // estuviera roto. Y lo peor no es el fallo: es que el resultado dependia
+    // de lo que IGDB tuviera ese dia.
+    //
+    // Un E2E dispara el trabajo que quiere probar EXPLICITAMENTE (los tests
+    // de integracion llaman a external.refreshGame, achievements.refreshGame
+    // o hltb.refreshGame por su nombre), que ademas es lo que hace que el
+    // rojo senale a la API que cambio. Las pasadas automaticas solo anaden
+    // ruido no determinista.
+    if (isE2E()) {
+      mark('pasadas de arranque OMITIDAS (modo E2E)');
+      return;
+    }
     // El buzón ya se ha drenado aquí dentro: runSyncCycle lo dispara solo tras
     // el pull (ver onSyncCompleted arriba). Un alta encolada existe por tanto
     // como juego ANTES de que pasen por encima el backfill de appids y las

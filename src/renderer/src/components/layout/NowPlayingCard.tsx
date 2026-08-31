@@ -57,7 +57,13 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
       .map((session): LiveEntry => ({ kind: 'pending', startedAt: session.startedAt, session })),
   ].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 
-  if (entries.length === 0) return null;
+  // La guarda mira TAMBIÉN el modal: cerrar el emulador con "Assign" abierto
+  // le pone endedAt a la pendiente, `entries` se vaciaba y la tarjeta devolvía
+  // null llevándose por delante a su hijo — el modal desaparecía con la
+  // búsqueda a medias y sin decir nada, saltándose incluso su propia guarda de
+  // "no cerrar con la asignación en vuelo" (AssignSessionModal). Sin nada vivo
+  // Y sin modal abierto sí se despinta, que es el trato de siempre.
+  if (entries.length === 0 && !assigning) return null;
 
   // La más reciente manda; el resto se resume en un "+N" discreto en vez de
   // apilar tarjetas y comerse la lista.
@@ -65,17 +71,19 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
 
   return (
     <>
-      <div className="flex-none border-t border-border">
-        {current.kind === 'game' ? (
-          <GameEntry entry={current} extra={rest.length} />
-        ) : (
-          <PendingEntry
-            entry={current}
-            extra={rest.length}
-            onAssign={() => setAssigning(current.session)}
-          />
-        )}
-      </div>
+      {entries.length > 0 && (
+        <div className="flex-none border-t border-border">
+          {current.kind === 'game' ? (
+            <GameEntry entry={current} extra={rest.length} />
+          ) : (
+            <PendingEntry
+              entry={current}
+              extra={rest.length}
+              onAssign={() => setAssigning(current.session)}
+            />
+          )}
+        </div>
+      )}
 
       {assigning && (
         <AssignSessionModal

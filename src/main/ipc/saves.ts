@@ -526,7 +526,23 @@ export const registerSavesHandlers = (): void => {
 
     // Un completo del que cuelgan diferenciales no se puede borrar solo: se
     // llevaría por delante los que dependen de él (§9.1).
-    const dependents = rows.filter((candidate) => candidate.parentBackupName === row.backupName);
+    //
+    // Y "dependen de él" incluye la máquina, no solo el nombre: getSaveBackups
+    // devuelve las filas de TODOS los PCs (la tabla viaja por Turso) y cada
+    // máquina tiene su propio prefijo en R2, así que un diferencial de otra
+    // nunca cuelga de un completo de esta por mucho que el nombre coincida. Y
+    // coincide de verdad: al recuperar el índice desde la nube se crean filas
+    // con el machineId de la instalación anterior y, si se decide conservar la
+    // identidad actual, el siguiente backup sube los MISMOS zips de la MISMA
+    // carpeta bajo el id nuevo — mismo backupName, mismo parentBackupName, otra
+    // máquina. Sin este filtro, borrar el completo nuevo se llevaba el objeto y
+    // la fila del diferencial ajeno: una versión que desaparece del otro PC sin
+    // que nadie la haya tocado. La limpieza local de más abajo ya distinguía la
+    // máquina; esta selección se había quedado fuera.
+    const dependents = rows.filter(
+      (candidate) =>
+        candidate.parentBackupName === row.backupName && candidate.machineId === row.machineId,
+    );
     const doomed = [row, ...dependents];
 
     await deleteKeys(doomed.map((candidate) => candidate.r2Key));

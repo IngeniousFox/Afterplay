@@ -14,6 +14,7 @@ import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
 import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
+import { requestAchievementFlash } from '../lib/achievementFlash';
 import { formatHours, pluralize } from '../lib/format';
 import { groupPageByDate } from '../lib/sessionGroups';
 import { sessionDurationStats } from '../lib/sessionStats';
@@ -302,6 +303,13 @@ export const Sessions = (): React.JSX.Element => {
                           }
                           moments={momentsIndex.get(session.id)}
                           achievements={unlocksBySession.get(session.id)}
+                          // Cada trofeo es un enlace (LOGROS-REDISENO §1): se
+                          // pide el parpadeo ANTES de navegar — la ficha lee
+                          // el pendiente al montar y hace el resto.
+                          onOpenAchievement={(achievementId) => {
+                            requestAchievementFlash(achievementId);
+                            navigate(`/games/${session.gameId}`);
+                          }}
                           onDelete={() => setPendingDelete(session)}
                         />
                       ))}

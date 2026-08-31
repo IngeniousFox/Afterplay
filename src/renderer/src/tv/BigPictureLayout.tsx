@@ -4,6 +4,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useGames } from '../hooks/games';
 import { queryKeys } from '../hooks/queryKeys';
+import { consumeAmbientWake } from '../lib/ambientWake';
 import { BLUE, GREEN, TEAL, VIOLET } from '../lib/colors';
 import { useTimeFormat } from '../hooks/settings';
 import { TvFocusProvider } from './focus';
@@ -409,7 +410,11 @@ const TvShell = (): React.JSX.Element => {
       // La misma regla del salvapantallas que el mando (gamepad.ts): la
       // tecla que despierta el modo ambiente se CONSUME — el keydown ya lo
       // desvaneció vía useIdle, y la acción no debe llegar a lo de debajo.
+      // El sello es el respaldo del atributo: React puede colar su commit
+      // (y borrar el atributo) en el microtask entre el bump de useIdle y
+      // este listener — ver lib/ambientWake.
       if (document.querySelector('[data-afterplay-ambient]') !== null) return;
+      if (consumeAmbientWake()) return;
       // El autorepeat del SO marca los ecos igual que el mando: scroll
       // instantáneo mientras la flecha se mantiene pulsada.
       handleAction(action.type === 'move' && event.repeat ? { ...action, repeat: true } : action);

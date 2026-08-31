@@ -40,11 +40,27 @@ export const ChangeCoverModal = ({
 
   const handleClose = (): void => {
     if (updateGame.isPending) return;
+    // El componente NO se desmonta al cerrar (solo su contenido, que vive en
+    // el portal del Dialog), así que sin esto el banner de un guardado
+    // fallido reaparecería tal cual en la próxima apertura — mismo motivo que
+    // el deleteIteration.reset() de IterationSection.
+    updateGame.reset();
     onOpenChange(false);
   };
 
   const handleSave = async (): Promise<void> => {
-    await updateGame.mutateAsync({ id: game.id, patch: { coverUrl, heroUrl, steamGridDbId } });
+    // Sin este try/catch la promesa rechazada se quedaba sin dueño
+    // (ModalFooter.onSubmit está tipado `() => void`) y el fallo no se veía
+    // por ningún sitio: el botón volvía de "Saving…" a "Save changes", el
+    // modal seguía abierto con la carátula nueva a la vista, y al cerrar la
+    // ficha seguía con la de antes. Ahora el rechazo se recoge y el banner de
+    // abajo lo cuenta, como en Edit Game / Add Game.
+    try {
+      await updateGame.mutateAsync({ id: game.id, patch: { coverUrl, heroUrl, steamGridDbId } });
+    } catch (error) {
+      console.error('[change-cover] fallo guardando la caratula:', error);
+      return;
+    }
     onOpenChange(false);
   };
 
@@ -83,13 +99,21 @@ export const ChangeCoverModal = ({
           onCancel={() => setPickerTarget(null)}
         />
       ) : (
-        <ImagesField
-          coverUrl={coverUrl}
-          heroUrl={heroUrl}
-          onPick={setPickerTarget}
-          steamGridDbId={steamGridDbId}
-          onSteamGridDbIdChange={setSteamGridDbId}
-        />
+        <>
+          <ImagesField
+            coverUrl={coverUrl}
+            heroUrl={heroUrl}
+            onPick={setPickerTarget}
+            steamGridDbId={steamGridDbId}
+            onSteamGridDbIdChange={setSteamGridDbId}
+          />
+
+          {updateGame.error && !updateGame.isPending && (
+            <div className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+              Couldn&apos;t save the images — {updateGame.error.message}
+            </div>
+          )}
+        </>
       )}
     </ModalShell>
   );

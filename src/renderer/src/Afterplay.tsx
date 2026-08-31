@@ -4,7 +4,7 @@ import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAchievementsActivitySync } from './hooks/achievements';
-import { useCuriositiesActivity } from './hooks/curiosities';
+import { useCuriositiesActivitySync } from './hooks/curiosities';
 import { useExternalRefreshActivity } from './hooks/external';
 import { useRadarActivity } from './hooks/radar';
 import { useBigPicture } from './hooks/useBigPicture';
@@ -67,8 +67,10 @@ const Afterplay = (): React.JSX.Element => {
   useKeysImportToast();
   // Curiosidades generadas de fondo (alta de un juego, backfill): invalida
   // sus queries en cuanto el main avisa — aquí y no solo en Ajustes, porque
-  // un juego recién añadido genera con el modal de Ajustes cerrado.
-  useCuriositiesActivity();
+  // un juego recién añadido genera con el modal de Ajustes cerrado. La
+  // variante SIN estado a propósito, igual que los logros de abajo: el
+  // progreso de la pasada es cosa de la tarjeta de Ajustes, no de la raíz.
+  useCuriositiesActivitySync();
   // Y los logros, por lo mismo: se sincronizan de fondo (alta de un juego,
   // cierre de sesión, vigilancia de emuladores) estés en la pantalla que
   // estés, y sus queries son staleTime Infinity — sin este aviso, una ficha

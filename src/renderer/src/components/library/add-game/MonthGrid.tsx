@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../../lib/utils';
-import { CURRENT_YEAR, TODAY } from './precisionDate';
+import { today } from './precisionDate';
 import { YearDropdown } from './YearDropdown';
 
 type MonthGridProps = {
@@ -28,16 +28,20 @@ const MONTH_LABELS = [
   'Dec',
 ];
 
-const CURRENT_MONTH = TODAY.getMonth();
-
 // Rejilla de meses + año navegable — react-day-picker no trae un modo "solo
 // mes" de fábrica, y montar un calendario de días completo para elegir un
 // mes sería enseñar más de lo que hace falta. Lo que se registra aquí ya
 // pasó, nunca es una fecha futura: ni el año ni, dentro del año actual, los
 // meses todavía no llegados se pueden elegir.
 export const MonthGrid = ({ value, initialMonth, onSelect }: MonthGridProps): React.JSX.Element => {
+  // El "ahora" se lee en cada render y no al importar el módulo: la app se
+  // queda abierta días, y con el mes congelado al arranque el mes en curso
+  // salía gris al cruzar medianoche del día 1 (ver precisionDate).
+  const now = today();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
   const [year, setYear] = useState(
-    value?.getFullYear() ?? initialMonth?.getFullYear() ?? CURRENT_YEAR,
+    value?.getFullYear() ?? initialMonth?.getFullYear() ?? currentYear,
   );
 
   return (
@@ -53,7 +57,7 @@ export const MonthGrid = ({ value, initialMonth, onSelect }: MonthGridProps): Re
         <YearDropdown year={year} onSelectYear={setYear} />
         <button
           type="button"
-          disabled={year >= CURRENT_YEAR}
+          disabled={year >= currentYear}
           onClick={() => setYear((current) => current + 1)}
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
         >
@@ -63,7 +67,7 @@ export const MonthGrid = ({ value, initialMonth, onSelect }: MonthGridProps): Re
       <div className="grid grid-cols-3 gap-1.5">
         {MONTH_LABELS.map((label, index) => {
           const isSelected = value?.getFullYear() === year && value.getMonth() === index;
-          const isFuture = year > CURRENT_YEAR || (year === CURRENT_YEAR && index > CURRENT_MONTH);
+          const isFuture = year > currentYear || (year === currentYear && index > currentMonth);
           return (
             <button
               key={label}

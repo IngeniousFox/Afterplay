@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
 import { useCuriosities } from '../../hooks/curiosities';
 import { useGames } from '../../hooks/games';
@@ -7,6 +7,7 @@ import { useAmbientIdleMinutes } from '../../hooks/settings';
 import { useSpendEvents } from '../../hooks/spend';
 import { useStateEvents } from '../../hooks/stateEvents';
 import { useIdle } from '../../hooks/useIdle';
+import { stampAmbientWake } from '../../lib/ambientWake';
 import { usePageVisible } from '../../hooks/usePageVisible';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useWindowVisible } from '../../hooks/useWindowVisible';
@@ -115,6 +116,18 @@ export const AmbientMode = (): React.JSX.Element | null => {
     isDialogOpen,
   );
 
+  // El sello del despertar (lib/ambientWake): estampado en useLayoutEffect a
+  // proposito — corre SINCRONO dentro del MISMO commit que borra el atributo
+  // data-afterplay-ambient de abajo, asi que para las puertas de teclado de
+  // TV el atributo y el sello cambian como una sola cosa. Con useEffect (que
+  // corre tras el paint) quedaba un hueco en el que ni atributo ni sello, y
+  // la tecla que despierta volvia a poder actuar.
+  const wasIdleRef = useRef(false);
+  useLayoutEffect(() => {
+    if (wasIdleRef.current && !idle) stampAmbientWake();
+    wasIdleRef.current = idle;
+  }, [idle]);
+
   // Desmontar en cuanto `idle` baja cortaba el modo ambiente de golpe, como
   // si se apagara la tele. Aquí el desmontaje se RETRASA hasta que termina el
   // fundido de salida: `mounted` sigue a `idle` al entrar, pero al salir
@@ -193,9 +206,19 @@ export const AmbientMode = (): React.JSX.Element | null => {
       // en vez de tapar con negro. Por eso el fondo va translúcido — con un
       // color opaco no habría nada que desenfocar. Un desenfoque suave, además:
       // se trata de que la app se aleje, no de esconderla.
-      // El atributo lo lee tv/gamepad.ts: la pulsación de mando que despierta
-      // este salvapantallas se consume y no llega al motor de foco.
-      data-afterplay-ambient=""
+      // El atributo lo leen tv/gamepad.ts, BigPictureLayout y TvLibrary: la
+      // pulsación de mando o tecla que despierta este salvapantallas se
+      // consume y no llega al motor de foco.
+      //
+      // Va atado a `idle`, igual que el pointerEvents de abajo, y no a que el
+      // nodo exista: el nodo sigue montado durante todo el fundido de salida
+      // (hasta el onTransitionEnd de 420ms, o la red de seguridad de 600ms),
+      // así que preguntando por su PRESENCIA el mando y el teclado quedaban
+      // medio segundo muertos DESPUÉS de despertar — la segunda pulsación de
+      // A no abría la carátula enfocada y las primeras letras de la búsqueda
+      // se perdían — mientras el ratón ya pasaba. Se consume la pulsación que
+      // despierta (BIG-PICTURE.md §5.5), no las que vienen detrás.
+      data-afterplay-ambient={idle ? '' : undefined}
       className="fixed inset-0 z-[60]"
       style={{
         background: 'rgba(8,9,8,.42)',

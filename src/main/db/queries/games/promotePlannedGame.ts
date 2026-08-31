@@ -34,6 +34,16 @@ export const promotePlannedGame = async (input: PromotePlannedGameInput): Promis
         // invisible, pero lista para reaparecer arriba del Plan si algún día
         // volviera a planearse.
         planPinnedAt: null,
+        // El sello del promote: los eventos que writeInitialPlaythrough
+        // escribe unas lineas mas abajo nacen en ESTA misma transaccion, asi
+        // que quedan a milisegundos de esta marca — y eso es lo que permite a
+        // isAddedAtArtifact reconocerlos como papeleo. Contra addedAt no se
+        // puede: aqui es la fecha de cuando lo PLANEASTE (y no se toca, hay
+        // test que lo protege) — sin esta marca, promocionar un planeado
+        // viejo marcandolo Beaten sin fechas lo subia a "Last played" hoy,
+        // colgaba sus horas manuales del año en curso y le abria capitulo
+        // del Loop este mes.
+        promotedAt: new Date(),
         endless: input.endless,
         isEmulated: input.isEmulated,
         executablePath: input.executablePath,

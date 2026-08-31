@@ -24,12 +24,13 @@ const stampOf = (date: Date): string =>
 
 const STAMP_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})$/;
 
-// La fecha que lleva el nombre de una copia, o null si el fichero no sigue
-// el patrón (no debería pasar, pero listar una carpeta ajena sin comprobar
-// antes de usarlo es la clase de asunción que ya ha costado caro en este
-// proyecto). Reconstruida con el constructor de Date en LOCAL —igual que se
-// escribió— para que las horas salgan bien aunque de por medio haya un
-// cambio de horario de verano.
+// La fecha que lleva el nombre de una copia, o null si el fichero no sigue el
+// patrón. Y sí pasa: la carpeta es del usuario y puede tener dentro cualquier
+// cosa que empiece por "Afterplay-" —una copia manual, un fichero que él mismo
+// dejó ahí—, así que este null es quien decide qué es una copia automática y
+// qué no (ver listBackups). Reconstruida con el constructor de Date en LOCAL
+// —igual que se escribió— para que las horas salgan bien aunque de por medio
+// haya un cambio de horario de verano.
 const parseStamp = (fileName: string): Date | null => {
   const stem = fileName.slice(BACKUP_PREFIX.length, -BACKUP_SUFFIX.length);
   const match = STAMP_RE.exec(stem);
@@ -41,10 +42,26 @@ const parseStamp = (fileName: string): Date | null => {
 const backupPathFor = (date: Date): string =>
   join(getBackupsDir(), `${BACKUP_PREFIX}${stampOf(date)}${BACKUP_SUFFIX}`);
 
+// Las copias AUTOMÁTICAS de la carpeta, las únicas que este mecanismo cuenta
+// para el intervalo y rota. Se exige que el sello se pueda LEER, no solo que
+// el nombre empiece por "Afterplay-": con el filtro anterior una copia manual
+// guardada aquí (el diálogo de "Back up now" no propone carpeta, así que se
+// puede elegir esta) se colaba en la lista, ordenaba siempre la última —su
+// nombre no lleva el sello, y cualquier letra ordena después de un dígito—,
+// parseStamp devolvía null sobre ella y el "no hay último del que medir" de
+// abajo hacía que TOCARA COPIA EN CADA ARRANQUE, con la rotación comiéndose
+// las automáticas viejas: la retención se derrumbaba de días a arranques sin
+// que nada avisara. Y de propina, una copia que el usuario pidió a mano ya no
+// puede desaparecer por rotación.
 const listBackups = (dir: string): string[] =>
   existsSync(dir)
     ? readdirSync(dir)
-        .filter((name) => name.startsWith(BACKUP_PREFIX) && name.endsWith(BACKUP_SUFFIX))
+        .filter(
+          (name) =>
+            name.startsWith(BACKUP_PREFIX) &&
+            name.endsWith(BACKUP_SUFFIX) &&
+            parseStamp(name) !== null,
+        )
         // El nombre es AAAA-MM-DD_HH-mm con ceros de relleno: el orden
         // alfabético YA es el orden cronológico, no hace falta parsear nada
         // para ordenar.
@@ -89,8 +106,11 @@ export const runDailyBackup = async (): Promise<void> => {
   const lastStamp = backups.length > 0 ? parseStamp(backups[backups.length - 1]) : null;
   const now = new Date();
   const intervalHours = Math.max(1, getConfigValue('backupIntervalHours'));
-  // Sin copias todavía, o el nombre no se pudo leer: se trata como "toca
-  // ya" — no hay ningún "último" del que medir la espera.
+  // Sin copias automáticas todavía: se trata como "toca ya" — no hay ningún
+  // "último" del que medir la espera. El otro camino a null (un nombre
+  // ilegible) ya no llega hasta aquí: listBackups solo devuelve nombres cuyo
+  // sello se lee, y ese era justo el que convertía este "toca ya" en "toca en
+  // CADA arranque".
   const due = lastStamp === null || hoursBetween(lastStamp, now) >= intervalHours;
   if (!due) return;
 
