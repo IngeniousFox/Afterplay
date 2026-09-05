@@ -96,7 +96,7 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
           />
           <span
             aria-hidden
-            className="afterplay-tv-glow absolute inset-y-0 left-0 w-[0.18em]"
+            className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
             style={{
               background: 'linear-gradient(180deg, #7c86c8, #7c86c826)',
               boxShadow: '0 0 0.8em rgba(124,134,200,.55)',

@@ -160,7 +160,7 @@ const Key = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-[0.42em]"
+          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.42em]"
           style={{ boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.9)' }}
         />
       )}
@@ -227,7 +227,7 @@ const SuggestionChip = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-[0.5em]"
+          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.5em]"
           style={{ boxShadow: 'inset 0 0 0 2px rgba(124,134,200,.85)' }}
         />
       )}
@@ -437,7 +437,7 @@ const KeyboardSurface = ({
             <span className="min-w-0 truncate text-muted-foreground/60">{placeholder}</span>
           )}
           <span
-            className="afterplay-tv-caret -ml-[0.15em] h-[1.15em] w-[3px] flex-none rounded-[1px] bg-[#7dffb5]"
+            className="afterplay-tv-caret animate-[afterplay-tv-caret-blink_1.06s_step-end_infinite] -ml-[0.15em] h-[1.15em] w-[3px] flex-none rounded-[1px] bg-[#7dffb5]"
             style={{ boxShadow: '0 0 0.5em rgba(47,220,126,.9)' }}
           />
           {hint !== undefined && (

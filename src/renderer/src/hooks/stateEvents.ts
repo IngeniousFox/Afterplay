@@ -13,12 +13,14 @@ import { useInvalidatingMutation } from './useInvalidatingMutation';
 // Changes" por año en Stats). Misma historia que useSessions()/
 // useSpendEvents(): staleTime Infinity, invalidada por las mutations de
 // aquí.
+export const stateEventsQueryOptions = {
+  queryKey: queryKeys.stateEvents.all,
+  queryFn: () => window.api.stateEvents.getAll(),
+  staleTime: Infinity,
+};
+
 export const useStateEvents = (): UseQueryResult<StateEventSummary[], Error> =>
-  useQuery({
-    queryKey: queryKeys.stateEvents.all,
-    queryFn: () => window.api.stateEvents.getAll(),
-    staleTime: Infinity,
-  });
+  useQuery(stateEventsQueryOptions);
 
 // Un evento de estado nuevo cambia currentState/stateHistory del juego dueño
 // de la iteración — no sabemos su gameId aquí (el input solo trae

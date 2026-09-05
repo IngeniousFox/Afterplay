@@ -1,5 +1,6 @@
-import { Info } from 'lucide-react';
-import { useMemo } from 'react';
+import { cn } from '../../lib/utils';
+import { ArrowDownRight, ArrowUpRight, Gauge, Info, Minus } from 'lucide-react';
+import { type CSSProperties, useMemo } from 'react';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { formatHours } from '../../lib/format';
 import { GameCover } from '../GameCover';
@@ -22,51 +23,28 @@ type HltbCompareListProps = {
   // sesiones ya vienen sin marcadores de borde (getAllSessions).
   sessions: CompareSession[];
   year: Year;
+  onOpenGame: (gameId: number) => void;
 };
 
 const MAX_ENTRIES = 6;
-
-// La barra representa hasta 2× el Main Story: el marcador blanco al 50% ES
-// el tiempo oficial de HLTB, así que quedarse a su izquierda = más rápido
-// que la media, pasarlo = lo exprimiste. Ratios mayores de 2× saturan la
-// barra (la etiqueta numérica sigue diciendo la verdad).
 const BAR_SCALE = 2;
-
-// Alto de una fila (carátula/pista h-12 = 3rem) + el gap-2 entre filas —
-// fijan el alto del área de la lista a MAX_ENTRIES filas SIEMPRE, tengas 1
-// completado o 6. Sin esto la card se encogía/crecía con el nº de datos y
-// bailaba de tamaño en la grid junto a su vecina (Session length, que
-// siempre pinta sus 5 tramos fijos).
-const ROW_HEIGHT_PX = 48;
+const ROW_HEIGHT_PX = 50;
 const ROW_GAP_PX = 8;
-const LIST_MIN_HEIGHT_PX = ROW_HEIGHT_PX * MAX_ENTRIES + ROW_GAP_PX * (MAX_ENTRIES - 1);
-
-// Verde de acento para quien despachó el juego por debajo del Main Story,
-// ámbar de Beaten para quien lo pasó de largo (lo exprimió) — el mismo
-// vocabulario de color del resto de Stats.
 const FAST_COLOR = '#2fdc7e';
 const SAVOR_COLOR = '#e3b24a';
 
-// Tus horas frente al Main Story de HowLongToBeat, solo en juegos
-// completados (con año filtrado, completados ESE año). Las horas son las del
-// ÚLTIMO playthrough completado del juego — no las totales de todos los
-// playthroughs juntos: comparar la suma de tres partidas contra el tiempo de
-// UNA pasada no decía nada (petición explícita: "mira solo el último
-// Beaten"). Resueltas con la regla de horas de siempre: manual + trackeado.
-// Ordenado por ratio descendente, con paginación (mismo patrón de
-// Completed: flechas + deslizamiento sutil al cambiar de página).
 export const HltbCompareList = ({
   games,
   stateEvents,
   sessions,
   year,
+  onOpenGame,
 }: HltbCompareListProps): React.JSX.Element | null => {
   const { page, direction, goToPage } = usePagedYear(year);
 
   const entries = useMemo(() => {
-    // El ÚLTIMO evento 'completed' de cada juego dentro de la ventana — de
-    // él sale qué playthrough se compara (desempate por id, como el resto
-    // de la app).
+    // El ÚLTIMO evento 'completed' de cada juego dentro de la ventana decide
+    // qué playthrough se compara (desempate por id, como el resto de la app).
     const lastCompletedByGame = new Map<number, StateEventSummary>();
     for (const event of stateEvents) {
       if (event.type !== 'completed') continue;
@@ -96,11 +74,6 @@ export const HltbCompareList = ({
       .flatMap((game) => {
         const completed = lastCompletedByGame.get(game.id);
         if (!completed) return [];
-        // Horas de ESE playthrough — manual MÁS trackeado, la misma regla que
-        // resolveIterationHours en el main: son tiempos disjuntos (lo jugado
-        // fuera de la app y lo que midió el watcher), no dos versiones del
-        // mismo dato. Comparar contra HowLongToBeat solo con la parte manual
-        // dejaba fuera todo lo que el watcher hubiera medido después.
         const manual = game.manualIterations.find(
           (iteration) => iteration.iterationId === completed.iterationId,
         );
@@ -122,61 +95,131 @@ export const HltbCompareList = ({
       .sort((a, b) => b.ratio - a.ratio);
   }, [games, stateEvents, sessions, year]);
 
-  // Acotada, no confiada al estado: filtrar a otro año puede dejar `page`
-  // fuera de rango sin que ningún click lo haya pedido.
   const totalPages = Math.max(1, Math.ceil(entries.length / MAX_ENTRIES));
   const currentPage = Math.min(page, totalPages - 1);
   const shown = entries.slice(currentPage * MAX_ENTRIES, (currentPage + 1) * MAX_ENTRIES);
+  // Tres filas como suelo visual; desde ahí crece con el contenido real.
+  // Evita el enorme hueco de reservar seis filas cuando solo hay dos juegos.
+  const visibleRowFloor = Math.max(3, shown.length);
+  const listMinHeight =
+    ROW_HEIGHT_PX * visibleRowFloor + ROW_GAP_PX * Math.max(0, visibleRowFloor - 1);
 
-  // Mediana y no media: un único juego rejugado veinte veces no debe
-  // arrastrar el "cómo juegas normalmente". Sobre TODAS las entradas, no
-  // solo la página visible.
+  // Mediana, no media: una única partida larguísima no debe definir cómo
+  // juegas normalmente. Se calcula sobre todas las entradas, no la página.
   const medianRatio = useMemo(() => {
     if (entries.length === 0) return null;
     const sorted = entries.map((entry) => entry.ratio).sort((a, b) => a - b);
     return sorted[Math.floor(sorted.length / 2)];
   }, [entries]);
 
+  const medianColor = medianRatio !== null && medianRatio <= 1 ? FAST_COLOR : SAVOR_COLOR;
+  const medianDelta = medianRatio === null ? 0 : Math.round(Math.abs(medianRatio - 1) * 100);
+  const medianLabel =
+    medianRatio === null
+      ? ''
+      : medianRatio < 0.95
+        ? `${medianDelta}% under Main Story`
+        : medianRatio > 1.05
+          ? `${medianDelta}% beyond Main Story`
+          : 'Right on the Main Story estimate';
+  const MedianIcon =
+    medianRatio === null || (medianRatio >= 0.95 && medianRatio <= 1.05)
+      ? Minus
+      : medianRatio < 1
+        ? ArrowDownRight
+        : ArrowUpRight;
+
   return (
-    <StatCard className="flex h-full flex-col">
-      <div className="mb-4.5 flex items-baseline justify-between gap-4">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[14px] font-bold text-foreground">You vs HowLongToBeat</span>
-          <Tooltip>
-            <TooltipTrigger>
-              <Info size={12} className="text-muted-foreground" />
-            </TooltipTrigger>
-            <TooltipContent>
-              Compares the hours of each game&apos;s LAST beaten playthrough (not the whole game)
-              against HLTB&apos;s Main Story time. The white marker is the official time.
-            </TooltipContent>
-          </Tooltip>
+    <StatCard className="afterplay-hltb-card flex h-full flex-col">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[14px] font-bold text-foreground">You vs HowLongToBeat</span>
+            <Tooltip>
+              <TooltipTrigger>
+                <Info size={12} className="text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Compares each game&apos;s last beaten playthrough against HLTB&apos;s Main Story
+                time. The centre marker is the official estimate.
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+            Last completed playthroughs only
+          </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          {medianRatio !== null && (
-            <div className="text-[11.5px] text-muted-foreground">
-              typically {medianRatio.toFixed(1)}× the Main Story
-            </div>
-          )}
-          <StatsPager
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-            prevLabel="Previous games"
-            nextLabel="Next games"
-          />
-        </div>
+        <StatsPager
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={goToPage}
+          prevLabel="Previous games"
+          nextLabel="Next games"
+        />
       </div>
 
-      <div className="flex flex-1 flex-col" style={{ minHeight: LIST_MIN_HEIGHT_PX }}>
+      {medianRatio !== null && (
+        <div
+          className={cn(
+            'afterplay-hltb-summary mt-4 flex items-center gap-[11px] min-h-15 py-2.5 px-3 rounded-[11px] border',
+            'border-[color-mix(in_srgb,var(--hltb-accent)_22%,rgba(255,255,255,0.06))]',
+            '[background:linear-gradient(120deg,color-mix(in_srgb,var(--hltb-accent)_10%,transparent),rgba(255,255,255,0.015))]',
+          )}
+          style={{ '--hltb-accent': medianColor } as CSSProperties}
+        >
+          <span
+            className={cn(
+              'afterplay-hltb-summary-icon flex w-8.5 h-8.5 flex-none items-center justify-center rounded-[9px] border',
+              'border-[color-mix(in_srgb,var(--hltb-accent)_28%,transparent)]',
+              'text-[color:var(--hltb-accent)]',
+              'bg-[color-mix(in_srgb,var(--hltb-accent)_9%,transparent)]',
+            )}
+          >
+            <Gauge size={16} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-black tracking-[.16em] text-white/45 uppercase">
+              Your typical finish
+            </div>
+            <div className="mt-0.5 flex items-baseline gap-2">
+              <strong
+                className={cn(
+                  'text-[23px] leading-none font-black tracking-[-.04em] tabular-nums',
+                  'text-[color:var(--hltb-accent)]',
+                )}
+              >
+                {medianRatio.toFixed(1)}×
+              </strong>
+              <span className="truncate text-[11px] font-semibold text-muted-foreground">
+                {medianLabel}
+              </span>
+            </div>
+          </div>
+          <MedianIcon
+            size={17}
+            className="afterplay-hltb-direction text-[color:var(--hltb-accent)]"
+          />
+        </div>
+      )}
+
+      <div
+        className={cn(
+          'afterplay-hltb-scale mt-3.5 flex justify-between ml-12 py-0 px-px text-[11px] font-extrabold tracking-[0.08em]',
+          'uppercase text-white/45 [&_span:nth-child(2)]:text-white/52 [&_span:nth-child(2)]:[transform:translateX(5px)]',
+        )}
+        aria-hidden="true"
+      >
+        <span>0×</span>
+        <span>Main Story</span>
+        <span>2×+</span>
+      </div>
+
+      <div className="flex flex-1 flex-col" style={{ minHeight: listMinHeight }}>
         {shown.length === 0 ? (
           <StatCardEmpty>
             No completed games with HowLongToBeat data{year === 'all' ? '' : ` in ${year}`} yet.
           </StatCardEmpty>
         ) : (
-          // key={currentPage}: mismo remontado-para-animar que CompletedGallery.
-          // justify-start (no -center): con pocas filas se quedan arriba, no
-          // flotando a media altura de un hueco que ahora es fijo.
           <div
             key={currentPage}
             className={`flex flex-col justify-start gap-2 duration-300 animate-in fade-in-0 ${
@@ -184,49 +227,84 @@ export const HltbCompareList = ({
             }`}
           >
             {shown.map((entry) => {
-              // Verde si te quedaste por debajo del Main Story, ámbar si lo
-              // pasaste — el relleno y el ratio hablan el mismo color.
               const color = entry.ratio <= 1 ? FAST_COLOR : SAVOR_COLOR;
+              const fillPercent = Math.min(1, entry.ratio / BAR_SCALE) * 100;
               return (
-                <div key={entry.id} className="flex items-center gap-3">
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => onOpenGame(entry.id)}
+                  className={cn(
+                    'afterplay-hltb-row group flex h-[50px] w-full items-center gap-3 text-left pt-px pr-1 pb-px pl-0 rounded-[9px]',
+                    'outline-none [transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),background-color_200ms_ease]',
+                    '[&:is(:hover,:focus-visible)]:bg-white/[0.025] [&:is(:hover,:focus-visible)]:[transform:translateX(3px)]',
+                    'motion-reduce:animate-none motion-reduce:transition-none',
+                  )}
+                  style={{ '--hltb-accent': color } as CSSProperties}
+                  aria-label={`Open ${entry.title}`}
+                >
                   <GameCover
                     url={entry.coverUrl}
-                    className="h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border"
+                    className={cn(
+                      'afterplay-hltb-cover h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border',
+                      '[transition:border-color_200ms_ease,box-shadow_240ms_ease,transform_280ms_cubic-bezier(0.22,1,0.36,1)]',
+                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:border-[color-mix(in_srgb,var(--hltb-accent)_44%,transparent)]',
+                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_7px_16px_rgba(0,0,0,0.3)]',
+                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[transform:translateY(-1px)]',
+                      'motion-reduce:animate-none motion-reduce:transition-none',
+                    )}
                     iconSize={15}
                   />
-                  {/* La fila ES la barra (mismo estilo que Most Played): la
-                      pista entera representa 2× el Main Story, el relleno
-                      llega hasta tu ratio y la línea blanca del 50% ES el
-                      tiempo oficial de HLTB. */}
-                  <div className="relative h-12 flex-1 overflow-hidden rounded-[9px] bg-white/[0.03]">
-                    <div
-                      className="absolute inset-y-0 left-0"
-                      style={{
-                        width: `${Math.min(1, entry.ratio / BAR_SCALE) * 100}%`,
-                        background: `linear-gradient(90deg, ${color}38, ${color}12)`,
-                        borderRight: `2px solid ${color}b3`,
-                      }}
-                    />
-                    {/* Marcador del Main Story oficial — al 50% por diseño. */}
-                    <div className="absolute inset-y-1.5 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-white/45" />
-                    <div className="relative z-1 flex h-full items-center justify-between gap-3 px-3.25">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate text-[13px] font-semibold text-foreground">
+                        <div className="truncate text-[12.5px] font-bold text-foreground">
                           {entry.title}
                         </div>
-                        <div className="text-[10.5px] text-muted-foreground tabular-nums">
-                          {formatHours(entry.hours)} vs {formatHours(entry.hltbMain)} main
+                        <div className="mt-0.25 text-[11px] text-muted-foreground tabular-nums">
+                          You {formatHours(entry.hours)} · HLTB {formatHours(entry.hltbMain)}
                         </div>
                       </div>
                       <span
-                        className="flex-none rounded-md border border-white/10 bg-black/30 px-1.75 py-0.5 text-[12px] font-bold tabular-nums"
-                        style={{ color }}
+                        className={cn(
+                          'afterplay-hltb-ratio flex-none min-w-[39px] py-0.5 px-[5px] rounded-[6px] text-[11.5px] font-[850] text-center',
+                          'border border-[color-mix(in_srgb,var(--hltb-accent)_20%,rgba(255,255,255,0.06))]',
+                          'text-[color:var(--hltb-accent)]',
+                          'bg-[color-mix(in_srgb,var(--hltb-accent)_7%,rgba(0,0,0,0.22))]',
+                          '[transition:border-color_180ms_ease,background-color_180ms_ease]',
+                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:border-[color-mix(in_srgb,var(--hltb-accent)_42%,transparent)]',
+                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:bg-[color-mix(in_srgb,var(--hltb-accent)_12%,rgba(0,0,0,0.22))]',
+                          'motion-reduce:animate-none motion-reduce:transition-none',
+                        )}
                       >
                         {entry.ratio.toFixed(1)}×
                       </span>
                     </div>
+                    <div className="afterplay-hltb-track mt-1.5 relative h-[5px] rounded-[99px] bg-white/[0.055]">
+                      <span
+                        className={cn(
+                          'afterplay-hltb-fill absolute [inset:0_auto_0_0] rounded-[inherit]',
+                          '[background:linear-gradient(90deg,color-mix(in_srgb,var(--hltb-accent)_45%,transparent),var(--hltb-accent))]',
+                          '[box-shadow:0_0_9px_color-mix(in_srgb,var(--hltb-accent)_22%,transparent)] origin-left',
+                          'animate-[afterplay-grow-x_650ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
+                          'motion-reduce:animate-none motion-reduce:transition-none',
+                        )}
+                        style={{ width: `${fillPercent}%` }}
+                      />
+                      <span className="afterplay-hltb-marker absolute top-[-3px] bottom-[-3px] left-1/2 w-px bg-white/72 [box-shadow:0_0_5px_rgba(255,255,255,0.25)]" />
+                      <span
+                        className={cn(
+                          'afterplay-hltb-point absolute top-1/2 w-2 h-2 rounded-[50%] border-2 border-[#111512] bg-[var(--hltb-accent)]',
+                          '[box-shadow:0_0_9px_color-mix(in_srgb,var(--hltb-accent)_45%,transparent)] [transform:translate(-50%,-50%)]',
+                          '[transition:box-shadow_200ms_ease]',
+                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_0_14px_color-mix(in_srgb,var(--hltb-accent)_65%,transparent)]',
+                          'motion-reduce:animate-none motion-reduce:transition-none',
+                        )}
+                        style={{ left: `${fillPercent}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

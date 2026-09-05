@@ -81,7 +81,7 @@ const MenuItem = ({
               la fila enfocada está viva, no solo pintada. */}
           <span
             aria-hidden
-            className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-[0.55em]"
+            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.55em]"
             style={{ boxShadow: `inset 0 0 0 2px ${accent}59` }}
           />
           <span
@@ -89,7 +89,7 @@ const MenuItem = ({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[0.55em]"
           >
             <span
-              className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
                   'linear-gradient(105deg, transparent, rgba(255,255,255,.13), transparent)',
@@ -143,7 +143,7 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
           <div className="mb-[1.2em] flex items-center gap-[0.6em] px-[0.7em]">
             <span
               aria-hidden
-              className="afterplay-tv-ring h-[0.4em] w-[0.4em] rounded-full"
+              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] h-[0.4em] w-[0.4em] rounded-full"
               style={{ background: GREEN, boxShadow: `0 0 0.6em ${GREEN}99` }}
             />
             <span className="text-[0.75em] font-extrabold tracking-[.22em] text-muted-foreground/60">
@@ -210,7 +210,7 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
             <div className="mt-[0.95em] flex items-center justify-center gap-[0.55em]">
               <span
                 aria-hidden
-                className="afterplay-tv-glow h-[0.3em] w-[0.3em] rounded-full"
+                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] h-[0.3em] w-[0.3em] rounded-full"
                 style={{ background: GREEN, boxShadow: `0 0 0.5em ${GREEN}99` }}
               />
               <span className="text-[0.58em] font-extrabold tracking-[.34em] text-muted-foreground/50">

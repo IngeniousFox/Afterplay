@@ -111,7 +111,7 @@ const FilterPill = ({
         <>
           <span
             aria-hidden
-            className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-full"
+            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
             style={{ boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.8)' }}
           />
           <span
@@ -119,7 +119,7 @@ const FilterPill = ({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
           >
             <span
-              className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
                   'linear-gradient(105deg, transparent, rgba(255,255,255,.25), transparent)',
@@ -189,7 +189,7 @@ const SearchChip = ({
         <>
           <span
             aria-hidden
-            className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-full"
+            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
             style={{ boxShadow: 'inset 0 0 0 2px rgba(124,134,200,.75)' }}
           />
           <span
@@ -197,7 +197,7 @@ const SearchChip = ({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
           >
             <span
-              className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
                   'linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent)',
@@ -672,7 +672,7 @@ export const TvLibrary = (): React.JSX.Element => {
           // queda toda plegada debajo) para no desmontarla jamás.
           <div className="animate-in fade-in-0 zoom-in-95 pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center duration-300">
             <div
-              className="afterplay-tv-float relative mb-[0.9em] flex h-[3.4em] w-[3.4em] items-center justify-center rounded-full"
+              className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative mb-[0.9em] flex h-[3.4em] w-[3.4em] items-center justify-center rounded-full"
               style={{
                 background: 'rgba(255,255,255,.04)',
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)',
@@ -680,7 +680,7 @@ export const TvLibrary = (): React.JSX.Element => {
             >
               <span
                 aria-hidden
-                className="afterplay-tv-glow absolute inset-0 rounded-full"
+                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-0 rounded-full"
                 style={{ boxShadow: `0 0 1.8em ${emptyAccent}45` }}
               />
               <Search

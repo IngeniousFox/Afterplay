@@ -1,3 +1,4 @@
+import { CalendarDays } from 'lucide-react';
 import { useMemo } from 'react';
 import { GREEN } from '../../lib/colors';
 import { formatHours } from '../../lib/format';
@@ -49,12 +50,21 @@ export const WhenDoYouPlayChart = ({
   return (
     <CategoryBarChart
       title={title}
-      headerRight={(peakIndex) => (peakIndex >= 0 ? `${DAY_LABELS[peakIndex]} is your day` : null)}
+      subtitle="The week in your playtime"
+      Icon={CalendarDays}
+      headerRight={(peakIndex) =>
+        peakIndex >= 0 ? (
+          <>
+            <strong>{DAY_LABELS[peakIndex]}</strong>
+            <small>your busiest day</small>
+          </>
+        ) : null
+      }
       bars={bars}
       formatValue={(seconds) => formatHours(seconds / 3600)}
       barGradient="linear-gradient(180deg,var(--ac),var(--ac2))"
       labelColor={GREEN}
-      glowColor="rgba(47,220,126,.35)"
+      glowColor="rgba(47,220,126,.18)"
       maxBarWidthClass="max-w-9"
     />
   );

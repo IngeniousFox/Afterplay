@@ -16,8 +16,8 @@ import { useEffect, useRef, useState } from 'react';
 // porque esa era otra fila con su propio estado a cero. De ahí las dos piezas
 // de abajo: el rearme en dos fotogramas y la retirada de la clase al acabar.
 
-// La clase y los fotogramas comparten nombre en main.css: 1.1s x 2.
-const FLASH_CLASS = 'afterplay-flash-gold';
+// Keep the animation name separate from the classes: animationend reports only its name.
+const FLASH_ANIMATION = 'afterplay-flash-gold';
 
 // Margen para que el desplazamiento haya llegado (o casi) antes del primer
 // pulso; si no, el destello se gasta mientras la fila todavía entra en pantalla.
@@ -64,11 +64,13 @@ export const useFlashLanding = (flash: boolean, consume: () => void): FlashLandi
 
   return {
     rowRef,
-    flashClass: flashing ? FLASH_CLASS : '',
+    flashClass: flashing
+      ? 'afterplay-flash-gold animate-[afterplay-flash-gold_1.1s_ease-in-out_2]'
+      : '',
     onAnimationEnd: (event) => {
       // Solo la del destello: los eventos de animación BURBUJEAN y una fila
       // puede llevar hijos animados.
-      if (event.animationName !== FLASH_CLASS) return;
+      if (event.animationName !== FLASH_ANIMATION) return;
       setFlashing(false);
     },
   };

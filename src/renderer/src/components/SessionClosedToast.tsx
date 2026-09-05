@@ -129,7 +129,7 @@ export const SessionClosedToast = ({
   };
 
   return (
-    <div className="afterplay-toast relative w-full overflow-hidden rounded-[14px] border border-input bg-[#141614] shadow-[0_20px_55px_rgba(0,0,0,.6)]">
+    <div className="afterplay-toast group/toast animate-[afterplay-toast-in_0.42s_cubic-bezier(0.16,1,0.3,1)_backwards] relative w-full overflow-hidden rounded-[14px] border border-input bg-[#141614] shadow-[0_20px_55px_rgba(0,0,0,.6)]">
       {/* Hero del juego de fondo, con el mismo velo de izquierda a derecha de
           la ficha: da identidad al aviso sin comerse la legibilidad. */}
       {heroSrc && (
@@ -322,7 +322,7 @@ export const SessionClosedToast = ({
       {!saved && (
         <div className="absolute inset-x-0 bottom-0 h-0.5 bg-white/8">
           <div
-            className="afterplay-toast-countdown h-full bg-primary/75"
+            className="afterplay-toast-countdown origin-left animate-[afterplay-grow-x_var(--afterplay-toast-duration,15s)_linear_reverse_forwards] group-hover/toast:[animation-play-state:paused] group-focus-within/toast:[animation-play-state:paused] h-full bg-primary/75"
             style={{ '--afterplay-toast-duration': `${durationMs}ms` } as React.CSSProperties}
           />
         </div>

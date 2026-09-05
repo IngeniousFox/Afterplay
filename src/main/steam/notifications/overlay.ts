@@ -121,6 +121,7 @@ const ensureWindow = async (): Promise<BrowserWindow> => {
   if (window && !window.isDestroyed()) return window;
 
   const created = new BrowserWindow({
+    title: 'Afterplay',
     ...cornerBounds(),
     show: false,
     frame: false,

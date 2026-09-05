@@ -1,3 +1,4 @@
+import { cn } from '../../lib/utils';
 import {
   CalendarDays,
   Clock,
@@ -10,6 +11,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { hasMeasuredDuration } from '../../lib/sessionStats';
 import { floatingPanelClass } from '../../lib/styles';
 import { StatCard } from './StatCard';
@@ -171,45 +173,121 @@ export const GameBadges = ({
   ];
 
   const earnedCount = badges.filter((badge) => badge.earned).length;
+  const earnedPct = (earnedCount / badges.length) * 100;
 
   return (
-    <StatCard className="flex h-full flex-col">
-      <div className="mb-4 flex items-baseline justify-between gap-4">
-        <div className="text-[14px] font-bold text-foreground">Trophy cabinet</div>
-        <div className="text-[11.5px] text-muted-foreground tabular-nums">
-          {earnedCount} of {badges.length} unlocked
+    <StatCard
+      className={cn(
+        'afterplay-game-badges',
+        'relative flex h-full flex-col overflow-visible',
+        'border-white/[0.075] shadow-[inset_0_1px_rgba(255,255,255,0.025)]',
+        '[background:radial-gradient(circle_at_8%_0%,rgba(227,178,74,0.06),transparent_32%),var(--card)]',
+      )}
+    >
+      <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[14px] font-extrabold text-foreground">Trophy cabinet</span>
+          <small className="text-[10.5px] text-white/[0.34]">
+            Milestones from your relationship with this game
+          </small>
+        </div>
+        <div className="afterplay-game-badges-score flex items-baseline text-[10px] font-bold text-white/[0.32]">
+          <strong className="text-[24px] leading-none font-[950] text-[#e3b24a]">
+            {earnedCount}
+          </strong>
+          <span>/ {badges.length}</span>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-wrap content-center gap-2">
+      <div
+        className={cn(
+          'afterplay-game-badges-progress',
+          'mx-0 -mt-1.5 mb-4.25 h-0.5 overflow-hidden rounded-[99px]',
+          'bg-white/[0.045]',
+          '[&_i]:[background:linear-gradient(90deg,#e3b24a,#2fdc7e)]',
+          '[&_i]:shadow-[0_0_12px_rgba(227,178,74,0.25)] [&_i]:origin-left',
+          '[&_i]:animate-[afterplay-game-run-in_750ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
+          'motion-reduce:[&_i]:animate-none motion-reduce:[&_i]:transition-none',
+        )}
+        aria-hidden="true"
+      >
+        <i className="block h-full rounded-[inherit]" style={{ width: `${earnedPct}%` }} />
+      </div>
+
+      <div
+        className={cn(
+          'afterplay-game-badges-grid',
+          'grid grid-cols-3 gap-2',
+          '[@media(1040px<width<=1120px)]:grid-cols-[repeat(2,minmax(0,1fr))]',
+          '[@media(760px<width<=1040px)]:grid-cols-[repeat(3,minmax(0,1fr))]',
+          '[@media(width<=760px)]:grid-cols-[repeat(2,minmax(0,1fr))]',
+        )}
+      >
         {badges.map((badge) => (
-          <div key={badge.key} className="group/badge relative">
-            <div
-              className="flex items-center gap-1.75 rounded-[10px] border px-2.75 py-2"
-              style={
-                badge.earned
-                  ? { background: `${badge.color}1f`, borderColor: `${badge.color}59` }
-                  : {
-                      background: 'rgba(255,255,255,.02)',
-                      borderColor: 'var(--input)',
-                      opacity: 0.4,
-                      filter: 'grayscale(1)',
-                    }
-              }
+          <div
+            key={badge.key}
+            tabIndex={0}
+            role="group"
+            className={cn(
+              'afterplay-game-badge group/badge',
+              'relative grid min-h-15 min-w-0 grid-cols-[34px_minmax(0,_1fr)] items-center gap-2.25 overflow-visible',
+              'rounded-[10px] p-2.25',
+              '[--badge-color:var(--primary)] border border-white/[0.055] outline-none bg-white/[0.02]',
+              '[&.is-earned:not(:where(:hover,:focus-visible))]:border-[color-mix(in_srgb,var(--badge-color)_22%,rgba(255,255,255,0.045))]',
+              '[&.is-earned:not(:where(:hover,:focus-visible))]:[background:linear-gradient(135deg,color-mix(in_srgb,var(--badge-color)_7%,transparent),rgba(255,255,255,0.017))]',
+              '[&.is-locked:not(:where(:hover,:focus-visible))]:opacity-[0.44]',
+              '[&.is-locked:not(:where(:hover,:focus-visible))]:filter-[grayscale(0.9)]',
+              '[&:is(:hover,:focus-visible)]:z-[4]',
+              '[&:is(:hover,:focus-visible)]:border-[color-mix(in_srgb,var(--badge-color)_40%,rgba(255,255,255,0.08))]',
+              '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--badge-color)_9%,rgba(255,255,255,0.02))]',
+              '[&:is(:hover,:focus-visible)]:shadow-[0_12px_24px_rgba(0,0,0,0.24)]',
+              '[&:is(:hover,:focus-visible)]:opacity-[1] [&:is(:hover,:focus-visible)]:filter-none',
+              '[&:is(:hover,:focus-visible)]:transform-[translateY(-3px)]',
+              '[transition:transform_280ms_cubic-bezier(0.22,1,0.36,1),border-color_200ms_ease,background-color_200ms_ease,box-shadow_240ms_ease]',
+              'motion-reduce:animate-none motion-reduce:transition-none',
+              badge.earned ? 'is-earned' : 'is-locked',
+            )}
+            style={{ '--badge-color': badge.color } as CSSProperties}
+            aria-label={`${badge.label}: ${badge.earned ? 'unlocked' : 'locked'}. ${badge.criteria}`}
+          >
+            <span
+              className={cn(
+                'afterplay-game-badge-medallion',
+                'relative flex size-8.5 items-center justify-center rounded-[50%] text-(--badge-color)',
+                'border border-[color-mix(in_srgb,var(--badge-color)_28%,transparent)]',
+                'bg-[color-mix(in_srgb,var(--badge-color)_10%,rgba(0,0,0,0.25))]',
+                'group-[:is(:hover,:focus-visible)]/badge:shadow-[0_0_18px_color-mix(in_srgb,var(--badge-color)_20%,transparent)]',
+                'group-[:is(:hover,:focus-visible)]/badge:transform-[rotate(-6deg)_scale(1.08)]',
+                '[transition:transform_320ms_cubic-bezier(0.22,1,0.36,1),box-shadow_220ms_ease]',
+                'motion-reduce:animate-none motion-reduce:transition-none',
+              )}
             >
-              <badge.Icon
-                size={14}
-                color={badge.earned ? badge.color : 'var(--muted-foreground)'}
-              />
-              <span
-                className="text-[12px] font-bold"
-                style={{ color: badge.earned ? badge.color : 'var(--muted-foreground)' }}
-              >
+              <badge.Icon size={16} />
+            </span>
+            <div className="afterplay-game-badge-copy flex min-w-0 flex-col gap-0.5">
+              <strong className="truncate text-[10.5px] font-extrabold text-foreground">
                 {badge.label}
-              </span>
+              </strong>
+              <small className="text-[7px] font-black tracking-[0.09em] text-(--badge-color)">
+                {badge.earned ? 'UNLOCKED' : 'LOCKED'}
+              </small>
             </div>
+            <i
+              className={cn(
+                'afterplay-game-badge-glint',
+                'absolute top-0 bottom-0 left-[-45%] w-[32%]',
+                '[background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)]',
+                'transform-[skewX(-16deg)] opacity-[0]',
+                'group-[&.is-earned:hover]/badge:opacity-[1]',
+                'group-[&.is-earned:hover]/badge:animate-[afterplay-game-badge-glint_700ms_ease-out_both]',
+                'group-[&.is-earned:focus-visible]/badge:opacity-[1]',
+                'group-[&.is-earned:focus-visible]/badge:animate-[afterplay-game-badge-glint_700ms_ease-out_both]',
+                'motion-reduce:animate-none motion-reduce:transition-none',
+              )}
+              aria-hidden="true"
+            />
             <div
-              className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden w-max max-w-52 -translate-x-1/2 rounded-[9px] border ${floatingPanelClass} px-2.75 py-1.75 text-center text-[11.5px] text-muted-foreground group-hover/badge:block`}
+              className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-max max-w-54 -translate-x-1/2 rounded-[9px] border ${floatingPanelClass} px-2.75 py-1.75 text-center text-[11.5px] text-muted-foreground group-hover/badge:block group-focus/badge:block`}
             >
               {badge.criteria}
             </div>

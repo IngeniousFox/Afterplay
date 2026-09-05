@@ -16,7 +16,7 @@ export const RootLayout = (): React.JSX.Element => {
   useMemoryArrivalToast();
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full" data-testid="desktop-layout">
       <NavRail />
       <MiddleColumn />
       <div className="min-w-0 flex-1">

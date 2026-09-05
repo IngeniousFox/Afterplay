@@ -10,7 +10,7 @@ import {
   shell,
 } from 'electron';
 import { join } from 'path';
-import icon from '../../resources/icon.png?asset';
+import icon, { pngIcon } from './lib/appIcon';
 import { initCredentials } from './config/credentials';
 import { runMigrations, runSyncCycle } from './db';
 import { runDailyBackup } from './db/dailyBackup';
@@ -302,9 +302,10 @@ function createWindow(): void {
     // activo): nace directamente a pantalla completa, sin parpadeo de
     // ventana normal por medio.
     fullscreen: bigPictureMode,
+    title: 'Afterplay',
+    icon,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' } : {}),
-    ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -647,6 +648,18 @@ app.whenReady().then(async () => {
   // F12/Ctrl+R de desarrollo no viven aquí (los pone watchWindowShortcuts).
   Menu.setApplicationMenu(null);
 
+  // Windows resolves the installed app name through this identity. Set it
+  // before creating any window; it must match electron-builder.yml.
+  // Development still runs electron.exe without an installed shortcut.
+  electronApp.setAppUserModelId('com.afterplay.app');
+
+  // Cover every native surface, including overlays and future windows.
+  // macOS takes its Dock/app icon from the packaged .icns resource.
+  app.on('browser-window-created', (_, window) => {
+    if (process.platform !== 'darwin') window.setIcon(icon);
+    optimizer.watchWindowShortcuts(window);
+  });
+
   // Splash — tan pronto como Electron deja crear ventanas, antes de nada
   // más (migraciones, conexión con Turso, arranque del bundle del
   // renderer...). Si la app la abrió Windows sola al iniciar sesión, no
@@ -655,24 +668,6 @@ app.whenReady().then(async () => {
   // misma excepción: --bigpicture quiere pantalla.
   if (!wasOpenedHiddenAtLogin() || bigPictureMode) splashWindow = createSplashWindow();
   mark('splash creado');
-
-  // Identidad de la app para Windows. TIENE que coincidir con el appId de
-  // electron-builder.yml (com.afterplay.app): Windows resuelve el nombre que
-  // enseña en las notificaciones buscando este identificador en el acceso
-  // directo que crea el instalador. Con el 'com.electron' de la plantilla no
-  // encontraba nada y caía a la ruta del ejecutable — de ahí el
-  // "D:\...\node_modules\electron..." como título del aviso.
-  //
-  // En desarrollo puede seguir saliendo la ruta: se lanza electron.exe a pelo
-  // y no hay acceso directo instalado con este id contra el que resolver.
-  electronApp.setAppUserModelId('com.afterplay.app');
-
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window);
-  });
 
   // Credenciales (Twitch/IGDB, SteamGridDB, Turso) del almacén cifrado de
   // userData a process.env — TIENE que ir tras whenReady (safeStorage lo
@@ -897,6 +892,7 @@ app.whenReady().then(async () => {
     // pasar mientras NO estabas mirando la app — un aviso mudo en una ventana
     // oculta es un aviso que no existe.
     const notification = new Notification({
+      icon: pngIcon,
       title: event.gameTitle,
       body: `${formatDuration(event.durationSec)} played${
         event.isLongest ? ' · your longest session yet' : ''

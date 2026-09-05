@@ -93,7 +93,7 @@ export const TvGameTile = ({
           <>
             <span
               aria-hidden
-              className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-[0.55em]"
+              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.55em]"
               style={{ boxShadow: `inset 0 0 0 3px ${status.color}` }}
             />
             <span
@@ -101,7 +101,7 @@ export const TvGameTile = ({
               className="pointer-events-none absolute inset-0 overflow-hidden rounded-[0.55em]"
             >
               <span
-                className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+                className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
                 style={{
                   background:
                     'linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent)',

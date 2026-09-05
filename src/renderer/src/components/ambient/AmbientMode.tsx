@@ -534,7 +534,7 @@ const AmbientSlide = ({
   const slideVar = { ['--afterplay-slide-ms' as string]: `${SLIDE_MS + 4000}ms` };
 
   return (
-    <div className="afterplay-ambient-slide absolute inset-0">
+    <div className="afterplay-ambient-slide animate-[afterplay-fade-in_2.2s_cubic-bezier(0.4,0,0.2,1)_backwards] absolute inset-0">
       {/* Sin hero de fondo: el fondo ahora es la propia app desenfocada por la
           capa de arriba (ver AmbientMode). Solo queda la viñeta, que apaga los
           bordes para que la carátula y el texto del centro no compitan con lo
@@ -578,7 +578,7 @@ const AmbientSlide = ({
               src={coverSrc}
               alt=""
               aria-hidden
-              className="afterplay-ambient-backdrop absolute inset-0 h-full w-full object-cover"
+              className="afterplay-ambient-backdrop animate-[afterplay-ambient-backdrop_var(--afterplay-slide-ms,26s)_ease-in-out_forwards] will-change-transform motion-reduce:animate-none motion-reduce:[transform:scale(1.3)] motion-reduce:will-change-auto absolute inset-0 h-full w-full object-cover"
               style={{ ...slideVar, filter: 'blur(70px) saturate(1.9)', opacity: 0.55 }}
             />
           )}
@@ -599,7 +599,7 @@ const AmbientSlide = ({
           <div className="relative flex items-center gap-14 px-16 py-12">
             {coverSrc && (
               <div
-                className="afterplay-ambient-cover relative flex-none"
+                className="afterplay-ambient-cover animate-[afterplay-ambient-cover_var(--afterplay-slide-ms,26s)_cubic-bezier(0.22,0.61,0.36,1)_forwards] will-change-[transform,opacity] motion-reduce:[animation-name:afterplay-fade-in] relative flex-none"
                 style={{ ...slideVar, width: COVER_WIDTH }}
               >
                 {/* Copia desenfocada justo detrás: la carátula parece emitir
@@ -639,11 +639,14 @@ const AmbientSlide = ({
                 `min-w-0` + encogible para que en una ventana estrecha ceda en
                 vez de desbordar. */}
             <div className="w-[42rem] min-w-0">
-              <div className="afterplay-ambient-text" style={{ animationDelay: '600ms' }}>
+              <div
+                className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in]"
+                style={{ animationDelay: '600ms' }}
+              >
                 {game.isLive && (
                   <div className="mb-3.5 flex items-center gap-2">
                     <span
-                      className="afterplay-ambient-halo h-2 w-2 rounded-full"
+                      className="afterplay-ambient-halo animate-[afterplay-ambient-halo_2.8s_ease-in-out_infinite] h-2 w-2 rounded-full"
                       style={{ background: GREEN, boxShadow: `0 0 14px ${GREEN}` }}
                     />
                     <span
@@ -675,7 +678,10 @@ const AmbientSlide = ({
               </div>
 
               {line && (
-                <div className="afterplay-ambient-text mt-6" style={{ animationDelay: '1400ms' }}>
+                <div
+                  className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in] mt-6"
+                  style={{ animationDelay: '1400ms' }}
+                >
                   {/* Filete corto en el verde de la app: separa el dato del
                       título y ata la diapositiva al resto de Afterplay. */}
                   <div

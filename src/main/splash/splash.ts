@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { readFileSync } from 'fs';
-import icon from '../../../resources/icon.png?asset';
+import icon, { pngIcon } from '../lib/appIcon';
+import { buildSplashHtml, SPLASH_SIZE } from './splashHtml';
 
 // Pantalla de arranque (no confundir con los "Loading…" de dentro de la
 // app, que son cosa del renderer/TanStack Query) — cubre el hueco real
@@ -20,50 +21,9 @@ import icon from '../../../resources/icon.png?asset';
 // file:// : una página data: corre en un origen opaco, y Chromium bloquea
 // que cargue recursos file:// sueltos desde ahí (salía como imagen rota) —
 // metido como base64 no hay ningún recurso externo que cargar.
-const iconDataUrl = `data:image/png;base64,${readFileSync(icon).toString('base64')}`;
+const iconDataUrl = `data:image/png;base64,${readFileSync(pngIcon).toString('base64')}`;
 
-const SPLASH_HTML = `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>
-  html, body { margin: 0; height: 100%; overflow: hidden; }
-  body {
-    -webkit-app-region: drag;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%;
-    background: #0a0b0a;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    color: #eaece9;
-    -webkit-user-select: none;
-  }
-  .logo {
-    width: 60px; height: 60px; border-radius: 15px;
-    box-shadow: 0 10px 28px rgba(47,220,126,.32);
-    margin-bottom: 16px;
-  }
-  .logo img { width: 100%; height: 100%; border-radius: 15px; display: block; }
-  .title { font-size: 16px; font-weight: 800; letter-spacing: -.01em; margin-bottom: 20px; }
-  .dots { display: flex; gap: 6px; }
-  .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: #2fdc7e;
-    animation: afterplay-splash-pulse 1.2s ease-in-out infinite;
-  }
-  .dot:nth-child(2) { animation-delay: .15s; }
-  .dot:nth-child(3) { animation-delay: .3s; }
-  @keyframes afterplay-splash-pulse {
-    0%, 80%, 100% { opacity: .25; transform: scale(.85); }
-    40% { opacity: 1; transform: scale(1); }
-  }
-</style>
-</head>
-<body>
-  <div class="logo"><img src="${iconDataUrl}" alt="" /></div>
-  <div class="title">Afterplay</div>
-  <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-</body>
-</html>`;
+const SPLASH_HTML = buildSplashHtml(iconDataUrl);
 
 export const createSplashWindow = (): BrowserWindow => {
   // Sin transparent/hasShadow: esquinas cuadradas a propósito. Con
@@ -73,8 +33,10 @@ export const createSplashWindow = (): BrowserWindow => {
   // lío que una ventana opaca normal, del mismo tamaño que su contenido,
   // no tiene.
   const splash = new BrowserWindow({
-    width: 320,
-    height: 320,
+    ...SPLASH_SIZE,
+    title: 'Afterplay',
+    icon,
+    backgroundColor: '#0a0b0a',
     frame: false,
     resizable: false,
     movable: true,

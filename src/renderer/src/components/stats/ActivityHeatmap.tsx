@@ -1,3 +1,4 @@
+import { cn } from '../../lib/utils';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours, formatTime, pluralize } from '../../lib/format';
@@ -88,9 +89,11 @@ export const ActivityHeatmap = ({
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
-    const measure = (): void => setContainerWidth(el.clientWidth);
-    measure();
-    const observer = new ResizeObserver(measure);
+    // Reading clientWidth in a layout effect forced the entire statistics page
+    // to lay out synchronously. Use the size already computed by the observer.
+    const observer = new ResizeObserver(([entry]) => {
+      setContainerWidth(Math.round(entry.contentRect.width));
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
@@ -229,7 +232,7 @@ export const ActivityHeatmap = ({
   const monthRow =
     cellPx > 0 ? (
       <div
-        className="mb-1.5 grid text-[9.5px] whitespace-nowrap text-muted-foreground"
+        className="mb-1.5 grid text-[11px] whitespace-nowrap text-muted-foreground"
         style={{
           gridTemplateColumns: `${DAY_LABEL_WIDTH_PX}px repeat(${weeks}, ${cellPx}px)`,
           columnGap: GAP_PX,
@@ -258,7 +261,7 @@ export const ActivityHeatmap = ({
         {DAY_LABELS.map((label, index) => (
           <span
             key={`day-${index}`}
-            className="flex items-center text-[9.5px] leading-none text-muted-foreground"
+            className="flex items-center text-[11px] leading-none text-muted-foreground"
           >
             {label}
           </span>
@@ -266,7 +269,13 @@ export const ActivityHeatmap = ({
         {cells.map((cell) => (
           <div
             key={cell.dayMs}
-            className="rounded-[3px]"
+            className={cn(
+              'afterplay-heat-cell rounded-[3px] origin-center',
+              '[transition:transform_110ms_ease,filter_110ms_ease,box-shadow_110ms_ease]',
+              'hover:z-2 hover:[filter:brightness(1.18)_saturate(1.15)] hover:[transform:scale(1.32)]',
+              'hover:[box-shadow:0_0_10px_rgba(47,220,126,0.25)]',
+              'motion-reduce:animate-none motion-reduce:transition-none',
+            )}
             style={{ background: LEVEL_COLORS[cell.level] }}
             // Solo días reales del rango — el futuro y los restos de
             // diciembre anterior no tienen nada que contar.

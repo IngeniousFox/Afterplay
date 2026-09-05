@@ -344,7 +344,9 @@ export const NotesEditor = ({
       // sin esto la selección se vuelve invisible y no sabes qué texto vas a
       // enlazar. Con className propio para no chocar con ningún `.selection`
       // global.
-      Selection.configure({ className: 'afterplay-note-selection' }),
+      Selection.configure({
+        className: 'afterplay-note-selection rounded-[2px] bg-[rgba(47,220,126,0.26)]',
+      }),
       // html:false — las notas son markdown puro; permitir HTML crudo abriría
       // la puerta a pegar marcado que luego react-markdown no pinta igual.
       Markdown.configure({ html: false, transformPastedText: true }),
@@ -352,10 +354,7 @@ export const NotesEditor = ({
     content: value,
     editorProps: {
       attributes: {
-        // El margen de h1/h2/h3/hr ya no se fuerza aquí — vive centralizado
-        // en `.afterplay-notes` (main.css) para que editor y lectura
-        // (NotesSection) se vean idénticos; ver el comentario junto a esa
-        // regla.
+        // Shared prose utilities keep heading and divider spacing identical in edit and read views.
         class: `${notesProseClass} ${minHeightClass} px-4.5 py-4 outline-none [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5`,
       },
     },

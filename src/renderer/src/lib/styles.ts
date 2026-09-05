@@ -54,13 +54,12 @@ export const heroCtaButtonClass =
 //      se distinga sin depender de los backticks. Ambos ajustes se limitan a
 //      `:not(pre) > code` para no tocar los bloques de código (pre), que ya
 //      tienen su propio fondo.
-// `afterplay-notes` es solo un gancho para el CSS: el <hr> de prose trae un
-// color azulado propio (--tw-prose-invert-hr) y se reemplaza por el borde
-// neutro de la app en main.css (`.afterplay-notes hr`) — vía clase y no
-// variante Tailwind arbitraria porque esta última no siempre compila dentro
-// de una cadena concatenada.
+// Shared heading and divider utilities keep editor, reading view and TV notes identical.
 export const notesProseClass =
   'afterplay-notes prose prose-invert prose-sm max-w-none ' +
+  'prose-hr:border-border prose-hr:my-[12px] ' +
+  'prose-h1:text-[23px] prose-h1:leading-[1.3] prose-h1:font-bold prose-h1:mt-0 prose-h1:mb-[6px] ' +
+  'prose-h2:mt-[12px] prose-h2:mb-[6px] prose-h3:mt-[12px] prose-h3:mb-[6px] ' +
   '[&_:not(pre)>code::before]:content-none [&_:not(pre)>code::after]:content-none ' +
   '[&_:not(pre)>code]:rounded-[5px] [&_:not(pre)>code]:bg-white/[0.07] ' +
   '[&_:not(pre)>code]:px-1.25 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:font-medium';

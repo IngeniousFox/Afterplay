@@ -6,6 +6,8 @@ import { useCredentials } from '../../hooks/settings';
 import { AMBER } from '../../lib/colors';
 import { SettingsModal } from './SettingsModal';
 import { GREEN } from '../../lib/colors';
+import firefly from '../../../../../resources/icon.png';
+import { preloadStatsRoute } from '../../lib/statsRoute';
 
 type NavItem = {
   to: string;
@@ -54,14 +56,18 @@ export const NavRail = (): React.JSX.Element => {
       <button
         type="button"
         title="Settings"
+        aria-label="Settings"
+        aria-haspopup="dialog"
+        aria-expanded={settingsOpen}
         onClick={() => setSettingsOpen(true)}
-        className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-[10px]"
-        style={{
-          background: 'linear-gradient(150deg,#2fdc7e,#16a35a)',
-          boxShadow: '0 4px 14px rgba(47,220,126,.32)',
-        }}
+        className="afterplay-brand-button group/brand border-0 [transition:transform_150ms_cubic-bezier(0.22,1,0.36,1)] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:rounded-[11px] after:[background:linear-gradient(145deg,rgba(255,255,255,0.052),rgba(255,255,255,0.016))] after:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.062)] after:[transition:background_150ms_ease,box-shadow_150ms_ease] after:content-[''] hover:after:[background:linear-gradient(145deg,rgba(47,220,126,0.11),rgba(47,220,126,0.035))] hover:after:shadow-[inset_0_0_0_1px_rgba(47,220,126,0.19)] active:[transform:scale(0.96)] focus-visible:[outline:1px_solid_rgba(47,220,126,0.72)] focus-visible:outline-offset-2 motion-reduce:transition-none motion-reduce:after:transition-none motion-reduce:hover:transform-none motion-reduce:active:transform-none relative mb-2.5 flex size-10.5 flex-none items-center justify-center rounded-[11px] bg-transparent"
       >
-        <Gamepad2 size={20} color="#08120c" />
+        <img
+          src={firefly}
+          alt=""
+          draggable={false}
+          className="afterplay-brand-button__mark opacity-[0.98] [filter:drop-shadow(0_2px_5px_rgba(47,220,126,0.12))] [transition:opacity_150ms_ease,transform_150ms_cubic-bezier(0.22,1,0.36,1),filter_150ms_ease] group-hover/brand:opacity-100 group-hover/brand:[filter:drop-shadow(0_2px_6px_rgba(47,220,126,0.2))] group-hover/brand:[transform:scale(1.035)] motion-reduce:transition-none motion-reduce:group-hover/brand:transform-none relative z-1 size-8 object-contain select-none"
+        />
       </button>
 
       <SettingsModal
@@ -80,6 +86,8 @@ export const NavRail = (): React.JSX.Element => {
           key={to}
           to={to}
           title={label}
+          onPointerEnter={to === '/stats' ? preloadStatsRoute : undefined}
+          onFocus={to === '/stats' ? preloadStatsRoute : undefined}
           className="relative flex h-10.5 w-10.5 items-center justify-center rounded-[11px]"
         >
           {({ isActive }) => (

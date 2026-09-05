@@ -558,7 +558,7 @@ const TvShell = (): React.JSX.Element => {
                   key={backdrop.current}
                   src={backdrop.current}
                   alt=""
-                  className="afterplay-tv-backdrop absolute inset-0 h-full w-full object-cover"
+                  className="afterplay-tv-backdrop animate-[afterplay-fade-in_900ms_ease-out_both,afterplay-tv-backdrop-drift_28s_ease-in-out_infinite_alternate] absolute inset-0 h-full w-full object-cover"
                   style={{ filter: 'blur(24px) saturate(1.55) brightness(.44) contrast(1.12)' }}
                 />
               )}
@@ -591,14 +591,14 @@ const TvShell = (): React.JSX.Element => {
                   radial muere a transparente antes de su propio borde, así
                   que da igual dónde lo recorte la pantalla. */}
               <div
-                className="afterplay-tv-aurora-a absolute -top-[30%] -left-[22%] h-[95vh] w-[70vw]"
+                className="afterplay-tv-aurora-a animate-[afterplay-tv-aurora-a_26s_ease-in-out_infinite] absolute -top-[30%] -left-[22%] h-[95vh] w-[70vw]"
                 style={{
                   background:
                     'radial-gradient(closest-side, rgba(47,220,126,.14), rgba(47,220,126,.055) 55%, transparent 78%)',
                 }}
               />
               <div
-                className="afterplay-tv-aurora-b absolute -right-[20%] -bottom-[34%] h-[100vh] w-[66vw]"
+                className="afterplay-tv-aurora-b animate-[afterplay-tv-aurora-b_32s_ease-in-out_infinite] absolute -right-[20%] -bottom-[34%] h-[100vh] w-[66vw]"
                 style={{
                   background:
                     'radial-gradient(closest-side, rgba(124,134,200,.15), rgba(124,134,200,.06) 55%, transparent 78%)',
@@ -624,7 +624,10 @@ const TvShell = (): React.JSX.Element => {
             <div className="relative min-h-0 flex-1 overflow-hidden px-[4vw] pt-[3.2vh]">
               {/* Cada ruta entra con su propio fundido+subida: navegar es
                 moverse por un sitio, no repintar un formulario. */}
-              <div key={location.pathname} className="afterplay-tv-screen h-full min-h-0">
+              <div
+                key={location.pathname}
+                className="afterplay-tv-screen animate-[afterplay-tv-screen-in_420ms_cubic-bezier(0.22,1,0.36,1)_both] h-full min-h-0"
+              >
                 <Outlet />
               </div>
             </div>

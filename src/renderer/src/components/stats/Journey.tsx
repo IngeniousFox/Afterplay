@@ -45,7 +45,7 @@ const JourneyStatTile = ({
     className="flex-1 rounded-[9px] border px-2.5 py-2"
     style={{ borderColor: `${color}2e`, background: `${color}0f` }}
   >
-    <div className="text-[9.5px] font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
+    <div className="text-[11px] font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
       {label}
     </div>
     <div className="mt-0.5 text-[14px] font-extrabold tabular-nums" style={{ color }}>
@@ -73,7 +73,7 @@ const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Ele
       style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)` }}
     />
     <div
-      className="flex items-center gap-1.5 text-[8.5px] font-extrabold tracking-[.18em]"
+      className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[.18em]"
       style={{ color: `${VIOLET}d9` }}
     >
       <BookOpen size={10} strokeWidth={2.5} />
@@ -142,7 +142,7 @@ const YearStory = ({
     </span>
     <div className="relative">
       <div
-        className="flex items-center gap-1.5 text-[9px] font-extrabold tracking-[.18em]"
+        className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[.18em]"
         style={{ color: `${VIOLET}d9` }}
       >
         <BookOpen size={11} strokeWidth={2.5} />
@@ -366,7 +366,7 @@ const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => 
           );
         })}
       </div>
-      <div className="mt-0.5 flex justify-between text-[9.5px] font-semibold text-muted-foreground">
+      <div className="mt-0.5 flex justify-between text-[11px] font-semibold text-muted-foreground">
         <span>{shortDate(entry.firstAt, entry.firstPrecision)}</span>
         <span>{shortDate(entry.lastAt, entry.lastPrecision)}</span>
       </div>
@@ -439,7 +439,7 @@ const HoverPanel = ({
               </div>
               {status && (
                 <div
-                  className="flex flex-none items-center gap-1.25 text-[10px] font-extrabold uppercase"
+                  className="flex flex-none items-center gap-1.25 text-[11.5px] font-extrabold uppercase"
                   style={{ color: status.color }}
                 >
                   <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
@@ -452,7 +452,7 @@ const HoverPanel = ({
 
         <div className="px-4 pb-3.5">
           <div className="py-3">
-            <div className="text-[8.5px] font-extrabold tracking-[.14em] text-muted-foreground/60">
+            <div className="text-[11px] font-extrabold tracking-[.14em] text-muted-foreground/80">
               {entry.kind === 'endless' ? 'ACTIVITY DATES' : 'PLAYTHROUGH DATES'}
             </div>
             <div className="mt-1.25 flex items-center gap-2.25">
@@ -531,7 +531,7 @@ const JourneyCover = ({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-muted px-1.5 text-center">
             <Gamepad2 size={20} className="text-muted-foreground/35" />
-            <span className="line-clamp-3 text-[8.5px] font-semibold text-muted-foreground">
+            <span className="line-clamp-3 text-[11px] font-semibold text-muted-foreground">
               {entry.title}
             </span>
           </div>
@@ -540,7 +540,7 @@ const JourneyCover = ({
             que el rótulo de MatchCardGrid: la carátula sigue siendo carátula
             de esquina a esquina y aun así cuenta algo. */}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-2 pt-6 pb-2 text-right">
-          <span className="text-[10.5px] font-extrabold text-white/90 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
+          <span className="text-[11.5px] font-extrabold text-white/90 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
             {formatHours(entry.hours)}
           </span>
         </span>
@@ -554,7 +554,7 @@ const JourneyCover = ({
       </div>
 
       {badge && (
-        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[8.5px] font-extrabold text-foreground shadow-md">
+        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[11px] font-extrabold text-foreground shadow-md">
           {badge}
         </span>
       )}
@@ -634,7 +634,7 @@ const FeaturedEntry = ({
             )}
           </div>
           {badge && (
-            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[8.5px] font-extrabold text-foreground shadow-md">
+            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[11px] font-extrabold text-foreground shadow-md">
               {badge}
             </span>
           )}
@@ -642,7 +642,7 @@ const FeaturedEntry = ({
 
         <div className="min-w-0 flex-1">
           <div
-            className="text-[8.5px] font-extrabold tracking-[.16em]"
+            className="text-[11px] font-extrabold tracking-[.16em]"
             style={{ color: `${accent}d0` }}
           >
             MOST PLAYED
@@ -652,7 +652,7 @@ const FeaturedEntry = ({
           </div>
           <div className="mt-0.5 truncate text-[11px] font-semibold text-white/55">
             {entry.iterationLabel}
-            <span className="mx-1.5 text-white/25">·</span>
+            <span className="mx-1.5 text-white/45">·</span>
             {dateRange(entry)}
           </div>
 
@@ -669,7 +669,7 @@ const FeaturedEntry = ({
             )}
             {status && (
               <span
-                className="flex items-center gap-1.25 text-[10px] font-extrabold uppercase"
+                className="flex items-center gap-1.25 text-[11.5px] font-extrabold uppercase"
                 style={{ color: status.color }}
               >
                 <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
@@ -920,7 +920,7 @@ export const Journey = ({
     return (
       <div className="flex min-h-80 flex-col items-center justify-center text-center">
         <div className="flex h-13 w-13 items-center justify-center rounded-full bg-white/[0.04]">
-          <Route size={23} strokeWidth={1.5} className="text-muted-foreground/45" />
+          <Route size={23} strokeWidth={1.5} className="text-muted-foreground/75" />
         </div>
         <div className="mt-3 text-sm font-semibold text-foreground">Your journey starts here</div>
         <div className="mt-1 text-xs text-muted-foreground">
@@ -1052,10 +1052,10 @@ export const Journey = ({
                     >
                       <div className="relative border-r border-border/80 pr-4 text-right">
                         <div className="sticky top-3 pt-1">
-                          <div className="text-[10px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
+                          <div className="text-[11.5px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
                             {monthLabel(month)}
                           </div>
-                          <div className="mt-0.75 text-[9px] font-bold text-muted-foreground/50 tabular-nums">
+                          <div className="mt-0.75 text-[11px] font-bold text-muted-foreground/75 tabular-nums">
                             {formatHours(monthHours)}
                           </div>
                         </div>
@@ -1073,7 +1073,7 @@ export const Journey = ({
                         <div className="mb-2.5 flex items-center gap-2">
                           <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
                           {monthEntries.length > 1 && (
-                            <span className="text-[9.5px] font-bold text-muted-foreground/55 tabular-nums">
+                            <span className="text-[11px] font-bold text-muted-foreground/75 tabular-nums">
                               {monthEntries.length} playthroughs
                             </span>
                           )}
@@ -1116,7 +1116,7 @@ export const Journey = ({
           <div className="mb-4 flex flex-col items-center gap-2 pt-2">
             <span className="h-10 w-px bg-gradient-to-b from-border/80 to-transparent" />
             <span className="h-2 w-2 rounded-full bg-white/25" />
-            <span className="text-[9.5px] font-extrabold tracking-[.16em] text-muted-foreground/55">
+            <span className="text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
               WHERE IT ALL BEGAN
             </span>
           </div>
@@ -1126,7 +1126,7 @@ export const Journey = ({
             años abiertos a la vez la columna se convertía en una lista de
             120 entradas y dejaba de servir para orientarse. */}
         <nav aria-label="Journey date navigation" className="sticky top-5 py-1">
-          <div className="mb-3 pl-4 text-[8.5px] font-extrabold tracking-[.16em] text-muted-foreground/50">
+          <div className="mb-3 pl-4 text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
             JOURNEY
           </div>
           <div className="relative flex flex-col gap-1 border-l border-border/70 pl-4">
@@ -1201,14 +1201,14 @@ export const Journey = ({
                                 settleCancelRef.current = settleScrollIntoView(monthElement);
                               }
                             }}
-                            className="flex items-center justify-between gap-2 py-1 text-left text-[10px] font-semibold transition-colors duration-150"
+                            className="flex items-center justify-between gap-2 py-1 text-left text-[11.5px] font-semibold transition-colors duration-150"
                             style={{
                               color: monthActive ? 'var(--foreground)' : 'var(--muted-foreground)',
                             }}
                           >
                             <span>{monthShortLabel(month)}</span>
                             {monthEntries.length > 0 && (
-                              <span className="text-[8.5px] text-muted-foreground/45 tabular-nums">
+                              <span className="text-[11px] text-muted-foreground/75 tabular-nums">
                                 {monthEntries.length}
                               </span>
                             )}

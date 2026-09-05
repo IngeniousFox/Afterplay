@@ -75,6 +75,8 @@ export const launchAfterplay = async (options: SandboxOptions = {}): Promise<Lau
   // pintable). Esperar a que el shell exista es lo que evita que un test
   // empiece a buscar botones sobre un documento vacío.
   await window.waitForLoadState('domcontentloaded');
+  await window.getByRole('link', { name: 'Games', exact: true }).waitFor({ state: 'visible' });
+  await window.waitForFunction(() => globalThis.location.hash === '#/games');
   return { app, window, sandbox };
 };
 
@@ -90,7 +92,13 @@ export const launchAfterplay = async (options: SandboxOptions = {}): Promise<Lau
 // Los clics del rail SÍ hay que probarlos — pero en UN test que pruebe el
 // rail, no en los treinta que solo quieren estar en otra pantalla.
 export type Route =
-  '/games' | '/plan' | '/sessions' | '/stats' | `/games/${number}` | `/plan/${number}`;
+  | '/games'
+  | '/plan'
+  | '/sessions'
+  | '/stats'
+  | `/stats?game=${number}`
+  | `/games/${number}`
+  | `/plan/${number}`;
 
 export const goTo = async (page: Page, route: Route): Promise<void> => {
   await page.evaluate((target) => {

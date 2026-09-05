@@ -132,7 +132,7 @@ const TabPill = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-full"
+          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
           style={{ boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.8)' }}
         />
       )}
@@ -200,7 +200,7 @@ const ActionButton = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-sheen pointer-events-none absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-white/30 to-transparent"
+          className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-white/30 to-transparent"
         />
       )}
       {icon}
@@ -249,7 +249,7 @@ const BackButton = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-full"
+          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
           style={{ boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.55)' }}
         />
       )}
@@ -342,7 +342,7 @@ const StatusPicker = ({
         />
         {/* El panel nace con el pop de la casa: pequeño y subiendo, con su
             hairline de luz arriba — cristal que llega, no que aparece. */}
-        <div className="afterplay-tv-pop relative w-[16em] rounded-[0.7em] border border-white/[0.12] bg-[#121413]/95 px-[1em] py-[1em] shadow-[inset_0_1px_0_rgba(255,255,255,.10),0_2em_4em_rgba(0,0,0,.6)]">
+        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[16em] rounded-[0.7em] border border-white/[0.12] bg-[#121413]/95 px-[1em] py-[1em] shadow-[inset_0_1px_0_rgba(255,255,255,.10),0_2em_4em_rgba(0,0,0,.6)]">
           <div className="mb-[0.6em] border-b border-white/[0.07] px-[0.4em] pb-[0.55em] text-[0.68em] font-extrabold tracking-[.18em] text-muted-foreground">
             SET STATUS
           </div>
@@ -413,7 +413,7 @@ const StatusOption = ({
       {/* El estado que ya tienes LATE despacio: elegirlo de nuevo solo cierra. */}
       {current && (
         <span
-          className="afterplay-tv-glow ml-auto h-[0.4em] w-[0.4em] rounded-full"
+          className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] ml-auto h-[0.4em] w-[0.4em] rounded-full"
           style={{ background: color, boxShadow: `0 0 0.5em ${color}` }}
         />
       )}
@@ -649,7 +649,11 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           aria-hidden
           className="pointer-events-none absolute -top-[3.2vh] -right-[4vw] -bottom-[0.2em] -left-[4vw] -z-10 overflow-hidden"
         >
-          <img src={heroSrc} alt="" className="afterplay-tv-hero-art h-full w-full object-cover" />
+          <img
+            src={heroSrc}
+            alt=""
+            className="afterplay-tv-hero-art animate-[afterplay-tv-hero-drift_24s_ease-in-out_infinite_alternate] h-full w-full object-cover"
+          />
           <div
             className="absolute inset-0"
             style={{
@@ -770,7 +774,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 }}
               >
                 <span className="relative flex h-[0.55em] w-[0.55em] flex-none">
-                  <span className="afterplay-tv-ring absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.6em_#2fdc7e]" />
+                  <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.6em_#2fdc7e]" />
                 </span>
                 Playing
                 {liveSince && (
@@ -1068,7 +1072,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   hacia dentro del cristal (el overflow recorta lo demás). */}
                     <span
                       aria-hidden
-                      className="afterplay-tv-glow absolute inset-y-0 left-0 w-[0.18em]"
+                      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
                       style={{
                         background: 'linear-gradient(180deg, #7c86c8, #7c86c826)',
                         boxShadow: '0 0 0.8em rgba(124,134,200,.55)',
@@ -1107,7 +1111,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   >
                     {/* La bombilla parpadea despacio: una idea que se le ocurre a
                   la pantalla, no un bullet point. */}
-                    <Lightbulb className="afterplay-tv-glow mt-[0.15em] h-[1.1em] w-[1.1em] flex-none text-[#2bb6a6]/80" />
+                    <Lightbulb className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] mt-[0.15em] h-[1.1em] w-[1.1em] flex-none text-[#2bb6a6]/80" />
                     {curiosity}
                   </p>
                 )}
@@ -1147,10 +1151,10 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 el halo del color de estado respira detrás; la carátula queda
                 nítida encima con su propia sombra profunda. Dos contenedores
                 porque reveal y float no pueden compartir animation. */}
-          <div className="afterplay-tv-float relative">
+          <div className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative">
             <span
               aria-hidden
-              className="afterplay-tv-glow absolute -inset-[0.9em]"
+              className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.9em]"
               style={{
                 background: `radial-gradient(closest-side, ${status.color}50, transparent 72%)`,
                 filter: 'blur(0.6em)',

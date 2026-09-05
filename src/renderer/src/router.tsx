@@ -7,7 +7,7 @@ import { Library } from './screens/Library';
 import { PlanGameDetailRoute } from './screens/PlanGameDetailRoute';
 import { PlanToPlay } from './screens/PlanToPlay';
 import { Sessions } from './screens/Sessions';
-import { Stats } from './screens/Stats';
+import { loadStatsRoute } from './lib/statsRoute';
 import { ModeBridge } from './tv/ModeBridge';
 
 // Todo el árbol de TV (BIG-PICTURE.md §3) en imports dinámicos, y no en el
@@ -92,7 +92,11 @@ export const router = createHashRouter([
             ],
           },
           { path: 'sessions', element: <Sessions /> },
-          { path: 'stats', element: <Stats /> },
+          {
+            path: 'stats',
+            // The separate module is warmed after startup and reused on navigation.
+            lazy: loadStatsRoute,
+          },
         ],
       },
       {

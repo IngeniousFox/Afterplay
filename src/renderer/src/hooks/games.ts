@@ -76,12 +76,14 @@ export const useGame = (id: number): UseQueryResult<GameDetail | null, Error> =>
 // necesita sinopsis/notas/etiquetas, usa usePlannedGamesWithExtras (abajo).
 // Antes todo viajaba junto y cualquier ficha abierta pagaba 928 KB por
 // aviso; la medida completa está en ipc/games.ts.
+export const plannedGamesQueryOptions = {
+  queryKey: queryKeys.games.planned,
+  queryFn: () => window.api.games.getPlanned(),
+  staleTime: Infinity,
+};
+
 export const usePlannedGames = (): UseQueryResult<PlannedGameListItem[], Error> =>
-  useQuery({
-    queryKey: queryKeys.games.planned,
-    queryFn: () => window.api.games.getPlanned(),
-    staleTime: Infinity,
-  });
+  useQuery(plannedGamesQueryOptions);
 
 export type PlannedGamesWithExtras = {
   data: PlannedGameItem[] | undefined;

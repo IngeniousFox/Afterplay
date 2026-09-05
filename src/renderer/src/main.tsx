@@ -62,7 +62,7 @@ const isOverlayWindow = window.location.hash.startsWith('#/overlay');
 // pantalla completa se veían como bugs — y costaron una tarde de cacería por
 // el lado de Electron, que no tenía ninguna culpa:
 //
-//   · `#root { padding-top: 2rem }` reserva el hueco de la TitleBar (main.css
+//   · `#root` reserva el hueco compartido de la TitleBar (main.css
 //     lo explica). El overlay no monta TitleBar, así que ese hueco se
 //     quedaba ahí para siempre: 32px de banda muerta arriba con el juego
 //     asomando por debajo — el "gap" que no cuadraba con ningún tamaño de
