@@ -1,5 +1,5 @@
 import { NotebookPen, Pencil } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { NotesMarkdown } from './NotesMarkdown';
 import { notesProseClass } from '../../../lib/styles';
 import { SectionLabel } from './SectionLabel';
 
@@ -37,7 +37,7 @@ export const NotesSection = ({ notes, onEdit }: NotesSectionProps): React.JSX.El
       {notes ? (
         <div className="max-h-95 overflow-y-auto rounded-[14px] border border-border bg-card px-6 py-5">
           <div className={notesProseClass}>
-            <ReactMarkdown>{notes}</ReactMarkdown>
+            <NotesMarkdown>{notes}</NotesMarkdown>
           </div>
         </div>
       ) : (

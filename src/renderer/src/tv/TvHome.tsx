@@ -106,7 +106,7 @@ const HeroButton = ({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
           >
             <span
-              className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
                   'linear-gradient(105deg, transparent, rgba(255,255,255,.5), transparent)',
@@ -115,7 +115,7 @@ const HeroButton = ({
           </span>
           <span
             aria-hidden
-            className="afterplay-tv-ring pointer-events-none absolute -inset-[2px] rounded-full"
+            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute -inset-[2px] rounded-full"
             style={{ boxShadow: '0 0 1.6em rgba(47,220,126,.5)' }}
           />
         </>
@@ -158,12 +158,12 @@ const Shelf = ({
           {live && (
             <span
               aria-hidden
-              className="afterplay-tv-glow absolute -inset-[0.35em] rounded-full"
+              className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.35em] rounded-full"
               style={{ background: `radial-gradient(closest-side, ${accent}59, transparent)` }}
             />
           )}
           <span
-            className={`absolute inset-0 rounded-full ${live ? 'afterplay-tv-ring' : ''}`}
+            className={`absolute inset-0 rounded-full ${live ? 'afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite]' : ''}`}
             style={{ background: accent, boxShadow: `0 0 0.6em ${accent}99` }}
           />
         </span>
@@ -298,7 +298,7 @@ const SeeAllTile = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-sheen pointer-events-none absolute inset-y-0 left-0 w-[45%]"
+          className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%]"
           style={{
             background: 'linear-gradient(105deg, transparent, rgba(255,255,255,.14), transparent)',
           }}
@@ -358,12 +358,12 @@ const RecapDoor = ({
         <>
           <span
             aria-hidden
-            className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-[0.7em]"
+            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.7em]"
             style={{ boxShadow: 'inset 0 0 0 2px rgba(124,134,200,.85)' }}
           />
           <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
             <span
-              className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[40%]"
+              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[40%]"
               style={{
                 background:
                   'linear-gradient(105deg, transparent, rgba(255,255,255,.1), transparent)',
@@ -622,14 +622,14 @@ export const TvHome = (): React.JSX.Element => {
               contraste entre ambos lo que vende la levitación. */}
           <span
             aria-hidden
-            className="afterplay-tv-glow absolute -bottom-[0.8em] left-1/2 h-[1.1em] w-[5em] -translate-x-1/2 rounded-[50%]"
+            className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -bottom-[0.8em] left-1/2 h-[1.1em] w-[5em] -translate-x-1/2 rounded-[50%]"
             style={{
               background: 'radial-gradient(closest-side, rgba(47,220,126,.35), transparent 72%)',
               filter: 'blur(5px)',
             }}
           />
           <div
-            className="afterplay-tv-float flex h-[3.8em] w-[3.8em] items-center justify-center rounded-full"
+            className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] flex h-[3.8em] w-[3.8em] items-center justify-center rounded-full"
             style={{
               background: 'rgba(255,255,255,.05)',
               boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12), 0 0.9em 2em rgba(0,0,0,.45)',
@@ -689,7 +689,7 @@ export const TvHome = (): React.JSX.Element => {
             <img
               src={heroImage}
               alt=""
-              className="afterplay-tv-hero-art absolute inset-0 h-full w-full object-cover"
+              className="afterplay-tv-hero-art animate-[afterplay-tv-hero-drift_24s_ease-in-out_infinite_alternate] absolute inset-0 h-full w-full object-cover"
               // El arte se oscurece EN ORIGEN, no con un velo encima: un
               // negro translúcido sobre un arte claro (Pragmata, Forza) da
               // gris lavado por definición — era el "fondo gris raro" de la
@@ -701,7 +701,7 @@ export const TvHome = (): React.JSX.Element => {
             <img
               src={heroCoverBackdrop}
               alt=""
-              className="afterplay-tv-hero-art absolute inset-0 h-full w-full object-cover blur-lg brightness-[.55]"
+              className="afterplay-tv-hero-art animate-[afterplay-tv-hero-drift_24s_ease-in-out_infinite_alternate] absolute inset-0 h-full w-full object-cover blur-lg brightness-[.55]"
             />
           ) : null}
           {/* El scrim, ahora LIGERO: solo tiene que dar fondo al texto de la
@@ -734,7 +734,7 @@ export const TvHome = (): React.JSX.Element => {
               esquinas redondeadas lo corten limpio. */}
           <div
             aria-hidden
-            className="afterplay-tv-glow absolute inset-y-0 left-0 w-[38%]"
+            className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[38%]"
             style={{ background: `linear-gradient(90deg, ${heroStatus.color}2e, transparent)` }}
           />
           <div
@@ -751,19 +751,19 @@ export const TvHome = (): React.JSX.Element => {
                 charco de luz del color del estado que se queda quieto: el
                 contraste entre ambos es lo que vende la levitación. */}
             <div
-              className="afterplay-tv-pop relative w-[8.5em] flex-none"
+              className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[8.5em] flex-none"
               style={{ animationDelay: '90ms' }}
             >
               <span
                 aria-hidden
-                className="afterplay-tv-glow absolute -bottom-[0.75em] left-1/2 h-[1.3em] w-[115%] -translate-x-1/2 rounded-[50%]"
+                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -bottom-[0.75em] left-1/2 h-[1.3em] w-[115%] -translate-x-1/2 rounded-[50%]"
                 style={{
                   background: `radial-gradient(closest-side, ${heroStatus.color}4a, transparent 72%)`,
                   filter: 'blur(6px)',
                 }}
               />
               <div
-                className="afterplay-tv-float relative"
+                className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative"
                 style={{ filter: 'drop-shadow(0 1.2em 2.4em rgba(0,0,0,.6))' }}
               >
                 <GameCover
@@ -793,13 +793,13 @@ export const TvHome = (): React.JSX.Element => {
                   <span className="relative h-[0.6em] w-[0.6em] flex-none">
                     <span
                       aria-hidden
-                      className="afterplay-tv-glow absolute -inset-[0.4em] rounded-full"
+                      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.4em] rounded-full"
                       style={{
                         background:
                           'radial-gradient(closest-side, rgba(47,220,126,.6), transparent)',
                       }}
                     />
-                    <span className="afterplay-tv-ring absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.7em_#2fdc7e]" />
+                    <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.7em_#2fdc7e]" />
                   </span>
                   PLAYING NOW
                   <span aria-hidden className="h-[0.9em] w-px bg-[#2fdc7e]/30" />

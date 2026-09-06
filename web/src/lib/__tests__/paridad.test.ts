@@ -23,46 +23,12 @@ import * as pcNotas from '../../../../src/renderer/src/lib/ratings';
 import * as pcRelease from '../../../../src/renderer/src/lib/releaseDate';
 import * as pcCubos from '../../../../src/renderer/src/lib/sessionGroups';
 
-// EL TEST DE DIVERGENCIA entre el escritorio y la PWA.
-//
-// REMOTO.md §3 parte el código en dos mitades con reglas distintas: lo que
-// CALCULA una cifra (horas, estados, gasto repartido) se comparte de verdad
-// —el Worker importa los ficheros reales del escritorio—, y lo que solo DA
-// FORMA a una cifra ya calculada se COPIA, porque importarlo arrastraría a una
-// PWA el grafo de tipos entero del proceso principal de Electron (la cabecera
-// de web/src/lib/format.ts lo cuenta con nombres y apellidos).
-//
-// Copiar tiene un precio, y este fichero es quien lo cobra: aquí se llama a las
-// DOS mitades con las MISMAS entradas y se exige la MISMA salida. Cuando
-// además importa QUÉ contestan (y no solo que contesten lo mismo) se fija el
-// texto exacto, porque dos copias que se tocan a la vez —que pasa: es un solo
-// cambio de criterio aplicado en dos ficheros— se pondrían de acuerdo en el
-// error sin que un test de pura igualdad se enterase.
-//
-// Las dos divergencias que ya pasaron DE VERDAD, y que este fichero deja
-// clavadas para que no vuelvan:
-//
-//   · sortForDisplay (escritorio) frente a sortAchievements (móvil): la misma
-//     lista de logros salía en distinto orden. Hoy coinciden, pero son dos
-//     algoritmos distintos con el mismo resultado —el PC parte la lista en
-//     conseguidos+pendientes y ordena solo la primera mitad; el móvil hace un
-//     único sort de la lista entera—, y dos algoritmos distintos empatan solo
-//     mientras nadie los toca. Por eso aquí se comparan las 120 PERMUTACIONES
-//     de una lista, no un caso feliz: la diferencia entre ellos vive en la
-//     estabilidad del orden, y la estabilidad no se ve con una lista ya
-//     ordenada.
-//   · humanizeSpanByPrecision medía días de CALENDARIO en el móvil y días
-//     REALES en el escritorio. El mismo playthrough del 1 de marzo a las 23:00
-//     al 2 a la 01:00 —dos horas— decía "less than a day" en el PC y "1 day" en
-//     el móvil. Hoy los dos restan los timestamps tal cual.
-//
-// Las cuatro parejas se importan de verdad. La de la agrupación por día no
-// podía: su mitad del escritorio vivía dentro de Sessions.tsx y este fichero la
-// leía del fuente con readFileSync para evaluarla con new Function. Ya no —
-// vive en src/renderer/src/lib/sessionGroups.ts (ver más abajo).
-//
-// Sin mock.module: aquí no se dobla nada, son funciones puras de los dos lados.
-// Por eso los imports van arriba y no dentro de un before().
+// Shared presentation rules still need adapter coverage: desktop sends Date,
+// mobile sends milliseconds, desktop owns the clock preference and diary
+// month scopes, and each app resolves its own Lucide package. Assert expected
+// outputs as well as parity so a shared regression cannot agree with itself.
+// Historical regressions include achievement ordering and elapsed spans
+// incorrectly measured as calendar days in the PWA. Keep both contracts here.
 
 // ── Utilidades ─────────────────────────────────────────────────────────────
 
@@ -87,23 +53,7 @@ const instante = (iso: string): { date: Date; ms: number } => {
   return { date, ms: date.getTime() };
 };
 
-// ── El gemelo que antes no se podía importar ───────────────────────────────
-//
-// ARREGLADO. La tabla de cubos de la pantalla de Sesiones vivía en el
-// escritorio DENTRO de src/renderer/src/screens/Sessions.tsx: un `const`
-// privado de un módulo que importa React, el router, lucide y seis hooks. No
-// había forma de importarla desde un test de node, y copiar su tabla aquí
-// habría fabricado una TERCERA copia — un tercer sitio del que divergir,
-// dentro del test que existe para vigilar las divergencias. Así que este
-// fichero LEÍA el .tsx con readFileSync, recortaba el cuerpo de la función a
-// base de indexOf y lo evaluaba con new Function prestándole startOfDayMs y
-// DAY_MS. Mordía, pero cualquier retoque a la firma o al cierre de la función
-// rompía la extracción en vez de comparar nada, y el `monthScopeKey` que la
-// función devuelve —el gancho del recap del diario— no lo miraba nadie.
-//
-// Ahora la mitad del escritorio vive en src/renderer/src/lib/sessionGroups.ts,
-// aritmética de calendario sin React ni tipos del proceso principal, y se
-// importa como las otras tres parejas. Sessions.tsx la usa desde ahí.
+// The desktop exposes diary metadata; mobile consumes only the label.
 const cuboPC = (date: Date, now: Date): string => pcCubos.getSessionGroup(date, now).label;
 
 // ── Fábricas ───────────────────────────────────────────────────────────────
@@ -601,7 +551,7 @@ describe('notas: las tres muestras y sus umbrales son los mismos en los dos', ()
     mismo(movilNotas.bestRating(machacado), pcNotas.bestRating(machacado), 0);
   });
 
-  it('la paleta copiada en status.ts sigue siendo la de colors.ts', () => {
+  it('la paleta compartida sigue disponible por los dos caminos públicos', () => {
     // web/src/lib/status.ts lleva los hex a mano ("Acentos de identidad
     // (src/renderer/src/lib/colors.ts)"). Es la copia más fácil de olvidar de
     // todas: cambiar el verde de la casa en colors.ts no rompe nada, solo deja
@@ -696,7 +646,7 @@ describe('logros: la misma lista se pinta y se ordena igual en los dos', () => {
     mismo(ordenMovil(alReves), ordenPC(alReves), [8, 7]);
   });
 
-  it('un empate exacto de fecha no reordena nada: los dos sorts son estables', () => {
+  it('un empate exacto de fecha no reordena nada en ninguno de los adaptadores', () => {
     // Dos logros sacados en el mismo instante (una tanda que Steam sella de
     // golpe) no tienen desempate. Un sort inestable en una de las mitades los
     // sacaría en distinto orden en cada pantalla, y peor: en distinto orden
@@ -1001,19 +951,9 @@ describe('salida: la honestidad de la precisión es la misma en los dos', () => 
 
 // ══ TABLA DE ESTADOS ═══════════════════════════════════════════════════════
 
-describe('estados: la tabla copiada en el móvil dice lo mismo que la del PC', () => {
+describe('estados: los adaptadores móvil y PC conservan la presentación', () => {
   it('los seis estados (y el "sin estado") tienen la misma etiqueta, color e icono', () => {
-    // web/src/lib/status.ts repite fila a fila el STATUS_META del escritorio, y
-    // el único test que la rozaba comparaba los CINCO acentos de identidad
-    // contra colors.ts — o sea que los hex que solo viven en esta tabla
-    // (dropped, on_hold, unplayed) y las seis etiquetas no los miraba nadie.
-    // Cambiar el color o el texto de un estado en gameStatus.ts no rompía nada
-    // y dejaba el móvil con el estado viejo para siempre.
-    //
-    // La diferencia entre las dos mitades es de VOCABULARIO, no de tabla: el
-    // escritorio indexa por el suyo de UI ('playing'/'beaten') porque también
-    // ESCRIBE estados, y el móvil, que solo lee, indexa por el de la BD. Por eso
-    // se comparan a través de getGameStatusMeta, que es quien traduce.
+    // Both apps inject their local Lucide icons into the shared definition.
     const estados: (StateType | null)[] = [
       'started',
       'completed',

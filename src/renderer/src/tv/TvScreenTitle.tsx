@@ -23,7 +23,7 @@ export const TvScreenTitle = ({
   >
     <span
       aria-hidden
-      className="afterplay-tv-glow h-[0.4em] w-[0.4em] flex-none rounded-full"
+      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] h-[0.4em] w-[0.4em] flex-none rounded-full"
       style={{ background: accent, boxShadow: `0 0 0.8em ${accent}cc` }}
     />
     {/* pb + leading holgado por la misma razón que el titular del hero: con

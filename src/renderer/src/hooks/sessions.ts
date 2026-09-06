@@ -8,12 +8,14 @@ import { useInvalidatingMutation } from './useInvalidatingMutation';
 // Sesiones). Misma historia que useGames(): staleTime Infinity porque solo
 // cambia por las mutations de aquí (que invalidan sessions.all) o por el
 // watcher del main (vía useWatcherSync).
+export const sessionsQueryOptions = {
+  queryKey: queryKeys.sessions.all,
+  queryFn: () => window.api.sessions.getAll(),
+  staleTime: Infinity,
+};
+
 export const useSessions = (): UseQueryResult<SessionWithGame[], Error> =>
-  useQuery({
-    queryKey: queryKeys.sessions.all,
-    queryFn: () => window.api.sessions.getAll(),
-    staleTime: Infinity,
-  });
+  useQuery(sessionsQueryOptions);
 
 // EMULADORES.md §6 — la bandeja "Pending": sesiones de emulador sin asignar.
 // Su key vive bajo ['sessions'], así que el watcher (useWatcherSync) y las

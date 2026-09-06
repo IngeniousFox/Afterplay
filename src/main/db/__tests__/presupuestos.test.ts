@@ -101,15 +101,15 @@ describe('presupuestos: la lista de la biblioteca', () => {
       'getGames hace más consultas cuando hay más juegos: hay un N+1 nuevo',
     );
     assert.ok(
-      gastoMuchos.queries <= 6,
-      `getGames deberia resolverse en 4-5 consultas y ha hecho ${gastoMuchos.queries}`,
+      gastoMuchos.queries <= 3,
+      `getGames deberia resolverse en 3 consultas y ha hecho ${gastoMuchos.queries}`,
     );
   });
 
   it('getGames no se trae mas filas que las que hay que agregar', async () => {
-    // Hoy se trae: juegos + iteraciones + sesiones + eventos de estado. Con 10
-    // juegos que tienen 1 iteración, 2 sesiones y 1-2 eventos cada uno, eso son
-    // ~50 filas. El presupuesto deja margen de sobra; lo que corta es que
+    // Juegos + iteraciones con sesiones agregadas + eventos de estado: 34
+    // filas para estos 10 juegos. El presupuesto corta que se vuelvan a
+    // transportar los agregados de sesiones por separado o que
     // alguien añada una tabla entera más al viaje (los logros, las curiosidades)
     // sin darse cuenta de que esta consulta corre en CADA 'games:changed', o
     // sea cada vez que el watcher abre o cierra una sesión.
@@ -118,8 +118,8 @@ describe('presupuestos: la lista de la biblioteca', () => {
 
     assert.equal(lista.length, 10);
     assert.ok(
-      gasto.rows <= 80,
-      `getGames se ha traido ${gasto.rows} filas para 10 juegos; el presupuesto son 80`,
+      gasto.rows <= 40,
+      `getGames se ha traido ${gasto.rows} filas para 10 juegos; el presupuesto son 40`,
     );
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useGames } from './games';
 import { resolveImageSrc } from './useImageSrc';
+import { scheduleStatsPreload } from '../lib/statsRoute';
 
 // EL TERCER RELOJ DEL ARRANQUE (la pareja de revealWhenReady en main/index.ts).
 //
@@ -60,6 +61,7 @@ export const useStartupContentSignal = (): void => {
     if (!sent.current && isError) {
       sent.current = true;
       window.api.window.startupContentReady();
+      scheduleStatsPreload();
       return;
     }
 
@@ -89,6 +91,7 @@ export const useStartupContentSignal = (): void => {
       await Promise.race([Promise.allSettled(urls.map(decodeCover)).then(() => undefined), cap]);
 
       window.api.window.startupContentReady();
+      scheduleStatsPreload();
     };
 
     void warm();

@@ -159,6 +159,7 @@ const createOverlayWindow = async (): Promise<BrowserWindow> => {
   });
 
   const created = new BrowserWindow({
+    title: 'Afterplay',
     x: birth.x,
     y: birth.y,
     width: birth.width,

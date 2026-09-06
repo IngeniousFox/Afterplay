@@ -1,0 +1,1 @@
+CREATE INDEX `sessions_iteration_idx` ON `sessions` (`iterationId`);

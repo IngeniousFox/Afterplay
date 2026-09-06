@@ -78,7 +78,7 @@ const PanelButton = ({
         // casa): un halo que respira alrededor de la píldora encendida.
         <span
           aria-hidden
-          className="afterplay-tv-ring pointer-events-none absolute -inset-[2px] rounded-full"
+          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute -inset-[2px] rounded-full"
           style={{ boxShadow: `0 0 1.2em ${accent}40` }}
         />
       )}
@@ -131,7 +131,7 @@ export const TvSessionPanel = ({
         />
         {/* El panel nace con el pop de la casa (pequeño-y-sube) en vez de un
             fade plano: es el remate de una sesión, no un diálogo cualquiera. */}
-        <div className="afterplay-tv-pop relative w-[28em] overflow-hidden rounded-[0.9em] border border-white/[0.12] bg-[#141614] shadow-[0_2em_5em_rgba(0,0,0,.7)]">
+        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[28em] overflow-hidden rounded-[0.9em] border border-white/[0.12] bg-[#141614] shadow-[0_2em_5em_rgba(0,0,0,.7)]">
           {heroSrc && (
             <>
               <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -190,7 +190,7 @@ export const TvSessionPanel = ({
               // respira detrás del icono y un barrido de luz la cruza una vez
               // al aparecer. Todo DENTRO del marco (overflow-hidden).
               <div
-                className="afterplay-tv-pop relative flex items-center gap-[0.55em] overflow-hidden rounded-[0.5em] px-[0.85em] py-[0.55em] text-[0.8em] font-bold"
+                className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative flex items-center gap-[0.55em] overflow-hidden rounded-[0.5em] px-[0.85em] py-[0.55em] text-[0.8em] font-bold"
                 style={{
                   background: `linear-gradient(90deg, ${AMBER}29, ${AMBER}0f)`,
                   color: AMBER,
@@ -199,14 +199,14 @@ export const TvSessionPanel = ({
               >
                 <span
                   aria-hidden
-                  className="afterplay-tv-glow pointer-events-none absolute inset-0"
+                  className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] pointer-events-none absolute inset-0"
                   style={{
                     background: `radial-gradient(ellipse at 10% 50%, ${AMBER}38, transparent 62%)`,
                   }}
                 />
                 <span
                   aria-hidden
-                  className="afterplay-tv-sheen pointer-events-none absolute inset-y-0 left-0 w-[45%]"
+                  className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%]"
                   style={{
                     background: `linear-gradient(105deg, transparent, ${AMBER}3d, transparent)`,
                   }}
@@ -224,7 +224,7 @@ export const TvSessionPanel = ({
                 {/* El acuse entra con pop: el "hecho" se planta en el panel
                     con el mismo gesto vivo con que nació el panel entero. */}
                 <div
-                  className="afterplay-tv-pop flex items-center gap-[0.5em] rounded-[0.5em] px-[0.85em] py-[0.5em] text-[0.85em] font-bold"
+                  className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex items-center gap-[0.5em] rounded-[0.5em] px-[0.85em] py-[0.5em] text-[0.85em] font-bold"
                   style={{
                     background: `${STATUS_META[marked].color}1f`,
                     color: STATUS_META[marked].color,

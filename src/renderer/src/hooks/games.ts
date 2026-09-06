@@ -1,6 +1,7 @@
 import type { QueryClient, UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { planPinOrder } from '../../../shared/planPinOrder';
 import type {
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
@@ -76,12 +77,14 @@ export const useGame = (id: number): UseQueryResult<GameDetail | null, Error> =>
 // necesita sinopsis/notas/etiquetas, usa usePlannedGamesWithExtras (abajo).
 // Antes todo viajaba junto y cualquier ficha abierta pagaba 928 KB por
 // aviso; la medida completa está en ipc/games.ts.
+export const plannedGamesQueryOptions = {
+  queryKey: queryKeys.games.planned,
+  queryFn: () => window.api.games.getPlanned(),
+  staleTime: Infinity,
+};
+
 export const usePlannedGames = (): UseQueryResult<PlannedGameListItem[], Error> =>
-  useQuery({
-    queryKey: queryKeys.games.planned,
-    queryFn: () => window.api.games.getPlanned(),
-    staleTime: Infinity,
-  });
+  useQuery(plannedGamesQueryOptions);
 
 export type PlannedGamesWithExtras = {
   data: PlannedGameItem[] | undefined;
@@ -224,35 +227,15 @@ export const useSetPlanPinned = (): UseMutationResult<
   });
 };
 
-// El MISMO reparto de timestamps que hace el main (reorderUpNext en la
-// query): los planPinnedAt existentes, ordenados de antiguo a nuevo, se
-// reasignan en el orden nuevo. Duplicado aqui a proposito — es lo que hace
-// posible la actualizacion OPTIMISTA de abajo: la cache queda exactamente
-// como va a quedar la DB, asi que cuando llegue el refetch no se mueve nada.
-//
-// Y "el MISMO" incluye el Set: el main deduplica antes de contar porque un
-// [A, A] con un solo juego fijado medía 2, se colaba por el guardián y le
-// corría la marca 1ms (el porqué entero está en getPlannedGames.ts). Sin el
-// Set aquí, esa misma orden malformada haría lo contrario en cada lado — el
-// main no escribe nada y devuelve false, mientras la cache se queda con una
-// marca inventada hasta que el refetch de onSettled la deshace. Que las dos
-// copias cuenten IGUAL es justo lo que sostiene la promesa de arriba.
+// La asignación vive en shared/planPinOrder: el arrastre optimista y el
+// commit de SQLite comparten ahora la regla, incluidos ids repetidos,
+// desconocidos y pines que se soltaron mientras se arrastraba.
 const reassignPinStamps = (
   games: PlannedGameListItem[],
   orderedIds: number[],
 ): PlannedGameListItem[] => {
-  const byId = new Map(games.map((game) => [game.id, game]));
-  const ids = [...new Set(orderedIds)].filter((id) => byId.get(id)?.planPinnedAt != null);
-  if (ids.length < 2) return games;
-
-  const stamps = ids
-    .map((id) => (byId.get(id)?.planPinnedAt as Date).getTime())
-    .sort((a, b) => a - b);
-  for (let k = 1; k < stamps.length; k++) {
-    if (stamps[k] <= stamps[k - 1]) stamps[k] = stamps[k - 1] + 1;
-  }
-
-  const stampById = new Map(ids.map((id, k) => [id, stamps[k]]));
+  const stampById = planPinOrder(games, orderedIds);
+  if (stampById.size === 0) return games;
   return games.map((game) => {
     const stamp = stampById.get(game.id);
     return stamp === undefined ? game : { ...game, planPinnedAt: new Date(stamp) };

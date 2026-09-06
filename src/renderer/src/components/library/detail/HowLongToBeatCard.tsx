@@ -1,5 +1,6 @@
+import { cn } from '../../../lib/utils';
 import { Check, Hourglass, Info, PartyPopper, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 import { toast } from 'sonner';
 import type { GameDetail } from '../../../../../shared/types';
 import { useRefreshGameHltb } from '../../../hooks/hltb';
@@ -15,6 +16,9 @@ type HowLongToBeatCardProps = {
   // del Plan): entonces la card es solo una estimación, sin marcador.
   markerHours: number;
   markerScope: 'playthrough' | 'total';
+  // Stats tiene espacio para tratar la comparación como una pieza narrativa
+  // completa. La ficha y Plan conservan la versión compacta del sidebar.
+  variant?: 'compact' | 'dossier';
 };
 
 type TierKey = 'main' | 'extra' | 'completionist';
@@ -82,7 +86,7 @@ const TierTile = ({
       {reached ? (
         <Check size={10} color={color} strokeWidth={3.5} />
       ) : (
-        <span className="h-2 w-2 flex-none rounded-[2px]" style={{ background: color }} />
+        <span className="size-2 flex-none rounded-[2px]" style={{ background: color }} />
       )}
       <span
         className="text-[9.5px] font-bold tracking-[.06em]"
@@ -113,6 +117,7 @@ export const HowLongToBeatCard = ({
   game,
   markerHours,
   markerScope,
+  variant = 'compact',
 }: HowLongToBeatCardProps): React.JSX.Element => {
   // Antes del early return de abajo: un hook nunca puede ser condicional.
   const [hoveredTier, setHoveredTier] = useState<TierKey | null>(null);
@@ -131,9 +136,23 @@ export const HowLongToBeatCard = ({
   // en vez de desaparecer, con el mismo botón que la card completa.
   if (hasNoTimes) {
     return (
-      <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+      <div
+        className={cn(
+          'rounded-[14px] px-5 py-4.5',
+          'border border-border bg-card',
+          variant === 'dossier'
+            ? cn(
+                'afterplay-game-hltb-empty',
+                'rounded-[15px] relative overflow-hidden',
+                'border border-white/[0.08]',
+                '[background:radial-gradient(circle_at_0%_0%,rgba(43,182,166,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(63,127,224,0.035),transparent_37%),var(--card)]',
+                'shadow-[inset_0_1px_rgba(255,255,255,0.03)]',
+              )
+            : '',
+        )}
+      >
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white/[0.04] text-muted-foreground/50">
+          <span className="flex size-8 flex-none items-center justify-center rounded-full bg-white/[0.04] text-muted-foreground/50">
             <Hourglass size={14} />
           </span>
           <div className="min-w-0 flex-1">
@@ -154,7 +173,7 @@ export const HowLongToBeatCard = ({
             }}
             title="Fetch times from HowLongToBeat"
             aria-label="Fetch times from HowLongToBeat"
-            className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex size-7 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
             <RefreshCw size={13} className={refresh.isPending ? 'animate-spin' : undefined} />
           </button>
@@ -219,6 +238,283 @@ export const HowLongToBeatCard = ({
       ? tiers.find((tier) => tier.key === hoveredTier)
       : undefined;
 
+  if (variant === 'dossier') {
+    const dossierTiers = [
+      { key: 'main' as const, threshold: main },
+      { key: 'extra' as const, threshold: extra },
+      { key: 'completionist' as const, threshold: completionist },
+    ];
+    const dossierSegments = [
+      { key: 'main' as const, width: segMain, color: MAIN },
+      { key: 'extra' as const, width: segExtra, color: EXTRA },
+      { key: 'completionist' as const, width: segComp, color: COMPLETIONIST },
+    ];
+
+    return (
+      <div
+        className={cn(
+          'afterplay-game-hltb-dossier',
+          'rounded-[15px] relative overflow-hidden px-5.5 py-5.25',
+          'border border-white/[0.08]',
+          '[background:radial-gradient(circle_at_0%_0%,rgba(43,182,166,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(63,127,224,0.035),transparent_37%),var(--card)]',
+          'shadow-[inset_0_1px_rgba(255,255,255,0.03)]',
+          'before:absolute before:top-[0] before:right-[8%] before:left-[8%] before:h-[1px]',
+          'before:[background:linear-gradient(90deg,transparent,#2bb6a6,#3f7fe0,#2fdc7e,transparent)]',
+          "before:content-[''] before:opacity-[0.4]",
+        )}
+      >
+        <div className="afterplay-game-hltb-header flex items-start justify-between gap-4.5">
+          <div className="flex flex-col">
+            <span className="afterplay-game-hltb-kicker flex items-center gap-1.25 text-[10px] font-black tracking-[0.14em] text-[#2bb6a6]">
+              <Hourglass size={11} /> PACE COMPARISON
+            </span>
+            <strong className="mt-1 text-[18px] font-black tracking-[-0.02em] text-foreground">
+              You vs HowLongToBeat
+            </strong>
+            <small className="mt-0.5 text-[11.5px] text-white/[0.43]">
+              Your real playtime against the community&apos;s landmarks
+            </small>
+          </div>
+          <button
+            type="button"
+            disabled={refresh.isPending}
+            onClick={() => {
+              refresh.mutate(game.id, {
+                onSuccess: (times) => {
+                  if (times) toast.success('Times updated from HowLongToBeat.');
+                  else
+                    toast.info('HowLongToBeat has no confident match — times kept as they were.');
+                },
+                onError: () => toast.error('Could not reach HowLongToBeat.'),
+              });
+            }}
+            title="Re-fetch times from HowLongToBeat"
+            aria-label="Refresh times"
+            className={cn(
+              'afterplay-game-hltb-refresh',
+              'flex size-7 flex-none items-center justify-center rounded-[8px] text-white/[0.42]',
+              'border border-white/[0.075] bg-white/[0.025]',
+              '[&:is(:hover,:focus-visible)]:border-[rgba(43,182,166,0.3)]',
+              '[&:is(:hover,:focus-visible)]:bg-[rgba(43,182,166,0.07)] [&:is(:hover,:focus-visible)]:text-[#2bb6a6]',
+              '[&:is(:hover,:focus-visible)]:transform-[rotate(14deg)]',
+              '[transition:color_180ms_ease,border-color_180ms_ease,background-color_180ms_ease,transform_240ms_cubic-bezier(0.22,1,0.36,1)]',
+              'motion-reduce:animate-none motion-reduce:transition-none',
+            )}
+          >
+            <RefreshCw size={12} className={refresh.isPending ? 'animate-spin' : undefined} />
+          </button>
+        </div>
+
+        <div className="afterplay-game-hltb-stage [@media(width<=760px)]:grid-cols-[minmax(0,1fr)] mt-4.75 grid grid-cols-[190px_minmax(0,_1fr)] gap-6.25">
+          <div
+            className={cn(
+              'afterplay-game-hltb-you',
+              'relative flex min-w-0 flex-col justify-center pt-2.25 pr-5.5 pb-2.25 pl-0.5',
+              'border-r border-r-white/[0.065]',
+              '[@media(width<=760px)]:pt-[5px] [@media(width<=760px)]:pr-[0] [@media(width<=760px)]:pb-[17px]',
+              '[@media(width<=760px)]:pl-[0] [@media(width<=760px)]:border-r-0 [@media(width<=760px)]:border-b',
+              '[@media(width<=760px)]:border-b-white/[0.065]',
+            )}
+          >
+            <span className="afterplay-game-hltb-you-label [&_i]:bg-(--primary) [&_i]:shadow-[0_0_5px_rgba(47,220,126,0.28)] flex items-center gap-1.5 text-[10px] font-black tracking-[0.13em] text-white/[0.39]">
+              <i className="size-1.5 rounded-[50%]" /> YOUR TIME
+            </span>
+            <strong className="mt-1.25 text-[41px] leading-none font-[950] tracking-[-0.055em] text-foreground">
+              {hasOwnHours ? formatHours(markerHours) : '—'}
+            </strong>
+            <small className="mt-1 text-[11px] text-white/[0.43]">
+              {markerScope === 'total' ? 'across every playthrough' : 'in this playthrough'}
+            </small>
+
+            <div
+              className={cn(
+                'afterplay-game-hltb-verdict',
+                'mt-3.25 flex min-h-10 flex-col justify-center rounded-[8px] px-2.25 py-2',
+                'border border-white/[0.055] bg-white/[0.02]',
+                '[&>span]:text-[10.5px] [&>span]:font-black [&>span]:leading-[1.25] [&>span]:tracking-[0.09em]',
+                '[&>span]:whitespace-normal',
+              )}
+            >
+              {hoveredDetail ? (
+                <HeaderDetail
+                  color={TIER_COLOR[hoveredDetail.key]}
+                  label={TIER_LABEL[hoveredDetail.key]}
+                  threshold={hoveredDetail.threshold}
+                  markerHours={hasOwnHours ? markerHours : null}
+                />
+              ) : hasOwnHours && nextTier ? (
+                <>
+                  <span style={{ color: TIER_COLOR[nextTier.key] }}>
+                    {formatHours(nextTier.threshold - markerHours)} TO GO
+                  </span>
+                  <small className="mt-0.25 text-[10.5px] text-white/[0.44]">
+                    until {TIER_LABEL[nextTier.key]}
+                  </small>
+                </>
+              ) : hasOwnHours && reachedTier === 'completionist' ? (
+                <>
+                  <span style={{ color: COMPLETIONIST }}>ALL TARGETS CLEARED</span>
+                  <small className="mt-0.25 text-[10.5px] text-white/[0.44]">
+                    {formatHours(markerHours - completionist)} beyond 100%
+                  </small>
+                </>
+              ) : (
+                <small className="mt-0.25 text-[10.5px] text-white/[0.44]">
+                  Community targets ready
+                </small>
+              )}
+            </div>
+          </div>
+
+          <div className="afterplay-game-hltb-race min-w-0">
+            <div className="afterplay-game-hltb-race-head flex items-baseline justify-between gap-2.5">
+              <span className="text-[10px] font-black tracking-[0.13em] text-white/[0.46]">
+                THE PACE LINE
+              </span>
+              <small className="text-[10px] text-white/[0.39]">
+                {formatHours(scale)} community ceiling
+              </small>
+            </div>
+
+            <div className="afterplay-game-hltb-track-wrap relative mx-1.75 mt-11.75 mb-0">
+              {hasOwnHours && (
+                <div
+                  className={cn(
+                    'afterplay-game-hltb-marker',
+                    'absolute -top-5 z-3 h-8.75 w-0.5',
+                    'bg-(--foreground) shadow-[0_0_0_2px_rgba(12,14,13,0.78),0_0_6px_rgba(255,255,255,0.24)]',
+                    'transform-[translateX(-1px)]',
+                    '[&_em]:border [&_em]:border-white/[0.11] [&_em]:bg-[#202421]',
+                    '[&_em]:shadow-[0_4px_9px_rgba(0,0,0,0.27)] [&_em]:transform-[translate(-50%,-100%)] [&_i]:border',
+                    '[&_i]:border-[rgba(12,14,13,0.85)] [&_i]:bg-(--foreground)',
+                    '[&_i]:shadow-[0_0_4px_rgba(255,255,255,0.28)]',
+                    '[&.is-beyond_em]:right-[0] [&.is-beyond_em]:left-[auto] [&.is-beyond_em]:text-(--primary)',
+                    '[&.is-beyond_em]:transform-[translate(1px,-100%)]',
+                    'animate-[afterplay-game-hltb-marker-in_560ms_cubic-bezier(0.22,1,0.36,1)_520ms_backwards]',
+                    'motion-reduce:animate-none motion-reduce:transition-none',
+                    markerHours > scale ? 'is-beyond' : '',
+                  )}
+                  style={{ left: `${markerPct}%` }}
+                >
+                  <em className="absolute -top-0.25 left-[50%] rounded-[5px] px-1.5 py-1 text-[8.5px] font-[950] tracking-[0.09em] text-foreground not-italic">
+                    {markerHours > scale ? 'BEYOND' : 'YOU'}
+                  </em>
+                  <i className="absolute -right-0.5 -bottom-0.25 size-1.5 rounded-[50%]" />
+                </div>
+              )}
+              <div
+                className={cn(
+                  'afterplay-game-hltb-track',
+                  'flex h-3.5 overflow-hidden rounded-[99px]',
+                  'bg-white/[0.035] shadow-[inset_0_2px_5px_rgba(0,0,0,0.42),0_0_0_1px_rgba(255,255,255,0.025)]',
+                  '[&>span]:[--tier-color:var(--primary)]',
+                  '[&>span]:[background:linear-gradient(180deg,color-mix(in_srgb,var(--tier-color)_88%,white),var(--tier-color))]',
+                  '[&>span]:shadow-[inset_-1px_0_rgba(10,12,11,0.45)] [&>span]:origin-left',
+                  '[&>span]:[transition:opacity_170ms_ease,filter_180ms_ease]',
+                  '[&>span]:animate-[afterplay-game-hltb-track-in_700ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
+                  '[&>span.is-hovered]:filter-[brightness(1.08)_saturate(1.06)]',
+                  'motion-reduce:[&>span]:animate-none motion-reduce:[&>span]:transition-none',
+                )}
+              >
+                {dossierSegments.map((segment, index) => {
+                  const isHovered = hoveredTier === segment.key;
+                  return (
+                    <span
+                      key={segment.key}
+                      onMouseEnter={() => setHoveredTier(segment.key)}
+                      onMouseLeave={() => setHoveredTier(null)}
+                      className={`block h-full ${isHovered ? 'is-hovered' : ''}`}
+                      style={
+                        {
+                          '--tier-color': segment.color,
+                          width: `${segment.width}%`,
+                          opacity: hoveredTier !== null && !isHovered ? 0.28 : 1,
+                          animationDelay: `${index * 110}ms`,
+                        } as CSSProperties
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="afterplay-game-hltb-milestones mt-4.75 grid grid-cols-3 gap-2">
+              {dossierTiers.map((tier) => {
+                const color = TIER_COLOR[tier.key];
+                const available = tier.threshold > 0;
+                const reached = available && hasOwnHours && markerHours >= tier.threshold;
+                const isHovered = hoveredTier === tier.key;
+                return (
+                  <div
+                    key={tier.key}
+                    tabIndex={available ? 0 : -1}
+                    role="group"
+                    aria-label={`${TIER_LABEL[tier.key]}, ${available ? formatHours(tier.threshold) : 'no estimate'}${reached ? ', reached' : ''}`}
+                    onMouseEnter={() => available && setHoveredTier(tier.key)}
+                    onMouseLeave={() => setHoveredTier(null)}
+                    onFocus={() => available && setHoveredTier(tier.key)}
+                    onBlur={() => setHoveredTier(null)}
+                    className={cn(
+                      'afterplay-game-hltb-milestone',
+                      'relative grid min-h-17.5 min-w-0 grid-cols-[30px_minmax(0,_1fr)] items-center gap-2 rounded-[9px]',
+                      'p-2.25',
+                      '[--tier-color:var(--primary)] border border-white/[0.055] outline-none bg-white/[0.018]',
+                      '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:border-[color-mix(in_srgb,var(--tier-color)_23%,rgba(255,255,255,0.04))]',
+                      '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:bg-[color-mix(in_srgb,var(--tier-color)_6%,rgba(255,255,255,0.015))]',
+                      '[&.is-hovered]:z-[2]',
+                      '[&.is-hovered]:border-[color-mix(in_srgb,var(--tier-color)_40%,rgba(255,255,255,0.06))]',
+                      '[&.is-hovered]:bg-[color-mix(in_srgb,var(--tier-color)_10%,rgba(255,255,255,0.015))]',
+                      '[&.is-hovered]:shadow-[0_8px_18px_rgba(0,0,0,0.16)] [&.is-hovered]:transform-[translateY(-2px)]',
+                      '[&.is-missing]:pointer-events-none [&.is-missing]:opacity-[0.48] [&.is-missing]:filter-[grayscale(1)]',
+                      '[&:is(:hover,:focus-visible)]:z-[2]',
+                      '[&:is(:hover,:focus-visible)]:border-[color-mix(in_srgb,var(--tier-color)_40%,rgba(255,255,255,0.06))]',
+                      '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--tier-color)_10%,rgba(255,255,255,0.015))]',
+                      '[&:is(:hover,:focus-visible)]:shadow-[0_8px_18px_rgba(0,0,0,0.16)]',
+                      '[&:is(:hover,:focus-visible)]:transform-[translateY(-2px)]',
+                      '[transition:opacity_180ms_ease,transform_250ms_cubic-bezier(0.22,1,0.36,1),border-color_180ms_ease,background-color_180ms_ease,box-shadow_220ms_ease]',
+                      'motion-reduce:animate-none motion-reduce:transition-none',
+                      reached ? 'is-reached' : '',
+                      isHovered ? 'is-hovered' : '',
+                      available ? '' : 'is-missing',
+                    )}
+                    style={{ '--tier-color': color } as CSSProperties}
+                  >
+                    <span
+                      className={cn(
+                        'afterplay-game-hltb-milestone-icon',
+                        'flex size-7.5 items-center justify-center rounded-[8px] text-(--tier-color)',
+                        'border border-[color-mix(in_srgb,var(--tier-color)_28%,transparent)]',
+                        'bg-[color-mix(in_srgb,var(--tier-color)_8%,transparent)]',
+                        '[&_i]:bg-(--tier-color) [&_i]:shadow-[0_0_4px_color-mix(in_srgb,var(--tier-color)_26%,transparent)]',
+                      )}
+                    >
+                      {reached ? (
+                        <Check size={12} strokeWidth={3.5} />
+                      ) : (
+                        <i className="size-1.5 rounded-[2px]" />
+                      )}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <small className="truncate text-[9.5px] font-[850] text-white/[0.45]">
+                        {TIER_LABEL[tier.key]}
+                      </small>
+                      <strong className="mt-0.5 text-[14px] font-black text-foreground">
+                        {available ? formatHours(tier.threshold) : '—'}
+                      </strong>
+                    </span>
+                    <em className="absolute right-2 bottom-1.5 text-[8px] font-[950] tracking-[0.08em] text-(--tier-color) not-italic opacity-[0.72]">
+                      {reached ? 'CLEARED' : available ? 'TARGET' : 'NO DATA'}
+                    </em>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
       <div className="flex items-center justify-between gap-3">
@@ -244,7 +540,7 @@ export const HowLongToBeatCard = ({
             }}
             title="Re-fetch times from HowLongToBeat"
             aria-label="Refresh times"
-            className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex size-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
             <RefreshCw size={11} className={refresh.isPending ? 'animate-spin' : undefined} />
           </button>

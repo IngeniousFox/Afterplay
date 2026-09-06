@@ -1,3 +1,4 @@
+import { WalletCards } from 'lucide-react';
 import { useMemo } from 'react';
 import { AMBER } from '../../lib/colors';
 import { monthKey, twelveMonthWindow } from '../../lib/dateMath';
@@ -43,16 +44,19 @@ export const SpendByMonthChart = ({
   return (
     <CategoryBarChart
       title="Spent per month"
+      subtitle="Where purchases clustered"
+      Icon={WalletCards}
       headerRight={() => (
         <>
-          {formatMoney(totalAmount)} {year === 'all' ? 'in the last 12 months' : `in ${year}`}
+          <strong>{formatMoney(totalAmount)}</strong>
+          <small>{year === 'all' ? 'last 12 months' : `${year} total`}</small>
         </>
       )}
       bars={bars}
       formatValue={formatMoney}
       barGradient={`linear-gradient(180deg,${AMBER},#b98c2e)`}
       labelColor={AMBER}
-      glowColor="rgba(227,178,74,.35)"
+      glowColor="rgba(227,178,74,.18)"
     />
   );
 };

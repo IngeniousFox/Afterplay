@@ -130,7 +130,7 @@ const JourneyCoverTv = ({
           <>
             <span
               aria-hidden
-              className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-[0.4em]"
+              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.4em]"
               style={{ boxShadow: `inset 0 0 0 3px ${status.color}` }}
             />
             <span
@@ -138,7 +138,7 @@ const JourneyCoverTv = ({
               className="pointer-events-none absolute inset-0 overflow-hidden rounded-[0.4em]"
             >
               <span
-                className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+                className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
                 style={{
                   background:
                     'linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent)',
@@ -201,13 +201,13 @@ const RecapPanel = ({
         ritmo que el lomo — el panel está vivo sin moverse. */}
     <span
       aria-hidden
-      className="afterplay-tv-glow pointer-events-none absolute -top-[3em] -left-[3em] h-[7em] w-[7em] rounded-full"
+      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] pointer-events-none absolute -top-[3em] -left-[3em] h-[7em] w-[7em] rounded-full"
       style={{ background: `radial-gradient(circle, ${VIOLET}2e, transparent 70%)` }}
     />
     {/* El lomo del libro, respirando. */}
     <span
       aria-hidden
-      className="afterplay-tv-glow absolute inset-y-0 left-0 w-[0.18em]"
+      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
       style={{
         background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)`,
         boxShadow: `0 0 0.9em ${VIOLET}66`,
@@ -253,7 +253,7 @@ const RecapPanel = ({
         paso (key por página), así que el sheen saluda exactamente una vez. */}
     <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <span
-        className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[38%]"
+        className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[38%]"
         style={{
           background: 'linear-gradient(105deg, transparent, rgba(255,255,255,.06), transparent)',
         }}
@@ -312,7 +312,7 @@ const PageArrow = ({
         // (turnPage), y confirmar + swish a la vez era una pila de sonidos.
         data-tv-sound="none"
         aria-label={side === 'left' ? 'Previous page' : 'Next page'}
-        className="afterplay-tv-float relative flex h-[2.2em] w-[2.2em] items-center justify-center overflow-hidden rounded-full transition-[background-color,box-shadow,opacity] duration-200"
+        className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative flex h-[2.2em] w-[2.2em] items-center justify-center overflow-hidden rounded-full transition-[background-color,box-shadow,opacity] duration-200"
         style={
           focused
             ? {
@@ -331,7 +331,7 @@ const PageArrow = ({
           <>
             <span
               aria-hidden
-              className="afterplay-tv-ring pointer-events-none absolute inset-0 rounded-full"
+              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
               style={{ boxShadow: `inset 0 0 0 2px ${VIOLET}` }}
             />
             <span
@@ -339,7 +339,7 @@ const PageArrow = ({
               className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
             >
               <span
-                className="afterplay-tv-sheen absolute inset-y-0 left-0 w-[45%]"
+                className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
                 style={{
                   background:
                     'linear-gradient(105deg, transparent, rgba(255,255,255,.25), transparent)',
@@ -510,7 +510,7 @@ export const TvJourney = (): React.JSX.Element => {
 
   if (!page) {
     return (
-      <div className="afterplay-tv-pop flex h-full flex-col items-center justify-center text-center">
+      <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex h-full flex-col items-center justify-center text-center">
         <div className="text-[1em] font-extrabold">Your journey starts here</div>
         <div className="mt-[0.3em] text-[0.75em] text-muted-foreground">
           Played and logged games will become part of it.
@@ -533,7 +533,7 @@ export const TvJourney = (): React.JSX.Element => {
       />
       <div
         key={pageIndex}
-        className="afterplay-tv-page-turn relative flex h-full flex-col gap-[0.9em] px-[2.6em] pb-[1em]"
+        className="afterplay-tv-page-turn origin-left animate-[afterplay-tv-page-turn-in_480ms_cubic-bezier(0.22,1,0.36,1)_both] relative flex h-full flex-col gap-[0.9em] px-[2.6em] pb-[1em]"
       >
         {/* El cuerpo del LIBRO: el canto del lomo a la izquierda y, si
             quedan páginas por delante, el taco de las que faltan asomando
@@ -613,8 +613,8 @@ export const TvJourney = (): React.JSX.Element => {
               aria-hidden
               className="pointer-events-none absolute right-[0.5em] bottom-[0.3em] select-none"
             >
-              <span className="afterplay-tv-float block">
-                <span className="afterplay-tv-glow block text-white/[0.05]">
+              <span className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] block">
+                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-white/[0.05]">
                   <BookOpen className="h-[9em] w-[9em]" strokeWidth={1} />
                 </span>
               </span>
@@ -680,7 +680,7 @@ export const TvJourney = (): React.JSX.Element => {
             >
               <span
                 aria-hidden
-                className="afterplay-tv-glow h-[0.4em] w-[0.4em] flex-none rounded-full"
+                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] h-[0.4em] w-[0.4em] flex-none rounded-full"
                 style={{ background: '#edd39a', boxShadow: '0 0 0.7em #edd39acc' }}
               />
               Every light in this sky is a game in your library.
@@ -703,8 +703,8 @@ export const TvJourney = (): React.JSX.Element => {
               aria-hidden
               className="pointer-events-none absolute right-[0.2em] bottom-[0.1em] select-none"
             >
-              <span className="afterplay-tv-float block">
-                <span className="afterplay-tv-glow block text-[7em] leading-none font-extrabold tracking-[-.05em] text-white/[0.06]">
+              <span className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] block">
+                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-[7em] leading-none font-extrabold tracking-[-.05em] text-white/[0.06]">
                   {page.year}
                 </span>
               </span>
@@ -774,12 +774,15 @@ export const TvJourney = (): React.JSX.Element => {
             {page.recap ? (
               // El YearStory nace con el pop de paneles, un compás después de
               // la regla — la portada se compone delante de ti.
-              <div className="afterplay-tv-pop flex-none" style={{ animationDelay: '140ms' }}>
+              <div
+                className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex-none"
+                style={{ animationDelay: '140ms' }}
+              >
                 <RecapPanel recap={page.recap} eyebrow={`THE STORY OF ${page.year}`} />
               </div>
             ) : (
               <div
-                className="afterplay-tv-pop flex-none text-[0.8em] text-muted-foreground"
+                className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex-none text-[0.8em] text-muted-foreground"
                 style={{ animationDelay: '140ms' }}
               >
                 A year of play — its story has not been written yet.

@@ -1,6 +1,6 @@
 import { MessageSquareQuote, NotebookPen } from 'lucide-react';
 import { useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { NotesMarkdown } from '../../components/library/detail/NotesMarkdown';
 import type { EventDatePrecision, GameDetail, TimeFormat } from '../../../../shared/types';
 import { useTimeFormat } from '../../hooks/settings';
 import { formatByPrecision } from '../../lib/format';
@@ -96,7 +96,7 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
           />
           <span
             aria-hidden
-            className="afterplay-tv-glow absolute inset-y-0 left-0 w-[0.18em]"
+            className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
             style={{
               background: 'linear-gradient(180deg, #7c86c8, #7c86c826)',
               boxShadow: '0 0 0.8em rgba(124,134,200,.55)',
@@ -129,7 +129,7 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
                 fontSize inline lo devuelve al redil y los hijos (em sobre em)
                 escalan solos. */}
             <div className={notesProseClass} style={{ fontSize: '0.75em' }}>
-              <ReactMarkdown>{gameNotes}</ReactMarkdown>
+              <NotesMarkdown>{gameNotes}</NotesMarkdown>
             </div>
           </div>
           {/* La lista se funde contra el borde: pista de que hay más abajo. */}

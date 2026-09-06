@@ -22,13 +22,20 @@ const BUDGETS: { match: RegExp; maxKB: number; what: string }[] = [
   // react-query y la TitleBar — si crece, es que algo se ha importado de
   // forma estática en main.tsx y ha arrastrado media app con él.
   { match: /^assets\/index-[^/]+\.js$/, maxKB: 300, what: 'chunk de entrada (main.tsx)' },
-  // El árbol de escritorio. Medido ~1749 KB. Dentro sigue habiendo ~516 KB
-  // de editor TipTap y ~118 KB de react-markdown que sobran en el arranque
-  // (ver "pendientes": un lazy en NotesEditor.tsx se los lleva de golpe).
-  { match: /^assets\/Afterplay-[^/]+\.js$/, maxKB: 1900, what: 'arbol de escritorio' },
+  // Medido 587,09 KB después de separar rutas, editor, lector Markdown y
+  // controles de Ajustes (antes 1626,47 KB). Margen del 11%, no espacio para
+  // volver a colar el editor o una pantalla completa en el arranque.
+  { match: /^assets\/Afterplay-[^/]+\.js$/, maxKB: 650, what: 'arbol de escritorio' },
   // El HUD del overlay, que nace con un juego ya corriendo. Medido 36,02 KB.
   { match: /^assets\/OverlayHud-[^/]+\.js$/, maxKB: 80, what: 'HUD del overlay' },
 ];
+
+// Entrada + Afterplay + TODOS sus imports estáticos, cada chunk una vez.
+// Medido 915,37 KB: index 253,92 + Afterplay 587,09 + useLiveTimer 74,36.
+// Medir solo Afterplay permitiría esconder una regresión en un chunk común.
+// Los imports dinámicos quedan fuera: se pagan al usar su pantalla/editor.
+const DESKTOP_STARTUP_MAX_KB = 1000;
+const AFTERPLAY_MODULE = resolve('src/renderer/src/Afterplay.tsx');
 
 const bundleBudget = (): Plugin => ({
   name: 'afterplay-bundle-budget',
@@ -45,6 +52,37 @@ const bundleBudget = (): Plugin => ({
             `(electron.vite.config.ts, BUDGETS).`,
         );
       }
+    }
+
+    const startupChunks = new Set<string>();
+    const includeStaticImports = (fileName: string): void => {
+      if (startupChunks.has(fileName)) return;
+      const chunk = bundle[fileName];
+      if (!chunk || chunk.type !== 'chunk') return;
+      startupChunks.add(fileName);
+      for (const imported of chunk.imports) includeStaticImports(imported);
+    };
+    for (const [fileName, chunk] of Object.entries(bundle)) {
+      if (chunk.type !== 'chunk') continue;
+      if (
+        chunk.isEntry ||
+        (chunk.facadeModuleId !== null && resolve(chunk.facadeModuleId) === AFTERPLAY_MODULE)
+      ) {
+        includeStaticImports(fileName);
+      }
+    }
+    let startupBytes = 0;
+    for (const fileName of startupChunks) {
+      const chunk = bundle[fileName];
+      if (chunk.type === 'chunk') startupBytes += Buffer.byteLength(chunk.code);
+    }
+    const startupKB = startupBytes / 1000;
+    if (startupKB > DESKTOP_STARTUP_MAX_KB) {
+      this.error(
+        `Presupuesto de arranque de escritorio superado: ${startupKB.toFixed(2)} kB ` +
+          `en ${startupChunks.size} chunks estáticos, tope ${DESKTOP_STARTUP_MAX_KB} kB. ` +
+          `Revisa los imports de ${[...startupChunks].join(', ')} antes de subir el tope.`,
+      );
     }
   },
 });

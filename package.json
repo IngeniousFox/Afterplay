@@ -1,13 +1,13 @@
 {
   "name": "Afterplay",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
-    "lint": "eslint --cache .",
+    "lint": "eslint --cache src web/src worker/src e2e scripts *.config.ts eslint.config.mjs web/vite.config.ts",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
@@ -16,8 +16,12 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:worker && npm run typecheck:pwa && npm run typecheck:e2e",
     "pretest": "tsx scripts/clean-test-temp.ts",
     "test": "tsx --test --experimental-test-module-mocks \"src/**/*.test.ts\" \"worker/src/**/*.test.ts\" \"web/src/**/*.test.ts\"",
+    "posttest": "tsx scripts/clean-test-temp.ts",
     "test:e2e": "npm run build && playwright test",
     "test:e2e:only": "playwright test",
+    "benchmark:journey": "tsx scripts/benchmark-journey.ts",
+    "benchmark:shared": "tsx scripts/benchmark-shared.ts",
+    "benchmark:db": "tsx --test --experimental-test-module-mocks scripts/benchmark-db.ts",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
@@ -96,4 +100,3 @@
     "vite": "^7.2.6"
   }
 }
-

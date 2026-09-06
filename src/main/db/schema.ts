@@ -304,70 +304,74 @@ export const radarGamesTable = sqliteTable('radar_games', {
 export type RadarGameRow = typeof radarGamesTable.$inferSelect;
 export type NewRadarGame = typeof radarGamesTable.$inferInsert;
 
-export const sessionsTable = sqliteTable('sessions', {
-  id: int().primaryKey({ autoIncrement: true }),
-  // Nullable desde EMULADORES.md §5: una sesión de emulador SIN ASIGNAR
-  // todavía no pertenece a ningún playthrough (iterationId null +
-  // emulatorId puesto) — vive en la bandeja "Pending" hasta que el usuario
-  // la asigna a un juego. Las sesiones normales siguen llevando iterationId
-  // SIEMPRE (lo garantiza la capa de app; la DB ya no puede).
-  iterationId: int().references(() => iterationsTable.id, { onDelete: 'cascade' }),
-  // Qué emulador generó esta sesión — se queda puesto también después de
-  // asignarla (registro de origen, útil para stats/filtros futuros). SET
-  // NULL y no CASCADE: borrar un emulador no debe llevarse las sesiones ya
-  // asignadas a juegos (deleteEmulator limpia las pendientes él mismo).
-  emulatorId: int().references(() => emulatorsTable.id, { onDelete: 'set null' }),
-  // HISTÓRICO: hoy NINGÚN insert lo pone a true. Solo lo hacía
-  // `addManualSession`, la vía de registrar el pasado del modelo v1, y esa
-  // desapareció: el pasado ahora se registra como horas manuales en la
-  // iteración (manualTotalPlayed), no fabricando sesiones. Las dos únicas
-  // vías vivas (watcher/Play y emuladores) escriben false.
-  //
-  // La columna y los filtros `!isManual` de Stats se quedan por las filas
-  // ANTIGUAS, que sí pueden traerlo a true: quitarlos metería sesiones
-  // inventadas en el heatmap, las rachas y los histogramas, que solo quieren
-  // tiempo medido de verdad. Si alguna vez se confirma que no queda ninguna
-  // fila con true, esto se puede borrar entero con su migración.
-  isManual: int({ mode: 'boolean' }).notNull().default(false),
-  startedAt: int({ mode: 'timestamp_ms' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  endedAt: int({ mode: 'timestamp_ms' }),
-  durationSec: int(),
-  // "Latido" del watcher: se refresca cada ciclo (~5s) mientras la sesión
-  // está en marcha. Si la app muere de golpe (corte de luz, cuelgue), al
-  // recuperar la sesión se cierra en este último latido en vez de quedar
-  // abierta hasta el siguiente arranque — así no se pierde el tiempo jugado
-  // ni se infla con el hueco de la app apagada. Null en sesiones manuales.
-  lastHeartbeatAt: int({ mode: 'timestamp_ms' }),
-  // QUIÉN abrió esta sesión (REMOTO.md §7.3). No cambia lo que la sesión ES —
-  // sigue siendo tiempo medido de verdad, con `isManual: false`, y cuenta
-  // igual en el heatmap, las rachas y los momentos. Solo dice quién apretó el
-  // botón.
-  //
-  // Existe por un choque concreto: reconcileOpenSessions recorre las sesiones
-  // abiertas y cierra la que no tenga su proceso corriendo. Una sesión de
-  // cronómetro (una consola física, GeForce Now, un juego de navegador) NUNCA
-  // va a tener proceso, así que sin esta marca se cerraría en el acto con
-  // `endedAt = startedAt` — duración 0 — cada vez que el watcher mirara.
-  //
-  // 'watcher' por defecto: es lo que era todo hasta ahora.
-  startedBy: text({ enum: ['watcher', 'timer'] })
-    .notNull()
-    .default('watcher'),
-  datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
-  // Diario de sesión: "dónde lo dejé". Se ofrece al cerrar el juego (toast) y
-  // se puede escribir o corregir después desde la propia fila de la sesión —
-  // una sesión sin nota no es una tarea pendiente, la nota es opcional
-  // siempre. Es lo que hace que volver a un juego tras semanas no empiece por
-  // "¿y yo por dónde iba?".
-  note: text(),
-  // Modelo v2: una sesión es SOLO tiempo jugado real. La columna `milestone`
-  // (marcadores de borde de duración 0) y las anclas start/endSessionId de
-  // iterations desaparecieron — las fechas de inicio/fin de un playthrough
-  // viven en su log de state_events (única fuente de verdad) y se DERIVAN en
-  // las queries de lectura (ver getGameById).
-});
+export const sessionsTable = sqliteTable(
+  'sessions',
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    // Nullable desde EMULADORES.md §5: una sesión de emulador SIN ASIGNAR
+    // todavía no pertenece a ningún playthrough (iterationId null +
+    // emulatorId puesto) — vive en la bandeja "Pending" hasta que el usuario
+    // la asigna a un juego. Las sesiones normales siguen llevando iterationId
+    // SIEMPRE (lo garantiza la capa de app; la DB ya no puede).
+    iterationId: int().references(() => iterationsTable.id, { onDelete: 'cascade' }),
+    // Qué emulador generó esta sesión — se queda puesto también después de
+    // asignarla (registro de origen, útil para stats/filtros futuros). SET
+    // NULL y no CASCADE: borrar un emulador no debe llevarse las sesiones ya
+    // asignadas a juegos (deleteEmulator limpia las pendientes él mismo).
+    emulatorId: int().references(() => emulatorsTable.id, { onDelete: 'set null' }),
+    // HISTÓRICO: hoy NINGÚN insert lo pone a true. Solo lo hacía
+    // `addManualSession`, la vía de registrar el pasado del modelo v1, y esa
+    // desapareció: el pasado ahora se registra como horas manuales en la
+    // iteración (manualTotalPlayed), no fabricando sesiones. Las dos únicas
+    // vías vivas (watcher/Play y emuladores) escriben false.
+    //
+    // La columna y los filtros `!isManual` de Stats se quedan por las filas
+    // ANTIGUAS, que sí pueden traerlo a true: quitarlos metería sesiones
+    // inventadas en el heatmap, las rachas y los histogramas, que solo quieren
+    // tiempo medido de verdad. Si alguna vez se confirma que no queda ninguna
+    // fila con true, esto se puede borrar entero con su migración.
+    isManual: int({ mode: 'boolean' }).notNull().default(false),
+    startedAt: int({ mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    endedAt: int({ mode: 'timestamp_ms' }),
+    durationSec: int(),
+    // "Latido" del watcher: se refresca cada ciclo (~5s) mientras la sesión
+    // está en marcha. Si la app muere de golpe (corte de luz, cuelgue), al
+    // recuperar la sesión se cierra en este último latido en vez de quedar
+    // abierta hasta el siguiente arranque — así no se pierde el tiempo jugado
+    // ni se infla con el hueco de la app apagada. Null en sesiones manuales.
+    lastHeartbeatAt: int({ mode: 'timestamp_ms' }),
+    // QUIÉN abrió esta sesión (REMOTO.md §7.3). No cambia lo que la sesión ES —
+    // sigue siendo tiempo medido de verdad, con `isManual: false`, y cuenta
+    // igual en el heatmap, las rachas y los momentos. Solo dice quién apretó el
+    // botón.
+    //
+    // Existe por un choque concreto: reconcileOpenSessions recorre las sesiones
+    // abiertas y cierra la que no tenga su proceso corriendo. Una sesión de
+    // cronómetro (una consola física, GeForce Now, un juego de navegador) NUNCA
+    // va a tener proceso, así que sin esta marca se cerraría en el acto con
+    // `endedAt = startedAt` — duración 0 — cada vez que el watcher mirara.
+    //
+    // 'watcher' por defecto: es lo que era todo hasta ahora.
+    startedBy: text({ enum: ['watcher', 'timer'] })
+      .notNull()
+      .default('watcher'),
+    datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
+    // Diario de sesión: "dónde lo dejé". Se ofrece al cerrar el juego (toast) y
+    // se puede escribir o corregir después desde la propia fila de la sesión —
+    // una sesión sin nota no es una tarea pendiente, la nota es opcional
+    // siempre. Es lo que hace que volver a un juego tras semanas no empiece por
+    // "¿y yo por dónde iba?".
+    note: text(),
+    // Modelo v2: una sesión es SOLO tiempo jugado real. La columna `milestone`
+    // (marcadores de borde de duración 0) y las anclas start/endSessionId de
+    // iterations desaparecieron — las fechas de inicio/fin de un playthrough
+    // viven en su log de state_events (única fuente de verdad) y se DERIVAN en
+    // las queries de lectura (ver getGameById).
+  },
+  (table) => [index('sessions_iteration_idx').on(table.iterationId)],
+);
 
 export const iterationsTable = sqliteTable(
   'iterations',

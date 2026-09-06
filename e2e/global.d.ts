@@ -17,6 +17,5 @@ import type { api as preloadApi } from '../src/preload/api';
 // fichero de test resolveria a la Page de Playwright, no al global de la
 // pagina. Por eso siempre `globalThis.api`.
 declare global {
-  // eslint-disable-next-line no-var
   var api: typeof preloadApi;
 }

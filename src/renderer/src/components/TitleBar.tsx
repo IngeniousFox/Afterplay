@@ -16,7 +16,7 @@ const TitleBar = (): React.JSX.Element | null => {
 
   useEffect(() => window.api.window.onMaximizedChange(setIsMaximized), []);
 
-  // Marca en <html> el hueco de 2rem que #root le reserva a esta barra (ver
+  // Marca en <html> el hueco compartido que #root le reserva a esta barra (ver
   // main.css) para que se lo quede el contenido: sin esto, F11 quitaba el
   // chrome del SO pero dejaba una franja vacía del tamaño de la TitleBar
   // flotando en la parte de arriba — "pantalla completa" a medias.
@@ -28,7 +28,8 @@ const TitleBar = (): React.JSX.Element | null => {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-60 flex h-7 items-center justify-between border-b border-border bg-card pl-3 text-foreground select-none"
+      className="fixed inset-x-0 top-0 z-60 flex h-(--titlebar-height) items-center justify-between border-b border-border bg-card pl-3 text-foreground select-none"
+      data-testid="app-titlebar"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       <span className="text-sm font-semibold">Afterplay</span>

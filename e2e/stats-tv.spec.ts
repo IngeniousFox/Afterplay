@@ -3,6 +3,7 @@ import { formatHours } from '../src/renderer/src/lib/format';
 import type { SeedGame } from './sandbox';
 import { DEFAULT_SEED } from './seed';
 import { expect, goTo, test } from './fixtures';
+import { landingError } from './scroll';
 
 // LO QUE ESTA SUITE BLINDA: la pantalla de Stats (las cifras de cabecera,
 // la pestaña Journey y su índice de años) y el modo TV / Big Picture
@@ -43,29 +44,20 @@ type BacklogDebtSnapshot = {
 };
 
 // Toda la lectura de la tarjeta "Backlog debt" (BacklogDebtCard.tsx, modo
-// all-time) en una sola pasada por el DOM: busca cada etiqueta de texto por
-// su contenido exacto y lee el número que cuelga a su lado, sin depender de
-// ninguna clase — mismo espíritu que readMetricValue.
+// all-time) en una sola pasada por el DOM. Los atributos data-debt-* forman
+// el pequeño contrato de prueba: permiten cambiar la composición visual sin
+// volver a acoplar las cifras al número de wrappers del diseño.
 const readBacklogDebtCard = (page: Page): Promise<BacklogDebtSnapshot | null> =>
   page.evaluate(() => {
-    const isLeaf = (element: Element): boolean => element.children.length === 0;
-    const findLeaf = (root: ParentNode, text: string): Element | null =>
-      Array.from(root.querySelectorAll('*')).find(
-        (element) => isLeaf(element) && element.textContent?.trim() === text,
-      ) ?? null;
-
-    const title = findLeaf(document, 'Backlog debt');
-    // title -> el div sin título que lo envuelve -> la fila "justify-between"
-    // de cabecera -> la raíz de la StatCard entera (ver BacklogDebtCard.tsx).
-    const card = title?.parentElement?.parentElement?.parentElement ?? null;
+    const card = document.querySelector('.afterplay-debt-card');
     if (!card) return null;
 
-    const hoursLabel = findLeaf(card, 'hours');
     const readSplit = (label: string): string | null =>
-      findLeaf(card, label)?.parentElement?.lastElementChild?.textContent?.trim() ?? null;
+      card.querySelector(`[data-debt-source="${label}"] [data-debt-count]`)?.textContent?.trim() ??
+      null;
 
     return {
-      hours: hoursLabel?.previousElementSibling?.textContent?.trim() ?? null,
+      hours: card.querySelector('[data-debt-hours]')?.textContent?.trim() ?? null,
       neverTouched: readSplit('Never touched'),
       planToPlay: readSplit('Plan to play'),
     };
@@ -154,10 +146,10 @@ test.describe('Stats — Journey', () => {
 
     await year2021.click();
 
-    // settleScrollIntoView (Journey.tsx) puede relanzar el viaje varias
-    // veces mientras los meses sin pintar aún se materializan con su alto
-    // real — de ahí un margen bastante mayor que el resto de la suite.
-    await expect(year2021).toHaveAttribute('aria-current', 'true', { timeout: 20_000 });
+    // El índice se resalta de forma optimista: comprobar solo aria-current
+    // no demuestra que el scroll haya llegado al año de verdad.
+    await expect.poll(() => landingError(window, '[data-year="2021"]')).toBeLessThanOrEqual(2);
+    await expect(year2021).toHaveAttribute('aria-current', 'true');
   });
 });
 

@@ -2,12 +2,8 @@ import { Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import { createHashRouter, Navigate } from 'react-router-dom';
 import { RootLayout } from './components/layout/RootLayout';
-import { GameDetailRoute } from './screens/GameDetailRoute';
 import { Library } from './screens/Library';
-import { PlanGameDetailRoute } from './screens/PlanGameDetailRoute';
-import { PlanToPlay } from './screens/PlanToPlay';
-import { Sessions } from './screens/Sessions';
-import { Stats } from './screens/Stats';
+import { loadStatsRoute } from './lib/statsRoute';
 import { ModeBridge } from './tv/ModeBridge';
 
 // Todo el árbol de TV (BIG-PICTURE.md §3) en imports dinámicos, y no en el
@@ -81,18 +77,41 @@ export const router = createHashRouter([
             path: 'games',
             children: [
               { index: true, element: <Library /> },
-              { path: ':id', element: <GameDetailRoute /> },
+              {
+                path: ':id',
+                lazy: () =>
+                  import('./screens/GameDetailRoute').then((m) => ({
+                    Component: m.GameDetailRoute,
+                  })),
+              },
             ],
           },
           {
             path: 'plan',
             children: [
-              { index: true, element: <PlanToPlay /> },
-              { path: ':id', element: <PlanGameDetailRoute /> },
+              {
+                index: true,
+                lazy: () =>
+                  import('./screens/PlanToPlay').then((m) => ({ Component: m.PlanToPlay })),
+              },
+              {
+                path: ':id',
+                lazy: () =>
+                  import('./screens/PlanGameDetailRoute').then((m) => ({
+                    Component: m.PlanGameDetailRoute,
+                  })),
+              },
             ],
           },
-          { path: 'sessions', element: <Sessions /> },
-          { path: 'stats', element: <Stats /> },
+          {
+            path: 'sessions',
+            lazy: () => import('./screens/Sessions').then((m) => ({ Component: m.Sessions })),
+          },
+          {
+            path: 'stats',
+            // The separate module is warmed after startup and reused on navigation.
+            lazy: loadStatsRoute,
+          },
         ],
       },
       {

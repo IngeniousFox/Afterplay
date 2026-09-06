@@ -1,5 +1,5 @@
 import { BookOpen, CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import type {
@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/types';
 import type { JourneyEntry } from '../../lib/journeyEntries';
 import { buildEntries, groupEntriesByYearMonth } from '../../lib/journeyEntries';
+import { navigateJourney } from '../../lib/journeyNavigation';
 import { useMemories } from '../../hooks/memories';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
@@ -45,7 +46,7 @@ const JourneyStatTile = ({
     className="flex-1 rounded-[9px] border px-2.5 py-2"
     style={{ borderColor: `${color}2e`, background: `${color}0f` }}
   >
-    <div className="text-[9.5px] font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
+    <div className="text-[11px] font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
       {label}
     </div>
     <div className="mt-0.5 text-[14px] font-extrabold tabular-nums" style={{ color }}>
@@ -73,7 +74,7 @@ const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Ele
       style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)` }}
     />
     <div
-      className="flex items-center gap-1.5 text-[8.5px] font-extrabold tracking-[.18em]"
+      className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[.18em]"
       style={{ color: `${VIOLET}d9` }}
     >
       <BookOpen size={10} strokeWidth={2.5} />
@@ -142,7 +143,7 @@ const YearStory = ({
     </span>
     <div className="relative">
       <div
-        className="flex items-center gap-1.5 text-[9px] font-extrabold tracking-[.18em]"
+        className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[.18em]"
         style={{ color: `${VIOLET}d9` }}
       >
         <BookOpen size={11} strokeWidth={2.5} />
@@ -233,79 +234,6 @@ const monthIntrinsicHeight = (entryCount: number): number => {
   return Math.max(MONTH_MIN_HEIGHT_PX, content) + MONTH_PADDING_PX;
 };
 
-// EL SCROLL QUE TERMINA DE LLEGAR.
-//
-// scrollIntoView({smooth}) calcula el destino UNA vez, al arrancar — y en
-// esta pantalla el suelo se mueve durante el viaje: los meses llevan
-// content-visibility:auto (ver el bloque del mes), asi que los que nunca se
-// han pintado son huecos con la altura ESTIMADA de arriba, y al pasar el
-// viewport por ellos se materializan con su altura real. Cada diferencia
-// desplaza todo lo de abajo, y el viaje aterriza corto (o largo): cuanto mas
-// lejano el destino, mas meses sin pintar de por medio y mas error acumulado.
-// Saltar de 2026 a 2019 se quedaba a medio año del sitio.
-//
-// El remedio NO es quitar content-visibility (eso devolveria los 41 meses
-// maquetados de golpe al entrar) ni saltar en seco (perderia la animacion):
-// es dejar que el viaje suave termine y ENTONCES medir. Si el destino no
-// quedo clavado, se relanza otro scrollIntoView suave — que ya viaja sobre
-// geometria real, porque el primer viaje materializo todo el camino — y en
-// una o dos correcciones cortas converge. Se detecta "el viaje termino"
-// muestreando la posicion del destino por frame (estable N frames seguidos =
-// quieto), sin depender de en que contenedor se scrollea ni del evento
-// scrollend. Y en cuanto el usuario toca rueda/tecla/dedo, se cancela: el
-// corrector nunca pelea contra una mano humana.
-const SETTLE_STABLE_FRAMES = 3;
-const SETTLE_TOLERANCE_PX = 2;
-const SETTLE_MAX_MS = 5_000;
-const USER_TAKEOVER_EVENTS = ['wheel', 'touchstart', 'keydown', 'mousedown'] as const;
-
-const settleScrollIntoView = (target: HTMLElement): (() => void) => {
-  let frame = 0;
-  let cancelled = false;
-  let lastTop = Number.NaN;
-  let stableFrames = 0;
-  // La posicion del destino cuando se lanzo el ultimo scrollIntoView: si al
-  // siguiente asentamiento no se ha movido, el scroll ya no tenia nada que
-  // corregir — estamos donde el navegador queria dejarnos, fin.
-  let topAtLastNudge = Number.POSITIVE_INFINITY;
-  const deadline = performance.now() + SETTLE_MAX_MS;
-
-  const stop = (): void => {
-    if (cancelled) return;
-    cancelled = true;
-    window.cancelAnimationFrame(frame);
-    for (const event of USER_TAKEOVER_EVENTS) window.removeEventListener(event, stop);
-  };
-  // mousedown incluido: agarrar la barra de scroll tambien es tomar el mando.
-  // El click del indice que ARRANCA el viaje no llega aqui — estos listeners
-  // se registran despues de que ese evento ya se haya despachado.
-  for (const event of USER_TAKEOVER_EVENTS) {
-    window.addEventListener(event, stop, { passive: true });
-  }
-
-  const tick = (): void => {
-    if (cancelled) return;
-    const top = target.getBoundingClientRect().top;
-    stableFrames = Math.abs(top - lastTop) < 0.5 ? stableFrames + 1 : 0;
-    lastTop = top;
-
-    if (stableFrames >= SETTLE_STABLE_FRAMES) {
-      if (Math.abs(top - topAtLastNudge) < SETTLE_TOLERANCE_PX || performance.now() > deadline) {
-        // El ultimo empujon no movio nada (o se acabo el tiempo): asentado.
-        stop();
-        return;
-      }
-      topAtLastNudge = top;
-      stableFrames = 0;
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    frame = window.requestAnimationFrame(tick);
-  };
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  frame = window.requestAnimationFrame(tick);
-  return stop;
-};
-
 const monthLabel = (month: number): string =>
   new Date(2020, month, 1).toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
 
@@ -366,7 +294,7 @@ const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => 
           );
         })}
       </div>
-      <div className="mt-0.5 flex justify-between text-[9.5px] font-semibold text-muted-foreground">
+      <div className="mt-0.5 flex justify-between text-[11px] font-semibold text-muted-foreground">
         <span>{shortDate(entry.firstAt, entry.firstPrecision)}</span>
         <span>{shortDate(entry.lastAt, entry.lastPrecision)}</span>
       </div>
@@ -439,7 +367,7 @@ const HoverPanel = ({
               </div>
               {status && (
                 <div
-                  className="flex flex-none items-center gap-1.25 text-[10px] font-extrabold uppercase"
+                  className="flex flex-none items-center gap-1.25 text-[11.5px] font-extrabold uppercase"
                   style={{ color: status.color }}
                 >
                   <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
@@ -452,7 +380,7 @@ const HoverPanel = ({
 
         <div className="px-4 pb-3.5">
           <div className="py-3">
-            <div className="text-[8.5px] font-extrabold tracking-[.14em] text-muted-foreground/60">
+            <div className="text-[11px] font-extrabold tracking-[.14em] text-muted-foreground/80">
               {entry.kind === 'endless' ? 'ACTIVITY DATES' : 'PLAYTHROUGH DATES'}
             </div>
             <div className="mt-1.25 flex items-center gap-2.25">
@@ -531,7 +459,7 @@ const JourneyCover = ({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-muted px-1.5 text-center">
             <Gamepad2 size={20} className="text-muted-foreground/35" />
-            <span className="line-clamp-3 text-[8.5px] font-semibold text-muted-foreground">
+            <span className="line-clamp-3 text-[11px] font-semibold text-muted-foreground">
               {entry.title}
             </span>
           </div>
@@ -540,7 +468,7 @@ const JourneyCover = ({
             que el rótulo de MatchCardGrid: la carátula sigue siendo carátula
             de esquina a esquina y aun así cuenta algo. */}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-2 pt-6 pb-2 text-right">
-          <span className="text-[10.5px] font-extrabold text-white/90 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
+          <span className="text-[11.5px] font-extrabold text-white/90 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
             {formatHours(entry.hours)}
           </span>
         </span>
@@ -554,7 +482,7 @@ const JourneyCover = ({
       </div>
 
       {badge && (
-        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[8.5px] font-extrabold text-foreground shadow-md">
+        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[11px] font-extrabold text-foreground shadow-md">
           {badge}
         </span>
       )}
@@ -634,7 +562,7 @@ const FeaturedEntry = ({
             )}
           </div>
           {badge && (
-            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[8.5px] font-extrabold text-foreground shadow-md">
+            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[11px] font-extrabold text-foreground shadow-md">
               {badge}
             </span>
           )}
@@ -642,7 +570,7 @@ const FeaturedEntry = ({
 
         <div className="min-w-0 flex-1">
           <div
-            className="text-[8.5px] font-extrabold tracking-[.16em]"
+            className="text-[11px] font-extrabold tracking-[.16em]"
             style={{ color: `${accent}d0` }}
           >
             MOST PLAYED
@@ -652,7 +580,7 @@ const FeaturedEntry = ({
           </div>
           <div className="mt-0.5 truncate text-[11px] font-semibold text-white/55">
             {entry.iterationLabel}
-            <span className="mx-1.5 text-white/25">·</span>
+            <span className="mx-1.5 text-white/45">·</span>
             {dateRange(entry)}
           </div>
 
@@ -669,7 +597,7 @@ const FeaturedEntry = ({
             )}
             {status && (
               <span
-                className="flex items-center gap-1.25 text-[10px] font-extrabold uppercase"
+                className="flex items-center gap-1.25 text-[11.5px] font-extrabold uppercase"
                 style={{ color: status.color }}
               >
                 <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
@@ -706,12 +634,17 @@ export const Journey = ({
   const monthRefs = useRef(new Map<string, HTMLElement>());
   // El candado del scroll programático (ver los dos observers de abajo).
   const navigationTargetRef = useRef<{ year: number; month?: string } | null>(null);
-  const navigationUnlockTimerRef = useRef<number | null>(null);
-  // El corrector de asentamiento en vuelo (settleScrollIntoView): empezar un
+  // La navegación en vuelo: empezar un
   // viaje nuevo cancela el anterior, y desmontar la pantalla no puede dejar
-  // un rAF vivo midiendo nodos muertos.
+  // scroll vivo ni meses materializados después de salir.
   const settleCancelRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => settleCancelRef.current?.(), []);
+  useEffect(
+    () => () => {
+      navigationTargetRef.current = null;
+      settleCancelRef.current?.();
+    },
+    [],
+  );
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
   const entries = useMemo(
@@ -744,6 +677,63 @@ export const Journey = ({
     [entries],
   );
 
+  // One lifecycle for year/month clicks and links from recap notifications.
+  // The destination stays highlighted for the whole trip, and cancellation
+  // hands the date indicator back to what is actually on screen immediately.
+  const navigateTo = useCallback(
+    (year: number, month?: string): void => {
+      const monthElement = month ? monthRefs.current.get(month) : undefined;
+      const target = monthElement ?? yearRefs.current.get(year);
+      if (!target) return;
+      settleCancelRef.current?.();
+      const destination = monthElement && month ? { year, month } : { year };
+      navigationTargetRef.current = destination;
+      setActiveYear(year);
+      const firstMonth = byYear.find((entry) => entry.year === year)?.months[0]?.[0];
+      setActiveMonth(
+        monthElement && month ? month : firstMonth === undefined ? null : `${year}-${firstMonth}`,
+      );
+      settleCancelRef.current = navigateJourney(
+        target,
+        monthRefs.current.values(),
+        (cancelled, trigger) => {
+          // Cleanup after unmount or an older trip must not update the new route.
+          if (navigationTargetRef.current !== destination) return;
+          navigationTargetRef.current = null;
+          settleCancelRef.current = null;
+          if (!cancelled) return;
+          // The next date click has not fired yet on mousedown/Enter/Space.
+          // Expanding another year's months now would move its button out from
+          // under the pointer (or replace the focused month before activation).
+          const activatingDate =
+            trigger?.target instanceof Element &&
+            trigger.target.closest('nav[aria-label="Journey date navigation"]') &&
+            (trigger.type === 'touchstart' ||
+              (trigger instanceof MouseEvent &&
+                trigger.type === 'mousedown' &&
+                trigger.button === 0) ||
+              (trigger instanceof KeyboardEvent &&
+                (trigger.key === 'Enter' || trigger.key === ' ')));
+          if (activatingDate) return;
+          const visible = byYear.find(({ year: candidate }) => {
+            const rect = yearRefs.current.get(candidate)?.getBoundingClientRect();
+            return rect && rect.bottom > 72 && rect.top < window.innerHeight * 0.38;
+          });
+          if (!visible) return;
+          setActiveYear(visible.year);
+          const visibleMonth = visible.months.find(([candidate]) => {
+            const rect = monthRefs.current
+              .get(`${visible.year}-${candidate}`)
+              ?.getBoundingClientRect();
+            return rect && rect.bottom > 72 && rect.top < window.innerHeight * 0.28;
+          });
+          if (visibleMonth) setActiveMonth(`${visible.year}-${visibleMonth[0]}`);
+        },
+      );
+    },
+    [byYear],
+  );
+
   // Scroll-spy del año: ilumina en el índice el año que se está mirando.
   //
   // El rootMargin recorta la ventana a una banda estrecha por arriba (72px de
@@ -755,10 +745,8 @@ export const Journey = ({
   // EL CANDADO (navigationTargetRef): al pulsar un año del índice se hace
   // scroll suave, y durante ese viaje el observer ve pasar todos los años
   // intermedios y los iría iluminando uno a uno. Mientras hay destino fijado
-  // se ignora todo lo que informe el observer, y solo se suelta cuando el
-  // destino aparece de verdad en pantalla (o cuando salta el temporizador de
-  // seguridad, por si el scroll se queda a medias — ver los onClick del
-  // índice).
+  // se ignora todo lo que informe el observer. La navegación suelta el
+  // candado al aterrizar o cuando el usuario toma el control.
   useEffect(() => {
     const visibleYears = new Set<number>();
     const observer = new IntersectionObserver(
@@ -768,18 +756,7 @@ export const Journey = ({
           if (entry.isIntersecting) visibleYears.add(year);
           else visibleYears.delete(year);
         }
-        const navigationTarget = navigationTargetRef.current;
-        if (navigationTarget) {
-          if (navigationTarget.month === undefined && visibleYears.has(navigationTarget.year)) {
-            navigationTargetRef.current = null;
-            if (navigationUnlockTimerRef.current !== null) {
-              window.clearTimeout(navigationUnlockTimerRef.current);
-              navigationUnlockTimerRef.current = null;
-            }
-            setActiveYear(navigationTarget.year);
-          }
-          return;
-        }
+        if (navigationTargetRef.current) return;
         // El PRIMERO de byYear que esté visible, no el último que avisó: así
         // con dos años en la banda gana siempre el más reciente, que es el
         // orden en que se leen.
@@ -826,19 +803,7 @@ export const Journey = ({
           if (entry.isIntersecting) visibleMonths.add(key);
           else visibleMonths.delete(key);
         }
-        const navigationTarget = navigationTargetRef.current;
-        if (navigationTarget) {
-          if (navigationTarget.month && visibleMonths.has(navigationTarget.month)) {
-            navigationTargetRef.current = null;
-            if (navigationUnlockTimerRef.current !== null) {
-              window.clearTimeout(navigationUnlockTimerRef.current);
-              navigationUnlockTimerRef.current = null;
-            }
-            setActiveYear(navigationTarget.year);
-            setActiveMonth(navigationTarget.month);
-          }
-          return;
-        }
+        if (navigationTargetRef.current) return;
         const visibleMonth = byYear
           .flatMap(({ year, months }) => months.map(([month]) => `${year}-${month}`))
           .find((key) => visibleMonths.has(key));
@@ -875,30 +840,14 @@ export const Journey = ({
       year = Number(focusYearParam);
     }
 
-    const monthElement = monthKey ? monthRefs.current.get(monthKey) : undefined;
-    const yearElement = yearRefs.current.get(year);
-    const target = monthElement ?? yearElement;
-    if (target) {
-      navigationTargetRef.current = monthElement && monthKey ? { year, month: monthKey } : { year };
-      if (navigationUnlockTimerRef.current !== null) {
-        window.clearTimeout(navigationUnlockTimerRef.current);
-      }
-      navigationUnlockTimerRef.current = window.setTimeout(() => {
-        navigationTargetRef.current = null;
-        navigationUnlockTimerRef.current = null;
-      }, 1_200);
-      setActiveYear(year);
-      if (monthKey && monthElement) setActiveMonth(monthKey);
-      settleCancelRef.current?.();
-      settleCancelRef.current = settleScrollIntoView(target);
-    }
+    navigateTo(year, monthKey ?? undefined);
 
     const next = new URLSearchParams(searchParams);
     next.delete('month');
     next.delete('year');
     next.delete('view');
     setSearchParams(next, { replace: true });
-  }, [focusMonthParam, focusYearParam, byYear, searchParams, setSearchParams]);
+  }, [focusMonthParam, focusYearParam, byYear, searchParams, setSearchParams, navigateTo]);
 
   // La tira de resumen de arriba. gamesTouched cuenta JUEGOS distintos y no
   // entradas: tres vueltas a Hollow Knight son tres carátulas en el viaje,
@@ -920,7 +869,7 @@ export const Journey = ({
     return (
       <div className="flex min-h-80 flex-col items-center justify-center text-center">
         <div className="flex h-13 w-13 items-center justify-center rounded-full bg-white/[0.04]">
-          <Route size={23} strokeWidth={1.5} className="text-muted-foreground/45" />
+          <Route size={23} strokeWidth={1.5} className="text-muted-foreground/75" />
         </div>
         <div className="mt-3 text-sm font-semibold text-foreground">Your journey starts here</div>
         <div className="mt-1 text-xs text-muted-foreground">
@@ -1042,20 +991,20 @@ export const Journey = ({
                       // cuanto se pinta una vez), pero saltar del índice a un
                       // año lejano aterrizaba corto igualmente al moverse el
                       // suelo durante el viaje. Quien paga ese precio ahora
-                      // es settleScrollIntoView (arriba), que corrige el
-                      // aterrizaje cuando el viaje termina.
-                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 [content-visibility:auto] ${revealClass}`}
+                      // es navigateJourney: materializa los meses antes del
+                      // viaje y guarda su alto real como fallback local.
+                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 [content-visibility:auto] motion-reduce:animate-none ${revealClass}`}
                       style={{
                         ...revealStyle(yearIndex + monthIndex + 1),
-                        containIntrinsicSize: `auto ${monthIntrinsicHeight(monthEntries.length)}px`,
+                        containIntrinsicSize: `auto var(--journey-measured-height, ${monthIntrinsicHeight(monthEntries.length)}px)`,
                       }}
                     >
                       <div className="relative border-r border-border/80 pr-4 text-right">
                         <div className="sticky top-3 pt-1">
-                          <div className="text-[10px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
+                          <div className="text-[11.5px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
                             {monthLabel(month)}
                           </div>
-                          <div className="mt-0.75 text-[9px] font-bold text-muted-foreground/50 tabular-nums">
+                          <div className="mt-0.75 text-[11px] font-bold text-muted-foreground/75 tabular-nums">
                             {formatHours(monthHours)}
                           </div>
                         </div>
@@ -1073,7 +1022,7 @@ export const Journey = ({
                         <div className="mb-2.5 flex items-center gap-2">
                           <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
                           {monthEntries.length > 1 && (
-                            <span className="text-[9.5px] font-bold text-muted-foreground/55 tabular-nums">
+                            <span className="text-[11px] font-bold text-muted-foreground/75 tabular-nums">
                               {monthEntries.length} playthroughs
                             </span>
                           )}
@@ -1116,7 +1065,7 @@ export const Journey = ({
           <div className="mb-4 flex flex-col items-center gap-2 pt-2">
             <span className="h-10 w-px bg-gradient-to-b from-border/80 to-transparent" />
             <span className="h-2 w-2 rounded-full bg-white/25" />
-            <span className="text-[9.5px] font-extrabold tracking-[.16em] text-muted-foreground/55">
+            <span className="text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
               WHERE IT ALL BEGAN
             </span>
           </div>
@@ -1126,7 +1075,7 @@ export const Journey = ({
             años abiertos a la vez la columna se convertía en una lista de
             120 entradas y dejaba de servir para orientarse. */}
         <nav aria-label="Journey date navigation" className="sticky top-5 py-1">
-          <div className="mb-3 pl-4 text-[8.5px] font-extrabold tracking-[.16em] text-muted-foreground/50">
+          <div className="mb-3 pl-4 text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
             JOURNEY
           </div>
           <div className="relative flex flex-col gap-1 border-l border-border/70 pl-4">
@@ -1138,28 +1087,7 @@ export const Journey = ({
                     type="button"
                     aria-current={active ? 'true' : undefined}
                     onClick={() => {
-                      // Se fija el destino ANTES de mover el scroll: a partir
-                      // de aquí el observer calla hasta llegar (ver el
-                      // candado arriba). El temporizador es la red de
-                      // seguridad — si el destino nunca llega a la banda (un
-                      // año al final del todo que no alcanza a subir), a los
-                      // 1,2 s se suelta el candado igualmente en vez de
-                      // dejar el resaltado congelado para siempre.
-                      navigationTargetRef.current = { year };
-                      if (navigationUnlockTimerRef.current !== null) {
-                        window.clearTimeout(navigationUnlockTimerRef.current);
-                      }
-                      navigationUnlockTimerRef.current = window.setTimeout(() => {
-                        navigationTargetRef.current = null;
-                        navigationUnlockTimerRef.current = null;
-                      }, 1_200);
-                      setActiveYear(year);
-                      setActiveMonth(`${year}-${months[0]?.[0]}`);
-                      const yearElement = yearRefs.current.get(year);
-                      if (yearElement) {
-                        settleCancelRef.current?.();
-                        settleCancelRef.current = settleScrollIntoView(yearElement);
-                      }
+                      navigateTo(year);
                     }}
                     className="group/year relative w-full py-1.25 text-left text-[12px] font-extrabold tabular-nums transition-colors duration-150"
                     style={{ color: active ? BLUE : 'var(--muted-foreground)' }}
@@ -1185,30 +1113,16 @@ export const Journey = ({
                             type="button"
                             aria-current={monthActive ? 'true' : undefined}
                             onClick={() => {
-                              navigationTargetRef.current = { year, month: key };
-                              if (navigationUnlockTimerRef.current !== null) {
-                                window.clearTimeout(navigationUnlockTimerRef.current);
-                              }
-                              navigationUnlockTimerRef.current = window.setTimeout(() => {
-                                navigationTargetRef.current = null;
-                                navigationUnlockTimerRef.current = null;
-                              }, 1_200);
-                              setActiveYear(year);
-                              setActiveMonth(key);
-                              const monthElement = monthRefs.current.get(key);
-                              if (monthElement) {
-                                settleCancelRef.current?.();
-                                settleCancelRef.current = settleScrollIntoView(monthElement);
-                              }
+                              navigateTo(year, key);
                             }}
-                            className="flex items-center justify-between gap-2 py-1 text-left text-[10px] font-semibold transition-colors duration-150"
+                            className="flex items-center justify-between gap-2 py-1 text-left text-[11.5px] font-semibold transition-colors duration-150"
                             style={{
                               color: monthActive ? 'var(--foreground)' : 'var(--muted-foreground)',
                             }}
                           >
                             <span>{monthShortLabel(month)}</span>
                             {monthEntries.length > 0 && (
-                              <span className="text-[8.5px] text-muted-foreground/45 tabular-nums">
+                              <span className="text-[11px] text-muted-foreground/75 tabular-nums">
                                 {monthEntries.length}
                               </span>
                             )}

@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from './harness';
+import {
+  cleanupDbs,
+  freshDb,
+  makeAchievement,
+  makeGame,
+  makeUnlock,
+  measure,
+  type TestDb,
+} from './harness';
 
 // Dos consultas que comparten el mismo denominador: "juegos con catálogo de
 // logros posible" (steamAppId O raGameId). getAchievementsStatus lo cuenta
@@ -38,6 +46,23 @@ after(() => cleanupDbs());
 // ══ getAchievementsStatus ═══════════════════════════════════════════════════
 
 describe('getAchievementsStatus: el denominador de "juegos elegibles"', () => {
+  it('combina los contadores de juegos sin perder catálogos ni duplicar desbloqueos por fuente', async () => {
+    const gameId = await makeGame(db, { steamAppId: 620, raGameId: 1 });
+    // Un sello sigue siendo una sincronización aunque ya no tenga fuente,
+    // y epoch 0 no es lo mismo que NULL.
+    await makeGame(db, { achievementsSyncedAt: new Date(0) });
+    const achievementId = await makeAchievement(db, gameId, 'FIRST');
+    await makeAchievement(db, gameId, 'SECOND');
+    await makeUnlock(db, achievementId, '2024-01-01T12:00:00Z', { source: 'steam' });
+    await makeUnlock(db, achievementId, '2024-01-02T12:00:00Z', { source: 'emu' });
+    const [status, work] = await measure(() => getAchievementsStatus(true, 2));
+    assert.equal(status.eligibleGames, 1);
+    assert.equal(status.syncedGames, 1);
+    assert.equal(status.totalAchievements, 2);
+    assert.equal(status.unlockedAchievements, 1);
+    assert.deepEqual(work, { queries: 1, rows: 1 });
+  });
+
   it('cuenta steamAppId O raGameId, y un juego con LAS DOS no cuenta doble', async () => {
     await makeGame(db, { title: 'Solo Steam', steamAppId: 620 });
     await makeGame(db, { title: 'Solo RA', raGameId: 4650 });

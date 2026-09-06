@@ -1,5 +1,5 @@
 import { app, Menu, Tray } from 'electron';
-import icon from '../../../resources/icon.png?asset';
+import icon from '../lib/appIcon';
 
 export type TrayCallbacks = {
   onOpen: () => void;

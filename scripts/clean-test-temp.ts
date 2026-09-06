@@ -1,8 +1,8 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isTestTempDirectoryName, resolveTestTempDirectory } from './lib/testTempDirectories';
 
-// LA BASURA QUE DEJAN LOS TESTS EN %TEMP%, RECOGIDA ANTES DE CADA PASADA.
+// Temporales de tests recogidos fuera de los procesos que abren SQLite.
 //
 // El andamio de los tests de unidad (db/__tests__/harness.ts) abre UNA base
 // por proceso en una carpeta temporal, y cleanupDbs() suelta la conexion pero
@@ -14,37 +14,31 @@ import { join } from 'node:path';
 // El precio de no borrar se vio el 29-ago-2026: 32.586 carpetas
 // `afterplay-test-*` acumuladas en %TEMP%.
 //
-// La solucion que no toca esa cicatriz: recogerlas DESDE FUERA, antes de que
-// empiece la pasada siguiente, cuando no hay ni un proceso de test vivo y por
-// tanto ningun handle que pueda pelearse con el borrado. Se ejecuta como
-// `pretest`, asi que no hay que acordarse de nada.
+// posttest recoge los restos DESPUÉS de que tsx --test y sus procesos hijos
+// terminen: ningún handle nativo sigue vivo. pretest conserva la recuperación
+// al empezar la siguiente pasada si la anterior falló o fue interrumpida
+// (npm no ejecuta posttest cuando test falla). No ejecutar simultáneamente
+// con otra suite independiente que esté usando sus propios temporales.
 //
 // Los sandboxes de E2E (afterplay-e2e-*) SI se borran solos al terminar cada
 // test, pero entran igual en la barrida: una pasada interrumpida a media
 // (Ctrl+C) deja el suyo, y aqui no cuesta nada.
 //
-// EL PREFIJO ES `afterplay-` A SECAS, Y ESO ES DELIBERADO. La primera version
-// listaba tres prefijos exactos y se dejaba fuera lo que mas pesaba: los
-// andamios del worker se llaman `afterplay-worker-test-` y
-// `afterplay-worker-paridad-`, que no empiezan por `afterplay-test-`. El
-// barrido decia "0 restantes" con 13.890 carpetas delante. Hoy los prefijos
-// vivos son ocho (test, e2e, keys, worker-test, worker-paridad, ficha-test,
-// backups, migrations) y manana habra otro: una lista cerrada vuelve a
-// quedarse corta sola.
-//
-// Barrer todo lo que empiece por `afterplay-` es seguro porque la app de
-// PRODUCCION no crea ni una carpeta temporal: todo lo suyo cuelga de userData
-// (comprobado). Aqui dentro solo hay andamios de test.
-const PREFIXES = ['afterplay-'];
+// Solo familias de mkdtemp verificadas en los tests, con sus seis caracteres
+// aleatorios completos. El prefijo afterplay- por si solo NO prueba que una
+// carpeta sea desechable: tambien puede ser una copia de trabajo o backup.
+// Una familia nueva debe añadirse a lib/testTempDirectories.ts expresamente.
 
 const temp = tmpdir();
 let removed = 0;
 let failed = 0;
 
 for (const entry of readdirSync(temp)) {
-  if (!PREFIXES.some((prefix) => entry.startsWith(prefix))) continue;
+  if (!isTestTempDirectoryName(entry)) continue;
   try {
-    rmSync(join(temp, entry), { recursive: true, force: true });
+    const target = resolveTestTempDirectory(temp, entry);
+    if (target === null) continue;
+    rmSync(target, { recursive: true, force: true });
     removed += 1;
   } catch {
     // Una carpeta que no se deja borrar (antivirus, un proceso zombi) no

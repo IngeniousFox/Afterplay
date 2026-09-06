@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useBigPicture } from '../hooks/useBigPicture';
+import {
+  BRAND_FONT_FAMILY,
+  BRAND_VEIL_BACKGROUND,
+  BRAND_WORDMARK,
+  BRAND_WORDMARK_SHADOW,
+  BRAND_WORDMARK_WEIGHT,
+} from '../../../shared/branding';
 
 // La cortina del cambio de modo. Entrar en Big Picture mueve MUCHAS piezas a
 // la vez — el fullscreen del SO, el salto de ruta, el remonte del árbol — y
@@ -17,7 +24,7 @@ type Phase = 'idle' | 'entering' | 'leaving';
 
 // El negro de la cortina no es plano: un aliento verdoso apenas perceptible
 // tras la marca — la firma de color del modo ya está ahí antes que el modo.
-const VEIL_BACKGROUND = 'radial-gradient(ellipse 60% 45% at 50% 44%, #0b110d 0%, #080a09 70%)';
+const VEIL_BACKGROUND = BRAND_VEIL_BACKGROUND;
 
 export const TvModeTransition = (): React.JSX.Element | null => {
   const active = useBigPicture();
@@ -57,7 +64,7 @@ export const TvModeTransition = (): React.JSX.Element | null => {
             animation: 'afterplay-tv-outro-mark 720ms ease-in-out both',
           }}
         >
-          AFTERPLAY
+          {BRAND_WORDMARK}
         </div>
       </div>
     );
@@ -74,11 +81,13 @@ export const TvModeTransition = (): React.JSX.Element | null => {
       <div
         className="text-[clamp(28px,4.2vh,56px)] font-extrabold text-foreground"
         style={{
-          textShadow: '0 0 2.4em rgba(47,220,126,.18)',
+          fontFamily: BRAND_FONT_FAMILY,
+          fontWeight: BRAND_WORDMARK_WEIGHT,
+          textShadow: BRAND_WORDMARK_SHADOW,
           animation: 'afterplay-tv-intro-mark 1650ms cubic-bezier(.22,1,.36,1) both',
         }}
       >
-        AFTERPLAY
+        {BRAND_WORDMARK}
       </div>
       {/* La línea que se abre bajo la marca, ahora con su brillo: la nítida
           delante y una gemela desenfocada detrás, las dos con el MISMO
