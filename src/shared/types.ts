@@ -1,3 +1,6 @@
+import type { DatePrecision, EventDatePrecision } from './dateTypes';
+export type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes';
+
 import type {
   GameRow,
   Iteration,
@@ -50,18 +53,6 @@ export type { ScanCandidate, ScannedFolder, ScanReport } from '../main/scan/cont
 // Resultado del buscador de la tienda de Steam — el respaldo del alta cuando
 // IGDB no tiene el juego (steam/store.ts).
 export type { SteamSearchResult } from '../main/steam/store';
-
-// Precisión de una fecha elegida a mano en un picker (Add/Edit Game,
-// History) — 'datetime' no es una opción del picker (nadie teclea hora a
-// mano), solo la llevan los eventos que la app crea ella sola en el momento
-// (ver EventDatePrecision).
-export type DatePrecision = 'year' | 'month' | 'day';
-
-// Precisión guardada en la DB para un evento de estado/gasto o una sesión —
-// añade 'datetime' a DatePrecision para los eventos que la propia app crea
-// en vivo (estado inicial al guardar, cambios de estado, sesiones
-// trackeadas), que sí llevan hora real.
-export type EventDatePrecision = DatePrecision | 'datetime';
 
 // Inputs de los handlers de escritura. Parten de las formas de INSERT de
 // Drizzle pero quitando lo que el renderer nunca debe mandar (ids, campos
@@ -464,7 +455,7 @@ export type RadarActivityEvent = { discovered: number };
 // Preferencia de formato de hora (ajustes, SPEC 3E-bis) — 24h por defecto.
 // Un solo tipo compartido: el main la persiste (config/store.ts), el
 // renderer la usa para formatear cualquier datetime (lib/format.ts).
-export type TimeFormat = '12h' | '24h';
+// The shared clock preference is re-exported from dateTypes.ts above.
 
 // Estado del atajo global del overlay in-game (OVERLAY.md §6.1): 'inactive'
 // mientras no hay juego corriendo (el atajo ni se registra), 'ok' registrado,

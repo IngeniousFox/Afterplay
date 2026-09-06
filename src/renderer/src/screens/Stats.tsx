@@ -48,6 +48,7 @@ import { yearsDesc } from '../lib/dateMath';
 import { formatHours, formatMoney } from '../lib/format';
 import { mapGenreToAxis } from '../lib/genreAxes';
 import { hasMeasuredDuration } from '../lib/sessionStats';
+import { sessionActivity } from '../lib/sessionActivity';
 import { yearTotals } from '../lib/statsTotals';
 import { revealClass, revealStyle } from '../lib/styles';
 import { GameStats } from './GameStats';
@@ -666,24 +667,9 @@ export const Stats = (): React.JSX.Element => {
         hasMeasuredDuration(session) &&
         (selectedYear === 'all' || session.startedAt.getFullYear() === selectedYear),
     );
-    const longest = measured.slice().sort((a, b) => (b.durationSec ?? 0) - (a.durationSec ?? 0))[0];
-
-    const secondsByDay = new Map<number, number>();
-    const secondsByMonth = new Map<number, number>();
-    for (const session of measured) {
-      const seconds = session.durationSec ?? 0;
-      const day = new Date(
-        session.startedAt.getFullYear(),
-        session.startedAt.getMonth(),
-        session.startedAt.getDate(),
-      ).getTime();
-      const month = session.startedAt.getFullYear() * 12 + session.startedAt.getMonth();
-      secondsByDay.set(day, (secondsByDay.get(day) ?? 0) + seconds);
-      secondsByMonth.set(month, (secondsByMonth.get(month) ?? 0) + seconds);
-    }
-
-    const peakDay = [...secondsByDay.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
-    const peakMonth = [...secondsByMonth.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+    const { longest, biggestDay, busiestMonth } = sessionActivity(measured);
+    const peakDay = biggestDay ? [biggestDay.dayMs, biggestDay.seconds] : null;
+    const peakMonth = busiestMonth ? [busiestMonth.monthKey, busiestMonth.seconds] : null;
     const peakMonthDate = peakMonth
       ? new Date(Math.floor(peakMonth[0] / 12), peakMonth[0] % 12, 1)
       : null;

@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, notExists, sql } from 'drizzle-orm';
 import { getDb } from '../..';
+import { RARE, ULTRA_RARE } from '../../../../shared/achievements';
 import type { AchievementsOverview } from '../../../../shared/types';
 import { achievementsTable, achievementUnlocksTable, gamesTable } from '../../schema';
 
@@ -47,9 +48,6 @@ import { achievementsTable, achievementUnlocksTable, gamesTable } from '../../sc
 // escanea `achievements` en ninguna: el conteo por juego entra por el índice
 // achievements_game_api_unique (COVERING), los desbloqueos por
 // achievement_unlocks_source_unique, y lo que falta por búsquedas de game_id.
-
-const RARE = 10;
-const ULTRA_RARE = 5;
 
 // Los tres cubos de rareza, DISJUNTOS: común ≥10%, raro 5-10%, ultra <5%.
 // Viven aquí arriba y no repartidos por la función porque "raro" llegó a

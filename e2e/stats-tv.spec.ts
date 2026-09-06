@@ -3,6 +3,7 @@ import { formatHours } from '../src/renderer/src/lib/format';
 import type { SeedGame } from './sandbox';
 import { DEFAULT_SEED } from './seed';
 import { expect, goTo, test } from './fixtures';
+import { landingError } from './scroll';
 
 // LO QUE ESTA SUITE BLINDA: la pantalla de Stats (las cifras de cabecera,
 // la pestaña Journey y su índice de años) y el modo TV / Big Picture
@@ -145,10 +146,10 @@ test.describe('Stats — Journey', () => {
 
     await year2021.click();
 
-    // settleScrollIntoView (Journey.tsx) puede relanzar el viaje varias
-    // veces mientras los meses sin pintar aún se materializan con su alto
-    // real — de ahí un margen bastante mayor que el resto de la suite.
-    await expect(year2021).toHaveAttribute('aria-current', 'true', { timeout: 20_000 });
+    // El índice se resalta de forma optimista: comprobar solo aria-current
+    // no demuestra que el scroll haya llegado al año de verdad.
+    await expect.poll(() => landingError(window, '[data-year="2021"]')).toBeLessThanOrEqual(2);
+    await expect(year2021).toHaveAttribute('aria-current', 'true');
   });
 });
 

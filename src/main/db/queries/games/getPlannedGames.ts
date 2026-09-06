@@ -1,6 +1,7 @@
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { PlannedGameExtras, PlannedGameListItem } from '../../../../shared/types';
+import { planPinOrder } from '../../../../shared/planPinOrder';
 import { gamesTable } from '../../schema';
 
 // Sección Plan to Play — la contrapartida de getGames(): SOLO los juegos
@@ -193,7 +194,6 @@ export const reorderUpNext = async (orderedIds: number[]): Promise<boolean> => {
       .select({ id: gamesTable.id, planPinnedAt: gamesTable.planPinnedAt })
       .from(gamesTable)
       .where(and(eq(gamesTable.planned, true), isNotNull(gamesTable.planPinnedAt)));
-    const byId = new Map(pinned.map((game) => [game.id, game.planPinnedAt as Date]));
 
     // Solo los que SIGUEN fijados y planeados: entre el arrastre y el commit
     // pudo pasar cualquier cosa (un unpin desde otra máquina vía sync). Los
@@ -206,22 +206,14 @@ export const reorderUpNext = async (orderedIds: number[]): Promise<boolean> => {
     // que una orden malformada se daba por buena sin que hubiera estantería
     // que reordenar. El Set conserva la primera aparición de cada id, que es
     // la posición que el usuario soltó.
-    const ids = [...new Set(orderedIds)].filter((id) => byId.has(id));
-    if (ids.length < 2) return false;
+    const stamps = planPinOrder(pinned, orderedIds);
+    if (stamps.size === 0) return false;
 
-    const stamps = ids.map((id) => (byId.get(id) as Date).getTime()).sort((a, b) => a - b);
-    // Estrictamente crecientes: dos fijados en el mismo milisegundo (pasa al
-    // fijar dos seguidos muy rápido) empatarían y el desempate por título
-    // podría deshacer visualmente el orden que se acaba de arrastrar.
-    for (let k = 1; k < stamps.length; k++) {
-      if (stamps[k] <= stamps[k - 1]) stamps[k] = stamps[k - 1] + 1;
-    }
-
-    for (let k = 0; k < ids.length; k++) {
+    for (const [id, stamp] of stamps) {
       await tx
         .update(gamesTable)
-        .set({ planPinnedAt: new Date(stamps[k]) })
-        .where(eq(gamesTable.id, ids[k]));
+        .set({ planPinnedAt: new Date(stamp) })
+        .where(eq(gamesTable.id, id));
     }
     return true;
   });

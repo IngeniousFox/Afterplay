@@ -1,5 +1,5 @@
 import { BookOpen, CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import type {
@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/types';
 import type { JourneyEntry } from '../../lib/journeyEntries';
 import { buildEntries, groupEntriesByYearMonth } from '../../lib/journeyEntries';
+import { navigateJourney } from '../../lib/journeyNavigation';
 import { useMemories } from '../../hooks/memories';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
@@ -231,79 +232,6 @@ const monthIntrinsicHeight = (entryCount: number): number => {
   const coverRows = Math.ceil(Math.max(0, entryCount - 1) / COVERS_PER_ROW);
   const content = FEATURED_HEIGHT_PX + coverRows * COVER_ROW_HEIGHT_PX;
   return Math.max(MONTH_MIN_HEIGHT_PX, content) + MONTH_PADDING_PX;
-};
-
-// EL SCROLL QUE TERMINA DE LLEGAR.
-//
-// scrollIntoView({smooth}) calcula el destino UNA vez, al arrancar — y en
-// esta pantalla el suelo se mueve durante el viaje: los meses llevan
-// content-visibility:auto (ver el bloque del mes), asi que los que nunca se
-// han pintado son huecos con la altura ESTIMADA de arriba, y al pasar el
-// viewport por ellos se materializan con su altura real. Cada diferencia
-// desplaza todo lo de abajo, y el viaje aterriza corto (o largo): cuanto mas
-// lejano el destino, mas meses sin pintar de por medio y mas error acumulado.
-// Saltar de 2026 a 2019 se quedaba a medio año del sitio.
-//
-// El remedio NO es quitar content-visibility (eso devolveria los 41 meses
-// maquetados de golpe al entrar) ni saltar en seco (perderia la animacion):
-// es dejar que el viaje suave termine y ENTONCES medir. Si el destino no
-// quedo clavado, se relanza otro scrollIntoView suave — que ya viaja sobre
-// geometria real, porque el primer viaje materializo todo el camino — y en
-// una o dos correcciones cortas converge. Se detecta "el viaje termino"
-// muestreando la posicion del destino por frame (estable N frames seguidos =
-// quieto), sin depender de en que contenedor se scrollea ni del evento
-// scrollend. Y en cuanto el usuario toca rueda/tecla/dedo, se cancela: el
-// corrector nunca pelea contra una mano humana.
-const SETTLE_STABLE_FRAMES = 3;
-const SETTLE_TOLERANCE_PX = 2;
-const SETTLE_MAX_MS = 5_000;
-const USER_TAKEOVER_EVENTS = ['wheel', 'touchstart', 'keydown', 'mousedown'] as const;
-
-const settleScrollIntoView = (target: HTMLElement): (() => void) => {
-  let frame = 0;
-  let cancelled = false;
-  let lastTop = Number.NaN;
-  let stableFrames = 0;
-  // La posicion del destino cuando se lanzo el ultimo scrollIntoView: si al
-  // siguiente asentamiento no se ha movido, el scroll ya no tenia nada que
-  // corregir — estamos donde el navegador queria dejarnos, fin.
-  let topAtLastNudge = Number.POSITIVE_INFINITY;
-  const deadline = performance.now() + SETTLE_MAX_MS;
-
-  const stop = (): void => {
-    if (cancelled) return;
-    cancelled = true;
-    window.cancelAnimationFrame(frame);
-    for (const event of USER_TAKEOVER_EVENTS) window.removeEventListener(event, stop);
-  };
-  // mousedown incluido: agarrar la barra de scroll tambien es tomar el mando.
-  // El click del indice que ARRANCA el viaje no llega aqui — estos listeners
-  // se registran despues de que ese evento ya se haya despachado.
-  for (const event of USER_TAKEOVER_EVENTS) {
-    window.addEventListener(event, stop, { passive: true });
-  }
-
-  const tick = (): void => {
-    if (cancelled) return;
-    const top = target.getBoundingClientRect().top;
-    stableFrames = Math.abs(top - lastTop) < 0.5 ? stableFrames + 1 : 0;
-    lastTop = top;
-
-    if (stableFrames >= SETTLE_STABLE_FRAMES) {
-      if (Math.abs(top - topAtLastNudge) < SETTLE_TOLERANCE_PX || performance.now() > deadline) {
-        // El ultimo empujon no movio nada (o se acabo el tiempo): asentado.
-        stop();
-        return;
-      }
-      topAtLastNudge = top;
-      stableFrames = 0;
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    frame = window.requestAnimationFrame(tick);
-  };
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  frame = window.requestAnimationFrame(tick);
-  return stop;
 };
 
 const monthLabel = (month: number): string =>
@@ -706,12 +634,17 @@ export const Journey = ({
   const monthRefs = useRef(new Map<string, HTMLElement>());
   // El candado del scroll programático (ver los dos observers de abajo).
   const navigationTargetRef = useRef<{ year: number; month?: string } | null>(null);
-  const navigationUnlockTimerRef = useRef<number | null>(null);
-  // El corrector de asentamiento en vuelo (settleScrollIntoView): empezar un
+  // La navegación en vuelo: empezar un
   // viaje nuevo cancela el anterior, y desmontar la pantalla no puede dejar
-  // un rAF vivo midiendo nodos muertos.
+  // scroll vivo ni meses materializados después de salir.
   const settleCancelRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => settleCancelRef.current?.(), []);
+  useEffect(
+    () => () => {
+      navigationTargetRef.current = null;
+      settleCancelRef.current?.();
+    },
+    [],
+  );
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
   const entries = useMemo(
@@ -744,6 +677,63 @@ export const Journey = ({
     [entries],
   );
 
+  // One lifecycle for year/month clicks and links from recap notifications.
+  // The destination stays highlighted for the whole trip, and cancellation
+  // hands the date indicator back to what is actually on screen immediately.
+  const navigateTo = useCallback(
+    (year: number, month?: string): void => {
+      const monthElement = month ? monthRefs.current.get(month) : undefined;
+      const target = monthElement ?? yearRefs.current.get(year);
+      if (!target) return;
+      settleCancelRef.current?.();
+      const destination = monthElement && month ? { year, month } : { year };
+      navigationTargetRef.current = destination;
+      setActiveYear(year);
+      const firstMonth = byYear.find((entry) => entry.year === year)?.months[0]?.[0];
+      setActiveMonth(
+        monthElement && month ? month : firstMonth === undefined ? null : `${year}-${firstMonth}`,
+      );
+      settleCancelRef.current = navigateJourney(
+        target,
+        monthRefs.current.values(),
+        (cancelled, trigger) => {
+          // Cleanup after unmount or an older trip must not update the new route.
+          if (navigationTargetRef.current !== destination) return;
+          navigationTargetRef.current = null;
+          settleCancelRef.current = null;
+          if (!cancelled) return;
+          // The next date click has not fired yet on mousedown/Enter/Space.
+          // Expanding another year's months now would move its button out from
+          // under the pointer (or replace the focused month before activation).
+          const activatingDate =
+            trigger?.target instanceof Element &&
+            trigger.target.closest('nav[aria-label="Journey date navigation"]') &&
+            (trigger.type === 'touchstart' ||
+              (trigger instanceof MouseEvent &&
+                trigger.type === 'mousedown' &&
+                trigger.button === 0) ||
+              (trigger instanceof KeyboardEvent &&
+                (trigger.key === 'Enter' || trigger.key === ' ')));
+          if (activatingDate) return;
+          const visible = byYear.find(({ year: candidate }) => {
+            const rect = yearRefs.current.get(candidate)?.getBoundingClientRect();
+            return rect && rect.bottom > 72 && rect.top < window.innerHeight * 0.38;
+          });
+          if (!visible) return;
+          setActiveYear(visible.year);
+          const visibleMonth = visible.months.find(([candidate]) => {
+            const rect = monthRefs.current
+              .get(`${visible.year}-${candidate}`)
+              ?.getBoundingClientRect();
+            return rect && rect.bottom > 72 && rect.top < window.innerHeight * 0.28;
+          });
+          if (visibleMonth) setActiveMonth(`${visible.year}-${visibleMonth[0]}`);
+        },
+      );
+    },
+    [byYear],
+  );
+
   // Scroll-spy del año: ilumina en el índice el año que se está mirando.
   //
   // El rootMargin recorta la ventana a una banda estrecha por arriba (72px de
@@ -755,10 +745,8 @@ export const Journey = ({
   // EL CANDADO (navigationTargetRef): al pulsar un año del índice se hace
   // scroll suave, y durante ese viaje el observer ve pasar todos los años
   // intermedios y los iría iluminando uno a uno. Mientras hay destino fijado
-  // se ignora todo lo que informe el observer, y solo se suelta cuando el
-  // destino aparece de verdad en pantalla (o cuando salta el temporizador de
-  // seguridad, por si el scroll se queda a medias — ver los onClick del
-  // índice).
+  // se ignora todo lo que informe el observer. La navegación suelta el
+  // candado al aterrizar o cuando el usuario toma el control.
   useEffect(() => {
     const visibleYears = new Set<number>();
     const observer = new IntersectionObserver(
@@ -768,18 +756,7 @@ export const Journey = ({
           if (entry.isIntersecting) visibleYears.add(year);
           else visibleYears.delete(year);
         }
-        const navigationTarget = navigationTargetRef.current;
-        if (navigationTarget) {
-          if (navigationTarget.month === undefined && visibleYears.has(navigationTarget.year)) {
-            navigationTargetRef.current = null;
-            if (navigationUnlockTimerRef.current !== null) {
-              window.clearTimeout(navigationUnlockTimerRef.current);
-              navigationUnlockTimerRef.current = null;
-            }
-            setActiveYear(navigationTarget.year);
-          }
-          return;
-        }
+        if (navigationTargetRef.current) return;
         // El PRIMERO de byYear que esté visible, no el último que avisó: así
         // con dos años en la banda gana siempre el más reciente, que es el
         // orden en que se leen.
@@ -826,19 +803,7 @@ export const Journey = ({
           if (entry.isIntersecting) visibleMonths.add(key);
           else visibleMonths.delete(key);
         }
-        const navigationTarget = navigationTargetRef.current;
-        if (navigationTarget) {
-          if (navigationTarget.month && visibleMonths.has(navigationTarget.month)) {
-            navigationTargetRef.current = null;
-            if (navigationUnlockTimerRef.current !== null) {
-              window.clearTimeout(navigationUnlockTimerRef.current);
-              navigationUnlockTimerRef.current = null;
-            }
-            setActiveYear(navigationTarget.year);
-            setActiveMonth(navigationTarget.month);
-          }
-          return;
-        }
+        if (navigationTargetRef.current) return;
         const visibleMonth = byYear
           .flatMap(({ year, months }) => months.map(([month]) => `${year}-${month}`))
           .find((key) => visibleMonths.has(key));
@@ -875,30 +840,14 @@ export const Journey = ({
       year = Number(focusYearParam);
     }
 
-    const monthElement = monthKey ? monthRefs.current.get(monthKey) : undefined;
-    const yearElement = yearRefs.current.get(year);
-    const target = monthElement ?? yearElement;
-    if (target) {
-      navigationTargetRef.current = monthElement && monthKey ? { year, month: monthKey } : { year };
-      if (navigationUnlockTimerRef.current !== null) {
-        window.clearTimeout(navigationUnlockTimerRef.current);
-      }
-      navigationUnlockTimerRef.current = window.setTimeout(() => {
-        navigationTargetRef.current = null;
-        navigationUnlockTimerRef.current = null;
-      }, 1_200);
-      setActiveYear(year);
-      if (monthKey && monthElement) setActiveMonth(monthKey);
-      settleCancelRef.current?.();
-      settleCancelRef.current = settleScrollIntoView(target);
-    }
+    navigateTo(year, monthKey ?? undefined);
 
     const next = new URLSearchParams(searchParams);
     next.delete('month');
     next.delete('year');
     next.delete('view');
     setSearchParams(next, { replace: true });
-  }, [focusMonthParam, focusYearParam, byYear, searchParams, setSearchParams]);
+  }, [focusMonthParam, focusYearParam, byYear, searchParams, setSearchParams, navigateTo]);
 
   // La tira de resumen de arriba. gamesTouched cuenta JUEGOS distintos y no
   // entradas: tres vueltas a Hollow Knight son tres carátulas en el viaje,
@@ -1042,12 +991,12 @@ export const Journey = ({
                       // cuanto se pinta una vez), pero saltar del índice a un
                       // año lejano aterrizaba corto igualmente al moverse el
                       // suelo durante el viaje. Quien paga ese precio ahora
-                      // es settleScrollIntoView (arriba), que corrige el
-                      // aterrizaje cuando el viaje termina.
-                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 [content-visibility:auto] ${revealClass}`}
+                      // es navigateJourney: materializa los meses antes del
+                      // viaje y guarda su alto real como fallback local.
+                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 [content-visibility:auto] motion-reduce:animate-none ${revealClass}`}
                       style={{
                         ...revealStyle(yearIndex + monthIndex + 1),
-                        containIntrinsicSize: `auto ${monthIntrinsicHeight(monthEntries.length)}px`,
+                        containIntrinsicSize: `auto var(--journey-measured-height, ${monthIntrinsicHeight(monthEntries.length)}px)`,
                       }}
                     >
                       <div className="relative border-r border-border/80 pr-4 text-right">
@@ -1138,28 +1087,7 @@ export const Journey = ({
                     type="button"
                     aria-current={active ? 'true' : undefined}
                     onClick={() => {
-                      // Se fija el destino ANTES de mover el scroll: a partir
-                      // de aquí el observer calla hasta llegar (ver el
-                      // candado arriba). El temporizador es la red de
-                      // seguridad — si el destino nunca llega a la banda (un
-                      // año al final del todo que no alcanza a subir), a los
-                      // 1,2 s se suelta el candado igualmente en vez de
-                      // dejar el resaltado congelado para siempre.
-                      navigationTargetRef.current = { year };
-                      if (navigationUnlockTimerRef.current !== null) {
-                        window.clearTimeout(navigationUnlockTimerRef.current);
-                      }
-                      navigationUnlockTimerRef.current = window.setTimeout(() => {
-                        navigationTargetRef.current = null;
-                        navigationUnlockTimerRef.current = null;
-                      }, 1_200);
-                      setActiveYear(year);
-                      setActiveMonth(`${year}-${months[0]?.[0]}`);
-                      const yearElement = yearRefs.current.get(year);
-                      if (yearElement) {
-                        settleCancelRef.current?.();
-                        settleCancelRef.current = settleScrollIntoView(yearElement);
-                      }
+                      navigateTo(year);
                     }}
                     className="group/year relative w-full py-1.25 text-left text-[12px] font-extrabold tabular-nums transition-colors duration-150"
                     style={{ color: active ? BLUE : 'var(--muted-foreground)' }}
@@ -1185,21 +1113,7 @@ export const Journey = ({
                             type="button"
                             aria-current={monthActive ? 'true' : undefined}
                             onClick={() => {
-                              navigationTargetRef.current = { year, month: key };
-                              if (navigationUnlockTimerRef.current !== null) {
-                                window.clearTimeout(navigationUnlockTimerRef.current);
-                              }
-                              navigationUnlockTimerRef.current = window.setTimeout(() => {
-                                navigationTargetRef.current = null;
-                                navigationUnlockTimerRef.current = null;
-                              }, 1_200);
-                              setActiveYear(year);
-                              setActiveMonth(key);
-                              const monthElement = monthRefs.current.get(key);
-                              if (monthElement) {
-                                settleCancelRef.current?.();
-                                settleCancelRef.current = settleScrollIntoView(monthElement);
-                              }
+                              navigateTo(year, key);
                             }}
                             className="flex items-center justify-between gap-2 py-1 text-left text-[11.5px] font-semibold transition-colors duration-150"
                             style={{

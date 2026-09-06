@@ -1,6 +1,7 @@
 import { BrowserWindow, screen } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
+import { RARE, ULTRA_RARE } from '../../../shared/achievements';
 import { cacheImage } from '../../images/cache';
 import { buildOverlayHtml, OVERLAY_HEIGHT, OVERLAY_WIDTH } from './overlayHtml';
 import type { OverlayPayload } from './overlayHtml';
@@ -42,9 +43,6 @@ export type AchievementToast = {
 const GREEN = '#2fdc7e';
 const AMBER = '#e3b24a';
 const VIOLET = '#e0a3ff';
-
-const RARE = 10;
-const ULTRA_RARE = 5;
 
 const SINGLE_MS = 4200;
 const COMBINED_MS = 5200;

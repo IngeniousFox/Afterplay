@@ -109,7 +109,9 @@ export const groupEntriesByYearMonth = (
     if (year > now.getFullYear()) continue;
     if (year === now.getFullYear() && month > now.getMonth()) continue;
     const months = grouped.get(year) ?? new Map<number, JourneyEntry[]>();
-    months.set(month, [...(months.get(month) ?? []), entry]);
+    const monthEntries = months.get(month) ?? [];
+    monthEntries.push(entry);
+    months.set(month, monthEntries);
     grouped.set(year, months);
   }
   return grouped;
@@ -126,16 +128,40 @@ export const buildEntries = (
   const gameById = new Map(games.map((game) => [game.id, game]));
   const sessionsByIteration = new Map<number, SessionWithGame[]>();
   const eventsByIteration = new Map<number, StateEventSummary[]>();
+  // Los endless se consultan por juego y el resto por playthrough. Indexar
+  // ambas rutas aquí evita recorrer el archivo entero por cada endless.
+  const sessionsByGame = new Map<number, SessionWithGame[]>();
+  const eventsByGame = new Map<number, StateEventSummary[]>();
+  const manualByGame = new Map<number, Map<number, GameListItem['manualIterations'][number]>>();
+
+  for (const game of games) {
+    const byIteration = new Map<number, GameListItem['manualIterations'][number]>();
+    for (const manual of game.manualIterations) {
+      // Igual que find(): si una entrada se repite, manda la primera.
+      if (!byIteration.has(manual.iterationId)) byIteration.set(manual.iterationId, manual);
+    }
+    manualByGame.set(game.id, byIteration);
+  }
 
   for (const session of sessions) {
     const list = sessionsByIteration.get(session.iterationId) ?? [];
     list.push(session);
     sessionsByIteration.set(session.iterationId, list);
+    if (gameById.get(session.gameId)?.endless) {
+      const gameSessions = sessionsByGame.get(session.gameId) ?? [];
+      gameSessions.push(session);
+      sessionsByGame.set(session.gameId, gameSessions);
+    }
   }
   for (const event of stateEvents) {
     const list = eventsByIteration.get(event.iterationId) ?? [];
     list.push(event);
     eventsByIteration.set(event.iterationId, list);
+    if (gameById.get(event.gameId)?.endless) {
+      const gameEvents = eventsByGame.get(event.gameId) ?? [];
+      gameEvents.push(event);
+      eventsByGame.set(event.gameId, gameEvents);
+    }
   }
 
   // Las tres formas que tiene un playthrough de haber existido: sesiones
@@ -183,7 +209,7 @@ export const buildEntries = (
       return null;
     }
 
-    // Sesiones y eventos revueltos y ordenados: los extremos de esa mezcla
+    // Los extremos de sesiones y eventos, sin ordenar toda la mezcla:
     // son el principio y el final del tramo. Da igual de cuál de las dos
     // fuentes venga cada uno — un playthrough puede empezar por una sesión
     // que el watcher pilló y terminar por un Beaten tecleado a mano.
@@ -203,7 +229,23 @@ export const buildEntries = (
     if (activity.length === 0) {
       activity.push({ at: fallbackAt ?? game.addedAt, precision: 'year' });
     }
-    activity.sort((a, b) => a.at.getTime() - b.at.getTime());
+    let first = activity[0];
+    let last = first;
+    for (const point of activity) {
+      const time = point.at.getTime();
+      if (Number.isNaN(time)) {
+        // Datos antiguos inválidos conservan el comportamiento del sort
+        // estable; las fechas válidas recorren la mezcla una sola vez.
+        activity.sort((a, b) => a.at.getTime() - b.at.getTime());
+        first = activity[0];
+        last = activity[activity.length - 1];
+        break;
+      }
+      if (time < first.at.getTime()) first = point;
+      // En un empate la primera precisión sigue siendo la primera y la
+      // última la última, igual que el orden estable de la mezcla anterior.
+      if (time >= last.at.getTime()) last = point;
+    }
 
     const sortedSessions = [...allSessions].sort(
       (a, b) => a.startedAt.getTime() - b.startedAt.getTime(),
@@ -211,10 +253,7 @@ export const buildEntries = (
     // La nota MÁS RECIENTE con texto, no la primera: "dónde lo dejé" es por
     // definición lo último que escribiste, y las sesiones sin nota se saltan
     // en vez de dejar la entrada muda.
-    const note = [...sortedSessions]
-      .reverse()
-      .find((session) => session.note?.trim())
-      ?.note?.trim();
+    const note = sortedSessions.findLast((session) => session.note?.trim())?.note?.trim();
     const trackedSeconds = allSessions.reduce(
       (sum, session) => sum + (session.durationSec ?? 0),
       0,
@@ -228,10 +267,10 @@ export const buildEntries = (
       title: game.title,
       coverUrl: game.coverUrl,
       heroUrl: game.heroUrl,
-      firstAt: activity[0].at,
-      firstPrecision: activity[0].precision,
-      lastAt: activity.at(-1)?.at ?? activity[0].at,
-      lastPrecision: activity.at(-1)?.precision ?? activity[0].precision,
+      firstAt: first.at,
+      firstPrecision: first.precision,
+      lastAt: last.at,
+      lastPrecision: last.precision,
       hours: totalHours ?? manualHours + trackedSeconds / 3600,
       sessions: sortedSessions,
       note: note ?? null,
@@ -243,12 +282,16 @@ export const buildEntries = (
   // jugó en marzo y octubre aparece en ambos meses. Cada entrada contiene
   // solo las sesiones y horas de ese mes; juntas vuelven a sumar exactamente
   // el total canónico del juego.
-  for (const game of games.filter((candidate) => candidate.endless)) {
-    const gameSessions = sessions.filter((session) => session.gameId === game.id);
-    const gameEvents = meaningfulEvents(
-      stateEvents.filter((event) => event.gameId === game.id),
-      game,
-    );
+  for (const game of games) {
+    if (!game.endless) continue;
+    const gameSessions = sessionsByGame.get(game.id) ?? [];
+    const gameEvents = meaningfulEvents(eventsByGame.get(game.id) ?? [], game);
+    const meaningfulByIteration = new Map<number, StateEventSummary[]>();
+    for (const event of gameEvents) {
+      const iterationEvents = meaningfulByIteration.get(event.iterationId) ?? [];
+      iterationEvents.push(event);
+      meaningfulByIteration.set(event.iterationId, iterationEvents);
+    }
     const monthBuckets = new Map<string, JourneyMonthBucket>();
     const getMonthBucket = (at: Date): JourneyMonthBucket => {
       const key = `${at.getFullYear()}-${at.getMonth()}`;
@@ -272,7 +315,7 @@ export const buildEntries = (
     // del juego — un mes cualquiera es mejor que perderlas.
     for (const manual of game.manualIterations) {
       const anchor =
-        manualHoursAnchor(gameEvents.filter((event) => event.iterationId === manual.iterationId)) ??
+        manualHoursAnchor(meaningfulByIteration.get(manual.iterationId) ?? []) ??
         (manual.year === null ? null : new Date(manual.year, 6, 1)) ??
         game.lastPlayedAt ??
         game.addedAt;
@@ -336,7 +379,7 @@ export const buildEntries = (
     // Los endless ya salieron arriba, troceados por mes: pasarlos otra vez
     // aquí los duplicaría, una vez por mes y otra entera.
     if (game.endless) continue;
-    const manual = game.manualIterations.find((entry) => entry.iterationId === iterationId);
+    const manual = manualByGame.get(game.id)?.get(iterationId);
     const entry = makeEntry({
       key: `iteration:${iterationId}`,
       game,

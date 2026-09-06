@@ -1,0 +1,137 @@
+import type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes';
+
+// "1 game" / "3 games" — usado en las cabeceras de las columnas de nav
+// (Library/Sessions/Stats) y en la vista de Sesiones.
+export const pluralize = (count: number, noun: string): string =>
+  `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+// "Xh Ym" si hay minutos sueltos, "Xh" si es un número redondo de horas,
+// "0h" si no hay nada — mismo formato que el prototipo (fmtH).
+export const formatHours = (hours: number): string => {
+  const totalMinutes = Math.round(hours * 60);
+  if (totalMinutes <= 0) return '0h';
+  const wholeHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${wholeHours}h ${minutes}m` : `${wholeHours}h`;
+};
+
+// Mismo separador decimal que el placeholder "0.00" del campo de gasto —
+// nunca coma, sin importar el locale del sistema.
+export const formatMoney = (amount: number): string => `€${amount.toFixed(2)}`;
+
+// Un CONTEO grande en un hueco pequeño: "416K reviews" en vez de "415,946
+// reviews". Nació de un recorte real — el tile de Steam de la RatingsCard
+// mide 81px y la muestra de Hollow Knight (415.946 reseñas) se cortaba a la
+// mitad, con lo que el número dejaba de decir nada. Redondear una MUESTRA no
+// pierde nada: lo que informa de ella es el orden de magnitud, y el valor
+// exacto sigue estando en el title al pasar el ratón.
+//
+// 'en-US' fijo, mismo motivo que las fechas de este archivo: el resto de la
+// UI está en inglés sin i18n, y con el locale del sistema en español "415,946"
+// salía como "415.946", que un lector inglés lee como un decimal.
+//
+// Cada tramo se elige por lo que se va a ESCRIBIR, no por el valor crudo, y
+// esa es la corrección: mirando el valor crudo, 99.999 caía en el tramo del
+// decimal y su redondeo lo sacaba de él — "100.0K" justo antes de que
+// 100.000 dijera "100K". El mismo escalón un piso más arriba escribía
+// "1000K" para 999.999 en vez de "1.0M". Los cortes de abajo son los valores
+// a partir de los cuales el redondeo YA cambia de tramo (99,95 millares
+// redondean a 100; 999,5 millares redondean a 1,0 millones).
+export const formatCount = (value: number): string => {
+  const thousands = value / 1000;
+  if (thousands >= 999.5) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (thousands >= 99.95) return `${Math.round(thousands)}K`;
+  if (value >= 10_000) return `${thousands.toFixed(1)}K`;
+  return value.toLocaleString('en-US');
+};
+
+// 'en-US' fijo (mismo motivo que abajo) — hour12 es lo único que cambia
+// según el ajuste de Settings (slider 12h/24h, 24h por defecto).
+//
+// Desktop supplies its preference; the PWA adapter deliberately uses 24h.
+export const formatTime = (date: Date, timeFormat: TimeFormat): string =>
+  date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  });
+
+// 'en-US' fijo, no el locale del sistema — el resto de la UI está en inglés
+// sin i18n, así que dejar que esto cambie de idioma solo (el navegador de
+// pruebas de Claude Code está en es-ES, y salía "15 de julio de 2026" aquí
+// en medio de una interfaz en inglés) sería inconsistente.
+export const formatDateOnly = (date: Date, precision: DatePrecision): string => {
+  if (precision === 'year') return String(date.getFullYear());
+  if (precision === 'month') {
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+// Fechas de eventos/sesiones (Date real, no el isoDate del picker) según su
+// datePrecision — 'en-US' fijo, mismo motivo que formatDateOnly: el resto de
+// la UI está en inglés sin i18n. timeFormat es obligatorio (no opcional con
+// default) a propósito: así el compilador señala cualquier llamada que se me
+// olvide actualizar si este archivo cambia, en vez de dejarla colada en 24h
+// en silencio.
+export const formatByPrecision = (
+  date: Date,
+  precision: EventDatePrecision,
+  timeFormat: TimeFormat,
+): string => {
+  if (precision !== 'datetime') return formatDateOnly(date, precision);
+  const datePart = date.toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  return `${datePart} · ${formatTime(date, timeFormat)}`;
+};
+
+// Hora de fin de una sesión, para pintarla justo debajo de la de inicio en
+// cualquier fila de sesión — solo la hora (no repite la fecha, casi siempre
+// el mismo día) y solo tiene sentido con precisión 'datetime' (año/mes/día
+// no llevan hora que mostrar). null si no aplica (sesión en marcha, o sin
+// hora que dar).
+export const formatSessionEndTime = (
+  endedAt: Date | null,
+  datePrecision: EventDatePrecision,
+  timeFormat: TimeFormat,
+): string | null => {
+  if (!endedAt || datePrecision !== 'datetime') return null;
+  return formatTime(endedAt, timeFormat);
+};
+
+// GB si llega a 1000MB, MB si llega a 1, y KB por debajo. Los KB entraron
+// con las partidas guardadas: una carpeta de instalación nunca baja de 1 MB,
+// pero la MEDIANA de una partida guardada son 322 KB (medido sobre la
+// biblioteca real), y "0 MB" no es una talla, es un error de redondeo.
+//
+// El salto a GB es a los 1000 y no a los 1024 exactos: el valor sigue siendo
+// en base 1024 (0.99 GB, no 1.01), solo se cambia CUÁNDO se cambia de unidad.
+// Los 24 MB de tierra de nadie salían como "1009 MB", que nadie lee como una
+// talla — se lee como un número suelto.
+//
+// El cero se contesta antes que nada: el suelo de 1 KB de la última línea
+// está para que una partida guardada diminuta no se redondee a "0", no para
+// inventarle tamaño a lo que no existe. Sin esta guarda una carpeta vacía
+// decía "1 KB", y el "Freed 1 KB" de una limpieza que no liberó nada era el
+// mismo texto que el de una que liberó un fichero de verdad.
+export const formatBytes = (bytes: number): string => {
+  if (bytes <= 0) return '0 KB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb >= 1) return `${mb.toFixed(0)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+};
+
+// HH:MM:SS con ceros a la izquierda — el contador en vivo de una sesión
+// abierta (mismo formato que el prototipo, fmtTimer).
+export const formatElapsed = (seconds: number): string => {
+  const total = Math.max(0, Math.floor(seconds));
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+};

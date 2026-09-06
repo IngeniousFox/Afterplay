@@ -9,7 +9,7 @@
 // funciones son puras.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
+import { baseGame, baseSession, baseEvent, syntheticJourney } from './journeyFixtures';
 import { buildEntries, groupEntriesByYearMonth, type JourneyEntry } from '../journeyEntries';
 
 // Una entrada del viaje con lo minimo: la agrupacion solo mira lastAt, el
@@ -91,61 +91,80 @@ describe('groupEntriesByYearMonth', () => {
 
 // ── buildEntries ─────────────────────────────────────────────────────────
 
-const baseGame = (overrides: Partial<GameListItem> = {}): GameListItem => ({
-  id: 1,
-  igdbId: null,
-  steamAppId: null,
-  title: 'Test Game',
-  coverUrl: null,
-  heroUrl: null,
-  genres: null,
-  isEmulated: false,
-  endless: false,
-  releaseYear: null,
-  totalHours: 0,
-  addedAt: new Date(2020, 0, 1, 10, 0, 0),
-  promotedAt: null,
-  hltbMain: null,
-  hltbMainExtras: null,
-  hltbCompletionist: null,
-  executablePath: null,
-  manualIterations: [],
-  currentState: null,
-  lastPlayedAt: null,
-  isLive: false,
-  liveSince: null,
-  sessionCount: 0,
-  ...overrides,
-});
-
-const baseSession = (overrides: Partial<SessionWithGame> = {}): SessionWithGame => ({
-  id: 1,
-  iterationId: 10,
-  isManual: false,
-  startedAt: new Date(2021, 0, 1),
-  endedAt: null,
-  durationSec: 3600,
-  lastHeartbeatAt: null,
-  datePrecision: 'datetime',
-  note: null,
-  gameId: 1,
-  gameTitle: 'Test Game',
-  coverUrl: null,
-  ...overrides,
-});
-
-const baseEvent = (overrides: Partial<StateEventSummary> = {}): StateEventSummary => ({
-  id: 1,
-  gameId: 1,
-  iterationId: 10,
-  type: 'started',
-  occurredAt: new Date(2021, 0, 1),
-  datePrecision: 'datetime',
-  iterationLabel: 'Playthrough 1',
-  ...overrides,
-});
-
 describe('buildEntries', () => {
+  it('indexa el archivo con un presupuesto lineal aunque haya muchos endless', () => {
+    const { games, sessions, events } = syntheticJourney(120, 60);
+    let gameIdReads = 0;
+    const countedSessions = sessions.map((session) => ({
+      ...session,
+      get gameId(): number {
+        gameIdReads++;
+        return session.gameId;
+      },
+    }));
+    const countedEvents = events.map((event) => ({
+      ...event,
+      get gameId(): number {
+        gameIdReads++;
+        return event.gameId;
+      },
+    }));
+    const entries = buildEntries(games, countedSessions, countedEvents);
+    assert.equal(
+      entries.reduce((sum, item) => sum + item.hours, 0),
+      120 * 66,
+    );
+    // El algoritmo anterior leía gameId > 450.000 veces. Este tope escala
+    // con filas de entrada, sin depender de los ms de la máquina de CI.
+    assert.ok(gameIdReads <= 5 * (sessions.length + events.length), `${gameIdReads} lecturas`);
+  });
+
+  it('conserva orden, referencias, empates de fecha y precisión sin mutar el archivo', () => {
+    const at = new Date(2024, 2, 1);
+    const first = Object.freeze(baseSession({ id: 1, startedAt: at, note: 'first' }));
+    const second = Object.freeze(baseSession({ id: 2, startedAt: at, note: ' last ' }));
+    const event = Object.freeze(baseEvent({ occurredAt: at, datePrecision: 'year' }));
+    const sessions = [first, second];
+    const events = [event];
+    Object.freeze(sessions);
+    Object.freeze(events);
+    const [result] = buildEntries([baseGame()], sessions, events);
+    assert.equal(result.firstPrecision, 'datetime');
+    assert.equal(result.lastPrecision, 'year');
+    assert.equal(result.note, 'last');
+    assert.deepEqual(result.sessions, [first, second]);
+    assert.equal(result.sessions[0], first);
+    assert.notEqual(result.sessions, sessions);
+    const grouped = groupEntriesByYearMonth([result, result], new Date(2025, 0, 1));
+    assert.deepEqual(grouped.get(2024)?.get(2), [result, result]);
+    assert.equal(grouped.get(2024)?.get(2)?.[0], result);
+  });
+
+  it('atribuye horas de endless al evento válido de SU vuelta, sin mezclar juegos', () => {
+    const game = baseGame({
+      endless: true,
+      totalHours: 7,
+      manualIterations: [
+        { iterationId: 10, hours: 3, year: 2023 },
+        { iterationId: 11, hours: 4, year: 2024 },
+      ],
+    });
+    const events = [
+      baseEvent({ iterationId: 10, occurredAt: new Date(2023, 4, 1) }),
+      baseEvent({ iterationId: 11, occurredAt: new Date(2024, 7, 1) }),
+      baseEvent({ iterationId: 11, type: 'plan_to_play', occurredAt: new Date(2025, 0, 1) }),
+      baseEvent({ gameId: 2, iterationId: 20, occurredAt: new Date(2025, 2, 1) }),
+    ];
+    const entries = buildEntries([game, baseGame({ id: 2 })], [], events);
+    assert.deepEqual(
+      entries.filter((item) => item.gameId === 1).map((item) => [item.key, item.hours]),
+      [
+        ['endless:1:2024-7', 4],
+        ['endless:1:2023-4', 3],
+      ],
+    );
+  });
+
   it('descarta el evento pegado al alta como hito, pero cuenta uno fechado a mano', () => {
     const addedAt = new Date(2020, 0, 1, 10, 0, 0);
     const game = baseGame({ id: 1, addedAt });

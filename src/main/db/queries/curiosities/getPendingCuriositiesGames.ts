@@ -1,4 +1,4 @@
-import { and, count, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { CuriositiesStatus } from '../../../../shared/types';
 import { gamesTable } from '../../schema';
@@ -42,13 +42,9 @@ export const getPendingCuriositiesGames = async (): Promise<PendingCuriositiesGa
 // —el botón se quedaba encendido para siempre y no encolaba nada—.
 export const getCuriositiesCounts = async (): Promise<Omit<CuriositiesStatus, 'running'>> => {
   const db = getDb();
-  const [totalRow] = await db
-    .select({ value: count() })
+  const [row] = await db
+    .select({ total: count(), generated: count(gamesTable.curiositiesGeneratedAt) })
     .from(gamesTable)
     .where(eq(gamesTable.planned, false));
-  const [generatedRow] = await db
-    .select({ value: count() })
-    .from(gamesTable)
-    .where(and(isNotNull(gamesTable.curiositiesGeneratedAt), eq(gamesTable.planned, false)));
-  return { totalGames: totalRow?.value ?? 0, generatedGames: generatedRow?.value ?? 0 };
+  return { totalGames: row?.total ?? 0, generatedGames: row?.generated ?? 0 };
 };

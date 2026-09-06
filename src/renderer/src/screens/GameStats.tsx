@@ -32,10 +32,11 @@ import { useSessions } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { AMBER, BLUE, GREEN, VIOLET } from '../lib/colors';
-import { monthKey, startOfDayMs, yearsDesc } from '../lib/dateMath';
+import { yearsDesc } from '../lib/dateMath';
 import { formatDateOnly, formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
 import { hasMeasuredDuration, sessionDurationStats } from '../lib/sessionStats';
+import { sessionActivity } from '../lib/sessionActivity';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
 import { longestStreak, playedDayKeys } from '../lib/streaks';
 
@@ -376,28 +377,7 @@ export const GameStats = ({
 
   // Récords: día más intenso, días distintos jugados, mes más cargado —
   // solo sesiones cerradas (las abiertas aún no tienen duración final).
-  const records = useMemo(() => {
-    const secondsByDay = new Map<number, number>();
-    const secondsByMonth = new Map<number, number>();
-    for (const session of realSessions) {
-      if (session.endedAt === null) continue;
-      const dayMs = startOfDayMs(session.startedAt);
-      secondsByDay.set(dayMs, (secondsByDay.get(dayMs) ?? 0) + (session.durationSec ?? 0));
-      const month = monthKey(session.startedAt);
-      secondsByMonth.set(month, (secondsByMonth.get(month) ?? 0) + (session.durationSec ?? 0));
-    }
-
-    let biggestDay: { dayMs: number; seconds: number } | null = null;
-    for (const [dayMs, seconds] of secondsByDay) {
-      if (!biggestDay || seconds > biggestDay.seconds) biggestDay = { dayMs, seconds };
-    }
-    let busiestMonth: { monthKey: number; seconds: number } | null = null;
-    for (const [monthKey, seconds] of secondsByMonth) {
-      if (!busiestMonth || seconds > busiestMonth.seconds) busiestMonth = { monthKey, seconds };
-    }
-
-    return { biggestDay, busiestMonth, daysPlayed: secondsByDay.size };
-  }, [realSessions]);
+  const records = useMemo(() => sessionActivity(realSessions), [realSessions]);
 
   const ranked = [...allGames].sort((a, b) => b.totalHours - a.totalHours);
   const rankIndex = ranked.findIndex((g) => g.id === gameId);
