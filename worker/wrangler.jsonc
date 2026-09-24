@@ -2,9 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "afterplay-web",
   "main": "src/index.ts",
-  // Un día por detrás de hoy a propósito: workerd solo admite fechas que su
-  // propio binario conozca, y el de wrangler 4.120 llega hasta el 2026-08-08.
-  // Poner la fecha de hoy hace que `wrangler dev` ni arranque.
+  // Contrato de ejecución fijado: actualizar Wrangler no adelanta también
+  // los cambios de comportamiento del runtime. La fecha se cambia al validar
+  // expresamente ese nuevo contrato.
   "compatibility_date": "2026-08-08",
   "compatibility_flags": ["nodejs_compat"],
 
@@ -42,7 +42,7 @@
     "directory": "../web/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*"],
   },
 
   "observability": {
@@ -50,10 +50,10 @@
     // Los logs de Workers entran en el plan gratuito. head_sampling_rate a 1
     // porque a ~100 peticiones/día (§4.1) muestrear no ahorra nada y perder
     // el log de la única petición que falló sí duele.
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
 
   // Sin "routes" ni "workers_dev": false — el Worker se sirve en su
   // *.workers.dev hasta que haya dominio propio, que es opcional (§4.1).
-  "placement": { "mode": "smart" }
+  "placement": { "mode": "smart" },
 }

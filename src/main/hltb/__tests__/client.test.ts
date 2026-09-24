@@ -178,8 +178,19 @@ describe('cliente de HowLongToBeat', () => {
     assert.equal(results[0].name, 'Y');
   });
 
-  it('un token con forma inesperada falla limpio', async () => {
-    initResponse = () => ({ data: { token: 'solo-el-token' } }); // faltan hpKey/hpVal
-    await assert.rejects(() => new HLTBClient().search('z'), /token de HowLongToBeat/i);
+  it('acepta el formato actual con solo token sin inventar cabeceras ni campos hp', async () => {
+    initResponse = () => ({ data: { token: 'solo-el-token' } });
+    await new HLTBClient().search('z');
+    assert.equal(posts[0].headers?.['x-auth-token'], 'solo-el-token');
+    assert.equal('x-hp-key' in (posts[0].headers ?? {}), false);
+    assert.equal('x-hp-val' in (posts[0].headers ?? {}), false);
+    assert.equal('undefined' in (posts[0].body as Record<string, unknown>), false);
+  });
+
+  it('rechaza un token inválido o un par hp incompleto', async () => {
+    for (const data of [{}, { token: 1 }, { token: '' }, { token: 'tok', hpKey: 'key' }]) {
+      initResponse = () => ({ data });
+      await assert.rejects(() => new HLTBClient().search('z'), /token de HowLongToBeat/i);
+    }
   });
 });

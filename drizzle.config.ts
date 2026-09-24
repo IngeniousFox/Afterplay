@@ -1,7 +1,9 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { defineConfig } from 'drizzle-kit';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
+
+loadEnv({ quiet: true });
 
 // Mirrors Electron's app.getPath('userData') (main/index.ts sets app.setName
 // to 'Afterplay'). This is dev-only tooling run from a plain terminal, not

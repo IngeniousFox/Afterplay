@@ -28,10 +28,10 @@ const USER_AGENT =
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 30_000;
 
-// El token anti-bot que HLTB exige en cada busqueda: un token opaco mas un par
-// clave/valor que ademas viaja DENTRO del cuerpo (con la clave como nombre de
-// campo, de ahi que sea dinamico). Los tres salen del endpoint /init.
-type SecurityToken = { token: string; hpKey: string; hpVal: string };
+// /init devuelve ahora solo token (verificado el 24-sep-2026). El par hp
+// pertenece al formato anterior: se reenvía si llega completo, pero su
+// ausencia ya no hace inválida una respuesta con token.
+type SecurityToken = { token: string; hpKey?: string; hpVal?: string };
 
 // La forma cruda que devuelve HLTB. Solo se declaran los campos que se usan;
 // el resto (imagen, plataformas, resenas...) no se guarda. Todo opcional
@@ -127,10 +127,19 @@ export class HLTBClient {
     // intermediario podria servir un token ya caducado.
     const response = await this.http.get(`${INIT_URL}?t=${Date.now()}`);
     const { token, hpKey, hpVal } = (response.data ?? {}) as Partial<SecurityToken>;
-    if (!token || !hpKey || !hpVal) {
+    const hasHpPair =
+      typeof hpKey === 'string' &&
+      hpKey.length > 0 &&
+      typeof hpVal === 'string' &&
+      hpVal.length > 0;
+    if (
+      typeof token !== 'string' ||
+      token.length === 0 ||
+      ((hpKey !== undefined || hpVal !== undefined) && !hasHpPair)
+    ) {
       throw new Error('token de HowLongToBeat invalido o con forma inesperada');
     }
-    this.token = { token, hpKey, hpVal };
+    this.token = { token, ...(hasHpPair ? { hpKey, hpVal } : {}) };
     this.tokenExpiry = Date.now() + TOKEN_TTL_MS;
     return this.token;
   }
@@ -163,9 +172,7 @@ export class HLTBClient {
         randomizer: 0,
       },
       useCache: true,
-      // El par del token va tambien en el cuerpo, con la clave como nombre de
-      // campo. Es parte del esquema anti-bot: sin esto, 403.
-      [token.hpKey]: token.hpVal,
+      ...(token.hpKey && token.hpVal ? { [token.hpKey]: token.hpVal } : {}),
     };
   }
 
@@ -179,8 +186,7 @@ export class HLTBClient {
         'Content-Type': 'application/json',
         Accept: '*/*',
         'x-auth-token': token.token,
-        'x-hp-key': token.hpKey,
-        'x-hp-val': token.hpVal,
+        ...(token.hpKey && token.hpVal ? { 'x-hp-key': token.hpKey, 'x-hp-val': token.hpVal } : {}),
       },
     });
     const data = (response.data ?? {}) as { data?: unknown };

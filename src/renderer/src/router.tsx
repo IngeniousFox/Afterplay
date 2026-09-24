@@ -1,10 +1,11 @@
 import { Loader2 } from 'lucide-react';
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { createHashRouter, Navigate } from 'react-router-dom';
 import { RootLayout } from './components/layout/RootLayout';
 import { Library } from './screens/Library';
 import { loadStatsRoute } from './lib/statsRoute';
 import { ModeBridge } from './tv/ModeBridge';
+import { BigPictureLayout, TvGameDetail, TvHome, TvJourney, TvLibrary } from './tv/LazyScreens';
 
 // Todo el árbol de TV (BIG-PICTURE.md §3) en imports dinámicos, y no en el
 // bundle principal: gamepad, sonido generativo, el sistema de foco a mando,
@@ -14,15 +15,8 @@ import { ModeBridge } from './tv/ModeBridge';
 // React.lazy, ese peso solo se paga la primera vez que se entra de verdad
 // en el modo (F11 o el mando) — el Suspense de más abajo, con un fondo del
 // mismo negro que BigPictureLayout, cubre el hueco mientras carga.
-const BigPictureLayout = lazy(() =>
-  import('./tv/BigPictureLayout').then((m) => ({ default: m.BigPictureLayout })),
-);
-const TvHome = lazy(() => import('./tv/TvHome').then((m) => ({ default: m.TvHome })));
-const TvLibrary = lazy(() => import('./tv/TvLibrary').then((m) => ({ default: m.TvLibrary })));
-const TvGameDetail = lazy(() =>
-  import('./tv/TvGameDetail').then((m) => ({ default: m.TvGameDetail })),
-);
-const TvJourney = lazy(() => import('./tv/TvJourney').then((m) => ({ default: m.TvJourney })));
+// Las definiciones viven en tv/LazyScreens para que Fast Refresh las trate
+// como componentes, sin mezclarlas con el objeto router exportado aquí.
 
 // AQUÍ NO HAY NADA DEL OVERLAY, y es a propósito. La ventana del HUD in-game
 // (OVERLAY.md §8.1) carga esta misma SPA con #/overlay, pero NO pasa por este

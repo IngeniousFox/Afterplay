@@ -3,13 +3,12 @@ productName: Afterplay
 directories:
   buildResources: build
 files:
-  - '!test-results/**'
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # Con solo exclusiones, builder incluía todo el repo, incluso worker/.dev.vars.
+  # package.json y las dependencias de producción se añaden automáticamente.
+  - out/**
+  - drizzle/**
+  - resources/**
+  - '!**/{.env,.env.*,.dev.vars,.dev.vars.*,.npmrc}'
 # Ludusavi va como carpeta entera (binario + material legal) a
 # resources/ludusavi. extraResources y no asarUnpack a propósito: esto no
 # vive en node_modules, es un ejecutable externo que el main lanza desde
@@ -55,6 +54,10 @@ linux:
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
+# SDL, libSQL y Turso usan binarios Node-API. Sus propios instaladores
+# descargan los precompilados; install-app-deps intentaba recompilar SDL
+# desde fuentes sin sus devDependencies. postinstall prepara Electron y
+# e2e/native-modules.spec.ts comprueba los binarios dentro de ese runtime.
 npmRebuild: false
 # Auto-actualización vía GitHub Releases (repo público — descargas sin
 # token). Publicar: subir version en package.json y `npm run release:win`

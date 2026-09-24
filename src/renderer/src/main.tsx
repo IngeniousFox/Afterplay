@@ -1,10 +1,11 @@
 import './assets/main.css';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { lazy, StrictMode, Suspense } from 'react';
+import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import TitleBar from './components/TitleBar';
 import { queryClient } from './lib/queryClient';
+import { Afterplay, OverlayHud } from './WindowRoots';
 
 // LAS DOS VENTANAS SE PARTEN AQUÍ, Y ESO ES TODO EL TRUCO DE ARRANQUE.
 //
@@ -15,7 +16,7 @@ import { queryClient } from './lib/queryClient';
 // había que descargar, parsear y ejecutar ENTERO antes del primer píxel — en
 // las dos ventanas, incluida la del overlay, que de ahí usa el 3%.
 //
-// Con los dos `lazy` de abajo el chunk de entrada baja a 253,75 KB (React,
+// Con los dos `lazy` de WindowRoots el chunk de entrada baja a 253,75 KB (React,
 // react-dom, react-query y la TitleBar) y cada ventana se trae solo su árbol:
 //   · la app      → + Afterplay, ~1749 KB (router + pantallas de escritorio)
 //   · el overlay  → + OverlayHud, 36,02 KB (+ SessionNote, 74,72 KB, que
@@ -25,7 +26,6 @@ import { queryClient } from './lib/queryClient';
 // en cuanto están los 253 KB de entrada. Y el overlay pasa de arrastrar
 // 2080,49 KB a 364,49 KB — un 82% menos, y no es un detalle: esa ventana nace
 // CON UN JUEGO YA CORRIENDO, peleando por CPU con él.
-const Afterplay = lazy(() => import('./Afterplay'));
 
 // El HUD del overlay se monta AQUÍ DIRECTAMENTE y no a través del router, a
 // propósito: pasar por el router obligaba a cargar su módulo, y ese arrastra
@@ -44,9 +44,6 @@ const Afterplay = lazy(() => import('./Afterplay'));
 // un <Link>, useNavigate o useLocation ahí dentro, reventará con "useX may be
 // used only in the context of a Router" — y la solución NO es volver a montar
 // el router entero, sino un router propio y mínimo para esta ventana.
-const OverlayHud = lazy(() =>
-  import('./overlay/OverlayHud').then((m) => ({ default: m.OverlayHud })),
-);
 
 // ¿Es esta la ventana del overlay in-game (OVERLAY.md §8.1)? Es la MISMA SPA
 // cargada por otra BrowserWindow con #/overlay, y aquí se decide qué monta:
