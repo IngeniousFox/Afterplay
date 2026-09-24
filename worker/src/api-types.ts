@@ -117,6 +117,7 @@ export type GameDetail = {
   endless: boolean;
   planned: boolean;
   addedAt: number;
+  firstPlannedAt: number | null;
   notes: string | null;
 
   hltbMain: number | null;

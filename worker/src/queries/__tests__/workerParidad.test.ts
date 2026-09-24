@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { after, beforeEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createClient, type Client } from '@libsql/client';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import {
@@ -270,6 +271,21 @@ describe('logros: el desempate multi-fuente es el compartido, no una copia', () 
 // ══ LA FORMA DE /api/plan ══════════════════════════════════════════════════
 
 describe('plan: la respuesta es el PlannedGame del contrato, ni un campo más', () => {
+  it('usa la primera fecha registrada en el Plan tras venir de Library', async () => {
+    const gameId = await makeGame({ title: 'Vuelve al Plan', planned: true });
+    const iterationId = await makeIteration(gameId);
+    await makeStateEvent(iterationId, 'plan_to_play', '2025-05-01T09:00:00Z');
+    await makeStateEvent(iterationId, 'plan_to_play', '2024-01-01T00:00:00Z');
+
+    const [game] = await listPlanned(db);
+    assert.equal(game.addedAt, new Date('2025-05-01T09:00:00Z').getTime());
+    const [stored] = await db
+      .select({ addedAt: gamesTable.addedAt })
+      .from(gamesTable)
+      .where(eq(gamesTable.id, gameId));
+    assert.deepEqual(stored.addedAt, ADDED_AT);
+  });
+
   it('el pin sale como pinnedAt y planPinnedAt NO viaja', async () => {
     // El `...row` de antes filtraba al JSON la columna `planPinnedAt`, que el
     // contrato no declara: la respuesta ya no era el objeto que decía ser, y la

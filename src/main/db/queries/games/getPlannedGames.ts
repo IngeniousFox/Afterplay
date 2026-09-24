@@ -17,11 +17,21 @@ import { gamesTable } from '../../schema';
 // resto — el porqué del reparto y las cifras por consumidor están en
 // ipc/games.ts, y la forma en shared/types.ts.
 //
-// Y NO es el mismo patrón que getGames: esto no toca sessions ni
-// state_events, así que no se degrada con los años — con cinco años de
-// tracking simulados encima sigue costando lo mismo.
+// La primera fecha en el Plan sale del primer evento plan_to_play. Para los
+// planeados creados directamente allí coincide con games.addedAt; al devolver
+// un juego de Library al Plan conserva aquella primera fecha, y un juego que
+// nunca estuvo en el Plan empieza a esperar desde hoy sin alterar su fecha
+// original de alta en Afterplay.
 export const getPlannedGames = async (): Promise<PlannedGameListItem[]> => {
   const db = getDb();
+  const firstPlanAt = sql<number | null>`(
+    select se.occurredAt
+    from state_events se
+    join iterations it on it.id = se.iterationId
+    where it.gameId = games.id and se.type = 'plan_to_play'
+    order by se.id asc
+    limit 1
+  )`;
 
   const games = await db
     .select({
@@ -38,6 +48,7 @@ export const getPlannedGames = async (): Promise<PlannedGameListItem[]> => {
       endless: gamesTable.endless,
       releaseYear: gamesTable.releaseYear,
       addedAt: gamesTable.addedAt,
+      firstPlanAt,
       promotedAt: gamesTable.promotedAt,
       hltbMain: gamesTable.hltbMain,
       hltbMainExtras: gamesTable.hltbMainExtras,
@@ -65,7 +76,7 @@ export const getPlannedGames = async (): Promise<PlannedGameListItem[]> => {
     endless: game.endless,
     releaseYear: game.releaseYear,
     totalHours: 0,
-    addedAt: game.addedAt,
+    addedAt: game.firstPlanAt === null ? game.addedAt : new Date(Number(game.firstPlanAt)),
     promotedAt: game.promotedAt,
     hltbMain: game.hltbMain,
     hltbMainExtras: game.hltbMainExtras,

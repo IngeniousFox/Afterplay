@@ -271,7 +271,7 @@ export const GameDetailScreen = (): React.JSX.Element => {
             deja preparado, sin fechas ni horas. Lo que sí importa de él es lo
             de más abajo — cuánto dura, qué opinan, de qué va. */}
         {detail.planned ? (
-          <PlanBanner addedAt={detail.addedAt} />
+          <PlanBanner addedAt={detail.firstPlannedAt ?? detail.addedAt} />
         ) : (
           <>
             <MetricsRow game={detail} />

@@ -289,6 +289,76 @@ test.describe('Plan to play — promocionar', () => {
   });
 });
 
+test('un Unplayed comprado vuelve al Plan desde su ficha; uno jugado no ofrece el gesto', async () => {
+  const originalAddedAt = new Date('2024-04-10T12:00:00.000Z');
+  const {
+    app,
+    window: page,
+    sandbox,
+  } = await launchAfterplay({
+    games: [
+      { title: 'E2E Nunca jugado', addedAt: originalAddedAt, releaseYear: 2020 },
+      {
+        title: 'E2E Ya jugado',
+        releaseYear: 2020,
+        playthroughs: [{ events: [{ type: 'started', at: new Date('2026-01-01T10:00:00Z') }] }],
+      },
+    ],
+  });
+  try {
+    const ids = await page.evaluate(async () => {
+      const games = await globalThis.api.games.getAll();
+      return {
+        unplayed: games.find((game) => game.title === 'E2E Nunca jugado')?.id,
+        played: games.find((game) => game.title === 'E2E Ya jugado')?.id,
+      };
+    });
+    if (!ids.unplayed || !ids.played) throw new Error('Faltan juegos del fixture');
+
+    await goTo(page, `/games/${ids.played}`);
+    await expect(page.getByRole('button', { name: 'Move to Plan' })).toHaveCount(0);
+
+    await page.evaluate(async (gameId) => {
+      await globalThis.api.spend.add({
+        gameId,
+        type: 'purchase',
+        amount: 19.99,
+        occurredAt: new Date('2025-02-01T00:00:00Z'),
+        datePrecision: 'day',
+        note: null,
+      });
+    }, ids.unplayed);
+    await goTo(page, `/games/${ids.unplayed}`);
+    const firstPlanAt = Date.now();
+    await page.getByRole('button', { name: 'Move to Plan' }).click();
+    await page.waitForFunction((id) => globalThis.location.hash === `#/plan/${id}`, ids.unplayed);
+    await expect(page.getByText('E2E Nunca jugado', { exact: true }).first()).toBeVisible();
+
+    const result = await page.evaluate(async (gameId) => {
+      const [detail, planned, library] = await Promise.all([
+        globalThis.api.games.getById(gameId),
+        globalThis.api.games.getPlanned(),
+        globalThis.api.games.getAll(),
+      ]);
+      return {
+        detail,
+        plannedAt: planned.find((game) => game.id === gameId)?.addedAt,
+        stillInLibrary: library.some((game) => game.id === gameId),
+      };
+    }, ids.unplayed);
+    if (!result.detail || !result.plannedAt) throw new Error('El juego no llegó al Plan');
+    expect(result.detail.addedAt).toEqual(originalAddedAt);
+    expect(result.detail.spendHistory.map((spend) => spend.type)).toEqual(['purchase']);
+    expect(result.detail.stateHistory.map((event) => event.type)).toEqual(['plan_to_play']);
+    expect(result.plannedAt.getTime()).toBeGreaterThanOrEqual(firstPlanAt);
+    expect(result.plannedAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(result.stillInLibrary).toBe(false);
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});
+
 // ── AJUSTES ──────────────────────────────────────────────────────────────
 //
 // LO QUE BLINDA: que la sección de credenciales (CredentialsSection.tsx) no

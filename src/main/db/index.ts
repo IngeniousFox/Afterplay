@@ -1052,11 +1052,13 @@ export const runSyncCycle = async (): Promise<void> => {
     }
 
     const db = getDb();
+    // Subir primero, como hace sync() en el propio SDK: así los cambios
+    // locales quedan a salvo en Turso antes de aplicar páginas remotas.
     // pull() devuelve si de verdad ha aplicado cambios: sin eso, avisar en
     // cada tic de 60s invalidaría el caché entero de la ventana un minuto sí
     // y otro también sin que nada hubiera cambiado.
-    const pulled = await db.$client.pull();
     await db.$client.push();
+    const pulled = await db.$client.pull();
     lastSyncFailure = null;
 
     if (pulled) notifyPulledChanges();

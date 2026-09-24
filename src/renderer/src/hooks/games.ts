@@ -308,6 +308,12 @@ export const usePromotePlannedGame = (): UseMutationResult<
     [queryKeys.games.all, queryKeys.spend.all, queryKeys.stateEvents.all],
   );
 
+export const useMoveToPlan = (): UseMutationResult<GameRow, Error, number, unknown> =>
+  useInvalidatingMutation(
+    (gameId: number) => window.api.games.moveToPlan(gameId),
+    [queryKeys.games.all, queryKeys.stateEvents.all],
+  );
+
 export const useCreateGameWithDetails = (): UseMutationResult<
   GameRow,
   Error,

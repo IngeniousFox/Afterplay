@@ -23,17 +23,23 @@ import { SessionHistoryList } from '../components/library/detail/SessionHistoryL
 import { StatusCard } from '../components/library/detail/StatusCard';
 import { EditGameModal } from '../components/library/EditGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
-import { useGame } from '../hooks/games';
+import { useGame, useMoveToPlan } from '../hooks/games';
 import { lastIteration } from '../lib/iterations';
 import { revealClass, revealStyle } from '../lib/styles';
 
 type GameDetailProps = {
   gameId: number;
   onBack: () => void;
+  onMovedToPlan: () => void;
 };
 
-export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Element => {
+export const GameDetail = ({
+  gameId,
+  onBack,
+  onMovedToPlan,
+}: GameDetailProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
+  const moveToPlan = useMoveToPlan();
   const [editOpen, setEditOpen] = useState(false);
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -99,6 +105,16 @@ export const GameDetail = ({ gameId, onBack }: GameDetailProps): React.JSX.Eleme
                 onEdit={() => setEditOpen(true)}
                 onChangeCover={() => setChangeCoverOpen(true)}
                 onDelete={() => setDeleteOpen(true)}
+                movingToPlan={moveToPlan.isPending}
+                onMoveToPlan={() => {
+                  void moveToPlan
+                    .mutateAsync(game.id)
+                    .then(() => {
+                      toast.success('Moved to Plan to Play');
+                      onMovedToPlan();
+                    })
+                    .catch(() => toast.error("Couldn't move this game to Plan to Play."));
+                }}
               />
             </div>
 

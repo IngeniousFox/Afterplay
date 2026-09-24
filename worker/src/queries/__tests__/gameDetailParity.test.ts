@@ -321,3 +321,17 @@ describe('el inicio del playthrough en la ficha del móvil', () => {
     assert.equal(iteration.startedBySession, true);
   });
 });
+
+describe('la primera fecha del Plan en la ficha del móvil', () => {
+  it('conserva el alta original en Afterplay y fecha el Plan con su primer evento', async () => {
+    const addedAt = new Date('2024-04-10T12:00:00Z');
+    const gameId = await makeGame(db, { planned: true, addedAt });
+    const iterationId = await makeIteration(db, gameId);
+    await makeStateEvent(db, iterationId, 'plan_to_play', '2025-05-01T09:00:00Z');
+    await makeStateEvent(db, iterationId, 'plan_to_play', '2024-01-01T00:00:00Z');
+
+    const game = await detail(gameId);
+    assert.equal(game.addedAt, addedAt.getTime());
+    assert.equal(game.firstPlannedAt, new Date('2025-05-01T09:00:00Z').getTime());
+  });
+});

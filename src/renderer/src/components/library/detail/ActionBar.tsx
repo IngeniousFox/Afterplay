@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  BookmarkPlus,
   FolderOpen,
   ImagePlus,
   Pause,
@@ -27,6 +28,8 @@ type ActionBarProps = {
   onEdit: () => void;
   onChangeCover: () => void;
   onDelete: () => void;
+  movingToPlan: boolean;
+  onMoveToPlan: () => void;
 };
 
 // Nombre propio (no "outlineButtonClass"): ese nombre ya lo exporta
@@ -52,6 +55,8 @@ export const ActionBar = ({
   onEdit,
   onChangeCover,
   onDelete,
+  movingToPlan,
+  onMoveToPlan,
 }: ActionBarProps): React.JSX.Element => {
   const closeSession = useCloseSession();
   const startGameSession = useStartGameSession();
@@ -140,6 +145,18 @@ export const ActionBar = ({
           <Pencil size={16} />
           Edit
         </button>
+
+        {game.canMoveToPlan && (
+          <button
+            type="button"
+            onClick={onMoveToPlan}
+            disabled={movingToPlan}
+            className={`${editButtonClass} py-3 disabled:cursor-wait disabled:opacity-60`}
+          >
+            <BookmarkPlus size={16} />
+            {movingToPlan ? 'Moving…' : 'Move to Plan'}
+          </button>
+        )}
 
         <AddSpendPopover gameId={game.id} />
 

@@ -17,6 +17,7 @@ export const GameDetailRoute = (): React.JSX.Element => {
       // en ambas, así que se funden consigo mismos sin parpadeo — no hace
       // falta aislar nada con view-transition-name a mano.
       onBack={() => navigate('/games', { viewTransition: true })}
+      onMovedToPlan={() => navigate(`/plan/${id}`, { viewTransition: true })}
     />
   );
 };

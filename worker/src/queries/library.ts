@@ -459,6 +459,14 @@ export const findOwned = async (
 // el contrato no declara, o sea que la respuesta ya no era el objeto que dice
 // ser.
 export const listPlanned = async (db: TenantDb): Promise<PlannedGame[]> => {
+  const firstPlanAt = sql<number | null>`(
+    select se.occurredAt
+    from state_events se
+    join iterations it on it.id = se.iterationId
+    where it.gameId = games.id and se.type = 'plan_to_play'
+    order by se.id asc
+    limit 1
+  )`;
   const rows = await db
     .select({
       id: gamesTable.id,
@@ -471,6 +479,7 @@ export const listPlanned = async (db: TenantDb): Promise<PlannedGame[]> => {
       hltbMain: gamesTable.hltbMain,
       endless: gamesTable.endless,
       addedAt: gamesTable.addedAt,
+      firstPlanAt,
       planPinnedAt: gamesTable.planPinnedAt,
       ratingCritics: gamesTable.ratingCritics,
       ratingCriticsCount: gamesTable.ratingCriticsCount,
@@ -493,7 +502,9 @@ export const listPlanned = async (db: TenantDb): Promise<PlannedGame[]> => {
     genres: row.genres,
     hltbMain: row.hltbMain,
     endless: row.endless,
-    addedAt: row.addedAt.getTime(),
+    // Igual que la lista del escritorio: esperar en el Plan empieza con la
+    // primera entrada allí, no con el alta anterior en Library.
+    addedAt: row.firstPlanAt === null ? row.addedAt.getTime() : Number(row.firstPlanAt),
     // El nombre de la columna es planPinnedAt y el del contrato pinnedAt: es el
     // único campo que se renombra al salir, y la razón de que el `...row` de
     // antes filtrara los DOS al JSON.

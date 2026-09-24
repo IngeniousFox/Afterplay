@@ -20,6 +20,7 @@ import {
   setPlanPinned,
 } from '../db/queries/games/getPlannedGames';
 import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
+import { moveToPlan } from '../db/queries/games/moveToPlan';
 import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
 import { openPathResult } from '../lib/openPath';
@@ -147,6 +148,10 @@ export const registerGamesHandlers = (): void => {
     // el momento exacto en que su fuente de emuladores empieza a existir.
     void queueAchievementsRefreshForGame(game.id);
     return game;
+  });
+
+  handleDb('games:moveToPlan', async (_event, gameId: number) => {
+    return moveToPlan(gameId);
   });
 
   handleDb('games:update', async (_event, id: number, patch: UpdateGamePatch) => {

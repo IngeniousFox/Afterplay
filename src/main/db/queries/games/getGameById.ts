@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../..';
 import {
   endsPlaythrough,
@@ -21,6 +21,7 @@ import {
   stateEventsTable,
 } from '../../schema';
 import { resolveIterationHours } from './iterationHours';
+import { canMoveToPlanWhere } from './moveToPlan';
 
 // La ficha completa de un juego, y con ella el corazón de las derivaciones
 // (SPEC 4.4): aquí es donde el log de eventos se convierte en las fechas, el
@@ -232,6 +233,15 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   const isLive = sessions.some((session) => session.endedAt === null);
   // Mismo filtro de 'plan_to_play' que arriba (solo historial, nunca estado).
   const latestStateEvent = latestRealStateEvent(stateEvents);
+  const canMoveToPlan = game.planned
+    ? false
+    : (
+        await db
+          .select({ id: gamesTable.id })
+          .from(gamesTable)
+          .where(and(eq(gamesTable.id, id), canMoveToPlanWhere(id)))
+          .limit(1)
+      ).length > 0;
 
   return {
     ...game,
@@ -243,5 +253,6 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
     stateHistory: stateEvents,
     spendHistory: spendEvents,
     iterations: iterationDetails,
+    canMoveToPlan,
   };
 };

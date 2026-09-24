@@ -33,6 +33,7 @@ export const gamesApi = {
     ipcRenderer.invoke('games:createPlanned', input),
   promote: (input: PromotePlannedGameInput): Promise<GameRow> =>
     ipcRenderer.invoke('games:promote', input),
+  moveToPlan: (gameId: number): Promise<GameRow> => ipcRenderer.invoke('games:moveToPlan', gameId),
   getById: (id: number): Promise<GameDetail | null> => ipcRenderer.invoke('games:getById', id),
   createWithDetails: (input: CreateGameWithDetailsInput): Promise<GameRow> =>
     ipcRenderer.invoke('games:createWithDetails', input),

@@ -878,6 +878,7 @@ export type IterationDetail = Iteration & {
 };
 
 export type GameDetail = GameRow & {
+  canMoveToPlan: boolean;
   totalHours: number;
   currentState: StateEvent['type'] | null;
   isLive: boolean;

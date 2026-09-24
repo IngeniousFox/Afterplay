@@ -308,10 +308,17 @@ export const getGameDetail = async (db: TenantDb, id: number): Promise<GameDetai
   const liveSession =
     sessions.find((session) => session.endedAt === null && isSessionLive(session, now)) ?? null;
   const latestStateEvent = latestRealStateEvent(stateEvents);
+  const firstPlanEvent = stateEvents
+    .filter((event) => event.type === 'plan_to_play')
+    .reduce<(typeof stateEvents)[number] | null>(
+      (first, event) => (first === null || event.id < first.id ? event : first),
+      null,
+    );
 
   return {
     ...game,
     addedAt: ms(game.addedAt),
+    firstPlannedAt: firstPlanEvent ? ms(firstPlanEvent.occurredAt) : null,
     releaseDate: game.releaseDate ? ms(game.releaseDate) : null,
     totalHours,
     currentState: (latestStateEvent?.type as StateType) ?? null,
