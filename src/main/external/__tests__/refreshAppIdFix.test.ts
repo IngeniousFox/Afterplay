@@ -184,6 +184,23 @@ const filaDe = async (
 };
 
 describe('la pasada de biblioteca cuando el appid apuntaba a otro producto', () => {
+  it('respects an App ID fixed by the user', async () => {
+    const gameId = await makeGame(db, {
+      title: 'User matched game',
+      igdbId: 710,
+      steamAppId: 123456,
+      steamAppIdManual: true,
+    });
+    fixes = new Map([[710, 999999]]);
+
+    const done = waitForDone();
+    await startExternalRefresh('all');
+    await done;
+
+    assert.equal((await filaDe(gameId)).steamAppId, 123456);
+    assert.deepEqual(queued, []);
+  });
+
   it('corrige el appid, tira lo del producto viejo y re-encola sus logros', async () => {
     const remake = await makeGame(db, {
       title: 'Trails in the Sky 2nd Chapter',
@@ -239,6 +256,20 @@ describe('la pasada de biblioteca cuando el appid apuntaba a otro producto', () 
 // arreglarlo despues, porque el appid ya habia quedado bueno y la revision no
 // vuelve a encontrar nada que corregir.
 describe('el boton de refrescar las notas cuando el appid apuntaba a otro producto', () => {
+  it('does not replace a manually fixed App ID', async () => {
+    const gameId = await makeGame(db, {
+      igdbId: 811,
+      steamAppId: 123456,
+      steamAppIdManual: true,
+    });
+    fixForOne = 999999;
+
+    await refreshGameRatings(gameId);
+
+    assert.equal((await filaDe(gameId)).steamAppId, 123456);
+    assert.deepEqual(queued, []);
+  });
+
   it('corrige el appid, tira las reseñas del producto viejo y re-encola sus logros', async () => {
     const remake = await makeGame(db, {
       title: 'Trails in the Sky 2nd Chapter',

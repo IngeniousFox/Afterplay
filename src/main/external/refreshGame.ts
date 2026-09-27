@@ -1,6 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
-import { updateGame } from '../db/queries/games/updateGame';
 import { gamesTable } from '../db/schema';
 import { getHltbTimes } from '../hltb/api';
 import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
@@ -59,6 +58,7 @@ export const refreshGameEverything = async (
         releaseYear: gamesTable.releaseYear,
         steamGridDbId: gamesTable.steamGridDbId,
         steamAppId: gamesTable.steamAppId,
+        steamAppIdManual: gamesTable.steamAppIdManual,
       })
       .from(gamesTable)
       .where(eq(gamesTable.id, gameId))
@@ -138,7 +138,7 @@ export const refreshGameEverything = async (
     // entradas de Steam de su propia ficha y se corrige solo en esos dos casos
     // (external/steamAppIdFix.ts, que es de donde sale también el aviso por
     // consola).
-    game.steamAppId !== null || !detail
+    game.steamAppIdManual || game.steamAppId !== null || !detail
       ? Promise.resolve(undefined)
       : resolveAchievementsSteamAppId(
           detail.igdbId,
@@ -148,7 +148,7 @@ export const refreshGameEverything = async (
           console.warn('[refresh] no se pudo resolver el appid de Steam:', error);
           return undefined;
         }),
-    game.steamAppId === null || !detail
+    game.steamAppIdManual || game.steamAppId === null || !detail
       ? Promise.resolve(undefined)
       : findSteamAppIdFix({
           igdbId: detail.igdbId,
@@ -250,7 +250,22 @@ export const refreshGameEverything = async (
   }
 
   // ── 4. Escritura, con todo lo que se haya reunido ───────────────────────
-  await withDbAccess(async () => updateGame(gameId, patch));
+  if (Object.keys(patch).length > 0) {
+    await withDbAccess(async () =>
+      getDb()
+        .update(gamesTable)
+        .set(patch)
+        .where(
+          and(
+            eq(gamesTable.id, gameId),
+            eq(gamesTable.steamAppIdManual, game.steamAppIdManual),
+            game.steamAppId === null
+              ? isNull(gamesTable.steamAppId)
+              : eq(gamesTable.steamAppId, game.steamAppId),
+          ),
+        ),
+    );
+  }
 
   // ── 5. Los logros, al final y por su cola ───────────────────────────────
   // Después de escribir a propósito: si el appid acaba de aparecer, este es

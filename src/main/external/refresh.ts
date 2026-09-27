@@ -127,7 +127,13 @@ export type RefreshScope = 'plan' | 'all';
 // igdbId null = juego que no está en el catálogo de IGDB (existe en Steam y
 // ellos todavía no lo tienen). Entra igual en la pasada: lo de Steam sí se le
 // puede pedir, solo se salta la parte de IGDB.
-type TargetGame = { id: number; igdbId: number | null; title: string; steamAppId: number | null };
+type TargetGame = {
+  id: number;
+  igdbId: number | null;
+  title: string;
+  steamAppId: number | null;
+  steamAppIdManual: boolean;
+};
 
 const EMPTY_SUMMARY: ExternalRefreshSummary = {
   total: 0,
@@ -156,6 +162,7 @@ const selectTargets = async (scope: RefreshScope): Promise<TargetGame[]> =>
         igdbId: gamesTable.igdbId,
         title: gamesTable.title,
         steamAppId: gamesTable.steamAppId,
+        steamAppIdManual: gamesTable.steamAppIdManual,
       })
       .from(gamesTable);
     return scope === 'plan' ? query.where(eq(gamesTable.planned, true)) : query;
@@ -360,7 +367,9 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
     // Los appids que faltan, re-preguntados (ver el bloque de arriba). Va
     // dentro de la fase 'igdb' porque es lo mismo: peticiones de catálogo que
     // vuelan, sin nada que enseñar juego a juego.
-    const withoutAppId = inIgdb.filter((game) => game.steamAppId === null);
+    const withoutAppId = inIgdb.filter(
+      (game) => game.steamAppId === null && !game.steamAppIdManual,
+    );
     for (let start = 0; start < withoutAppId.length; start += APPID_BATCH_SIZE) {
       const batch = withoutAppId.slice(start, start + APPID_BATCH_SIZE);
       const appIdByIgdbId = await getSteamAppIds(batch.map((game) => game.igdbId));
@@ -376,7 +385,8 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
     // re-resuelve nada más: el guardado se comprueba contra las entradas de
     // Steam de su propia ficha.
     const withAppId = inIgdb.filter(
-      (game): game is typeof game & { steamAppId: number } => game.steamAppId !== null,
+      (game): game is typeof game & { steamAppId: number } =>
+        game.steamAppId !== null && !game.steamAppIdManual,
     );
     for (let start = 0; start < withAppId.length; start += APPID_BATCH_SIZE) {
       const batch = withAppId.slice(start, start + APPID_BATCH_SIZE);
@@ -529,6 +539,13 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
             ...(corrected ? { steamTags: null, steamPositive: null, steamNegative: null } : {}),
             ...(steam ?? {}),
           };
+          const sameSteamIdentity = and(
+            eq(gamesTable.id, game.id),
+            eq(gamesTable.steamAppIdManual, game.steamAppIdManual),
+            game.steamAppId === null
+              ? isNull(gamesTable.steamAppId)
+              : eq(gamesTable.steamAppId, game.steamAppId),
+          );
 
           if (!igdb) {
             // IGDB no devolvió el juego: ya no está en su catálogo (rarísimo,
@@ -544,7 +561,7 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
                 // esto nunca pisa nada: el juego tenía los tres a null.
                 ...(hltbByGameId.get(game.id) ?? {}),
               })
-              .where(eq(gamesTable.id, game.id));
+              .where(sameSteamIdentity);
             continue;
           }
 
@@ -563,7 +580,7 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
               // Los tiempos repescados de los huérfanos — ver la otra rama.
               ...(hltbByGameId.get(game.id) ?? {}),
             })
-            .where(eq(gamesTable.id, game.id));
+            .where(sameSteamIdentity);
         }
       }),
     );

@@ -1,6 +1,7 @@
 import {
   Cpu,
   Gamepad2,
+  Hash,
   History,
   Infinity as InfinityIcon,
   NotebookPen,
@@ -241,6 +242,13 @@ const AddGameModalBody = ({
   const endless = useWatch({ control, name: 'endless' });
   const isEmulated = useWatch({ control, name: 'isEmulated' });
   const playedBefore = useWatch({ control, name: 'playedBefore' });
+  const steamAppIdOverride = useWatch({ control, name: 'steamAppIdOverride' });
+  const typedAppId = steamAppIdOverride.trim();
+  const steamAppIdValid =
+    typedAppId === '' ||
+    (/^[1-9]\d*$/.test(typedAppId) &&
+      Number.isSafeInteger(Number(typedAppId)) &&
+      Number(typedAppId) <= 0xffffffff);
   const origin = useWatch({ control, name: 'origin' });
   // Leído aquí (no solo dentro de AddGameImagesField) porque el CoverPicker
   // se pinta como hermano del FormProvider, no dentro de él.
@@ -547,7 +555,7 @@ const AddGameModalBody = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selected || isSaving}
+            disabled={!selected || isSaving || !steamAppIdValid}
             className="[will-change:transform] flex items-center gap-2 rounded-[10px] px-5.5 py-2.5 text-[13.5px] font-bold transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(47,220,126,.32)]"
             style={
               selected
@@ -686,6 +694,7 @@ const AddGameModalBody = ({
                       setValue('coverUrl', null);
                       setValue('heroUrl', null);
                       setValue('steamGridDbId', null);
+                      setValue('steamAppIdOverride', '');
                     }
               }
             />
@@ -698,6 +707,45 @@ const AddGameModalBody = ({
                   setPickerTarget(target);
                 }}
               />
+              {!isPlan && !isPromote && (
+                <FormSection
+                  icon={Hash}
+                  title="Steam App ID"
+                  color={TEAL}
+                  className={revealClass}
+                  style={revealStyle(0)}
+                >
+                  <label htmlFor="add-game-steam-app-id" className={fieldLabelClass}>
+                    OVERRIDE STEAM APP ID
+                  </label>
+                  <Controller
+                    control={control}
+                    name="steamAppIdOverride"
+                    render={({ field }) => (
+                      <input
+                        {...field}
+                        id="add-game-steam-app-id"
+                        inputMode="numeric"
+                        placeholder={
+                          'steamAppId' in selected.source
+                            ? String(selected.source.steamAppId)
+                            : 'Detect automatically'
+                        }
+                        className={`${textInputClass} ${textInputFocusClass} font-mono tabular-nums`}
+                      />
+                    )}
+                  />
+                  <p className="mt-1.5 text-[12px] text-muted-foreground">
+                    Leave empty to use the detected ID. Enter one to keep your choice when
+                    refreshing.
+                  </p>
+                  {!steamAppIdValid && (
+                    <p className="mt-1.5 text-[12px] text-destructive">
+                      Enter a valid numeric App ID.
+                    </p>
+                  )}
+                </FormSection>
+              )}
               {/* Todo lo de playthrough/gasto/exe se pregunta al pasar el
                     juego a la biblioteca, no al planearlo — un Plan to Play
                     solo lleva el juego, sus imágenes y tus notas. */}

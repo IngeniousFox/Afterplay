@@ -57,6 +57,7 @@ export const gameColumns = {
   saveCustomPaths: gamesTable.saveCustomPaths,
   curiositiesGeneratedAt: gamesTable.curiositiesGeneratedAt,
   steamAppId: gamesTable.steamAppId,
+  steamAppIdManual: gamesTable.steamAppIdManual,
   steamAppIdCheckedAt: gamesTable.steamAppIdCheckedAt,
   achievementsSyncedAt: gamesTable.achievementsSyncedAt,
   achievementsUnlocksSyncedAt: gamesTable.achievementsUnlocksSyncedAt,

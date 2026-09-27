@@ -78,7 +78,7 @@ const tick = async (getActiveGameIds: () => number[]): Promise<void> => {
       // nada (storeUnlocks casa por apiName contra la tabla de logros): ese
       // caso lo cubre la sync completa del cierre de sesión, que es la que
       // trae el catálogo. El sondeo en vivo es solo para desbloqueos.
-      const fresh = await storeUnlocks(game.id, 'steam', unlocks, new Date());
+      const fresh = await storeUnlocks(game.id, 'steam', unlocks, new Date(), game.steamAppId);
       if (fresh.length === 0) continue;
 
       // Solo ASCII en los console.log, convencion de la casa.

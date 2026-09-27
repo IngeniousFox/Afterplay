@@ -31,6 +31,7 @@ import { scopeKeyOf } from '../../shared/memory/chapters';
 // Estado mutable por test: cada test reasigna la implementación que necesita.
 
 type AnyGame = { id: number; title: string };
+type SteamGame = import('../steam/queue').PendingAchievementsGame;
 
 let generateCuriositiesImpl: (game: AnyGame) => Promise<void> = async () => {};
 
@@ -44,7 +45,7 @@ let chapterForImpl: (snapshot: unknown, scope: ChapterScope) => unknown = () => 
 });
 
 let syncGameAchievementsImpl: (
-  game: AnyGame,
+  game: SteamGame,
 ) => Promise<{ catalogCount: number; unlockedCount: number }> = async () => ({
   catalogCount: 0,
   unlockedCount: 0,
@@ -73,7 +74,7 @@ mock.module('../memories/status', {
 
 mock.module('../steam/syncAchievements', {
   namedExports: {
-    syncGameAchievements: (game: AnyGame) => syncGameAchievementsImpl(game),
+    syncGameAchievements: (game: SteamGame) => syncGameAchievementsImpl(game),
   },
 });
 
@@ -619,4 +620,23 @@ test('steam: la reserva impide duplicar mientras está encolado o en vuelo', asy
   gate.resolve();
   await waitUntil(() => !steamQueue.isAchievementsQueueRunning(), 'cola steam vacía');
   assert.deepEqual(calls, [251, 252]);
+});
+
+test('steam: changing App ID during a sync queues the corrected ID next', async () => {
+  const gate = deferred();
+  const seen: number[] = [];
+  syncGameAchievementsImpl = async (game) => {
+    seen.push(game.steamAppId);
+    if (seen.length === 1) await gate.promise;
+    return { catalogCount: 0, unlockedCount: 0 };
+  };
+
+  const old = steamGame(261);
+  steamQueue.enqueueAchievements([old]);
+  await waitUntil(() => seen.length === 1, 'old App ID in flight');
+  steamQueue.enqueueAchievements([{ ...old, steamAppId: 999999 }]);
+  gate.resolve();
+  await waitUntil(() => seen.length === 2, 'corrected App ID synced');
+  await waitUntil(() => !steamQueue.isAchievementsQueueRunning(), 'sync complete');
+  assert.deepEqual(seen, [old.steamAppId, 999999]);
 });

@@ -39,6 +39,8 @@ export const gamesApi = {
     ipcRenderer.invoke('games:createWithDetails', input),
   update: (id: number, patch: UpdateGamePatch): Promise<GameRow | null> =>
     ipcRenderer.invoke('games:update', id, patch),
+  setSteamAppId: (id: number, appId: number): Promise<GameRow | null> =>
+    ipcRenderer.invoke('games:setSteamAppId', id, appId),
   delete: (id: number): Promise<boolean> => ipcRenderer.invoke('games:delete', id),
   resetEndlessState: (id: number): Promise<boolean> =>
     ipcRenderer.invoke('games:resetEndlessState', id),

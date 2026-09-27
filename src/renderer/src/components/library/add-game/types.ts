@@ -126,6 +126,7 @@ export type AddGameFormValues = {
   // nombre+año (comportamiento de siempre); puesto, se usa tal cual y el
   // CoverPicker busca fotos de ESE juego concreto.
   steamGridDbId: number | null;
+  steamAppIdOverride: string;
 };
 
 export const DEFAULT_FORM_VALUES: AddGameFormValues = {
@@ -150,4 +151,5 @@ export const DEFAULT_FORM_VALUES: AddGameFormValues = {
   coverUrl: null,
   heroUrl: null,
   steamGridDbId: null,
+  steamAppIdOverride: '',
 };

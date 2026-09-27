@@ -67,6 +67,7 @@ const queue = createClaimQueue<PendingAchievementsGame>({
     // lectura más reciente.
     const intent = intents.get(game.id) ?? game;
     inFlightId = game.id;
+    let completed = false;
     try {
       const result = await syncGameAchievements(intent, intent.notify === true);
       failedGames.delete(game.id);
@@ -76,8 +77,17 @@ const queue = createClaimQueue<PendingAchievementsGame>({
         catalogCount: result.catalogCount,
         unlockedCount: result.unlockedCount,
       });
-      intents.delete(game.id);
+      completed = true;
     } finally {
+      const latest = intents.get(game.id);
+      if (latest && latest.steamAppId !== intent.steamAppId) {
+        intents.delete(game.id);
+        // La reserva del juego se libera al salir de process(). Después se
+        // pide otra pasada con el ID corregido.
+        setTimeout(() => enqueueAchievements([latest]), 0);
+      } else if (completed) {
+        intents.delete(game.id);
+      }
       inFlightId = null;
     }
   },

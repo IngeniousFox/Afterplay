@@ -16,14 +16,27 @@ import { writeInitialPlaythrough } from './writeInitialPlaythrough';
 export const createGameWithDetails = async (
   input: CreateGameWithDetailsInput,
 ): Promise<GameRow> => {
-  const enrichment = await resolveGameEnrichment(input.source, {
+  const forcedAppId = input.steamAppIdOverride ?? null;
+  if (
+    forcedAppId !== null &&
+    (!Number.isSafeInteger(forcedAppId) || forcedAppId < 1 || forcedAppId > 0xffffffff)
+  ) {
+    throw new Error('Invalid Steam App ID.');
+  }
+  const source =
+    forcedAppId !== null && 'steamAppId' in input.source
+      ? { steamAppId: forcedAppId }
+      : input.source;
+  const enrichment = await resolveGameEnrichment(source, {
     coverUrl: input.coverUrl,
     heroUrl: input.heroUrl,
     steamGridDbId: input.steamGridDbId,
+    steamAppIdOverride: forcedAppId,
   });
 
   const gameInput: CreateGameInput = {
     ...enrichment,
+    steamAppIdManual: forcedAppId !== null,
     notes: input.gameNotes,
     executablePath: input.executablePath,
     installDirectory: input.installDirectory,

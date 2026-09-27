@@ -1,9 +1,11 @@
-import { Folder, HardDrive, Tag } from 'lucide-react';
+import { Folder, HardDrive, Hash, Pencil, Tag } from 'lucide-react';
+import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatBytes } from '../../../lib/format';
 import { formatRelease } from '../../../lib/releaseDate';
 import { InfoChip } from './InfoChip';
+import { SteamAppIdEditor } from './SteamAppIdEditor';
 
 type DetailsCardProps = {
   game: GameDetail;
@@ -36,6 +38,7 @@ export const Cell = ({
 // corta feo para ser píldoras, y la carpeta de instalación gana bloque
 // propio con su tamaño — es lo único aquí que es una ruta larga de verdad.
 export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
+  const [editingSteamId, setEditingSteamId] = useState(false);
   const { data: timeFormat = '24h' } = useTimeFormat();
   const replays = Math.max(0, game.iterations.length - 1);
   const replaysLabel = replays === 0 ? 'Never' : `${replays} ${replays === 1 ? 'time' : 'times'}`;
@@ -73,6 +76,24 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
             <Cell label="LAST PLAYED" value={recentActivity} />
           </>
         )}
+      </div>
+
+      <div className="mt-4 border-t border-white/5 pt-3.5">
+        <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+          STEAM APP ID
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditingSteamId(true)}
+          aria-label="Edit Steam App ID"
+          className="flex min-h-10 w-full items-center gap-2 rounded-[9px] border border-border bg-white/[0.02] px-2.5 py-2 text-left transition-colors hover:border-primary/35 hover:bg-white/[0.05] focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <Hash size={13} className="flex-none text-muted-foreground" />
+          <span className="min-w-0 flex-1 font-mono text-[12px] text-foreground tabular-nums">
+            {game.steamAppId ?? 'Not set'}
+          </span>
+          <Pencil size={12} className="flex-none text-muted-foreground" />
+        </button>
       </div>
 
       {game.genres && game.genres.length > 0 && (
@@ -147,6 +168,7 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
           </div>
         </div>
       )}
+      {editingSteamId && <SteamAppIdEditor game={game} onClose={() => setEditingSteamId(false)} />}
     </div>
   );
 };

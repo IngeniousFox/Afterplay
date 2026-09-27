@@ -35,7 +35,13 @@ export const runSteamAppIdBackfill = async (): Promise<void> => {
       getDb()
         .select({ id: gamesTable.id, igdbId: gamesTable.igdbId })
         .from(gamesTable)
-        .where(and(isNull(gamesTable.steamAppIdCheckedAt), isNotNull(gamesTable.igdbId))),
+        .where(
+          and(
+            isNull(gamesTable.steamAppIdCheckedAt),
+            isNotNull(gamesTable.igdbId),
+            eq(gamesTable.steamAppIdManual, false),
+          ),
+        ),
     );
     if (pending.length === 0) return;
 
@@ -62,7 +68,7 @@ export const runSteamAppIdBackfill = async (): Promise<void> => {
                 steamAppId: appIds.get(game.igdbId) ?? null,
                 steamAppIdCheckedAt: checkedAt,
               })
-              .where(eq(gamesTable.id, game.id));
+              .where(and(eq(gamesTable.id, game.id), eq(gamesTable.steamAppIdManual, false)));
           }
         }),
       );

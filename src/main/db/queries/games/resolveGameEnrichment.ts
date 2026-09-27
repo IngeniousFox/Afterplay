@@ -19,6 +19,7 @@ export type GameEnrichmentOverrides = {
   // null = buscar el id en SteamGridDB por nombre+año, como siempre. Puesto
   // a mano = usar ESE id directo, sin sgdbSearch — el usuario ya lo tecleó.
   steamGridDbId: number | null;
+  steamAppIdOverride?: number | null;
 };
 
 export type GameEnrichment = {
@@ -190,16 +191,18 @@ export const resolveGameEnrichment = async (
           console.warn('[sgdb] sin id de SteamGridDB para este alta (sigo sin él):', error);
           return null;
         }),
-    resolveAchievementsSteamAppId(
-      detail.igdbId,
-      detail.parentIgdbId,
-      detail.directSteamAppId,
-    ).catch((error) => {
-      // El appid es un extra para los logros, no un requisito del alta: si
-      // esto falla, el juego se da de alta igual y el backfill lo recogerá.
-      console.warn('[steam] fallo resolviendo el appid en el alta (sigo sin el):', error);
-      return null;
-    }),
+    overrides.steamAppIdOverride != null
+      ? Promise.resolve(overrides.steamAppIdOverride)
+      : resolveAchievementsSteamAppId(
+          detail.igdbId,
+          detail.parentIgdbId,
+          detail.directSteamAppId,
+        ).catch((error) => {
+          // El appid es un extra para los logros, no un requisito del alta: si
+          // esto falla, el juego se da de alta igual y el backfill lo recogerá.
+          console.warn('[steam] fallo resolviendo el appid en el alta (sigo sin el):', error);
+          return null;
+        }),
   ]);
 
   return {

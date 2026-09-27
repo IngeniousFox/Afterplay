@@ -1,6 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
-import { updateGame } from '../db/queries/games/updateGame';
 import { gamesTable } from '../db/schema';
 import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
 import type { GameRatings, RatingsRefreshResult } from '../igdb/types';
@@ -42,6 +41,7 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
         title: gamesTable.title,
         igdbId: gamesTable.igdbId,
         steamAppId: gamesTable.steamAppId,
+        steamAppIdManual: gamesTable.steamAppIdManual,
       })
       .from(gamesTable)
       .where(eq(gamesTable.id, gameId))
@@ -113,7 +113,7 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
   // dos rutas de refresco (refresh.ts y refreshGame.ts, con el mismo helper).
   let appId = game.steamAppId;
   let correctedAppId = false;
-  if (detail) {
+  if (detail && !game.steamAppIdManual) {
     const igdbId = detail.igdbId;
     if (appId === null) {
       appId = await resolveAchievementsSteamAppId(
@@ -161,7 +161,20 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
   // entonces la card de Details sigue enseñando las del producto viejo.
 
   if (Object.keys(patch).length > 0) {
-    await withDbAccess(async () => updateGame(gameId, patch));
+    await withDbAccess(async () =>
+      getDb()
+        .update(gamesTable)
+        .set(patch)
+        .where(
+          and(
+            eq(gamesTable.id, gameId),
+            eq(gamesTable.steamAppIdManual, game.steamAppIdManual),
+            game.steamAppId === null
+              ? isNull(gamesTable.steamAppId)
+              : eq(gamesTable.steamAppId, game.steamAppId),
+          ),
+        ),
+    );
   }
 
   // Y si el appid ha CAMBIADO DE PRODUCTO, sus logros también son de otro

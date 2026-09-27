@@ -123,6 +123,7 @@ export const storeUnlocks = async (
   // Para los desbloqueos sin fecha propia (Steam la perdió, o el crack no la
   // guardó): sí lo tienes, y perderlo sería peor que fecharlo hoy.
   fallbackDate: Date,
+  expectedAppId?: number,
 ): Promise<AchievementToast[]> => {
   if (unlocks.length === 0) return [];
 
@@ -145,6 +146,14 @@ export const storeUnlocks = async (
 
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
+      if (expectedAppId !== undefined) {
+        const [current] = await tx
+          .select({ steamAppId: gamesTable.steamAppId })
+          .from(gamesTable)
+          .where(eq(gamesTable.id, gameId))
+          .limit(1);
+        if (current?.steamAppId !== expectedAppId) return;
+      }
       // Qué desbloqueos YA constaban de este juego (de cualquier fuente) — la
       // foto de "antes" contra la que se decide qué es nuevo, si el instante
       // huele a rescate y si la fecha guardada vale más que la que entra. Se
@@ -362,7 +371,7 @@ export const applyEmuUnlocksForGame = async (
   const emu = readEmuUnlocksForGame(game.steamAppId, game.executablePath);
   if (emu.unlocks.length === 0) return { unlockedCount: 0, fresh: [] };
 
-  const fresh = await storeUnlocks(game.id, 'emu', emu.unlocks, fallbackDate);
+  const fresh = await storeUnlocks(game.id, 'emu', emu.unlocks, fallbackDate, game.steamAppId);
   return { unlockedCount: emu.unlocks.length, fresh };
 };
 
@@ -417,6 +426,12 @@ const fillHiddenDescriptions = async (
 
   await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
+      const [current] = await tx
+        .select({ steamAppId: gamesTable.steamAppId })
+        .from(gamesTable)
+        .where(eq(gamesTable.id, gameId))
+        .limit(1);
+      if (current?.steamAppId !== appId) return false;
       for (const row of filled) {
         await tx
           .update(achievementsTable)
@@ -425,6 +440,7 @@ const fillHiddenDescriptions = async (
             and(eq(achievementsTable.gameId, gameId), eq(achievementsTable.apiName, row.apiName)),
           );
       }
+      return true;
     }),
   );
 
@@ -495,8 +511,14 @@ export const syncGameAchievements = async (
     return { catalogCount: 0, unlockedCount: 0, unlocksKnown: false };
   }
 
-  await withDbAccess(async () =>
+  const catalogStored = await withDbAccess(async () =>
     getDb().transaction(async (tx) => {
+      const [current] = await tx
+        .select({ steamAppId: gamesTable.steamAppId })
+        .from(gamesTable)
+        .where(eq(gamesTable.id, gameId))
+        .limit(1);
+      if (current?.steamAppId !== appId) return false;
       for (const definition of definitions) {
         const values = {
           gameId,
@@ -554,8 +576,10 @@ export const syncGameAchievements = async (
         .update(gamesTable)
         .set({ achievementsSyncedAt: syncedAt })
         .where(eq(gamesTable.id, gameId));
+      return true;
     }),
   );
+  if (!catalogStored) return { catalogCount: 0, unlockedCount: 0, unlocksKnown: false };
 
   if (definitions.length === 0) {
     return { catalogCount: 0, unlockedCount: 0, unlocksKnown: false };
@@ -601,13 +625,13 @@ export const syncGameAchievements = async (
     };
   }
 
-  fresh.push(...(await storeUnlocks(gameId, 'steam', unlocks, syncedAt)));
+  fresh.push(...(await storeUnlocks(gameId, 'steam', unlocks, syncedAt, appId)));
 
   await withDbAccess(async () =>
     getDb()
       .update(gamesTable)
       .set({ achievementsUnlocksSyncedAt: syncedAt })
-      .where(eq(gamesTable.id, gameId)),
+      .where(and(eq(gamesTable.id, gameId), eq(gamesTable.steamAppId, appId))),
   );
 
   if (notify) toastFresh(game, fresh);

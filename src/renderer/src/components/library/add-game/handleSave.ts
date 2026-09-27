@@ -73,6 +73,9 @@ export const buildGameDetails = (
     coverUrl: values.coverUrl,
     heroUrl: values.heroUrl,
     steamGridDbId: values.steamGridDbId,
+    steamAppIdOverride: values.steamAppIdOverride.trim()
+      ? Number(values.steamAppIdOverride.trim())
+      : null,
   };
 };
 

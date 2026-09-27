@@ -152,6 +152,8 @@ export const gamesTable = sqliteTable('games', {
   // de consola emulados, por ejemplo). Sin UNIQUE a propósito: dos fichas de
   // IGDB (juego y edición) pueden apuntar al mismo appid.
   steamAppId: int(),
+  // Si se fijó a mano, IGDB no debe sustituirlo en los refrescos automáticos.
+  steamAppIdManual: int({ mode: 'boolean' }).notNull().default(false),
   // Cuándo se le preguntó a IGDB por el appid, haya salido o no — misma
   // convención que curiositiesGeneratedAt: null = pendiente (el backfill lo
   // reintentará), con fecha = preguntado, aunque la respuesta fuera "no está

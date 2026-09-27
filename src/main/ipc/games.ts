@@ -23,8 +23,10 @@ import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
 import { moveToPlan } from '../db/queries/games/moveToPlan';
 import { resetEndlessState } from '../db/queries/games/resetEndlessState';
 import { updateGame } from '../db/queries/games/updateGame';
+import { setSteamAppId } from '../db/queries/games/setSteamAppId';
 import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
+import { notifyAchievementsActivity } from '../steam/notify';
 import { warmImageCache, warmSteamData } from '../external/warmNewGame';
 
 // warmImageCache y warmSteamData viven en external/warmNewGame.ts desde que
@@ -155,6 +157,9 @@ export const registerGamesHandlers = (): void => {
   });
 
   handleDb('games:update', async (_event, id: number, patch: UpdateGamePatch) => {
+    if ('steamAppId' in patch || 'steamAppIdManual' in patch) {
+      throw new Error('Use the Steam App ID editor.');
+    }
     const game = await updateGame(id, patch);
     if (game) warmImageCache(game);
 
@@ -167,6 +172,15 @@ export const registerGamesHandlers = (): void => {
     if (game && ('installDirectory' in patch || 'executablePath' in patch)) {
       void queueAchievementsRefreshForGame(id);
     }
+    return game;
+  });
+
+  handleDb('games:setSteamAppId', async (_event, id: number, appId: number) => {
+    const game = await setSteamAppId(id, appId);
+    if (!game) return null;
+    notifyAchievementsActivity({ kind: 'synced', gameId: id, catalogCount: 0, unlockedCount: 0 });
+    warmSteamData(game);
+    void queueAchievementsRefreshForGame(id, { notify: false });
     return game;
   });
 

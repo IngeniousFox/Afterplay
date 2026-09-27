@@ -1,6 +1,7 @@
 import type { GameRow } from '../../shared/types';
-import { withDbAccess } from '../db';
-import { updateGame } from '../db/queries/games/updateGame';
+import { and, eq } from 'drizzle-orm';
+import { getDb, withDbAccess } from '../db';
+import { gamesTable } from '../db/schema';
 import { getSteamGameData } from './steamData';
 import { cacheImage } from '../images/cache';
 
@@ -40,12 +41,16 @@ export const warmImageCache = (game: Pick<GameRow, 'coverUrl' | 'heroUrl'>): voi
 // lotes lo recogerá — y mientras tanto el juego se queda sin chips, que es
 // exactamente lo mismo que le pasa a cualquier juego de consola.
 export const warmSteamData = (game: Pick<GameRow, 'id' | 'steamAppId'>): void => {
-  if (game.steamAppId === null) return;
-  void getSteamGameData(game.steamAppId)
+  const appId = game.steamAppId;
+  if (appId === null) return;
+  void getSteamGameData(appId)
     .then(async (data) => {
       if (!data) return;
       await withDbAccess(async () =>
-        updateGame(game.id, { ...data, steamSpyCheckedAt: new Date() }),
+        getDb()
+          .update(gamesTable)
+          .set({ ...data, steamSpyCheckedAt: new Date() })
+          .where(and(eq(gamesTable.id, game.id), eq(gamesTable.steamAppId, appId))),
       );
     })
     .catch((error) => {

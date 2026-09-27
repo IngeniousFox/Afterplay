@@ -193,6 +193,8 @@ export type CreateGameWithDetailsInput = {
   // se usa ESE id tal cual, sin buscar — para cuando el auto-match falla o
   // el usuario ya sabe cuál es el juego correcto en SteamGridDB.
   steamGridDbId: number | null;
+  // null/omitido: usar el App ID detectado. Número: fijar ese ID manualmente.
+  steamAppIdOverride?: number | null;
   // Carpeta de instalación + su tamaño ya calculado (ver dialog:pickDirectory)
   // — null si no se eligió ninguna al añadir el juego.
   installDirectory: string | null;
