@@ -8,6 +8,7 @@ import {
   setMachineId,
 } from './machine';
 import * as r2 from './r2';
+import { getConfigValue } from '../config/store';
 
 // Identidad de esta máquina frente al bucket (PARTIDAS-GUARDADAS.md §7.2 y
 // §9). Existe por un fallo real del diseño anterior:
@@ -39,8 +40,14 @@ export type MachineManifest = {
 // cuando esto dice que sí se ofrece mirar la nube, y siempre a petición.
 export const needsIdentityCheck = (): boolean => {
   const bucket = r2.getBucketName();
-  if (!bucket) return false;
-  return getMachineIdentity()?.reconciledBucket !== bucket;
+  const destination = r2.getDestinationId();
+  if (!bucket || !destination) return false;
+  const reconciled = getMachineIdentity()?.reconciledBucket;
+  // Los usuarios existentes guardaron solo el nombre del bucket. En R2 esa
+  // marca sigue siendo válida y la actualización no les fuerza una nueva
+  // reconciliación. Las marcas nuevas incluyen proveedor, servidor y bucket.
+  if (getConfigValue('saveStorageProvider') === 'cloudflare' && reconciled === bucket) return false;
+  return reconciled !== destination;
 };
 
 const describeSelf = (): MachineManifest => ({
@@ -130,10 +137,11 @@ export const checkIdentity = async (): Promise<IdentityCheck | null> => {
 // exacto que el prefijo por máquina existe para evitar.
 export const adoptMachine = async (machineId: string): Promise<void> => {
   const bucket = r2.getBucketName();
-  if (!bucket) throw new r2.R2NotConfiguredError();
+  const destination = r2.getDestinationId();
+  if (!bucket || !destination) throw new r2.R2NotConfiguredError();
 
   console.log(`[saves] adoptando la identidad ${machineId} en el bucket "${bucket}"...`);
-  setMachineId(machineId, bucket);
+  setMachineId(machineId, destination);
   // El manifiesto se reescribe con el nombre y el home ACTUALES: la carpeta
   // es la de antes, pero la cuenta de Windows puede haberse renombrado y lo
   // que vale para los redirects es lo de ahora.
@@ -145,11 +153,12 @@ export const adoptMachine = async (machineId: string): Promise<void> => {
 // la próxima instalación sí pueda reconocerlo.
 export const keepCurrentIdentity = async (): Promise<void> => {
   const bucket = r2.getBucketName();
-  if (!bucket) throw new r2.R2NotConfiguredError();
+  const destination = r2.getDestinationId();
+  if (!bucket || !destination) throw new r2.R2NotConfiguredError();
 
   console.log(`[saves] registrando esta maquina en el bucket "${bucket}"...`);
   await publishMachineManifest();
-  markIdentityReconciled(bucket);
+  markIdentityReconciled(destination);
   console.log('[saves] identidad reconciliada — este aviso no volvera a salir');
 };
 
@@ -186,7 +195,8 @@ export const ensureIdentityBeforeUpload = async (): Promise<void> => {
     // Bucket sin otras máquinas: no hay a quién confundirse con, se marca
     // visto para no volver a preguntar. Con otras presentes se deja sin marcar
     // para que Ajustes ofrezca la reconciliación explícita.
-    if (check.machines.length === 0) markIdentityReconciled(check.bucket);
+    const destination = r2.getDestinationId();
+    if (check.machines.length === 0 && destination) markIdentityReconciled(destination);
   } catch (error) {
     // Nunca puede tumbar un backup: sin identidad reconciliada se sube con
     // el id actual, que es exactamente lo que se hacía antes de todo esto.

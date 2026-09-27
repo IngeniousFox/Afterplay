@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CredentialsImportResult,
   CredentialsValues,
+  SaveStorageProvider,
   OverlayShortcutStatus,
   SyncFailureInfo,
   TimeFormat,
@@ -186,18 +187,26 @@ export const useCredentials = (): UseQueryResult<CredentialsValues, Error> =>
     staleTime: Infinity,
   });
 
+export const useSaveStorageProvider = (): UseQueryResult<SaveStorageProvider, Error> =>
+  useQuery({
+    queryKey: queryKeys.settings.saveStorageProvider,
+    queryFn: () => window.api.settings.getSaveStorageProvider(),
+    staleTime: Infinity,
+  });
+
 export const useSetCredentials = (): UseMutationResult<
   CredentialsValues,
   Error,
-  CredentialsValues,
+  { values: CredentialsValues; provider: SaveStorageProvider },
   unknown
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CredentialsValues) => window.api.settings.setCredentials(input),
-    onSuccess: (saved) => {
+    mutationFn: ({ values, provider }) => window.api.settings.setCredentials(values, provider),
+    onSuccess: (saved, { provider }) => {
       // El main devuelve los valores ya normalizados — se fijan directos.
       queryClient.setQueryData(queryKeys.settings.credentials, saved);
+      queryClient.setQueryData(queryKeys.settings.saveStorageProvider, provider);
     },
   });
 };

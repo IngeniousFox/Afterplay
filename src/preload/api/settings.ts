@@ -2,6 +2,8 @@ import { ipcRenderer } from 'electron';
 import type {
   CredentialsImportResult,
   CredentialsValues,
+  SaveStorageProvider,
+  StorageMigrationProgress,
   OverlayShortcutStatus,
   StartupKeysImport,
   SyncFailureInfo,
@@ -41,9 +43,21 @@ export const settingsApi = {
   getSyncFailure: (): Promise<SyncFailureInfo | null> =>
     ipcRenderer.invoke('settings:getSyncFailure'),
   getCredentials: (): Promise<CredentialsValues> => ipcRenderer.invoke('settings:getCredentials'),
+  getSaveStorageProvider: (): Promise<SaveStorageProvider> =>
+    ipcRenderer.invoke('settings:getSaveStorageProvider'),
   // Devuelve los valores ya guardados (normalizados: '' pasa a null).
-  setCredentials: (input: CredentialsValues): Promise<CredentialsValues> =>
-    ipcRenderer.invoke('settings:setCredentials', input),
+  setCredentials: (
+    input: CredentialsValues,
+    provider?: SaveStorageProvider,
+  ): Promise<CredentialsValues> => ipcRenderer.invoke('settings:setCredentials', input, provider),
+  onStorageMigrationProgress: (
+    callback: (progress: StorageMigrationProgress) => void,
+  ): (() => void) => {
+    const listener = (_event: unknown, payload: StorageMigrationProgress): void =>
+      callback(payload);
+    ipcRenderer.on('settings:storageMigrationProgress', listener);
+    return () => ipcRenderer.removeListener('settings:storageMigrationProgress', listener);
+  },
   // Llevarse las claves a otro PC (main/config/credentials.ts): exportar
   // escribe afterplay-keys.json en la carpeta elegida y devuelve su ruta;
   // importar lo lee del fichero elegido y FUSIONA con lo que ya hubiera.

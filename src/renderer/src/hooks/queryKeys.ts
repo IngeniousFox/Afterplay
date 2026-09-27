@@ -157,6 +157,7 @@ export const queryKeys = {
     backupIntervalHours: ['settings', 'backupIntervalHours'] as const,
     backupCount: ['settings', 'backupCount'] as const,
     credentials: ['settings', 'credentials'] as const,
+    saveStorageProvider: ['settings', 'saveStorageProvider'] as const,
     syncFailure: ['settings', 'syncFailure'] as const,
   },
   // La versión instalada — el pie de Ajustes. No cambia nunca en caliente

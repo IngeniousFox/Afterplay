@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import type { TimeFormat } from '../../shared/types';
+import type { SaveStorageProvider, TimeFormat } from '../../shared/types';
 import { writeFileAtomicSync } from '../lib/atomicWrite';
 
 // Preferencias de la app que NO son ajustes del sistema operativo (a
@@ -15,6 +15,9 @@ import { writeFileAtomicSync } from '../lib/atomicWrite';
 type WindowBounds = { x: number; y: number; width: number; height: number };
 
 type AppConfig = {
+  // Configuración local: los usuarios existentes carecen de este campo y
+  // siguen en Cloudflare R2 exactamente como antes.
+  saveStorageProvider: SaveStorageProvider;
   timeFormat: TimeFormat;
   windowBounds: WindowBounds | null;
   windowMaximized: boolean;
@@ -59,6 +62,7 @@ type AppConfig = {
 };
 
 const DEFAULT_CONFIG: AppConfig = {
+  saveStorageProvider: 'cloudflare',
   timeFormat: '24h',
   windowBounds: null,
   windowMaximized: false,
@@ -100,6 +104,9 @@ const readConfig = (): AppConfig => {
     // No existe todavía: primer arranque, sin ruido. El próximo
     // setConfigValue() lo crea.
     next = { ...DEFAULT_CONFIG };
+  }
+  if (next.saveStorageProvider !== 'cloudflare' && next.saveStorageProvider !== 's3') {
+    next.saveStorageProvider = 'cloudflare';
   }
   cached = next;
   return next;

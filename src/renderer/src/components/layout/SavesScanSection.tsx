@@ -189,7 +189,7 @@ const UnavailableNotice = ({
         : /* Sin "above": esta tarjeta vive en la pestaña "Game saves" y las
              claves en OTRA pestaña, así que mandar a mirar más arriba de esta
              misma columna era mandar a ninguna parte. */
-          `Scanning works, but nothing can be uploaded until you add your Cloudflare R2 keys in ${KEYS_TAB}.`}
+          `Scanning works, but nothing can be uploaded until you add your cloud save credentials in ${KEYS_TAB}.`}
     </span>
   </div>
 );

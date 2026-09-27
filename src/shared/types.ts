@@ -465,6 +465,15 @@ export type RadarActivityEvent = { discovered: number };
 // es parte del diseño ("nunca fallar en silencio").
 export type OverlayShortcutStatus = 'inactive' | 'ok' | 'conflict';
 
+export type SaveStorageProvider = 'cloudflare' | 's3';
+
+export type StorageMigrationProgress = {
+  phase: 'listing' | 'copying' | 'verifying';
+  completed: number;
+  total: number;
+  key: string | null;
+};
+
 // Credenciales de servicios externos, editables desde Ajustes y guardadas
 // cifradas en userData (ver main/config/credentials.ts) — la app funciona
 // sin ninguna (modo local, sin búsqueda IGDB); null = sin configurar.
@@ -481,6 +490,14 @@ export type CredentialsValues = {
   r2Bucket: string | null;
   r2AccessKeyId: string | null;
   r2SecretAccessKey: string | null;
+  // Otro servidor S3 compatible. Igual que R2, solo en credentials.json local;
+  // Turso no recibe endpoint, bucket ni claves.
+  s3Endpoint: string | null;
+  s3Region: string | null;
+  s3Bucket: string | null;
+  s3AccessKeyId: string | null;
+  s3SecretAccessKey: string | null;
+  s3AddressingMode: string | null;
   // Anthropic para las curiosidades de juegos del modo ambiente — una llamada
   // por juego EN LA VIDA (quedan guardadas en la DB y sincronizan por Turso).
   anthropicApiKey: string | null;

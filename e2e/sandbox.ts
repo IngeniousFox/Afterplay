@@ -12,7 +12,7 @@ import {
   sessionsTable,
   stateEventsTable,
 } from '../src/main/db/schema';
-import type { CredentialsValues } from '../src/shared/types';
+import type { CredentialsValues, SaveStorageProvider } from '../src/shared/types';
 import { credentialsForSandbox } from './credentials';
 import { DEFAULT_SEED } from './seed';
 
@@ -123,9 +123,20 @@ const PLACEHOLDER_CREDENTIALS: Partial<CredentialsValues> = {
   twitchClientSecret: 'e2e-fake-client-secret',
 };
 
-const credentialsFileFor = (withRemote: boolean): string => {
+const credentialsFileFor = (
+  withRemote: boolean,
+  overrides: Partial<CredentialsValues> = {},
+): string => {
+  if (!withRemote && (overrides.databaseUrl || overrides.databaseAuthToken)) {
+    throw new Error(
+      'An E2E sandbox cannot receive remote database credentials without withRemote.',
+    );
+  }
   const fromEnvTest = credentialsForSandbox(withRemote);
-  const values = Object.keys(fromEnvTest).length > 0 ? fromEnvTest : { ...PLACEHOLDER_CREDENTIALS };
+  const values = {
+    ...(Object.keys(fromEnvTest).length > 0 ? fromEnvTest : PLACEHOLDER_CREDENTIALS),
+    ...overrides,
+  };
   return JSON.stringify(
     {
       version: 1,
@@ -271,6 +282,8 @@ const seedDatabase = async (dbPath: string, games: SeedGame[]): Promise<void> =>
 
 export type SandboxOptions = {
   games?: SeedGame[];
+  credentials?: Partial<CredentialsValues>;
+  saveStorageProvider?: SaveStorageProvider;
   // SINCRONIZAR CON TURSO: apagado salvo que un test lo pida, y con motivo.
   // Una remota compartida le mete al sandbox juegos que el test no sembró (o
   // sea, tests que dejan de ser deterministas) y se lleva los de mentira
@@ -282,12 +295,20 @@ export type SandboxOptions = {
 export const createSandbox = async ({
   games = DEFAULT_SEED,
   withRemote = false,
+  credentials = {},
+  saveStorageProvider,
 }: SandboxOptions = {}): Promise<Sandbox> => {
   const userDataDir = mkdtempSync(join(tmpdir(), 'afterplay-e2e-'));
   const dbPath = join(userDataDir, 'Afterplay.db');
 
   await seedDatabase(dbPath, games);
-  writeFileSync(join(userDataDir, 'credentials.json'), credentialsFileFor(withRemote));
+  writeFileSync(join(userDataDir, 'credentials.json'), credentialsFileFor(withRemote, credentials));
+  if (saveStorageProvider) {
+    writeFileSync(
+      join(userDataDir, 'config.json'),
+      JSON.stringify({ saveStorageProvider }, null, 2),
+    );
+  }
 
   return {
     userDataDir,

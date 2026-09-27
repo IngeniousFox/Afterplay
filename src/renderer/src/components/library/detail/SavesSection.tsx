@@ -125,7 +125,7 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
                 blockedReason={
                   status?.binaryAvailable === false
                     ? 'Restoring needs the save-backup engine, which is missing right now.'
-                    : 'Add your R2 keys to restore these.'
+                    : 'Add your cloud save credentials to restore these.'
                 }
                 onRestore={setRestoring}
               />
@@ -197,7 +197,7 @@ const DisabledNotice = ({ status }: { status: SavesStatus | undefined }): React.
   <div className="text-[12px] leading-relaxed text-muted-foreground">
     {status && !status.binaryAvailable
       ? 'The save-backup engine isn’t available in this install — an antivirus may have quarantined it. Everything else works as usual.'
-      : 'Add your Cloudflare R2 keys in Settings → API & Sync to back up saves. Nothing is uploaded until then.'}
+      : 'Add cloud save credentials in Settings → API & Sync to back up saves. Nothing is uploaded until then.'}
   </div>
 );
 

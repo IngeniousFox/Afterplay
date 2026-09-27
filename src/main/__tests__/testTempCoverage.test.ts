@@ -73,9 +73,18 @@ it('every source mkdtemp family is covered by pretest cleanup or has an explicit
                 .replaceAll('\\', '/')
                 .endsWith('src/main/__tests__/testTempDirectories.test.ts') &&
               prefix === 'codex-temp-classifier-';
+            // La migración S3 crea un directorio SOLO mientras copia y en
+            // finally borra su único fichero y el directorio vacío. No es una
+            // fixture de test: la limpieza pretest no debe tocar una copia de
+            // producción que pueda estar ejecutándose a la vez.
+            const storageMigrationSelfCleaning =
+              path.replaceAll('\\', '/').endsWith('src/main/saves/migrateStorage.ts') &&
+              prefix === 'afterplay-storage-migrate-' &&
+              text.includes('await cleanTemp(dir, tempFile)') &&
+              text.includes('await rmdir(dir)');
             // The selector tests deliberately use an unrelated parent and
             // remove exactly that parent in after(); never put it in pretest.
-            if (!ownClassifierFixture) {
+            if (!ownClassifierFixture && !storageMigrationSelfCleaning) {
               assert.ok(
                 isTestTempDirectoryName(`${prefix}aB19zX`),
                 `${location}: mkdtemp prefix ${JSON.stringify(prefix)} is missing from the cleanup allowlist`,

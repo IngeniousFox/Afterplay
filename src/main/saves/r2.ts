@@ -6,9 +6,13 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { createWriteStream } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
+import { Upload } from '@aws-sdk/lib-storage';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
+import { getConfigValue } from '../config/store';
+import { storageTargetFromEnv, type StorageTarget } from './storageConfig';
 
 // Cloudflare R2 (PARTIDAS-GUARDADAS.md §9). API compatible con S3 —el mismo
 // SDK, solo cambia el endpoint— pero SIN coste de egress, que es justo lo
@@ -28,39 +32,73 @@ import type { Readable } from 'node:stream';
 // MÁQUINA: lo que la retención de ludusavi se lleva en local, se borra también
 // aquí — salvo lo que proteja el suelo de poda (pruneFloor en machine.ts).
 
-const R2_REGION = 'auto';
-
-let cached: { client: S3Client; bucket: string; fingerprint: string } | null = null;
-
-const credentials = (): {
-  accountId: string;
+let cached: {
+  client: S3Client;
   bucket: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-} | null => {
-  const accountId = process.env.R2_ACCOUNT_ID?.trim();
-  const bucket = process.env.R2_BUCKET?.trim();
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim();
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
-  if (!accountId || !bucket || !accessKeyId || !secretAccessKey) return null;
-  return { accountId, bucket, accessKeyId, secretAccessKey };
+  target: StorageTarget;
+  fingerprint: string;
+} | null = null;
+let migrationBarrier = false;
+let activeWrites = 0;
+
+const withActiveWrite = async <T>(work: () => Promise<T>): Promise<T> => {
+  if (migrationBarrier) throw new Error('Cloud saves are being migrated; retry the backup later.');
+  activeWrites++;
+  try {
+    return await work();
+  } finally {
+    activeWrites--;
+  }
 };
+
+export const beginStorageMigration = async (): Promise<() => void> => {
+  if (migrationBarrier) throw new Error('A storage migration is already running.');
+  migrationBarrier = true;
+  while (activeWrites > 0) await new Promise((resolve) => setTimeout(resolve, 50));
+  return () => {
+    migrationBarrier = false;
+  };
+};
+
+const activeTarget = (): StorageTarget | null =>
+  storageTargetFromEnv(getConfigValue('saveStorageProvider'));
 
 // La puerta de §9.2: sin las cuatro claves, la función entera queda
 // deshabilitada. No hay modo degradado "solo local" a propósito — un backup
 // que no sale de este PC no protege de nada de lo que esta función existe
 // para proteger.
-export const isR2Configured = (): boolean => credentials() !== null;
+export const isR2Configured = (): boolean => activeTarget() !== null;
 
 // Contra QUÉ bucket se reconcilió la identidad de esta máquina (ver
 // saves/identity.ts). Es una cadena, no un booleano, a propósito: cambiar de
 // bucket es cambiar de mundo — el de al lado puede tener otras máquinas y
 // otros backups, así que hay que volver a mirar.
-export const getBucketName = (): string | null => credentials()?.bucket ?? null;
+export const getBucketName = (): string | null => activeTarget()?.bucket ?? null;
 
-const getClient = (): { client: S3Client; bucket: string } | null => {
-  const creds = credentials();
-  if (!creds) {
+export const getDestinationId = (): string | null => activeTarget()?.identity ?? null;
+
+export const createStorageClient = (target: StorageTarget): S3Client =>
+  new S3Client({
+    region: target.region,
+    endpoint: target.endpoint,
+    credentials: {
+      accessKeyId: target.accessKeyId,
+      secretAccessKey: target.secretAccessKey,
+    },
+    ...(target.provider === 's3'
+      ? {
+          forcePathStyle: target.forcePathStyle,
+          // Muchos servidores compatibles no implementan checksums opcionales
+          // recientes del SDK; siguen verificándose los bytes en la migración.
+          requestChecksumCalculation: 'WHEN_REQUIRED',
+          responseChecksumValidation: 'WHEN_REQUIRED',
+        }
+      : {}),
+  });
+
+const getClient = (): { client: S3Client; bucket: string; target: StorageTarget } | null => {
+  const target = activeTarget();
+  if (!target) {
     cached = null;
     return null;
   }
@@ -68,16 +106,13 @@ const getClient = (): { client: S3Client; bucket: string } | null => {
   // Las credenciales se pueden cambiar en caliente desde Ajustes, así que el
   // cliente cacheado se tira si dejaron de ser las mismas — mismo problema
   // que ya tenían el token de Twitch y el cliente de SGDB.
-  const fingerprint = `${creds.accountId}|${creds.bucket}|${creds.accessKeyId}|${creds.secretAccessKey}`;
-  if (cached?.fingerprint === fingerprint) return { client: cached.client, bucket: cached.bucket };
+  const fingerprint = `${target.identity}|${target.region}|${target.forcePathStyle}|${target.accessKeyId}|${target.secretAccessKey}`;
+  if (cached?.fingerprint === fingerprint)
+    return { client: cached.client, bucket: cached.bucket, target: cached.target };
 
-  const client = new S3Client({
-    region: R2_REGION,
-    endpoint: `https://${creds.accountId}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey },
-  });
-  cached = { client, bucket: creds.bucket, fingerprint };
-  return { client, bucket: creds.bucket };
+  const client = createStorageClient(target);
+  cached = { client, bucket: target.bucket, target, fingerprint };
+  return { client, bucket: target.bucket, target };
 };
 
 export const resetR2Client = (): void => {
@@ -86,12 +121,12 @@ export const resetR2Client = (): void => {
 
 export class R2NotConfiguredError extends Error {
   constructor() {
-    super('Cloudflare R2 credentials are missing.');
+    super('Cloud save storage credentials are missing.');
     this.name = 'R2NotConfiguredError';
   }
 }
 
-const requireClient = (): { client: S3Client; bucket: string } => {
+const requireClient = (): { client: S3Client; bucket: string; target: StorageTarget } => {
   const client = getClient();
   if (!client) throw new R2NotConfiguredError();
   return client;
@@ -128,41 +163,61 @@ export const MACHINES_PREFIX = 'machines/';
 
 export const machineKey = (machineId: string): string => `${MACHINES_PREFIX}${machineId}.json`;
 
-export const uploadFile = async (key: string, filePath: string): Promise<number> => {
-  const { client, bucket } = requireClient();
-  const body = await readFile(filePath);
-  await client.send(
-    new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
-  );
-  return body.byteLength;
-};
+export const uploadFile = async (key: string, filePath: string): Promise<number> =>
+  withActiveWrite(async () => {
+    const { client, bucket, target } = requireClient();
+    if (target.provider === 's3') {
+      const size = (await stat(filePath)).size;
+      await new Upload({
+        client,
+        params: {
+          Bucket: bucket,
+          Key: key,
+          Body: createReadStream(filePath),
+          ContentLength: size,
+          ContentType: contentType(key),
+        },
+        queueSize: 2,
+        partSize: 16 * 1024 * 1024,
+        leavePartsOnError: false,
+      }).done();
+      return size;
+    }
+    const body = await readFile(filePath);
+    await client.send(
+      new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
+    );
+    return body.byteLength;
+  });
 
 // Subir un texto que solo existe en memoria. Lo pide el mapping.yaml del
 // espejo: se sube FUSIONADO con el que ya hubiera arriba (orchestrator.ts), o
 // sea que lo que va al bucket no es el fichero local sino algo compuesto, y
 // escribirlo en disco para reusar uploadFile sería pisar el índice que
 // mantiene ludusavi.
-export const uploadText = async (key: string, body: string): Promise<void> => {
-  const { client, bucket } = requireClient();
-  await client.send(
-    new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
-  );
-};
+export const uploadText = async (key: string, body: string): Promise<void> =>
+  withActiveWrite(async () => {
+    const { client, bucket } = requireClient();
+    await client.send(
+      new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
+    );
+  });
 
 // Subir/leer un objeto JSON pequeño sin pasar por disco — el registro de
 // máquinas es un puñado de bytes y no tiene por qué materializarse en un
 // fichero temporal solo para reusar uploadFile.
-export const uploadJson = async (key: string, value: unknown): Promise<void> => {
-  const { client, bucket } = requireClient();
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: `${JSON.stringify(value, null, 2)}\n`,
-      ContentType: 'application/json',
-    }),
-  );
-};
+export const uploadJson = async (key: string, value: unknown): Promise<void> =>
+  withActiveWrite(async () => {
+    const { client, bucket } = requireClient();
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: `${JSON.stringify(value, null, 2)}\n`,
+        ContentType: 'application/json',
+      }),
+    );
+  });
 
 // Contenido de un objeto pequeño como texto, sin pasar por disco (el
 // mapping.yaml de un juego son unos pocos KB). null si no está o falla: la
@@ -201,7 +256,7 @@ const contentType = (key: string): string =>
 export const downloadFile = async (key: string, destinationPath: string): Promise<void> => {
   const { client, bucket } = requireClient();
   const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  if (!response.Body) throw new Error(`R2 devolvió un objeto vacío: ${key}`);
+  if (!response.Body) throw new Error(`El almacenamiento devolvió un objeto vacío: ${key}`);
   // Por streaming y no en memoria: un backup grande (InZOI son 56 MB que
   // además no comprimen) no tiene por qué pasar entero por el heap.
   await pipeline(response.Body as Readable, createWriteStream(destinationPath));
@@ -231,29 +286,31 @@ export const listKeys = async (prefix: string): Promise<{ key: string; size: num
 
 export const deleteKeys = async (keys: string[]): Promise<void> => {
   if (keys.length === 0) return;
-  const { client, bucket } = requireClient();
-  // DeleteObjects acepta 1000 claves por llamada; con la retención de §9.1
-  // nunca se llega ni de lejos, pero trocear es una línea y evita un fallo
-  // sorpresa el día que alguien limpie un bucket entero.
-  for (let index = 0; index < keys.length; index += 1000) {
-    const response = await client.send(
-      new DeleteObjectsCommand({
-        Bucket: bucket,
-        Delete: { Objects: keys.slice(index, index + 1000).map((key) => ({ Key: key })) },
-      }),
-    );
-    // DeleteObjects responde HTTP 200 aunque claves concretas fallen: los
-    // fallos van en response.Errors, no en el status. Sin mirarlos, un borrado
-    // fallido pasaba por bueno y el llamador soltaba la fila del índice — el
-    // zip se quedaba en el bucket, ya sin índice: invisible, imposible de
-    // restaurar y cobrándose igual, justo el huérfano que el orden
-    // "borra-objeto-antes-que-índice" existe para evitar. Al lanzar, el
-    // llamador conserva la fila y lo reintenta en la próxima pasada.
-    if (response.Errors && response.Errors.length > 0) {
-      const first = response.Errors[0];
-      throw new Error(
-        `R2 no pudo borrar ${response.Errors.length} objeto(s): ${first.Key ?? '?'} (${first.Code ?? 'sin código'})`,
+  return withActiveWrite(async () => {
+    const { client, bucket } = requireClient();
+    // DeleteObjects acepta 1000 claves por llamada; con la retención de §9.1
+    // nunca se llega ni de lejos, pero trocear es una línea y evita un fallo
+    // sorpresa el día que alguien limpie un bucket entero.
+    for (let index = 0; index < keys.length; index += 1000) {
+      const response = await client.send(
+        new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: keys.slice(index, index + 1000).map((key) => ({ Key: key })) },
+        }),
       );
+      // DeleteObjects responde HTTP 200 aunque claves concretas fallen: los
+      // fallos van en response.Errors, no en el status. Sin mirarlos, un borrado
+      // fallido pasaba por bueno y el llamador soltaba la fila del índice — el
+      // zip se quedaba en el bucket, ya sin índice: invisible, imposible de
+      // restaurar y cobrándose igual, justo el huérfano que el orden
+      // "borra-objeto-antes-que-índice" existe para evitar. Al lanzar, el
+      // llamador conserva la fila y lo reintenta en la próxima pasada.
+      if (response.Errors && response.Errors.length > 0) {
+        const first = response.Errors[0];
+        throw new Error(
+          `No se pudieron borrar ${response.Errors.length} objeto(s): ${first.Key ?? '?'} (${first.Code ?? 'sin código'})`,
+        );
+      }
     }
-  }
+  });
 };

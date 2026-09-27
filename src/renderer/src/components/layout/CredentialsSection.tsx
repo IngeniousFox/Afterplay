@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Check,
   ChevronDown,
   Eye,
   EyeOff,
@@ -9,18 +10,25 @@ import {
   Save,
   Upload,
 } from 'lucide-react';
-import { useState } from 'react';
-import type { CredentialsValues } from '../../../../shared/types';
+import { Select } from '@base-ui/react/select';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  CredentialsValues,
+  SaveStorageProvider,
+  StorageMigrationProgress,
+} from '../../../../shared/types';
 import {
   useCredentials,
   useExportCredentials,
   useImportCredentials,
   useSetCredentials,
+  useSaveStorageProvider,
   useSyncFailure,
 } from '../../hooks/settings';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
-import { accentGradientStyle, expandClass } from '../../lib/styles';
+import { accentGradientStyle, expandClass, floatingPanelClass } from '../../lib/styles';
 import { AMBER, BLUE } from '../../lib/colors';
+import { cn } from '../../lib/utils';
 
 type CredentialsSectionProps = {
   // Primer arranque sin credenciales de IGDB: el grupo de IGDB nace
@@ -38,17 +46,51 @@ type FieldKey = keyof CredentialsValues;
 //
 // El nombre del servicio va en la cabecera del grupo, así que las etiquetas
 // de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
-type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'r2' | 'anthropic' | 'steam' | 'ra';
+type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'storage' | 'anthropic' | 'steam' | 'ra';
+
+type CredentialField = { key: FieldKey; label: string };
+
+const R2_FIELDS: CredentialField[] = [
+  { key: 'r2AccountId', label: 'ACCOUNT ID' },
+  { key: 'r2Bucket', label: 'BUCKET' },
+  { key: 'r2AccessKeyId', label: 'ACCESS KEY ID' },
+  { key: 'r2SecretAccessKey', label: 'SECRET ACCESS KEY' },
+];
+
+const S3_FIELDS: CredentialField[] = [
+  { key: 's3Endpoint', label: 'ENDPOINT URL' },
+  { key: 's3Region', label: 'REGION' },
+  { key: 's3Bucket', label: 'BUCKET' },
+  { key: 's3AccessKeyId', label: 'ACCESS KEY ID' },
+  { key: 's3SecretAccessKey', label: 'SECRET ACCESS KEY' },
+  { key: 's3AddressingMode', label: 'ADDRESSING' },
+];
+
+const S3_ADDRESSING_OPTIONS = [
+  { value: 'path', label: 'Path style' },
+  { value: 'virtual', label: 'Virtual host style' },
+];
+
+const storageReady = (creds: CredentialsValues, provider: SaveStorageProvider): boolean =>
+  provider === 'cloudflare'
+    ? Boolean(creds.r2AccountId && creds.r2Bucket && creds.r2AccessKeyId && creds.r2SecretAccessKey)
+    : Boolean(
+        creds.s3Endpoint &&
+        creds.s3Region &&
+        creds.s3Bucket &&
+        creds.s3AccessKeyId &&
+        creds.s3SecretAccessKey,
+      );
 
 type Service = {
   id: ServiceId;
   label: string;
   detail: string;
   where: string;
-  fields: { key: FieldKey; label: string }[];
+  fields: CredentialField[];
   // Un servicio solo está listo con TODAS sus claves — IGDB y Turso necesitan
   // las dos suyas, media configuración no sirve de nada.
-  isReady: (creds: CredentialsValues) => boolean;
+  isReady: (creds: CredentialsValues, provider: SaveStorageProvider) => boolean;
 };
 
 const SERVICES: Service[] = [
@@ -83,23 +125,14 @@ const SERVICES: Service[] = [
     isReady: (creds) => Boolean(creds.databaseUrl && creds.databaseAuthToken),
   },
   {
-    id: 'r2',
-    label: 'Cloudflare R2',
-    detail: 'Cloud save backups · optional',
+    id: 'storage',
+    label: 'Cloud saves',
+    detail: 'Cloudflare R2 · optional',
     where: 'dash.cloudflare.com → R2 → Manage API tokens',
-    fields: [
-      { key: 'r2AccountId', label: 'ACCOUNT ID' },
-      { key: 'r2Bucket', label: 'BUCKET' },
-      { key: 'r2AccessKeyId', label: 'ACCESS KEY ID' },
-      { key: 'r2SecretAccessKey', label: 'SECRET ACCESS KEY' },
-    ],
-    // Las cuatro o ninguna: sin bucket no hay dónde subir, sin secreto no
-    // hay forma de firmar. Media configuración solo daría errores por
-    // sesión, así que la función entera se queda apagada hasta tenerlo todo.
-    isReady: (creds) =>
-      Boolean(
-        creds.r2AccountId && creds.r2Bucket && creds.r2AccessKeyId && creds.r2SecretAccessKey,
-      ),
+    // Ambos juegos de campos viven en el borrador para que alternar el
+    // selector no borre credenciales del destino que no está a la vista.
+    fields: [...R2_FIELDS, ...S3_FIELDS],
+    isReady: storageReady,
   },
   {
     id: 'anthropic',
@@ -139,16 +172,29 @@ const SERVICES: Service[] = [
   },
 ];
 
-// Derivado de SERVICES y no escrito a mano: con cuatro servicios y nueve
-// claves, tres listas paralelas (borrador vacío, siembra y guardado) eran
-// tres sitios donde olvidarse de añadir la nueva. El cast es la contrapartida
-// de Object.fromEntries, que siempre devuelve un índice ancho.
+// Derivado de SERVICES y no escrito a mano: el borrador, la siembra y el
+// guardado deben incluir incluso las claves del destino que está oculto.
+// El cast es la contrapartida de Object.fromEntries, que devuelve un índice ancho.
 const FIELD_KEYS = SERVICES.flatMap((service) => service.fields.map((field) => field.key));
 
 const draftFrom = (read: (key: FieldKey) => string): Record<FieldKey, string> =>
   Object.fromEntries(FIELD_KEYS.map((key) => [key, read(key)])) as Record<FieldKey, string>;
 
 const EMPTY_DRAFT = draftFrom(() => '');
+
+const destinationKey = (provider: SaveStorageProvider, values: CredentialsValues): string =>
+  provider === 'cloudflare'
+    ? JSON.stringify([provider, values.r2AccountId?.trim(), values.r2Bucket?.trim()])
+    : JSON.stringify([
+        provider,
+        values.s3Endpoint?.trim().replace(/\/$/, '').toLowerCase(),
+        values.s3Bucket?.trim(),
+      ]);
+
+const destinationLabel = (provider: SaveStorageProvider, values: CredentialsValues): string =>
+  provider === 'cloudflare'
+    ? `Cloudflare R2 · ${values.r2Bucket ?? 'no bucket'}`
+    : `S3 · ${values.s3Endpoint ?? 'no server'} · ${values.s3Bucket ?? 'no bucket'}`;
 
 // Los tres botones del traslado son SECUNDARIOS: la acción principal de esta
 // sección sigue siendo Save keys (el único con el degradado de acento).
@@ -163,6 +209,7 @@ const transferButtonClass =
 // pliega es cada servicio, en acordeón.
 export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): React.JSX.Element => {
   const { data: creds } = useCredentials();
+  const { data: savedProvider } = useSaveStorageProvider();
   const { data: syncFailure } = useSyncFailure();
   const setCredentials = useSetCredentials();
   const exportCredentials = useExportCredentials();
@@ -174,6 +221,12 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
   const [openService, setOpenService] = useState<ServiceId | null>(spotlight ? 'igdb' : null);
   const [showValues, setShowValues] = useState(false);
   const [draft, setDraft] = useState<Record<FieldKey, string>>(EMPTY_DRAFT);
+  const [selectedProvider, setSelectedProvider] = useState<SaveStorageProvider>('cloudflare');
+  const [seededProvider, setSeededProvider] = useState(false);
+  if (savedProvider && !seededProvider) {
+    setSeededProvider(true);
+    setSelectedProvider(savedProvider);
+  }
   // Los valores guardados llegan async — se siembran en el borrador UNA vez
   // (ajustar-estado-durante-render, como EditNotesModal). Tras guardar, la
   // mutation fija la query con lo normalizado y el borrador ya coincide.
@@ -183,6 +236,19 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
     setDraft(draftFrom((key) => creds[key] ?? ''));
   }
   const [savedFlash, setSavedFlash] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<StorageMigrationProgress | null>(null);
+  const [pendingStorageChange, setPendingStorageChange] = useState<{
+    values: CredentialsValues;
+    provider: SaveStorageProvider;
+    from: string;
+    to: string;
+  } | null>(null);
+  const migrationPromptRef = useRef<HTMLDivElement>(null);
+  useEffect(() => window.api.settings.onStorageMigrationProgress(setMigrationProgress), []);
+  useEffect(() => {
+    if (pendingStorageChange && !setCredentials.isPending)
+      migrationPromptRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [pendingStorageChange, setCredentials.isPending]);
   // El resultado del traslado (exportar/importar), en su propia línea: son
   // dos gestos que terminan FUERA de la app —un fichero escrito, un fichero
   // leído— y sin decirlo no se ve absolutamente nada. El error se muestra
@@ -191,14 +257,41 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
   const [transferFlash, setTransferFlash] = useState<{ text: string; ok: boolean } | null>(null);
   const transferBusy = exportCredentials.isPending || importCredentials.isPending;
 
-  const handleSave = async (): Promise<void> => {
+  const saveValues = async (
+    values: CredentialsValues,
+    provider: SaveStorageProvider,
+  ): Promise<void> => {
     setSavedFlash(false);
-    await setCredentials.mutateAsync(
-      Object.fromEntries(
-        FIELD_KEYS.map((key) => [key, draft[key] || null]),
-      ) as unknown as CredentialsValues,
-    );
-    setSavedFlash(true);
+    setMigrationProgress(null);
+    try {
+      await setCredentials.mutateAsync({ values, provider });
+      setPendingStorageChange(null);
+      setSavedFlash(true);
+    } catch {
+      // La mutation pinta el error debajo. El proveedor anterior sigue activo.
+    }
+  };
+
+  const handleSave = async (): Promise<void> => {
+    const values = Object.fromEntries(
+      FIELD_KEYS.map((key) => [key, draft[key] || null]),
+    ) as CredentialsValues;
+    const oldProvider = savedProvider ?? 'cloudflare';
+    if (
+      creds &&
+      storageReady(creds, oldProvider) &&
+      storageReady(values, selectedProvider) &&
+      destinationKey(oldProvider, creds) !== destinationKey(selectedProvider, values)
+    ) {
+      setPendingStorageChange({
+        values,
+        provider: selectedProvider,
+        from: destinationLabel(oldProvider, creds),
+        to: destinationLabel(selectedProvider, values),
+      });
+      return;
+    }
+    await saveValues(values, selectedProvider);
   };
 
   const handleExport = async (): Promise<void> => {
@@ -262,27 +355,28 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             texto de la izquierda en lugar de exigir el suyo entero. */}
         {creds && (
           <div className="flex min-w-0 max-w-44 flex-wrap items-center justify-end gap-x-2.5 gap-y-1 pt-1">
-            {SERVICES.map((service) => ({ ...service, ready: service.isReady(creds) })).map(
-              (service) => (
+            {SERVICES.map((service) => ({
+              ...service,
+              ready: service.isReady(creds, savedProvider ?? 'cloudflare'),
+            })).map((service) => (
+              <span
+                key={service.id}
+                title={service.detail}
+                // whitespace-nowrap: cada etiqueta es una unidad
+                // ("Cloud saves" son dos palabras) — sin esto el texto
+                // se parte a mitad en vez de saltar la etiqueta entera.
+                className="flex items-center gap-1.5 whitespace-nowrap text-[10.5px] font-bold"
+                style={{ color: service.ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
+              >
                 <span
-                  key={service.id}
-                  title={service.detail}
-                  // whitespace-nowrap: cada etiqueta es una unidad
-                  // ("Cloudflare R2" son dos palabras) — sin esto el texto
-                  // se parte a mitad en vez de saltar la etiqueta entera.
-                  className="flex items-center gap-1.5 whitespace-nowrap text-[10.5px] font-bold"
-                  style={{ color: service.ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
-                >
-                  <span
-                    className="h-1.5 w-1.5 flex-none rounded-full"
-                    style={{
-                      background: service.ready ? '#2fdc7e' : 'rgba(255,255,255,.22)',
-                    }}
-                  />
-                  {service.label}
-                </span>
-              ),
-            )}
+                  className="h-1.5 w-1.5 flex-none rounded-full"
+                  style={{
+                    background: service.ready ? '#2fdc7e' : 'rgba(255,255,255,.22)',
+                  }}
+                />
+                {service.label}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -334,8 +428,14 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
         </div>
 
         {SERVICES.map((service) => {
-          const ready = creds ? service.isReady(creds) : false;
+          const ready = creds ? service.isReady(creds, savedProvider ?? 'cloudflare') : false;
           const isOpen = openService === service.id;
+          const fields =
+            service.id === 'storage'
+              ? selectedProvider === 'cloudflare'
+                ? R2_FIELDS
+                : S3_FIELDS
+              : service.fields;
           return (
             <div
               key={service.id}
@@ -357,7 +457,9 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                 />
                 <span className="text-[12.5px] font-semibold text-foreground">{service.label}</span>
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
-                  {service.detail}
+                  {service.id === 'storage'
+                    ? `${(savedProvider ?? 'cloudflare') === 'cloudflare' ? 'Cloudflare R2' : 'S3 compatible'} · backups`
+                    : service.detail}
                 </span>
                 <span
                   className="flex-none text-[10.5px] font-bold"
@@ -371,31 +473,150 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                 <div
                   className={`flex flex-col gap-2.5 border-t border-border px-2.75 pt-2.5 pb-3 ${expandClass}`}
                 >
-                  {service.fields.map((field) => (
-                    <div key={field.key}>
-                      <div className={fieldLabelClass}>{field.label}</div>
-                      <input
-                        type={showValues ? 'text' : 'password'}
-                        value={draft[field.key]}
-                        onChange={(event) => {
-                          setDraft((current) => ({
-                            ...current,
-                            [field.key]: event.target.value,
-                          }));
-                          // Antes savedFlash solo se apagaba al volver a
-                          // guardar: tocar OTRO campo después de guardar
-                          // uno (sin pulsar Save de nuevo) dejaba el "Saved
-                          // — applied immediately" puesto, dando a entender
-                          // que la clave sin guardar ya estaba activa.
-                          setSavedFlash(false);
-                        }}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}
-                      />
+                  {service.id === 'storage' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(['cloudflare', 's3'] as const).map((provider) => (
+                        <button
+                          key={provider}
+                          type="button"
+                          aria-pressed={selectedProvider === provider}
+                          onClick={() => {
+                            setSelectedProvider(provider);
+                            setPendingStorageChange(null);
+                            setSavedFlash(false);
+                          }}
+                          className={`rounded-[8px] border px-3 py-1.75 text-[12px] font-semibold transition-colors ${
+                            selectedProvider === provider
+                              ? 'border-primary/50 bg-primary/10 text-primary'
+                              : 'border-border bg-white/[0.02] text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {provider === 'cloudflare' ? 'Cloudflare R2' : 'S3 compatible'}
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                  <div className="text-[11px] text-muted-foreground">Get it at {service.where}</div>
+                  )}
+                  {service.id === 'storage' &&
+                    selectedProvider !== (savedProvider ?? 'cloudflare') && (
+                      <p className="text-[11px] text-amber-300">
+                        The current destination stays active until saved.
+                      </p>
+                    )}
+                  <div
+                    className={
+                      service.id === 'storage'
+                        ? 'grid grid-cols-1 gap-x-2.5 gap-y-2.5 min-[700px]:grid-cols-2'
+                        : 'flex flex-col gap-2.5'
+                    }
+                  >
+                    {fields.map((field) => (
+                      <div
+                        key={field.key}
+                        className={
+                          field.key === 's3Endpoint' || field.key === 's3AddressingMode'
+                            ? 'min-[700px]:col-span-2'
+                            : undefined
+                        }
+                      >
+                        {field.key === 's3AddressingMode' ? (
+                          <Select.Root
+                            items={S3_ADDRESSING_OPTIONS}
+                            value={draft.s3AddressingMode === 'virtual' ? 'virtual' : 'path'}
+                            onValueChange={(value) => {
+                              if (!value) return;
+                              setDraft((current) => ({ ...current, s3AddressingMode: value }));
+                              setPendingStorageChange(null);
+                              setSavedFlash(false);
+                            }}
+                          >
+                            <Select.Label className={fieldLabelClass}>ADDRESSING</Select.Label>
+                            <Select.Trigger
+                              className={cn(
+                                textInputClass,
+                                textInputFocusClass,
+                                'flex items-center justify-between text-left text-[12px]',
+                              )}
+                            >
+                              <Select.Value />
+                              <Select.Icon>
+                                <ChevronDown size={15} className="text-muted-foreground" />
+                              </Select.Icon>
+                            </Select.Trigger>
+                            <Select.Portal>
+                              <Select.Positioner
+                                alignItemWithTrigger={false}
+                                sideOffset={4}
+                                className="isolate z-60"
+                              >
+                                <Select.Popup
+                                  className={`w-(--anchor-width) rounded-[9px] border ${floatingPanelClass} p-1 outline-none`}
+                                >
+                                  <Select.List className="flex flex-col gap-0.5">
+                                    {S3_ADDRESSING_OPTIONS.map((option) => (
+                                      <Select.Item
+                                        key={option.value}
+                                        value={option.value}
+                                        className="flex cursor-default items-center justify-between rounded-[7px] px-2.75 py-2 text-[12px] text-foreground outline-none data-highlighted:bg-white/[0.07] data-selected:text-primary"
+                                      >
+                                        <Select.ItemText>{option.label}</Select.ItemText>
+                                        <Select.ItemIndicator>
+                                          <Check size={14} className="text-primary" />
+                                        </Select.ItemIndicator>
+                                      </Select.Item>
+                                    ))}
+                                  </Select.List>
+                                </Select.Popup>
+                              </Select.Positioner>
+                            </Select.Portal>
+                          </Select.Root>
+                        ) : (
+                          <>
+                            <div className={fieldLabelClass}>{field.label}</div>
+                            <input
+                              type={
+                                showValues ||
+                                field.key === 's3Endpoint' ||
+                                field.key === 's3Region' ||
+                                field.key === 's3Bucket'
+                                  ? 'text'
+                                  : 'password'
+                              }
+                              value={draft[field.key]}
+                              onChange={(event) => {
+                                setDraft((current) => ({
+                                  ...current,
+                                  [field.key]: event.target.value,
+                                }));
+                                setPendingStorageChange(null);
+                                setSavedFlash(false);
+                              }}
+                              autoComplete="off"
+                              spellCheck={false}
+                              className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}
+                            />
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {service.id === 'storage' && selectedProvider === 's3' && (
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Path style is recommended for private S3 servers.
+                    </p>
+                  )}
+                  {service.id === 'storage' &&
+                    selectedProvider === 's3' &&
+                    draft.s3Endpoint.trim().toLowerCase().startsWith('http://') && (
+                      <p className="text-[11px] leading-relaxed text-amber-300">
+                        HTTP sends backup data without transport encryption. Use HTTPS for Plexy.
+                      </p>
+                    )}
+                  <div className="text-[11px] text-muted-foreground">
+                    Get it at{' '}
+                    {service.id === 'storage' && selectedProvider === 's3'
+                      ? 'your S3 server’s admin panel'
+                      : service.where}
+                  </div>
                 </div>
               )}
             </div>
@@ -411,7 +632,11 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             style={accentGradientStyle}
           >
             <Save size={14} />
-            {setCredentials.isPending ? 'Saving…' : 'Save keys'}
+            {setCredentials.isPending
+              ? migrationProgress
+                ? 'Migrating…'
+                : 'Saving…'
+              : 'Save keys'}
           </button>
           {savedFlash && !setCredentials.isPending && (
             <span className="text-[12px] font-semibold text-primary">
@@ -424,6 +649,48 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             </span>
           )}
         </div>
+
+        {pendingStorageChange && !setCredentials.isPending && (
+          <div
+            ref={migrationPromptRef}
+            className="rounded-[9px] border border-amber-400/35 bg-amber-400/[0.07] px-3 py-3 text-[12px] text-foreground"
+          >
+            <div className="font-semibold">Move cloud saves to the new destination?</div>
+            <div className="mt-1 text-muted-foreground">
+              {pendingStorageChange.from} → {pendingStorageChange.to}
+            </div>
+            <p className="mt-2 leading-relaxed text-muted-foreground">
+              Afterplay will copy and verify every object before activating the new destination. The
+              original bucket will remain intact. Close Afterplay on other PCs during the move, then
+              switch each PC before using it again.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  void saveValues(pendingStorageChange.values, pendingStorageChange.provider)
+                }
+                className="rounded-[8px] border border-primary/40 bg-primary/10 px-3 py-1.75 font-semibold text-primary"
+              >
+                Migrate backups and switch
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingStorageChange(null)}
+                className="rounded-[8px] border border-border px-3 py-1.75 font-semibold text-muted-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {setCredentials.isPending && migrationProgress && (
+          <div className="text-[12px] text-muted-foreground">
+            {migrationProgress.phase === 'listing'
+              ? 'Checking objects in both buckets…'
+              : `${migrationProgress.phase === 'copying' ? 'Copying' : 'Verifying'} ${migrationProgress.completed} of ${migrationProgress.total} objects`}
+          </div>
+        )}
 
         {/* Llevarse las claves a otro PC. Debajo del guardado y separado por
             una línea: no es parte de rellenar claves, es lo que se hace

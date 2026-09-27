@@ -7,15 +7,20 @@ import {
   takeStartupKeysImport,
 } from '../config/credentials';
 import { getConfigValue, setConfigValue } from '../config/store';
-import { getLastSyncFailure, runSyncCycle } from '../db';
+import { getDb, getLastSyncFailure, runSyncCycle, withDbAccess } from '../db';
+import { saveBackupsTable } from '../db/schema';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
 import { isE2E } from '../lib/e2e';
 import { openPathResult } from '../lib/openPath';
 import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
-import { resetR2Client } from '../saves/r2';
+import { beginStorageMigration, resetR2Client } from '../saves/r2';
+import { migrateStorageObjects } from '../saves/migrateStorage';
+import { verifyMigratedRestore } from '../saves/verifyStorageRestore';
+import { storageTargetFrom, destinationChanged } from '../saves/storageConfig';
+import { markIdentityReconciled } from '../saves/machine';
 import { resetSgdbClient } from '../sgdb/client';
-import type { CredentialsValues, TimeFormat } from '../../shared/types';
+import type { CredentialsValues, SaveStorageProvider, TimeFormat } from '../../shared/types';
 
 // SPEC 3E — "iniciar con Windows" como opción activable desde el modal de
 // ajustes, no forzada al primer arranque. app.setLoginItemSettings es la API
@@ -44,6 +49,12 @@ const applyCredentialsChange = (): void => {
   // siguiente ciclo de 60s. Fire-and-forget: nunca lanza.
   void runSyncCycle();
 };
+
+const hasIndexedBackups = async (): Promise<boolean> =>
+  withDbAccess(async () => {
+    const rows = await getDb().select({ id: saveBackupsTable.id }).from(saveBackupsTable).limit(1);
+    return rows.length > 0;
+  });
 
 export const registerSettingsHandlers = (): void => {
   ipcMain.handle(
@@ -125,11 +136,77 @@ export const registerSettingsHandlers = (): void => {
   // confianza que el .env que sustituyen.
   ipcMain.handle('settings:getCredentials', () => getCredentials());
 
-  ipcMain.handle('settings:setCredentials', (_event, input: CredentialsValues) => {
-    setCredentials(input);
-    applyCredentialsChange();
-    return getCredentials();
-  });
+  ipcMain.handle('settings:getSaveStorageProvider', () => getConfigValue('saveStorageProvider'));
+
+  ipcMain.handle(
+    'settings:setCredentials',
+    async (event, input: CredentialsValues, requestedProvider?: SaveStorageProvider) => {
+      const currentProvider = getConfigValue('saveStorageProvider');
+      const provider = requestedProvider ?? currentProvider;
+      if (provider !== 'cloudflare' && provider !== 's3') {
+        throw new Error('Unknown cloud save provider.');
+      }
+      const currentCredentials = getCredentials();
+      let source;
+      try {
+        source = storageTargetFrom(currentProvider, currentCredentials);
+      } catch {
+        // Un endpoint local antiguo mal escrito se puede corregir, pero no
+        // se puede leer de él para migrar copias ya indexadas.
+        source = null;
+      }
+      const destination = storageTargetFrom(provider, input);
+      if (provider !== currentProvider && !destination) {
+        throw new Error('Complete the new storage credentials before switching.');
+      }
+      if (!source && destination) {
+        const oldAddress =
+          currentProvider === 'cloudflare'
+            ? `${currentCredentials.r2AccountId ?? ''}|${currentCredentials.r2Bucket ?? ''}`
+            : `${currentCredentials.s3Endpoint ?? ''}|${currentCredentials.s3Bucket ?? ''}`;
+        const newAddress =
+          provider === 'cloudflare'
+            ? `${input.r2AccountId ?? ''}|${input.r2Bucket ?? ''}`
+            : `${input.s3Endpoint ?? ''}|${input.s3Bucket ?? ''}`;
+        if (
+          (provider !== currentProvider || (oldAddress !== '|' && oldAddress !== newAddress)) &&
+          (await hasIndexedBackups())
+        ) {
+          throw new Error(
+            'Existing backups are indexed, but the current bucket cannot be read. Restore its credentials before changing destination.',
+          );
+        }
+      }
+      let migrated = false;
+      if (source && destination && destinationChanged(source, destination)) {
+        const release = await beginStorageMigration();
+        try {
+          const result = await migrateStorageObjects(source, destination, (progress) => {
+            try {
+              if (!event.sender.isDestroyed())
+                event.sender.send('settings:storageMigrationProgress', progress);
+            } catch {
+              // Cerrar Ajustes no interrumpe la copia ni cambia el destino.
+            }
+          });
+          if (result.total === 0 && (await hasIndexedBackups())) {
+            throw new Error(
+              'Backups are indexed, but the current bucket is empty. Reconcile the old destination before switching.',
+            );
+          }
+          migrated = result.total > 0;
+          if (migrated) await verifyMigratedRestore(destination);
+        } finally {
+          release();
+        }
+      }
+      setCredentials(input);
+      if (provider !== currentProvider) setConfigValue('saveStorageProvider', provider);
+      applyCredentialsChange();
+      if (migrated && destination) markIdentityReconciled(destination.identity);
+      return getCredentials();
+    },
+  );
 
   // Llevarse las claves a otro PC (config/credentials.ts). La carpeta de
   // destino y el fichero de origen los pide el renderer con los MISMOS

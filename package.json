@@ -1,6 +1,6 @@
 {
   "name": "Afterplay",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -37,6 +37,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "@aws-sdk/client-s3": "^3.1139.0",
+    "@aws-sdk/lib-storage": "3.1139.0",
     "@base-ui/react": "^1.8.0",
     "@electron-toolkit/utils": "^4.0.0",
     "@kmamal/sdl": "^0.11.13",
