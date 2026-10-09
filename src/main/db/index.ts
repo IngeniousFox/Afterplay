@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { remoteLabel } from '../config/credentials';
 import { e2eBlocksSync } from '../lib/e2e';
+import { isWalOutOfStep, localConnectionOptions } from './localConnection';
 import { removeEmptySidecars } from './sidecars';
 import {
   applyRemotePending,
@@ -102,11 +103,17 @@ const enableOfflineChangeCapture = async (db: Db): Promise<void> => {
 // vías de conexión (local y con sync) necesitan aplicarlo por igual.
 const enableForeignKeys = (db: Db): Promise<unknown> => db.run(sql`PRAGMA foreign_keys = ON`);
 
+// Un fichero que ya sincronizó se abre con el motor de sync EN PAUSA, nunca
+// con la conexión simple: esa le reiniciaba el WAL por debajo y dejaba el
+// sync bloqueado para siempre (ver localConnection.ts). En ese modo el motor
+// ya captura solo cada escritura para el próximo push, así que la captura a
+// mano de enableOfflineChangeCapture queda para el fichero sin -info.
 const connectLocalOnly = async (): Promise<Db> => {
-  const db = drizzle({ connection: { path: getDbPath(), clientName: 'afterplay' } });
+  const connection = localConnectionOptions(getDbPath());
+  const db = drizzle({ connection });
   await db.$client.connect();
   await enableForeignKeys(db);
-  await enableOfflineChangeCapture(db);
+  if (!connection.url) await enableOfflineChangeCapture(db);
   return db;
 };
 
@@ -913,6 +920,11 @@ export type SyncFailure = {
   // no se arregla reintentando, a diferencia de un corte de red: hay que
   // aplicar la migración que falta. La UI lo dice con otras palabras.
   schemaMismatch: boolean;
+  // El WAL local y la marca de agua de -info ya no cuadran (localConnection.ts).
+  // Tampoco se cura reintentando, pero por otro motivo: el push sigue subiendo
+  // y lo que no llega es lo de los otros dispositivos. Hace falta reconstruir
+  // la copia local desde Turso una vez.
+  walOutOfStep: boolean;
   consecutive: number;
 };
 
@@ -925,11 +937,16 @@ export const getLastSyncFailure = (): SyncFailure | null => lastSyncFailure;
 // a medias, que no lanza pero tampoco es un ciclo bueno — y la racha
 // (`consecutive`, la que decide si esto va a consola) tiene que contarse igual
 // en los dos.
-const recordSyncFailure = (message: string, schemaMismatch: boolean): SyncFailure => {
+const recordSyncFailure = (
+  message: string,
+  schemaMismatch: boolean,
+  walOutOfStep = false,
+): SyncFailure => {
   lastSyncFailure = {
     message,
     at: new Date(),
     schemaMismatch,
+    walOutOfStep,
     consecutive: (lastSyncFailure?.consecutive ?? 0) + 1,
   };
   return lastSyncFailure;
@@ -1078,12 +1095,18 @@ export const runSyncCycle = async (): Promise<void> => {
     const failure = recordSyncFailure(
       message,
       SCHEMA_MISMATCH_HINTS.some((hint) => lower.includes(hint)),
+      isWalOutOfStep(message),
     );
     // Solo el PRIMERO de una racha va a consola: este ciclo corre cada minuto
     // y un fallo persistente llenaba el log de la misma línea repetida, que
     // es justo lo que hace que se deje de leer.
     if (failure.consecutive === 1) {
-      console.warn('[db] fallo sincronizando con Turso (sigo en local, reintento luego):', error);
+      console.warn(
+        failure.walOutOfStep
+          ? '[db] el WAL local ya no cuadra con su marca de sync: el push sigue, el pull no volverá a completar hasta reconstruir la copia local desde Turso:'
+          : '[db] fallo sincronizando con Turso (sigo en local, reintento luego):',
+        error,
+      );
     }
   } finally {
     syncCycleRunning = false;

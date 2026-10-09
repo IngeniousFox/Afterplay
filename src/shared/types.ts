@@ -719,11 +719,13 @@ export type AchievementsOverview = {
 };
 
 // Último fallo de sincronización con Turso, para enseñarlo en Ajustes. Un
-// desajuste de esquema no se cura reintentando, así que se distingue.
+// desajuste de esquema y un WAL descuadrado no se curan reintentando, así que
+// se distinguen.
 export type SyncFailureInfo = {
   message: string;
   at: Date;
   schemaMismatch: boolean;
+  walOutOfStep: boolean;
   consecutive: number;
 };
 

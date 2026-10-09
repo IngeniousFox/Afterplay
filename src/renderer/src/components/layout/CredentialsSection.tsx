@@ -394,16 +394,24 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             <div className="text-[12px] font-semibold" style={{ color: AMBER }}>
               {syncFailure.schemaMismatch
                 ? "Cloud sync is stuck — the remote database doesn't match this one"
-                : 'Cloud sync is failing'}
+                : syncFailure.walOutOfStep
+                  ? 'Cloud sync is stuck — changes from your other devices are not coming in'
+                  : 'Cloud sync is failing'}
               {syncFailure.consecutive > 1 && ` · ${syncFailure.consecutive} tries`}
             </div>
             <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
               {/* Un desajuste de esquema NO se cura reintentando: hay que
                   aplicar la migración que falta en el remoto. Decirlo evita
                   esperar en vano a que "ya se arreglará". */}
+              {/* Un WAL descuadrado tampoco: el push sigue subiendo, así que
+                  lo tuyo está a salvo en Turso, pero el pull no vuelve a
+                  completar. El "will upload once the connection recovers" de
+                  abajo mentía dos veces en este caso. */}
               {syncFailure.schemaMismatch
                 ? 'A table or column is missing on Turso, so nothing new is being uploaded. Retrying will not fix it — the pending migration has to be applied there. Your data is safe locally.'
-                : 'Your data is safe locally and will upload once the connection recovers.'}
+                : syncFailure.walOutOfStep
+                  ? 'Your changes are still uploading to Turso, but nothing from your other devices can download. Retrying will not fix it — the local copy has to be rebuilt from Turso once.'
+                  : 'Your data is safe locally and will upload once the connection recovers.'}
             </div>
             <div className="mt-1 font-mono text-[10px] break-all text-muted-foreground/60">
               {syncFailure.message}
