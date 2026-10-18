@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../db';
@@ -48,10 +48,12 @@ type GoldbergAchievement = {
 
 const MAX_SCAN_DEPTH = 3;
 
-// Las steam_settings de una carpeta de juego. Búsqueda acotada: los cracks
-// las dejan junto al exe, nunca enterradas — y un árbol de mods gigante no
-// debe pagarse entero.
-const findSteamSettingsDirs = (root: string, depth = 0): string[] => {
+// Las steam_settings de una carpeta de juego. GSE las lee de JUNTO A LA DLL
+// que sustituye (steam_api.dll / steam_api64.dll), y en casi todos los juegos
+// esa DLL va junto al exe o un par de niveles más abajo (Unity: <Juego>_Data/
+// Plugins/x86_64). Búsqueda acotada para eso: un árbol de mods gigante no debe
+// pagarse entero, y esto corre en cada arranque para toda la biblioteca.
+const scanSteamSettingsDirs = (root: string, depth = 0): string[] => {
   const found: string[] = [];
   let entries;
   try {
@@ -65,11 +67,52 @@ const findSteamSettingsDirs = (root: string, depth = 0): string[] => {
     if (entry.name === 'steam_settings') {
       found.push(full);
     } else if (depth < MAX_SCAN_DEPTH) {
-      found.push(...findSteamSettingsDirs(full, depth + 1));
+      found.push(...scanSteamSettingsDirs(full, depth + 1));
     }
   }
   return found;
 };
+
+// La excepción, y no es rara: Unreal Engine. Su DLL de Steam no va junto al
+// exe sino en una ruta FIJA del motor,
+//
+//   Engine/Binaries/ThirdParty/Steamworks/Steamv<versión>/Win64 (o Win32)
+//
+// seis niveles por debajo de la carpeta del juego, fuera del alcance de la
+// búsqueda de arriba. Lo destapó The Adventures of Elliot (13-oct-2026): GSE
+// con su steam_settings en esa ruta, sin achievements.json, y 0 de 44 logros
+// registrados tras horas de juego. Se mira esa ruta concreta en vez de subir
+// la profundidad general: son dos o tres lecturas de carpeta por juego, no el
+// árbol entero de cada juego de la biblioteca.
+const UNREAL_STEAMWORKS = join('Engine', 'Binaries', 'ThirdParty', 'Steamworks');
+
+const isDirectory = (path: string): boolean => {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+const unrealSteamSettingsDirs = (root: string): string[] => {
+  const steamworks = join(root, UNREAL_STEAMWORKS);
+  let versions;
+  try {
+    versions = readdirSync(steamworks, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return versions
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) =>
+      ['Win64', 'Win32'].map((arch) => join(steamworks, entry.name, arch, 'steam_settings')),
+    )
+    .filter(isDirectory);
+};
+
+export const findSteamSettingsDirs = (root: string): string[] => [
+  ...new Set([...scanSteamSettingsDirs(root), ...unrealSteamSettingsDirs(root)]),
+];
 
 // Escribe el catálogo donde falte. Devuelve cuántos ficheros escribió (0 es
 // el caso normal: juego sin Goldberg, o con el catálogo ya puesto).
