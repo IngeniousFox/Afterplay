@@ -174,3 +174,19 @@ export const stopTimer = (sessionId: number): Promise<{ durationSec: number }> =
 // llevar horas muda, esto viene a false y la pantalla se entera sola.
 export const beatTimer = (sessionId: number): Promise<{ alive: boolean }> =>
   postJson<{ alive: boolean }>(`/timer/beat?sessionId=${sessionId}`);
+
+// El último latido antes de que la pestaña se vaya al fondo (bloquear el
+// móvil, cambiar de app). Con fetch + keepalive y no con axios: una petición
+// normal lanzada mientras la página se congela se cancela a medias, y esta es
+// justo la que deja escrito "seguía vivo a esta hora". Mismo origen, así que
+// la cookie de Access y la guarda CSRF del Worker la tratan igual que a las
+// demás. No devuelve nada: ya no hay pantalla que lo lea.
+export const beatTimerOnHide = (sessionId: number): void => {
+  void fetch(`/api/timer/beat?sessionId=${sessionId}`, {
+    method: 'POST',
+    keepalive: true,
+    credentials: 'same-origin',
+  }).catch(() => {
+    // Perderlo no es nada: queda el latido anterior.
+  });
+};

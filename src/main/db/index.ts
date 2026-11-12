@@ -17,6 +17,7 @@ import {
   selectPendingByName,
   type LocalMigration,
 } from './migrationSync';
+import { markRemotePullSucceeded, setRemoteExpected } from './remoteFreshness';
 
 // Bloque 4 — @tursodatabase/sync sustituye por completo a @tursodatabase/
 // database: su propio connect() ya da el mismo Database (mismo prepare/exec/
@@ -397,6 +398,10 @@ const phase = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
 //     ver schema.ts.
 const connectAndMigrate = async (): Promise<void> => {
   const remoteConfigured = hasRemoteConfigured();
+  // Antes de que arranque el watcher: su primer sondeo va por delante del
+  // primer sync, y tiene que saber ya que esta copia local puede ir desfasada
+  // (ver remoteFreshness.ts).
+  setRemoteExpected(remoteConfigured);
   // Sondeo barato ANTES de pagar dos timeouts de red completos (push de
   // migraciones + connectWithSync, 4s cada uno de CONNECT_TIMEOUT_MS): sin
   // adaptador de red (avión, sin cable) ninguno de los dos va a responder
@@ -1016,6 +1021,9 @@ const SCHEMA_MISMATCH_HINTS = [
 ];
 
 export const runSyncCycle = async (): Promise<void> => {
+  // En cada ciclo y no solo al arrancar: las credenciales de Turso se pueden
+  // guardar en Ajustes con la app abierta.
+  setRemoteExpected(hasRemoteConfigured());
   if (syncCycleRunning) return;
   // Base marcada por una pérdida verificada (ver dataLossBlocksSync): ni pull
   // ni push mientras dure el proceso. No se toca lastSyncFailure — el mensaje
@@ -1077,6 +1085,9 @@ export const runSyncCycle = async (): Promise<void> => {
     await db.$client.push();
     const pulled = await db.$client.pull();
     lastSyncFailure = null;
+    // La copia local vuelve a valer para decidir (el barrido de cronómetros
+    // del watcher espera a esto: ver remoteFreshness.ts).
+    markRemotePullSucceeded();
 
     if (pulled) notifyPulledChanges();
 

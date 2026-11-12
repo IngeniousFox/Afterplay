@@ -16,16 +16,24 @@
 
 // Cuánto puede callarse un cronómetro antes de darlo por abandonado.
 //
-// GENEROSO a propósito, y no los pocos minutos que sugeriría un latido de uno
-// por minuto. El §7.5 avisa de por qué: los navegadores móviles suspenden las
-// pestañas de fondo sin piedad, así que es normal que el latido se pare
-// MIENTRAS SIGUES JUGANDO. Con un umbral corto, una tarde de consola con el
-// móvil en el bolsillo se cortaría por la mitad.
+// UN DÍA ENTERO, y no los pocos minutos que sugeriría un latido de uno por
+// minuto. El §7.5 avisa de por qué: los navegadores móviles suspenden las
+// pestañas de fondo sin piedad, así que el latido se para MIENTRAS SIGUES
+// JUGANDO — con el móvil bloqueado, el último latido es prácticamente la hora
+// de arranque.
 //
-// El precio es el opuesto y está asumido (§7.6): dormirse con el cronómetro
-// puesto suma hasta seis horas de más. Pero eso se corrige después editando la
-// sesión, y perder tiempo real no se corrige con nada.
-export const TIMER_STALE_MS = 6 * 3_600_000;
+// Fueron seis horas y se quedaron cortas de la peor manera: una sesión de
+// siete horas de consola se daba por abandonada mientras seguías jugando, se
+// cerraba en ese último latido (o sea, con duración cero) y al ir a pararla
+// ya no había nada que parar. Una sesión real no puede morirse sola. Con 24h
+// solo se cierra lo que de verdad se olvidó: nadie juega un día seguido sin
+// mirar el móvil ni una vez.
+//
+// El precio es el opuesto y está asumido (§7.6): un cronómetro olvidado sigue
+// "en marcha" hasta un día, y si lo paras tarde cuenta hasta ese momento. Eso
+// se corrige después editando la sesión; perder tiempo real no se corrige con
+// nada.
+export const TIMER_STALE_MS = 24 * 3_600_000;
 
 // Lo mínimo que hace falta saber de una sesión para juzgar su frescura. Un
 // structural type y no la fila entera: el watcher le pasa su OpenSession y el
@@ -39,7 +47,7 @@ export type TimerFreshness = { startedAt: Date; lastHeartbeatAt: Date | null };
 export const timerLastBeat = (session: TimerFreshness): Date =>
   session.lastHeartbeatAt ?? session.startedAt;
 
-// Rancia = abandonada. El borde va con `>=`, así que seis horas clavadas ya
+// Rancia = abandonada. El borde va con `>=`, así que 24 horas clavadas ya
 // son rancias; los dos lados lo heredan de aquí y no pueden discrepar ni en el
 // número ni en el lado del borde.
 export const isTimerStale = (session: TimerFreshness, now: number): boolean =>

@@ -836,11 +836,11 @@ describe('el cronómetro exige un playthrough que se pueda seguir (REMOTO.md §7
     // a cualquier Start del sábado.
     const olvidado = await makeGame(db, { title: 'El olvidado' });
     const olvidadoIteration = await makeIteration(db, olvidado);
-    const ultimoLatido = new Date(NOW - 8 * HOUR_MS);
+    const ultimoLatido = new Date(NOW - 30 * HOUR_MS);
     const rancia = await makeTimerSession(
       db,
       olvidadoIteration,
-      new Date(NOW - 9 * HOUR_MS),
+      new Date(NOW - 31 * HOUR_MS),
       ultimoLatido,
     );
 
@@ -886,7 +886,7 @@ describe('el cronómetro exige un playthrough que se pueda seguir (REMOTO.md §7
 describe('la frescura del cronómetro (§7.4)', () => {
   const START = T('2026-01-10T10:00:00Z');
 
-  it('el umbral son SEIS horas exactas, y a las seis en punto ya está rancia', async () => {
+  it('el umbral son VEINTICUATRO horas exactas, y a las 24 en punto ya está rancia', async () => {
     // ARREGLADO: el número estaba escrito DOS veces y con dos formas distintas
     // —`6 * 3_600_000` en el Worker y un `TIMER_STALE_HOURS = 6` privado en
     // ProcessWatcher— y esta prueba solo podía comprobar la del Worker: la del
@@ -895,10 +895,10 @@ describe('la frescura del cronómetro (§7.4)', () => {
     // rancia una sesión que la web seguía pintando LIVE durante tres horas.
     //
     // Ahora las dos salen de src/shared/timerFreshness, que es lo que se fija
-    // aquí: el valor y el lado del borde (`>=`, o sea que seis horas clavadas
+    // aquí: el valor y el lado del borde (`>=`, o sea que 24 horas clavadas
     // ya son rancias). La divergencia ya no se puede escribir sin tocar esta
     // línea.
-    assert.equal(TIMER_STALE_MS, 6 * HOUR_MS);
+    assert.equal(TIMER_STALE_MS, 24 * HOUR_MS);
 
     // El predicado compartido, el mismo que corre en el watcher, en sus dos
     // bordes. El del Worker (getActiveTimer, aquí abajo) tiene que coincidir
@@ -921,7 +921,7 @@ describe('la frescura del cronómetro (§7.4)', () => {
     assert.notEqual(await getActiveTimer(db, START + TIMER_STALE_MS - 60_000), null);
     assert.equal((await readSession(db, sessionId)).endedAt, null);
 
-    // A las seis en punto: abandonada, y se cierra en su último latido.
+    // A las 24 en punto: abandonada, y se cierra en su último latido.
     assert.equal(await getActiveTimer(db, START + TIMER_STALE_MS), null);
     const cerrada = await readSession(db, sessionId);
     assert.equal(cerrada.endedAt?.getTime(), latido.getTime());
@@ -935,7 +935,7 @@ describe('la frescura del cronómetro (§7.4)', () => {
     const iterationId = await makeIteration(db, gameId);
     const sessionId = await makeTimerSession(db, iterationId, new Date(START), null);
 
-    assert.equal(await getActiveTimer(db, START + 7 * HOUR_MS), null);
+    assert.equal(await getActiveTimer(db, START + 25 * HOUR_MS), null);
     const cerrada = await readSession(db, sessionId);
     assert.equal(cerrada.endedAt?.getTime(), START);
     // Duración cero y no negativa ni inventada: no hubo tiempo que medir.
@@ -992,8 +992,8 @@ describe('la frescura del cronómetro (§7.4)', () => {
     await makeTimerSession(
       db,
       await makeIteration(db, rancio),
-      agoMs(11 * HOUR_MS),
-      agoMs(10 * HOUR_MS),
+      agoMs(31 * HOUR_MS),
+      agoMs(30 * HOUR_MS),
     );
 
     const [game] = await listLibrary(db);
@@ -1044,8 +1044,8 @@ describe('la frescura del cronómetro (§7.4)', () => {
     await makeTimerSession(
       db,
       await makeIteration(db, gameId),
-      agoMs(11 * HOUR_MS),
-      agoMs(10 * HOUR_MS),
+      agoMs(31 * HOUR_MS),
+      agoMs(30 * HOUR_MS),
     );
 
     const [fromList] = await listLibrary(db);
@@ -1167,10 +1167,10 @@ describe('parar el cronómetro (§7.5) y el latido', () => {
 
   it('un latido tardío no resucita la sesión: la cierra en su último latido', async () => {
     // ARREGLADO: beatTimer miraba solo `endedAt IS NULL` y `startedBy =
-    // 'timer'`, sin la regla de frescura. Si la PWA volvía del limbo a las diez
+    // 'timer'`, sin la regla de frescura. Si la PWA volvía del limbo a las treinta
     // horas y latía antes de que nadie pidiera /api/timer, la sesión se
-    // declaraba fresca otra vez y esas diez horas de silencio acababan contadas
-    // como jugadas: pararla ahí registraba 10 h en vez de los 30 min reales.
+    // declaraba fresca otra vez y esas treinta horas de silencio acababan contadas
+    // como jugadas: pararla ahí registraba 30 h en vez de los 30 min reales.
     //
     // Y no era el caso raro sino el normal: el §7.5 dice justo que los
     // navegadores móviles suspenden las pestañas de fondo. La tabla del §7.4 no
@@ -1178,7 +1178,7 @@ describe('parar el cronómetro (§7.5) y el latido', () => {
     // latido"— así que ese latido cierra igual que el barrido y contesta que
     // no, ya no está viva.
     const sessionId = await startedSession();
-    const tarde = START + 10 * HOUR_MS;
+    const tarde = START + 30 * HOUR_MS;
 
     assert.equal(await beatTimer(db, sessionId, tarde), false);
 
@@ -1196,10 +1196,10 @@ describe('parar el cronómetro (§7.5) y el latido', () => {
 
   it('un latido dentro del plazo sí mantiene viva la sesión', async () => {
     // El borde contrario: el umbral es generoso a propósito (§7.5) porque el
-    // latido se para MIENTRAS SIGUES JUGANDO. Un silencio de cinco horas y
-    // media no puede cerrar una tarde de consola.
+    // latido se para MIENTRAS SIGUES JUGANDO. Un silencio de casi un día
+    // entero no puede cerrar una maratón de consola.
     const sessionId = await startedSession();
-    // El último latido es el de las 20:30, así que "casi seis horas después"
+    // El último latido es el de las 20:30, así que "casi 24 horas después"
     // se mide desde ahí, no desde el arranque.
     const aTiempo = START + 30 * 60_000 + TIMER_STALE_MS - 60_000;
 
@@ -1208,7 +1208,7 @@ describe('parar el cronómetro (§7.5) y el latido', () => {
     const viva = await readSession(db, sessionId);
     assert.equal(viva.endedAt, null);
     assert.equal(viva.lastHeartbeatAt?.getTime(), aTiempo);
-    // Y el latido corre la vara: seis horas más tarde sigue viva porque el
+    // Y el latido corre la vara: un día más tarde sigue viva porque el
     // reloj se cuenta desde el último latido, no desde el arranque.
     assert.equal((await getActiveTimer(db, aTiempo + HOUR_MS))?.sessionId, sessionId);
   });

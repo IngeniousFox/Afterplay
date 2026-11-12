@@ -1,6 +1,7 @@
 import { powerMonitor, type BrowserWindow } from 'electron';
 import { closeSync, openSync } from 'node:fs';
 import { withDbAccess } from '../db';
+import { isLocalCopyFresh } from '../db/remoteFreshness';
 import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
 import { closeSession, closeSessionIfOpen } from '../db/queries/sessions/closeSession';
 import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
@@ -155,6 +156,10 @@ export class ProcessWatcher {
   // abortado a medias lo deje como estaba es lo que se quiere: al volver de
   // una pausa no hay que volver a contar lo mismo).
   private timerHeldKeys = new Set<string>();
+  // Cronómetros que parecen abandonados pero cuyo cierre se aplaza porque la
+  // copia local no está al día (ver sweepStaleTimerSessions). Solo sirve para
+  // que el aviso salga una vez por sesión.
+  private timerSweepDeferred = new Set<number>();
   private readonly getWindow: () => BrowserWindow | null;
   // Bandeja del sistema (SPEC 6, opcional): deja ver de un vistazo qué se
   // está jugando sin abrir la ventana. Se llama con los títulos actualmente
@@ -580,7 +585,7 @@ export class ProcessWatcher {
   // `TIMER_STALE_HOURS = 6` privado aquí y un `6 * 3_600_000` allí) y esa copia
   // privada no se podía importar desde ningún test, así que bajarla dejaba la
   // suite entera en verde mientras el PC y la web discrepaban durante horas
-  // sobre si seguías jugando. El porqué de las seis horas está en la cabecera
+  // sobre si seguías jugando. El porqué de las 24 horas está en la cabecera
   // de ese fichero.
 
   // Las sesiones de CRONÓMETRO (REMOTO.md §7) no tienen proceso: las abre el
@@ -603,20 +608,44 @@ export class ProcessWatcher {
   // llegan por el pull del ciclo de sync, que corre por su cuenta cada 60s y no
   // se serializa con este sondeo: el "parar" pulsado en el móvil —que manda
   // sobre el latido, §7.5— y el barrido gemelo del Worker, que aplica esta
-  // MISMA regla de las 6h contra Turso (worker/src/queries/timer.ts). La hora
+  // MISMA regla de las 24h contra Turso (worker/src/queries/timer.ts). La hora
   // de fin no corre peligro en ninguno de los dos casos (closeSession devuelve
   // la fila ya cerrada tal cual, sin recalcular), pero al ser truthy cantaría
   // el log y marcaría `changed` por un cierre ajeno y con una hora que no es la
   // que quedó guardada. Lo que NO puede pasar es repetirse en bucle: la foto se
   // relee en cada vuelta, así que una sesión ya cerrada no vuelve a entrar
   // aquí.
+  //
+  // Y SOLO CON LA COPIA LOCAL AL DÍA (db/remoteFreshness.ts). Esta regla se
+  // aplica sobre lo que el PC cree que pasó en Turso, y si lleva horas sin
+  // bajar nada —venía de suspensión, arrancó sin red, o este es el sondeo del
+  // arranque, que va por delante del primer sync— la sesión que aquí sigue
+  // "abierta y muda" puede estar parada en el móvil con sus horas bien
+  // puestas. Cerrarla aquí era peor que no hacer nada: el ciclo de sync sube
+  // antes de bajar, así que el cierre local (en el último latido conocido,
+  // casi siempre el arranque: duración cero) pisaba en Turso el "parar" bueno.
+  // Sin sync reciente no se cierra nada; el Worker aplica la misma regla
+  // contra Turso en cuanto alguien abre la web, y el siguiente pull lo trae.
   private async sweepStaleTimerSessions(openSessions: OpenSession[]): Promise<boolean> {
     const now = Date.now();
     let changed = false;
+    const fresh = isLocalCopyFresh(now);
+    const deferredNow = new Set<number>();
 
     for (const session of openSessions) {
       if (session.startedBy !== 'timer') continue;
       if (!isTimerStale(session, now)) continue;
+
+      if (!fresh) {
+        deferredNow.add(session.sessionId);
+        // Una línea por sesión, no una cada 5s durante horas sin red.
+        if (!this.timerSweepDeferred.has(session.sessionId)) {
+          console.log(
+            `[watcher] [info] sesion ${session.sessionId} de cronometro parece abandonada, pero la copia local no esta al dia con Turso - espero al proximo sync antes de cerrarla`,
+          );
+        }
+        continue;
+      }
 
       const lastBeat = timerLastBeat(session);
       const closed = await closeSessionIfOpen(session.sessionId, lastBeat);
@@ -627,6 +656,7 @@ export class ProcessWatcher {
       changed = true;
     }
 
+    this.timerSweepDeferred = deferredNow;
     return changed;
   }
 

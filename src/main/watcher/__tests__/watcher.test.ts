@@ -13,6 +13,12 @@ import {
   makeStateEvent,
   type TestDb,
 } from '../../db/__tests__/harness';
+import {
+  markRemotePullSucceeded,
+  REMOTE_FRESH_MS,
+  resetRemoteFreshness,
+  setRemoteExpected,
+} from '../../db/remoteFreshness';
 import { iterationsTable, sessionsTable, stateEventsTable } from '../../db/schema';
 import type { SessionClosedEvent } from '../../../shared/types';
 
@@ -149,8 +155,8 @@ const quit = (pid: number): void => {
 
 // La regla de frescura del §7.4 se mide contra el reloj del sistema, así que
 // los cronómetros son los únicos casos que no pueden llevar fecha fija. El
-// ancla se toma una vez, y las horas elegidas (1h / 7h) quedan lejísimos del
-// borde de las 6h: ningún retraso de la máquina puede cambiar el veredicto, y
+// ancla se toma una vez, y las horas elegidas (1h / 26h) quedan lejísimos del
+// borde de las 24h: ningún retraso de la máquina puede cambiar el veredicto, y
 // las duraciones siguen saliendo exactas porque las dos fechas salen de aquí.
 const ANCHOR_MS = Date.now();
 const hoursAgo = (hours: number): Date => new Date(ANCHOR_MS - hours * 3_600_000);
@@ -173,6 +179,9 @@ const fakeWindow = {
 
 beforeEach(async () => {
   db = await freshDb();
+  // Sin remoto configurado, que es como corre casi toda la suite: la copia
+  // local es la única y siempre vale. Los tests del desfase lo activan.
+  resetRemoteFreshness();
   systemProcesses = [];
   screenLocked = false;
   rendererChannels.length = 0;
@@ -814,7 +823,7 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     assert.equal((await openSessions()).length, 1);
   });
 
-  it('§7.4: uno sin latir 6h se cierra en su ultimo latido, y no solo al arrancar', async () => {
+  it('§7.4: uno sin latir 24h se cierra en su ultimo latido, y no solo al arrancar', async () => {
     // El barrido corre en CADA ciclo a propósito: la app vive días en la
     // bandeja, así que con la regla solo en el arranque un cronómetro
     // olvidado por la noche se quedaba LIVE y sin horas hasta el siguiente
@@ -824,16 +833,75 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
     await cycle();
 
-    await makeOpenSession(db, iterationId, hoursAgo(9).toISOString(), {
+    await makeOpenSession(db, iterationId, hoursAgo(28).toISOString(), {
       startedBy: 'timer',
-      lastHeartbeatAt: hoursAgo(7),
+      lastHeartbeatAt: hoursAgo(26),
     });
     await cycle();
 
     const [session] = await sessions();
-    assert.equal(session.endedAt?.getTime(), hoursAgo(7).getTime());
-    // 9h - 7h: lo que se sabe que jugó, no las 9h hasta ahora.
+    assert.equal(session.endedAt?.getTime(), hoursAgo(26).getTime());
+    // 28h - 26h: lo que se sabe que jugó, no las 28h hasta ahora.
     assert.equal(session.durationSec, 7200);
+  });
+
+  // ── La copia local desfasada (db/remoteFreshness.ts) ──────────────────────
+  // El caso real: cronómetro arrancado en el móvil con el PC encendido, PC
+  // suspendido, tres horas de consola, "parar" en el móvil. Al volver, el PC
+  // seguía viendo la sesión abierta y muda, la cerraba en su último latido
+  // (el arranque: 0s) y el push pisaba en Turso las tres horas buenas.
+
+  it('con Turso configurado y SIN sync todavia, un cronometro que parece abandonado no se toca', async () => {
+    // El sondeo del arranque va por delante del primer sync: lo que hay en
+    // local es la foto de la última vez que el PC estuvo despierto.
+    setRemoteExpected(true);
+    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
+    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
+    // Nunca latió: el móvil se bloqueó nada más arrancar. Cerrarla aquí era
+    // dejarla en duración cero.
+    await makeOpenSession(db, iterationId, hoursAgo(30).toISOString(), { startedBy: 'timer' });
+
+    await cycle();
+    await cycle();
+
+    const [session] = await sessions();
+    assert.equal(session.endedAt, null, 'sigue abierta: quien sabe si esta parada es Turso');
+    assert.equal(session.durationSec, null);
+  });
+
+  it('en cuanto hay un pull reciente, el barrido vuelve a cerrar lo que siga abierto', async () => {
+    setRemoteExpected(true);
+    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
+    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
+    await makeOpenSession(db, iterationId, hoursAgo(28).toISOString(), {
+      startedBy: 'timer',
+      lastHeartbeatAt: hoursAgo(26),
+    });
+    await cycle();
+    assert.equal((await openSessions()).length, 1);
+
+    // El sync baja lo que haya: si el móvil la hubiera parado, el pull la
+    // traería ya cerrada y aquí no quedaría nada que barrer. Sigue abierta,
+    // así que ahora sí es un abandono de verdad.
+    markRemotePullSucceeded();
+    await cycle();
+
+    const [session] = await sessions();
+    assert.equal(session.endedAt?.getTime(), hoursAgo(26).getTime());
+    assert.equal(session.durationSec, 7200);
+  });
+
+  it('un pull de hace horas no cuenta: al volver de suspension se espera al siguiente', async () => {
+    setRemoteExpected(true);
+    // El último sync bueno fue antes de suspender.
+    markRemotePullSucceeded(Date.now() - REMOTE_FRESH_MS - 60_000);
+    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
+    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
+    await makeOpenSession(db, iterationId, hoursAgo(30).toISOString(), { startedBy: 'timer' });
+
+    await cycle();
+
+    assert.equal((await openSessions()).length, 1);
   });
 
   it('mientras el cronometro este fresco, su juego en marcha NO abre sesion propia', async () => {
@@ -878,9 +946,9 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     const iterationId = await makeIteration(db, gameId);
     await cycle();
 
-    const timerSessionId = await makeOpenSession(db, iterationId, hoursAgo(9).toISOString(), {
+    const timerSessionId = await makeOpenSession(db, iterationId, hoursAgo(28).toISOString(), {
       startedBy: 'timer',
-      lastHeartbeatAt: hoursAgo(7),
+      lastHeartbeatAt: hoursAgo(26),
     });
     launch(4510, EXE_CELESTE);
     await cycle();
@@ -888,7 +956,7 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     const rows = await sessions();
     assert.equal(rows.length, 2);
     assert.equal(rows[0].id, timerSessionId);
-    assert.equal(rows[0].endedAt?.getTime(), hoursAgo(7).getTime());
+    assert.equal(rows[0].endedAt?.getTime(), hoursAgo(26).getTime());
     assert.equal(rows[1].startedBy, 'watcher');
     assert.equal(rows[1].endedAt, null);
     // Misma iteración: el relevo no abre un playthrough nuevo.

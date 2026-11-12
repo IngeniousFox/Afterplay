@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, Square, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { beatTimer, fetchActiveTimer, stopTimer } from '../api';
+import { beatTimer, beatTimerOnHide, fetchActiveTimer, stopTimer } from '../api';
 import { useLiveSeconds } from '../hooks/useLiveSeconds';
 import { formatElapsed } from '../lib/format';
 import { Cover } from './Cover';
@@ -81,8 +81,32 @@ export const TimerBar = (): React.JSX.Element | null => {
         });
     };
 
+    // El intervalo solo late con la pestaña DELANTE, y en un móvil eso es
+    // casi nunca: arrancas el cronómetro, bloqueas el teléfono y el primer
+    // latido (al minuto) ya no sale. El "último latido" se quedaba clavado en
+    // la hora de arranque, y todo lo que cierra "en el último latido" (el
+    // abandono del §7.4) cerraba con duración cero. Por eso se late también
+    // en los tres momentos en que se SABE que estás ahí:
+    //
+    //   - al montar: abrir la app con un cronómetro en marcha ya es una señal
+    //     de vida, sin esperar un minuto que quizá no llegue;
+    //   - al volver a primer plano: mirar el móvil a mitad de partida;
+    //   - al irse al fondo: la última hora a la que constas.
+    //
+    // Ninguno resucita una sesión ya rancia: el Worker la cierra igual (un
+    // latido tardío no reanuda, §7.4) y contesta alive=false.
+    beat();
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'visible') beat();
+      else beatTimerOnHide(sessionId);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     const id = setInterval(beat, BEAT_MS);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [sessionId, queryClient]);
 
   const stop = useMutation({
