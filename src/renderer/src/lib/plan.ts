@@ -1,5 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { Clock3, History, Sparkles, Star } from 'lucide-react';
+import { filterQueue, sortHorizon, sortUpNext } from '../../../shared/planShelves';
+import type { PlanShelfReaders } from '../../../shared/planShelves';
 import type { PlannedGameItem } from '../../../shared/types';
 import { bestRating } from './ratings';
 import { isUnreleased, releaseSortKey } from './releaseDate';
@@ -81,54 +83,26 @@ export type PlanSections = {
   horizon: PlannedGameItem[];
 };
 
-// upNext y queue reparten lo jugable; el horizonte es una CAPA aparte, no un
-// tercer trozo del reparto.
-//
-// Antes sí lo era, y se notaba mal: fijar un juego que estaba en el horizonte
-// lo hacía desaparecer de allí. Desde el sofá parecía que la app se había
-// comido la cuenta atrás — que es justo el dato por el que ese juego está en
-// el horizonte y no en otro sitio. Fijar dice "este me importa", no "quítalo
-// del calendario"; el calendario no es una estantería de la que se saca algo,
-// es la vista de lo que aún no puedes jugar.
-//
-// Así que el horizonte se calcula sobre TODOS los planeados sin salir, estén
-// fijados o no. De la cola sí siguen fuera los fijados: ahí el reparto es real
-// (una fila no puede estar en dos estanterías de lo jugable a la vez).
-export const splitPlanSections = (games: PlannedGameItem[], lens: PlanLens): PlanSections => {
-  const upNext = games
-    .filter((game) => game.planPinnedAt !== null)
-    .sort(
-      (a, b) =>
-        (a.planPinnedAt as Date).getTime() - (b.planPinnedAt as Date).getTime() || byTitle(a, b),
-    );
-
-  const horizon = games
-    .filter((game) => isUnreleased(game))
-    .sort((a, b) => releaseSortKey(a) - releaseSortKey(b) || byTitle(a, b));
-  const queue = sortByLens(
-    games.filter((game) => game.planPinnedAt === null && !isUnreleased(game)),
-    lens,
-  );
-
-  return { upNext, queue, horizon };
+// Cómo se lee un PlannedGameItem del escritorio para repartirlo. Es solo la
+// traducción a la moneda de aquí (Date donde la PWA tiene milisegundos): QUIÉN
+// va a cada estantería lo decide src/shared/planShelves, la misma función que
+// usa la PWA. Antes este fichero tenía su propia copia del reparto, con la parte
+// sutil del horizonte no excluyente incluida, y solo un test de paridad
+// vigilaba que no se separasen.
+export const PLAN_SHELF_READERS: PlanShelfReaders<PlannedGameItem> = {
+  pinnedAt: (game) => game.planPinnedAt?.getTime() ?? null,
+  title: (game) => game.title,
+  unreleased: (game) => isUnreleased(game),
+  releaseSortKey: (game) => releaseSortKey(game),
 };
 
-// La deuda de la cabecera (§2.1): el mismo criterio que la card de Backlog
-// debt de Stats — horas de Main Story de HowLongToBeat, sin inventar nada
-// para los juegos que no la tienen (se cuentan aparte y se dicen en pequeño)
-// y sin los endless, que no tienen final que alcanzar.
-export type PlanDebt = {
-  totalGames: number;
-  totalHours: number;
-  withoutEstimate: number;
-};
-
-export const computePlanDebt = (games: PlannedGameItem[]): PlanDebt => {
-  const counted = games.filter((game) => !game.endless);
-  const withEstimate = counted.filter((game) => game.hltbMain !== null);
-  return {
-    totalGames: games.length,
-    totalHours: withEstimate.reduce((sum, game) => sum + (game.hltbMain ?? 0), 0),
-    withoutEstimate: counted.length - withEstimate.length,
-  };
-};
+// Lo único que esta pantalla añade al reparto compartido es la LENTE sobre la
+// cola: el reparto devuelve la cola en el orden en que entra, y el orden dentro
+// de ella es una decisión de cada interfaz (la PWA no tiene lentes). Up next y
+// el horizonte salen tal cual de shared — el horizonte incluye también a los
+// fijados sin salir, a propósito (ver sortHorizon).
+export const splitPlanSections = (games: PlannedGameItem[], lens: PlanLens): PlanSections => ({
+  upNext: sortUpNext(games, PLAN_SHELF_READERS),
+  queue: sortByLens(filterQueue(games, PLAN_SHELF_READERS), lens),
+  horizon: sortHorizon(games, PLAN_SHELF_READERS),
+});

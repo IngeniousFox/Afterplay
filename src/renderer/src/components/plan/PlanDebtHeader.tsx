@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { GRAY, VIOLET } from '../../lib/colors';
 import { pluralize } from '../../lib/format';
 import { STATUS_META } from '../../lib/gameStatus';
-import type { PlanDebt } from '../../lib/plan';
+import type { PlanDebt } from '../../../../shared/planShelves';
 
 const PLAN_COLOR = STATUS_META.plan.color;
 

@@ -1,3 +1,4 @@
+import { hoursByGameInYear } from '../../../shared/domain/hours';
 import type { GameListItem, SessionWithGame, SpendEventSummary } from '../../../shared/types';
 import type { Year } from '../components/stats/YearPicker';
 
@@ -34,27 +35,19 @@ export const yearTotals = (
   totalSpent: number;
   costPerHour: number | null;
 } => {
-  const trackedSecondsByGame = new Map<number, number>();
-  if (year !== 'all') {
-    for (const session of sessions) {
-      if (session.startedAt.getFullYear() !== year) continue;
-      const current = trackedSecondsByGame.get(session.gameId) ?? 0;
-      trackedSecondsByGame.set(session.gameId, current + (session.durationSec ?? 0));
-    }
-  }
-
-  const hoursByGame = new Map<number, number>();
-  for (const game of games) {
-    if (year === 'all') {
-      hoursByGame.set(game.id, game.totalHours);
-      continue;
-    }
-    const trackedHours = (trackedSecondsByGame.get(game.id) ?? 0) / 3600;
-    const manualHours = game.manualIterations
-      .filter((manual) => manual.year === year)
-      .reduce((sum, manual) => sum + manual.hours, 0);
-    hoursByGame.set(game.id, trackedHours + manualHours);
-  }
+  // Las horas de un año salen de la regla compartida (hoursByGameInYear), la
+  // misma que usa la portada del móvil en el Worker: aquí había una copia a
+  // mano. Sin zona horaria a propósito: el escritorio ya corre en el reloj del
+  // que mira, y yearOf sin zona es exactamente el getFullYear() local de antes.
+  const hoursByGame =
+    year === 'all'
+      ? new Map(games.map((game) => [game.id, game.totalHours]))
+      : hoursByGameInYear(
+          games.map((game) => game.id),
+          sessions,
+          new Map(games.map((game) => [game.id, game.manualIterations])),
+          year,
+        );
 
   // "All Time" cuenta la biblioteca entera; un año concreto, solo los juegos
   // que de verdad se tocaron ese año (de ahí las dos etiquetas distintas del

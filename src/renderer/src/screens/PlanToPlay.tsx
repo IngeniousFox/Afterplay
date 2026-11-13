@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { AddGameModal } from '../components/library/AddGameModal';
+import { computePlanDebt } from '../../../shared/planShelves';
 import type { IgdbSearchResult } from '../../../shared/types';
 import { PlanDebtHeader } from '../components/plan/PlanDebtHeader';
 import { PlanLensChips } from '../components/plan/PlanLensChips';
@@ -25,7 +26,7 @@ import { getStoredScroll, useScrollMemory } from '../hooks/useScrollMemory';
 import { AMBER, GRAY, GREEN, TEAL, VIOLET } from '../lib/colors';
 import { STATUS_META } from '../lib/gameStatus';
 import type { PlanLens } from '../lib/plan';
-import { computePlanDebt, splitPlanSections } from '../lib/plan';
+import { splitPlanSections } from '../lib/plan';
 import { countdownLabel, releaseCountdown, releaseSortKey } from '../lib/releaseDate';
 import {
   accentGradientStyle,
