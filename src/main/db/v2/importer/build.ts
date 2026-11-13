@@ -20,6 +20,11 @@ import type { AchievementCatalogItem, AchievementSource, ExternalCheckSource } f
 import { tableInfo } from '../store/columns';
 import { classifyAchievements, type ClassifiedAchievement } from './achievements';
 import {
+  attributeAchievementStamps,
+  catalogAnswerAt,
+  type StampAttribution,
+} from './achievementStamps';
+import {
   assignLegacyClocks,
   legacyClockAt,
   nextLegacyClock,
@@ -100,8 +105,12 @@ export interface ImportContext {
   /** Logro 1.x → catálogos en los que entra. */
   readonly achievementSources: ReadonlyMap<number, readonly AchievementSource[]>;
   readonly classified: readonly ClassifiedAchievement[];
-  /** Juego 1.x → fuentes de `external_checks` que se escribieron con `achievementsSyncedAt`. */
-  readonly achievementCheckSources: ReadonlyMap<number, readonly ExternalCheckSource[]>;
+  /**
+   * Juego 1.x (con algún sello de logros) → el reparto de
+   * `achievementsSyncedAt`/`achievementsUnlocksSyncedAt` entre las
+   * comprobaciones de `external_checks` (achievementStamps.ts).
+   */
+  readonly achievementStamps: ReadonlyMap<number, StampAttribution>;
   readonly gamesById: ReadonlyMap<number, LegacyGame>;
   readonly iterationsById: ReadonlyMap<number, LegacyIteration>;
   readonly currency: string;
@@ -472,7 +481,7 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
     checkedAt: number;
   };
   const checks: Check[] = [];
-  const achievementCheckSources = new Map<number, ExternalCheckSource[]>();
+  const achievementStamps = new Map<number, StampAttribution>();
   for (const g of data.games) {
     const gameId = g.id as number;
     const add = (src: ExternalCheckSource, at: SqlValue, ok: boolean): void => {
@@ -496,38 +505,22 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
     );
     add('curiosities', g.curiositiesGeneratedAt, (curiositiesByGame.get(gameId)?.length ?? 0) > 0);
 
-    // `achievementsSyncedAt` lo escriben Steam y RA: una fila por cada fuente
-    // cuyo catálogo existe. Sin catálogo, la respuesta fue "no hay logros" de
-    // la fuente que el juego tenga enlazada.
-    if (g.achievementsSyncedAt !== null) {
-      const catalogs = catalogSourcesByGame.get(gameId) ?? new Set<AchievementSource>();
-      const sources: ExternalCheckSource[] = [];
-      if (catalogs.has('steam')) sources.push('steam_achievements');
-      if (catalogs.has('ra')) sources.push('ra_achievements');
-      if (sources.length > 0) {
-        for (const src of sources) add(src, g.achievementsSyncedAt, true);
-      } else {
-        if (g.steamAppId !== null) sources.push('steam_achievements');
-        if (g.raGameId !== null) sources.push('ra_achievements');
-        for (const src of sources) add(src, g.achievementsSyncedAt, false);
-        if (sources.length === 0)
-          discard('games', 'achievementsSyncedAt sin catálogo ni clave de Steam o RA');
-        else fact('achievementsSyncedAt sin catálogo: comprobación "empty"');
-      }
-      achievementCheckSources.set(gameId, sources);
-    }
-    // `achievementsUnlocksSyncedAt` → `steam_unlocks` si el juego es de Steam.
-    // Si solo es de RA, ese sello lo escribió el sync de RA junto al catálogo
-    // y ya lo representa `ra_achievements`.
-    if (g.achievementsUnlocksSyncedAt !== null) {
-      if (catalogSourcesByGame.get(gameId)?.has('steam') || g.steamAppId !== null) {
-        add('steam_unlocks', g.achievementsUnlocksSyncedAt, true);
-      } else {
-        discard(
-          'games',
-          'achievementsUnlocksSyncedAt de un juego solo de RA (lo cubre ra_achievements)',
-        );
-      }
+    // Los dos sellos de logros: quién los escribió, con la regla de
+    // achievementStamps.ts (sin inventar horas; lo ambiguo y lo anómalo se
+    // cuentan).
+    const attribution = attributeAchievementStamps({
+      syncedAt: num(g.achievementsSyncedAt),
+      unlocksSyncedAt: num(g.achievementsUnlocksSyncedAt),
+      hasSteamKey: g.steamAppId !== null,
+      hasRaKey: g.raGameId !== null,
+      catalogs: catalogSourcesByGame.get(gameId) ?? new Set<AchievementSource>(),
+    });
+    if (attribution.basis !== 'sin sellos') {
+      achievementStamps.set(gameId, attribution);
+      fact(`sellos de logros: ${attribution.basis}`);
+      for (const c of attribution.checks)
+        checks.push({ gameId, source: c.source, status: c.status, checkedAt: c.checkedAt });
+      for (const reason of attribution.discarded) discard('games', reason);
     }
   }
   const checkClocks = clockOf(
@@ -869,13 +862,19 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
   count('achievements').read = data.achievements.length;
   const catalogs = [...catalogGroups.entries()].map(([key, group]) => {
     const game = gamesById.get(group.gameId) as LegacyGame;
-    let fetchedAt = num(game.achievementsSyncedAt);
+    // La hora a la que contestó SU fuente (achievementStamps.ts). Si no se
+    // sabe (catálogo sin sello: setSteamAppId borra los sellos y deja el
+    // catálogo de RA), la fecha del alta, la más antigua posible, para que el
+    // refresco lo trate como viejo.
+    const attribution = achievementStamps.get(group.gameId);
+    let fetchedAt = attribution ? catalogAnswerAt(attribution, group.source) : null;
     if (fetchedAt === null) {
-      // Catálogo sin sello (setSteamAppId borra el sello y deja el de RA):
-      // la fecha del alta, la más antigua posible, para que el refresco lo
-      // trate como viejo.
       fetchedAt = req(game.addedAt);
-      fact('catálogos sin achievementsSyncedAt (fetchedAt = alta del juego)');
+      fact(
+        game.achievementsSyncedAt === null
+          ? 'catálogos sin achievementsSyncedAt (fetchedAt = alta del juego; EXPECTED catalogWithoutStamp)'
+          : 'catálogos cuya fuente no escribió el sello (fetchedAt = alta del juego)',
+      );
     }
     return { key, group, fetchedAt };
   });
@@ -980,7 +979,9 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
     let at = num(g.curiositiesGeneratedAt);
     if (at === null) {
       at = req(g.addedAt);
-      fact('curiosidades sin curiositiesGeneratedAt (generatedAt = alta del juego)');
+      fact(
+        'juegos con curiosidades sin curiositiesGeneratedAt (generatedAt = alta del juego; EXPECTED curiositiesWithoutStamp)',
+      );
     }
     curiosityDates.set(g.id as number, at);
   }
@@ -1117,7 +1118,7 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
       planEntries,
       achievementSources,
       classified,
-      achievementCheckSources,
+      achievementStamps,
       gamesById,
       iterationsById,
       currency: options.currency,

@@ -195,6 +195,6 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetail<strin
     iterations: iterationDetails,
     // Un planeado ya está en el Plan: ni se pregunta (una consulta menos).
     canMoveToPlan: game.planned ? false : canMoveToPlan(ctx, gameId),
-    planHistory: readPlanHistory(ctx, gameId, game.promotedAt),
+    planHistory: readPlanHistory(ctx, gameId, game.promotedAt, game.addedAt),
   };
 }

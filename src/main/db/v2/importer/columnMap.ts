@@ -180,6 +180,65 @@ const toCheck = (column: string, source: ExternalCheckSource): ColumnDecl => ({
 });
 const isNotNull = (value: unknown): boolean => value !== null && value !== undefined;
 
+const CATALOG_CHECKS = ['steam_achievements', 'ra_achievements'] as const;
+
+/**
+ * Los dos sellos de logros (achievementStamps.ts). Cada comprobación que el
+ * reparto dice tiene que estar con su hora y su estado, las que no dice no
+ * tienen que existir, y el valor 1.x tiene que CONSERVARSE: tiene que ser la
+ * hora de alguna de las comprobaciones que lo representan (para el de
+ * desbloqueos, `steam_unlocks` o `ra_achievements`). Si el reparto lo hubiera
+ * perdido, se exige en la fuente de Steam y la conciliación lo cuenta como
+ * diferencia.
+ */
+function stampChecks(row: Row, ctx: ReconcileContext, which: 'catalog' | 'unlocks'): ColumnCheck {
+  const legacyId = Number(row.id);
+  const id = gameRow(row, ctx);
+  const value = which === 'catalog' ? row.achievementsSyncedAt : row.achievementsUnlocksSyncedAt;
+  const attribution = ctx.achievementStamps.get(legacyId);
+  const checks = attribution?.checks ?? [];
+  const owned: readonly ExternalCheckSource[] =
+    which === 'catalog' ? CATALOG_CHECKS : ['steam_unlocks'];
+  const out: Expectation[] = [];
+  for (const source of owned) {
+    const check = checks.find((c) => c.source === source);
+    const checkId = externalCheckId(id, source);
+    if (!check) {
+      out.push(absent('external_checks', checkId));
+      continue;
+    }
+    out.push(expect('external_checks', checkId, 'checkedAt', check.checkedAt));
+    out.push(expect('external_checks', checkId, 'status', check.status));
+  }
+  if (which === 'catalog') {
+    // El catálogo guarda la hora a la que contestó su fuente (o el alta).
+    for (const source of ['steam', 'ra'] as const) {
+      if (!hasCatalog(ctx, legacyId, source)) continue;
+      const at = checks.find((c) => c.source === `${source}_achievements`)?.checkedAt;
+      out.push(
+        expect(
+          'achievement_catalogs',
+          achievementCatalogId(id, source),
+          'fetchedAt',
+          at ?? row.addedAt,
+        ),
+      );
+    }
+  }
+  if (value !== null) {
+    const carriers: readonly ExternalCheckSource[] =
+      which === 'catalog' ? CATALOG_CHECKS : ['steam_unlocks', 'ra_achievements'];
+    const kept = checks.some((c) => carriers.includes(c.source) && c.checkedAt === Number(value));
+    // Un sello que el reparto declara sin destino ya sale en los descartes
+    // del origen (con su motivo); cualquier otra pérdida es una diferencia.
+    const declared = (attribution?.discarded.length ?? 0) > 0;
+    if (!kept && !declared) {
+      out.push(expect('external_checks', externalCheckId(id, owned[0]), 'checkedAt', value));
+    }
+  }
+  return out;
+}
+
 const GAMES: TableDecl = {
   columns: {
     id: idDecl(
@@ -264,57 +323,13 @@ const GAMES: TableDecl = {
     steamAppIdCheckedAt: toCheck('steamAppIdCheckedAt', 'steam_appid'),
     achievementsSyncedAt: {
       fate: 'transform',
-      to: 'external_checks(steam_achievements / ra_achievements, según el catálogo).checkedAt y achievement_catalogs.fetchedAt',
-      check: (row, ctx) => {
-        const id = gameRow(row, ctx);
-        const sources = ctx.achievementCheckSources.get(Number(row.id)) ?? [];
-        if (row.achievementsSyncedAt === null) {
-          return [
-            absent('external_checks', externalCheckId(id, 'steam_achievements')),
-            absent('external_checks', externalCheckId(id, 'ra_achievements')),
-          ];
-        }
-        if (sources.length === 0)
-          return { skip: 'achievementsSyncedAt sin catálogo ni clave de Steam o RA' };
-        const out: Expectation[] = sources.map((source) =>
-          expect(
-            'external_checks',
-            externalCheckId(id, source),
-            'checkedAt',
-            row.achievementsSyncedAt,
-          ),
-        );
-        for (const source of ['steam', 'ra'] as const) {
-          if (
-            sources.includes(source === 'steam' ? 'steam_achievements' : 'ra_achievements') &&
-            hasCatalog(ctx, Number(row.id), source)
-          ) {
-            out.push(
-              expect(
-                'achievement_catalogs',
-                achievementCatalogId(id, source),
-                'fetchedAt',
-                row.achievementsSyncedAt,
-              ),
-            );
-          }
-        }
-        return out;
-      },
+      to: 'external_checks(steam_achievements / ra_achievements, según quién lo escribió: achievementStamps.ts).checkedAt; achievement_catalogs.fetchedAt = la hora de su fuente (o el alta)',
+      check: (row, ctx) => stampChecks(row, ctx, 'catalog'),
     },
     achievementsUnlocksSyncedAt: {
       fate: 'transform',
-      to: 'external_checks(steam_unlocks).checkedAt (los juegos solo de RA lo tienen en ra_achievements)',
-      check: (row, ctx) => {
-        const id = externalCheckId(gameRow(row, ctx), 'steam_unlocks');
-        if (row.achievementsUnlocksSyncedAt === null) return [absent('external_checks', id)];
-        if (row.steamAppId === null && !hasCatalog(ctx, Number(row.id), 'steam')) {
-          return {
-            skip: 'achievementsUnlocksSyncedAt de un juego solo de RA (lo cubre ra_achievements)',
-          };
-        }
-        return [expect('external_checks', id, 'checkedAt', row.achievementsUnlocksSyncedAt)];
-      },
+      to: 'external_checks(steam_unlocks o ra_achievements, según quién lo escribió: achievementStamps.ts).checkedAt',
+      check: (row, ctx) => stampChecks(row, ctx, 'unlocks'),
     },
     raGameId: toGames('raGameId'),
     raCheckedAt: toCheck('raCheckedAt', 'ra_match'),

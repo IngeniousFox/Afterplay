@@ -6,12 +6,16 @@ import { getGameAchievements } from '../../queries/achievements/getGameAchieveme
 import { getSessionUnlocks } from '../../queries/achievements/getSessionUnlocks';
 import { getAllCuriosities } from '../../queries/curiosities/getAllCuriosities';
 import { getCuriositiesCounts } from '../../queries/curiosities/getPendingCuriositiesGames';
+import { getEmulators } from '../../queries/emulators/getEmulators';
 import { getGameById } from '../../queries/games/getGameById';
 import { getGames } from '../../queries/games/getGames';
+import { getOwnedGames } from '../../queries/games/getOwnedGames';
 import { getPlannedGameExtras, getPlannedGames } from '../../queries/games/getPlannedGames';
+import { getWatchTargets } from '../../queries/games/getWatchTargets';
 import { getLatestMemories } from '../../queries/memories/getLatestMemories';
 import { getMemoryFacts } from '../../queries/memories/getMemoryFacts';
 import { getAllSessions } from '../../queries/sessions/getAllSessions';
+import { getPendingSessions } from '../../queries/sessions/getPendingSessions';
 import { getAllSpendEvents } from '../../queries/spend/getAllSpendEvents';
 import { getAllStateEvents } from '../../queries/stateEvents/getAllStateEvents';
 import { gamesTable, radarGamesTable } from '../../schema';
@@ -58,6 +62,13 @@ export interface LegacyQueryViews {
   readonly curiosities: Awaited<ReturnType<typeof getAllCuriosities>>;
   readonly curiositiesCounts: Awaited<ReturnType<typeof getCuriositiesCounts>>;
   readonly radar: Awaited<ReturnType<typeof listLegacyRadar>>;
+  readonly emulators: Awaited<ReturnType<typeof getEmulators>>;
+  /** La bandeja "Pending" de Sesiones (sesiones de emulador sin asignar). */
+  readonly pendingSessions: Awaited<ReturnType<typeof getPendingSessions>>;
+  /** Lo que el escaneo de carpetas sabe de la colección. */
+  readonly ownedGames: Awaited<ReturnType<typeof getOwnedGames>>;
+  /** Lo que vigila el watcher (rutas de la 1.x, de cualquier PC). */
+  readonly watchTargets: Awaited<ReturnType<typeof getWatchTargets>>;
   /** Cuánto tardó la foto (informe). */
   readonly elapsedMs: number;
 }
@@ -149,6 +160,10 @@ export async function collectLegacyQueryViews(): Promise<LegacyQueryViews> {
     curiosities: await getAllCuriosities(),
     curiositiesCounts: await getCuriositiesCounts(),
     radar: await listLegacyRadar(),
+    emulators: await getEmulators(),
+    pendingSessions: await getPendingSessions(),
+    ownedGames: await getOwnedGames(),
+    watchTargets: await getWatchTargets(),
     elapsedMs: Math.round(performance.now() - started),
   };
 }

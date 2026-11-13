@@ -195,6 +195,18 @@ describe('readGameRow', () => {
     assert.equal(readGameRow(fx.ctx, ambos)?.achievementsUnlocksSyncedAt?.getTime(), T0 + 9);
   });
 
+  it('Steam pregunta DESPUÉS sin encontrar logros: el catálogo es de Steam y los desbloqueos de RA', () => {
+    // Lo que deja la 1.x (y el importador): RA sincroniza a las 3 (los dos
+    // sellos) y Steam contesta "sin logros" a las 9 (solo el de catálogo).
+    // Un "empty" de Steam no es una respuesta sobre TUS desbloqueos.
+    const id = seedGame(fx.ctx, { title: 'Dos fuentes', steamAppId: 10, raGameId: 20 });
+    writeCheck(fx.ctx, id, 'ra_achievements', 'ok', { checkedAt: at(3) });
+    writeCheck(fx.ctx, id, 'steam_achievements', 'empty', { checkedAt: at(9) });
+    const row = readGameRow(fx.ctx, id)!;
+    assert.equal(row.achievementsSyncedAt?.getTime(), T0 + 9);
+    assert.equal(row.achievementsUnlocksSyncedAt?.getTime(), T0 + 3);
+  });
+
   it('una caché o un plan con lápida es como no tenerlos', () => {
     const id = seedGame(fx.ctx, {
       title: 'Celeste',

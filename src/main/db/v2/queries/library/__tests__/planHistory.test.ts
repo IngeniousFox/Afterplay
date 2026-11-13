@@ -6,9 +6,18 @@ import {
   seedPlaythrough,
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
+import {
+  createGameWithDetails,
+  createPlannedGame,
+  deleteGame,
+  moveToPlan,
+  promotePlannedGame,
+} from '../../games';
+import { createInput, enrichment, planInput, promoteInput } from '../../games/__tests__/helpers';
 import { getGameById } from '../getGameById';
 import type { GameDetail } from '../../../../../../shared/types';
 import { event, iso } from './helpers';
+import { hours } from '../../common/__tests__/fixtures';
 
 // Los dos eventos del Plan de la ficha (R-06, petición expresa del usuario):
 // "Añadido al Plan" (`plan_entries.plannedAt` + nota, viva o con lápida) y
@@ -131,5 +140,137 @@ describe('planHistory: los dos eventos del Plan en la ficha', () => {
     const g = detail(gameId);
     assert.equal(g.planHistory?.note, null);
     assert.equal(g.planHistory?.leftAt, null);
+  });
+});
+
+// La regla que separa "lápida de esta vida" de "lápida de una vida anterior"
+// (I-11 e I-14): una entrada con lápida cuyo `plannedAt` es anterior al
+// `addedAt` actual es de antes de volver a añadir el juego. Aquí, con las
+// escrituras de verdad de `games/` (no con la puerta a mano), los casos que
+// tienen que cumplirse A LA VEZ.
+describe('planHistory: vida actual frente a vida anterior', () => {
+  const H = { igdbId: 30003, title: 'Hades', steamAppId: 1145360 };
+  const plan = (note: string | null = null): string =>
+    createPlannedGame(fx.ctx, planInput({ source: { igdbId: H.igdbId }, note }), enrichment(H)).id;
+  const add = (): string =>
+    createGameWithDetails(fx.ctx, createInput({ source: { igdbId: H.igdbId } }), enrichment(H)).id;
+  const promote = (gameId: string): void => {
+    promotePlannedGame(fx.ctx, promoteInput(gameId));
+  };
+
+  it('importado de la 1.x: lápida sin promotedAt (anterior a la columna) enseña el alta en el Plan', () => {
+    // Lo que deja el importador: la entrada con lápida con la fecha y la nota
+    // del plan_to_play (posterior al alta) y `promotedAt` null.
+    const addedAt = new Date('2024-02-01T10:00:00Z');
+    const plannedAt = new Date('2024-02-01T10:00:00.002Z');
+    const gameId = seedGame(fx.ctx, {
+      title: 'Importado',
+      addedAt,
+      planned: { plannedAt, note: 'Nota del Plan 1.x' },
+    });
+    fx.ctx.store.remove('plan_entries', gameId);
+    const g = detail(gameId);
+    assert.equal(g.planned, false);
+    assert.equal(g.promotedAt, null);
+    assert.deepEqual(g.planHistory, { plannedAt, note: 'Nota del Plan 1.x', leftAt: null });
+  });
+
+  it('importado con plannedAt igual al alta (planeado sin evento): también se enseña', () => {
+    const addedAt = new Date('2024-02-01T10:00:00Z');
+    const gameId = seedGame(fx.ctx, {
+      title: 'Importado',
+      addedAt,
+      planned: { plannedAt: addedAt },
+    });
+    fx.ctx.store.remove('plan_entries', gameId);
+    assert.deepEqual(detail(gameId).planHistory, { plannedAt: addedAt, note: null, leftAt: null });
+  });
+
+  it('planeado → promocionado → borrado → vuelto a añadir: nada de la vida anterior', () => {
+    const gameId = plan('De la otra vida');
+    fx.wall.advance(hours(24));
+    promote(gameId);
+    fx.wall.advance(hours(24));
+    assert.equal(deleteGame(fx.ctx, gameId), true);
+    fx.wall.advance(hours(24));
+    assert.equal(add(), gameId, 'resucita con el mismo id');
+    const g = detail(gameId);
+    assert.equal(g.promotedAt, null);
+    assert.equal(g.planHistory, null);
+  });
+
+  it('borrado mientras estaba en el Plan y vuelto a añadir a la biblioteca: nada', () => {
+    const gameId = plan('De la otra vida');
+    fx.wall.advance(hours(24));
+    deleteGame(fx.ctx, gameId);
+    fx.wall.advance(hours(24));
+    add();
+    assert.equal(detail(gameId).planHistory, null);
+  });
+
+  it('borrado y vuelto a añadir AL PLAN: el paso nuevo, con su fecha y su nota', () => {
+    const gameId = plan('De la otra vida');
+    fx.wall.advance(hours(24));
+    promote(gameId);
+    deleteGame(fx.ctx, gameId);
+    fx.wall.advance(hours(24));
+    const plannedAt = fx.ctx.now();
+    plan('De esta vida');
+    assert.deepEqual(detail(gameId).planHistory, {
+      plannedAt,
+      note: 'De esta vida',
+      leftAt: null,
+    });
+  });
+
+  it('vuelto a añadir y después llevado al Plan y promocionado: se enseña el paso de esta vida', () => {
+    const gameId = plan();
+    fx.wall.advance(hours(24));
+    promote(gameId);
+    deleteGame(fx.ctx, gameId);
+    fx.wall.advance(hours(24));
+    add();
+    fx.wall.advance(hours(24));
+    const backAt = fx.ctx.now();
+    moveToPlan(fx.ctx, gameId);
+    assert.deepEqual(detail(gameId).planHistory, { plannedAt: backAt, note: null, leftAt: null });
+    fx.wall.advance(hours(24));
+    const leftAt = fx.ctx.now();
+    promote(gameId);
+    assert.deepEqual(detail(gameId).planHistory, { plannedAt: backAt, note: null, leftAt });
+  });
+
+  it('los tres normales con las escrituras de verdad: planeado, promocionado, ida y vuelta', () => {
+    const plannedAt = fx.ctx.now();
+    const gameId = plan('Por la secuela');
+    assert.deepEqual(detail(gameId).planHistory, {
+      plannedAt,
+      note: 'Por la secuela',
+      leftAt: null,
+    });
+    fx.wall.advance(hours(24));
+    const leftAt = fx.ctx.now();
+    promote(gameId);
+    assert.deepEqual(detail(gameId).planHistory, {
+      plannedAt,
+      note: 'Por la secuela',
+      leftAt,
+    });
+    fx.wall.advance(hours(24));
+    const backAt = fx.ctx.now();
+    moveToPlan(fx.ctx, gameId);
+    assert.deepEqual(detail(gameId).planHistory, {
+      plannedAt: backAt,
+      note: 'Por la secuela',
+      leftAt: null,
+    });
+    fx.wall.advance(hours(24));
+    const leftAgain = fx.ctx.now();
+    promote(gameId);
+    assert.deepEqual(detail(gameId).planHistory, {
+      plannedAt: backAt,
+      note: 'Por la secuela',
+      leftAt: leftAgain,
+    });
   });
 });

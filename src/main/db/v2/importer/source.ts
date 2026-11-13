@@ -195,6 +195,12 @@ export interface LegacyData {
   readonly radarGames: readonly LegacyRadarGame[];
   /** `save_backups` no se migra (§19.5): solo se cuenta. */
   readonly saveBackupCount: number;
+  /**
+   * Juegos con alguna copia de partida en la 1.x. Las copias no se importan
+   * (se reindexan del bucket), pero cuentan como "registro de partida" en la
+   * condición de devolver al Plan, y la validación con consultas lo necesita.
+   */
+  readonly saveBackupGameIds: readonly number[];
   /** Órdenes del buzón sin procesar (§19.7). */
   readonly pendingMailbox: number;
   /** Total de filas del buzón, procesadas o no (desaparece entero). */
@@ -246,6 +252,11 @@ export function readLegacyData(db: DatabaseSync): LegacyData {
   const radarGames = selectAll(db, 'radar_games', RADAR_COLUMNS);
 
   const saveBackupCount = countOf(db, 'SELECT count(*) AS n FROM save_backups');
+  const saveBackupGameIds = (
+    db.prepare('SELECT DISTINCT "gameId" AS id FROM save_backups ORDER BY 1').all() as {
+      id: number;
+    }[]
+  ).map((r) => Number(r.id));
   const mailboxCount = countOf(db, 'SELECT count(*) AS n FROM plan_mailbox');
   const pendingMailbox = countOf(
     db,
@@ -289,6 +300,7 @@ export function readLegacyData(db: DatabaseSync): LegacyData {
     memories,
     radarGames,
     saveBackupCount,
+    saveBackupGameIds,
     pendingMailbox,
     mailboxCount,
     // Una base vacía no tiene sellos: cualquier valor positivo sirve (no hay

@@ -20,7 +20,7 @@ import {
   type ImportReport,
 } from '..';
 import type { LegacyQueryViews } from '../legacyQueries';
-import { validateWithQueries } from '../queryValidation';
+import { expectedCases, validateWithQueries } from '../queryValidation';
 import { DAY, LegacyDb, openTarget, seedDefault, T } from './fixture';
 
 // La validación con las consultas de verdad (queryValidation.ts) y el
@@ -315,6 +315,208 @@ describe('validación con consultas (1.x frente a 2.0)', () => {
         e.report.queryValidation?.checks['biblioteca: [].totalHours'].differences === 1,
     );
     assert.equal(target.db.$client.prepare('SELECT count(*) AS n FROM games').get()?.n, 0);
+  });
+});
+
+/**
+ * Los casos que destapó el ensayo con datos reales (inventados aquí): un
+ * promocionado sin `promotedAt` con su plan_to_play, un juego con Steam y RA
+ * cuyos sellos escribieron fuentes distintas, uno de la biblioteca sin
+ * playthroughs, un catálogo mezclado, y catálogo y curiosidades sin sello.
+ */
+function realCases(): { db: LegacyDb; ids: Record<string, number> } {
+  const db = track(new LegacyDb());
+  const ids: Record<string, number> = {};
+  // 1. Promocionado antes de existir `promotedAt`.
+  ids.oldPromoted = db.game({ title: 'Antiguo', igdbId: 50, addedAt: T });
+  const pt = db.iteration(ids.oldPromoted);
+  db.event(pt, 'plan_to_play', T + 5, { datePrecision: 'datetime', note: 'del Plan' });
+  db.event(pt, 'started', T + 3 * DAY);
+  // 2. Steam y RA: RA sincroniza (los dos sellos) y Steam pregunta después
+  //    sin encontrar logros (solo el de catálogo).
+  ids.both = db.game({ title: 'Dos fuentes', igdbId: 60, steamAppId: 600, raGameId: 61 });
+  for (const [i, api] of ['101', '102'].entries()) {
+    db.insert('achievements', {
+      gameId: ids.both,
+      apiName: api,
+      displayName: `RA ${api}`,
+      iconUrl: `https://media.retroachievements.org/Badge/${api}.png`,
+      sortIndex: i,
+    });
+  }
+  db.client.exec(
+    `UPDATE games SET achievementsUnlocksSyncedAt = ${T + 20 * DAY}, achievementsSyncedAt = ${T + 20 * DAY + 245_000} WHERE id = ${ids.both}`,
+  );
+  // 3. De la biblioteca, sin ninguna iteración ni registro.
+  ids.empty = db.game({ title: 'Vacío', igdbId: 70, promotedAt: T + DAY });
+  // 4. Catálogo mezclado, intercalado por sortIndex, con los dos sellos iguales.
+  ids.mixed = db.game({ title: 'Mezclado', igdbId: 80, steamAppId: 800, raGameId: 81 });
+  for (const [api, sortIndex, ra] of [
+    ['WIN', 0, false],
+    ['901', 1, true],
+    ['LOSE', 2, false],
+    ['902', 3, true],
+  ] as const) {
+    db.insert('achievements', {
+      gameId: ids.mixed,
+      apiName: api,
+      displayName: api,
+      iconUrl: ra ? `https://media.retroachievements.org/Badge/${api}.png` : null,
+      sortIndex,
+    });
+  }
+  db.client.exec(
+    `UPDATE games SET achievementsSyncedAt = ${T + 30 * DAY}, achievementsUnlocksSyncedAt = ${T + 30 * DAY} WHERE id = ${ids.mixed}`,
+  );
+  // 5. Catálogo de Steam sin achievementsSyncedAt.
+  ids.noStamp = db.game({ title: 'Sin sello', igdbId: 90, steamAppId: 900, addedAt: T + 2 * DAY });
+  db.insert('achievements', { gameId: ids.noStamp, apiName: 'A', displayName: 'A', sortIndex: 0 });
+  // 6. Curiosidades sin curiositiesGeneratedAt.
+  ids.trivia = db.game({ title: 'Curioso', igdbId: 95, addedAt: T + 4 * DAY });
+  db.insert('curiosities', { gameId: ids.trivia, text: 'una' });
+  return { db, ids };
+}
+
+const checkRow = (target: LocalDatabase, id: string): Record<string, unknown> | undefined => {
+  const row = target.db.$client
+    .prepare('SELECT status, checkedAt FROM external_checks WHERE id = ?')
+    .get(id);
+  return row ? { ...row } : undefined;
+};
+
+describe('validación con consultas: los casos del ensayo real', () => {
+  it('cero diferencias, cada diferencia decidida contada en su caso exacto', async () => {
+    const { db } = realCases();
+    const views = await legacyViews(db);
+    const target = track(openTarget());
+    const report = importWith(db, target, views);
+    const q = report.queryValidation;
+    assert.ok(q);
+    assert.deepEqual(q.differences, []);
+    assert.equal(report.validation.columns.differences, 0);
+    // Todos los de la biblioteca sin iteraciones ni registros (los cinco de logros y curiosidades también).
+    assert.equal(q.expected.zeroPlaythroughsMoveToPlan, 5);
+    assert.equal(q.expected.mixedCatalogOrder, 1);
+    // Ficha de logros y recuento de sincronizados.
+    assert.equal(q.expected.catalogWithoutStamp, 2);
+    // Ficha y recuento de generados.
+    assert.equal(q.expected.curiositiesWithoutStamp, 2);
+    assert.equal(report.facts['sellos de logros: cierto'], 1);
+    assert.equal(
+      report.facts[
+        'sellos de logros: ambiguo: Steam o RA escribieron el sello (las dos con su hora)'
+      ],
+      1,
+    );
+
+    const ctx = createQueryContext(target, { now: () => new Date(NOW) });
+    const { getGameById } = await import('../../queries/library');
+    const { getGameAchievements } = await import('../../queries/achievements');
+    // 1. "Añadido al Plan" con fecha y nota; la salida no se sabe.
+    assert.deepEqual(getGameById(ctx, gameIdForIgdb(50))?.planHistory, {
+      plannedAt: new Date(T + 5),
+      note: 'del Plan',
+      leftAt: null,
+    });
+    // 2. Cada sello en su fuente; las dos lecturas enseñan los de la 1.x.
+    const both = gameIdForIgdb(60);
+    assert.deepEqual(checkRow(target, `${both}:steam_achievements`), {
+      status: 'empty',
+      checkedAt: T + 20 * DAY + 245_000,
+    });
+    assert.deepEqual(checkRow(target, `${both}:ra_achievements`), {
+      status: 'ok',
+      checkedAt: T + 20 * DAY,
+    });
+    assert.equal(checkRow(target, `${both}:steam_unlocks`), undefined);
+    assert.deepEqual(getGameById(ctx, both)?.achievementsUnlocksSyncedAt, new Date(T + 20 * DAY));
+    assert.deepEqual(getGameAchievements(ctx, both).unlocksSyncedAt, new Date(T + 20 * DAY));
+  });
+
+  it('el orden por bloques exige el orden de la 1.x DENTRO de cada fuente', async () => {
+    const { db } = realCases();
+    const views = await legacyViews(db);
+    const target = track(openTarget());
+    importWith(db, target, views);
+    // Se invierte el orden del catálogo de Steam del juego mezclado en el
+    // destino (sus sortIndex): los bloques siguen bien, pero dentro no.
+    const id = `${gameIdForIgdb(80)}:steam`;
+    const client = target.db.$client;
+    const stored = client.prepare('SELECT items FROM achievement_catalogs WHERE id = ?').get(id);
+    const items = JSON.parse(String(stored?.items)) as { sortIndex: number }[];
+    const reversed = items.map((item, i) => ({ ...item, sortIndex: items.length - i }));
+    client
+      .prepare('UPDATE achievement_catalogs SET items = ? WHERE id = ?')
+      .run(JSON.stringify(reversed), id);
+    const q = validateWithQueries({
+      target,
+      context: planLegacyImport(db.client).context,
+      legacy: views,
+      memories: new Map(),
+      now: new Date(NOW),
+    });
+    assert.equal(q.checks['logros (ficha): entries{orden}'].differences, 1);
+    assert.equal(q.expected.mixedCatalogOrder, undefined);
+  });
+
+  it('emuladores, bandeja Pending, escaneo y watcher, con instalaciones reclamadas', async () => {
+    const db = track(new LegacyDb());
+    // Ejecutable y carpeta aquí; solo la carpeta; nada (de otro PC); emulado.
+    const both = db.game({
+      title: 'Aquí',
+      executablePath: 'C:\\Juegos\\aqui\\Aqui.exe',
+      installDirectory: 'C:\\Juegos\\aqui',
+      installSizeBytes: 1000,
+    });
+    db.iteration(both);
+    db.iteration(
+      db.game({
+        title: 'Solo carpeta',
+        executablePath: 'C:\\Juegos\\carpeta\\Borrado.exe',
+        installDirectory: 'C:\\Juegos\\carpeta',
+      }),
+    );
+    db.iteration(db.game({ title: 'Otro PC', executablePath: 'D:\\Otro\\otro.exe' }));
+    db.game({ title: 'Emulado', isEmulated: 1, executablePath: 'C:\\Juegos\\aqui\\Aqui.exe' });
+    const emu = db.insert('emulators', { name: 'Emu', executablePath: 'C:\\Emus\\emu.exe' });
+    db.insert('emulators', { name: 'emu lejos', executablePath: 'D:\\Otro\\emu.exe' });
+    db.session(null, T + DAY, 1, { emulatorId: emu, startedBy: 'watcher' });
+    db.session(null, T + 2 * DAY, 2, { emulatorId: emu, startedBy: 'watcher' });
+    const views = await legacyViews(db);
+    const target = track(openTarget());
+    const report = importLegacyDatabase({
+      source: db.client,
+      target,
+      legacyQueryViews: views,
+      now: NOW,
+      claimInstalls: true,
+      pathExists: (path) => path.startsWith('C:\\') && !path.endsWith('Borrado.exe'),
+    });
+    const q = report.queryValidation;
+    assert.ok(q);
+    assert.deepEqual(q.differences, []);
+    assert.equal(q.checks['watcher: {presente}'].compared, 2, 'un juego y un emulador');
+    assert.equal(q.checks['emuladores: {presente}'].compared, 2);
+    assert.equal(q.checks['sesiones (pendientes): {presente}'].compared, 2);
+    assert.equal(q.checks['escaneo (juegos de la colección): {presente}'].compared, 4);
+    assert.ok((q.expected.installPaths ?? 0) > 0);
+  });
+
+  it('cero playthroughs solo cuenta si no hay ningún registro de partida', () => {
+    const db = track(new LegacyDb());
+    const clean = db.game({ title: 'Limpio' });
+    const withSpend = db.game({ title: 'Con gasto' });
+    db.insert('spend_events', {
+      gameId: withSpend,
+      type: 'ingame_spend',
+      amount: 5,
+      occurredAt: T,
+      datePrecision: 'day',
+    });
+    db.game({ title: 'Planeado', planned: 1 });
+    db.iteration(db.game({ title: 'Con playthrough' }));
+    const cases = expectedCases(planLegacyImport(db.client).context);
+    assert.deepEqual([...cases.zeroPlaythroughs], [clean]);
   });
 });
 

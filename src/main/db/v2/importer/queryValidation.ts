@@ -18,7 +18,13 @@ import {
   getSessionUnlocks,
 } from '../queries/achievements';
 import { createQueryContext, type QueryContext } from '../queries/common';
-import { getGameById, getGames, getPlannedGameExtras, getPlannedGames } from '../queries/library';
+import {
+  getGameById,
+  getGames,
+  getOwnedGames,
+  getPlannedGameExtras,
+  getPlannedGames,
+} from '../queries/library';
 import {
   chapterSignature,
   getAllCuriosities,
@@ -31,8 +37,13 @@ import {
   toLegacyIds,
 } from '../queries/loop';
 import { getAllSpendEvents, getAllStateEvents } from '../queries/playthroughs';
-import { getAllSessions } from '../queries/sessions';
-import { gameInstalls } from '../schema';
+import {
+  getAllSessions,
+  getEmulators,
+  getPendingSessions,
+  getWatchTargets,
+} from '../queries/sessions';
+import { emulatorInstalls, gameInstalls } from '../schema';
 import type { ImportContext } from './build';
 import type { LegacyQueryViews } from './legacyQueries';
 
@@ -61,7 +72,7 @@ import type { LegacyQueryViews } from './legacyQueries';
 
 /** Las diferencias decididas entre la 1.x y la 2.0, con su motivo. */
 export const EXPECTED = {
-  ids: 'Los ids son otros: se traducen con local_legacy_ids (§19.5) antes de comparar; el radar pasa de id numérico a igdb:<id>.',
+  ids: 'Los ids son otros: se traducen con local_legacy_ids (§19.5) antes de comparar; el radar pasa de id numérico a igdb:<id>. Una lista que la 1.x ordenaba por su id entero (los extras del Plan, que se cruzan por id y cuyo orden no se enseña) no puede salir en ese orden con ids 2.0.',
   planToPlay:
     'El evento plan_to_play ya no está en el historial de estados ni en las lecturas de eventos: su fecha y su nota pasan a plan_entries y la ficha las enseña en planHistory (R-06), que se comprueba aparte.',
   emptyPlannedIteration:
@@ -71,11 +82,19 @@ export const EXPECTED = {
   installPaths:
     'Las rutas de instalación (executablePath, installDirectory, installSizeBytes) no se importan: cada PC las reclama (§19.6). Sin reclamar, la 2.0 enseña null.',
   unorderedLegacy:
-    'Orden: la lectura 1.x no tenía ORDER BY (orden del motor) o empataba sin desempate; la 2.0 ordena de forma determinista. Se comparan los elementos por clave y el orden se da por bueno.',
+    'Orden: la lectura 1.x no tenía ORDER BY (orden del motor: sesiones de la ficha, estados, desbloqueos por sesión, hechos de los recaps, gastos, curiosidades) o empataba sin desempate (y entonces solo se aceptan cambios ENTRE empatados); la 2.0 ordena de forma determinista. Los elementos se comparan por clave.',
   perSourceCompletion:
-    'Los juegos perfectos y el completado van por fuente (decisión del usuario, §20.3.1): Steam y RetroAchievements son dos hitos.',
+    'Los juegos perfectos y el completado van por fuente (decisión del usuario, §20.3.1): Steam y RetroAchievements son dos hitos. Solo en juegos con catálogo de las dos fuentes; en «perfectos» se comprueba igualmente que la 1.x lo da por perfecto si y solo si la 2.0 da perfectas las dos fuentes, con el total sumado y la fecha del último logro.',
   playthroughPosition:
     '"Playthrough N" es una posición: la 2.0 la deriva del orden de creación (R-03) y el importador guarda la etiqueta solo si no es la automática de su posición. No genera diferencias: la etiqueta se compara exactamente y tiene que salir igual.',
+  zeroPlaythroughsMoveToPlan:
+    'Devolver al Plan con CERO playthroughs (CONSULTAS.md §5.0, I-15): la 1.x exigía exactamente una iteración vacía; la 2.0 admite cero o una, porque un juego planeado ya no tiene playthrough y "nunca se ha jugado" con cero es coherente y más permisivo sin riesgo. Solo en un juego de la biblioteca sin ninguna iteración, sin gastos que no sean compras, sin desbloqueos y sin copias de partidas en la 1.x.',
+  mixedCatalogOrder:
+    'Orden de los logros de un catálogo mezclado Steam + RA (CONSULTAS.md §5.0, I-16; R-11): la 1.x los intercalaba por sortIndex y la 2.0 pone el bloque de Steam y luego el de RA. Solo en juegos con catálogo de las dos fuentes, y comprobando que DENTRO de cada fuente el orden coincide (salvo empates de sortIndex).',
+  catalogWithoutStamp:
+    'Catálogo de logros sin achievementsSyncedAt en la 1.x (CONSULTAS.md §5.0, I-17): el importador usa la fecha de alta como fetchedAt (no puede usar "ahora": no sería determinista) y la 2.0 enseña esa fecha como sincronizado y cuenta el juego como sincronizado, donde la 1.x enseña null. Estado anómalo y benigno. Solo en juegos con catálogo y sin el sello: ficha de logros (syncedAt) y recuento de juegos sincronizados.',
+  curiositiesWithoutStamp:
+    'Curiosidades sin curiositiesGeneratedAt en la 1.x (CONSULTAS.md §5.0, I-18): el importador usa la fecha de alta como generatedAt y la 2.0 da el juego por generado (no vuelve a pagar la generación), donde la 1.x lo dejaría pendiente. Solo en juegos con curiosidades y sin el sello: ficha (curiositiesGeneratedAt) y recuento de generados.',
   resealedSignature:
     'La firma de los recaps (sourceHash) se recalcula con los ids 2.0 cuando casa con los hechos importados (§19.5); la que no casa se conserva.',
 } as const;
@@ -124,6 +143,12 @@ export interface QueryValidationInput {
   /** Id 2.0 del recap → su firma esperada. */
   readonly memories: ReadonlyMap<string, ResealedMemory>;
   readonly now: Date;
+  /**
+   * Si se reclamaron las instalaciones de este PC (`claimInstalls`). Sin
+   * reclamar, el watcher de la 2.0 no vigila nada (sus objetivos salen de las
+   * instalaciones) y comparar sus objetivos no diría nada: se omite.
+   */
+  readonly claimedInstalls?: boolean;
 }
 
 const MAX_DIFFERENCES = 300;
@@ -269,6 +294,16 @@ function keyed<A, B>(
     readonly orderRule?: ExpectedRule | 'ties' | null;
     /** Para `ties`: la clave de orden de la 1.x (empatados = mismo valor). */
     readonly tieKey?: (item: A) => string;
+    /**
+     * Orden por bloques (una diferencia decidida): la 2.0 pone los elementos
+     * agrupados por `groupOf(clave)` en el orden `order`, y DENTRO de cada
+     * grupo el orden tiene que ser el de la 1.x (con la regla `orderRule`).
+     */
+    readonly blocks?: {
+      readonly groupOf: (key: string) => string;
+      readonly order: readonly string[];
+      readonly rule: ExpectedRule;
+    };
   } = {},
 ): void {
   const actualByKey = new Map<string, B>();
@@ -307,13 +342,40 @@ function keyed<A, B>(
   // Sin claves en el informe (pueden llevar un apiName): la primera posición distinta.
   const first = order1.findIndex((k, i) => k !== order2[i]);
   const differs = `primera posición distinta: ${first} de ${order1.length}`;
-  if (options.orderRule === 'ties' && options.tieKey) {
+  const tie = options.tieKey
+    ? new Map(expected.map((item) => [keyOfExpected(item), options.tieKey!(item)]))
+    : null;
+  // ¿Coinciden dos órdenes salvo cambios entre empatados de la 1.x?
+  const tiesOnly = (a: readonly string[], b: readonly string[]): boolean =>
+    a.length === b.length && tie !== null && a.every((k, i) => tie.get(k) === tie.get(b[i]));
+  const identical = (a: readonly string[], b: readonly string[]): boolean =>
+    a.length === b.length && a.every((k, i) => k === b[i]);
+  if (options.blocks) {
+    const { groupOf, order, rule } = options.blocks;
+    const rank = (k: string): number => order.indexOf(groupOf(k));
+    const inBlocks = order2.every(
+      (k, i) => rank(k) >= 0 && (i === 0 || rank(order2[i - 1]) <= rank(k)),
+    );
+    let ties = false;
+    const withinOk = order.every((group) => {
+      const a = order1.filter((k) => groupOf(k) === group);
+      const b = order2.filter((k) => groupOf(k) === group);
+      if (identical(a, b)) return true;
+      if (options.orderRule === 'ties' && tiesOnly(a, b)) return (ties = true);
+      return false;
+    });
+    if (inBlocks && withinOk) {
+      out.expect(rule);
+      if (ties) out.expect('unorderedLegacy');
+      out.leaf(read, `${path}{orden}`, true, true, list);
+    } else {
+      out.leaf(read, `${path}{orden}`, 'orden 1.x (por bloques)', differs, list);
+    }
+    return;
+  }
+  if (options.orderRule === 'ties' && tie) {
     // Se acepta solo si los dos órdenes coinciden al agrupar los empatados de la 1.x.
-    const tie = new Map(expected.map((item) => [keyOfExpected(item), options.tieKey!(item)]));
-    const groups1 = order1.map((k) => tie.get(k));
-    const groups2 = order2.map((k) => tie.get(k));
-    const tiesOnly = groups1.every((g, i) => g === groups2[i]);
-    if (tiesOnly) {
+    if (tiesOnly(order1, order2)) {
       out.expect('unorderedLegacy');
       out.leaf(read, `${path}{orden}`, true, true, list);
     } else {
@@ -398,9 +460,69 @@ interface Run {
   readonly q: QueryContext;
   readonly legacy: Legacy;
   /** Juegos 2.0 con instalación reclamada en este PC. */
-  readonly installed: ReadonlySet<string>;
+  readonly installs: ReadonlyMap<string, ClaimedInstall>;
+  /** Emuladores 2.0 con ruta reclamada en este PC → la ruta. */
+  readonly emulatorPaths: ReadonlyMap<string, string>;
   /** Juego 1.x → (alta, promoción), para la regla del artefacto. */
   readonly gameDates: ReadonlyMap<number, { addedAt: Date; promotedAt: Date | null }>;
+  /** Los juegos 1.x a los que se aplica cada diferencia esperada por juego. */
+  readonly cases: ExpectedCases;
+}
+
+/** Los juegos 1.x de las diferencias esperadas que dependen del juego. */
+interface ExpectedCases {
+  /** Biblioteca, cero iteraciones y ningún registro de partida (zeroPlaythroughsMoveToPlan). */
+  readonly zeroPlaythroughs: ReadonlySet<number>;
+  /** Con catálogo de Steam Y de RA (mixedCatalogOrder, perSourceCompletion). */
+  readonly mixedCatalogs: ReadonlySet<number>;
+  /** Con catálogo y sin achievementsSyncedAt (catalogWithoutStamp). */
+  readonly catalogWithoutStamp: ReadonlySet<number>;
+  /** Con curiosidades y sin curiositiesGeneratedAt (curiositiesWithoutStamp). */
+  readonly curiositiesWithoutStamp: ReadonlySet<number>;
+}
+
+/**
+ * Los casos exactos, sacados del ORIGEN (sus filas 1.x), no de lo importado:
+ * así una diferencia esperada no puede taparse con un fallo del importador.
+ */
+export function expectedCases(ctx: ImportContext): ExpectedCases {
+  const { data } = ctx;
+  const catalogs = new Map<number, Set<string>>();
+  for (const entry of ctx.classified) {
+    const gameId = Number(entry.achievement.gameId);
+    const set = catalogs.get(gameId) ?? new Set<string>();
+    for (const source of entry.sources) set.add(source);
+    catalogs.set(gameId, set);
+  }
+  const withIterations = new Set(data.iterations.map((i) => Number(i.gameId)));
+  // "Registro de partida" según la condición 1.x (canMoveToPlanWhere): sin
+  // iteraciones no puede haber sesiones ni eventos (cuelgan de ellas), así que
+  // quedan los gastos que no son compras, los desbloqueos y las copias.
+  const withPlay = new Set<number>([
+    ...data.spendEvents.filter((sp) => sp.type !== 'purchase').map((sp) => Number(sp.gameId)),
+    ...data.saveBackupGameIds,
+  ]);
+  const achievementGame = new Map(data.achievements.map((a) => [Number(a.id), Number(a.gameId)]));
+  for (const u of data.unlocks) {
+    const gameId = achievementGame.get(Number(u.achievementId));
+    if (gameId !== undefined) withPlay.add(gameId);
+  }
+  const withCuriosities = new Set(data.curiosities.map((c) => Number(c.gameId)));
+  const zeroPlaythroughs = new Set<number>();
+  const catalogWithoutStamp = new Set<number>();
+  const curiositiesWithoutStamp = new Set<number>();
+  for (const g of data.games) {
+    const id = Number(g.id);
+    if (!Number(g.planned) && !withIterations.has(id) && !withPlay.has(id))
+      zeroPlaythroughs.add(id);
+    if (g.achievementsSyncedAt === null && catalogs.has(id)) catalogWithoutStamp.add(id);
+    if (g.curiositiesGeneratedAt === null && withCuriosities.has(id))
+      curiositiesWithoutStamp.add(id);
+  }
+  const mixedCatalogs = new Set(
+    [...catalogs].filter(([, set]) => set.size > 1).map(([gameId]) => gameId),
+  );
+  return { zeroPlaythroughs, mixedCatalogs, catalogWithoutStamp, curiositiesWithoutStamp };
 }
 
 /** La precisión que la 2.0 tiene que enseñar para un evento 1.x. */
@@ -418,9 +540,26 @@ function expectedPrecision(
   return precision;
 }
 
-/** Las rutas de este PC: las de la 1.x si se reclamaron, si no null (§19.6). */
-function expectedPath<T>(run: Run, newGameId: string, value: T | null): T | null {
-  if (run.installed.has(newGameId)) return value;
+/** Lo reclamado en este PC para un juego (game_installs). */
+interface ClaimedInstall {
+  readonly executablePath: string | null;
+  readonly installDirectory: string | null;
+}
+
+/**
+ * Las rutas de este PC (§19.6): la de la 1.x si ESA ruta se reclamó (el
+ * tamaño va con la carpeta), si no null. Columna a columna: un juego puede
+ * tener reclamada la carpeta y no el ejecutable.
+ */
+function expectedPath<T>(
+  run: Run,
+  newGameId: string,
+  column: 'executablePath' | 'installDirectory' | 'installSizeBytes',
+  value: T | null,
+): T | null {
+  const install = run.installs.get(newGameId);
+  const claimed = column === 'installSizeBytes' ? install?.installDirectory : install?.[column];
+  if (claimed != null) return value;
   if (value !== null) run.out.expect('installPaths');
   return null;
 }
@@ -439,7 +578,7 @@ function normalizeListItem<T extends ListItem1x>(run: Run, item: T): NormalizedL
   return {
     ...item,
     id,
-    executablePath: expectedPath(run, id, item.executablePath),
+    executablePath: expectedPath(run, id, 'executablePath', item.executablePath),
     manualIterations: item.manualIterations.map((m) => ({
       ...m,
       iterationId: run.ids.iteration(m.iterationId),
@@ -505,6 +644,20 @@ function normalizeSession(run: Run, s: LegacySession): Record<string, unknown> {
   };
 }
 
+/** zeroPlaythroughsMoveToPlan: la 1.x dice que no (no hay iteración) y la 2.0 que sí. */
+function expectedCanMoveToPlan(run: Run, legacyGameId: number, legacy: boolean): boolean {
+  if (legacy || !run.cases.zeroPlaythroughs.has(legacyGameId)) return legacy;
+  run.out.expect('zeroPlaythroughsMoveToPlan');
+  return true;
+}
+
+/** curiositiesWithoutStamp: sin sello en la 1.x, la 2.0 enseña la fecha del alta. */
+function expectedCuriositiesAt(run: Run, legacyGameId: number, legacy: Date | null): Date | null {
+  if (legacy !== null || !run.cases.curiositiesWithoutStamp.has(legacyGameId)) return legacy;
+  run.out.expect('curiositiesWithoutStamp');
+  return run.gameDates.get(legacyGameId)?.addedAt ?? null;
+}
+
 /** El paso por el Plan que la 2.0 tiene que enseñar, sacado de lo que enseña la 1.x. */
 function expectedPlanHistory(
   run: Run,
@@ -554,9 +707,11 @@ function compareDetail(run: Run, legacyGameId: number, detail: LegacyDetail): vo
   const expectedGame = {
     ...game,
     id,
-    executablePath: expectedPath(run, id, game.executablePath),
-    installDirectory: expectedPath(run, id, game.installDirectory),
-    installSizeBytes: expectedPath(run, id, game.installSizeBytes),
+    executablePath: expectedPath(run, id, 'executablePath', game.executablePath),
+    installDirectory: expectedPath(run, id, 'installDirectory', game.installDirectory),
+    installSizeBytes: expectedPath(run, id, 'installSizeBytes', game.installSizeBytes),
+    canMoveToPlan: expectedCanMoveToPlan(run, legacyGameId, game.canMoveToPlan),
+    curiositiesGeneratedAt: expectedCuriositiesAt(run, legacyGameId, game.curiositiesGeneratedAt),
   };
   const {
     iterations: actualIterations,
@@ -662,7 +817,8 @@ function comparePlan(run: Run): void {
     getPlannedGameExtras(run.q),
     (g) => g.id,
     (g) => g.id,
-    { orderRule: 'unorderedLegacy' },
+    // La 1.x los ordena por su id entero (`orderBy(asc(gamesTable.id))`).
+    { orderRule: 'ids' },
   );
 }
 
@@ -725,6 +881,56 @@ function compareTimelines(run: Run): void {
 
 // ── Logros ──────────────────────────────────────────────────────────────────
 
+/** La fuente de un logro 2.0 por su clave `<juego>:<fuente>:<apiName>`. */
+const sourceOfAchievementKey = (key: string): string => key.split(':')[1] ?? '?';
+
+type Perfect1x =
+  Legacy['overview'] extends ReadonlyMap<unknown, infer O>
+    ? O extends { perfectGames: readonly (infer P)[] }
+      ? P
+      : never
+    : never;
+type Perfect2x = ReturnType<typeof getAchievementsOverview>['perfectGames'][number];
+
+/**
+ * Los perfectos de un juego con catálogo de las dos fuentes (perSourceCompletion,
+ * estrechada): en la 1.x es perfecto si TODO el catálogo mezclado lo es, así
+ * que tiene que serlo si y solo si la 2.0 da perfectas LAS DOS fuentes, con
+ * el total sumado y, como fecha, la del último logro (null si alguna fuente
+ * no la tiene fiable). Que la 2.0 dé perfecta UNA sola fuente es justo la
+ * diferencia decidida.
+ */
+function mixedPerfect(
+  run: Run,
+  read: string,
+  mixed: ReadonlySet<string>,
+  legacy: readonly Perfect1x[],
+  actual: readonly Perfect2x[],
+): void {
+  for (const legacyId of run.cases.mixedCatalogs) {
+    const gameId = run.ids.game(legacyId);
+    if (!mixed.has(gameId)) continue;
+    const old = legacy.find((g) => g.gameId === legacyId);
+    const sources = actual.filter((g) => g.gameId === gameId);
+    const both = sources.length === 2 && new Set(sources.map((g) => g.source)).size === 2;
+    const where: Where = { legacyTable: 'games', legacyId };
+    run.out.leaf(read, 'perfectGames{fuentes mezcladas}', old !== undefined, both, where);
+    if (!old || !both) continue;
+    const dates = sources.map((g) => g.completedAt);
+    const last = dates.every((d) => d !== null)
+      ? new Date(Math.max(...dates.map((d) => (d as Date).getTime())))
+      : null;
+    run.out.leaf(
+      read,
+      'perfectGames{fuentes mezcladas}.total',
+      old.total,
+      sources[0].total + sources[1].total,
+      where,
+    );
+    run.out.leaf(read, 'perfectGames{fuentes mezcladas}.completedAt', old.completedAt, last, where);
+  }
+}
+
 function compareAchievements(run: Run): void {
   const sortIndexOf = new Map(
     run.ctx.data.achievements.map((a) => [Number(a.id), Number(a.sortIndex)]),
@@ -735,7 +941,14 @@ function compareAchievements(run: Run): void {
     const actual = getGameAchievements(run.q, id);
     const { entries, ...head } = legacy;
     const { entries: actualEntries, ...actualHead } = actual;
-    deep(run.out, 'logros (ficha)', '', { ...head, gameId: id }, actualHead, where);
+    let syncedAt = head.syncedAt;
+    if (syncedAt === null && run.cases.catalogWithoutStamp.has(legacyGameId)) {
+      // catalogWithoutStamp: el catálogo lleva la fecha del alta (build.ts).
+      run.out.expect('catalogWithoutStamp');
+      syncedAt = run.gameDates.get(legacyGameId)?.addedAt ?? null;
+    }
+    deep(run.out, 'logros (ficha)', '', { ...head, syncedAt, gameId: id }, actualHead, where);
+    const mixed = run.cases.mixedCatalogs.has(legacyGameId);
     keyed(
       run.out,
       'logros (ficha)',
@@ -757,20 +970,18 @@ function compareAchievements(run: Run): void {
         // motor); la 2.0 desempata por el orden guardado en el catálogo.
         orderRule: 'ties',
         tieKey: (e) => String(sortIndexOf.get(e.legacyId) ?? '?'),
+        // mixedCatalogOrder: con las dos fuentes, bloque de Steam y luego el
+        // de RA; dentro de cada una, la regla de los empates.
+        blocks: mixed
+          ? { groupOf: sourceOfAchievementKey, order: ['steam', 'ra'], rule: 'mixedCatalogOrder' }
+          : undefined,
       },
     );
     run.out.total('fichas de logros comparadas');
   }
 
-  // Juegos 2.0 con catálogo de las dos fuentes.
-  const sourcesOf = new Map<string, Set<string>>();
-  for (const entry of run.ctx.classified) {
-    const game = run.ids.game(Number(entry.achievement.gameId));
-    const set = sourcesOf.get(game) ?? new Set<string>();
-    for (const source of entry.sources) set.add(source);
-    sourcesOf.set(game, set);
-  }
-  const mixed = new Set([...sourcesOf].filter(([, set]) => set.size > 1).map(([game]) => game));
+  // Juegos 2.0 con catálogo de las dos fuentes (sacados del origen).
+  const mixed = new Set([...run.cases.mixedCatalogs].map((legacyId) => run.ids.game(legacyId)));
 
   for (const [year, legacy] of run.legacy.overview) {
     const read = `logros (resumen ${year ?? 'All Time'})`;
@@ -806,14 +1017,16 @@ function compareAchievements(run: Run): void {
     );
     // Completado por fuente: un juego con catálogo de Steam Y de RA es un hito
     // por fuente en la 2.0 y uno solo (todo el catálogo mezclado) en la 1.x.
-    // Esos juegos se apartan de los dos lados (y se cuentan); el resto se
-    // compara exactamente.
+    // Esos juegos se apartan de la comparación por clave (y se cuentan); el
+    // resto se compara exactamente. Los perfectos apartados se comprueban
+    // aparte (`mixedPerfect`).
     const single = <T extends { gameId: string }>(list: readonly T[]): T[] =>
       list.filter((g) => {
         if (!mixed.has(g.gameId)) return true;
         run.out.expect('perSourceCompletion');
         return false;
       });
+    mixedPerfect(run, read, mixed, perfectGames, aPerfect);
     keyed(
       run.out,
       read,
@@ -855,7 +1068,18 @@ function compareAchievements(run: Run): void {
     hasUserId: run.legacy.status.hasUserId,
     hasRaCredentials: run.legacy.status.hasRaCredentials,
   });
-  deep(run.out, 'logros (estado)', '', run.legacy.status, status, {});
+  // catalogWithoutStamp: la 2.0 cuenta como sincronizado un juego con
+  // catálogo aunque no tenga sello; la 1.x solo cuenta el sello.
+  const stampless = run.cases.catalogWithoutStamp.size;
+  run.out.expect('catalogWithoutStamp', stampless);
+  deep(
+    run.out,
+    'logros (estado)',
+    '',
+    { ...run.legacy.status, syncedGames: run.legacy.status.syncedGames + stampless },
+    status,
+    {},
+  );
 
   keyed(
     run.out,
@@ -1094,11 +1318,21 @@ function compareLoopExtras(run: Run): void {
   const sameOrder =
     legacy.length === actual.length && legacy.every((c, i) => c.gameId === actual[i].gameId);
   if (!sameOrder) run.out.expect('unorderedLegacy');
+  // curiositiesWithoutStamp: la 2.0 cuenta como generado un juego con
+  // curiosidades sin sello (el recuento es de la biblioteca: sin planeados).
+  const plannedGames = new Set(
+    run.ctx.data.games.filter((g) => Number(g.planned)).map((g) => Number(g.id)),
+  );
+  const stampless = [...run.cases.curiositiesWithoutStamp].filter((id) => !plannedGames.has(id));
+  run.out.expect('curiositiesWithoutStamp', stampless.length);
   deep(
     run.out,
     'curiosidades (recuento)',
     '',
-    run.legacy.curiositiesCounts,
+    {
+      ...run.legacy.curiositiesCounts,
+      generatedGames: run.legacy.curiositiesCounts.generatedGames + stampless.length,
+    },
     getCuriositiesCounts(run.q),
     {},
   );
@@ -1120,6 +1354,112 @@ function compareLoopExtras(run: Run): void {
   );
 }
 
+// ── Emuladores, bandeja Pending, escaneo y watcher ──────────────────────────
+
+function compareDevices(run: Run, claimedInstalls: boolean): void {
+  const emulatorId = (id: number): string => run.ids.emulatorOrNull(id) as string;
+  // La ruta de un emulador es de ESTE PC (emulator_installs): la de la 1.x si
+  // se reclamó; si no, '' (R-08, como el DTO de la 2.0).
+  keyed(
+    run.out,
+    'emuladores',
+    '',
+    run.legacy.emulators.map((e) => {
+      const id = emulatorId(e.id);
+      const claimed = run.emulatorPaths.get(id);
+      if (claimed === undefined) run.out.expect('installPaths');
+      return {
+        ...e,
+        id,
+        executablePath: claimed === undefined ? '' : e.executablePath,
+        legacyId: e.id,
+      };
+    }),
+    getEmulators(run.q),
+    (e) => e.id,
+    (e) => e.id,
+    {
+      where: (e) => ({ legacyTable: 'emulators', legacyId: e.legacyId }),
+      // `name collate nocase` en las dos; la 2.0 desempata por creación.
+      orderRule: 'ties',
+      tieKey: (e) => nocaseKey(e.name),
+    },
+  );
+
+  keyed(
+    run.out,
+    'sesiones (pendientes)',
+    '',
+    run.legacy.pendingSessions.map((p) => ({
+      ...p,
+      id: run.ids.session(p.id),
+      emulatorId: emulatorId(p.emulatorId),
+      legacyId: p.id,
+    })),
+    getPendingSessions(run.q),
+    (p) => p.id,
+    (p) => p.id,
+    {
+      where: (p) => ({ legacyTable: 'sessions', legacyId: p.legacyId }),
+      // `startedAt desc` en las dos; la 1.x no desempata.
+      orderRule: 'ties',
+      tieKey: (p) => ms(p.startedAt),
+    },
+  );
+
+  keyed(
+    run.out,
+    'escaneo (juegos de la colección)',
+    '',
+    run.legacy.ownedGames.map((g) => ({ ...g, id: run.ids.game(g.id), legacyId: g.id })),
+    getOwnedGames(run.q),
+    (g) => g.id,
+    (g) => g.id,
+    {
+      where: (g) => ({ legacyTable: 'games', legacyId: g.legacyId }),
+      // La 1.x no tiene ORDER BY.
+      orderRule: 'unorderedLegacy',
+    },
+  );
+
+  if (!claimedInstalls) {
+    run.out.total('watcher: sin comparar (importación sin claimInstalls)');
+    return;
+  }
+  // Lo que vigila la 1.x, menos lo que no se reclamó en este PC (§19.6).
+  const expected = run.legacy.watchTargets.flatMap((t) => {
+    const refId = t.kind === 'game' ? run.ids.game(t.refId) : emulatorId(t.refId);
+    const claimed =
+      t.kind === 'game'
+        ? run.installs.get(refId)?.executablePath != null
+        : run.emulatorPaths.has(refId);
+    if (!claimed) {
+      run.out.expect('installPaths');
+      return [];
+    }
+    const prefix = t.kind === 'game' ? 'game' : 'emu';
+    return [{ ...t, key: `${prefix}:${refId}`, refId, legacyId: t.refId }];
+  });
+  keyed(
+    run.out,
+    'watcher',
+    '',
+    expected,
+    getWatchTargets(run.q),
+    (t) => t.key,
+    (t) => t.key,
+    {
+      where: (t) => ({
+        legacyTable: t.kind === 'game' ? 'games' : 'emulators',
+        legacyId: t.legacyId,
+      }),
+      // Juegos y luego emuladores en las dos; dentro, la 1.x no tiene ORDER BY.
+      orderRule: 'unorderedLegacy',
+    },
+  );
+  run.out.totals['watcher: objetivos 1.x'] = run.legacy.watchTargets.length;
+}
+
 // ── Entrada ─────────────────────────────────────────────────────────────────
 
 /**
@@ -1131,13 +1471,30 @@ export function validateWithQueries(input: QueryValidationInput): QueryValidatio
   const { target, context, legacy } = input;
   const out = new QueryCollector();
   const q = createQueryContext(target, { now: () => new Date(input.now) });
-  const installed = new Set(
+  const installs = new Map(
     q.db
-      .select({ gameId: gameInstalls.gameId })
+      .select({
+        gameId: gameInstalls.gameId,
+        executablePath: gameInstalls.executablePath,
+        installDirectory: gameInstalls.installDirectory,
+      })
       .from(gameInstalls)
       .where(and(eq(gameInstalls.deviceId, target.deviceId), isNull(gameInstalls.syncDeleted)))
       .all()
-      .map((r) => r.gameId),
+      .map(({ gameId, ...install }) => [gameId, install]),
+  );
+  const emulatorPaths = new Map(
+    q.db
+      .select({
+        emulatorId: emulatorInstalls.emulatorId,
+        executablePath: emulatorInstalls.executablePath,
+      })
+      .from(emulatorInstalls)
+      .where(
+        and(eq(emulatorInstalls.deviceId, target.deviceId), isNull(emulatorInstalls.syncDeleted)),
+      )
+      .all()
+      .map((r) => [r.emulatorId, r.executablePath]),
   );
   const gameDates = new Map(
     context.data.games.map((g) => [
@@ -1148,7 +1505,24 @@ export function validateWithQueries(input: QueryValidationInput): QueryValidatio
       },
     ]),
   );
-  const run: Run = { out, ids: new Ids(context), ctx: context, q, legacy, installed, gameDates };
+  const run: Run = {
+    out,
+    ids: new Ids(context),
+    ctx: context,
+    q,
+    legacy,
+    installs,
+    emulatorPaths,
+    gameDates,
+    cases: expectedCases(context),
+  };
+
+  // Cuántos juegos caen en cada diferencia esperada por juego, para que quien
+  // migre lo vea aunque cada una se aplique en varias lecturas.
+  out.totals['juegos en zeroPlaythroughsMoveToPlan'] = run.cases.zeroPlaythroughs.size;
+  out.totals['juegos en mixedCatalogOrder / perSourceCompletion'] = run.cases.mixedCatalogs.size;
+  out.totals['juegos en catalogWithoutStamp'] = run.cases.catalogWithoutStamp.size;
+  out.totals['juegos en curiositiesWithoutStamp'] = run.cases.curiositiesWithoutStamp.size;
 
   compareLibrary(run);
   for (const [legacyGameId, detail] of legacy.details) compareDetail(run, legacyGameId, detail);
@@ -1159,6 +1533,7 @@ export function validateWithQueries(input: QueryValidationInput): QueryValidatio
   compareAchievements(run);
   compareMemories(run, input.memories, input.now);
   compareLoopExtras(run);
+  compareDevices(run, input.claimedInstalls ?? false);
 
   out.totals['valores comparados'] = out.compared;
   return {

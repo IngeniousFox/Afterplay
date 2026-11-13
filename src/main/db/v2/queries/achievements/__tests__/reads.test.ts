@@ -290,6 +290,27 @@ describe('getGameAchievements — dos catálogos y completado por fuente (R-11)'
     // unlocksSyncedAt también se alimenta de RA (catálogo y desbloqueos llegan juntos).
     assert.notEqual(result.unlocksSyncedAt, null);
   });
+
+  it('catálogo solo de RA y Steam contestando después "sin logros": cada sello de su fuente', () => {
+    // El caso que destapó la validación de la importación: los desbloqueos
+    // los trajo RA (18:20) y Steam solo preguntó por el catálogo (18:24).
+    const gameId = seedGame(fx.ctx, { title: 'Clásico', steamAppId: 10, raGameId: 20 });
+    catalogo(gameId, [{ api: '1' }], 'ra');
+    seedCheck(fx.ctx, {
+      gameId,
+      source: 'ra_achievements',
+      checkedAt: new Date('2026-08-03T18:20:00Z'),
+    });
+    seedCheck(fx.ctx, {
+      gameId,
+      source: 'steam_achievements',
+      status: 'empty',
+      checkedAt: new Date('2026-08-03T18:24:05Z'),
+    });
+    const result = getGameAchievements(fx.ctx, gameId);
+    assert.equal(isoDe(result.syncedAt), '2026-08-03T18:24:05.000Z');
+    assert.equal(isoDe(result.unlocksSyncedAt), '2026-08-03T18:20:00.000Z');
+  });
 });
 
 // ══ LA PANTALLA DE SESIONES ═══════════════════════════════════════════════

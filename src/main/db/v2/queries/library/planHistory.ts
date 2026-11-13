@@ -17,12 +17,13 @@ import type { PlanHistory } from '../../../../../shared/types';
 
 /**
  * El último paso del juego por el Plan, o null si nunca pasó por él.
- * `promotedAt` es el `games.promotedAt` ya leído por quien llama.
+ * `promotedAt` y `addedAt` son los de `games`, ya leídos por quien llama.
  */
 export function readPlanHistory(
   ctx: QueryContext,
   gameId: string,
   promotedAt: Date | null,
+  addedAt: Date,
 ): PlanHistory | null {
   const entry = ctx.db
     .select({
@@ -35,16 +36,24 @@ export function readPlanHistory(
     .get();
   if (!entry) return null;
   const stillPlanned = entry.syncDeleted === null;
-  // Una entrada con lápida SIN promoción no es de esta vida del juego: es lo
+  // Una entrada con lápida puede ser de una VIDA ANTERIOR del juego: es lo
   // que queda cuando se borra un juego planeado (o promocionado) y se vuelve
-  // a añadir con el mismo igdbId. La resurrección de `games/` limpia
-  // `promotedAt` pero la entrada vieja sigue ahí con su lápida, y enseñarla
-  // daría un "Añadido al Plan" de la vida anterior sin "Salió del Plan", es
-  // decir, un juego de la biblioteca que la ficha cuenta como aún en el Plan
-  // (lo destapó la prueba de integración). Promocionar siempre fija
-  // `promotedAt` y devolver al Plan resucita la entrada, así que en la vida
-  // actual una lápida va siempre con `promotedAt`.
-  if (!stillPlanned && promotedAt === null) return null;
+  // a añadir con el mismo igdbId (la lápida del juego arrastra la de su
+  // entrada, y la resurrección no la toca). Enseñarla daría un "Añadido al
+  // Plan" de la otra vida (lo destapó la prueba de integración, I-11).
+  //
+  // La señal es la fecha: volver a añadir el juego RENUEVA `addedAt` (es su
+  // alta en esta vida), y todo paso por el Plan de esta vida es posterior o
+  // igual al alta (planear un juego nuevo escribe los dos con el mismo
+  // "ahora"; devolverlo al Plan, después). Una entrada con `plannedAt`
+  // anterior al alta actual solo puede ser de antes.
+  //
+  // No vale "lápida sin `promotedAt`", que era la regla anterior: también la
+  // cumplen los juegos importados de la 1.x que se promocionaron antes de que
+  // existiera esa columna (I-14). Esos SÍ pasaron por el Plan en esta vida:
+  // se enseña su "Añadido al Plan" y "Salió del Plan" queda en null porque no
+  // se sabe cuándo fue.
+  if (!stillPlanned && entry.plannedAt.getTime() < addedAt.getTime()) return null;
   return {
     plannedAt: entry.plannedAt,
     note: entry.note,

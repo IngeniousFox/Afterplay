@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { LocalDatabase } from '../connection';
+import { DEFAULT_CURRENCY } from '../queries/common/currency';
 import {
   buildImportPlan,
   ImportBlockedError,
@@ -72,7 +73,11 @@ export interface ImportLegacyOptions {
    * consultas de verdad (queryValidation.ts).
    */
   readonly legacyQueryViews?: LegacyQueryViews;
-  /** Moneda de los gastos (D-23). Por defecto EUR: la 1.x solo pinta euros. */
+  /**
+   * Moneda de los gastos (D-23). Por defecto la de la 2.0 (`DEFAULT_CURRENCY`,
+   * euros): la 1.x solo pinta euros, y así lo importado y lo nuevo no pueden
+   * discrepar.
+   */
   readonly currency?: string;
   /** Desarrollo: importar las sesiones abiertas cerradas en su último latido. */
   readonly devCloseOpenSessions?: boolean;
@@ -125,7 +130,7 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
     );
   }
   const plan: ImportPlan = buildImportPlan(data, {
-    currency: options.currency ?? 'EUR',
+    currency: options.currency ?? DEFAULT_CURRENCY,
     devCloseOpenSessions: options.devCloseOpenSessions ?? false,
   });
   if (data.pendingMailbox > 0) {
@@ -150,6 +155,7 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
           legacy: options.legacyQueryViews,
           memories: signatures.expected,
           now: new Date(now),
+          claimedInstalls: installs !== null,
         })
       : null;
     const report: ImportReport = {
@@ -176,7 +182,7 @@ export function planLegacyImport(
 ): ImportPlan {
   const data = withLegacySource(source, readLegacyData);
   return buildImportPlan(data, {
-    currency: options.currency ?? 'EUR',
+    currency: options.currency ?? DEFAULT_CURRENCY,
     devCloseOpenSessions: options.devCloseOpenSessions ?? false,
   });
 }

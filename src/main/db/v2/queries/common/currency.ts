@@ -9,7 +9,6 @@
 // (`games/`). El día que haya un ajuste de moneda, llega por el contexto y el
 // resto no cambia.
 //
-// El importador de la 1.x (`importer/`) escribe también 'EUR' en todo lo que
-// trae, con su propia constante (`options.currency ?? 'EUR'`): debería usar
-// esta cuando se toque (anotado en CONSULTAS.md §5.0).
+// El importador de la 1.x (`importer/index.ts`) usa también esta constante
+// para todo lo que trae (salvo que quien lo llame indique otra).
 export const DEFAULT_CURRENCY = 'EUR';
