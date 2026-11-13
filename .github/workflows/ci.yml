@@ -1,0 +1,52 @@
+# CI mínimo (docs/AFTERPLAY-2.0.md §17.4): lo que hoy se comprueba a mano antes
+# de cada release, en cada push y en cada PR.
+#
+# Windows a propósito: la app es de Windows, y sus módulos nativos (el motor de
+# la base, SDL) y parte de los tests dependen de rutas y binarios de Windows.
+#
+# Los E2E de Electron NO van aquí: tardan minutos y necesitan una sesión con
+# pantalla. Siguen siendo un paso manual antes de publicar.
+name: CI
+
+on:
+  push:
+    branches: [main, v2]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+            worker/package-lock.json
+
+      # Tres instalaciones: la raíz, la PWA y el Worker tienen cada uno su
+      # package.json, y `npm run typecheck` compila los tres.
+      - name: Install (root)
+        run: npm ci
+      - name: Install (web)
+        run: npm ci
+        working-directory: web
+      - name: Install (worker)
+        run: npm ci
+        working-directory: worker
+
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test

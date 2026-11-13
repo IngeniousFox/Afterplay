@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 // contain backups or work snapshots and must never be inferred disposable.
 const TEST_TEMP_PREFIXES = [
   'afterplay-test-', // db/__tests__/harness.ts
+  'afterplay-test-localconn-', // db/__tests__/localConnection.test.ts
+  'afterplay-test-goldberg-', // steam/__tests__/goldbergCatalog.test.ts
   'afterplay-e2e-', // e2e/sandbox.ts
   'afterplay-e2e-keys-', // e2e/plan-ajustes.spec.ts
   'afterplay-worker-test-', // workerQueries.test.ts
