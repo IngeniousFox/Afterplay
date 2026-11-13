@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { achievementUnlocks, type AchievementSource } from '../../schema';
 import { alive } from '../../store';
-import { writeCheck } from '../common/checks';
+import { recordCheck } from '../common/checks';
 import type { QueryContext } from '../common/context';
 import { readCatalogItems, readLiveGameKeys } from './catalog';
 import { catalogSourceOf, unlockOriginOf, type UnlockFeed } from './ids';
@@ -249,7 +249,10 @@ export function markSteamUnlocksSynced(
   return ctx.store.transaction(() => {
     const game = readLiveGameKeys(ctx, gameId);
     if (!game || game.steamAppId !== appId) return false;
-    // writeCheck relee el juego y escribe solo si algo cambia.
-    return writeCheck(ctx, gameId, 'steam_unlocks', 'ok', { checkedAt });
+    // `recordCheck` relee el juego y no re-sella una respuesta igual: el
+    // sondeo en vivo y "Sync now" preguntan una y otra vez, y re-sellar sería
+    // una escritura sincronizada por juego y pasada (F-33). Solo cuenta que
+    // se preguntó (`progressIsKnown`), no cuándo fue la última vez.
+    return recordCheck(ctx, gameId, 'steam_unlocks', 'ok', { checkedAt });
   });
 }

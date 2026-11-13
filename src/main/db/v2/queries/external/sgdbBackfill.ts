@@ -73,7 +73,7 @@ export function applySgdbResult(
     const current = readLiveIdentity(ctx, gameId);
     if (!current || current.sgdbId !== null || current.sgdbIdSource === 'manual') return 'skipped';
     if (isFailure(result)) {
-      recordCheck(ctx, gameId, 'sgdb', 'error', result.error);
+      recordCheck(ctx, gameId, 'sgdb', 'error', { error: result.error });
       return 'failed';
     }
     if (result === null) {

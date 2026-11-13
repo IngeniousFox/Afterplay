@@ -55,11 +55,14 @@ export {
   isCheckDue,
   nextCheckAtFor,
   readCheck,
+  recordCheck,
   writeCheck,
   type CheckPolicy,
   type RecheckAfter,
   type WriteCheckOptions,
 } from './checks';
+export { canMoveToPlan, canMoveToPlanCondition, hasLivePlanEntry } from './canMoveToPlan';
+export { DEFAULT_CURRENCY } from './currency';
 export {
   closeOpenOwnSessions,
   closeOwnSession,

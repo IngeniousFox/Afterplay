@@ -1,6 +1,6 @@
 import type { GameRow } from '../../../../../shared/dto';
 import type { CreateGameWithDetailsInput } from '../../../../../shared/types';
-import { readGameRow, updateGame, type QueryContext } from '../common';
+import { DEFAULT_CURRENCY, readGameRow, updateGame, type QueryContext } from '../common';
 import {
   assertInitialStatus,
   initialPlaythroughValues,
@@ -19,8 +19,12 @@ import { writeNewGame, type GameEnrichmentData } from './newGame';
 // papeleo (gasto y estados).
 
 export interface CreateGameOptions {
-  /** Moneda del gasto inicial (D-23), de la configuración. */
-  readonly currency: string;
+  /**
+   * Moneda del gasto inicial (D-23). Por defecto `DEFAULT_CURRENCY`
+   * (common/currency.ts), la misma que escribe `playthroughs/addSpendEvent`:
+   * la app no tiene ajuste de moneda.
+   */
+  readonly currency?: string;
 }
 
 /**
@@ -41,7 +45,7 @@ export function createGameWithDetails(
   ctx: QueryContext,
   input: CreateGameWithDetailsInput,
   enrichment: GameEnrichmentData,
-  options: CreateGameOptions,
+  options: CreateGameOptions = {},
 ): GameRow<string> {
   assertInitialStatus(input.initialStatus);
   const gameId = ctx.store.transaction(() => {
@@ -61,7 +65,9 @@ export function createGameWithDetails(
       gameId,
       playthroughId,
       anchor: addedAt,
-      currency: options.currency,
+      // Solo `undefined` toma el valor por defecto: cualquier otro valor
+      // (también uno inválido) llega a la puerta tal cual, que es quien valida.
+      currency: options.currency === undefined ? DEFAULT_CURRENCY : options.currency,
       input,
     });
     return gameId;

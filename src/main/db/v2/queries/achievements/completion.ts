@@ -1,4 +1,4 @@
-import type { AchievementSource } from '../../schema';
+import type { SourceCompletion } from '../../../../../shared/types';
 import type { QueryContext } from '../common/context';
 import {
   completedAtOf,
@@ -18,23 +18,10 @@ import {
 // celebrar dos veces, una por cada 100 %, y un 100 % en RA no queda
 // escondido por los logros de Steam que te falten.
 
-/** Cambio pedido (tipo local hasta P9): el completado de UNA fuente. */
-export interface SourceCompletion {
-  readonly source: AchievementSource;
-  /** Logros del catálogo. */
-  readonly total: number;
-  /** Logros del catálogo que constan por algún origen (fundidos). */
-  readonly unlocked: number;
-  /** `total > 0 && unlocked === total`. */
-  readonly complete: boolean;
-  /**
-   * ¿Se sabe el progreso? false = nunca se preguntó por tus desbloqueos de
-   * esta fuente y no consta ninguno (regla 2: no es un 0 %).
-   */
-  readonly known: boolean;
-  /** Fecha del 100 %: la del último logro, solo si todas son fiables. */
-  readonly completedAt: Date | null;
-}
+// La forma (`SourceCompletion`) es la compartida de `shared/types.ts`: la
+// devuelven también la ficha de logros (`completion`) y, por fuente, el
+// resumen y la tarjeta de Ajustes.
+export type { SourceCompletion };
 
 export const toSourceCompletion = (progress: CatalogProgress): SourceCompletion => ({
   source: progress.source,

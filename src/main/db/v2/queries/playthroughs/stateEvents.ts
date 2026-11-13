@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
-import type { StateEvent } from '../../../../../shared/dto';
+import type { AddStateEventInput, StateEvent } from '../../../../../shared/dto';
 import { closesOpenSession, latestRealStateEvent } from '../../../../../shared/playthroughState';
-import type { StateEventSummary } from '../../../../../shared/types';
+import type { StateEventSummary, UpdateStateEventPatch } from '../../../../../shared/types';
 import {
   STATE_EVENT_TYPES,
   playthroughs,
@@ -25,7 +25,6 @@ import {
   stateEventState,
   storeErrorFor,
 } from './read';
-import type { AddStateEventInputV2, UpdateStateEventPatchV2 } from './types';
 
 // El log de estados de un playthrough sobre el esquema 2.0 (CONSULTAS.md §2.2
 // "stateEvents"). Las reglas de qué significa cada tipo y cuál es "el último
@@ -91,7 +90,10 @@ function assertWritableType(type: string): asserts type is StateEventType {
  * Un cierre de sesión que la puerta rechace no tumba el evento (lo captura
  * `closeOpenOwnSessions`, ver su contrato).
  */
-export function addStateEvent(ctx: QueryContext, input: AddStateEventInputV2): StateEvent<string> {
+export function addStateEvent(
+  ctx: QueryContext,
+  input: AddStateEventInput<string>,
+): StateEvent<string> {
   assertWritableType(input.type);
   const id = ctx.store.transaction(() => {
     const target = playthroughState(ctx, input.iterationId);
@@ -228,7 +230,7 @@ function pauseActiveSiblings(ctx: QueryContext, input: PauseSiblingsInput): void
 export function updateStateEvent(
   ctx: QueryContext,
   eventId: string,
-  patch: UpdateStateEventPatchV2,
+  patch: UpdateStateEventPatch<string>,
 ): StateEvent<string> | null {
   if (patch.type !== undefined) assertWritableType(patch.type);
   const updated = ctx.store.transaction(() => {

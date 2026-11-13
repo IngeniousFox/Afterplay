@@ -218,8 +218,13 @@ export function toGameRow(row: GameViewRow): GameRow<string> {
       stamp(row.steamAchievementsStatus, row.steamAchievementsCheckedAt),
       stamp(row.raAchievementsStatus, row.raAchievementsCheckedAt),
     ),
-    // Fuente nueva `steam_unlocks` (R-05).
-    achievementsUnlocksSyncedAt: stamp(row.steamUnlocksStatus, row.steamUnlocksCheckedAt),
+    // Fuente nueva `steam_unlocks` (R-05) y también `ra_achievements`: en RA
+    // los desbloqueos llegan con el catálogo, y la 1.x estampaba las dos
+    // marcas a la vez (ra/sync.ts:67). La más reciente de las dos.
+    achievementsUnlocksSyncedAt: latest(
+      stamp(row.steamUnlocksStatus, row.steamUnlocksCheckedAt),
+      stamp(row.raAchievementsStatus, row.raAchievementsCheckedAt),
+    ),
     raGameId: row.raGameId,
     raCheckedAt: stamp(row.raMatchStatus, row.raMatchCheckedAt),
     ratingCritics: row.ratingCritics,

@@ -6,7 +6,6 @@ export {
   getMemory,
   getMemoryFacts,
   insertMemory,
-  readReliableUnlocks,
   type InsertMemoryInput,
   type LatestMemory,
   type MemoryFacts,

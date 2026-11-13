@@ -21,7 +21,7 @@ import {
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
 import { addStateEvent } from '../stateEvents';
-import type { AddStateEventInputV2 } from '../types';
+import type { AddStateEventInput } from '../../../../../../shared/dto';
 import { derivedDetail } from './detail';
 
 // addStateEvent sobre el esquema 2.0. Porta, caso por caso, los de
@@ -62,14 +62,14 @@ const juegoConUno = (title: string): { gameId: string; pt: string } => {
 
 const evento = (
   playthroughId: string,
-  type: AddStateEventInputV2['type'],
+  type: AddStateEventInput<string>['type'],
   occurredAt: string,
-  datePrecision: AddStateEventInputV2['datePrecision'] = 'datetime',
+  datePrecision: AddStateEventInput<string>['datePrecision'] = 'datetime',
 ): string =>
   seedStateEvent(fx.ctx, { playthroughId, type, occurredAt: new Date(occurredAt), datePrecision });
 
 const add = (
-  input: Omit<AddStateEventInputV2, 'note'> & { note?: string | null },
+  input: Omit<AddStateEventInput<string>, 'note'> & { note?: string | null },
 ): StateEvent<string> => addStateEvent(fx.ctx, { note: null, ...input });
 
 // El log vivo de un playthrough en orden de CREACIÓN: la auto-pausa se
@@ -685,7 +685,7 @@ describe('addStateEvent [2.0] — tipos válidos', () => {
       () =>
         addStateEvent(fx.ctx, {
           iterationId: segundo,
-          type: 'plan_to_play' as AddStateEventInputV2['type'],
+          type: 'plan_to_play' as AddStateEventInput<string>['type'],
           datePrecision: 'day',
         }),
       (error: unknown) => isStoreError(error, 'invalid_value'),

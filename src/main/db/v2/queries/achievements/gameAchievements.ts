@@ -35,16 +35,8 @@ import { achievementKey, dtoSourceOf, type AchievementKey } from './ids';
 // vivos por sync bajo un padre con lápida) no se enseñan: la columna se lee
 // como null. Al borrar por la puerta ya se anulan (`nullify` del registro).
 
-/** Cambio pedido (tipo local hasta P9): la ficha con su completado por fuente. */
-export interface GameAchievementsV2 extends GameAchievements<string> {
-  readonly entries: AchievementEntry<string>[];
-  /**
-   * Completado de cada catálogo, Steam antes que RA (R-11). El "porcentaje"
-   * de hoy (entradas desbloqueadas / entradas) sigue saliendo de `entries` y
-   * mezcla las dos fuentes; esto es lo que hay que pintar si se separan.
-   */
-  readonly completion: SourceCompletion[];
-}
+// La ficha devuelve `GameAchievements<string>`, que con ids de texto lleva
+// `completion`: el completado de cada catálogo, Steam antes que RA (R-11).
 
 interface UnlockRow {
   achievementId: AchievementKey;
@@ -82,7 +74,7 @@ const latest = (...dates: (Date | null | undefined)[]): Date | null => {
  *   `ec(steam_unlocks)` (R-05) o `ec(ra_achievements)` (en RA llegan con el
  *   catálogo; la 1.x estampaba las dos marcas a la vez, ra/sync.ts:67).
  */
-export function getGameAchievements(ctx: QueryContext, gameId: string): GameAchievementsV2 {
+export function getGameAchievements(ctx: QueryContext, gameId: string): GameAchievements<string> {
   const game = readLiveGameKeys(ctx, gameId);
   if (!game) {
     return {

@@ -183,6 +183,18 @@ describe('readGameRow', () => {
     assert.equal(row.curiositiesGeneratedAt?.getTime(), T0 + 8);
   });
 
+  it('achievementsUnlocksSyncedAt también cuenta ra_achievements (RA trae los desbloqueos con el catálogo)', () => {
+    const soloRa = seedGame(fx.ctx, { title: 'Solo RA' });
+    writeCheck(fx.ctx, soloRa, 'ra_achievements', 'ok', { checkedAt: at(3) });
+    assert.equal(readGameRow(fx.ctx, soloRa)?.achievementsUnlocksSyncedAt?.getTime(), T0 + 3);
+
+    const ambos = seedGame(fx.ctx, { title: 'Ambos' });
+    writeCheck(fx.ctx, ambos, 'steam_unlocks', 'ok', { checkedAt: at(2) });
+    writeCheck(fx.ctx, ambos, 'ra_achievements', 'ok', { checkedAt: at(9) });
+    // La más reciente de las dos, como achievementsSyncedAt.
+    assert.equal(readGameRow(fx.ctx, ambos)?.achievementsUnlocksSyncedAt?.getTime(), T0 + 9);
+  });
+
   it('una caché o un plan con lápida es como no tenerlos', () => {
     const id = seedGame(fx.ctx, {
       title: 'Celeste',

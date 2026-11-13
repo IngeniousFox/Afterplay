@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { games } from '../../schema';
 import { liveGame, type QueryContext } from '../common';
-import { readSessionRow, rereadSession, type SessionDto } from './dto';
+import type { Session } from '../../../../../shared/dto';
+import { readSessionRow, rereadSession } from './dto';
 import { resolvePlaythroughForSession } from './resolvePlaythrough';
 
 // Editar y borrar sesiones (sustituyen a `assignSession.ts`,
@@ -32,7 +33,7 @@ export function assignSession(
   ctx: QueryContext,
   sessionId: string,
   gameId: string,
-): SessionDto | null {
+): Session<string> | null {
   const assigned = ctx.store.transaction((): boolean => {
     const session = readSessionRow(ctx, sessionId);
     if (!session || session.syncDeleted !== null) return false;
@@ -65,7 +66,7 @@ export function updateSessionNote(
   ctx: QueryContext,
   sessionId: string,
   note: string,
-): SessionDto | null {
+): Session<string> | null {
   const updated = ctx.store.transaction((): boolean => {
     const session = readSessionRow(ctx, sessionId);
     if (!session || session.syncDeleted !== null) return false;

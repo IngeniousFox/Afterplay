@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { planEntries } from '../../schema';
 import type { QueryContext } from '../common/context';
-import type { PlanHistory } from './types';
+import type { PlanHistory } from '../../../../../shared/types';
 
 // Los dos eventos del Plan de la ficha (decisión R-06; la forma y su porqué
-// están en `types.ts`, `PlanHistory`).
+// están en `shared/types.ts`, `PlanHistory`).
 //
 // Se lee la entrada de `plan_entries` del juego VIVA O CON LÁPIDA, a
 // propósito: la lápida es lo que queda de un juego promocionado, y conserva
@@ -35,6 +35,16 @@ export function readPlanHistory(
     .get();
   if (!entry) return null;
   const stillPlanned = entry.syncDeleted === null;
+  // Una entrada con lápida SIN promoción no es de esta vida del juego: es lo
+  // que queda cuando se borra un juego planeado (o promocionado) y se vuelve
+  // a añadir con el mismo igdbId. La resurrección de `games/` limpia
+  // `promotedAt` pero la entrada vieja sigue ahí con su lápida, y enseñarla
+  // daría un "Añadido al Plan" de la vida anterior sin "Salió del Plan", es
+  // decir, un juego de la biblioteca que la ficha cuenta como aún en el Plan
+  // (lo destapó la prueba de integración). Promocionar siempre fija
+  // `promotedAt` y devolver al Plan resucita la entrada, así que en la vida
+  // actual una lápida va siempre con `promotedAt`.
+  if (!stillPlanned && promotedAt === null) return null;
   return {
     plannedAt: entry.plannedAt,
     note: entry.note,

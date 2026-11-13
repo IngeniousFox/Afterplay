@@ -20,7 +20,17 @@ export type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes'
 // su representación (`Id`, por defecto `EntityId`; ver entityIds.ts) y la
 // propagan a los tipos anidados: `GameDetail<string>` lleva playthroughs,
 // sesiones y eventos de ids de texto. Sin parámetro, lo de siempre.
-import type { GameRow, Iteration, Session, SpendEvent, StateEvent } from './dto';
+import type {
+  GameRow,
+  Iteration,
+  SchemaFields,
+  Session,
+  SessionOwnership,
+  SpendEvent,
+  StateEvent,
+  StateEventPrecision,
+  WritableStateEventType,
+} from './dto';
 
 export type {
   AddSpendEventInput,
@@ -91,10 +101,14 @@ export type PendingSession<Id extends EntityIdLike = EntityId> = {
 // DESENLACE de un playthrough manual (Beaten → Dropped) desde Edit: ahí no
 // es "reescribir el pasado", es corregir un registro tecleado — el mismo
 // criterio que siempre aplicó a las fechas.
-export type UpdateStateEventPatch = {
-  type?: StateEvent['type'];
+//
+// Genérico en el id aunque no lleve ninguno: la representación dice de qué
+// esquema es la escritura (ver dto.ts). Con texto (2.0), como
+// `AddStateEventInput`: sin 'plan_to_play' y con la precisión 'unknown'.
+export type UpdateStateEventPatch<Id extends EntityIdLike = EntityId> = {
+  type?: WritableStateEventType<Id>;
   occurredAt?: Date;
-  datePrecision?: EventDatePrecision;
+  datePrecision?: StateEventPrecision<Id>;
   note?: string | null;
 };
 
@@ -593,6 +607,31 @@ export type AchievementEntry<Id extends EntityIdLike = EntityId> = {
   iterationId: IterationId<Id> | null;
 };
 
+// El CATÁLOGO del que es un logro en el 2.0 (una fila de catálogo por juego y
+// fuente). No confundir con `AchievementSource`, que dice por qué vía consta
+// un desbloqueo ('emu' es un logro de Steam visto por un emulador).
+export type AchievementCatalogSource = 'steam' | 'ra';
+
+// "¿Está completado?" de UNA fuente (decisión R-11 del usuario): un 100 % de
+// Steam y uno de RetroAchievements son dos hitos distintos y no se suman.
+// Solo lo calculan las consultas 2.0.
+export type SourceCompletion = {
+  source: AchievementCatalogSource;
+  /** Logros del catálogo. */
+  total: number;
+  /** Logros del catálogo que constan por algún origen (fundidos). */
+  unlocked: number;
+  /** `total > 0 && unlocked === total`. */
+  complete: boolean;
+  /**
+   * ¿Se sabe el progreso? false = nunca se preguntó por tus desbloqueos de
+   * esta fuente y no consta ninguno (regla 2: no es un 0 %).
+   */
+  known: boolean;
+  /** Fecha del 100 %: la del último logro, solo si todas son fiables. */
+  completedAt: Date | null;
+};
+
 export type GameAchievements<Id extends EntityIdLike = EntityId> = {
   gameId: GameId<Id>;
   // null si el juego no está en Steam (no hay de dónde sacarlos).
@@ -601,10 +640,39 @@ export type GameAchievements<Id extends EntityIdLike = EntityId> = {
   syncedAt: Date | null;
   unlocksSyncedAt: Date | null;
   entries: AchievementEntry<Id>[];
+} & SchemaFields<
+  Id,
+  {
+    // Completado de cada catálogo, Steam antes que RA (R-11). El porcentaje de
+    // hoy (entradas desbloqueadas / entradas) sigue saliendo de `entries` y
+    // mezcla las dos fuentes; esto es lo que hay que pintar si se separan.
+    completion: SourceCompletion[];
+  }
+>;
+
+// Los números de UNA fuente en la tarjeta de Ajustes (solo 2.0, R-11).
+export type AchievementsSourceStatus = {
+  /** Juegos con el catálogo de esta fuente respondido (`ok` o `empty`) o vivo. */
+  syncedGames: number;
+  totalAchievements: number;
+  unlockedAchievements: number;
+  /** Juegos con esta fuente al 100 %, con progreso conocido. */
+  perfectGames: number;
 };
 
-// Estado de la pasada de logros para la tarjeta de Ajustes.
-export type AchievementsStatus = {
+// Estado de la pasada de logros para la tarjeta de Ajustes. Genérico en el id
+// aunque no lleve ninguno, para colgarle lo que solo da el 2.0 (ver dto.ts).
+export type AchievementsStatus<Id extends EntityIdLike = EntityId> = AchievementsStatusBase &
+  SchemaFields<
+    Id,
+    {
+      // Lo mismo por fuente; los totales de arriba son la suma de las dos (un
+      // juego con las dos cuenta una vez en `syncedGames`).
+      bySource: { [S in AchievementCatalogSource]: AchievementsSourceStatus };
+    }
+  >;
+
+type AchievementsStatusBase = {
   // Juegos con appid de Steam — los únicos que pueden tener logros.
   eligibleGames: number;
   syncedGames: number;
@@ -685,16 +753,18 @@ export type AchievementsOverview<Id extends EntityIdLike = EntityId> = {
   }[];
   // Juegos al 100% (solo con desbloqueos conocidos — regla 2). completedAt =
   // la fecha del ÚLTIMO logro, y solo si todas las del juego son fiables.
-  perfectGames: {
+  // En el 2.0 el completado es POR FUENTE (R-11): una entrada por catálogo
+  // (juego × fuente), con su `source`, y `total` es el de esa fuente.
+  perfectGames: ({
     gameId: GameId<Id>;
     title: string;
     coverUrl: string | null;
     total: number;
     completedAt: Date | null;
-  }[];
+  } & CatalogSourceOf<Id>)[];
   // A un empujón del 100%: qué juegos y qué falta (sin descripciones de
-  // ocultos — regla 3).
-  almostThere: {
+  // ocultos — regla 3). Por fuente en el 2.0, como `perfectGames`.
+  almostThere: ({
     gameId: GameId<Id>;
     title: string;
     coverUrl: string | null;
@@ -707,9 +777,15 @@ export type AchievementsOverview<Id extends EntityIdLike = EntityId> = {
       globalPercent: number | null;
       hidden: boolean;
     }[];
-  }[];
+  } & CatalogSourceOf<Id>)[];
   rarityProfile: { common: number; rare: number; ultra: number };
 };
+
+// La fuente de una entrada del muro del 100 % o de "almost there" (solo 2.0).
+type CatalogSourceOf<Id extends EntityIdLike> = SchemaFields<
+  Id,
+  { source: AchievementCatalogSource }
+>;
 
 // Último fallo de sincronización con Turso, para enseñarlo en Ajustes. Un
 // desajuste de esquema y un WAL descuadrado no se curan reintentando, así que
@@ -820,7 +896,7 @@ export type SessionWithGame<Id extends EntityIdLike = EntityId> = {
   gameId: GameId<Id>;
   gameTitle: string;
   coverUrl: string | null;
-};
+} & SessionOwnership<Id>;
 
 // Un juego se acaba de cerrar y el watcher ha cerrado su sesión. Viaja del
 // main al renderer para levantar el aviso con la duración y el atajo de
@@ -862,11 +938,13 @@ export type SessionClosedEvent<Id extends EntityIdLike = EntityId> = {
 
 // Referencia al evento que fija una fecha de borde del playthrough (modelo
 // v2: las fechas viven en el log de estados) — con lo justo para prellenar
-// el picker del Edit y parchear el evento al guardar.
+// el picker del Edit y parchear el evento al guardar. Con ids de texto la
+// precisión admite 'unknown': dar de alta un juego como "jugando" sin fecha
+// escribe un `started` así, y es su borde de inicio.
 export type IterationEdgeEvent<Id extends EntityIdLike = EntityId> = {
   id: StateEventId<Id>;
   occurredAt: Date;
-  datePrecision: EventDatePrecision;
+  datePrecision: StateEventPrecision<Id>;
 };
 
 export type IterationDetail<Id extends EntityIdLike = EntityId> = Iteration<Id> & {
@@ -901,4 +979,81 @@ export type GameDetail<Id extends EntityIdLike = EntityId> = GameRow<Id> & {
   stateHistory: StateEvent<Id>[];
   spendHistory: SpendEvent<Id>[];
   iterations: IterationDetail<Id>[];
+} & SchemaFields<
+    Id,
+    {
+      // El último paso por el Plan (R-06), o null si el juego nunca pasó por él
+      // en esta vida (ver `PlanHistory`). Sustituye al evento `plan_to_play`.
+      planHistory: PlanHistory | null;
+    }
+  >;
+
+// El paso por el Plan de la ficha (decisión R-06). En la 1.x el historial y
+// el Journey contaban "Planeado el X" con el evento `plan_to_play`; el 2.0 ya
+// no lo tiene (el Plan es `plan_entries`, una fila por juego), así que la
+// ficha expone los dos hitos DERIVADOS, de solo lectura (no son filas de
+// `state_events` ni se editan desde el historial):
+//
+//   "Añadido al Plan" = `plannedAt` + su nota, esté la entrada viva (sigue en
+//                       el Plan) o con lápida (ya salió).
+//   "Salió del Plan"  = `leftAt` (`games.promotedAt`), cuando se promocionó.
+//
+// Devolver un juego al Plan resucita la misma entrada con `plannedAt` nuevo,
+// así que esto describe siempre el ÚLTIMO paso. Forma mínima a propósito, sin
+// sintetizar eventos con un `type` falso: así un evento inventado no se cuela
+// en las reglas que recorren `stateHistory` (estado actual, gasto, "Last
+// played") y el renderer decide cómo pintarlos.
+export type PlanHistory = {
+  /** "Añadido al Plan": cuándo entró (la última vez). Precisión de instante. */
+  plannedAt: Date;
+  /** El porqué que se apuntó al planearlo. */
+  note: string | null;
+  /** "Salió del Plan": cuándo se promocionó. Null mientras siga en el Plan. */
+  leftAt: Date | null;
+};
+
+// Lo que el escaneo de carpetas necesita saber de la colección: qué juegos
+// existen ya, biblioteca Y Plan, para repartir cada carpeta entre "añadible",
+// "ya lo tienes" y "estaba en tu plan". (La 1.x tiene su copia con id numérico
+// en main/db/queries/games/getOwnedGames.ts.)
+export type OwnedGameRef<Id extends EntityIdLike = EntityId> = {
+  id: GameId<Id>;
+  igdbId: number | null;
+  title: string;
+  planned: boolean;
+};
+
+// ── Partidas guardadas: lo que el módulo necesita de un juego ────────────────
+
+export type SaveDetectionSource = 'auto' | 'manual';
+
+// Proyección mínima para hablar con ludusavi y con el bucket (la 1.x tiene su
+// copia en main/db/queries/saves/getSaveGames.ts). Con ids de texto lleva
+// además el prefijo del juego en el bucket (`saveKey`, AFTERPLAY-2.0.md §7.4):
+// así los juegos sin igdbId también pueden ir a la nube (§12.7).
+export type SaveGame<Id extends EntityIdLike = EntityId> = {
+  id: GameId<Id>;
+  title: string;
+  igdbId: number | null;
+  saveBackupEnabled: boolean;
+  saveDetectionSource: SaveDetectionSource | null;
+  saveLudusaviName: string | null;
+  saveCustomPaths: string[] | null;
+} & SchemaFields<
+  Id,
+  {
+    /** Lo fija el alta; null solo en un juego que se saltara ese paso. */
+    saveKey: string | null;
+  }
+>;
+
+// Las columnas de partidas que puede escribir el módulo de partidas: un tipo
+// cerrado en lugar del `GamePatch` abierto de main/db/writeTypes.ts
+// (CONSULTAS.md §1.4). `saveKey` no está a propósito: se fija una vez.
+export type SaveSettingsPatch = {
+  saveBackupEnabled?: boolean;
+  saveDetectionSource?: SaveDetectionSource | null;
+  saveLudusaviName?: string | null;
+  /** Siempre tokenizadas (`<winAppData>/…`), nunca una ruta resuelta. */
+  saveCustomPaths?: string[] | null;
 };

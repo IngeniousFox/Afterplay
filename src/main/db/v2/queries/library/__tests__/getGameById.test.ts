@@ -11,7 +11,7 @@ import {
 } from '../../common/__tests__/fixtures';
 import { getGameById } from '../getGameById';
 import { getGames } from '../getGames';
-import type { GameDetailV2, IterationDetailV2 } from '../types';
+import type { GameDetail, IterationDetail } from '../../../../../../shared/types';
 import { event, iso, openSession, session, syncedSession } from './helpers';
 
 // getGameById sobre el 2.0. Portado de src/main/db/__tests__/getGameById.test.ts
@@ -29,13 +29,13 @@ beforeEach(() => {
 });
 afterEach(() => fx.close());
 
-const detail = (gameId: string): GameDetailV2 => {
+const detail = (gameId: string): GameDetail<string> => {
   const game = getGameById(fx.ctx, gameId);
   if (!game) throw new Error(`getGameById(${gameId}) devolvió null y el test esperaba la ficha`);
   return game;
 };
 
-const sessionIds = (iteration: IterationDetailV2): string[] =>
+const sessionIds = (iteration: IterationDetail<string>): string[] =>
   iteration.sessions.map((s) => s.id).sort();
 
 const spend = (

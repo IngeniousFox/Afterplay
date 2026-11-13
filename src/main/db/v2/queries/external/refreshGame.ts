@@ -71,7 +71,7 @@ export function applyRefreshGameResult(
     if (result.igdb !== undefined) {
       if (current.igdbId !== snapshot.igdbId || current.igdbId === null) discarded.push('igdb');
       else if (isFailure(result.igdb)) {
-        recordCheck(ctx, current.id, 'igdb_ratings', 'error', result.igdb.error);
+        recordCheck(ctx, current.id, 'igdb_ratings', 'error', { error: result.igdb.error });
       } else applyIgdbBatch(ctx, current, result.igdb);
     }
 

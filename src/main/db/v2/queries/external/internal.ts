@@ -1,14 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { sameValue } from '../../../../../shared/sync/fieldClocks';
-import {
-  gameMetadata,
-  games,
-  type CheckStatus,
-  type ExternalCheckSource,
-  type KeySource,
-} from '../../schema';
+import { gameMetadata, games, type KeySource } from '../../schema';
 import { alive, type CreateValues, type PatchValues } from '../../store';
-import { CHECK_POLICIES, clearCheck, readCheck, writeCheck } from '../common/checks';
+import { clearCheck, recordCheck } from '../common/checks';
 import type { QueryContext } from '../common/context';
 import type { HltbTimesData, IgdbBatchData, IgdbDetailData, SteamStoreData } from './types';
 
@@ -22,8 +16,8 @@ import type { HltbTimesData, IgdbBatchData, IgdbDetailData, SteamStoreData } fro
 //   resultado igual al automático (§19.5); `setAutoKey` no toca una clave con
 //   `…Source = 'manual'`;
 // - "escribir solo lo que cambia" (F-33): todo pasa por la puerta, que no
-//   escribe un parche sin cambios, y `recordCheck` no re-sella una respuesta
-//   repetida que no tiene cadencia;
+//   escribe un parche sin cambios, y `recordCheck` (common/checks.ts) no
+//   re-sella una respuesta repetida que no tiene cadencia;
 // - "relectura" (R-15): todas reciben la identidad RELEÍDA dentro de la
 //   transacción de quien llama (`readLiveIdentity`), nunca la de la foto.
 
@@ -120,41 +114,10 @@ export function forgetSteamProductChecks(ctx: QueryContext, gameId: string): voi
 
 // ── Sellos ─────────────────────────────────────────────────────────────────
 
-/**
- * Apunta una comprobación (`external_checks`) con dos reglas encima de
- * `writeCheck`:
- *
- * 1. Un FALLO no pisa una respuesta anterior (`ok`/`empty`). En la 1.x un
- *    fallo no dejaba sello y el anterior seguía en pie; pisarlo convertiría un
- *    juego ya preguntado en "nunca preguntado" (sube `neverChecked` en
- *    Ajustes) por un 503 pasajero. "Un no externo no borra lo que había"
- *    (§14.2) vale también para los sellos.
- * 2. Una respuesta IGUAL a la anterior y sin cadencia (`nextCheckAt` null en
- *    la política: casi todas) no se re-sella. Si no, el refresco semanal
- *    reescribiría una fila por juego y fuente cada semana, que es justo F-33.
- *    Consecuencia: `checkedAt` es "desde cuándo la fuente responde esto", no
- *    "la última vez que se preguntó". Las respuestas con cadencia (`ra_match`
- *    sin set, los fallos) sí se re-sellan siempre: su `nextCheckAt` se mueve.
- *
- * Devuelve si escribió. No escribe nada si el juego no está vivo (R-15).
- */
-export function recordCheck(
-  ctx: QueryContext,
-  gameId: string,
-  source: ExternalCheckSource,
-  status: CheckStatus,
-  error?: string | null,
-): boolean {
-  const previous = readCheck(ctx, gameId, source);
-  if (previous) {
-    if (status === 'error' && previous.status !== 'error') return false;
-    const sameAnswer =
-      previous.status === status &&
-      (previous.error ?? null) === (status === 'error' ? (error ?? null) : null);
-    if (sameAnswer && CHECK_POLICIES[source][status] === null) return false;
-  }
-  return writeCheck(ctx, gameId, source, status, { error: error ?? null });
-}
+// `recordCheck` vivía aquí y ahora está en `common/checks.ts`: la usan
+// también los logros (`achievements/`). Se reexporta para que el paquete la
+// siga importando de su sitio de siempre.
+export { recordCheck };
 
 // ── Caché de metadatos ─────────────────────────────────────────────────────
 

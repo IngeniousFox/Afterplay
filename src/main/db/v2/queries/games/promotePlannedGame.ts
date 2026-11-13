@@ -3,7 +3,13 @@ import type { GameRow, UpdateGamePatch } from '../../../../../shared/dto';
 import type { PromotePlannedGameInput } from '../../../../../shared/types';
 import { games, playthroughs } from '../../schema';
 import { alive } from '../../store';
-import { playthroughCreationOrder, readGameRow, updateGame, type QueryContext } from '../common';
+import {
+  DEFAULT_CURRENCY,
+  playthroughCreationOrder,
+  readGameRow,
+  updateGame,
+  type QueryContext,
+} from '../common';
 import { GameWriteError } from './errors';
 import {
   assertInitialStatus,
@@ -31,8 +37,8 @@ import { readPlanEntry } from './planEntry';
 //   papeleo inicial anclado en `promotedAt` (R-07).
 
 export interface PromotePlannedGameOptions {
-  /** Moneda del gasto inicial (D-23), de la configuración. */
-  readonly currency: string;
+  /** Moneda del gasto inicial (D-23). Por defecto `DEFAULT_CURRENCY` (common/currency.ts). */
+  readonly currency?: string;
 }
 
 /**
@@ -47,7 +53,7 @@ export interface PromotePlannedGameOptions {
 export function promotePlannedGame(
   ctx: QueryContext,
   input: PromotePlannedGameInput<string>,
-  options: PromotePlannedGameOptions,
+  options: PromotePlannedGameOptions = {},
 ): GameRow<string> {
   assertInitialStatus(input.initialStatus);
   const { gameId } = input;
@@ -75,7 +81,8 @@ export function promotePlannedGame(
       gameId,
       playthroughId,
       anchor: promotedAt,
-      currency: options.currency,
+      // Como en el alta: solo `undefined` toma el valor por defecto.
+      currency: options.currency === undefined ? DEFAULT_CURRENCY : options.currency,
       input,
     });
   });

@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
-import type { AchievementsStatus } from '../../../../../shared/types';
+import type { AchievementsSourceStatus, AchievementsStatus } from '../../../../../shared/types';
 import { achievementCatalogs, externalChecks, games, type AchievementSource } from '../../schema';
 import { checkIsDue } from '../common/checks';
 import { liveGame } from '../common/alive';
@@ -18,19 +18,9 @@ export interface AchievementsStatusOptions {
   readonly hasRaCredentials: boolean;
 }
 
-/** Cambio pedido (tipo local hasta P9): los números de cada fuente. */
-export interface AchievementsSourceStatus {
-  /** Juegos con el catálogo de esta fuente respondido (`ok` o `empty`). */
-  readonly syncedGames: number;
-  readonly totalAchievements: number;
-  readonly unlockedAchievements: number;
-  /** Juegos con esta fuente al 100 % (R-11), con progreso conocido. */
-  readonly perfectGames: number;
-}
-
-export interface AchievementsStatusV2 extends AchievementsStatus {
-  readonly bySource: { readonly [S in AchievementSource]: AchievementsSourceStatus };
-}
+// Los números de cada fuente (`AchievementsSourceStatus`) y el estado con
+// `bySource` son los compartidos con ids de texto (shared/types.ts).
+export type { AchievementsSourceStatus };
 
 const CATALOG_CHECK = { steam: 'steam_achievements', ra: 'ra_achievements' } as const;
 
@@ -53,7 +43,7 @@ const CATALOG_CHECK = { steam: 'steam_achievements', ra: 'ra_achievements' } as 
 export function getAchievementsStatus(
   ctx: QueryContext,
   options: AchievementsStatusOptions,
-): AchievementsStatusV2 {
+): AchievementsStatus<string> {
   const eligible = ctx.db
     .select({ n: sql<number>`count(*)`.mapWith(Number) })
     .from(games)
@@ -110,12 +100,12 @@ export function getAchievementsStatus(
   };
 }
 
-const emptySource = (): {
-  syncedGames: number;
-  totalAchievements: number;
-  unlockedAchievements: number;
-  perfectGames: number;
-} => ({ syncedGames: 0, totalAchievements: 0, unlockedAchievements: 0, perfectGames: 0 });
+const emptySource = (): AchievementsSourceStatus => ({
+  syncedGames: 0,
+  totalAchievements: 0,
+  unlockedAchievements: 0,
+  perfectGames: 0,
+});
 
 // ── Objetivos de la sincronización ─────────────────────────────────────────
 

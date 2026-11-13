@@ -510,6 +510,10 @@ const gameDetailDto = <Id extends EntityIdLike>(id: (n: number) => Id): GameDeta
         startedBy: 'watcher',
         datePrecision: 'datetime',
         note: null,
+        // Campos que solo existen con ids de texto (`SessionOwnership`): un
+        // constructor genérico tiene que darlos para valer en las dos.
+        deviceId: 'pc-a',
+        closedBy: null,
       },
     ],
     spend: 0,
@@ -544,6 +548,8 @@ const gameDetailDto = <Id extends EntityIdLike>(id: (n: number) => Id): GameDeta
       },
     ],
     iterations: [iteration],
+    // Solo con ids de texto (R-06); ver la nota de `deviceId` arriba.
+    planHistory: null,
   };
 };
 

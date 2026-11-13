@@ -4,9 +4,9 @@
 export { createGameWithDetails, type CreateGameOptions } from './createGameWithDetails';
 export { createPlannedGame } from './createPlannedGame';
 export { promotePlannedGame, type PromotePlannedGameOptions } from './promotePlannedGame';
-export { canMoveToPlan, hasNoPlayRecords, moveToPlan } from './moveToPlan';
+export { moveToPlan } from './moveToPlan';
 export { deleteGame } from './deleteGame';
-export { updateGame, updateGameSaves, type SaveGamePatch } from './updateGame';
+export { updateGame } from './updateGame';
 export { setSteamAppId } from './setSteamAppId';
 export { resetEndlessState } from './resetEndlessState';
 export { reorderUpNext, setPlanPinned } from './planPins';

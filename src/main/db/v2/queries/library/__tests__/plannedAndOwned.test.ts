@@ -10,7 +10,7 @@ import {
   tombstoneOnly,
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
-import { canMoveToPlan } from '../canMoveToPlan';
+import { canMoveToPlan } from '../../common/canMoveToPlan';
 import { getGameById } from '../getGameById';
 import { getGames } from '../getGames';
 import { getOwnedGames } from '../getOwnedGames';

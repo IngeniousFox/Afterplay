@@ -1,5 +1,10 @@
 // Consultas 2.0 de logros (paquete P5 de CONSULTAS.md §4). Léase antes
 // `../README.md`. Todo síncrono, con `ctx` primero e ids de texto.
+//
+// Las lecturas devuelven los DTO compartidos con ids de texto, que ya llevan
+// el completado por fuente (R-11): `GameAchievements<string>.completion`,
+// `source` en `perfectGames`/`almostThere` de `AchievementsOverview<string>`,
+// `AchievementsStatus<string>.bySource` y `SourceCompletion` (shared/types.ts).
 
 export {
   achievementKey,
@@ -50,18 +55,10 @@ export {
   type UnlockPlacement,
 } from './placement';
 export { replaceUnlockPlacements } from './replacePlacements';
-export {
-  getGameAchievements,
-  getSessionUnlocks,
-  type GameAchievementsV2,
-} from './gameAchievements';
-export {
-  getAchievementsOverview,
-  type AchievementsOverviewV2,
-  type AlmostThereV2,
-  type PerfectGameV2,
-} from './overview';
-export { getGameCompletion, type SourceCompletion } from './completion';
+export { getGameAchievements, getSessionUnlocks } from './gameAchievements';
+export { getAchievementsOverview } from './overview';
+export { getGameCompletion } from './completion';
+export { getReliableUnlocks } from './reliableUnlocks';
 export {
   getAchievementsRefreshTarget,
   getAchievementsStatus,
@@ -69,9 +66,7 @@ export {
   getPendingAchievementsGames,
   getRaMatchedGames,
   getSteamLivePollGames,
-  type AchievementsSourceStatus,
   type AchievementsStatusOptions,
-  type AchievementsStatusV2,
   type AchievementsSyncTarget,
   type RaMatchedGame,
 } from './status';

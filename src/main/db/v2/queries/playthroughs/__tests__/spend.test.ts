@@ -13,13 +13,8 @@ import {
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
 import { deleteIteration } from '../playthroughs';
-import {
-  DEFAULT_CURRENCY,
-  addSpendEvent,
-  deleteSpendEvent,
-  getAllSpendEvents,
-  updateSpendEvent,
-} from '../spend';
+import { DEFAULT_CURRENCY } from '../../common/currency';
+import { addSpendEvent, deleteSpendEvent, getAllSpendEvents, updateSpendEvent } from '../spend';
 
 // Los gastos sobre el esquema 2.0. La 1.x no tenía tests propios de
 // add/update/delete; de `yearTotals.test.ts` se porta la parte que depende de

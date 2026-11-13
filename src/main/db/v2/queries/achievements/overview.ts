@@ -1,6 +1,5 @@
 import { RARE, ULTRA_RARE } from '../../../../../shared/achievements';
 import type { AchievementsOverview } from '../../../../../shared/types';
-import type { AchievementSource } from '../../schema';
 import type { QueryContext } from '../common/context';
 import { readGameRows } from '../common/gameView';
 import { achievementKey, type AchievementKey } from './ids';
@@ -42,21 +41,11 @@ const HALL_OF_FAME_SIZE = 10;
 const ALMOST_THERE_GAMES = 6;
 const ALMOST_THERE_MISSING = 5;
 
+// Con ids de texto, `AchievementsOverview<string>` ya lleva `source` en las
+// entradas del muro y de "almost there" (shared/types.ts).
 type Overview = AchievementsOverview<string>;
-
-/** Cambio pedido (tipo local hasta P9): las entradas del muro y de "casi", con su fuente. */
-export type PerfectGameV2 = Overview['perfectGames'][number] & {
-  readonly source: AchievementSource;
-};
-export type AlmostThereV2 = Overview['almostThere'][number] & {
-  readonly source: AchievementSource;
-};
-
-/** Cambio pedido: el resumen con las entradas por fuente. Asignable a `AchievementsOverview<string>`. */
-export interface AchievementsOverviewV2 extends Overview {
-  perfectGames: PerfectGameV2[];
-  almostThere: AlmostThereV2[];
-}
+type PerfectGame = Overview['perfectGames'][number];
+type AlmostThere = Overview['almostThere'][number];
 
 interface Unlocked {
   readonly achievementId: AchievementKey;
@@ -83,10 +72,7 @@ const toUnlocked = (progress: CatalogProgress, unlock: UnlockedItem): Unlocked =
  * solo con fechas fiables de ese año; el muro son los completados ese año;
  * "almost there" viene vacío (es una foto de ahora).
  */
-export function getAchievementsOverview(
-  ctx: QueryContext,
-  year: number | null,
-): AchievementsOverviewV2 {
+export function getAchievementsOverview(ctx: QueryContext, year: number | null): Overview {
   const catalogs = loadCatalogProgress(ctx);
 
   // Los desbloqueados, en el orden estable de la 1.x (allí, el id del logro;
@@ -115,7 +101,7 @@ export function getAchievementsOverview(
   const titleOf = (gameId: string): string => gamesById.get(gameId)?.title ?? '';
   const coverOf = (gameId: string): string | null => gamesById.get(gameId)?.coverUrl ?? null;
 
-  const perfectGames: PerfectGameV2[] = known
+  const perfectGames: PerfectGame[] = known
     .filter(progressIsComplete)
     .map((p) => ({
       gameId: p.gameId,
@@ -131,7 +117,7 @@ export function getAchievementsOverview(
     )
     .sort((a, b) => b.total - a.total);
 
-  const almostThere: AlmostThereV2[] = (year === null ? known : [])
+  const almostThere: AlmostThere[] = (year === null ? known : [])
     .map((p) => ({ p, ratio: p.unlocked.length / Math.max(1, p.total) }))
     .filter(({ p, ratio }) => p.total > 0 && ratio >= ALMOST_THERE_MIN && ratio < 1)
     .sort((a, b) => b.ratio - a.ratio)

@@ -343,7 +343,7 @@ export function applyHltb(
   hltb: HltbTimesData | null | SourceFailure,
 ): void {
   if (isFailure(hltb)) {
-    recordCheck(ctx, current.id, 'hltb', 'error', hltb.error);
+    recordCheck(ctx, current.id, 'hltb', 'error', { error: hltb.error });
     return;
   }
   if (hltb === null || !hasAnyHltbTime(hltb)) {

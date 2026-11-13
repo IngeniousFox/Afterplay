@@ -168,6 +168,49 @@ export function writeCheck(
 }
 
 /**
+ * Apunta una comprobación con dos reglas encima de `writeCheck`. Es la que
+ * deben usar las pasadas de fondo, que vuelven a preguntar lo mismo una y
+ * otra vez:
+ *
+ * 1. Un FALLO no pisa una respuesta anterior (`ok`/`empty`). En la 1.x un
+ *    fallo no dejaba sello y el anterior seguía en pie; pisarlo convertiría un
+ *    juego ya preguntado en "nunca preguntado" (y lo volvería pendiente) por
+ *    un 503 pasajero. "Un no externo no borra lo que había" (§14.2) vale
+ *    también para los sellos.
+ * 2. Una respuesta IGUAL a la anterior y sin cadencia (`nextCheckAt` null en
+ *    la política: casi todas) no se re-sella. Si no, cada pasada reescribiría
+ *    una fila por juego y fuente, que es justo F-33. Consecuencia: con esta
+ *    regla `checkedAt` es "desde cuándo la fuente responde esto", no "la
+ *    última vez que se preguntó". Las respuestas con cadencia (`ra_match` sin
+ *    set, los fallos) sí se re-sellan siempre: su `nextCheckAt` se mueve.
+ *
+ * Una comprobación con lápida (`clearCheck`) cuenta como inexistente: la
+ * siguiente respuesta se escribe siempre.
+ *
+ * Devuelve si escribió. No escribe nada si el juego no está vivo (R-15).
+ * `writeCheck` sigue siendo la regla para una escritura puntual que debe
+ * fechar ESTE momento (ver README, "Comprobaciones externas").
+ */
+export function recordCheck(
+  ctx: QueryContext,
+  gameId: string,
+  source: ExternalCheckSource,
+  status: CheckStatus,
+  options: WriteCheckOptions = {},
+): boolean {
+  return ctx.store.transaction(() => {
+    const previous = readCheck(ctx, gameId, source);
+    if (previous) {
+      if (status === 'error' && previous.status !== 'error') return false;
+      const error = status === 'error' ? (options.error ?? null) : null;
+      const sameAnswer = previous.status === status && (previous.error ?? null) === error;
+      if (sameAnswer && CHECK_POLICIES[source][status] === null) return false;
+    }
+    return writeCheck(ctx, gameId, source, status, options);
+  });
+}
+
+/**
  * Olvida una comprobación (lápida): la fuente vuelve a estar "nunca
  * preguntada". Lo usa, por ejemplo, cambiar el appid de Steam (CONSULTAS.md
  * §2.2, `setSteamAppId`). No falla si no existe o ya estaba borrada.

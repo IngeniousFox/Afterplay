@@ -54,6 +54,17 @@ export type IterationRating = 1 | 2 | 3 | 4 | 5;
 // el Worker, que seguirá con números, no.
 type SchemaValues<Id extends EntityIdLike, Base, Added> = Id extends string ? Base | Added : Base;
 
+// Lo mismo para los valores que el 2.0 QUITA de una escritura: con texto el
+// tipo pierde `Removed`; con números sigue siendo el de siempre.
+type SchemaWithout<Id extends EntityIdLike, Base, Removed> = Id extends string
+  ? Exclude<Base, Removed>
+  : Base;
+
+// Y para los CAMPOS que solo existen en el 2.0: se intersecan con el tipo de
+// siempre. Con números la intersección es con `unknown`, que no añade nada
+// (`T & unknown` es `T`), así que dtoSync.ts sigue viendo la tabla 1.x exacta.
+export type SchemaFields<Id extends EntityIdLike, Added> = Id extends string ? Added : unknown;
+
 // Precisión de un evento de estado. El 2.0 añade 'unknown' (R-07): el alta o
 // la promoción sin fecha. Las lecturas 2.0 la devuelven tal cual.
 export type StateEventPrecision<Id extends EntityIdLike = EntityId> = SchemaValues<
@@ -67,6 +78,20 @@ export type SessionStartedBy<Id extends EntityIdLike = EntityId> = SchemaValues<
   Id,
   'watcher' | 'timer',
   'play'
+>;
+
+// Quién cerró una sesión (AFTERPLAY-2.0.md §10.5, R-12): su dueño de forma
+// automática, el barrido del hub, o una persona (Stop, marcar un estado).
+// Solo existe en el 2.0.
+export type SessionClosedBy = 'owner' | 'janitor' | 'user';
+
+// El tipo de un evento de estado que se puede ESCRIBIR. El 2.0 quita
+// 'plan_to_play' (F-12): el paso por el Plan es `plan_entries`. El DTO de
+// lectura (`StateEventType`) lo conserva solo como valor sintético del Plan.
+export type WritableStateEventType<Id extends EntityIdLike = EntityId> = SchemaWithout<
+  Id,
+  StateEventType,
+  'plan_to_play'
 >;
 
 // Un juego tal como lo guarda la tabla `games`. El significado de cada
@@ -150,7 +175,19 @@ export type Session<Id extends EntityIdLike = EntityId> = {
   startedBy: SessionStartedBy<Id>;
   datePrecision: EventDatePrecision;
   note: string | null;
-};
+} & SessionOwnership<Id>;
+
+// Dueño y cierre de una sesión: solo en el 2.0 (CONSULTAS.md §1.2). Hacen
+// falta para "Jugando en PC-A" (§10.8) y para saber si la cerró una persona.
+export type SessionOwnership<Id extends EntityIdLike = EntityId> = SchemaFields<
+  Id,
+  {
+    /** El dispositivo dueño (`devices.id`). Texto en cualquier representación. */
+    deviceId: string;
+    /** Null mientras está abierta. */
+    closedBy: SessionClosedBy | null;
+  }
+>;
 
 // Una entrada del log de estados (tabla `state_events`).
 export type StateEvent<Id extends EntityIdLike = EntityId> = {
@@ -250,15 +287,19 @@ export type UpdateIterationPatch = {
 
 // stateEvents:add — todos los menús de estado (ficha, TV, toast de cierre).
 // occurredAt y note opcionales, como en la tabla: sin fecha, "ahora".
+// Con ids de texto (2.0): sin 'plan_to_play' y con la precisión 'unknown'
+// (el alta o la promoción sin fecha, R-07).
 export type AddStateEventInput<Id extends EntityIdLike = EntityId> = {
   iterationId: IterationId<Id>;
-  type: StateEventType;
+  type: WritableStateEventType<Id>;
   occurredAt?: Date;
-  datePrecision: EventDatePrecision;
+  datePrecision: StateEventPrecision<Id>;
   note?: string | null;
 };
 
-// spend:add — el popover de añadir gasto.
+// spend:add — el popover de añadir gasto. Con ids de texto, el gasto puede
+// colgar de un playthrough (opcional, como en la tabla 2.0; omitido o null =
+// repartir por fecha, como hoy).
 export type AddSpendEventInput<Id extends EntityIdLike = EntityId> = {
   gameId: GameId<Id>;
   type: SpendEventType;
@@ -266,7 +307,7 @@ export type AddSpendEventInput<Id extends EntityIdLike = EntityId> = {
   occurredAt?: Date;
   datePrecision: EventDatePrecision;
   note?: string | null;
-};
+} & SchemaFields<Id, { playthroughId?: IterationId<Id> | null }>;
 
 // emulators:create — la sección de emuladores de Ajustes.
 export type CreateEmulatorInput = {

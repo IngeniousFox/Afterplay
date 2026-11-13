@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
 import { generatedMemoryId } from '../../../../../shared/sync/ids';
 import type {
   ChapterStateEventV2,
@@ -9,24 +9,21 @@ import type { MemorySession } from '../../../../../shared/memory/moments';
 import type { RecapPayload } from '../../../../../shared/memory/payload';
 import { manualHoursAnchor } from '../../../../../shared/playthroughState';
 import {
-  achievementCatalogs,
-  achievementUnlocks,
   games,
   generatedMemories,
   playthroughs,
   sessions,
   stateEvents,
-  type AchievementCatalogItem,
   type MemoryScopeType,
   type StateEventType,
 } from '../../schema';
 import { alive } from '../../store';
+import { getReliableUnlocks } from '../achievements/reliableUnlocks';
 import {
   liveGame,
   livePlaythrough,
   liveSession,
   liveStateEvent,
-  liveUnlock,
   type QueryContext,
 } from '../common';
 
@@ -74,8 +71,10 @@ export type MemoryFacts = {
  * - `isManual` sale de `sessions.source = 'legacy_manual'`.
  * - Las horas manuales son `playthroughs.manualHours`, ancladas con
  *   `manualHoursAnchor(…, 'datePrecision')`.
- * - Los desbloqueos se leen de `achievement_unlocks` y del catálogo agrupado
- *   en JSON (`achievement_catalogs.items`), ver `readReliableUnlocks`.
+ * - Los desbloqueos (solo los de fecha fiable, fundidos por logro) los da el
+ *   lector de logros, `achievements/getReliableUnlocks`: el mismo progreso que
+ *   el resumen de Stats. Sustituyó en la integración al lector propio que
+ *   tenía este paquete, tras comprobar que devolvían lo mismo.
  *
  * El resto del cálculo se ha copiado a propósito tal cual, en el mismo orden:
  * la firma de los recaps importados (ver `memorySignature.ts`) solo casa si
@@ -195,89 +194,8 @@ export function getMemoryFacts(ctx: QueryContext): MemoryFacts {
     titlesByGame: new Map(gameRows.map((game) => [game.id, game.title])),
     manualBlocks,
     manualHoursByGame,
-    unlocks: readReliableUnlocks(ctx),
+    unlocks: getReliableUnlocks(ctx),
   };
-}
-
-/**
- * Los desbloqueos con fecha FIABLE, fundidos por logro `(gameId, source,
- * apiName)` y con su nombre, descripción y rareza sacados del catálogo.
- *
- * Lector mínimo propio, a propósito: las consultas de logros 2.0 las escribe
- * otro paquete (P5, `queries/achievements/`) a la vez y no se pueden importar.
- * Duplica una parte pequeña de su lógica; al juntar los paquetes se puede
- * sustituir por el lector de P5 si da exactamente esto.
- *
- * - Fundido como `mergeUnlocks.ts`: "fecha fiable gana; empatadas, la más
- *   temprana". Como solo entran las fiables, la ganadora es el `min()`. Los
- *   orígenes (`steam`, `emu@<pc>`) del mismo logro Steam son UNA fila; uno de
- *   RetroAchievements es otro logro (otra fuente), igual que en la 1.x.
- * - Un desbloqueo sin su logro en un catálogo vivo no sale (la 1.x hacía
- *   inner join con `achievements`).
- * - El catálogo se lee una vez por juego con desbloqueos y se cruza en JS: un
- *   `json_each` por desbloqueo recorrería el catálogo entero cada vez.
- */
-export function readReliableUnlocks(ctx: QueryContext): ChapterUnlock<string>[] {
-  const reliable = and(liveUnlock(), eq(achievementUnlocks.dateReliable, true));
-  const unlockRows = ctx.db
-    .select({
-      gameId: achievementUnlocks.gameId,
-      source: achievementUnlocks.source,
-      apiName: achievementUnlocks.apiName,
-      // `sql<Date>` con `mapWith`: sin él vuelve el entero crudo del driver.
-      unlockedAt: sql<Date>`min(${achievementUnlocks.unlockedAt})`.mapWith(
-        achievementUnlocks.unlockedAt,
-      ),
-    })
-    .from(achievementUnlocks)
-    .where(reliable)
-    .groupBy(achievementUnlocks.gameId, achievementUnlocks.source, achievementUnlocks.apiName)
-    .all();
-  if (unlockRows.length === 0) return [];
-
-  // `alive(cat)` basta: el juego ya está vivo por `liveUnlock` en la subconsulta.
-  const catalogRows = ctx.db
-    .select({
-      gameId: achievementCatalogs.gameId,
-      source: achievementCatalogs.source,
-      items: achievementCatalogs.items,
-    })
-    .from(achievementCatalogs)
-    .where(
-      and(
-        alive(achievementCatalogs),
-        inArray(
-          achievementCatalogs.gameId,
-          ctx.db
-            .selectDistinct({ gameId: achievementUnlocks.gameId })
-            .from(achievementUnlocks)
-            .where(reliable),
-        ),
-      ),
-    )
-    .all();
-
-  const itemsByCatalog = new Map<string, Map<string, AchievementCatalogItem>>();
-  for (const catalog of catalogRows) {
-    itemsByCatalog.set(
-      `${catalog.gameId}\u0000${catalog.source}`,
-      new Map(catalog.items.map((item) => [item.apiName, item])),
-    );
-  }
-
-  const unlocks: ChapterUnlock<string>[] = [];
-  for (const row of unlockRows) {
-    const item = itemsByCatalog.get(`${row.gameId}\u0000${row.source}`)?.get(row.apiName);
-    if (!item) continue;
-    unlocks.push({
-      gameId: row.gameId,
-      name: item.displayName,
-      description: item.description,
-      globalPercent: item.globalPercent,
-      unlockedAt: row.unlockedAt,
-    });
-  }
-  return unlocks;
 }
 
 // ── Recaps guardados ────────────────────────────────────────────────────────

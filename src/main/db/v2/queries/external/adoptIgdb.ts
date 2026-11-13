@@ -87,7 +87,7 @@ export function applyIgdbAdoption(
       return 'skipped';
     }
     if (isFailure(lookup)) {
-      recordCheck(ctx, current.id, 'igdb', 'error', lookup.error);
+      recordCheck(ctx, current.id, 'igdb', 'error', { error: lookup.error });
       return 'failed';
     }
     if (lookup === null) {

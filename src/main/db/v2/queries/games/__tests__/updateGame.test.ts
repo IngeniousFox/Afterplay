@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import { count, markClean, rawRow } from '../../../__tests__/helpers';
+import { count, rawRow } from '../../../__tests__/helpers';
 import { openQueryDb, seedGame, type QueryFixture } from '../../common/__tests__/fixtures';
-import { updateGame, updateGameSaves } from '../updateGame';
+import { updateGame } from '../updateGame';
 
 // games:update en 2.0. El patch del modal (`UpdateGamePatch`) lo prueba a
 // fondo `common/__tests__/updateGame.test.ts`; aquí, lo que porta la
 // referencia `ipc/__tests__/gamesUpdate.test.ts` a nivel de consulta (las
-// claves fuera de la lista no llegan a la fila) y el patch de partidas de P2.
+// claves fuera de la lista no llegan a la fila). El patch de partidas es de
+// `saves/` (`updateSaveSettings`) y se prueba allí.
 
 let fx: QueryFixture;
 beforeEach(() => {
@@ -42,48 +43,5 @@ describe('updateGame (reexportado de common)', () => {
     assert.equal(row?.steamAppId, null);
     assert.equal(row?.addedAt, addedAt);
     assert.equal(count(fx.local, 'plan_entries'), 0);
-  });
-});
-
-describe('updateGameSaves', () => {
-  it('escribe las cuatro columnas de partidas y devuelve el juego releído', () => {
-    const id = seedGame(fx.ctx, { title: 'Celeste' });
-    const row = updateGameSaves(fx.ctx, id, {
-      saveBackupEnabled: true,
-      saveDetectionSource: 'manual',
-      saveLudusaviName: 'Celeste',
-      saveCustomPaths: ['<home>/Saves/Celeste'],
-    });
-    assert.equal(row?.saveBackupEnabled, true);
-    assert.equal(row?.saveDetectionSource, 'manual');
-    assert.equal(row?.saveLudusaviName, 'Celeste');
-    assert.deepEqual(row?.saveCustomPaths, ['<home>/Saves/Celeste']);
-
-    const cleared = updateGameSaves(fx.ctx, id, {
-      saveLudusaviName: null,
-      saveDetectionSource: null,
-    });
-    assert.equal(cleared?.saveLudusaviName, null);
-    assert.equal(cleared?.saveBackupEnabled, true);
-  });
-
-  it('ignora claves ajenas y no escribe si nada cambia (F-33)', () => {
-    const id = seedGame(fx.ctx, { title: 'Celeste', saveBackupEnabled: true });
-    markClean(fx.local, 'games');
-    const row = updateGameSaves(fx.ctx, id, {
-      saveBackupEnabled: true,
-      title: 'Pisado',
-    } as Parameters<typeof updateGameSaves>[2]);
-    assert.equal(row?.title, 'Celeste');
-    assert.equal(count(fx.local, 'games', 'syncDirty = 1'), 0);
-  });
-
-  it('null si el juego no existe o tiene lápida, sin escribir', () => {
-    const id = seedGame(fx.ctx, { title: 'Celeste' });
-    fx.ctx.store.remove('games', id);
-    markClean(fx.local, 'games');
-    assert.equal(updateGameSaves(fx.ctx, id, { saveBackupEnabled: true }), null);
-    assert.equal(updateGameSaves(fx.ctx, 'no-existe', { saveBackupEnabled: true }), null);
-    assert.equal(count(fx.local, 'games', 'syncDirty = 1'), 0);
   });
 });

@@ -8,7 +8,7 @@ import {
   type AchievementSource,
 } from '../../schema';
 import { alive } from '../../store';
-import { writeCheck } from '../common/checks';
+import { recordCheck } from '../common/checks';
 import type { QueryContext } from '../common/context';
 
 // Escribir y leer `achievement_catalogs` (AFTERPLAY-2.0.md §7.4).
@@ -297,7 +297,11 @@ export function storeSteamCatalog(
     const merged = mergeSteamCatalog(previous, definitions, percentages);
     const written =
       merged.length > 0 && writeCatalogIfChanged(ctx, gameId, 'steam', merged, fetchedAt);
-    writeCheck(ctx, gameId, 'steam_achievements', definitions.length > 0 ? 'ok' : 'empty', {
+    // `recordCheck`, no `writeCheck`: "Sync now" vuelve a preguntar por todos
+    // los juegos y una respuesta igual no debe re-sellarse (F-33), igual que
+    // el catálogo no se reescribe si no cambia. `syncedAt` pasa a ser "desde
+    // cuándo responde esto"; ningún lector del renderer lo usa (grep).
+    recordCheck(ctx, gameId, 'steam_achievements', definitions.length > 0 ? 'ok' : 'empty', {
       checkedAt: fetchedAt,
     });
     return { status: 'stored', written, count: definitions.length } as const;
@@ -328,7 +332,7 @@ export function storeRaCatalog(ctx: QueryContext, input: StoreRaCatalogInput): S
     const merged = mergeRaCatalog(previous, input.definitions);
     const written =
       merged.length > 0 && writeCatalogIfChanged(ctx, input.gameId, 'ra', merged, fetchedAt);
-    writeCheck(
+    recordCheck(
       ctx,
       input.gameId,
       'ra_achievements',

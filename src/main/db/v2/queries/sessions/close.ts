@@ -1,5 +1,6 @@
 import { closeOwnSession, type CloseSessionInput, type QueryContext } from '../common';
-import { toSessionDto, type SessionDto } from './dto';
+import type { Session } from '../../../../../shared/dto';
+import { toSessionDto } from './dto';
 
 // Cerrar una sesión (sustituye a `closeSession.ts` de la 1.x; CONSULTAS.md
 // §2.2 y §3.2). La única forma de cerrar es `closeOwnSession` de
@@ -33,7 +34,7 @@ export function closeSessionIfOpen(
   ctx: QueryContext,
   sessionId: string,
   input: CloseSessionInput,
-): SessionDto | null {
+): Session<string> | null {
   const result = closeOwnSession(ctx, sessionId, input);
   return result.status === 'closed' ? toSessionDto(result.session) : null;
 }
@@ -48,7 +49,7 @@ export function closeSession(
   ctx: QueryContext,
   sessionId: string,
   input: CloseSessionInput,
-): SessionDto | null {
+): Session<string> | null {
   const result = closeOwnSession(ctx, sessionId, input);
   // No existe o tiene lápida: los únicos resultados sin fila.
   if (!('session' in result)) return null;

@@ -1,10 +1,11 @@
 import { asc } from 'drizzle-orm';
-import type { SpendEvent } from '../../../../../shared/dto';
-import type { SpendEventSummary } from '../../../../../shared/types';
+import type { AddSpendEventInput, SpendEvent } from '../../../../../shared/dto';
+import type { SpendEventSummary, UpdateSpendEventPatch } from '../../../../../shared/types';
 import { spendEvents } from '../../schema';
 import { StoreError, type CreateValues, type PatchValues } from '../../store';
 import { liveSpendEvent } from '../common/alive';
 import type { QueryContext } from '../common/context';
+import { DEFAULT_CURRENCY } from '../common/currency';
 import {
   gameFacts,
   playthroughState,
@@ -12,27 +13,11 @@ import {
   spendEventState,
   storeErrorFor,
 } from './read';
-import type { AddSpendEventInputV2, UpdateSpendEventPatchV2 } from './types';
 
 // Los gastos sobre el esquema 2.0 (CONSULTAS.md §2.2 "spend"). El gasto cuelga
 // del JUEGO, no del playthrough (SPEC Nivel 1 bis): puede haber gasto sin haber
 // jugado nunca. `playthroughId` es opcional y, sin él, el reparto entre
 // playthroughs se hace por fecha al leer (`shared/domain/spend.ts`).
-
-/**
- * La moneda que se guarda en cada gasto nuevo (D-23: una sola moneda en la
- * interfaz; cada gasto guarda la suya por si algún día hay varias).
- *
- * Por qué una constante y no un ajuste: la app no tiene hoy ninguna moneda
- * configurable; pinta siempre euros (`formatMoney` en `shared/format.ts`), y el
- * importador de la 1.x escribe también `EUR` en todo lo que trae
- * (`MAPA-1X.md`, `spend_events.currency`). Escribir otra cosa aquí haría que
- * un mismo historial mezclase monedas sin que la interfaz lo supiera. El día
- * que haya un ajuste de moneda, este valor pasa a llegar por parámetro (o por
- * el contexto) y el resto no cambia. Cambio pedido: moverla a `common/` para
- * que P2 (alta con gasto) use la misma.
- */
-export const DEFAULT_CURRENCY = 'EUR';
 
 /**
  * spend:add. Crea el gasto y lo devuelve releído.
@@ -46,7 +31,10 @@ export const DEFAULT_CURRENCY = 'EUR';
  *   juego (un gasto así se repartiría en un juego y se contaría en otro).
  * - Juego inexistente → `StoreError('not_found')`; borrado → `'deleted'`.
  */
-export function addSpendEvent(ctx: QueryContext, input: AddSpendEventInputV2): SpendEvent<string> {
+export function addSpendEvent(
+  ctx: QueryContext,
+  input: AddSpendEventInput<string>,
+): SpendEvent<string> {
   const id = ctx.store.transaction(() => {
     const game = gameFacts(ctx, input.gameId);
     if (game.state !== 'alive') throw storeErrorFor('games', input.gameId, game.state);
@@ -91,7 +79,7 @@ export function addSpendEvent(ctx: QueryContext, input: AddSpendEventInputV2): S
 export function updateSpendEvent(
   ctx: QueryContext,
   spendId: string,
-  patch: UpdateSpendEventPatchV2,
+  patch: UpdateSpendEventPatch,
 ): SpendEvent<string> | null {
   const updated = ctx.store.transaction(() => {
     if (spendEventState(ctx, spendId) !== 'alive') return false;

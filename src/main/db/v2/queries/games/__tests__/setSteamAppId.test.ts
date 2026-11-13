@@ -70,7 +70,9 @@ describe('setSteamAppId', () => {
     assert.equal(updated?.steamNegative, null);
     assert.equal(updated?.steamTags, null);
     assert.equal(updated?.summary, 'S');
-    assert.equal(updated?.achievementsUnlocksSyncedAt, null);
+    // `steam_unlocks` se olvida, pero el sello de RA (que en RA vale también
+    // por los desbloqueos, como en la 1.x) sigue en pie.
+    assert.deepEqual(updated?.achievementsUnlocksSyncedAt, new Date(T0));
     assert.equal(updated?.steamSpyCheckedAt, null);
     assert.deepEqual(updated?.steamAppIdCheckedAt, new Date(T0 + 1_000));
     // El de RA sigue sellado, así que "sincronizado" sigue diciendo algo.

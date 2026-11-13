@@ -10,7 +10,11 @@ export function getAlgo(ctx: QueryContext, id: string, …): Resultado {
 
 - **Síncrona**, siempre. El driver (`node:sqlite`) es síncrono; un `async` aquí solo esconde que no hay nada que esperar. La red va **fuera**, antes o después, nunca entre una lectura y la escritura que depende de ella.
 - **`ctx` primero** (`common/context.ts`): `{ db, store, deviceId, now }`. Nunca `getDb()`, nunca `new Date()` suelto (usa `ctx.now()`), nunca `os`/Electron (llegan por parámetro).
-- Ids de texto. Los DTO se devuelven con `Id = string` (`GameRow<string>`, `StateEvent<string>`…). Con texto, los DTO ya incluyen los valores del 2.0 (`'unknown'` en la precisión de los eventos de estado, `'play'` en `startedBy`).
+- Ids de texto. Los DTO se devuelven con `Id = string` (`GameRow<string>`, `StateEvent<string>`…). Con texto, los DTO ya incluyen lo del 2.0, y con `Id = number` (la app 1.x y el Worker) no cambian nada (`main/db/dtoSync.ts` lo vigila). Los ayudantes están en `shared/dto.ts`: `SchemaValues` (valores que se añaden a un enumerado), `SchemaWithout` (valores que se quitan) y `SchemaFields` (campos que solo existen con texto). Lo que hay hoy:
+  - Valores: `'unknown'` en `StateEventPrecision<Id>` (también en `IterationEdgeEvent`), `'play'` en `SessionStartedBy<Id>`; `WritableStateEventType<Id>` pierde `'plan_to_play'` (`AddStateEventInput<Id>`, `UpdateStateEventPatch<Id>`).
+  - Campos: `deviceId`/`closedBy` en `Session<Id>` y `SessionWithGame<Id>` (`SessionOwnership`); `planHistory` en `GameDetail<Id>` (`PlanHistory`, R-06); `playthroughId?` en `AddSpendEventInput<Id>`; `saveKey` en `SaveGame<Id>`; `completion` en `GameAchievements<Id>`, `source` en `perfectGames`/`almostThere` de `AchievementsOverview<Id>` y `bySource` en `AchievementsStatus<Id>` (R-11).
+  - Sin ids: `OwnedGameRef<Id>`, `SaveSettingsPatch`, `SourceCompletion`, `AchievementsSourceStatus`, `AchievementCatalogSource`.
+  - Ningún paquete define ya su `…V2` o `…Dto` local: si una consulta necesita algo que el DTO no tiene, se añade en `shared/` con estos ayudantes. Un constructor GENÉRICO en `Id` tiene que dar también los campos de `SchemaFields` (ver `shared/__tests__/idRepresentations.test.ts`).
 - Reglas de negocio: las de `src/shared/domain` y `src/shared/playthroughState.ts`, llamadas con ids de texto (`src/shared/__tests__/idRepresentations.test.ts` enseña cómo). No se reescriben aquí.
 
 ## Leer solo filas vivas
@@ -31,7 +35,11 @@ export function getAlgo(ctx: QueryContext, id: string, …): Resultado {
 - `store.patch` sin cambios no escribe (F-33): no hace falta comparar antes. Sobre una fila inexistente o con lápida lanza: compruébalo antes y devuelve lo que diga el contrato (`null`, `false`…).
 - **`ctx.store.transaction(() => …)`** en cuanto una operación hace más de una escritura, o lee algo y escribe según lo leído (releer dentro). Es síncrona y anidable (SAVEPOINT). Nada de `db.transaction` de Drizzle. La relectura para devolver el DTO puede ir fuera.
 - Filas de otro dispositivo: la puerta lanza `StoreError('not_owner')`. Si es un caso esperado (sesión abierta en otro PC), compruébalo antes y devuelve un resultado; no captures errores para decidir.
-- Comprobaciones externas: `writeCheck(ctx, gameId, source, status, { error })` y `clearCheck`; candidatos con `checkIsDue(source, now)`. La cadencia está en `CHECK_POLICIES`.
+- Comprobaciones externas (`common/checks.ts`); candidatos con `checkIsDue(source, now)`, la cadencia en `CHECK_POLICIES`, olvidar con `clearCheck`. Dos formas de apuntar:
+  - `recordCheck(ctx, gameId, source, status, { error, checkedAt })` para todo lo que **repite** la misma pregunta (pasadas de fondo, refrescos, sincronización de logros): un fallo no pisa una respuesta anterior y una respuesta igual sin cadencia no se re-sella (F-33). Con ella `checkedAt` es "desde cuándo responde esto". La usan `external/` y `achievements/` (`steam_achievements`, `ra_achievements`, `steam_unlocks`).
+  - `writeCheck(…)` para una escritura **puntual** que debe fechar ese momento y nunca lleva fallo: el alta (`games/newGame`), fijar el appid a mano (`games/setSteamAppId`) y guardar curiosidades (`loop/storeCuriosities`, cuyo `checkedAt` tiene que ser el `generatedAt` de la fila que escribe).
+- Moneda de los gastos: `DEFAULT_CURRENCY` (`common/currency.ts`). No escribas `'EUR'` a mano.
+- "¿Se puede devolver al Plan?": `canMoveToPlan` / `canMoveToPlanCondition` (`common/canMoveToPlan.ts`). La usan la ficha y la escritura; no hagas otra.
 - Cerrar sesiones: `closeOwnSession` / `closeOpenOwnSessions` de `common/sessionsClose.ts`, con `closedBy` explícito (`'user'` si lo pide una persona, `'owner'` si es automático, R-12). No escribas otro.
 - Errores: `StoreError` con `code` estable (`store/errors.ts`). Documenta en la cabecera de cada función qué devuelve en cada caso esperado y qué se propaga.
 
@@ -54,8 +62,9 @@ it('…', () => {
 - `seed*` escriben por la puerta con valores por defecto y devuelven el id: `seedGame`, `seedPlanEntry`, `seedInstall`, `seedPlaythrough`, `seedStateEvent`, `seedSession`, `seedSpendEvent`, `seedEmulator`, `seedCatalog`, `seedUnlock`, `seedCheck`, `seedCuriosities`, `seedSaveBackup`, `seedRadarGame`. Guarda los ids que devuelven (o busca por título); nunca ids literales.
 - **Otra máquina**: `asOtherDevice(fx.ctx)` crea su `devices` y escribe sus filas como llegadas por sync (`seedSession`, `seedInstall`, `seedEmulatorInstall`, `seedSaveBackup`, `insert(tabla, valores)`). Úsalo para probar que filtras por dispositivo. `insertSynced` para cualquier fila "llegada por sync" (también del propio PC, p. ej. dos sesiones abiertas que la puerta no deja crear). `tombstoneOnly` pone una lápida sin cascada (caso F-11).
 - Porta los casos de los tests 1.x de la columna "Referencia" de CONSULTAS.md §4. Ejemplos completos: `common/__tests__/gameView.test.ts` (lectura) y `updateGame.test.ts` (escritura).
+- `__tests__/integracion.test.ts` cuenta una historia entera solo con las funciones públicas de los paquetes y comprueba en cada paso que biblioteca, ficha, Plan, Sesiones y logros dicen lo mismo (`assertCoherent`). Si cambias lo que una consulta devuelve, pásala.
 - Ejecutar: `npx tsx --test --experimental-test-module-mocks "src/main/db/v2/queries/**/*.test.ts"`.
 
 ## Qué no se toca
 
-Cada paquete escribe **solo** en `queries/<dominio>/`. No se tocan `common/` (pide el cambio a P0 o déjalo anotado), `schema.ts`, `registry.ts`, `store/`, `importer/`, `src/shared/`, `ipc/`, el código 1.x (`src/main/db/queries`, `projections.ts`…), el renderer, `worker/` ni `web/`. Lo que importes del 1.x desaparecerá en P9: copia las funciones puras que necesites.
+Tras la integración, un paquete puede importar la API pública de otro cuando es la misma regla (p. ej. `loop/` lee los desbloqueos fiables con `achievements/getReliableUnlocks`); lo que comparten dos o más va a `common/`. Durante el trabajo en paralelo la regla era esta: cada paquete escribe **solo** en `queries/<dominio>/`. No se tocan `common/` (pide el cambio a P0 o déjalo anotado), `schema.ts`, `registry.ts`, `store/`, `importer/`, `src/shared/`, `ipc/`, el código 1.x (`src/main/db/queries`, `projections.ts`…), el renderer, `worker/` ni `web/`. Lo que importes del 1.x desaparecerá en P9: copia las funciones puras que necesites.

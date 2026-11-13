@@ -13,7 +13,7 @@ import {
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
 import { deleteStateEvent, getAllStateEvents, updateStateEvent } from '../stateEvents';
-import type { AddStateEventInputV2 } from '../types';
+import type { AddStateEventInput } from '../../../../../../shared/dto';
 import { derivedDetail } from './detail';
 
 // updateStateEvent, deleteStateEvent y getAllStateEvents sobre el esquema 2.0.
@@ -37,7 +37,7 @@ const juego = (title = 'Celeste'): { gameId: string; pt: string } => {
 
 const evento = (
   playthroughId: string,
-  type: AddStateEventInputV2['type'],
+  type: AddStateEventInput<string>['type'],
   occurredAt: string,
 ): string => seedStateEvent(fx.ctx, { playthroughId, type, occurredAt: new Date(occurredAt) });
 
@@ -124,7 +124,7 @@ describe('updateStateEvent [2.0]', () => {
     assert.throws(
       () =>
         updateStateEvent(fx.ctx, eventId, {
-          type: 'plan_to_play' as AddStateEventInputV2['type'],
+          type: 'plan_to_play' as AddStateEventInput<string>['type'],
         }),
       (e: unknown) => isStoreError(e, 'invalid_value'),
     );

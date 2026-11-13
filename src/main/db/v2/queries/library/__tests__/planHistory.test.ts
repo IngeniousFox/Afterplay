@@ -7,7 +7,7 @@ import {
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
 import { getGameById } from '../getGameById';
-import type { GameDetailV2 } from '../types';
+import type { GameDetail } from '../../../../../../shared/types';
 import { event, iso } from './helpers';
 
 // Los dos eventos del Plan de la ficha (R-06, petición expresa del usuario):
@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 afterEach(() => fx.close());
 
-const detail = (gameId: string): GameDetailV2 => {
+const detail = (gameId: string): GameDetail<string> => {
   const game = getGameById(fx.ctx, gameId);
   assert.ok(game);
   return game;

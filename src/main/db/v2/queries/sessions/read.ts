@@ -1,11 +1,14 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { resolveIterationHours } from '../../../../../shared/domain/hours';
 import { deriveMoments, type MemorySession } from '../../../../../shared/memory/moments';
-import type { PendingSession, SessionClosedEvent } from '../../../../../shared/types';
+import type {
+  PendingSession,
+  SessionClosedEvent,
+  SessionWithGame,
+} from '../../../../../shared/types';
 import { emulators, gameMetadata, games, playthroughs, sessions } from '../../schema';
 import { alive } from '../../store';
 import { liveEmulator, livePlaythrough, liveSession, type QueryContext } from '../common';
-import type { SessionWithGameDto } from './dto';
 
 // Lecturas de sesiones para la interfaz (sustituyen a `getAllSessions.ts`,
 // `getPendingSessions.ts` y `getSessionClosedInfo.ts` de la 1.x; CONSULTAS.md
@@ -33,7 +36,7 @@ export interface GetAllSessionsOptions {
 export function getAllSessions(
   ctx: QueryContext,
   options: GetAllSessionsOptions = {},
-): SessionWithGameDto[] {
+): SessionWithGame<string>[] {
   const rows = ctx.db
     .select({
       id: sessions.id,

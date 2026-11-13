@@ -2,7 +2,7 @@
 // `../README.md`.
 
 export { closeSession, closeSessionIfOpen } from './close';
-export { readSessionRow, toSessionDto, type SessionDto, type SessionWithGameDto } from './dto';
+export { readSessionRow, toSessionDto } from './dto';
 export { assignSession, deletePendingSession, deleteSession, updateSessionNote } from './edit';
 export { createEmulator, deleteEmulator, getEmulators } from './emulators';
 export { captureStoreError, type Captured } from './errors';

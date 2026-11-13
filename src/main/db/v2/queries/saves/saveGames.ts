@@ -1,5 +1,6 @@
 import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
-import { games, planEntries, type SaveDetectionSource } from '../../schema';
+import type { SaveGame as SharedSaveGame, SaveSettingsPatch } from '../../../../../shared/types';
+import { games, planEntries } from '../../schema';
 import { alive, type PatchValues } from '../../store';
 import { liveGame } from '../common';
 import type { QueryContext } from '../common';
@@ -15,24 +16,14 @@ import type { QueryContext } from '../common';
 // emparejamiento actual no puede pisar un cambio hecho entretanto.
 
 /**
- * Lo que el módulo de partidas necesita de un juego (`SaveGame` de la 1.x, con
- * ids de texto). [S] El prefijo del bucket es `saveKey`, no `igdbId` (§7.4):
- * así los juegos sin igdbId también pueden ir a la nube (§12.7).
+ * Lo que el módulo de partidas necesita de un juego: `SaveGame` de
+ * `shared/types.ts` con ids de texto. [S] El prefijo del bucket es `saveKey`,
+ * no `igdbId` (§7.4): así los juegos sin igdbId también pueden ir a la nube
+ * (§12.7). Null solo en un juego que se saltara el alta (ver `ensureSaveKey`).
  */
-export interface SaveGame {
-  readonly id: string;
-  readonly title: string;
-  readonly igdbId: number | null;
-  /**
-   * Prefijo del juego en el bucket. Lo fija el alta; null solo en un juego que
-   * se saltara ese paso (ver `ensureSaveKey`).
-   */
-  readonly saveKey: string | null;
-  readonly saveBackupEnabled: boolean;
-  readonly saveDetectionSource: SaveDetectionSource | null;
-  readonly saveLudusaviName: string | null;
-  readonly saveCustomPaths: string[] | null;
-}
+export type SaveGame = SharedSaveGame<string>;
+
+export type { SaveSettingsPatch };
 
 const saveGameColumns = {
   id: games.id,
@@ -95,21 +86,14 @@ export function ensureSaveKey(ctx: QueryContext, gameId: string): string | null 
 }
 
 /**
- * Las columnas de partidas que puede escribir el módulo de partidas: un tipo
- * cerrado en lugar del `GamePatch` general (§1.4). `saveKey` no está a
- * propósito: se fija una vez (`ensureSaveKey` o el alta) y no se cambia.
- */
-export interface SaveSettingsPatch {
-  readonly saveBackupEnabled?: boolean;
-  readonly saveDetectionSource?: SaveDetectionSource | null;
-  readonly saveLudusaviName?: string | null;
-  /** Siempre tokenizadas (`<winAppData>/…`), nunca una ruta resuelta. */
-  readonly saveCustomPaths?: string[] | null;
-}
-
-/**
  * Aplica un patch de ajustes de partidas a un juego vivo. Devuelve false si el
  * juego no existe o está borrado. Un patch sin cambios no escribe (F-33).
+ *
+ * `SaveSettingsPatch` (`shared/types.ts`) es un tipo cerrado en lugar del
+ * `GamePatch` general (§1.4); `saveKey` no está a propósito: se fija una vez,
+ * con `ensureSaveKey` o el alta. Este paquete es el ÚNICO escritor de esas
+ * columnas: la copia que tenía `games/` (`updateGameSaves`) se quitó en la
+ * integración.
  */
 export function updateSaveSettings(
   ctx: QueryContext,

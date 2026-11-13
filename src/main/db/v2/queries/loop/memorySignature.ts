@@ -1,13 +1,11 @@
-import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { compareByCreation } from '../../../../../shared/entityIds';
+import { compareByCreation, type EntityIdLike } from '../../../../../shared/entityIds';
 import {
   buildChapter,
-  canonicalChapterFacts,
   type Chapter,
-  type ChapterFactsGeneration,
   type ChapterScope,
 } from '../../../../../shared/memory/chapters';
+import { chapterHash, legacyChapterHash } from '../../../../memories/hash';
 import { deriveMoments, type Moment } from '../../../../../shared/memory/moments';
 import { generatedMemories, localLegacyIds, type MemoryScopeType } from '../../schema';
 import { alive } from '../../store';
@@ -18,9 +16,8 @@ import { getMemoryFacts, type MemoryFacts } from './memories';
 // recaps importados de la 1.x (AFTERPLAY-2.0.md §19.5).
 //
 // La firma es el SHA-256 de `canonicalChapterFacts(capítulo)`, que lleva los
-// ids de juego y ordena por ellos. Aquí NO se cambia cómo se calcula: es la
-// misma fórmula que `src/main/memories/hash.ts` (que solo acepta capítulos con
-// ids numéricos, por eso se repite aquí en dos líneas; ver el informe).
+// ids de juego y ordena por ellos. Aquí NO se cambia cómo se calcula: se usan
+// las mismas funciones de `src/main/memories/hash.ts`, genéricas en el id.
 //
 // El problema de la migración: los ids de juego cambian, así que una firma
 // 1.x no casa nunca con los mismos hechos leídos de la 2.0, y si se copiara
@@ -42,17 +39,16 @@ const ACCEPTED_GENERATIONS = ['noAchievements', 'noDecisions'] as const;
 export type AcceptedGeneration = (typeof ACCEPTED_GENERATIONS)[number];
 
 /**
- * SHA-256 hex de los hechos canónicos. `'noAchievements'` es `chapterHash` y
- * `'noDecisions'` es `legacyChapterHash` de `src/main/memories/hash.ts`.
+ * SHA-256 hex de los hechos canónicos: `'noAchievements'` es `chapterHash` y
+ * `'noDecisions'` es `legacyChapterHash` de `src/main/memories/hash.ts`, las
+ * mismas funciones que usa la 1.x (genéricas en el id), sin repetir la
+ * fórmula: si algún día cambia, cambia para las dos.
  */
-export function chapterSignature(
-  chapter: Chapter<string> | Chapter<number>,
-  generation: ChapterFactsGeneration = 'noAchievements',
+export function chapterSignature<Id extends EntityIdLike>(
+  chapter: Chapter<Id>,
+  generation: AcceptedGeneration = 'noAchievements',
 ): string {
-  // `canonicalChapterFacts` es genérica: el cast solo une las dos ramas.
-  return createHash('sha256')
-    .update(canonicalChapterFacts(chapter as Chapter<string>, generation))
-    .digest('hex');
+  return generation === 'noDecisions' ? legacyChapterHash(chapter) : chapterHash(chapter);
 }
 
 /** `'2026-06'` → mes (0-11), `'2026'` → año. Null si la clave no tiene esa forma. */

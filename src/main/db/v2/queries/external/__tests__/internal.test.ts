@@ -48,13 +48,16 @@ describe('recordCheck', () => {
   it('un fallo no pisa una respuesta anterior (en la 1.x un fallo no dejaba sello)', () => {
     const gameId = seedGame(fx.ctx, { title: 'Celeste' });
     seedCheck(fx.ctx, { gameId, source: 'igdb_ratings', status: 'ok' });
-    assert.equal(recordCheck(fx.ctx, gameId, 'igdb_ratings', 'error', 'IGDB 503'), false);
+    assert.equal(
+      recordCheck(fx.ctx, gameId, 'igdb_ratings', 'error', { error: 'IGDB 503' }),
+      false,
+    );
     assert.equal(checkOf(fx, gameId, 'igdb_ratings')?.status, 'ok');
   });
 
   it('un fallo sin respuesta previa sí se apunta, con su texto', () => {
     const gameId = seedGame(fx.ctx, { title: 'Celeste' });
-    assert.equal(recordCheck(fx.ctx, gameId, 'sgdb', 'error', 'timeout'), true);
+    assert.equal(recordCheck(fx.ctx, gameId, 'sgdb', 'error', { error: 'timeout' }), true);
     assert.equal(checkOf(fx, gameId, 'sgdb')?.error, 'timeout');
   });
 

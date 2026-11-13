@@ -1,9 +1,12 @@
-import type { Iteration } from '../../../../../shared/dto';
+import type {
+  CreateIterationInput,
+  Iteration,
+  UpdateIterationPatch,
+} from '../../../../../shared/dto';
 import type { CreateValues, PatchValues } from '../../store';
 import type { QueryContext } from '../common/context';
 import { customLabelToStore, nextPlaythroughPosition, playthroughPosition } from '../common/labels';
 import { gameFacts, playthroughState, readIteration, storeErrorFor } from './read';
-import type { CreatePlaythroughInput, UpdatePlaythroughPatch } from './types';
 
 // Crear, editar y borrar playthroughs (antes "iteraciones") sobre el esquema
 // 2.0 (CONSULTAS.md §1.4 y §2.2 "iterations"). Los DTO siguen llamándose
@@ -33,7 +36,7 @@ import type { CreatePlaythroughInput, UpdatePlaythroughPatch } from './types';
  */
 export function createIteration(
   ctx: QueryContext,
-  input: CreatePlaythroughInput,
+  input: CreateIterationInput<string>,
 ): Iteration<string> {
   const id = ctx.store.transaction(() => {
     const game = gameFacts(ctx, input.gameId);
@@ -68,7 +71,7 @@ export function createIteration(
 export function updateIteration(
   ctx: QueryContext,
   playthroughId: string,
-  patch: UpdatePlaythroughPatch,
+  patch: UpdateIterationPatch,
 ): Iteration<string> | null {
   const updated = ctx.store.transaction(() => {
     if (playthroughState(ctx, playthroughId).state !== 'alive') return false;

@@ -1,9 +1,11 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { deriveGameDetail } from '../../../../../shared/domain/gameDetail';
 import type { Iteration, Session, SpendEvent, StateEvent } from '../../../../../shared/dto';
+import type { GameDetail, IterationDetail } from '../../../../../shared/types';
 import { playthroughs, sessions, spendEvents, stateEvents } from '../../schema';
 import { alive } from '../../store';
 import { liveSession, liveSpendEvent, liveStateEvent } from '../common/alive';
+import { canMoveToPlan } from '../common/canMoveToPlan';
 import type { QueryContext } from '../common/context';
 import { readGameRow } from '../common/gameView';
 import {
@@ -11,9 +13,7 @@ import {
   playthroughCreationOrder,
   playthroughPositions,
 } from '../common/labels';
-import { canMoveToPlan } from './canMoveToPlan';
 import { readPlanHistory } from './planHistory';
-import type { GameDetailV2, IterationDetailV2 } from './types';
 
 // LA FICHA DE UN JUEGO sobre el esquema 2.0 (sustituye a
 // db/queries/games/getGameById.ts).
@@ -48,7 +48,7 @@ import type { GameDetailV2, IterationDetailV2 } from './types';
 //     es del renderer.
 
 /** La ficha del juego, o null si no existe o tiene lápida. */
-export function getGameById(ctx: QueryContext, gameId: string): GameDetailV2 | null {
+export function getGameById(ctx: QueryContext, gameId: string): GameDetail<string> | null {
   const game = readGameRow(ctx, gameId);
   if (!game) return null;
 
@@ -104,6 +104,8 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetailV2 | n
       startedBy: sessions.startedBy,
       datePrecision: sessions.datePrecision,
       note: sessions.note,
+      deviceId: sessions.deviceId,
+      closedBy: sessions.closedBy,
     })
     .from(sessions)
     .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))
@@ -122,6 +124,11 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetailV2 | n
     startedBy: row.startedBy,
     datePrecision: row.datePrecision,
     note: row.note,
+    // Dueño y cierre (`SessionOwnership`): lo mismo que devuelven las
+    // lecturas de `sessions/`, para que la ficha y la pantalla de Sesiones
+    // cuenten igual la misma sesión.
+    deviceId: row.deviceId,
+    closedBy: row.closedBy,
   }));
 
   // stateHistory viaja en este orden al renderer (el Journey).
@@ -163,7 +170,7 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetailV2 | n
     spendEvents: spendHistory,
   });
 
-  const iterationDetails: IterationDetailV2[] = derived.iterations.map((entry) => ({
+  const iterationDetails: IterationDetail<string>[] = derived.iterations.map((entry) => ({
     ...entry.iteration,
     hours: entry.hours,
     startedAt: entry.startedAt,

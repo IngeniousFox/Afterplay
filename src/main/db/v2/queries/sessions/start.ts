@@ -3,7 +3,8 @@ import { isTimerStale } from '../../../../../shared/timerFreshness';
 import { emulators, games, playthroughs, sessions } from '../../schema';
 import { alive } from '../../store';
 import { liveEmulator, liveGame, liveSession, type QueryContext } from '../common';
-import { rereadSession, type SessionDto } from './dto';
+import type { Session } from '../../../../../shared/dto';
+import { rereadSession } from './dto';
 import { resolvePlaythroughForSession } from './resolvePlaythrough';
 
 // Abrir sesiones (sustituye a `startGameSession.ts` y `createEmulatorSession.ts`
@@ -99,7 +100,7 @@ export function startGameSession(
   ctx: QueryContext,
   gameId: string,
   startedBy: SessionOpener,
-): SessionDto | null {
+): Session<string> | null {
   const sessionId = ctx.store.transaction((): string | null => {
     if (!isGameAlive(ctx, gameId)) return null;
     if (ownOpenSessionForGame(ctx, gameId)) return null;
@@ -154,7 +155,10 @@ export function isEmulatorAlive(ctx: QueryContext, emulatorId: string): boolean 
  * watcher vigila (clave `emu:`), y abrir otra contaría dos veces la misma
  * tarde. Un `StoreError` inesperado se propaga.
  */
-export function createEmulatorSession(ctx: QueryContext, emulatorId: string): SessionDto | null {
+export function createEmulatorSession(
+  ctx: QueryContext,
+  emulatorId: string,
+): Session<string> | null {
   const sessionId = ctx.store.transaction((): string | null => {
     if (!isEmulatorAlive(ctx, emulatorId)) return null;
     const open = ctx.db

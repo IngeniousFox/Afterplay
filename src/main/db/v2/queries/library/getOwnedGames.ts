@@ -4,7 +4,7 @@ import { games, planEntries } from '../../schema';
 import { alive } from '../../store';
 import { liveGame } from '../common/alive';
 import type { QueryContext } from '../common/context';
-import type { OwnedGameRef } from './types';
+import type { OwnedGameRef } from '../../../../../shared/types';
 
 // Lo que el escaneo de carpetas necesita saber de tu colección (sustituye a
 // db/queries/games/getOwnedGames.ts): qué juegos existen ya —biblioteca Y
@@ -23,7 +23,7 @@ import type { OwnedGameRef } from './types';
 const ownedPlan = alias(planEntries, 'owned_plan');
 
 /** Los juegos vivos de la colección, con si están en el Plan. Una consulta. */
-export function getOwnedGames(ctx: QueryContext): OwnedGameRef[] {
+export function getOwnedGames(ctx: QueryContext): OwnedGameRef<string>[] {
   const rows = ctx.db
     .select({
       id: games.id,
