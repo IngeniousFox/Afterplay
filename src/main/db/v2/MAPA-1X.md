@@ -2,6 +2,8 @@
 
 Entrada del importador de la fase 8 (AFTERPLAY-2.0.md §19.5). Cubre **cada tabla y columna** de `src/main/db/schema.ts` (1.x) y dice adónde va en `src/main/db/v2/schema.ts`.
 
+**La versión ejecutable de este mapa es `importer/columnMap.ts`**: declara el destino de cada columna, un test falla si alguna columna 1.x queda sin declarar, y la validación del importador comprueba cada valor en el destino. Si este documento y `columnMap.ts` discrepan, manda el código; corrige aquí.
+
 Leyenda del destino:
 
 - `tabla.columna`: copia directa (con el id remapeado si es una referencia).
@@ -9,61 +11,61 @@ Leyenda del destino:
 - **desaparece**: no se migra, con el motivo.
 - **SIN DESTINO**: el dato existe en la 1.x y el 2.0 no tiene dónde guardarlo, o la regla no está decidida. Hay que resolverlo antes de escribir el importador.
 
-Ids (§19.5): los juegos con `igdbId` toman el id natural (UUIDv5 de `igdb:<igdbId>`); las tablas de id aleatorio toman UUIDv5 de `legacy:<tabla>:<id antiguo>`; las de id compuesto o determinista **deben usar su id natural** (ver la nota 1 al final). El mapa id antiguo → id nuevo queda en `local_legacy_ids`.
+Ids: los juegos con `igdbId` toman el id natural (UUIDv5 de `igdb:<igdbId>`); las de id compuesto o determinista usan su id natural (nota 1); las tablas de id aleatorio (y los juegos sin `igdbId`) toman un **UUIDv7 determinista** (`importer/legacyIds.ts`): tiempo = 2001-01-01 + id antiguo, resto = SHA-256 de `legacy:<tabla>:<id>`. **Desviación de §19.5** (que decía UUIDv5): así el orden por id sigue siendo el de creación (`compareByCreation`, R-04). Donde abajo dice "UUIDv5 de `legacy:…`" léase este UUIDv7. El mapa id antiguo → id nuevo queda en `local_legacy_ids`.
 
 ## `games`
 
-| Columna 1.x                   | Destino 2.0                                                                                                                                    |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                          | `games.id` (UUIDv5 de `igdb:<igdbId>`, o `legacy:games:<id>`) + `local_legacy_ids`                                                             |
-| `title`                       | `games.title`                                                                                                                                  |
-| `coverUrl`                    | `games.coverOverride` (todos, §19.5 "Elecciones manuales"). `game_metadata.coverUrl` queda null hasta el primer refresco                       |
-| `heroUrl`                     | `games.heroOverride` (igual que `coverUrl`)                                                                                                    |
-| `igdbId`                      | `games.igdbId`                                                                                                                                 |
-| `sgdbId` (`steamGridDbId`)    | `games.sgdbId`; `games.sgdbIdSource` = `manual` si no es null (§19.5)                                                                          |
-| `officialPlatforms`           | `game_metadata.officialPlatforms`                                                                                                              |
-| `releaseYear`                 | `game_metadata.releaseYear`                                                                                                                    |
-| `hltbMain`                    | `game_metadata.hltbMain`                                                                                                                       |
-| `hltbMainExtras`              | `game_metadata.hltbMainExtras`                                                                                                                 |
-| `hltbCompletionist`           | `game_metadata.hltbCompletionist`                                                                                                              |
-| `notes`                       | `games.notes`                                                                                                                                  |
-| `executablePath`              | `game_installs.executablePath`, solo si existe en el disco de cada PC (reclamo, §19.6)                                                         |
-| `developer`                   | `games.developerOverride` (todos, §19.5)                                                                                                       |
-| `publisher`                   | `games.publisherOverride` (todos, §19.5)                                                                                                       |
-| `installDirectory`            | `game_installs.installDirectory` (reclamo por PC)                                                                                              |
-| `installSizeBytes`            | `game_installs.installSizeBytes` (reclamo por PC)                                                                                              |
-| `genres`                      | `games.genresOverride` (todos, §19.5)                                                                                                          |
-| `endless`                     | `games.endless`                                                                                                                                |
-| `isEmulated`                  | `games.isEmulated`                                                                                                                             |
-| `planned`                     | **derivado**: `planned = 1` crea una fila viva en `plan_entries`                                                                               |
-| `addedAt`                     | `games.addedAt` (y base del reloj importado)                                                                                                   |
-| `promotedAt`                  | `games.promotedAt`                                                                                                                             |
-| `saveBackupEnabled`           | `games.saveBackupEnabled`                                                                                                                      |
-| `saveDetectionSource`         | `games.saveDetectionSource`                                                                                                                    |
-| `saveLudusaviName`            | `games.saveLudusaviName`                                                                                                                       |
-| `saveCustomPaths`             | `games.saveCustomPaths`                                                                                                                        |
-| `curiositiesGeneratedAt`      | `game_curiosities.generatedAt` (con `items = []` si no hay curiosidades) y `external_checks(curiosities).checkedAt`                            |
-| `steamAppId`                  | `games.steamAppId`                                                                                                                             |
-| `steamAppIdManual`            | `games.steamAppIdSource` (`manual`/`auto`; null si `steamAppId` es null)                                                                       |
-| `steamAppIdCheckedAt`         | `external_checks(steam_appid).checkedAt`; `status` **derivado** (`ok` si hay appid, `empty` si no)                                             |
-| `achievementsSyncedAt`        | `external_checks(steam_achievements).checkedAt` y `achievement_catalogs.fetchedAt`. **Ambiguo**: el sync de RA también lo escribe (ver nota 4) |
-| `achievementsUnlocksSyncedAt` | **SIN DESTINO**. Ninguna fuente de `external_checks` representa "desbloqueos de Steam leídos" (ver nota 4)                                     |
-| `raGameId`                    | `games.raGameId`                                                                                                                               |
-| `raCheckedAt`                 | `external_checks(ra_match).checkedAt`                                                                                                          |
-| `ratingCritics`               | `game_metadata.ratingCritics`                                                                                                                  |
-| `ratingCriticsCount`          | `game_metadata.ratingCriticsCount`                                                                                                             |
-| `ratingUsers`                 | `game_metadata.ratingUsers`                                                                                                                    |
-| `ratingUsersCount`            | `game_metadata.ratingUsersCount`                                                                                                               |
-| `ratingsCheckedAt`            | `external_checks(igdb_ratings).checkedAt`                                                                                                      |
-| `summary`                     | `game_metadata.summary`                                                                                                                        |
-| `igdbCollections`             | `game_metadata.igdbCollections`                                                                                                                |
-| `steamTags`                   | `game_metadata.steamTags`                                                                                                                      |
-| `steamPositive`               | `game_metadata.steamPositive`                                                                                                                  |
-| `steamNegative`               | `game_metadata.steamNegative`                                                                                                                  |
-| `steamSpyCheckedAt`           | `external_checks(steam_store).checkedAt`                                                                                                       |
-| `planPinnedAt`                | `plan_entries.pinnedAt`                                                                                                                        |
-| `releaseDate`                 | `game_metadata.releaseDate`                                                                                                                    |
-| `releaseDatePrecision`        | `game_metadata.releaseDatePrecision`                                                                                                           |
+| Columna 1.x                   | Destino 2.0                                                                                                                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                          | `games.id` (UUIDv5 de `igdb:<igdbId>`, o `legacy:games:<id>`) + `local_legacy_ids`                                                                                                         |
+| `title`                       | `games.title`                                                                                                                                                                              |
+| `coverUrl`                    | `games.coverOverride` (todos, §19.5 "Elecciones manuales") **y** `game_metadata.coverUrl` (corregido: el importador copia a los dos)                                                       |
+| `heroUrl`                     | `games.heroOverride` y `game_metadata.heroUrl` (igual que `coverUrl`)                                                                                                                      |
+| `igdbId`                      | `games.igdbId`                                                                                                                                                                             |
+| `sgdbId` (`steamGridDbId`)    | `games.sgdbId`; `games.sgdbIdSource` = `manual` si no es null (§19.5)                                                                                                                      |
+| `officialPlatforms`           | `game_metadata.officialPlatforms`                                                                                                                                                          |
+| `releaseYear`                 | `game_metadata.releaseYear`                                                                                                                                                                |
+| `hltbMain`                    | `game_metadata.hltbMain`                                                                                                                                                                   |
+| `hltbMainExtras`              | `game_metadata.hltbMainExtras`                                                                                                                                                             |
+| `hltbCompletionist`           | `game_metadata.hltbCompletionist`                                                                                                                                                          |
+| `notes`                       | `games.notes`                                                                                                                                                                              |
+| `executablePath`              | `game_installs.executablePath`, solo si existe en el disco de cada PC (reclamo, §19.6)                                                                                                     |
+| `developer`                   | `games.developerOverride` (todos, §19.5) y `game_metadata.developer`                                                                                                                       |
+| `publisher`                   | `games.publisherOverride` (todos, §19.5) y `game_metadata.publisher`                                                                                                                       |
+| `installDirectory`            | `game_installs.installDirectory` (reclamo por PC)                                                                                                                                          |
+| `installSizeBytes`            | `game_installs.installSizeBytes` (reclamo por PC)                                                                                                                                          |
+| `genres`                      | `games.genresOverride` (todos, §19.5) y `game_metadata.genres`                                                                                                                             |
+| `endless`                     | `games.endless`                                                                                                                                                                            |
+| `isEmulated`                  | `games.isEmulated`                                                                                                                                                                         |
+| `planned`                     | **derivado**: `planned = 1` crea una fila viva en `plan_entries`                                                                                                                           |
+| `addedAt`                     | `games.addedAt` (y base del reloj importado)                                                                                                                                               |
+| `promotedAt`                  | `games.promotedAt`                                                                                                                                                                         |
+| `saveBackupEnabled`           | `games.saveBackupEnabled`                                                                                                                                                                  |
+| `saveDetectionSource`         | `games.saveDetectionSource`                                                                                                                                                                |
+| `saveLudusaviName`            | `games.saveLudusaviName`                                                                                                                                                                   |
+| `saveCustomPaths`             | `games.saveCustomPaths`                                                                                                                                                                    |
+| `curiositiesGeneratedAt`      | `game_curiosities.generatedAt` (con `items = []` si no hay curiosidades) y `external_checks(curiosities).checkedAt`                                                                        |
+| `steamAppId`                  | `games.steamAppId`                                                                                                                                                                         |
+| `steamAppIdManual`            | `games.steamAppIdSource` (`manual`/`auto`; null si `steamAppId` es null)                                                                                                                   |
+| `steamAppIdCheckedAt`         | `external_checks(steam_appid).checkedAt`; `status` **derivado** (`ok` si hay appid, `empty` si no)                                                                                         |
+| `achievementsSyncedAt`        | `external_checks(steam_achievements / ra_achievements).checkedAt`, una fila por cada fuente con catálogo (sin catálogo: `empty` de la fuente enlazada), y `achievement_catalogs.fetchedAt` |
+| `achievementsUnlocksSyncedAt` | `external_checks(steam_unlocks).checkedAt` (fuente nueva, R-05). En un juego solo de RA se descarta: lo escribió el sync de RA y lo cubre `ra_achievements`                                |
+| `raGameId`                    | `games.raGameId`                                                                                                                                                                           |
+| `raCheckedAt`                 | `external_checks(ra_match).checkedAt`                                                                                                                                                      |
+| `ratingCritics`               | `game_metadata.ratingCritics`                                                                                                                                                              |
+| `ratingCriticsCount`          | `game_metadata.ratingCriticsCount`                                                                                                                                                         |
+| `ratingUsers`                 | `game_metadata.ratingUsers`                                                                                                                                                                |
+| `ratingUsersCount`            | `game_metadata.ratingUsersCount`                                                                                                                                                           |
+| `ratingsCheckedAt`            | `external_checks(igdb_ratings).checkedAt`                                                                                                                                                  |
+| `summary`                     | `game_metadata.summary`                                                                                                                                                                    |
+| `igdbCollections`             | `game_metadata.igdbCollections`                                                                                                                                                            |
+| `steamTags`                   | `game_metadata.steamTags`                                                                                                                                                                  |
+| `steamPositive`               | `game_metadata.steamPositive`                                                                                                                                                              |
+| `steamNegative`               | `game_metadata.steamNegative`                                                                                                                                                              |
+| `steamSpyCheckedAt`           | `external_checks(steam_store).checkedAt`                                                                                                                                                   |
+| `planPinnedAt`                | `plan_entries.pinnedAt`                                                                                                                                                                    |
+| `releaseDate`                 | `game_metadata.releaseDate`                                                                                                                                                                |
+| `releaseDatePrecision`        | `game_metadata.releaseDatePrecision`                                                                                                                                                       |
 
 ## `radar_games`
 
@@ -97,7 +99,7 @@ Ids (§19.5): los juegos con `igdbId` toman el id natural (UUIDv5 de `igdb:<igdb
 | `datePrecision`   | `sessions.datePrecision`                                                 |
 | `note`            | `sessions.note`                                                          |
 | (nuevo)           | `sessions.deviceId` = `legacy` (§19.5)                                   |
-| (nuevo)           | `sessions.closedBy`: **SIN ORIGEN**; la 1.x no sabe quién cerró (nota 5) |
+| (nuevo)           | `sessions.closedBy` = null con reloj `BOTTOM` (nota 5)                   |
 
 ## `iterations` → `playthroughs`
 
@@ -113,19 +115,19 @@ Ids (§19.5): los juegos con `igdbId` toman el id natural (UUIDv5 de `igdb:<igdb
 | `rating`            | `playthroughs.rating`                                                                       |
 | `extraContent`      | `playthroughs.extraContent`                                                                 |
 | (fila entera)       | La iteración vacía de un juego planeado **desaparece** (la sustituye `plan_entries`, §19.5) |
-| (orden)             | **SIN DESTINO claro**: la 1.x no tiene fecha de dominio en `iterations`; ver nota 3         |
+| (orden)             | `syncCreated` derivado del alta del juego y, como desempate, del id antiguo (nota 3)        |
 
 ## `state_events`
 
-| Columna 1.x     | Destino 2.0                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`            | `state_events.id` (UUIDv5 de `legacy:state_events:<id>`) + `local_legacy_ids`                                                        |
-| `iterationId`   | `state_events.playthroughId` (remapeado)                                                                                             |
-| `type`          | `state_events.type`. `plan_to_play` **desaparece** como tipo (§7.4)                                                                  |
-| `occurredAt`    | `state_events.occurredAt`; si es la fecha del alta, también `plan_entries.plannedAt` (§19.5)                                         |
-| `datePrecision` | `state_events.datePrecision`; `unknown` donde `isAddedAtArtifact` lo reconozca (§7.5)                                                |
-| `note`          | `state_events.note`. En `plan_to_play`: `plan_entries.note` si el juego sigue planeado; **SIN DESTINO** si ya se promocionó (nota 6) |
-| (nuevo)         | `state_events.deviceId` = null                                                                                                       |
+| Columna 1.x     | Destino 2.0                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| `id`            | `state_events.id` (UUIDv5 de `legacy:state_events:<id>`) + `local_legacy_ids`                        |
+| `iterationId`   | `state_events.playthroughId` (remapeado)                                                             |
+| `type`          | `state_events.type`. `plan_to_play` **desaparece** como tipo (§7.4)                                  |
+| `occurredAt`    | `state_events.occurredAt`; si es la fecha del alta, también `plan_entries.plannedAt` (§19.5)         |
+| `datePrecision` | `state_events.datePrecision`; `unknown` donde `isAddedAtArtifact` lo reconozca (§7.5)                |
+| `note`          | `state_events.note`. En `plan_to_play`: `plan_entries.note` (con lápida si ya se promocionó, nota 6) |
+| (nuevo)         | `state_events.deviceId` = null                                                                       |
 
 ## `emulators`
 
@@ -169,20 +171,20 @@ No se migran filas: el índice se reconstruye desde el bucket (§19.5, F-21). Pa
 
 ## `achievements` → `achievement_catalogs`
 
-| Columna 1.x     | Destino 2.0                                                                                              |
-| --------------- | -------------------------------------------------------------------------------------------------------- |
-| `id`            | **desaparece**; solo sirve para enlazar los desbloqueos de la 1.x con su `(gameId, apiName)`             |
-| `gameId`        | `achievement_catalogs.gameId` (remapeado)                                                                |
-| (fuente)        | `achievement_catalogs.source`: **SIN DESTINO directo**; la tabla 1.x no tiene fuente (nota 4)            |
-| `apiName`       | `items[].apiName`                                                                                        |
-| `displayName`   | `items[].displayName`                                                                                    |
-| `description`   | `items[].description`                                                                                    |
-| `iconUrl`       | `items[].iconUrl`                                                                                        |
-| `iconGrayUrl`   | `items[].iconGrayUrl`                                                                                    |
-| `hidden`        | `items[].hidden`                                                                                         |
-| `globalPercent` | `items[].globalPercent`                                                                                  |
-| `sortIndex`     | `items[].sortIndex`                                                                                      |
-| (nuevo)         | `achievement_catalogs.fetchedAt` ← `games.achievementsSyncedAt` (o la hora de la importación si es null) |
+| Columna 1.x     | Destino 2.0                                                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | **desaparece**; solo sirve para enlazar los desbloqueos de la 1.x con su `(gameId, apiName)`                                                        |
+| `gameId`        | `achievement_catalogs.gameId` (remapeado)                                                                                                           |
+| (fuente)        | `achievement_catalogs.source`: **SIN DESTINO directo**; la tabla 1.x no tiene fuente (nota 4)                                                       |
+| `apiName`       | `items[].apiName`                                                                                                                                   |
+| `displayName`   | `items[].displayName`                                                                                                                               |
+| `description`   | `items[].description`                                                                                                                               |
+| `iconUrl`       | `items[].iconUrl`                                                                                                                                   |
+| `iconGrayUrl`   | `items[].iconGrayUrl`                                                                                                                               |
+| `hidden`        | `items[].hidden`                                                                                                                                    |
+| `globalPercent` | `items[].globalPercent`                                                                                                                             |
+| `sortIndex`     | `items[].sortIndex`                                                                                                                                 |
+| (nuevo)         | `achievement_catalogs.fetchedAt` ← `games.achievementsSyncedAt` (o `addedAt` del juego si es null: la hora de la importación no sería determinista) |
 
 ## `achievement_unlocks`
 
@@ -211,17 +213,17 @@ No se migran filas: el índice se reconstruye desde el bucket (§19.5, F-21). Pa
 
 ## `spend_events`
 
-| Columna 1.x     | Destino 2.0                                                                   |
-| --------------- | ----------------------------------------------------------------------------- |
-| `id`            | `spend_events.id` (UUIDv5 de `legacy:spend_events:<id>`) + `local_legacy_ids` |
-| `gameId`        | `spend_events.gameId` (remapeado)                                             |
-| `type`          | `spend_events.type`                                                           |
-| `amount`        | `spend_events.amount`                                                         |
-| `occurredAt`    | `spend_events.occurredAt`                                                     |
-| `datePrecision` | `spend_events.datePrecision`                                                  |
-| `note`          | `spend_events.note`                                                           |
-| (nuevo)         | `spend_events.currency` = la moneda única de la configuración (§19.5, D-23)   |
-| (nuevo)         | `spend_events.playthroughId` = null (reparto por fecha, como en la 1.x)       |
+| Columna 1.x     | Destino 2.0                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| `id`            | `spend_events.id` (UUIDv5 de `legacy:spend_events:<id>`) + `local_legacy_ids`                |
+| `gameId`        | `spend_events.gameId` (remapeado)                                                            |
+| `type`          | `spend_events.type`                                                                          |
+| `amount`        | `spend_events.amount`                                                                        |
+| `occurredAt`    | `spend_events.occurredAt`                                                                    |
+| `datePrecision` | `spend_events.datePrecision`                                                                 |
+| `note`          | `spend_events.note`                                                                          |
+| (nuevo)         | `spend_events.currency` = `EUR`: la 1.x no la configura, pinta siempre euros (`formatMoney`) |
+| (nuevo)         | `spend_events.playthroughId` = null (reparto por fecha, como en la 1.x)                      |
 
 ## `plan_mailbox`
 
@@ -239,7 +241,7 @@ No se migran filas: el índice se reconstruye desde el bucket (§19.5, F-21). Pa
 
 ## Columnas 2.0 sin origen en la 1.x
 
-Para que nadie las busque en el mapa de arriba: `devices.*` (salen de `machine-saves.json`, de `machines/<id>.json` del bucket y de la app), `devices.installNonce`, `games.saveKey` (derivado: `igdbId` o el id), `plan_entries.plannedAt` (derivado, §19.5), `plan_entries.sortKey` (derivado del orden actual del Plan o null), `external_checks.status` / `nextCheckAt` / `error` (derivados de la política de cada fuente), `game_installs.lastVerifiedAt` (hora del reclamo), `sessions.closedBy`, `state_events.deviceId`.
+Para que nadie las busque en el mapa de arriba: `devices.*` (salen de `machine-saves.json`, de `machines/<id>.json` del bucket y de la app), `devices.installNonce`, `games.saveKey` (derivado: `igdbId` o el id), `plan_entries.plannedAt` (derivado, §19.5), `plan_entries.sortKey` (null: la 1.x no tiene orden manual más allá de `pinnedAt`, que se conserva), `external_checks.status` / `nextCheckAt` / `error` (derivados de la política de cada fuente), `game_installs.lastVerifiedAt` (hora del reclamo), `sessions.closedBy`, `state_events.deviceId`.
 
 ## Notas
 
@@ -251,3 +253,13 @@ Para que nadie las busque en el mapa de arriba: `devices.*` (salen de `machine-s
 6. **Historial "Planeado el X" de los juegos ya promocionados.** Sus eventos `plan_to_play` se descartan y su `plan_entries` no existe. Se pierden la fecha y la nota de cuándo se planeó. Opción: crear su `plan_entries` ya con lápida, que conserva `plannedAt` y `note` sin que el juego cuente como planeado.
 7. **`machineHome` por backup.** En la 2.0 la carpeta de usuario es una por dispositivo (`devices.home`). Si un PC cambió de carpeta de usuario, los backups anteriores generarían redirects con la carpeta nueva. Hay que comprobar si `mapping.yaml` basta para reconstruirla.
 8. **Ubicación de restauración.** §7.6 la pone en `local_save_state`; §19.6 dice que se remapean las claves de `machine-saves.json` con `local_legacy_ids`. El esquema sigue a §7.6: el importador debería moverlas a la tabla.
+
+## Resolución en el importador (fase 8, primera versión)
+
+- Nota 1: resuelta (ids naturales; UUIDv7 determinista en las tablas de id aleatorio).
+- Notas 2 y 3: relojes deterministas por tabla en orden (fecha de dominio, id antiguo), recortados al techo del origen (el sello de la app más reciente de la base); `playthroughs` toma el alta de su juego y `emulators` no tiene fecha. Firmados con el id corto reservado `legacy`.
+- Nota 4: clasificación por evidencia (desbloqueo o icono) y, sin evidencia, la regla de `setSteamAppId.ts` (`importer/achievements.ts`); `steam_unlocks` añadida (R-05).
+- Nota 5: `closedBy` null.
+- Nota 6: `plan_entries` con lápida para los promocionados que conservan su `plan_to_play`.
+- Notas 7 y 8: siguen abiertas (fase 6).
+- `generated_memories.sourceHash`: **pendiente**; se copia tal cual hasta que existan las consultas 2.0 de recaps.

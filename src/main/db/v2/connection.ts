@@ -4,8 +4,8 @@ import { drizzle } from 'drizzle-orm/node-sqlite';
 import { migrate } from 'drizzle-orm/node-sqlite/migrator';
 import {
   HybridClock,
-  RESERVED_DEVICE_ID,
   isDeviceShortId,
+  isReservedDeviceShortId,
   maxClockOf,
   type Clock,
 } from '../../../shared/sync/clock';
@@ -151,7 +151,7 @@ function applyPragmas(client: DatabaseSync, path: string): void {
 
 const SHORT_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 
-/** Un id corto al azar: 6 caracteres `[0-9a-z]`, nunca `000000`. */
+/** Un id corto al azar: 6 caracteres `[0-9a-z]`, nunca uno reservado (`000000`, `legacy`). */
 export function randomShortDeviceId(): string {
   for (;;) {
     let id = '';
@@ -165,7 +165,7 @@ export function randomShortDeviceId(): string {
         id += SHORT_ID_ALPHABET[byte % 36];
       }
     }
-    if (id !== RESERVED_DEVICE_ID) return id;
+    if (!isReservedDeviceShortId(id)) return id;
   }
 }
 
@@ -182,7 +182,7 @@ function ensureShortDeviceId(db: LocalDb): string {
     .where(eq(localSyncState.id, 1))
     .get();
   const stored = row?.shortDeviceId;
-  if (isDeviceShortId(stored) && stored !== RESERVED_DEVICE_ID) return stored;
+  if (isDeviceShortId(stored) && !isReservedDeviceShortId(stored)) return stored;
   const fresh = randomShortDeviceId();
   db.update(localSyncState).set({ shortDeviceId: fresh }).where(eq(localSyncState.id, 1)).run();
   return fresh;

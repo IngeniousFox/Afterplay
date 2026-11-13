@@ -6,6 +6,8 @@ import {
   formatClock,
   HybridClock,
   isClock,
+  isReservedDeviceShortId,
+  LEGACY_DEVICE_SHORT_ID,
   MAX_AHEAD_MS,
   MAX_COUNTER,
   maxClockOf,
@@ -179,10 +181,17 @@ describe('HybridClock', () => {
     assert.equal(parseClock(clock.peek()).ms, 0);
   });
 
-  it('no acepta ids cortos mal formados ni el reservado del hub', () => {
+  it('no acepta ids cortos mal formados ni los reservados (hub e importador)', () => {
     assert.throws(() => new HybridClock('web'), RangeError);
     assert.throws(() => new HybridClock('ABCDEF'), RangeError);
     assert.throws(() => new HybridClock(RESERVED_DEVICE_ID), RangeError);
+    // El importador de la 1.x firma con él: ningún dispositivo puede usarlo.
+    assert.throws(() => new HybridClock(LEGACY_DEVICE_SHORT_ID), RangeError);
+    assert.ok(isReservedDeviceShortId(LEGACY_DEVICE_SHORT_ID));
+    assert.ok(isReservedDeviceShortId(RESERVED_DEVICE_ID));
+    assert.ok(!isReservedDeviceShortId('a1b2c3'));
+    // Tiene la forma de un id corto normal: sus relojes son relojes válidos.
+    assert.ok(isClock(formatClock(1, 0, LEGACY_DEVICE_SHORT_ID)));
     assert.ok(isClock(new HybridClock('a1b2c3').now()), 'usa Date.now por defecto');
   });
 });

@@ -33,6 +33,24 @@ export const BOTTOM: Clock = '0000000000000-0000-000000';
  */
 export const RESERVED_DEVICE_ID = '000000';
 
+/**
+ * Id corto con el que firma el importador de la 1.x (§19.5) los relojes de lo
+ * importado. Reservado por lo mismo que `RESERVED_DEVICE_ID`: si un dispositivo
+ * real lo usara, sus escrituras empatarían en id corto con las importadas y el
+ * desempate de §8.2 dejaría de distinguirlas. Tiene la forma de un id corto
+ * normal (6 caracteres `[0-9a-z]`) para que los relojes importados pasen las
+ * mismas validaciones que cualquier otro.
+ */
+export const LEGACY_DEVICE_SHORT_ID = 'legacy';
+
+/**
+ * ¿Es un id corto que ningún dispositivo puede usar? Lo consultan quien sortea
+ * el id corto de un dispositivo (y el hub, al asignarlo en la fase 3).
+ */
+export function isReservedDeviceShortId(value: string): boolean {
+  return value === RESERVED_DEVICE_ID || value === LEGACY_DEVICE_SHORT_ID;
+}
+
 /** 4 dígitos de contador: 10.000 escrituras por milisegundo (§8.2). */
 export const MAX_COUNTER = 9999;
 
@@ -151,8 +169,8 @@ export class HybridClock {
    */
   constructor(dev: string, wall: () => number = Date.now, initial?: Clock | null) {
     if (!isDeviceShortId(dev)) throw new RangeError(`id corto de dispositivo inválido: ${dev}`);
-    if (dev === RESERVED_DEVICE_ID) {
-      throw new RangeError(`el id corto ${RESERVED_DEVICE_ID} está reservado para el hub`);
+    if (isReservedDeviceShortId(dev)) {
+      throw new RangeError(`el id corto ${dev} está reservado (hub o importador de la 1.x)`);
     }
     this.dev = dev;
     this.wall = wall;

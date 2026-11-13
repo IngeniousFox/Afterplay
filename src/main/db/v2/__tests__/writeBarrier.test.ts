@@ -27,8 +27,24 @@ import * as schema from '../schema';
 /** Carpetas que se recorren. Ampliar al migrar las consultas (`src/main/db/queries`…). */
 const SCANNED = ['src/main/db/v2'];
 
-/** Únicos sitios que pueden escribir tablas sincronizadas. */
-const ALLOWED = ['src/main/db/v2/store', 'src/main/sync'];
+/**
+ * Únicos sitios que pueden escribir tablas sincronizadas.
+ *
+ * `importer/` escribe por debajo de la puerta a propósito: lo importado de la
+ * 1.x tiene que llevar relojes ANTIGUOS y deterministas (§19.5), y la puerta
+ * pondría el de ahora. Lo hace siempre dentro de `store.transaction`, solo
+ * inserta filas que no existen (nunca pisa una editada en la 2.0) y su
+ * validación comprueba el resultado antes de confirmar.
+ */
+const ALLOWED = ['src/main/db/v2/store', 'src/main/sync', 'src/main/db/v2/importer'];
+
+/**
+ * Carpetas que TIENEN que quedar dentro de lo recorrido y fuera de lo
+ * permitido: las consultas 2.0 (CONSULTAS.md §4) escriben siempre por la
+ * puerta. Si alguien estrecha `SCANNED` o amplía `ALLOWED` y las deja fuera,
+ * falla el test en vez de dejar de vigilarlas en silencio.
+ */
+const MUST_SCAN = ['src/main/db/v2/queries'];
 
 const syncedSqlNames = new Set(syncedEntries.map((entry) => entry.name));
 
@@ -90,6 +106,23 @@ const isAllowed = (file: string): boolean =>
 describe('barrera de la puerta de escritura (§8.6)', () => {
   it('las carpetas recorridas existen', () => {
     for (const dir of SCANNED) assert.ok(existsSync(dir), dir);
+  });
+
+  it('las consultas 2.0 se recorren y no tienen permiso de escribir', () => {
+    const inside = (dir: string, parent: string): boolean =>
+      dir === parent || dir.startsWith(`${parent}/`);
+    for (const dir of MUST_SCAN) {
+      assert.ok(existsSync(dir), dir);
+      assert.ok(
+        SCANNED.some((scanned) => inside(dir, scanned)),
+        `${dir} no está en lo recorrido`,
+      );
+      assert.ok(
+        !ALLOWED.some((allowed) => inside(dir, allowed) || inside(allowed, dir)),
+        `${dir} no puede escribir tablas sincronizadas fuera de la puerta`,
+      );
+      assert.ok(listFiles(dir).length > 0, `${dir} no tiene ficheros que recorrer`);
+    }
   });
 
   it('nadie escribe tablas sincronizadas fuera de la puerta', () => {
