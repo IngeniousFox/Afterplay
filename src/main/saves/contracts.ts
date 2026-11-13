@@ -1,4 +1,7 @@
-import type { SaveBackupRow } from '../db/schema';
+// De shared/dto y no del esquema: shared/types.ts reexporta este fichero, y
+// si siguiera tirando de db/schema el renderer volvería a depender de la
+// forma de las tablas por la puerta de atrás (F-42).
+import type { SaveBackupRow } from '../../shared/dto';
 
 // Contrato del IPC de partidas guardadas. Vive aparte de orchestrator.ts a
 // propósito: shared/types.ts lo reexporta para el renderer, y así ese import

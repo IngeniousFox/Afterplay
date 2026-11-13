@@ -1,5 +1,5 @@
 import type { GameExternalData } from '../igdb/types';
-import type { UpdateGamePatch } from '../../shared/types';
+import type { GamePatch } from '../db/writeTypes';
 
 // EL LOTE DE IGDB, APLICADO A UNA FILA, EN UN SOLO SITIO.
 //
@@ -23,7 +23,7 @@ import type { UpdateGamePatch } from '../../shared/types';
 // resuelve a su manera (refresh.ts lo estampa igual para no re-preguntarlos
 // cada vez; el radar los salta, porque su mitad externa pasa justo después y
 // ya lo hace).
-export const buildIgdbBatchPatch = (data: GameExternalData, checkedAt: Date): UpdateGamePatch => ({
+export const buildIgdbBatchPatch = (data: GameExternalData, checkedAt: Date): GamePatch => ({
   ratingCritics: data.ratingCritics,
   ratingCriticsCount: data.ratingCriticsCount,
   ratingUsers: data.ratingUsers,

@@ -3,7 +3,7 @@ import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
 import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
 import type { GameRatings, RatingsRefreshResult } from '../igdb/types';
-import type { UpdateGamePatch } from '../../shared/types';
+import type { GamePatch } from '../db/writeTypes';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { getSteamReviewCounts } from '../steam/reviews';
 import { findSteamAppIdFix } from './steamAppIdFix';
@@ -49,7 +49,7 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
   );
   if (!game) return null;
 
-  const patch: UpdateGamePatch = {};
+  const patch: GamePatch = {};
   const now = new Date();
 
   // igdbId null = no está en el catálogo de IGDB (existe en Steam y ellos aún
@@ -71,7 +71,7 @@ export const refreshGameRatings = async (gameId: number): Promise<RatingsRefresh
       releaseDate: detail.release?.date ?? null,
       releaseDatePrecision: detail.release?.precision ?? null,
       ratingsCheckedAt: now,
-    } satisfies UpdateGamePatch);
+    } satisfies GamePatch);
     // releaseYear se refresca pero NUNCA se pone a null: de él dependen las
     // stats y el matching de HowLongToBeat (misma regla que en refresh.ts).
     if (detail.releaseYear !== null) patch.releaseYear = detail.releaseYear;

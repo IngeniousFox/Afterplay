@@ -1,20 +1,16 @@
 import type { DatePrecision, EventDatePrecision } from './dateTypes';
 export type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes';
 
-import type {
-  GameRow,
-  Iteration,
-  NewEmulator,
-  NewGame,
-  NewIteration,
-  NewSpendEvent,
-  NewStateEvent,
-  Session,
-  SpendEvent,
-  StateEvent,
-} from '../main/db/schema';
+// Las entidades y los inputs del IPC viven en dto.ts, declarados a mano: shared/
+// ya no importa del esquema de Drizzle (F-42). Se reexportan aquí para que los
+// cientos de imports existentes de shared/types sigan funcionando igual.
+import type { GameRow, Iteration, Session, SpendEvent, StateEvent } from './dto';
 
 export type {
+  AddSpendEventInput,
+  AddStateEventInput,
+  CreateEmulatorInput,
+  CreateIterationInput,
   Emulator,
   GameRow,
   Iteration,
@@ -22,7 +18,9 @@ export type {
   Session,
   SpendEvent,
   StateEvent,
-} from '../main/db/schema';
+  UpdateGamePatch,
+  UpdateIterationPatch,
+} from './dto';
 
 // Partidas guardadas (PARTIDAS-GUARDADAS.md) — la fuente es
 // main/saves/contracts.ts, igual que igdb/hltb/sgdb reexportan la suya.
@@ -54,36 +52,11 @@ export type { ScanCandidate, ScannedFolder, ScanReport } from '../main/scan/cont
 // IGDB no tiene el juego (steam/store.ts).
 export type { SteamSearchResult } from '../main/steam/store';
 
-// Inputs de los handlers de escritura. Parten de las formas de INSERT de
-// Drizzle pero quitando lo que el renderer nunca debe mandar (ids, campos
-// que fija el main) — así el contrato del IPC queda explícito aquí.
-export type CreateGameInput = Omit<NewGame, 'id'>;
-
-export type UpdateGamePatch = Partial<Omit<NewGame, 'id' | 'addedAt'>>;
-
-export type CreateIterationInput = Omit<NewIteration, 'id' | 'label'> & {
-  label?: string | null;
-};
-
-export type UpdateIterationPatch = Partial<
-  Pick<
-    NewIteration,
-    | 'label'
-    | 'playedPlatform'
-    | 'origin'
-    | 'format'
-    | 'manualTotalPlayed'
-    | 'extraContent'
-    | 'rating'
-  >
->;
-
-export type AddStateEventInput = Omit<NewStateEvent, 'id'>;
-
-export type AddSpendEventInput = Omit<NewSpendEvent, 'id'>;
-
-// EMULADORES.md — registrar un emulador para que el watcher lo vigile.
-export type CreateEmulatorInput = Omit<NewEmulator, 'id'>;
+// Los inputs de escritura derivados de las tablas (crear/editar juego,
+// playthrough, evento, gasto, emulador) son ahora listas cerradas en dto.ts.
+// CreateGameInput ya no está en shared: el renderer nunca lo mandaba (el alta
+// va por CreateGameWithDetailsInput) y el main tiene su forma de INSERT propia
+// en main/db/writeTypes.ts.
 
 // Sesión de emulador pendiente de asignar (bandeja "Pending" de la vista de
 // Sesiones) — con el nombre del emulador ya resuelto para pintarla.

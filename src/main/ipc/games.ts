@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
+import { pickUpdateGamePatch } from './gamePatch';
 import type {
   CreateGameWithDetailsInput,
   CreatePlannedGameInput,
@@ -156,10 +157,15 @@ export const registerGamesHandlers = (): void => {
     return moveToPlan(gameId);
   });
 
-  handleDb('games:update', async (_event, id: number, patch: UpdateGamePatch) => {
-    if ('steamAppId' in patch || 'steamAppIdManual' in patch) {
+  handleDb('games:update', async (_event, id: number, rawPatch: UpdateGamePatch) => {
+    // El aviso explícito de siempre para el appid: tiene su propio editor y
+    // mandarlo aquí es un error de quien llama, no algo que tragarse.
+    if ('steamAppId' in rawPatch || 'steamAppIdManual' in rawPatch) {
       throw new Error('Use the Steam App ID editor.');
     }
+    // Y cualquier otra clave fuera de la lista cerrada se descarta antes de
+    // escribir: el tipo no viaja por el IPC (ver gamePatch.ts).
+    const patch = pickUpdateGamePatch(rawPatch);
     const game = await updateGame(id, patch);
     if (game) warmImageCache(game);
 

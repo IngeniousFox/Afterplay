@@ -2,7 +2,7 @@ import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
 import { getGameDetails, getIgdbIdsBySteamAppIds } from '../igdb/api';
-import type { UpdateGamePatch } from '../../shared/types';
+import type { GamePatch } from '../db/writeTypes';
 
 // CUANDO IGDB POR FIN TIENE EL JUEGO — el cambio de fuente.
 //
@@ -53,7 +53,7 @@ export const findAdoptionCandidates = async (): Promise<AdoptionCandidate[]> =>
 // El patch de adopción de UN juego, ya resuelto contra IGDB. Separado de la
 // escritura para que quien llame lo meta en su propia transacción si quiere
 // (el barrido por lotes lo hace) o lo escriba suelto (la ficha).
-export const buildIgdbAdoptionPatch = async (igdbId: number): Promise<UpdateGamePatch | null> => {
+export const buildIgdbAdoptionPatch = async (igdbId: number): Promise<GamePatch | null> => {
   const detail = await getGameDetails(igdbId);
   if (!detail) return null;
 

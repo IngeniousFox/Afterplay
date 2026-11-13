@@ -1,11 +1,8 @@
 import { getDb } from '../..';
-import type {
-  CreateGameInput,
-  CreateGameWithDetailsInput,
-  GameRow,
-} from '../../../../shared/types';
+import type { CreateGameWithDetailsInput, GameRow } from '../../../../shared/types';
 import { gameColumns } from '../../projections';
 import { gamesTable, iterationsTable } from '../../schema';
+import type { GameInsert } from '../../writeTypes';
 import { resolveGameEnrichment } from './resolveGameEnrichment';
 import { writeInitialPlaythrough } from './writeInitialPlaythrough';
 
@@ -34,7 +31,7 @@ export const createGameWithDetails = async (
     steamAppIdOverride: forcedAppId,
   });
 
-  const gameInput: CreateGameInput = {
+  const gameInput: GameInsert = {
     ...enrichment,
     steamAppIdManual: forcedAppId !== null,
     notes: input.gameNotes,

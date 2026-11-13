@@ -1,11 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../..';
-import type { GameRow, UpdateGamePatch } from '../../../../shared/types';
+import type { GameRow } from '../../../../shared/types';
+import type { GamePatch } from '../../writeTypes';
 import { gameColumns } from '../../projections';
 import { gamesTable } from '../../schema';
 import { updateOrFetch } from '../updateOrFetch';
 
-export const updateGame = async (id: number, patch: UpdateGamePatch): Promise<GameRow | null> => {
+export const updateGame = async (id: number, patch: GamePatch): Promise<GameRow | null> => {
   const db = getDb();
 
   return updateOrFetch(

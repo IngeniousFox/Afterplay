@@ -4,7 +4,7 @@ import { gamesTable } from '../db/schema';
 import { getHltbTimes } from '../hltb/api';
 import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
 import type { GameFullRefreshResult } from '../igdb/types';
-import type { UpdateGamePatch } from '../../shared/types';
+import type { GamePatch } from '../db/writeTypes';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { resolveSgdbId } from '../sgdb/api';
 import { adoptIgdbForGame } from './adoptIgdb';
@@ -81,7 +81,7 @@ export const refreshGameEverything = async (
     }
   }
 
-  const patch: UpdateGamePatch = {};
+  const patch: GamePatch = {};
   const now = new Date();
 
   // ── 1. IGDB: notas, sinopsis, sagas y fecha completa ────────────────────
