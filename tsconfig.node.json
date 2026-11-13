@@ -3,6 +3,7 @@
   "include": [
     "electron.vite.config.*",
     "drizzle.config.ts",
+    "drizzle.v2.config.ts",
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*",
