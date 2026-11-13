@@ -1,3 +1,4 @@
+import { hoursByGameInYear } from '../../../src/shared/domain/hours';
 import { yearOf } from '../../../src/shared/yearOf';
 import type { StatsSummary } from '../api-types';
 import type { TenantDb } from '../db';
@@ -50,16 +51,26 @@ export const getStatsSummary = async (
   // quedara en UTC, el año se partiría por dentro.
   const thisYear = yearOf(new Date(), timeZone);
 
-  const trackedSecondsThisYear = recentSessions
-    .filter((session) => yearOf(session.startedAt, timeZone) === thisYear)
-    .reduce((sum, session) => sum + (session.durationSec ?? 0), 0);
-
-  const manualHoursThisYear = [...manualByGame.values()]
-    .flat()
-    .filter((manual) => manual.year === thisYear)
-    .reduce((sum, manual) => sum + manual.hours, 0);
-
-  const hoursThisYear = trackedSecondsThisYear / 3600 + manualHoursThisYear;
+  // Las horas del año, juego a juego, con la regla compartida
+  // (hoursByGameInYear, src/shared/domain/hours.ts): la misma suma que
+  // yearTotals en Stats del escritorio —sesiones de ese año más manuales
+  // atribuidas a él—, y de ella salen las DOS cifras del año, para que no
+  // puedan hablar de poblaciones distintas.
+  const hoursByGame = hoursByGameInYear(
+    games.map((game) => game.id),
+    recentSessions,
+    manualByGame,
+    thisYear,
+    timeZone,
+  );
+  let hoursThisYear = 0;
+  let gamesThisYear = 0;
+  for (const hours of hoursByGame.values()) {
+    hoursThisYear += hours;
+    // Los juegos que de verdad se tocaron ESTE año — la misma distinción que
+    // hace Stats entre "GAMES TRACKED" (all time) y "GAMES PLAYED" (un año).
+    if (hours > 0) gamesThisYear++;
+  }
 
   // Los SEIS cajones, no cuatro: on_hold y resting existen en el modelo y sin
   // ellos la suma no daba totalGames, así que la portada los estimaba por
@@ -88,9 +99,7 @@ export const getStatsSummary = async (
     totalHours: games.reduce((sum, game) => sum + game.totalHours, 0),
     totalSessions: games.reduce((sum, game) => sum + game.sessionCount, 0),
     hoursThisYear,
-    // Los juegos que de verdad se tocaron ESTE año — la misma distinción que
-    // hace Stats entre "GAMES TRACKED" (all time) y "GAMES PLAYED" (un año).
-    gamesThisYear: countGamesThisYear(games, manualByGame, recentSessions, thisYear, timeZone),
+    gamesThisYear,
     year: thisYear,
     ...counts,
     live: liveGame
@@ -102,31 +111,4 @@ export const getStatsSummary = async (
         }
       : null,
   };
-};
-
-const countGamesThisYear = (
-  games: { id: number }[],
-  manualByGame: Map<number, { hours: number; year: number | null }[]>,
-  recentSessions: { gameId: number; startedAt: Date; durationSec: number | null }[],
-  year: number,
-  timeZone?: string | null,
-): number => {
-  const hoursByGame = new Map<number, number>();
-  for (const session of recentSessions) {
-    // Con la zona del que mira, igual que el año en curso: contar aquí en UTC
-    // y allí en local dejaría a GAMES PLAYED hablando de un año distinto que
-    // las horas que tiene al lado.
-    if (yearOf(session.startedAt, timeZone) !== year) continue;
-    hoursByGame.set(
-      session.gameId,
-      (hoursByGame.get(session.gameId) ?? 0) + (session.durationSec ?? 0) / 3600,
-    );
-  }
-  for (const [gameId, manuals] of manualByGame) {
-    const manualHours = manuals
-      .filter((manual) => manual.year === year)
-      .reduce((sum, manual) => sum + manual.hours, 0);
-    if (manualHours > 0) hoursByGame.set(gameId, (hoursByGame.get(gameId) ?? 0) + manualHours);
-  }
-  return games.filter((game) => (hoursByGame.get(game.id) ?? 0) > 0).length;
 };

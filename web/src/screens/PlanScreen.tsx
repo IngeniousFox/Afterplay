@@ -288,7 +288,16 @@ export const PlanScreen = (): React.JSX.Element => {
   });
 
   const { upNext, upNextAll, queue, horizon, debt, ghosts, touched } = useMemo(() => {
-    const overlay = applyPending(plan.data ?? [], pendingQuery.data?.pending ?? []);
+    // El tercer argumento solo se usa si un pin pendiente trae una marca no
+    // creíble (el Worker ya las rechaza): el escritorio lo sellará con "ahora"
+    // al drenar (mailboxPinStamp en src/shared/domain/planOrder.ts). Se usa el
+    // instante en que se leyeron los pendientes y no Date.now(), que haría el
+    // render impuro y movería la previsión en cada repintado.
+    const overlay = applyPending(
+      plan.data ?? [],
+      pendingQuery.data?.pending ?? [],
+      pendingQuery.dataUpdatedAt,
+    );
     const needle = query.trim().toLowerCase();
     const games = needle
       ? overlay.games.filter((game) => game.title.toLowerCase().includes(needle))
@@ -313,7 +322,7 @@ export const PlanScreen = (): React.JSX.Element => {
       // búsqueda: es cuánto debes, no cuánto estás mirando.
       debt: computePlanDebt(overlay.games),
     };
-  }, [plan.data, pendingQuery.data, query]);
+  }, [plan.data, pendingQuery.data, pendingQuery.dataUpdatedAt, query]);
 
   if (plan.isPending) return <Loading label="Reading your plan" />;
   if (plan.isError) return <ErrorState error={plan.error} onRetry={() => plan.refetch()} />;

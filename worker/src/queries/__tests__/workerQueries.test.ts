@@ -720,6 +720,52 @@ describe('el cronómetro exige un playthrough que se pueda seguir (REMOTO.md §7
     assert.equal((await db.select().from(sessionsTable)).length, 0);
   });
 
+  it('con un hermano activo por un started POSTERIOR a ahora, cuelga de él y no escribe nada', async () => {
+    // CAMBIO DE COMPORTAMIENTO (fase 1). La réplica solo leía hasta `at`, así
+    // que un 'started' con fecha posterior a la petición —el reloj del PC
+    // adelantado respecto al del Worker, o una fecha tecleada— era invisible:
+    // caía en "la última" (P2, aquí en on_hold) y le escribía otro 'started',
+    // dejando DOS playthroughs con 'started' como último evento. El escritorio
+    // mira también el log entero (activeNow) y cuelga la sesión del activo.
+    const gameId = await makeGame(db);
+    const p1 = await makeIteration(db, gameId, { label: 'Playthrough 1' });
+    const p2 = await makeIteration(db, gameId, { label: 'Playthrough 2' });
+    await makeStateEvent(db, p1, 'completed', '2026-01-02T18:00:00Z');
+    await makeStateEvent(db, p1, 'started', '2026-01-10T18:05:00Z');
+    await makeStateEvent(db, p2, 'on_hold', '2026-01-08T18:00:00Z');
+
+    const active = await startTimer(db, gameId, NOW);
+
+    assert.equal((await readSession(db, active.sessionId)).iterationId, p1);
+    assert.deepEqual(await eventTypesOf(db, p1), ['completed', 'started']);
+    assert.deepEqual(await eventTypesOf(db, p2), ['on_hold']);
+  });
+
+  it('si el destino ya tiene un started de ahora en adelante, no se le apila otro', async () => {
+    // CAMBIO DE COMPORTAMIENTO (fase 1). El único playthrough no tiene NADA
+    // hasta ahora y sí un started+completed posteriores (fechas por delante
+    // del reloj del Worker). La réplica lo veía "sin estrenar" y le escribía un
+    // 'started' de más; el escritorio sabe que su arranque ya está escrito
+    // (startedFromAt) y solo cuelga la sesión.
+    const gameId = await makeGame(db);
+    const iterationId = await makeIteration(db, gameId);
+    await makeStateEvent(db, iterationId, 'started', '2026-01-10T18:05:00Z');
+    await makeStateEvent(db, iterationId, 'completed', '2026-01-10T18:10:00Z');
+
+    const active = await startTimer(db, gameId, NOW);
+
+    assert.equal((await readSession(db, active.sessionId)).iterationId, iterationId);
+    assert.deepEqual(await eventTypesOf(db, iterationId), ['started', 'completed']);
+  });
+
+  it('un juego que no existe se rechaza antes de decidir nada', async () => {
+    // Antes caía de rebote en "no tiene ningún playthrough"; ahora que la regla
+    // puede contestar "crea uno", hace falta decirlo explícitamente.
+    await rejectsTimer(startTimer(db, 999_999, NOW), /no existe/);
+    assert.equal((await db.select().from(iterationsTable)).length, 0);
+    assert.equal((await db.select().from(sessionsTable)).length, 0);
+  });
+
   it('un juego endless se reanuda aunque arrastre un completed: no hay otro que abrir', async () => {
     // En un juego sin final no hay playthroughs discretos, así que un
     // completed/dropped no lo cierra para siempre — el escritorio vuelve a su

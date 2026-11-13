@@ -1,20 +1,16 @@
+import { redistributePinStamps } from './domain/planOrder';
+
 type PinnedGame = { id: number; planPinnedAt: Date | null };
 
-// Misma asignación para el commit de SQLite y la respuesta optimista del
-// arrastre. Solo reparte las fechas de los ids pedidos que siguen fijados.
+// Adaptador Date → milisegundos para quien maneja filas del escritorio con
+// `planPinnedAt: Date` (la respuesta optimista del arrastre en el renderer).
+// La regla del reparto NO vive aquí: vive en shared/domain/planOrder.ts, la
+// misma que usan el commit de SQLite, el drenado del buzón y la PWA.
 export const planPinOrder = (
   games: readonly PinnedGame[],
   orderedIds: readonly number[],
-): Map<number, number> => {
-  const byId = new Map(games.map((game) => [game.id, game.planPinnedAt]));
-  const ids = [...new Set(orderedIds)].filter((id) => byId.get(id) != null);
-  if (ids.length < 2) return new Map();
-
-  const stamps = ids.map((id) => byId.get(id)!.getTime()).sort((a, b) => a - b);
-  // Dos pines en el mismo milisegundo necesitan fechas distintas para que
-  // el desempate por título no deshaga el orden recién elegido.
-  for (let index = 1; index < stamps.length; index++) {
-    if (stamps[index] <= stamps[index - 1]) stamps[index] = stamps[index - 1] + 1;
-  }
-  return new Map(ids.map((id, index) => [id, stamps[index]]));
-};
+): Map<number, number> =>
+  redistributePinStamps(
+    games.map((game) => ({ id: game.id, pinnedAt: game.planPinnedAt?.getTime() ?? null })),
+    orderedIds,
+  );

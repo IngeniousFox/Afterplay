@@ -1,7 +1,7 @@
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { getDb } from '../..';
 import type { PlannedGameExtras, PlannedGameListItem } from '../../../../shared/types';
-import { planPinOrder } from '../../../../shared/planPinOrder';
+import { planWaitingSince, redistributePinStamps } from '../../../../shared/domain/planOrder';
 import { gamesTable } from '../../schema';
 
 // Sección Plan to Play — la contrapartida de getGames(): SOLO los juegos
@@ -76,7 +76,9 @@ export const getPlannedGames = async (): Promise<PlannedGameListItem[]> => {
     endless: game.endless,
     releaseYear: game.releaseYear,
     totalHours: 0,
-    addedAt: game.firstPlanAt === null ? game.addedAt : new Date(Number(game.firstPlanAt)),
+    // La regla (primera entrada en el Plan, o el alta) es compartida con el
+    // Worker: shared/domain/planOrder.ts.
+    addedAt: new Date(planWaitingSince(game.addedAt.getTime(), game.firstPlanAt)),
     promotedAt: game.promotedAt,
     hltbMain: game.hltbMain,
     hltbMainExtras: game.hltbMainExtras,
@@ -217,7 +219,13 @@ export const reorderUpNext = async (orderedIds: number[]): Promise<boolean> => {
     // que una orden malformada se daba por buena sin que hubiera estantería
     // que reordenar. El Set conserva la primera aparición de cada id, que es
     // la posición que el usuario soltó.
-    const stamps = planPinOrder(pinned, orderedIds);
+    //
+    // Esas defensas y el reparto viven en shared/domain/planOrder.ts: la
+    // vista previa de la PWA tiene que prever EXACTAMENTE esto.
+    const stamps = redistributePinStamps(
+      pinned.map((row) => ({ id: row.id, pinnedAt: row.planPinnedAt?.getTime() ?? null })),
+      orderedIds,
+    );
     if (stamps.size === 0) return false;
 
     for (const [id, stamp] of stamps) {

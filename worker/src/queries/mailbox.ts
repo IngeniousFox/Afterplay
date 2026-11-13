@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { planMailboxTable } from '../../../src/main/db/schema';
 import type { PlanMailboxEntry } from '../../../src/shared/planMailbox';
+import { isCrediblePinStamp } from '../../../src/shared/domain/planOrder';
 import type { TenantDb } from '../db';
 
 // El buzón visto desde el Worker: encolar y leer lo pendiente.
@@ -17,9 +18,6 @@ import type { TenantDb } from '../db';
 // Así que se valida entero, campo a campo, en vez de confiar en el tipo.
 const isPositiveInt = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0;
-
-const isTimestamp = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0;
 
 export const parseEntry = (raw: unknown): PlanMailboxEntry | null => {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -58,7 +56,11 @@ export const parseEntry = (raw: unknown): PlanMailboxEntry | null => {
   }
 
   if (entry.type === 'pin') {
-    if (!isPositiveInt(entry.gameId) || !isTimestamp(entry.pinnedAt)) return null;
+    // "Instante creíble" con el criterio COMPARTIDO (shared/domain/planOrder):
+    // el mismo con el que el drenado decide si sella con esta marca o con
+    // "ahora". Si aquí se aceptara algo que allí no, la vista previa de la PWA
+    // prometería un orden que el escritorio no aplica.
+    if (!isPositiveInt(entry.gameId) || !isCrediblePinStamp(entry.pinnedAt)) return null;
     return { type: 'pin', gameId: entry.gameId, pinnedAt: entry.pinnedAt };
   }
 

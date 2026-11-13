@@ -6,6 +6,7 @@ import { warmImageCache, warmSteamData } from '../external/warmNewGame';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { planMailboxTable } from '../db/schema';
 import type { PlanMailboxEntry } from '../../shared/planMailbox';
+import { isCrediblePinStamp } from '../../shared/domain/planOrder';
 
 // El drenado del buzón del Plan (REMOTO.md §6.2).
 //
@@ -219,8 +220,11 @@ const conciseError = (error: unknown): string => {
 // El futuro NO se recorta a propósito: un teléfono con el reloj adelantado deja
 // su juego al final de Up next, que es raro pero es SU orden, y reordenar desde
 // cualquiera de los dos lados lo arregla repartiendo las marcas que ya existen.
+//
+// El criterio de "creíble" es el compartido (shared/domain/planOrder.ts): el
+// MISMO con el que el Worker acepta la orden y con el que la PWA la previsualiza.
 const pinStamp = (pinnedAt: number): Date | undefined =>
-  Number.isFinite(pinnedAt) && pinnedAt > 0 ? new Date(pinnedAt) : undefined;
+  isCrediblePinStamp(pinnedAt) ? new Date(pinnedAt) : undefined;
 
 // Los remates del alta son "si sale, sale": ninguno forma parte del juego que
 // el móvil pidió, así que ninguno puede tumbar la orden NI a los otros dos. Hoy

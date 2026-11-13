@@ -19,13 +19,21 @@ import type { TenantDb } from '../db';
 // de haberlo jugado deja sus sesiones donde estaban, y siguen siendo ratos que
 // existieron.
 //
-// El precio es una asimetría real y visible: el tile "Sessions" de la portada
-// sale de StatsSummary.totalSessions, que SÍ excluye a los planeados, así que
-// con un juego devuelto al Plan la portada dice 54 y esta pantalla 57. Filtrar
-// aquí las igualaría a costa de que la lista del móvil enseñara menos filas que
-// la del PC, que es la divergencia que este lado del repo existe para no tener;
-// cuadrarlas de verdad es decidir UNA población para las dos, y esa decisión
-// toca también a stats.ts.
+// El precio es una asimetría real y visible, y es LA causa del 57 contra 54: el
+// tile "Sessions" de la portada sale de StatsSummary.totalSessions, que suma el
+// sessionCount de la biblioteca (deriveLibrary sobre los juegos con
+// `planned = false`), mientras que este total cuenta todas las sesiones con
+// playthrough. La diferencia son exactamente las sesiones de los juegos que hoy
+// están en el Plan (devueltos al Plan después de jugarlos). No hay otra fuente:
+// las dos consultas cuentan la sesión abierta y las dos excluyen las de
+// emulador sin playthrough (iterationId null).
+//
+// NO es una divergencia con el escritorio, que tiene la MISMA asimetría: la
+// píldora de "All Sessions" cuenta getAllSessions (con planeados) y el total de
+// MiddleColumn suma sessionCount de getGames (sin ellos). Filtrar aquí las
+// igualaría en el móvil a costa de que su lista enseñara menos filas que la del
+// PC; cuadrarlas de verdad es decidir UNA población para los dos lados, y esa
+// decisión toca al escritorio.
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 200;
 

@@ -1,9 +1,16 @@
-import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
-import { gamesTable, iterationsTable, sessionsTable } from '../../../src/main/db/schema';
+import { and, desc, eq, isNull } from 'drizzle-orm';
+import {
+  gamesTable,
+  iterationsTable,
+  sessionsTable,
+  stateEventsTable,
+} from '../../../src/main/db/schema';
 import { computeDurationSec } from '../../../src/main/db/queries/sessions/sessionDuration';
-import { endsPlaythrough, latestRealStateEvent } from '../../../src/shared/playthroughState';
+import {
+  resolvePlaythroughForPlay,
+  type PlaythroughStateEventRow,
+} from '../../../src/shared/domain/resolvePlaythrough';
 import { TIMER_STALE_MS, isTimerStale, timerLastBeat } from '../../../src/shared/timerFreshness';
-import { stateEventsTable } from '../../../src/main/db/schema';
 import type { ActiveTimer } from '../api-types';
 import type { TenantDb } from '../db';
 
@@ -25,117 +32,71 @@ import type { TenantDb } from '../db';
 // puede encender un "jugando ahora" ni recibir latidos. Es la única escritura
 // de la web sobre tablas reales, y se limita a lo que no tiene alternativa:
 // abrir la sesión (con el 'started' de su playthrough al lado, porque abrirla
-// sin él deja el juego "sin jugar" con horas encima) y cerrarla — el latido,
+// sin él deja el juego "sin jugar" con horas encima, y con el playthrough
+// mismo si la regla compartida dice que toca uno nuevo) y cerrarla — el latido,
 // el "parar", y el cierre de la abandonada que manda el §7.4.
 
 export class TimerError extends Error {}
 
-// El playthrough al que colgar la sesión, y si además hay que dejarlo ACTIVO.
+// LAS FILAS que necesita la decisión de "a qué playthrough cuelga la sesión".
 //
-// La MISMA decisión que resolveIterationForPlay en el escritorio (SPEC 4.5)
-// menos una rama: la de CREAR un playthrough nuevo. Esa ausencia es
-// deliberada y responde la pregunta abierta del §9 — el cronómetro no
-// inventa playthroughs desde el móvil; si el último se cerró para siempre, lo
-// dice y te manda al PC.
+// La decisión NO está aquí: es resolvePlaythroughForPlay
+// (src/shared/domain/resolvePlaythrough.ts), la misma función pura que usa el
+// escritorio. Aquí vivió una réplica "rama a rama" escrita a mano
+// (resolveIterationForTimer) que se había quedado atrás de la del PC
+// (AFTERPLAY-2.0 F-26): no miraba el log posterior a `at`, así que no veía un
+// hermano ya activo ni un 'started' ya escrito. Ahora el Worker lee las filas,
+// pide la decisión y la ejecuta — salvo cuando la decisión es CREAR un
+// playthrough: eso el cronómetro lo sigue rechazando a propósito (ver
+// startTimer).
 //
-// El resto sí se replica, rama a rama, y ninguna es un adorno:
-//
-//   - El 'started' cuando el playthrough no estaba activo. Esto devolvía solo
-//     el id y startTimer se limitaba a insertar la sesión. Como el estado se
-//     DERIVA del log de eventos, un juego recién dado de alta (playthrough con
-//     CERO eventos) o uno aparcado en on_hold/resting acumulaba horas reales
-//     mientras la biblioteca y las stats lo seguían contando como Unplayed/On
-//     Hold — cuatro horas encima de un juego "sin jugar". El botón Play del
-//     escritorio deja el 'started' escrito; este también.
-//   - Qué iteración: la que esté en 'started' primero, y solo si no hay
-//     ninguna, la última. Quedarse siempre con la de max(id) daba otra
-//     respuesta cuando la activa no era la última.
-//   - `endless`: en un juego sin final no hay playthroughs discretos, así que
-//     un completed/dropped NO lo cierra para siempre — el escritorio vuelve a
-//     su contenedor único (el `&& !game?.endless` de resolveIterationForPlay).
-//     Sin esta rama, el cronómetro le contestaba "empieza otro desde tu PC" a
-//     un endless: doblemente falso, porque no hay otro y el PC habría
-//     reanudado este.
-//   - `at`: lo POSTERIOR al instante que se pregunta no existe todavía para
-//     esta decisión (el `lte(occurredAt, at)` de allí). Un 'completed'
-//     fechado en el futuro —a mano, desde la ficha— bloqueaba el cronómetro en
-//     la web mientras el PC seguía dejándote jugar.
-type TimerTarget = { iterationId: number; needsStartEvent: boolean };
-
-const resolveIterationForTimer = async (
+// Las tres lecturas van en UN `batch` (un viaje a Turso, y una foto
+// coherente: es una transacción de lectura). Para eso los eventos se buscan
+// por el juego con un join y no con los ids de las iteraciones, que obligaría
+// a esperar a la primera lectura. El log va ENTERO, sin cortar por `at`: la
+// decisión necesita también lo posterior.
+const readPlaythroughRows = async (
   db: TenantDb,
   gameId: number,
-  at: Date,
-): Promise<TimerTarget> => {
-  const iterations = await db
-    .select({ id: iterationsTable.id })
-    .from(iterationsTable)
-    .where(eq(iterationsTable.gameId, gameId))
-    .orderBy(asc(iterationsTable.id));
-
-  if (iterations.length === 0) {
-    throw new TimerError('este juego todavía no tiene ningún playthrough — ábrelo en tu PC');
-  }
-
-  const events = await db
-    .select({
-      id: stateEventsTable.id,
-      iterationId: stateEventsTable.iterationId,
-      type: stateEventsTable.type,
-      occurredAt: stateEventsTable.occurredAt,
-    })
-    .from(stateEventsTable)
-    .where(
-      and(
-        inArray(
-          stateEventsTable.iterationId,
-          iterations.map((iteration) => iteration.id),
-        ),
-        lte(stateEventsTable.occurredAt, at),
-      ),
-    );
-
-  const eventsByIteration = new Map<number, typeof events>();
-  for (const event of events) {
-    const list = eventsByIteration.get(event.iterationId) ?? [];
-    list.push(event);
-    eventsByIteration.set(event.iterationId, list);
-  }
-
-  // El helper compartido ignora 'plan_to_play' (solo historial, nunca estado
-  // real — ver schema.ts) y desempata por id.
-  const latestTypeByIteration = new Map<number, (typeof events)[number]['type']>();
-  for (const [iterationId, list] of eventsByIteration) {
-    const latest = latestRealStateEvent(list);
-    if (latest) latestTypeByIteration.set(iterationId, latest.type);
-  }
-
-  const active = iterations.find(
-    (iteration) => latestTypeByIteration.get(iteration.id) === 'started',
-  );
-  if (active) return { iterationId: active.id, needsStartEvent: false };
-
-  const last = iterations[iterations.length - 1];
-  // La MISMA regla que usa el escritorio para saber si un playthrough se
-  // cerró para siempre (completed/dropped). On Hold y Resting quedan fuera a
-  // propósito: son pausas, y seguir jugándolas es seguir el mismo recorrido —
-  // por eso se reanudan, con su 'started' encima.
-  if (endsPlaythrough(latestTypeByIteration.get(last.id))) {
-    // El flag `endless` se pregunta AQUÍ y no arriba como en el escritorio: es
-    // la única rama que lo necesita y allí la lectura sale del SQLite local,
-    // mientras que aquí es un viaje más a Turso desde el Worker.
-    const [game] = await db
-      .select({ endless: gamesTable.endless })
+): Promise<{
+  game: { endless: boolean; isEmulated: boolean; officialPlatforms: string[] | null } | undefined;
+  playthroughs: { id: number; label: string }[];
+  events: PlaythroughStateEventRow[];
+}> => {
+  const [games, playthroughs, events] = await db.batch([
+    db
+      .select({
+        endless: gamesTable.endless,
+        isEmulated: gamesTable.isEmulated,
+        officialPlatforms: gamesTable.officialPlatforms,
+      })
       .from(gamesTable)
       .where(eq(gamesTable.id, gameId))
-      .limit(1);
+      .limit(1),
+    db
+      .select({ id: iterationsTable.id, label: iterationsTable.label })
+      .from(iterationsTable)
+      .where(eq(iterationsTable.gameId, gameId)),
+    db
+      .select({
+        id: stateEventsTable.id,
+        iterationId: stateEventsTable.iterationId,
+        type: stateEventsTable.type,
+        occurredAt: stateEventsTable.occurredAt,
+      })
+      .from(stateEventsTable)
+      .innerJoin(iterationsTable, eq(stateEventsTable.iterationId, iterationsTable.id))
+      .where(eq(iterationsTable.gameId, gameId)),
+  ]);
 
-    if (!game?.endless) {
-      throw new TimerError('este playthrough ya está cerrado — empieza otro desde tu PC');
-    }
-  }
+  const [game] = games;
+  // Precondición del CRONÓMETRO, no de la regla: antes un gameId inexistente
+  // caía en "no tiene ningún playthrough" y se rechazaba de rebote; ahora que
+  // la decisión puede contestar "crea uno", acabaría en un playthrough
+  // colgando de un juego que no está. Se rechaza antes de decidir nada.
+  if (!game) throw new TimerError('ese juego no existe');
 
-  return { iterationId: last.id, needsStartEvent: true };
+  return { game, playthroughs, events };
 };
 
 // "Sigue jugando AHORA", que no es lo mismo que "la fila no tiene endedAt".
@@ -298,12 +259,34 @@ export const startTimer = async (
   }
 
   const startedAt = new Date(now);
-  const target = await resolveIterationForTimer(db, gameId, startedAt);
+  const rows = await readPlaythroughRows(db, gameId);
+  // `at` y `now` son el MISMO instante: el cronómetro siempre juega AHORA, así
+  // que las ramas de "historia" de la decisión (nacer cerrado, reutilizar un
+  // cerrado al vuelo) no pueden dispararse desde aquí.
+  const decision = resolvePlaythroughForPlay({ ...rows, at: startedAt, now: startedAt });
+
+  // LA POLÍTICA DEL CRONÓMETRO, que NO es la regla compartida: el móvil no
+  // inventa playthroughs (REMOTO.md §9). La regla compartida sabe contestar
+  // "crea uno nuevo" porque el escritorio lo necesita —el botón Play estrena
+  // Playthrough 1 y abre el siguiente tras un Beaten—, pero empezar un
+  // playthrough es una decisión con plataforma, origen y formato detrás, y
+  // desde un cronómetro del móvil se tomaría a ciegas. Así que aquí la
+  // respuesta "crear" se convierte en el mismo rechazo de siempre. Lo que el
+  // Worker SÍ gana al usar la regla del PC es elegir bien entre los
+  // playthroughs que ya existen (ver los tests de "hermano activo").
+  if (decision.kind === 'create') {
+    throw new TimerError(
+      rows.playthroughs.length === 0
+        ? 'este juego todavía no tiene ningún playthrough — ábrelo en tu PC'
+        : 'este playthrough ya está cerrado — empieza otro desde tu PC',
+    );
+  }
+  const targetIterationId = decision.iterationId;
 
   const sessionInsert = db
     .insert(sessionsTable)
     .values({
-      iterationId: target.iterationId,
+      iterationId: targetIterationId,
       // Tiempo medido de verdad, igual que la del watcher. Lo único distinto
       // es quién apretó el botón.
       isManual: false,
@@ -319,38 +302,31 @@ export const startTimer = async (
     })
     .returning({ id: sessionsTable.id });
 
-  // Los dos INSERTs van en un `batch` de libsql, que es una transacción: o
-  // están la sesión y el 'started' o no está ninguno. A medias sería
-  // exactamente el estado que este arreglo viene a quitar — horas colgando de
-  // un playthrough que nadie ve activo, o al revés.
+  // Todos los INSERTs van en un `batch` de libsql, que es una transacción: o
+  // están la sesión y sus eventos, o no está
+  // ninguno. A medias sería exactamente el estado que el 'started' viene a
+  // quitar — horas colgando de un playthrough que nadie ve activo, o al revés.
+  // Los eventos van en el orden de la decisión: si alguna vez llega uno con el
+  // mismo instante que otro, el estado lo desempata el id.
   //
   // Lo que el batch NO cubre, y el escritorio sí (allí resolveIterationForPlay
-  // corre dentro de la transacción de quien llama): la DECISIÓN se lee fuera.
-  // Entre aquel SELECT y este batch cabe una escritura ajena —el PC, el
-  // drenado del buzón— y el 'started' acabaría encima de un playthrough que ya
-  // no es el que se leyó. El cliente HTTP de libsql sí sabe abrir una
-  // transacción interactiva, pero son tres o cuatro viajes más a Turso por cada
-  // Start; se prefiere un viaje y una ventana de milisegundos, porque el caso
-  // que de verdad duele —dos sesiones vivas a la vez— lo corta la guarda de
-  // arriba, que es lo que se comprueba justo antes.
-  const inserted = target.needsStartEvent
-    ? (
-        await db.batch([
-          sessionInsert,
-          db.insert(stateEventsTable).values({
-            iterationId: target.iterationId,
-            type: 'started',
-            // La misma fecha que el arranque de la sesión, y con precisión de
-            // instante: esto no es una fecha tecleada, es un botón pulsado.
-            occurredAt: startedAt,
-            datePrecision: 'datetime',
-            note: null,
-          }),
-        ])
-      )[0]
-    : await sessionInsert;
+  // corre dentro de la transacción de quien llama): la DECISIÓN se toma con
+  // filas leídas fuera. Entre aquella lectura y este batch cabe una escritura
+  // ajena —el PC, el drenado del buzón— y el 'started' (o el playthrough
+  // nuevo) acabaría encima de un estado que ya no es el que se leyó. Es la
+  // misma carrera "comprobar y luego insertar" de la guarda de arriba
+  // (AFTERPLAY-2.0 F-28), que se resuelve con otro diseño (§13.3) y no aquí.
+  const eventInserts =
+    decision.kind === 'use'
+      ? []
+      : decision.events.map((event) =>
+          db.insert(stateEventsTable).values({ iterationId: targetIterationId, ...event }),
+        );
 
-  const [session] = inserted;
+  const [session] =
+    eventInserts.length > 0
+      ? (await db.batch([sessionInsert, ...eventInserts]))[0]
+      : await sessionInsert;
 
   const active = await getActiveTimer(db, now);
   if (!active) throw new TimerError(`no se pudo abrir la sesión ${session.id}`);
