@@ -21,10 +21,9 @@ import { reconcileColumns, type ColumnReconciliation } from './reconcile';
 //    `src/shared/domain` sobre las filas del origen (como lo hace hoy la 1.x:
 //    getGames y getGameById) y sobre las del destino (como lo hará la 2.0: el
 //    papeleo del alta es `datePrecision = 'unknown'` y los desempates son por
-//    `syncCreated`, R-07 y §7.4 de CONSULTAS.md). Todavía no existen las
-//    consultas 2.0: cuando existan, `evaluateTarget` se sustituye (o se
-//    acompaña) por lo que devuelvan, con la misma `GameView`, y
-//    `compareViews` no cambia.
+//    `syncCreated`, R-07 y §7.4 de CONSULTAS.md). Se queda como red de
+//    seguridad independiente de las consultas: lo que DEVUELVEN las
+//    consultas 1.x y 2.0 lo compara `queryValidation.ts`.
 // 3. La conciliación columna a columna (`reconcile.ts`), y la integridad del
 //    destino (claves foráneas, enlaces lógicos, mapa de ids antiguos).
 //
@@ -760,7 +759,14 @@ function checkIntegrity(out: Collector, client: DatabaseSync): void {
   out.compare('integridad: local_legacy_ids apunta a filas inexistentes', 0, dangling);
 }
 
-export function validateImport(client: DatabaseSync, plan: ImportPlan): ValidationReport {
+export function validateImport(
+  client: DatabaseSync,
+  plan: ImportPlan,
+  options: {
+    /** Firma esperada de cada recap tras el recálculo (`memorySignatures.ts`). */
+    readonly memoryHashes?: ReadonlyMap<string, { readonly expectedHash: string }>;
+  } = {},
+): ValidationReport {
   const out = new Collector();
   const totals: Record<string, number> = {};
   const ctx = plan.context;
@@ -770,7 +776,7 @@ export function validateImport(client: DatabaseSync, plan: ImportPlan): Validati
   const targetViews = evaluate(targetInput(client, new Set(ctx.gameIds.values())));
   compareViews(out, legacyViews, targetViews, ctx.gameIds, ctx.iterationIds, ctx.droppedIterations);
   checkIntegrity(out, client);
-  const columns = reconcileColumns(client, ctx);
+  const columns = reconcileColumns(client, ctx, options.memoryHashes);
 
   totals['valores comparados columna a columna'] = columns.compared;
   totals['diferencias columna a columna'] = columns.differences;

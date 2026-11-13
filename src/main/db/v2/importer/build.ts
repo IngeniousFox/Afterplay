@@ -1035,9 +1035,10 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
           scopeType: m.scopeType,
           scopeKey: m.scopeKey,
           payload: m.payload,
-          // PENDIENTE (§19.5): la firma incluye ids de juego 1.x y habría que
-          // recalcularla con los nuevos. Necesita las consultas 2.0 de recaps,
-          // que aún no existen: se copia tal cual y se cuenta.
+          // La firma 1.x lleva ids de juego 1.x: se escribe tal cual y, ya
+          // con los hechos 2.0 en el destino, `memorySignatures.ts` la
+          // recalcula si casa (§19.5). El plan no puede hacerlo: necesita las
+          // consultas sobre las filas ya escritas.
           sourceHash: m.sourceHash,
           model: m.model,
           promptVersion: m.promptVersion,
@@ -1049,7 +1050,6 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
     );
     mapId('generated_memories', m.id as number, id);
     count('generated_memories').imported += 1;
-    fact('recaps con sourceHash 1.x sin recalcular (pendiente)');
   }
 
   // ── Radar ────────────────────────────────────────────────────────────────

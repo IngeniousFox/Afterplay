@@ -85,6 +85,11 @@ export interface ReconcileContext extends ImportContext {
   readonly achievementsById: ReadonlyMap<number, Row>;
   /** Juego 1.x → fuentes de las que tiene catálogo. */
   readonly catalogSourcesByGame: ReadonlyMap<number, ReadonlySet<'steam' | 'ra'>>;
+  /**
+   * Id 2.0 de un recap → la firma que tiene que haber quedado tras el
+   * recálculo (`memorySignatures.ts`). Sin entrada, la 1.x tal cual.
+   */
+  readonly memoryHashes: ReadonlyMap<string, { readonly expectedHash: string }>;
 }
 
 // ── Ayudantes ───────────────────────────────────────────────────────────────
@@ -831,9 +836,23 @@ const MEMORIES: TableDecl = {
     scopeType: toMemories('scopeType'),
     scopeKey: toMemories('scopeKey'),
     payload: toMemories('payload', true),
-    // PENDIENTE (§19.5): copiado tal cual; habría que recalcularlo con los ids
-    // nuevos cuando existan las consultas 2.0 de recaps.
-    sourceHash: toMemories('sourceHash'),
+    // §19.5: la firma se recalcula con los ids 2.0 cuando casa con los hechos
+    // importados (memorySignatures.ts); la que no casa se queda tal cual. Lo
+    // esperado es lo que decidió ese recálculo, y que la firma reescrita sea
+    // de verdad la de los hechos 2.0 lo comprueba la validación con consultas
+    // (vigencia de cada recap en la 1.x frente a la 2.0).
+    sourceHash: {
+      fate: 'transform',
+      to: 'generated_memories.sourceHash (recalculada con ids 2.0 si casa; si no, copia)',
+      check: (row, ctx) => [
+        expect(
+          'generated_memories',
+          memoryRow(row),
+          'sourceHash',
+          ctx.memoryHashes.get(memoryRow(row))?.expectedHash ?? row.sourceHash,
+        ),
+      ],
+    },
     model: toMemories('model'),
     promptVersion: toMemories('promptVersion'),
     createdAt: toMemories('createdAt'),

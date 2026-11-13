@@ -7,6 +7,9 @@ import {
   type SourceTableCount,
 } from './build';
 import { claimInstalls, type ClaimReport } from './installs';
+import type { LegacyQueryViews } from './legacyQueries';
+import { resealMemorySignatures, type MemorySignatureReport } from './memorySignatures';
+import { validateWithQueries, type QueryValidationReport } from './queryValidation';
 import { readLegacyData, withLegacySource } from './source';
 import { validateImport, type ValidationReport } from './validate';
 import { writePlan, type TargetTableCount } from './write';
@@ -21,14 +24,32 @@ import { writePlan, type TargetTableCount } from './write';
 //    sesiones abiertas u órdenes pendientes en el buzón (§19.7).
 // 2. Construir el plan: todas las filas 2.0 con ids y relojes deterministas
 //    (build.ts). Mismo origen → mismo plan, en cualquier PC.
-// 3. En UNA transacción de la puerta: escribir "si no existe", reclamar las
-//    instalaciones de este PC si se pide, y validar. Si la validación falla,
-//    se deshace todo y se lanza `ImportValidationError` con el informe.
+// 3. En UNA transacción de la puerta: escribir "si no existe" (filas y mapa
+//    de ids), recalcular las firmas de los recaps con los hechos ya escritos
+//    (memorySignatures.ts), reclamar las instalaciones de este PC si se pide,
+//    y validar. Si la validación falla, se deshace todo y se lanza
+//    `ImportValidationError` con el informe.
+//
+// La validación tiene dos partes. La de `validate.ts` (recuentos, sumas,
+// reglas de `shared/domain` sobre las filas, conciliación columna a columna)
+// corre siempre. La de `queryValidation.ts` compara lo que DEVUELVEN las
+// lecturas 1.x con lo que devuelven las consultas 2.0, para todos los juegos;
+// corre cuando quien llama trae la foto de las lecturas 1.x
+// (`legacyQueryViews`). Va así, y no siempre, porque esa foto solo se puede
+// tomar con el código 1.x y su `getDb()` (asíncrono, fuera de la transacción;
+// ver legacyQueries.ts): el importador no arrastra el driver de la 1.x. El
+// script la toma siempre salvo que se le pida lo contrario, y el corte de la
+// app (fase 10) tiene que pasarla: es una operación única y la foto cuesta
+// segundos (ver el informe del ensayo).
 
 export { ImportBlockedError } from './build';
 export { LEGACY_DEVICE_ID } from './build';
 export { legacyUuid } from './legacyIds';
 export type { ValidationReport } from './validate';
+export type { LegacyQueryViews } from './legacyQueries';
+export type { MemorySignatureReport } from './memorySignatures';
+export { EXPECTED as EXPECTED_QUERY_DIFFERENCES } from './queryValidation';
+export type { QueryValidationReport } from './queryValidation';
 
 export interface ImportLegacyOptions {
   /** La base 1.x: su ruta (se abre en solo lectura) o una conexión ya abierta en solo lectura. */
@@ -39,8 +60,18 @@ export interface ImportLegacyOptions {
   readonly deviceId?: string;
   /** Crear `game_installs`/`emulator_installs` de este PC para las rutas que existen aquí. */
   readonly claimInstalls?: boolean;
-  /** Hora de "ahora" para lo reclamado (tests). Lo importado no la usa. */
+  /**
+   * Hora de "ahora" (tests): la de lo reclamado y la que decide qué periodos
+   * están cerrados al recalcular las firmas de los recaps. Las filas
+   * importadas no la usan (llevan sus relojes antiguos).
+   */
   readonly now?: number;
+  /**
+   * La foto de las lecturas 1.x sobre ESTE mismo origen
+   * (`collectLegacyQueryViews`). Si se da, se valida también con las
+   * consultas de verdad (queryValidation.ts).
+   */
+  readonly legacyQueryViews?: LegacyQueryViews;
   /** Moneda de los gastos (D-23). Por defecto EUR: la 1.x solo pinta euros. */
   readonly currency?: string;
   /** Desarrollo: importar las sesiones abiertas cerradas en su último latido. */
@@ -58,7 +89,11 @@ export interface ImportReport {
   readonly target: Record<string, TargetTableCount>;
   readonly facts: Record<string, number>;
   readonly installs: ClaimReport | null;
+  /** El recálculo de las firmas de los recaps (§19.5). */
+  readonly memorySignatures: MemorySignatureReport;
   readonly validation: ValidationReport;
+  /** La validación con las consultas, o null si no se trajo la foto 1.x. */
+  readonly queryValidation: QueryValidationReport | null;
   readonly elapsedMs: number;
 }
 
@@ -68,7 +103,8 @@ export class ImportValidationError extends Error {
   constructor(report: ImportReport) {
     super(
       `La validación de la importación ha fallado: ${report.validation.differenceCount} diferencias en los ` +
-        `valores derivados y ${report.validation.columns.differences} columna a columna. No se ha escrito nada.`,
+        `valores derivados, ${report.validation.columns.differences} columna a columna y ` +
+        `${report.queryValidation?.differenceCount ?? 0} con las consultas. No se ha escrito nada.`,
     );
     this.name = 'ImportValidationError';
     this.report = report;
@@ -97,24 +133,38 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
       data.pendingMailbox;
   }
 
+  const now = options.now ?? Date.now();
   return target.store.transaction(() => {
     const written = writePlan(target.db.$client, plan);
+    const signatures = resealMemorySignatures(target, plan, new Date(now));
     const installs = options.claimInstalls
-      ? claimInstalls(target, plan.context, {
-          pathExists: options.pathExists,
-          now: options.now ?? Date.now(),
+      ? claimInstalls(target, plan.context, { pathExists: options.pathExists, now })
+      : null;
+    const validation = validateImport(target.db.$client, plan, {
+      memoryHashes: signatures.expected,
+    });
+    const queryValidation = options.legacyQueryViews
+      ? validateWithQueries({
+          target,
+          context: plan.context,
+          legacy: options.legacyQueryViews,
+          memories: signatures.expected,
+          now: new Date(now),
         })
       : null;
-    const validation = validateImport(target.db.$client, plan);
     const report: ImportReport = {
       source: plan.source,
       target: written,
       facts: plan.facts,
       installs,
+      memorySignatures: signatures.report,
       validation,
+      queryValidation,
       elapsedMs: Math.round(performance.now() - started),
     };
-    if (!validation.ok) throw new ImportValidationError(report);
+    if (!validation.ok || (queryValidation !== null && !queryValidation.ok)) {
+      throw new ImportValidationError(report);
+    }
     return report;
   });
 }

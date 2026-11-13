@@ -74,7 +74,10 @@ function unreadCounts(data: LegacyData): Record<string, number> {
   return { save_backups: data.saveBackupCount, plan_mailbox: data.mailboxCount };
 }
 
-export function reconcileContext(ctx: ImportContext): ReconcileContext {
+export function reconcileContext(
+  ctx: ImportContext,
+  memoryHashes: ReadonlyMap<string, { readonly expectedHash: string }> = new Map(),
+): ReconcileContext {
   const curiosityIndex = new Map<number, number>();
   const byGame = new Map<number, number[]>();
   for (const c of ctx.data.curiosities) {
@@ -109,6 +112,7 @@ export function reconcileContext(ctx: ImportContext): ReconcileContext {
     iterationPosition,
     achievementsById: new Map(ctx.data.achievements.map((a) => [Number(a.id), a])),
     catalogSourcesByGame,
+    memoryHashes,
   };
 }
 
@@ -181,8 +185,9 @@ function satisfied(
 export function reconcileColumns(
   client: DatabaseSync,
   importContext: ImportContext,
+  memoryHashes?: ReadonlyMap<string, { readonly expectedHash: string }>,
 ): ColumnReconciliation {
-  const ctx = reconcileContext(importContext);
+  const ctx = reconcileContext(importContext, memoryHashes);
   const reader = new TargetReader(client);
   const rowsByTable = sourceRows(ctx.data, ctx);
   const unread = unreadCounts(ctx.data);

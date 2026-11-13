@@ -19,6 +19,16 @@ import type { ImportPlan } from './build';
 /** Columnas que viajan (todas menos `syncDirty`, que es solo local). */
 const isSyncedColumn = (column: string): boolean => column !== 'syncDirty';
 
+/**
+ * Columnas que la importación reescribe DESPUÉS de insertar, y que por eso no
+ * cuentan al decidir si una fila ya presente es "distinta": la firma de los
+ * recaps (`memorySignatures.ts`) pasa de ids 1.x a ids 2.0 en la primera
+ * ejecución, y en la segunda el plan vuelve a traer la firma 1.x. Que quedó la
+ * firma correcta lo comprueba la conciliación columna a columna.
+ */
+const rewrittenAfterInsert = (table: string, column: string): boolean =>
+  table === 'generated_memories' && column === 'sourceHash';
+
 export interface TargetTableCount {
   planned: number;
   inserted: number;
@@ -59,7 +69,12 @@ export function writePlan(
       const existing = read.get(row.id) as Record<string, SQLInputValue> | undefined;
       const different =
         !existing ||
-        columns.some((c) => isSyncedColumn(c) && (existing[c] ?? null) !== (row.values[c] ?? null));
+        columns.some(
+          (c) =>
+            isSyncedColumn(c) &&
+            !rewrittenAfterInsert(name, c) &&
+            (existing[c] ?? null) !== (row.values[c] ?? null),
+        );
       if (different) count.alreadyPresentDifferent += 1;
     }
   }

@@ -442,7 +442,14 @@ describe('importador 1.x → 2.0: reglas', () => {
     assert.equal(game.sgdbIdSource, 'manual');
     assert.equal(game.saveKey, '100');
     assert.equal((row(target, 'game_curiosities', id) as Raw).items, '["primera","segunda"]');
-    assert.equal(report.facts['recaps con sourceHash 1.x sin recalcular (pendiente)'], 1);
+    // Su firma no es la de sus hechos: no casa y se queda tal cual.
+    assert.deepEqual(report.memorySignatures.outcomes, {
+      match: 0,
+      mismatch: 1,
+      no_chapter: 0,
+      invalid_scope: 0,
+    });
+    assert.equal((row(target, 'generated_memories', 'month:2024-01') as Raw).sourceHash, 'abc');
     assert.equal(report.source.save_backups.read, 1);
     assert.equal(rows(target, 'save_backups').length, 0);
   });
