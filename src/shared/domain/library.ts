@@ -1,7 +1,13 @@
 import { compareByCreation } from '../entityIds';
 import type { EntityId, EntityIdLike, GameId, IterationId, StateEventId } from '../entityIds';
 import { lastPlayedAtFor } from '../lastPlayedAt';
-import { isAddedAtArtifact, latestRealStateEvent, manualHoursAnchor } from '../playthroughState';
+import type { StateEventDatePrecision } from '../dateTypes';
+import {
+  isInitialPaperwork,
+  latestRealStateEvent,
+  manualHoursAnchor,
+  type PaperworkRule,
+} from '../playthroughState';
 import type { StateEvent } from '../types';
 import { yearOf } from '../yearOf';
 import { resolveIterationHours } from './hours';
@@ -68,6 +74,9 @@ export type LibraryStateEventRow<Id extends EntityIdLike = EntityId> = {
   type: StateType;
   occurredAt: Date;
   id: StateEventId<Id>;
+  // Imprescindible con `paperwork: 'datePrecision'` (las lecturas 2.0): es lo
+  // único que distingue el papeleo del alta. Las filas 1.x pueden omitirla.
+  datePrecision?: StateEventDatePrecision;
 };
 
 // Una sesión ABIERTA que sigue en marcha, ya juzgada por quien llama: en el
@@ -127,7 +136,12 @@ export const deriveLibrary = <Id extends EntityIdLike>(input: {
   stateEvents: readonly LibraryStateEventRow<Id>[];
   liveSessions: readonly LibraryLiveSession<Id>[];
   timeZone?: string | null;
+  // Cómo se reconoce el papeleo del alta (ver PaperworkRule en
+  // playthroughState.ts). Por defecto la heurística del 1.x; las lecturas 2.0
+  // pasan 'datePrecision' y la fecha de alta deja de mirarse.
+  paperwork?: PaperworkRule;
 }): Map<GameId<Id>, LibraryGameSummary<Id>> => {
+  const paperwork = input.paperwork ?? 'addedAt';
   const summaries = new Map<GameId<Id>, LibraryGameSummary<Id>>();
   const gameById = new Map<GameId<Id>, LibraryGameRow<Id>>();
   for (const game of input.games) {
@@ -189,6 +203,7 @@ export const deriveLibrary = <Id extends EntityIdLike>(input: {
         game?.addedAt,
         firstSessionAt === null ? [] : [new Date(firstSessionAt)],
         game?.promotedAt,
+        paperwork,
       );
       summary.manualIterations.push({
         iterationId: row.id,
@@ -230,13 +245,13 @@ export const deriveLibrary = <Id extends EntityIdLike>(input: {
     // El respaldo de "Last played" desde el log. Un evento vale como "cuándo
     // lo jugué" SOLO si su fecha la pusiste tú: el que escribe el alta (o el
     // promote) hereda su hora y convertiría "los últimos que jugué" en "los
-    // últimos que añadí" (isAddedAtArtifact). Se mira TODO el log y no solo el
+    // últimos que añadí" (isInitialPaperwork). Se mira TODO el log y no solo el
     // último: si el más reciente es papeleo pero un 'started' anterior tiene
     // fecha propia, esa fecha sigue siendo buena.
     let lastEventAt: Date | null = null;
     for (const event of events) {
       if (event.type === 'plan_to_play') continue;
-      if (isAddedAtArtifact(event.occurredAt, game?.addedAt, game?.promotedAt)) continue;
+      if (isInitialPaperwork(event, game ?? {}, paperwork)) continue;
       lastEventAt = later(lastEventAt, event.occurredAt);
     }
 

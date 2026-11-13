@@ -1,4 +1,4 @@
-import type { EventDatePrecision } from './dateTypes';
+import type { EventDatePrecision, StateEventDatePrecision } from './dateTypes';
 import type {
   EmulatorId,
   EntityId,
@@ -37,6 +37,37 @@ export type StateEventType =
 export type SpendEventType = 'purchase' | 'ingame_spend';
 export type IterationFormat = 'digital' | 'physical';
 export type IterationRating = 1 | 2 | 3 | 4 | 5;
+
+// ── Valores que solo existen en el esquema 2.0 ──────────────────────────────
+//
+// Durante la fase 2 (AFTERPLAY-2.0.md §20.3.1) los DTOs solo GANAN valores
+// (decisión "DTO" de src/main/db/v2/CONSULTAS.md §5.0), pero no pueden ganarlos
+// para el esquema 1.x: main/db/dtoSync.ts exige que el tipo por defecto (ids
+// numéricos) sea EXACTAMENTE el de las tablas 1.x, y un valor que esas tablas
+// no pueden guardar sería una mentira del tipo.
+//
+// La representación del id ya dice de qué esquema viene la fila: número =
+// 1.x (la app de hoy y, tras el cambio, el Worker hasta la fase 5), texto =
+// 2.0. Así que los valores nuevos se cuelgan de ella: con `Id = string` el
+// tipo los incluye y con `Id = number` sigue siendo el de siempre. El día del
+// cambio (`EntityId = string`) el renderer los recibe sin tocar nada aquí, y
+// el Worker, que seguirá con números, no.
+type SchemaValues<Id extends EntityIdLike, Base, Added> = Id extends string ? Base | Added : Base;
+
+// Precisión de un evento de estado. El 2.0 añade 'unknown' (R-07): el alta o
+// la promoción sin fecha. Las lecturas 2.0 la devuelven tal cual.
+export type StateEventPrecision<Id extends EntityIdLike = EntityId> = SchemaValues<
+  Id,
+  EventDatePrecision,
+  StateEventDatePrecision
+>;
+
+// Quién abrió una sesión. El 2.0 añade 'play' (el botón Play, §10.2).
+export type SessionStartedBy<Id extends EntityIdLike = EntityId> = SchemaValues<
+  Id,
+  'watcher' | 'timer',
+  'play'
+>;
 
 // Un juego tal como lo guarda la tabla `games`. El significado de cada
 // columna está documentado en el esquema; aquí solo se fija la forma.
@@ -116,7 +147,7 @@ export type Session<Id extends EntityIdLike = EntityId> = {
   endedAt: Date | null;
   durationSec: number | null;
   lastHeartbeatAt: Date | null;
-  startedBy: 'watcher' | 'timer';
+  startedBy: SessionStartedBy<Id>;
   datePrecision: EventDatePrecision;
   note: string | null;
 };
@@ -127,7 +158,7 @@ export type StateEvent<Id extends EntityIdLike = EntityId> = {
   iterationId: IterationId<Id>;
   type: StateEventType;
   occurredAt: Date;
-  datePrecision: EventDatePrecision;
+  datePrecision: StateEventPrecision<Id>;
   note: string | null;
 };
 

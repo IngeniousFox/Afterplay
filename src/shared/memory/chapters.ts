@@ -19,7 +19,8 @@
 
 import { compareByCreation, compareEntityIds } from '../entityIds';
 import type { EntityId, EntityIdLike, GameId } from '../entityIds';
-import { isAddedAtArtifact } from '../playthroughState';
+import type { StateEventDatePrecision } from '../dateTypes';
+import { isInitialPaperwork } from '../playthroughState';
 import type { MemorySession, Moment } from './moments';
 
 export type ChapterScope =
@@ -89,10 +90,27 @@ export type ChapterStateChange<Id extends EntityIdLike = EntityId> = {
 
 // Evento de estado con lo mínimo que un capítulo necesita — estructural, para
 // que StateEventSummary (renderer) y las filas del main encajen sin adaptar.
+//
+// Dos formas, una por esquema (ver PaperworkRule en playthroughState.ts):
+// las filas 1.x traen las fechas de alta y promoción para la heurística de los
+// 5 s; las 2.0 traen `datePrecision`, que basta ('unknown' = papeleo), y el
+// tipo les PROHÍBE traer `addedAt`/`promotedAt` para que una lectura 2.0 no
+// pueda activar la heurística por descuido. Así la regla viaja con cada
+// evento y `isMeaningfulStateEvent` sigue sirviendo de callback de `filter`.
 export type ChapterStateEvent<Id extends EntityIdLike = EntityId> = {
   gameId: GameId<Id>;
   type: string;
   occurredAt: Date;
+} & (ChapterStateEventV1 | ChapterStateEventV2);
+
+export type ChapterStateEventV2 = {
+  datePrecision: StateEventDatePrecision;
+  addedAt?: never;
+  promotedAt?: never;
+};
+
+export type ChapterStateEventV1 = {
+  datePrecision?: never;
   // Cuándo se dio de alta el juego, lo único que hace falta para reconocer el
   // papeleo del alta (ver isMeaningfulStateEvent). Sigue siendo opcional
   // porque un dato que falta no puede borrar historia, pero YA LO TRAE quien
@@ -111,8 +129,9 @@ export type ChapterStateEvent<Id extends EntityIdLike = EntityId> = {
 // que es intención y no juego, y fuera lo que caiga pegado al alta del juego,
 // que es un efecto secundario de darlo de alta y no un hito.
 //
-// El margen del alta NO se escribe aquí: se pregunta a isAddedAtArtifact
-// (shared/playthroughState), que es donde está el porqué y el número. Esta
+// El margen del alta NO se escribe aquí: se pregunta a isInitialPaperwork
+// (shared/playthroughState), que es donde está el porqué y el número, con la
+// regla de la forma del evento (heurística en 1.x, 'unknown' en 2.0). Esta
 // función llegó a llevar su propia copia del 5_000, igual que el Journey y que
 // el worker — cuatro copias que coincidían por costumbre y que nada obligaba a
 // seguir coincidiendo.
@@ -130,7 +149,11 @@ export type ChapterStateEvent<Id extends EntityIdLike = EntityId> = {
 // aparece una tanda de obsoletos sin haber tocado nada, viene de aquí.
 export const isMeaningfulStateEvent = (event: ChapterStateEvent<EntityIdLike>): boolean =>
   event.type !== 'plan_to_play' &&
-  !isAddedAtArtifact(event.occurredAt, event.addedAt, event.promotedAt);
+  !isInitialPaperwork(
+    event,
+    event,
+    event.datePrecision === undefined ? 'addedAt' : 'datePrecision',
+  );
 
 // Un desbloqueo tal como llega del main (getMemoryFacts): ya FUNDIDO por
 // logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de

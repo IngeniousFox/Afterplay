@@ -787,7 +787,7 @@ export type StateEventSummary<Id extends EntityIdLike = EntityId> = {
   iterationId: IterationId<Id>;
   type: StateEvent['type'];
   occurredAt: Date;
-  datePrecision: StateEvent['datePrecision'];
+  datePrecision: StateEvent<Id>['datePrecision'];
   // Etiqueta del playthrough dueño del evento ("Playthrough 2") — la galería
   // de completados de Stats la enseña en el tooltip de cada carátula.
   iterationLabel: string;

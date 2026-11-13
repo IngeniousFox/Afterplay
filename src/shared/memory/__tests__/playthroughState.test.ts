@@ -485,9 +485,12 @@ describe('una sola regla del alta, y no cuatro copias del mismo número', () => 
     ];
     for (const { ruta, debeLlamar } of copias) {
       const fuente = readFileSync(fileURLToPath(new URL(ruta, import.meta.url)), 'utf8');
+      // Vale la regla de siempre o su envoltorio de dos esquemas
+      // (isInitialPaperwork, que la llama con la regla 'addedAt'): las dos son
+      // la compartida y ninguna lleva su propio número.
       if (debeLlamar) {
         assert.ok(
-          fuente.includes('isAddedAtArtifact'),
+          /\b(isAddedAtArtifact|isInitialPaperwork)\b/.test(fuente),
           `${ruta} ya no llama a la regla compartida`,
         );
       }

@@ -155,6 +155,48 @@ export const isAddedAtArtifact = (
   (promotedAt != null &&
     Math.abs(occurredAt.getTime() - promotedAt.getTime()) < ADDED_AT_TOLERANCE_MS);
 
+// ── El papeleo del alta en los dos esquemas ─────────────────────────────────
+//
+// El esquema 2.0 ya no necesita adivinar: el alta y la promoción sin fecha
+// escriben `datePrecision = 'unknown'` (AFTERPLAY-2.0.md §7.5, decisión R-07
+// de src/main/db/v2/CONSULTAS.md), y ESE es exactamente el papeleo. Aplicar
+// además la heurística de los 5 s a una lectura 2.0 sería un fallo, no una
+// red de seguridad: un evento real tecleado con hora justo al dar de alta
+// (marcar "Started" hoy a las 18:00 en el mismo minuto en que lo añades) se
+// tiraría como papeleo.
+//
+// Pero la heurística no puede desaparecer: la siguen necesitando el esquema
+// 1.x, que no tiene 'unknown', y quien lo lee (el Worker hasta la fase 5, la
+// app hasta el cambio). Por eso la regla se ELIGE de forma explícita:
+//
+//   'addedAt'        (1.x, el valor por defecto) — cerca del alta o de la
+//                    promoción, como siempre; 'unknown' también cuenta, por si
+//                    alguna vez llega, porque no admite otra lectura.
+//   'datePrecision'  (2.0) — SOLO 'unknown'. La fecha de alta no se mira.
+//
+// Por defecto 'addedAt' para que ningún llamador de hoy cambie de
+// comportamiento sin enterarse; las lecturas 2.0 pasan 'datePrecision'.
+export type PaperworkRule = 'addedAt' | 'datePrecision';
+
+export type PaperworkCandidate = {
+  occurredAt: Date;
+  // Opcional: las filas 1.x de algunos llamadores no la traen.
+  datePrecision?: string | null;
+};
+
+export type PaperworkAnchors = {
+  addedAt?: Date | null;
+  promotedAt?: Date | null;
+};
+
+export const isInitialPaperwork = (
+  event: PaperworkCandidate,
+  anchors: PaperworkAnchors,
+  rule: PaperworkRule = 'addedAt',
+): boolean =>
+  event.datePrecision === 'unknown' ||
+  (rule === 'addedAt' && isAddedAtArtifact(event.occurredAt, anchors.addedAt, anchors.promotedAt));
+
 // A qué momento del calendario se atribuyen unas horas que nadie midió. Las
 // horas manuales no tienen fecha propia — son un número suelto en la
 // iteración —, así que hay que colgarlas de alguna fecha del playthrough.
@@ -199,19 +241,25 @@ export const isAddedAtArtifact = (
 // Genérico sobre la forma de los eventos porque cada lado trae la suya
 // (StateEventCandidate en el main, StateEventSummary en el renderer) y lo
 // único que importa aquí son el tipo y la fecha.
-export const manualHoursAnchor = <T extends { type: StateEventType; occurredAt: Date }>(
+//
+// `rule` dice cómo se reconoce ese papeleo (ver PaperworkRule): las lecturas
+// 2.0 pasan 'datePrecision' y entonces `addedAt`/`promotedAt` no se miran.
+export const manualHoursAnchor = <
+  T extends { type: StateEventType; occurredAt: Date; datePrecision?: string | null },
+>(
   allEvents: readonly T[],
   addedAt?: Date | null,
   sessionStarts: readonly Date[] = [],
   promotedAt?: Date | null,
+  rule: PaperworkRule = 'addedAt',
 ): Date | null => {
-  // Se filtra una sola vez y solo si hay con qué comparar: los dos recorridos
-  // de abajo tienen que ver EXACTAMENTE el mismo log, o un artefacto colado en
-  // el segundo cambiaría la respuesta cuando el primero no encuentra fin.
-  const events =
-    addedAt == null && promotedAt == null
-      ? allEvents
-      : allEvents.filter((event) => !isAddedAtArtifact(event.occurredAt, addedAt, promotedAt));
+  // Se filtra una sola vez: los dos recorridos de abajo tienen que ver
+  // EXACTAMENTE el mismo log, o un artefacto colado en el segundo cambiaría la
+  // respuesta cuando el primero no encuentra fin. Con la regla 1.x y sin
+  // fechas con qué comparar solo puede caer un 'unknown', que el 1.x no tiene.
+  const events = allEvents.filter(
+    (event) => !isInitialPaperwork(event, { addedAt, promotedAt }, rule),
+  );
 
   let latestEnd: Date | null = null;
   for (const event of events) {
