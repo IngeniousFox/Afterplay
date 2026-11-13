@@ -1093,6 +1093,7 @@ El modelo deja la puerta abierta a restaurar automáticamente en el estado "por 
 ### §12.7 Otros arreglos
 
 - **Juegos sin `igdbId`**: pueden ir a la nube usando `saveKey` (§7.4).
+- **Borrar un juego no borra sus copias de partidas** (decisión del usuario, 2026-11-13). En la 1.x, borrar un juego borraba sus copias del bucket, las de todos los PCs. En la 2.0 se quedan, tanto los objetos como su índice: las partidas son irrecuperables, y volver a añadir el juego (mismo id) las recupera. Hace falta dar una forma de limpiar a mano las copias de juegos borrados.
 - **Restauración exacta** (F-22): el diálogo de restaurar ofrece "dejar la carpeta exactamente como en la copia (borra lo que sobra)". Desmarcado por defecto: sin tocar nada, restaurar se comporta como hoy (D-20).
 - **Subida a R2**: dejar de leer el zip entero en memoria (`r2.ts:186`).
 - **Tarjetas de memoria compartidas entre juegos emulados**: hoy solo se advierte. Queda como está, documentado como limitación.
@@ -1854,7 +1855,11 @@ La fase se hace en dos tandas. La primera es solo añadir: la app sigue funciona
 
 **Para retomar el trabajo otro día:** comprobar que P0 y el importador están terminados y con commit (`git log`), leer §4 y §5.0 de `CONSULTAS.md`, y lanzar P1 a P8 en paralelo. Cada paquete escribe solo en su carpeta de `src/main/db/v2/queries/` y no toca la app, así que hasta P9 la app sigue funcionando con el esquema 1.x. Después de P9, el perfil de desarrollo se rellena con el importador.
 
-**Decisión del usuario (2026-11-13):** el completado al 100 % de logros se cuenta por fuente; Steam y RetroAchievements son dos hitos distintos. Cómo se enseña en la interfaz se decide al adaptar el renderer.
+**Decisiones del usuario (2026-11-13):**
+
+- El completado al 100 % de logros se cuenta por fuente: Steam y RetroAchievements son dos hitos distintos. Cómo se enseña en la interfaz se decide al adaptar el renderer.
+- El paso por el Plan tiene dos eventos visibles en la ficha y en el Journey: "Añadido al Plan" y "Salió del Plan". Se enseña el último paso; el "tiempo esperando" cuenta desde la última vez que el juego entró al Plan.
+- Borrar un juego no borra sus copias de partidas del bucket (§12.7).
 
 El Worker y la PWA siguen sobre el esquema 1.x hasta la fase 5.
 
