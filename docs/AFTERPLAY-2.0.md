@@ -617,7 +617,7 @@ Siguen como ficheros en la carpeta de datos: `config.json`, `credentials.json`, 
 - Regla de lectura: un hijo cuyo padre está marcado como borrado se trata como borrado. Cubre el caso "inserté un hijo offline y el padre se borró en otro PC" (F-11).
 - En la 2.0 las lápidas no se purgan (D-25). El volumen lo permite y evita toda una clase de errores.
 - Restricciones que sí se pueden imponer en local:
-  - Como mucho una sesión abierta por dispositivo y objetivo vigilado (índice único parcial sobre las sesiones propias).
+  - Como mucho una sesión abierta por dispositivo y objetivo vigilado. **La impone la puerta de escritura, no un índice único** (corregido en la fase 2): un índice único no se puede desactivar durante la descarga, y una fila ajena que lo violase la atascaría para siempre, como en H-4. Por lo mismo, ninguna tabla sincronizada lleva índices ni restricciones únicas; la unicidad la dan los ids deterministas y compuestos.
   - `sessions`: `playthroughId` o `emulatorId`, al menos uno.
 - Restricciones que **no** se pueden imponer entre dispositivos y se tratan como estados posibles: dos playthroughs activos del mismo juego, creados offline en dos PCs. La derivación de estado los tolera (gana el de `syncCreated` más reciente) y la ficha ofrece fusionarlos (§10.7).
 
@@ -670,7 +670,7 @@ Reloj lógico híbrido por dispositivo. Formato de ancho fijo, comparable como t
 - **Recuperación de un reloj adelantado.** El reloj lógico se queda en el futuro aunque se corrija el de pared, así que sin más el rechazo sería eterno. Al corregirse, el cliente reinicia su reloj y vuelve a fechar las celdas pendientes de subir que llevaban reloj futuro; es seguro porque el hub nunca las aceptó. El cliente ajusta su reloj con la hora que da `/status`.
 - **Arranque.** El reloj empieza por encima del mayor reloj que haya en la base. Importa al restaurar una copia.
 - **Contador.** Si el milisegundo no avanza y el contador se agota (10.000 escrituras), se avanza un milisegundo.
-- **Id corto único.** El hub asigna el id corto de cada dispositivo al emparejarlo, para que no coincidan dos.
+- **Id corto único.** El hub asigna el id corto de cada dispositivo al emparejarlo, para que no coincidan dos. Hasta entonces el dispositivo usa uno generado al azar y guardado en su estado local. El id `000000` está reservado: lo usa el barrido de sesiones abandonadas (§10.5) para escribir con el reloj siguiente al del dueño.
 - **Reloj de pared atrasado.** Converge, pero sus ediciones offline pierden frente a otras aunque sean posteriores en tiempo real. Es una limitación aceptada.
 
 ### §8.3 Fusión
@@ -1817,6 +1817,67 @@ Pendiente de la fase 1:
 Esquema nuevo (§7), driver local (§8.9), módulo de escritura (§8.6), consultas adaptadas, reloj (§8.2).
 
 **Salida:** la app funciona entera en local con el esquema nuevo y una base vacía; los tests de almacén pasan.
+
+#### §20.3.1 Estado de la fase 2 (2026-11-13)
+
+La fase se hace en dos tandas. La primera es solo añadir: la app sigue funcionando con el esquema 1.x. La segunda cambia las consultas, el IPC y el renderer al esquema nuevo.
+
+**Primera tanda, hecha:**
+
+| Pieza                                       | Dónde                                    |
+| ------------------------------------------- | ---------------------------------------- |
+| Reloj, relojes por columna, identificadores | `src/shared/sync/`                       |
+| Esquema 2.0, registro de tablas, migración  | `src/main/db/v2/`, `drizzle-v2/`         |
+| Mapa de cada columna 1.x a su destino       | `src/main/db/v2/MAPA-1X.md`              |
+| Conexión local y puerta de escritura        | `src/main/db/v2/connection.ts`, `store/` |
+| Ids con nombre en todo el código            | `src/shared/entityIds.ts`                |
+
+- **Driver.** `node:sqlite` con `drizzle-orm/node-sqlite` y su migrador. Comprobado dentro de Electron 44.4.5 (Node 24.21, SQLite 3.53.4): abrir, migrar, escribir por la puerta y reabrir con el reloj por encima del máximo de la base. Queda sin medir su comportamiento en ejecuciones largas; en Node 22 sigue avisando de que es experimental.
+- **Rendimiento de la puerta**, sobre un fichero con WAL y `synchronous = FULL`: 5.000 creaciones en 759 ms, 5.000 parches con cambio en 554 ms, 5.000 parches sin cambio en 41 ms, 100 escrituras sueltas en 234 ms, reabrir la base en 6 ms.
+- **Ids con nombre.** Unos 150 ficheros dejan de escribir `number` para los ids y de asumir que lo son (rutas, desempates, claves de consulta). Con el alias cambiado a texto, los únicos errores de tipos que quedan son la frontera con la base 1.x y los ids literales de tests y fixtures (unos 580). La app sigue con ids numéricos y se comporta igual.
+- **Comprobado.** Lint y tipos de los cinco proyectos sin errores, 1.538 tests, build y la suite completa de Playwright.
+
+**Segunda tanda, sin empezar.** Es mayor de lo que este plan contaba: además de las 65 consultas de `db/queries/`, hay **29 ficheros fuera de `db/` que consultan la base directamente** (refrescos externos, Steam, RetroAchievements, radar, imágenes, `index.ts`). Orden previsto:
+
+1. Consultas 2.0 en `src/main/db/v2/queries/`, por dominio, con sus tests sobre una base vacía. Sigue siendo solo añadir.
+2. El cambio: el main abre la base 2.0, el IPC y los 29 ficheros pasan a las consultas nuevas y a la puerta, `EntityId` pasa a texto, desaparece el sync de Turso del escritorio y se rehace la semilla de los e2e.
+
+El Worker y la PWA siguen sobre el esquema 1.x hasta la fase 5.
+
+Decisiones tomadas en esta fase que el documento no fijaba:
+
+- **Borrar un juego no borra sus cachés ni sus copias de partidas.** `game_metadata`, `external_checks`, `achievement_catalogs` y `game_curiosities` se quedan: si el juego se vuelve a añadir (mismo id) reaparecen sin repetir llamadas ni repagar curiosidades. `save_backups` se queda porque indexa objetos reales del bucket. Sí reciben lápida los playthroughs, eventos, sesiones, gastos, instalaciones, la entrada del plan y los desbloqueos.
+- **Volver a añadir un juego borrado hace reaparecer lo que tenía** (notas, ajustes de partidas): la fila resucita con sus valores anteriores, que es lo mismo que haría la fusión de §8.3. Sus playthroughs y sesiones siguen borrados.
+- **`NOT NULL` solo donde la fila siempre nace con valor.** No se puede desactivar durante la descarga, así que una fila incompleta llegada por sync la atascaría. La puerta rechaza las creaciones incompletas; el motor de la fase 3 debe apartar esas filas en vez de abortar la página.
+- **Valores por defecto al crear.** Una columna no indicada se guarda con su valor por defecto pero con reloj `BOTTOM`, para que no pise el valor real que escriba otro dispositivo. Indicar `null` cuenta como indicar: quien llama tiene que **omitir** lo que no sabe.
+- **Parchear una fila borrada o inexistente es un error**, no un no-op: esconderlo taparía ediciones sobre algo que otro PC acaba de borrar.
+- **La cascada de un borrado alcanza filas de otros dispositivos**, sesiones abiertas incluidas: borrar un juego es una decisión explícita del usuario. El borrado directo de una fila ajena sí pasa por la regla del dueño.
+- **"Una sesión abierta por objetivo" se mide por juego**, no por playthrough (§10.4), o por emulador si la sesión no tiene playthrough.
+- **`synchronous = FULL`**: con WAL y `NORMAL`, un corte de luz pierde lo confirmado desde el último checkpoint, y el volumen de escritura es pequeño.
+- **La regla de lint de §8.6 no es viable tal como está escrita**: las consultas de lectura necesitan los objetos de tabla. La barrera es un test que busca escrituras a tablas sincronizadas fuera de `store/`; la regla de lint se limitará a impedir que el IPC y el renderer importen el esquema.
+- **`devices.installNonce`**, que §12.6 da por supuesto y §7.4 no listaba, y `local_sync_state.shortDeviceId` para el id corto del reloj.
+
+Huecos de este documento encontrados en la fase 2 y **todavía sin resolver**. Ninguno bloquea la primera tanda; cada uno indica la fase que lo necesita:
+
+| Hueco                                                                                                                                                               | Lo necesita |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| El historial de la ficha desempata estados y gastos de la misma fecha comparando ids de dos tablas distintas                                                        | Fase 2      |
+| Los tests y la semilla de e2e usan ids numéricos fijos (`refreshGame(1)`, `FIRST_LIGHT = 3`): hay que buscarlos por título                                          | Fase 2      |
+| Ids de los dispositivos `web` y `legacy`, y su id corto de reloj                                                                                                    | Fase 3      |
+| Dónde se guardan el identificador y la época del hub                                                                                                                | Fase 3      |
+| Restaurar una copia con relojes muy futuros adelanta el reloj y el hub rechazaría las escrituras                                                                    | Fase 3      |
+| Borrar un juego alcanza sesiones de otros PCs que pueden estar abiertas; el watcher del dueño tiene que saber qué hacer si su sesión abierta recibe una lápida      | Fase 4      |
+| §11.3 habla de instalación "no verificada", pero solo existe `lastVerifiedAt`                                                                                       | Fase 4      |
+| Quién puede escribir qué en las tablas con dueño distintas de `sessions`. Hoy: solo el dueño, así que un PC no puede borrar del índice la copia de partidas de otro | Fases 4 y 6 |
+| Forma exacta de la clave de objeto de la que sale el id de `save_backups` (prefijo, separadores)                                                                    | Fase 6      |
+| `machineHome` pasa de ser por copia a ser por dispositivo: si la carpeta de usuario de un PC cambió, las copias antiguas generarían redirects equivocados           | Fase 6      |
+| Ubicación de restauración: §7.6 la pone en `local_save_state` y §19.6 en `machine-saves.json`, que hoy la guarda con el id numérico del juego como clave            | Fase 6      |
+| Importador: §19.5 da id `legacy:<tabla>:<id>` a todo lo que no es un juego con `igdbId`, pero las tablas de id compuesto o determinista deben usar su id natural    | Fase 8      |
+| Importador: la firma de cada recap incluye el id del juego, así que al cambiar los ids todos saldrían desactualizados. Hay que reescribir las firmas o sacar el id  | Fase 8      |
+| Importador: `achievements` 1.x no distingue Steam de RetroAchievements; `achievementsSyncedAt` lo escriben los dos                                                  | Fase 8      |
+| Importador: `achievementsUnlocksSyncedAt` no tiene fuente equivalente en `external_checks`                                                                          | Fase 8      |
+| Importador: el `syncCreated` de los playthroughs tiene que respetar el orden por id antiguo para que "Playthrough N" no cambie                                      | Fase 8      |
+| Importador: la nota y la fecha del `plan_to_play` de un juego ya promocionado no tienen destino                                                                     | Fase 8      |
 
 ### §20.4 Fase 3 — Motor de sync y hub (XL)
 
