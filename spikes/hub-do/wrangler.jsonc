@@ -1,0 +1,16 @@
+{
+  // Spike S-03: despliegue TEMPORAL autorizado para medir CPU y borrar (wrangler delete). Rutas protegidas por SPIKE_KEY.
+  "name": "afterplay-hub-do-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [{ "name": "TENANT_HUB", "class_name": "TenantHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantHub"] }],
+  // Las migraciones de drizzle-kit se importan como texto (migrations.js -> *.sql).
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+  "dev": { "port": 8799, "ip": "127.0.0.1" }
+}

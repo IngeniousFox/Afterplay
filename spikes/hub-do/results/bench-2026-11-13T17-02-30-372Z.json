@@ -1,0 +1,953 @@
+{
+  "tenant": "bench-1794589313977",
+  "startedAt": "2026-11-13T17:01:53.977Z",
+  "migration": {
+    "rowsRead": 47,
+    "rowsWritten": 42,
+    "statements": 31,
+    "serverMs": 0
+  },
+  "seedPush500": {
+    "games": {
+      "rows": 1011,
+      "meter": {
+        "rowsRead": 1017,
+        "rowsWritten": 5058,
+        "statements": 1030
+      },
+      "clientMs": 456.45519999999976,
+      "serverMs": 0,
+      "batches": 3,
+      "maxReqBytes": 167025,
+      "maxClientMs": 172.2313999999999
+    },
+    "playthroughs": {
+      "rows": 1014,
+      "meter": {
+        "rowsRead": 1020,
+        "rowsWritten": 4059,
+        "statements": 1033
+      },
+      "clientMs": 362.46540000000005,
+      "serverMs": 0,
+      "batches": 3,
+      "maxReqBytes": 142415,
+      "maxClientMs": 152.43579999999997
+    },
+    "state_events": {
+      "rows": 1280,
+      "meter": {
+        "rowsRead": 1286,
+        "rowsWritten": 5123,
+        "statements": 1301
+      },
+      "clientMs": 367.43780000000015,
+      "serverMs": 0,
+      "batches": 3,
+      "maxReqBytes": 143390,
+      "maxClientMs": 168.75970000000007
+    },
+    "sessions": {
+      "rows": 278,
+      "meter": {
+        "rowsRead": 280,
+        "rowsWritten": 1947,
+        "statements": 283
+      },
+      "clientMs": 125.01890000000003,
+      "serverMs": 0,
+      "batches": 1,
+      "maxReqBytes": 111235,
+      "maxClientMs": 125.01890000000003
+    },
+    "achievements": {
+      "rows": 5000,
+      "meter": {
+        "rowsRead": 5020,
+        "rowsWritten": 20010,
+        "statements": 5080
+      },
+      "clientMs": 1395.6040999999996,
+      "serverMs": 0,
+      "batches": 10,
+      "maxReqBytes": 305186,
+      "maxClientMs": 165.15380000000005
+    }
+  },
+  "statsAfterSeed": {
+    "counts": {
+      "games": 1011,
+      "playthroughs": 1014,
+      "state_events": 1280,
+      "sessions": 278,
+      "achievements": 5000
+    },
+    "seq": 8583,
+    "databaseSize": 4141056,
+    "migrationAtStartup": {
+      "rowsRead": 47,
+      "rowsWritten": 42,
+      "statements": 31,
+      "serverMs": 0
+    },
+    "clientMs": 31.655199999999695,
+    "reqBytes": 0,
+    "resBytes": 217
+  },
+  "libraryRowCounts": {
+    "games": 1011,
+    "playthroughs": 1014,
+    "sessionTotals": 107,
+    "openSessions": 0,
+    "recentSessions": 209,
+    "events": 1280
+  },
+  "libraryServerMs": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "libraryClientMs": [
+    103.1,
+    108.3,
+    74.8,
+    69.5,
+    62,
+    90.1,
+    65.7,
+    55.6,
+    65.3,
+    44,
+    86.6,
+    67,
+    70.9,
+    70.1,
+    45.4,
+    91.4,
+    68.8,
+    52.8,
+    45.9,
+    67.3
+  ],
+  "pullClientMs": [
+    125.7,
+    95.3,
+    53.8,
+    68.1,
+    146.8,
+    43.4,
+    127.6,
+    64.6,
+    55.1
+  ],
+  "writtenTotal": 40206,
+  "opLog": [
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 172.2313999999999,
+      "rowsRead": 502,
+      "rowsWritten": 2501,
+      "reqBytes": 167025,
+      "resBytes": 147,
+      "at": "2026-11-13T17:01:54.437Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 171.89999999999998,
+      "rowsRead": 502,
+      "rowsWritten": 2501,
+      "reqBytes": 166963,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:54.612Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 112.32379999999989,
+      "rowsRead": 13,
+      "rowsWritten": 56,
+      "reqBytes": 3751,
+      "resBytes": 143,
+      "at": "2026-11-13T17:01:54.784Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 148.65920000000006,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 142415,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:54.897Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 152.43579999999997,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 142404,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.048Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 61.37040000000002,
+      "rowsRead": 16,
+      "rowsWritten": 57,
+      "reqBytes": 3998,
+      "resBytes": 143,
+      "at": "2026-11-13T17:01:55.201Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 168.75970000000007,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 143390,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.265Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 103.78950000000009,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 143366,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.436Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 94.8886,
+      "rowsRead": 282,
+      "rowsWritten": 1121,
+      "reqBytes": 80492,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.541Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 125.01890000000003,
+      "rowsRead": 280,
+      "rowsWritten": 1947,
+      "reqBytes": 111235,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.639Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 145.86059999999998,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305168,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.769Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 156.75599999999986,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305186,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:55.917Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 129.55009999999993,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305172,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.077Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 165.15380000000005,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305156,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.210Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 133.89169999999967,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305142,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.376Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 144.27029999999968,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305126,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.511Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 151.11000000000013,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305148,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.658Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 120.26479999999992,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305117,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.811Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 117.70610000000033,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305132,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:56.935Z"
+    },
+    {
+      "op": "seed",
+      "path": "/push",
+      "clientMs": 131.04070000000002,
+      "rowsRead": 502,
+      "rowsWritten": 2001,
+      "reqBytes": 305052,
+      "resBytes": 148,
+      "at": "2026-11-13T17:01:57.057Z"
+    },
+    {
+      "op": "library-cold",
+      "path": "/library",
+      "clientMs": 103.08819999999832,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.234Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 108.32249999999476,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.338Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 74.7560999999987,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.447Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 69.47170000000187,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.523Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 62.02700000000186,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.593Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 90.07979999999952,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.658Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 65.68360000000393,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.750Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 55.613100000002305,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.817Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 65.32499999999709,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.873Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 43.98449999999866,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.940Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 86.6275999999998,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:27.985Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 67.02729999999428,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.072Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 70.92160000000149,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.139Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 70.10789999999542,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.211Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 45.42160000000149,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.282Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 91.3614000000016,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.328Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 68.75050000000192,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.422Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 52.77089999999589,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.492Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 45.93829999999434,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.547Z"
+    },
+    {
+      "op": "library",
+      "path": "/library",
+      "clientMs": 67.27900000000227,
+      "rowsRead": 11207,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 207547,
+      "at": "2026-11-13T17:02:28.594Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 125.73359999999957,
+      "rowsRead": 4282,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 620965,
+      "at": "2026-11-13T17:02:28.664Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 95.28870000000461,
+      "rowsRead": 3292,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 338129,
+      "at": "2026-11-13T17:02:28.794Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 53.77639999999519,
+      "rowsRead": 2306,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 310474,
+      "at": "2026-11-13T17:02:28.892Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 68.12410000000091,
+      "rowsRead": 1586,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 476466,
+      "at": "2026-11-13T17:02:28.948Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 146.81630000000587,
+      "rowsRead": 1005,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 621422,
+      "at": "2026-11-13T17:02:29.018Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 43.35160000000178,
+      "rowsRead": 1005,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 621405,
+      "at": "2026-11-13T17:02:29.168Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 127.62919999999576,
+      "rowsRead": 1005,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 621356,
+      "at": "2026-11-13T17:02:29.213Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 64.55639999999403,
+      "rowsRead": 1005,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 621333,
+      "at": "2026-11-13T17:02:29.344Z"
+    },
+    {
+      "op": "pull1000",
+      "path": "/pull",
+      "clientMs": 55.146099999998114,
+      "rowsRead": 587,
+      "rowsWritten": 0,
+      "reqBytes": 0,
+      "resBytes": 362223,
+      "at": "2026-11-13T17:02:29.410Z"
+    },
+    {
+      "op": "push100",
+      "path": "/push",
+      "clientMs": 73.22600000000239,
+      "rowsRead": 301,
+      "rowsWritten": 201,
+      "reqBytes": 22910,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:29.539Z"
+    },
+    {
+      "op": "push100",
+      "path": "/push",
+      "clientMs": 68.72839999999997,
+      "rowsRead": 301,
+      "rowsWritten": 201,
+      "reqBytes": 22910,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:29.612Z"
+    },
+    {
+      "op": "push100",
+      "path": "/push",
+      "clientMs": 81.80219999999827,
+      "rowsRead": 301,
+      "rowsWritten": 201,
+      "reqBytes": 22910,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:29.681Z"
+    },
+    {
+      "op": "push100",
+      "path": "/push",
+      "clientMs": 78.33110000000306,
+      "rowsRead": 301,
+      "rowsWritten": 201,
+      "reqBytes": 22910,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:29.764Z"
+    },
+    {
+      "op": "push200",
+      "path": "/push",
+      "clientMs": 105.300900000002,
+      "rowsRead": 602,
+      "rowsWritten": 401,
+      "reqBytes": 45810,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:29.843Z"
+    },
+    {
+      "op": "push200",
+      "path": "/push",
+      "clientMs": 73.75630000000092,
+      "rowsRead": 602,
+      "rowsWritten": 401,
+      "reqBytes": 45810,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:29.950Z"
+    },
+    {
+      "op": "push200",
+      "path": "/push",
+      "clientMs": 92.39080000000104,
+      "rowsRead": 602,
+      "rowsWritten": 401,
+      "reqBytes": 45810,
+      "resBytes": 147,
+      "at": "2026-11-13T17:02:30.025Z"
+    },
+    {
+      "op": "push500",
+      "path": "/push",
+      "clientMs": 112.39509999999427,
+      "rowsRead": 1502,
+      "rowsWritten": 1001,
+      "reqBytes": 114510,
+      "resBytes": 150,
+      "at": "2026-11-13T17:02:30.120Z"
+    },
+    {
+      "op": "push500",
+      "path": "/push",
+      "clientMs": 135.2852999999959,
+      "rowsRead": 1502,
+      "rowsWritten": 1001,
+      "reqBytes": 114510,
+      "resBytes": 150,
+      "at": "2026-11-13T17:02:30.235Z"
+    }
+  ],
+  "table": [
+    [
+      "migración inicial (DDL)",
+      "47",
+      "42",
+      "456.7",
+      "0",
+      ""
+    ],
+    [
+      "siembra push×500: games (1011 filas, 3 lotes)",
+      "1017",
+      "5058",
+      "456.5",
+      "0",
+      "5 esc/fila; lote máx 167025 B, 172.2 ms"
+    ],
+    [
+      "siembra push×500: playthroughs (1014 filas, 3 lotes)",
+      "1020",
+      "4059",
+      "362.5",
+      "0",
+      "4 esc/fila; lote máx 142415 B, 152.4 ms"
+    ],
+    [
+      "siembra push×500: state_events (1280 filas, 3 lotes)",
+      "1286",
+      "5123",
+      "367.4",
+      "0",
+      "4 esc/fila; lote máx 143390 B, 168.8 ms"
+    ],
+    [
+      "siembra push×500: sessions (278 filas, 1 lotes)",
+      "280",
+      "1947",
+      "125",
+      "0",
+      "7 esc/fila; lote máx 111235 B, 125 ms"
+    ],
+    [
+      "siembra push×500: achievements (5000 filas, 10 lotes)",
+      "5020",
+      "20010",
+      "1395.6",
+      "0",
+      "4 esc/fila; lote máx 305186 B, 165.2 ms"
+    ],
+    [
+      "siembra push×500: TOTAL",
+      "8623",
+      "36197",
+      "2707",
+      "",
+      ""
+    ],
+    [
+      "biblioteca (mejor de 20)",
+      "11207",
+      "0",
+      "67.3",
+      "0",
+      "1011 juegos, 208 KB; server ms 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+    ],
+    [
+      "pull página 1 (limit 1000)",
+      "4282",
+      "0",
+      "125.7",
+      "0",
+      "1000 filas, 621 KB"
+    ],
+    [
+      "pull página 2 (limit 1000)",
+      "3292",
+      "0",
+      "95.3",
+      "0",
+      "1000 filas, 338 KB"
+    ],
+    [
+      "pull página 3 (limit 1000)",
+      "2306",
+      "0",
+      "53.8",
+      "0",
+      "1000 filas, 310 KB"
+    ],
+    [
+      "pull página 4 (limit 1000)",
+      "1586",
+      "0",
+      "68.1",
+      "0",
+      "1000 filas, 476 KB"
+    ],
+    [
+      "pull página 5 (limit 1000)",
+      "1005",
+      "0",
+      "146.8",
+      "0",
+      "1000 filas, 621 KB"
+    ],
+    [
+      "pull página 6 (limit 1000)",
+      "1005",
+      "0",
+      "43.4",
+      "0",
+      "1000 filas, 621 KB"
+    ],
+    [
+      "pull página 7 (limit 1000)",
+      "1005",
+      "0",
+      "127.6",
+      "0",
+      "1000 filas, 621 KB"
+    ],
+    [
+      "pull página 8 (limit 1000)",
+      "1005",
+      "0",
+      "64.6",
+      "0",
+      "1000 filas, 621 KB"
+    ],
+    [
+      "pull página 9 (limit 1000)",
+      "587",
+      "0",
+      "55.1",
+      "0",
+      "583 filas, 362 KB"
+    ],
+    [
+      "push 100 filas (edición logros) #1",
+      "301",
+      "201",
+      "73.2",
+      "0",
+      "accepted 100, unchanged 0, 23 KB"
+    ],
+    [
+      "push 100 filas (edición logros) #2",
+      "301",
+      "201",
+      "68.7",
+      "0",
+      "accepted 100, unchanged 0, 23 KB"
+    ],
+    [
+      "push 100 filas (edición logros) #3",
+      "301",
+      "201",
+      "81.8",
+      "0",
+      "accepted 100, unchanged 0, 23 KB"
+    ],
+    [
+      "push 100 filas (edición logros) #4",
+      "301",
+      "201",
+      "78.3",
+      "0",
+      "accepted 100, unchanged 0, 23 KB"
+    ],
+    [
+      "push 200 filas (edición logros) #1",
+      "602",
+      "401",
+      "105.3",
+      "0",
+      "accepted 200, unchanged 0, 46 KB"
+    ],
+    [
+      "push 200 filas (edición logros) #2",
+      "602",
+      "401",
+      "73.8",
+      "0",
+      "accepted 200, unchanged 0, 46 KB"
+    ],
+    [
+      "push 200 filas (edición logros) #3",
+      "602",
+      "401",
+      "92.4",
+      "0",
+      "accepted 200, unchanged 0, 46 KB"
+    ],
+    [
+      "push 500 filas (edición logros) #1",
+      "1502",
+      "1001",
+      "112.4",
+      "0",
+      "accepted 500, unchanged 0, 115 KB"
+    ],
+    [
+      "push 500 filas (edición logros) #2",
+      "1502",
+      "1001",
+      "135.3",
+      "0",
+      "accepted 500, unchanged 0, 115 KB"
+    ]
+  ]
+}

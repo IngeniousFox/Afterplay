@@ -1,0 +1,13 @@
+{
+  "name": "spike-hub-do",
+  "private": true,
+  "type": "module",
+  "description": "Spike S-01/S-03 (docs/AFTERPLAY-2.0.md §20.1): Drizzle sobre el SQLite de un Durable Object, solo en local. Sin dependencias propias: reutiliza node_modules de la raíz (drizzle-orm, drizzle-kit, @libsql/client, tsx) y wrangler de worker/node_modules.",
+  "scripts": {
+    "generate": "node ../../node_modules/drizzle-kit/bin.cjs generate --config drizzle.hub.config.ts && node ../../node_modules/drizzle-kit/bin.cjs generate --config drizzle.client.config.ts",
+    "dev": "..\\..\\worker\\node_modules\\.bin\\wrangler dev --port 8799 --ip 127.0.0.1",
+    "libsql": "..\\..\\node_modules\\.bin\\tsx scripts/libsql-shared-schema.ts",
+    "bench": "..\\..\\node_modules\\.bin\\tsx scripts/bench.ts",
+    "typecheck": "..\\..\\node_modules\\.bin\\tsc -p tsconfig.json"
+  }
+}
