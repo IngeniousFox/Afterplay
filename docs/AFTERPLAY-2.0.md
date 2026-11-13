@@ -1777,7 +1777,7 @@ Mover las reglas a `shared/domain` como funciones puras (§15.2), con sus tests.
 
 #### §20.2.1 Estado de la fase 1 (2026-11-13)
 
-Hecha la parte de reglas; falta la de tipos.
+Hechas las reglas, los tipos propios y las copias del renderer. Queda una decisión de producto (el recuento de sesiones) y tres fallos anotados.
 
 | Regla                                                                   | Módulo en `src/shared/domain/` | Quién lo usa                                                              |
 | ----------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
@@ -1789,7 +1789,7 @@ Hecha la parte de reglas; falta la de tipos.
 | Orden de "Up next", validez de un pin del móvil, vista previa del buzón | `planOrder.ts`                 | `reorderUpNext`, drenado del buzón, Worker (buzón), PWA                   |
 
 - **Tamaño.** Las cuatro consultas de lectura pasan de 1.510 líneas a 844; `resolveIterationForTimer` (107 líneas) desaparece del Worker. En conjunto: 730 líneas añadidas y 2.339 quitadas, sin contar los módulos y tests nuevos.
-- **Comprobado.** Lint y tipos de los cinco proyectos sin errores; 1.147 tests en verde. **Sobre una copia de los datos reales**, las consultas nuevas devuelven exactamente lo mismo que las anteriores: 346 juegos de biblioteca, 665 planeados y las 1.011 fichas, en el escritorio y en el Worker, sin una sola diferencia.
+- **Comprobado.** Lint y tipos de los cinco proyectos sin errores; 1.162 tests en verde; build y 37 casos de Playwright (Plan, Stats, lógica, notas, Steam App ID, biblioteca) en verde tras la segunda pasada. **Sobre una copia de los datos reales**, las consultas nuevas devuelven exactamente lo mismo que las anteriores: 346 juegos de biblioteca, 665 planeados y las 1.011 fichas, en el escritorio y en el Worker, sin una sola diferencia.
 - **Rendimiento.** `getGames` no empeora (19,7 ms frente a 19,9-22,4 en el banco sintético de 300 juegos y 18.000 sesiones).
 
 Lo que cambia de comportamiento, todo en el móvil:
@@ -1801,10 +1801,14 @@ Lo que cambia de comportamiento, todo en el móvil:
 
 Excepción que se mantiene: el Worker decide "en vivo" con la frescura del cronómetro y el escritorio con "toda sesión abierta". Unificarlo haría que un cronómetro olvidado saliera en vivo en el móvil. Se resuelve de verdad con la señal de vida de §10.3.
 
+Segunda pasada (tipos y renderer):
+
+- **Tipos propios (F-42).** `src/shared/dto.ts` declara a mano las entidades (`GameRow`, `Iteration`, `Session`, `StateEvent`, `SpendEvent`, `Emulator`, `SaveBackupRow`) y los inputs del IPC; `shared/types.ts` los reexporta. Ni el renderer ni la PWA cargan ya `schema.ts`. `src/main/db/dtoSync.ts` hace fallar la compilación si un tipo y su tabla se separan, en los dos sentidos.
+- **Parches cerrados.** `UpdateGamePatch` pasa de "cualquier columna de `games`" a diez campos (título, carátula, hero, id de SteamGridDB, notas, ejecutable, carpeta y tamaño de instalación, endless, emulado). `games:update` descarta en ejecución cualquier otra clave (`src/main/ipc/gamePatch.ts`), con test contra una base real. Solo se filtran claves, no valores: la validación completa del contrato es de la fase 7 (§20.8). Lo que el main escribe por su cuenta (IGDB, notas, partidas guardadas) usa tipos internos en `src/main/db/writeTypes.ts`.
+- **Copias del renderer.** `renderer/src/lib/plan.ts` reparte las estanterías con `shared/planShelves` y solo añade la lente sobre la cola; `statsTotals.ts` saca las horas de un año de `hoursByGameInYear`. Sin cambios de comportamiento. Los casos del Plan que vivían en el test de paridad son ahora tests de la regla compartida.
+
 Pendiente de la fase 1:
 
-- **Tipos propios.** `shared/types.ts` sigue reexportando los tipos del esquema (F-42).
-- **Copias en el renderer**, que esta pasada no tocó: `renderer/src/lib/plan.ts` (estanterías y deuda del Plan) y `statsTotals.ts` (horas por año).
 - **La discrepancia de recuento de sesiones** entre la portada y la pantalla de Sesiones. Causa encontrada: la portada suma solo juegos de la biblioteca y Sesiones cuenta también las de juegos devueltos al Plan. El escritorio tiene la misma asimetría. Arreglarla es elegir una sola población, y eso es una decisión de producto. Con los datos de hoy no se manifiesta: ningún juego planeado tiene sesiones.
 - Fallos vistos y no tocados: el ancla de las horas manuales en la biblioteca incluye sesiones del modelo v1 y la ficha no; las sesiones de la ficha no tienen orden explícito; el Worker rechaza un reorden con ids repetidos y el escritorio lo acepta.
 
