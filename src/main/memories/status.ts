@@ -11,7 +11,7 @@ import type { LatestMemory } from '../db/queries/memories/getLatestMemories';
 import { getLatestMemories } from '../db/queries/memories/getLatestMemories';
 import type { MemoryFacts } from '../db/queries/memories/getMemoryFacts';
 import { getMemoryFacts } from '../db/queries/memories/getMemoryFacts';
-import { MODEL, PROMPT_VERSION } from './generate';
+import { CURRENT_FAMILY_MODELS, PROMPT_VERSION } from './generate';
 import { chapterHash, legacyChapterHash } from './hash';
 
 // El estado del sistema de recaps: qué periodos cerrados con actividad están
@@ -106,7 +106,13 @@ export const computeMemoriesOverview = async (
     const sealed =
       chapterHash(chapter) === existing.sourceHash ||
       legacyChapterHash(chapter) === existing.sourceHash;
-    if (sealed && existing.promptVersion === PROMPT_VERSION && existing.model === MODEL) {
+    if (
+      sealed &&
+      existing.promptVersion === PROMPT_VERSION &&
+      // Vale el modelo actual y los anteriores de su misma familia (ver
+      // CURRENT_FAMILY_MODELS): subir de versión no desactualiza lo escrito.
+      CURRENT_FAMILY_MODELS.includes(existing.model)
+    ) {
       current++;
     } else {
       stale.push(scope);

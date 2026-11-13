@@ -11,7 +11,7 @@ import { chapterHash } from './hash';
 // mes y otra por año en régimen normal (~13 al año, céntimos) — el resultado
 // se guarda en la DB (sincroniza por Turso) y se lee de ahí para siempre.
 //
-// Sonnet 5 y sin herramientas. La lección de costes de las curiosidades
+// Sonnet 5.5 y sin herramientas. La lección de costes de las curiosidades
 // sigue cocinada — sin búsqueda web (no hay nada que buscar, los hechos
 // vienen ya calculados) y prompt pequeño — y eso es justo lo que hace a
 // Sonnet asequible AQUÍ: lo que arruinó las curiosidades fue la búsqueda
@@ -20,17 +20,39 @@ import { chapterHash } from './hash';
 // año normal (13 llamadas) a céntimos. Se cambió desde Haiku porque Haiku
 // fallaba en fidelidad: derivaba ordinales mal y corría fechas un día.
 //
-// OJO al contrato de la API de Sonnet 5 (distinto del de Haiku 4.5):
+// OJO al contrato de la API de Sonnet 5.5 (distinto del de Haiku 4.5):
 //   · `temperature` no-default devuelve 400 — se omite y se gobierna con el
 //     prompt (las reglas de exactitud del system prompt).
-//   · El thinking va ACTIVADO por defecto (adaptativo). Se deja adaptativo
-//     con effort 'low' — para una narración de 2k tokens piensa poco o nada,
-//     y la guía de migración lo recomienda sobre apagarlo del todo.
-export const MODEL = 'claude-sonnet-5';
-// Con hueco para el thinking adaptativo (comparte tope con la respuesta) y
-// para el tokenizador nuevo de Sonnet 5 (~30% más tokens por el mismo
-// texto). Es un tope, no un gasto: solo se paga lo generado.
-const MAX_TOKENS = 4_096;
+//   · El thinking va ACTIVADO por defecto (adaptativo) y en Sonnet 5.5 ya no
+//     se puede apagar con `disabled` (400). Se deja adaptativo y se gobierna
+//     con el esfuerzo, que es justo lo que ya se hacía.
+//   · Forzar una herramienta (`tool_choice` any/tool) devuelve 400. Aquí no
+//     hay herramientas, pero quien las añada tiene que saberlo.
+//   · La respuesta puede empezar por bloques `thinking` vacíos: se lee por
+//     tipo de bloque, nunca por posición.
+//
+// Sonnet 5.5 desde noviembre de 2026 (antes Sonnet 5): misma familia, mismo
+// precio y mismo tokenizador, así que ni el coste ni el tamaño del prompt
+// cambian. Lo que sí cambia es que los niveles de esfuerzo están
+// RECALIBRADOS: 'medium' aquí no piensa lo mismo que 'medium' en Sonnet 5.
+export const MODEL = 'claude-sonnet-5-5';
+
+// Modelos de la misma familia cuyos recaps se siguen dando por buenos.
+//
+// status.ts marca como desactualizado un recap escrito con OTRO modelo, y
+// tiene sentido cuando el cambio es de familia (Haiku -> Sonnet cambió la
+// fidelidad, que era el motivo del cambio). Subir de versión dentro de la
+// misma familia no es eso: el prompt es el mismo y la prosa ya escrita sigue
+// siendo correcta. Sin esta lista, el cambio a Sonnet 5.5 habría marcado de
+// golpe TODOS los recaps existentes como desactualizados — más de cien
+// regeneraciones de pago ofrecidas para reescribir textos que ya se han
+// leído. Los recaps nuevos se escriben siempre con MODEL.
+export const CURRENT_FAMILY_MODELS: readonly string[] = [MODEL, 'claude-sonnet-5'];
+
+// Con hueco para el thinking adaptativo (comparte tope con la respuesta): de
+// 'medium' en adelante Sonnet 5.5 piensa un poco antes de casi cualquier
+// respuesta. Es un tope, no un gasto: solo se paga lo generado.
+const MAX_TOKENS = 8_192;
 
 // Versionado del prompt (§3.4). No es solo trazabilidad: un recap escrito
 // con una versión anterior cuenta como desactualizado en Ajustes (status.ts)
@@ -49,8 +71,8 @@ const MAX_TOKENS = 4_096;
 // nunca deriva, solo redacta: ahora el "último final del periodo" va YA
 // CALCULADO y etiquetado en los hechos, y el prompt prohíbe inventarse
 // primeros/últimos/rachas sin etiqueta. (En esta misma tanda el modelo pasó
-// de Haiku a Sonnet 5 — ver MODEL; el cambio de modelo también cuenta como
-// desactualización, ver status.ts.)
+// de Haiku a Sonnet 5 — ver MODEL; el cambio de FAMILIA de modelo también
+// cuenta como desactualización, ver status.ts y CURRENT_FAMILY_MODELS.)
 //
 // v4 (2026-07-31): con Sonnet 5 a effort 'low', el mismo año de 19 finales
 // volvió a fallar — esta vez CONTANDO la lista mal ("eighteen" en vez de
@@ -324,7 +346,7 @@ export const generateMemoryForChapter = async (chapter: Chapter): Promise<boolea
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('Anthropic API key not configured');
 
-  // Sin `temperature`: Sonnet 5 rechaza valores no-default (400). La
+  // Sin `temperature`: Sonnet 5.5 rechaza valores no-default (400). La
   // fidelidad a los hechos se gobierna desde el prompt (reglas de exactitud
   // + ordinales precalculados), que además es la palanca que sí escala.
   const response = await getClient(apiKey).messages.create({
@@ -336,6 +358,11 @@ export const generateMemoryForChapter = async (chapter: Chapter): Promise<boolea
     // recorta verificación en tareas moderadamente complejas, y contar bien
     // una lista es justo eso. 'medium' cuesta lo mismo por token — el coste
     // real es que piense un poco más, y aquí hablamos de céntimos al año.
+    //
+    // En Sonnet 5.5 los niveles están recalibrados y para generar contenido
+    // la guía sugiere empezar en 'low'. Se mantiene 'medium' sin haber vuelto
+    // a comparar niveles: bajar exige generar recaps de prueba y comprobar a
+    // mano que no vuelve a contar mal, y lo que se ahorraría son céntimos.
     output_config: { effort: 'medium' },
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildUserPrompt(chapter) }],

@@ -16,21 +16,37 @@ import { getWikipediaArticle } from './wikipedia';
 // entrada, y encima Sonnet 5 piensa por defecto (tokens de razonamiento a
 // precio de salida). Un solo juego llegó a más de un euro. Sin búsqueda, el
 // prompt es pequeño y cada juego cuesta una fracción de céntimo.
-const MODEL = 'claude-haiku-4-5';
+//
+// Haiku 5.5 desde noviembre de 2026 (antes Haiku 4.5): misma familia, mejor
+// siguiendo instrucciones y unas diez veces más barato por token ($0,10 /
+// $0,50 por millón frente a $1 / $5, mientras el prompt no pase de 100.000
+// tokens — y el artículo va recortado a 25.000 caracteres, muy por debajo).
+// Su tokenizador cuenta ~30 % más tokens para el mismo texto; aun así sale a
+// una fracción de lo de antes.
+const MODEL = 'claude-haiku-5-5';
 
-// Haiku 4.5 NO piensa salvo que se le pida explícitamente (thinking:
-// {enabled, budget_tokens}) — omitir el parámetro, como aquí, significa "sin
-// pensar", así que no hace falta margen para razonamiento. Sobra de sitio
-// para un array de hasta 6 frases cortas.
-const MAX_TOKENS = 2_048;
+// OJO al contrato de Haiku 5.5, que NO es el de Haiku 4.5:
+//   · PIENSA POR DEFECTO (thinking adaptativo) aunque no se le pida, y ese
+//     razonamiento cuenta dentro de max_tokens. Con el tope de antes (2.048,
+//     calculado para "no piensa") podía comerse el margen y cortar la
+//     respuesta antes de escribir una sola frase — y aquí una respuesta
+//     truncada es un error que deja el juego pendiente y se vuelve a pagar.
+//     Por eso el tope sube y el esfuerzo se fija en 'low' (ver la llamada).
+//   · El pensamiento NO se apaga con `thinking: disabled` ni se acota con
+//     `budget_tokens` (400): la palanca es `output_config.effort`.
+//   · `temperature`, `top_p` y `top_k` no-default devuelven 400. No se mandan.
+//   · La respuesta puede EMPEZAR por bloques `thinking` vacíos: se lee por
+//     tipo de bloque, nunca por posición (ya se hacía).
+// Es un tope, no un gasto: solo se paga lo generado.
+const MAX_TOKENS = 4_096;
 
 // Prompt caching: mirado y descartado para esta tarea. El mínimo cacheable en
-// Haiku 4.5 es 4096 tokens — el más alto de toda la familia — y el system
-// prompt de aquí abajo son ~300 tokens, muy por debajo. Lo único que sí pesa
-// (el artículo de Wikipedia) es DISTINTO en cada juego, así que no hay ningún
-// prefijo compartido que reutilizar entre llamadas. Poner cache_control no
-// rompería nada, pero tampoco ahorraría un céntimo: el bloque nunca llegaría
-// al mínimo y Anthropic lo ignora en silencio.
+// Haiku 5.5 son 512 tokens (en Haiku 4.5 eran 4.096) y el system prompt de
+// aquí abajo ronda los 400 con el tokenizador nuevo: sigue sin llegar. Lo
+// único que sí pesa (el artículo de Wikipedia) es DISTINTO en cada juego, así
+// que no hay ningún prefijo compartido que reutilizar entre llamadas. Si el
+// system prompt crece por encima del mínimo, entonces sí merecerá la pena
+// ponerle cache_control: el backfill hace cientos de llamadas seguidas.
 
 // Un cliente por clave, reutilizado entre llamadas: el backfill hace cientos
 // de peticiones seguidas y construir uno nuevo cada vez tira la conexión y
@@ -113,12 +129,24 @@ const callClaude = async (
   const response = await getClient(apiKey).messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,
+    // 'low' es el nivel para peticiones simples y de mucho volumen, y esto lo
+    // es: extraer unas frases de un texto que ya viene dado. A este nivel el
+    // modelo piensa poco o nada. Haiku 4.5 hacía este mismo trabajo sin
+    // pensar en absoluto, así que 'low' no baja el listón. El valor por
+    // defecto del modelo es 'medium': se fija a mano para no pagar de más.
+    output_config: { effort: 'low' },
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildUserPrompt(game, article) }],
   });
 
   // Un rechazo SÍ es una respuesta: el juego se marca como hecho y se queda
   // callado, en vez de reintentarse en cada pasada.
+  //
+  // Haiku 5.5 trae clasificadores de seguridad que Haiku 4.5 no tenía, y
+  // pueden negarse también con contenido inocente (un juego sobre hackers o
+  // sobre una pandemia). El criterio no cambia —no se repaga la pregunta en
+  // cada pasada—, pero un juego mudo por esto se queda mudo. Este modelo no
+  // admite el parámetro `fallbacks`: no hay a quién reintentar en el servidor.
   if (response.stop_reason === 'refusal') return [];
 
   // Truncada a mitad de JSON. No se intenta rescatar el trozo: se trata como
