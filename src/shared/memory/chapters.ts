@@ -12,10 +12,13 @@
 //   · Sesiones de emulador sin asignar (iterationId null) ni llegan aquí:
 //     no pertenecen a ningún juego, quien alimenta esta lib ya las filtró.
 //
-// Lib PURA, como moments.ts: sin DB, sin Electron, testable a pelo.
+// Lib PURA, como moments.ts: sin DB, sin Electron, testable a pelo. Genérica en
+// la representación del id (ver entityIds.ts) solo en los TIPOS: qué entra en
+// la firma canónica y en qué orden no cambia con ids numéricos, que es lo que
+// mantiene casando los recaps ya sellados.
 
 import { compareByCreation, compareEntityIds } from '../entityIds';
-import type { GameId } from '../entityIds';
+import type { EntityId, EntityIdLike, GameId } from '../entityIds';
 import { isAddedAtArtifact } from '../playthroughState';
 import type { MemorySession, Moment } from './moments';
 
@@ -40,8 +43,8 @@ export const scopeRange = (scope: ChapterScope): { start: Date; end: Date } =>
       }
     : { start: new Date(scope.year, 0, 1), end: new Date(scope.year + 1, 0, 1) };
 
-export type ChapterGameFacts = {
-  gameId: GameId;
+export type ChapterGameFacts<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   title: string;
   // Total del periodo: medidas + registradas a mano. Las manuales van también
   // desglosadas en manualHours para que el prompt pueda decir "logged by
@@ -58,14 +61,14 @@ export type ChapterGameFacts = {
 // por eso el capítulo tiene que contarlas igual: su panel de historia se
 // pinta justo al lado de esas carátulas. null = playthrough sin fechas, esas
 // horas no pertenecen a ningún periodo.
-export type ManualBlock = {
-  gameId: GameId;
+export type ManualBlock<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   hours: number;
   anchor: Date | null;
 };
 
-export type ChapterCompletion = {
-  gameId: GameId;
+export type ChapterCompletion<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   title: string;
   occurredAt: Date;
 };
@@ -77,8 +80,8 @@ export type ChapterCompletion = {
 // que no aparecían como generables en ningún sitio, aunque el Journey sí les
 // abría página. Un cambio de estado ES historia: decidir empezar o soltar un
 // juego dice tanto como las horas.
-export type ChapterStateChange = {
-  gameId: GameId;
+export type ChapterStateChange<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   title: string;
   type: string;
   occurredAt: Date;
@@ -86,8 +89,8 @@ export type ChapterStateChange = {
 
 // Evento de estado con lo mínimo que un capítulo necesita — estructural, para
 // que StateEventSummary (renderer) y las filas del main encajen sin adaptar.
-export type ChapterStateEvent = {
-  gameId: GameId;
+export type ChapterStateEvent<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   type: string;
   occurredAt: Date;
   // Cuándo se dio de alta el juego, lo único que hace falta para reconocer el
@@ -125,15 +128,15 @@ export type ChapterStateEvent = {
 // así que su firma cambia y su recap sale obsoleto la primera vez que se mira.
 // Es correcto —esa prosa narraba algo que ya no cuenta como hecho—, pero si
 // aparece una tanda de obsoletos sin haber tocado nada, viene de aquí.
-export const isMeaningfulStateEvent = (event: ChapterStateEvent): boolean =>
+export const isMeaningfulStateEvent = (event: ChapterStateEvent<EntityIdLike>): boolean =>
   event.type !== 'plan_to_play' &&
   !isAddedAtArtifact(event.occurredAt, event.addedAt, event.promotedAt);
 
 // Un desbloqueo tal como llega del main (getMemoryFacts): ya FUNDIDO por
 // logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de
 // LOGROS-IDEAS.md: una fecha de rescate no fabrica historia en un mes.
-export type ChapterUnlock = {
-  gameId: GameId;
+export type ChapterUnlock<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   name: string;
   // La descripción es el hecho NARRATIVO: "Reached the summit" cuenta la
   // escalada. Puede faltar (ocultos sin fuente de descripción).
@@ -146,7 +149,7 @@ export type ChapterUnlock = {
 // hechos cerrados y un puñado de destacados citables — jamás la lista entera
 // (las lecciones v3/v4 del prompt: sobre listas largas el modelo cuenta y
 // deriva mal).
-export type ChapterAchievements = {
+export type ChapterAchievements<Id extends EntityIdLike = EntityId> = {
   total: number;
   rareCount: number;
   // Hasta media docena, los más raros primero — cada uno con lo que el
@@ -154,7 +157,7 @@ export type ChapterAchievements = {
   // logro puede ser de un juego SIN sesiones en el periodo (desbloqueado en
   // otro PC, o jugando sin la app) y entonces no está en chapter.games.
   highlights: {
-    gameId: GameId;
+    gameId: GameId<Id>;
     gameTitle: string;
     name: string;
     description: string | null;
@@ -162,7 +165,7 @@ export type ChapterAchievements = {
   }[];
 };
 
-export type Chapter = {
+export type Chapter<Id extends EntityIdLike = EntityId> = {
   scopeType: 'month' | 'year';
   scopeKey: string;
   year: number;
@@ -177,26 +180,26 @@ export type Chapter = {
   // en este periodo) — el prompt la nombra aparte, nunca como sesiones.
   manualHours: number;
   // Ordenados por horas desc — games[0] es el dominante.
-  games: ChapterGameFacts[];
-  dominant: ChapterGameFacts | null;
-  completions: ChapterCompletion[];
+  games: ChapterGameFacts<Id>[];
+  dominant: ChapterGameFacts<Id> | null;
+  completions: ChapterCompletion<Id>[];
   // Los demás cambios de estado del periodo (ver ChapterStateChange), en
   // orden cronológico. Los 'completed' NO se repiten aquí: ya están arriba.
-  stateChanges: ChapterStateChange[];
+  stateChanges: ChapterStateChange<Id>[];
   // Los momentos que cayeron dentro del periodo. Se derivan FUERA (sobre la
   // historia completa, ver moments.ts) y aquí solo se filtran: un récord no
   // se puede calcular mirando un mes suelto.
-  moments: Moment[];
+  moments: Moment<Id>[];
   // Los logros del periodo, curados (ver ChapterAchievements). null = ninguno
   // con fecha fiable dentro del rango. Alimenta el prompt (generate.ts) pero
   // NO sella el capítulo todavía: la firma que se sella hoy no los mira, así
   // que un desbloqueo que aparezca meses después en un mes viejo no marca su
   // recap como obsoleto. Está a medio camino a propósito y el porqué está
   // contado en canonicalChapterFacts — leerlo antes de "arreglarlo".
-  achievements: ChapterAchievements | null;
+  achievements: ChapterAchievements<Id> | null;
 };
 
-const isMeasured = (session: MemorySession): boolean =>
+const isMeasured = (session: MemorySession<EntityIdLike>): boolean =>
   !session.isManual && session.endedAt !== null && (session.durationSec ?? 0) > 0;
 
 const inRange = (date: Date, start: Date, end: Date): boolean => date >= start && date < end;
@@ -215,20 +218,20 @@ const byCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 // sesiones medidas, ni completados, ni horas manuales ancladas dentro): un
 // mes vacío no produce capítulo, igual que no producirá recap (§3.4 — sin
 // historia no se inventa nada).
-export const buildChapter = (
+export const buildChapter = <Id extends EntityIdLike>(
   scope: ChapterScope,
-  sessions: MemorySession[],
-  events: ChapterStateEvent[],
-  titlesByGame: ReadonlyMap<GameId, string>,
-  moments: Moment[],
+  sessions: MemorySession<Id>[],
+  events: ChapterStateEvent<Id>[],
+  titlesByGame: ReadonlyMap<GameId<Id>, string>,
+  moments: Moment<Id>[],
   now: Date,
-  manualBlocks: ManualBlock[] = [],
-  unlocks: ChapterUnlock[] = [],
-): Chapter | null => {
+  manualBlocks: ManualBlock<Id>[] = [],
+  unlocks: ChapterUnlock<Id>[] = [],
+): Chapter<Id> | null => {
   const { start, end } = scopeRange(scope);
-  const titleOf = (gameId: GameId): string => titlesByGame.get(gameId) ?? 'an untitled game';
+  const titleOf = (gameId: GameId<Id>): string => titlesByGame.get(gameId) ?? 'an untitled game';
 
-  const perGame = new Map<GameId, ChapterGameFacts>();
+  const perGame = new Map<GameId<Id>, ChapterGameFacts<Id>>();
   let hours = 0;
   let sessionCount = 0;
   let manualHours = 0;
@@ -277,7 +280,7 @@ export const buildChapter = (
   // su addedAt — el porqué, en isMeaningfulStateEvent.
   const realEvents = events.filter(isMeaningfulStateEvent);
 
-  const completions: ChapterCompletion[] = realEvents
+  const completions: ChapterCompletion<Id>[] = realEvents
     .filter((event) => event.type === 'completed' && inRange(event.occurredAt, start, end))
     .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
     .map((event) => ({
@@ -286,7 +289,7 @@ export const buildChapter = (
       occurredAt: event.occurredAt,
     }));
 
-  const stateChanges: ChapterStateChange[] = realEvents
+  const stateChanges: ChapterStateChange<Id>[] = realEvents
     .filter((event) => event.type !== 'completed' && inRange(event.occurredAt, start, end))
     .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
     .map((event) => ({
@@ -323,7 +326,7 @@ export const buildChapter = (
   const rareUnlocks = periodUnlocks.filter(
     (unlock) => unlock.globalPercent !== null && unlock.globalPercent < 10,
   );
-  const achievements: ChapterAchievements | null =
+  const achievements: ChapterAchievements<Id> | null =
     periodUnlocks.length === 0
       ? null
       : {
@@ -373,11 +376,11 @@ export const buildChapter = (
 // Todos los periodos CERRADOS con actividad, ascendentes — la lista contra la
 // que la detección automática y el backfill comparan lo ya generado (§3.3).
 // El periodo en curso queda fuera por definición de "cerrado".
-export const listClosedPeriodsWithActivity = (
-  sessions: MemorySession[],
-  events: ChapterStateEvent[],
+export const listClosedPeriodsWithActivity = <Id extends EntityIdLike>(
+  sessions: MemorySession<Id>[],
+  events: ChapterStateEvent<Id>[],
   now: Date,
-  manualBlocks: ManualBlock[] = [],
+  manualBlocks: ManualBlock<Id>[] = [],
 ): { months: ChapterScope[]; years: ChapterScope[] } => {
   // year*12+month — la clave comparable de meses que ya usa dateMath.ts en el
   // renderer (duplicada aquí porque shared no puede tirar del renderer).
@@ -472,8 +475,8 @@ const localDate = (date: Date): string =>
 //                        bloque de logros de aquí abajo.
 export type ChapterFactsGeneration = 'full' | 'noAchievements' | 'noDecisions';
 
-export const canonicalChapterFacts = (
-  chapter: Chapter,
+export const canonicalChapterFacts = <Id extends EntityIdLike>(
+  chapter: Chapter<Id>,
   generation: ChapterFactsGeneration | boolean = 'noAchievements',
 ): string => {
   // El parámetro nació booleano (`withStateChanges`) y hash.ts sigue llamando

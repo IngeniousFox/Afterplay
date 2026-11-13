@@ -1,5 +1,5 @@
 import { compareByCreation } from '../entityIds';
-import type { IterationId, StateEventId } from '../entityIds';
+import type { EntityId, EntityIdLike, IterationId, StateEventId } from '../entityIds';
 import { latestRealStateEvent, leavesEndDate } from '../playthroughState';
 import type { StateEvent } from '../types';
 import { resolveIterationHours, trackedSecondsOf } from './hours';
@@ -22,19 +22,26 @@ import { costPerHourOf, splitSpendByPlaythrough, totalSpendOf } from './spend';
 
 type StateType = StateEvent['type'];
 
-export type DetailIterationRow = { id: IterationId; manualTotalPlayed: number | null };
+// Las filas son genéricas también en la representación del id (ver
+// entityIds.ts): la ficha se deriva igual con los enteros del esquema 1.x que
+// con el texto del 2.0, porque todo lo que hace con un id es agrupar por él y
+// desempatar con compareByCreation.
+export type DetailIterationRow<Id extends EntityIdLike = EntityId> = {
+  id: IterationId<Id>;
+  manualTotalPlayed: number | null;
+};
 
-export type DetailSessionRow = {
-  iterationId: IterationId | null;
+export type DetailSessionRow<Id extends EntityIdLike = EntityId> = {
+  iterationId: IterationId<Id> | null;
   isManual: boolean;
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
 };
 
-export type DetailStateEventRow = {
-  id: StateEventId;
-  iterationId: IterationId;
+export type DetailStateEventRow<Id extends EntityIdLike = EntityId> = {
+  id: StateEventId<Id>;
+  iterationId: IterationId<Id>;
   type: StateType;
   occurredAt: Date;
   datePrecision: unknown;
@@ -42,15 +49,15 @@ export type DetailStateEventRow = {
 
 export type DetailSpendRow = { amount: number; occurredAt: Date };
 
-export type IterationEdge<E extends DetailStateEventRow> = Pick<
+export type IterationEdge<E extends DetailStateEventRow<EntityIdLike>> = Pick<
   E,
   'id' | 'occurredAt' | 'datePrecision'
 >;
 
 export type DerivedIteration<
-  I extends DetailIterationRow,
-  S extends DetailSessionRow,
-  E extends DetailStateEventRow,
+  I extends DetailIterationRow<EntityIdLike>,
+  S extends DetailSessionRow<EntityIdLike>,
+  E extends DetailStateEventRow<EntityIdLike>,
 > = {
   iteration: I;
   hours: number;
@@ -68,9 +75,9 @@ export type DerivedIteration<
 };
 
 export type DerivedGameDetail<
-  I extends DetailIterationRow,
-  S extends DetailSessionRow,
-  E extends DetailStateEventRow,
+  I extends DetailIterationRow<EntityIdLike>,
+  S extends DetailSessionRow<EntityIdLike>,
+  E extends DetailStateEventRow<EntityIdLike>,
 > = {
   iterations: DerivedIteration<I, S, E>[];
   totalHours: number;
@@ -86,7 +93,7 @@ export type DerivedGameDetail<
   firstPlanEvent: E | null;
 };
 
-const edgeOf = <E extends DetailStateEventRow>(event: E): IterationEdge<E> =>
+const edgeOf = <E extends DetailStateEventRow<EntityIdLike>>(event: E): IterationEdge<E> =>
   ({
     id: event.id,
     occurredAt: event.occurredAt,
@@ -96,7 +103,9 @@ const edgeOf = <E extends DetailStateEventRow>(event: E): IterationEdge<E> =>
 // El 'started' más temprano por fecha y, a igual fecha, por id. Es lo que
 // devolvía el `find` sobre el log ordenado por (occurredAt, id) asc de los dos
 // SELECTs; escrito explícito para que la regla no dependa de su ORDER BY.
-const firstStartedEvent = <E extends DetailStateEventRow>(events: readonly E[]): E | null => {
+const firstStartedEvent = <E extends DetailStateEventRow<EntityIdLike>>(
+  events: readonly E[],
+): E | null => {
   let first: E | null = null;
   for (const event of events) {
     if (event.type !== 'started') continue;
@@ -120,7 +129,9 @@ const firstStartedEvent = <E extends DetailStateEventRow>(events: readonly E[]):
 // fecha "porque una medición no se falsea" y con la que el móvil pinta un
 // instante exacto que nadie midió. Mismo criterio que Stats y
 // shared/memory/moments.ts.
-const firstMeasuredSessionAt = (sessions: readonly DetailSessionRow[]): Date | null => {
+const firstMeasuredSessionAt = (
+  sessions: readonly DetailSessionRow<EntityIdLike>[],
+): Date | null => {
   let earliest: Date | null = null;
   for (const session of sessions) {
     if (session.isManual) continue;
@@ -153,13 +164,17 @@ const groupBy = <T, K>(rows: readonly T[], keyOf: (row: T) => K | null): Map<K, 
 // cronómetro (isSessionLive, sobre shared/timerFreshness): la MISMA vara que el
 // barrido del PC, aplicada en la lectura.
 export const deriveGameDetail = <
-  I extends DetailIterationRow,
-  S extends DetailSessionRow,
-  E extends DetailStateEventRow,
+  Id extends EntityIdLike,
+  I extends DetailIterationRow<Id>,
+  S extends DetailSessionRow<Id>,
+  E extends DetailStateEventRow<Id>,
 >(input: {
-  iterations: readonly I[];
-  sessions: readonly S[];
-  stateEvents: readonly E[];
+  // La intersección con la fila mínima es para que TypeScript INFIERA `Id` de
+  // los argumentos (de una restricción no lo infiere) y así rechace mezclar
+  // filas de ids de texto con filas de ids numéricos en la misma llamada.
+  iterations: readonly (I & DetailIterationRow<Id>)[];
+  sessions: readonly (S & DetailSessionRow<Id>)[];
+  stateEvents: readonly (E & DetailStateEventRow<Id>)[];
   spendEvents: readonly DetailSpendRow[];
   isRunning?: (session: S) => boolean;
 }): DerivedGameDetail<I, S, E> => {

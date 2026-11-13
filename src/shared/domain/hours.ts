@@ -1,5 +1,5 @@
 import { yearOf } from '../yearOf';
-import type { GameId } from '../entityIds';
+import type { EntityId, EntityIdLike, GameId } from '../entityIds';
 
 // LAS HORAS, escritas UNA vez (AFTERPLAY-2.0.md §15.2, F-26).
 //
@@ -53,17 +53,21 @@ export const trackedSecondsOf = (sessions: readonly { durationSec: number | null
 // quien llama: una sesión de un juego que no está en la lista no suma), en el
 // orden de `gameIds`, para que la suma total recorra los juegos en el mismo
 // orden en los dos lados.
-export type YearSession = { gameId: GameId; startedAt: Date; durationSec: number | null };
+export type YearSession<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
+  startedAt: Date;
+  durationSec: number | null;
+};
 export type YearManualHours = { hours: number; year: number | null };
 
-export const hoursByGameInYear = (
-  gameIds: readonly GameId[],
-  sessions: readonly YearSession[],
-  manualByGame: ReadonlyMap<GameId, readonly YearManualHours[]>,
+export const hoursByGameInYear = <Id extends EntityIdLike>(
+  gameIds: readonly GameId<Id>[],
+  sessions: readonly YearSession<Id>[],
+  manualByGame: ReadonlyMap<GameId<Id>, readonly YearManualHours[]>,
   year: number,
   timeZone?: string | null,
-): Map<GameId, number> => {
-  const trackedSecondsByGame = new Map<GameId, number>();
+): Map<GameId<Id>, number> => {
+  const trackedSecondsByGame = new Map<GameId<Id>, number>();
   for (const session of sessions) {
     if (yearOf(session.startedAt, timeZone) !== year) continue;
     trackedSecondsByGame.set(
@@ -72,7 +76,7 @@ export const hoursByGameInYear = (
     );
   }
 
-  const hoursByGame = new Map<GameId, number>();
+  const hoursByGame = new Map<GameId<Id>, number>();
   for (const gameId of gameIds) {
     let manualHours = 0;
     for (const manual of manualByGame.get(gameId) ?? []) {

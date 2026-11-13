@@ -7,42 +7,49 @@
 // Lib PURA a propósito: sin DB, sin Electron, sin imports del renderer. La
 // alimentan igual el main (hechos para los recaps) y el renderer (distintivos
 // del diario), cada uno con sus propias filas — de ahí que los inputs sean
-// formas estructurales mínimas y no los tipos de Drizzle.
+// formas estructurales mínimas y no los tipos de Drizzle. Genéricas también en la
+// representación del id (ver entityIds.ts): los ids solo agrupan y desempatan.
 
 import { compareByCreation } from '../entityIds';
-import type { GameId, SessionId } from '../entityIds';
+import type { EntityId, EntityIdLike, GameId, SessionId } from '../entityIds';
 
-export type MemorySession = {
-  id: SessionId;
-  gameId: GameId;
+export type MemorySession<Id extends EntityIdLike = EntityId> = {
+  id: SessionId<Id>;
+  gameId: GameId<Id>;
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
   isManual: boolean;
 };
 
-export type Moment =
-  | { type: 'first_session'; gameId: GameId; sessionId: SessionId; occurredAt: Date }
-  | { type: 'return'; gameId: GameId; sessionId: SessionId; occurredAt: Date; awayDays: number }
+export type Moment<Id extends EntityIdLike = EntityId> =
+  | { type: 'first_session'; gameId: GameId<Id>; sessionId: SessionId<Id>; occurredAt: Date }
+  | {
+      type: 'return';
+      gameId: GameId<Id>;
+      sessionId: SessionId<Id>;
+      occurredAt: Date;
+      awayDays: number;
+    }
   | {
       type: 'longest_session';
-      gameId: GameId;
-      sessionId: SessionId;
+      gameId: GameId<Id>;
+      sessionId: SessionId<Id>;
       occurredAt: Date;
       durationSec: number;
       previousBestSec: number;
     }
   | {
       type: 'hours_milestone';
-      gameId: GameId;
-      sessionId: SessionId;
+      gameId: GameId<Id>;
+      sessionId: SessionId<Id>;
       occurredAt: Date;
       hours: number;
     }
   | {
       type: 'sessions_milestone';
-      gameId: GameId;
-      sessionId: SessionId;
+      gameId: GameId<Id>;
+      sessionId: SessionId<Id>;
       occurredAt: Date;
       count: number;
     };
@@ -69,7 +76,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // partidas — cuentan para acumular horas, pero no pueden "ser" tu primera
 // sesión ni batir un récord. Una sesión abierta (endedAt null) todavía no es
 // nada: se evaluará cuando cierre.
-const isMeasured = (session: MemorySession): boolean =>
+const isMeasured = (session: MemorySession<EntityIdLike>): boolean =>
   !session.isManual && session.endedAt !== null && (session.durationSec ?? 0) > 0;
 
 // Deriva TODOS los momentos de un conjunto de sesiones (la historia completa,
@@ -80,18 +87,18 @@ const isMeasured = (session: MemorySession): boolean =>
 // before"), que actúan de línea base del contador de horas — si ya le dijiste
 // a la app que llevabas 30h, la sesión que te pone en 26h medidas no "cruza
 // las 25": las cruzaste antes de que existiera el tracking.
-export const deriveMoments = (
-  sessions: MemorySession[],
-  manualHoursByGame?: ReadonlyMap<GameId, number>,
-): Moment[] => {
-  const byGame = new Map<GameId, MemorySession[]>();
+export const deriveMoments = <Id extends EntityIdLike>(
+  sessions: MemorySession<Id>[],
+  manualHoursByGame?: ReadonlyMap<GameId<Id>, number>,
+): Moment<Id>[] => {
+  const byGame = new Map<GameId<Id>, MemorySession<Id>[]>();
   for (const session of sessions) {
     const list = byGame.get(session.gameId) ?? [];
     list.push(session);
     byGame.set(session.gameId, list);
   }
 
-  const moments: Moment[] = [];
+  const moments: Moment<Id>[] = [];
 
   for (const [gameId, gameSessions] of byGame) {
     const ordered = gameSessions
@@ -188,8 +195,10 @@ export const deriveMoments = (
 
 // Índice por sesión, para pintar los distintivos del diario sin recorrer la
 // lista entera fila a fila.
-export const momentsBySession = (moments: Moment[]): Map<SessionId, Moment[]> => {
-  const map = new Map<SessionId, Moment[]>();
+export const momentsBySession = <Id extends EntityIdLike>(
+  moments: Moment<Id>[],
+): Map<SessionId<Id>, Moment<Id>[]> => {
+  const map = new Map<SessionId<Id>, Moment<Id>[]>();
   for (const moment of moments) {
     const list = map.get(moment.sessionId) ?? [];
     list.push(moment);

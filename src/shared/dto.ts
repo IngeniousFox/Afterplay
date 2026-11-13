@@ -1,6 +1,8 @@
 import type { EventDatePrecision } from './dateTypes';
 import type {
   EmulatorId,
+  EntityId,
+  EntityIdLike,
   GameId,
   IterationId,
   SaveBackupId,
@@ -18,8 +20,12 @@ import type {
 // importar nada de main, para que shared/ deje de saber que existe una base
 // de datos.
 //
-// La forma es EXACTAMENTE la que inferían las tablas (ids number incluidos:
-// eso cambia en la fase 2, no ahora). Y para que no se separen solas, main
+// La forma es EXACTAMENTE la que inferían las tablas. Los tipos que llevan ids
+// de entidad son genéricos en su representación (`Id`, por defecto
+// `EntityId`): sin parámetro significan lo de siempre, y con `string` sirven a
+// las consultas del esquema 2.0 mientras la app sigue en el 1.x (ver
+// entityIds.ts). Los ids de servicios externos (igdbId, steamAppId…) son
+// números de ESOS servicios y no participan. Y para que no se separen solas, main
 // compara cada tipo de aquí con el inferido de su tabla en tiempo de
 // compilación (main/db/dtoSync.ts): tocar una columna sin tocar su tipo
 // propio —o al revés— rompe `npm run typecheck:node`.
@@ -34,8 +40,8 @@ export type IterationRating = 1 | 2 | 3 | 4 | 5;
 
 // Un juego tal como lo guarda la tabla `games`. El significado de cada
 // columna está documentado en el esquema; aquí solo se fija la forma.
-export type GameRow = {
-  id: GameId;
+export type GameRow<Id extends EntityIdLike = EntityId> = {
+  id: GameId<Id>;
   title: string;
   coverUrl: string | null;
   heroUrl: string | null;
@@ -87,9 +93,9 @@ export type GameRow = {
 };
 
 // Un playthrough (tabla `iterations`).
-export type Iteration = {
-  id: IterationId;
-  gameId: GameId;
+export type Iteration<Id extends EntityIdLike = EntityId> = {
+  id: IterationId<Id>;
+  gameId: GameId<Id>;
   label: string;
   playedPlatform: string;
   origin: string;
@@ -101,10 +107,10 @@ export type Iteration = {
 
 // Una sesión de juego (tabla `sessions`). iterationId es null en las de
 // emulador todavía sin asignar (bandeja "Pending").
-export type Session = {
-  id: SessionId;
-  iterationId: IterationId | null;
-  emulatorId: EmulatorId | null;
+export type Session<Id extends EntityIdLike = EntityId> = {
+  id: SessionId<Id>;
+  iterationId: IterationId<Id> | null;
+  emulatorId: EmulatorId<Id> | null;
   isManual: boolean;
   startedAt: Date;
   endedAt: Date | null;
@@ -116,9 +122,9 @@ export type Session = {
 };
 
 // Una entrada del log de estados (tabla `state_events`).
-export type StateEvent = {
-  id: StateEventId;
-  iterationId: IterationId;
+export type StateEvent<Id extends EntityIdLike = EntityId> = {
+  id: StateEventId<Id>;
+  iterationId: IterationId<Id>;
   type: StateEventType;
   occurredAt: Date;
   datePrecision: EventDatePrecision;
@@ -126,9 +132,9 @@ export type StateEvent = {
 };
 
 // Un gasto (tabla `spend_events`).
-export type SpendEvent = {
-  id: SpendEventId;
-  gameId: GameId;
+export type SpendEvent<Id extends EntityIdLike = EntityId> = {
+  id: SpendEventId<Id>;
+  gameId: GameId<Id>;
   type: SpendEventType;
   amount: number;
   occurredAt: Date;
@@ -137,16 +143,16 @@ export type SpendEvent = {
 };
 
 // Un emulador registrado (tabla `emulators`).
-export type Emulator = {
-  id: EmulatorId;
+export type Emulator<Id extends EntityIdLike = EntityId> = {
+  id: EmulatorId<Id>;
   name: string;
   executablePath: string;
 };
 
 // Una versión de partida guardada subida al bucket (tabla `save_backups`).
-export type SaveBackupRow = {
-  id: SaveBackupId;
-  gameId: GameId;
+export type SaveBackupRow<Id extends EntityIdLike = EntityId> = {
+  id: SaveBackupId<Id>;
+  gameId: GameId<Id>;
   createdAt: Date;
   backupName: string;
   r2Key: string;
@@ -191,8 +197,8 @@ export type UpdateGamePatch = {
 
 // iterations:create — StatusCard, TvGameDetail, Add/Edit game. `label` vacío
 // o null = el main autogenera "Playthrough N".
-export type CreateIterationInput = {
-  gameId: GameId;
+export type CreateIterationInput<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   label?: string | null;
   playedPlatform: string;
   origin: string;
@@ -213,8 +219,8 @@ export type UpdateIterationPatch = {
 
 // stateEvents:add — todos los menús de estado (ficha, TV, toast de cierre).
 // occurredAt y note opcionales, como en la tabla: sin fecha, "ahora".
-export type AddStateEventInput = {
-  iterationId: IterationId;
+export type AddStateEventInput<Id extends EntityIdLike = EntityId> = {
+  iterationId: IterationId<Id>;
   type: StateEventType;
   occurredAt?: Date;
   datePrecision: EventDatePrecision;
@@ -222,8 +228,8 @@ export type AddStateEventInput = {
 };
 
 // spend:add — el popover de añadir gasto.
-export type AddSpendEventInput = {
-  gameId: GameId;
+export type AddSpendEventInput<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
   type: SpendEventType;
   amount: number;
   occurredAt?: Date;

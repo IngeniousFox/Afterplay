@@ -20,7 +20,7 @@
 // recortados, y lo único que importa es que lleven estos campos.
 
 import { compareByCreation } from '../entityIds';
-import type { IterationId, StateEventId } from '../entityIds';
+import type { EntityId, EntityIdLike, IterationId, StateEventId } from '../entityIds';
 import { endsPlaythrough, latestRealStateEvent } from '../playthroughState';
 import type { StateEvent } from '../types';
 import { nextPlaythroughLabel } from './nextPlaythroughLabel';
@@ -29,14 +29,20 @@ type StateEventType = StateEvent['type'];
 
 // Un playthrough (fila de `iterations`) del juego. La etiqueta hace falta para
 // numerar el siguiente si hay que crear uno.
-export type PlaythroughRow = { id: IterationId; label: string };
+// Genéricas en la representación del id (ver entityIds.ts): la decisión solo
+// agrupa por id y desempata con compareByCreation, que vale igual para los
+// enteros del esquema 1.x que para los UUIDv7 del 2.0.
+export type PlaythroughRow<Id extends EntityIdLike = EntityId> = {
+  id: IterationId<Id>;
+  label: string;
+};
 
 // Un evento de estado de cualquiera de esos playthroughs. El id desempata dos
 // eventos en el mismo instante (manda el escrito después, ver
 // latestRealStateEvent) y además forma parte de la firma "cerrado al vuelo".
-export type PlaythroughStateEventRow = {
-  id: StateEventId;
-  iterationId: IterationId;
+export type PlaythroughStateEventRow<Id extends EntityIdLike = EntityId> = {
+  id: StateEventId<Id>;
+  iterationId: IterationId<Id>;
   type: StateEventType;
   occurredAt: Date;
 };
@@ -51,14 +57,14 @@ export type PlaythroughGameRow = {
   officialPlatforms: readonly string[] | null;
 };
 
-export type ResolvePlaythroughInput = {
+export type ResolvePlaythroughInput<Id extends EntityIdLike = EntityId> = {
   // En cualquier orden: la decisión ordena por id (la "última" es la de id más
   // alto, ver abajo) y no se fía de ningún ORDER BY del que llama.
-  playthroughs: readonly PlaythroughRow[];
+  playthroughs: readonly PlaythroughRow<Id>[];
   // TODOS los eventos de esos playthroughs, también los posteriores a `at`:
   // hacen falta dos lecturas del mismo log (a fecha `at` y hoy). Los de
   // iteraciones que no estén en `playthroughs` se ignoran.
-  events: readonly PlaythroughStateEventRow[];
+  events: readonly PlaythroughStateEventRow<Id>[];
   game: PlaythroughGameRow | null | undefined;
   // La fecha A LA QUE SE PREGUNTA: "ahora" para el watcher, el botón Play y el
   // cronómetro; la fecha real de la sesión para una asignación retroactiva.
@@ -93,9 +99,9 @@ export type NewPlaythroughValues = {
 //              (hoy siempre un 'started': reanudar es reactivarlo).
 //   · create — crea un playthrough con estos valores, escríbele estos eventos y
 //              cuelga la sesión de él.
-export type PlaythroughDecision =
-  | { kind: 'use'; iterationId: IterationId }
-  | { kind: 'resume'; iterationId: IterationId; events: PlaythroughEventToWrite[] }
+export type PlaythroughDecision<Id extends EntityIdLike = EntityId> =
+  | { kind: 'use'; iterationId: IterationId<Id> }
+  | { kind: 'resume'; iterationId: IterationId<Id>; events: PlaythroughEventToWrite[] }
   | { kind: 'create'; playthrough: NewPlaythroughValues; events: PlaythroughEventToWrite[] };
 
 // El día natural LOCAL de una fecha, para preguntar "¿esto es de hoy?". Local
@@ -149,7 +155,9 @@ const eventAt = (type: PlaythroughEventToWrite['type'], at: Date): PlaythroughEv
 // El corte es el DÍA natural y no un margen en minutos: la sesión de emulador
 // que asignas por la noche es la de esta tarde, y ese juego SÍ es el que estás
 // jugando; la de la semana pasada ya no.
-export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): PlaythroughDecision => {
+export const resolvePlaythroughForPlay = <Id extends EntityIdLike>(
+  input: ResolvePlaythroughInput<Id>,
+): PlaythroughDecision<Id> => {
   const { at, now, game } = input;
   const atMs = at.getTime();
 
@@ -162,7 +170,7 @@ export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): Playt
   // Ordenados por fecha y, a igualdad, por id: la firma "cerrado al vuelo" de
   // abajo depende del orden ('started' primero, 'completed' después) y aquí no
   // se puede heredar del ORDER BY de nadie.
-  const eventsByIteration = new Map<IterationId, PlaythroughStateEventRow[]>();
+  const eventsByIteration = new Map<IterationId<Id>, PlaythroughStateEventRow<Id>[]>();
   for (const event of input.events) {
     if (!knownIds.has(event.iterationId)) continue;
     const list = eventsByIteration.get(event.iterationId) ?? [];
@@ -173,14 +181,14 @@ export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): Playt
   // El estado A FECHA `at` (lo posterior a `at` no existe todavía para esta
   // pregunta: un 'completed' de agosto no decide dónde cae una sesión de
   // julio) — es quien elige la rama nuevo/reanudar.
-  const latestTypeAt = new Map<IterationId, StateEventType>();
+  const latestTypeAt = new Map<IterationId<Id>, StateEventType>();
   // El estado HOY, con el log entero. Solo se consulta si a fecha `at` no
   // había nada activo, y está para no romper "como mucho un playthrough
   // activo por juego" con una escritura retroactiva (ver cabecera).
-  const latestTypeNow = new Map<IterationId, StateEventType>();
+  const latestTypeNow = new Map<IterationId<Id>, StateEventType>();
   // Iteraciones que ya tienen un 'started' en `at` o después: para ellas el
   // evento sobra, la activación ya está escrita y con mejor fecha.
-  const startedFromAt = new Set<IterationId>();
+  const startedFromAt = new Set<IterationId<Id>>();
   // Los playthroughs históricos que fabricó ESTA regla: log de exactamente
   // dos eventos, 'started' y 'completed', en el MISMO instante. Es una firma
   // que una mano no produce (las fechas tecleadas caen a medianoche del día y
@@ -189,7 +197,7 @@ export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): Playt
   // de emulador se asignan de varias en varias, y si cada una viera "el último
   // terminó" abriría otro Playthrough — cinco tardes de la misma partida,
   // cinco playthroughs Beaten.
-  const autoClosedRuns = new Set<IterationId>();
+  const autoClosedRuns = new Set<IterationId<Id>>();
 
   for (const [iterationId, unsorted] of eventsByIteration) {
     const iterationEvents = [...unsorted].sort(

@@ -4,7 +4,7 @@ import {
   type RealStateEventCandidate,
 } from '../playthroughState';
 import { compareByCreation } from '../entityIds';
-import type { IterationId } from '../entityIds';
+import type { EntityId, EntityIdLike, IterationId } from '../entityIds';
 import type { StateEvent } from '../types';
 
 // EL GASTO DE UN JUEGO Y SU REPARTO ENTRE PLAYTHROUGHS, escrito UNA vez
@@ -16,7 +16,9 @@ import type { StateEvent } from '../types';
 // móvil que en el PC. Ahora los dos llaman aquí.
 
 // Lo mínimo de un evento de estado para cerrar (o no) la ventana de gasto.
-export type SpendStateEvent = RealStateEventCandidate & { type: StateEvent['type'] };
+export type SpendStateEvent<Id extends EntityIdLike = EntityId> = RealStateEventCandidate<Id> & {
+  type: StateEvent['type'];
+};
 export type SpendRow = { amount: number; occurredAt: Date };
 
 // Cuándo se CERRÓ un playthrough, o null si sigue abierto. Sale del último
@@ -30,7 +32,9 @@ export type SpendRow = { amount: number; occurredAt: Date };
 //
 // on_hold y resting NO cierran: son pausas, y retomarlas es seguir el mismo
 // playthrough (mismo criterio que resolveIterationForPlay).
-export const playthroughClosedAt = (events: readonly SpendStateEvent[]): Date | null => {
+export const playthroughClosedAt = <Id extends EntityIdLike>(
+  events: readonly SpendStateEvent<Id>[],
+): Date | null => {
   const latest = latestRealStateEvent(events);
   return latest && endsPlaythrough(latest.type) ? latest.occurredAt : null;
 };
@@ -54,17 +58,17 @@ export const playthroughClosedAt = (events: readonly SpendStateEvent[]): Date | 
 // dependa del ORDER BY de quien llama. Sin playthroughs no hay a quién
 // atribuir nada y el mapa sale vacío (el total del juego sigue contando, ver
 // totalSpendOf).
-export const splitSpendByPlaythrough = (
-  iterations: readonly { id: IterationId }[],
-  eventsByIteration: ReadonlyMap<IterationId, readonly SpendStateEvent[]>,
+export const splitSpendByPlaythrough = <Id extends EntityIdLike>(
+  iterations: readonly { id: IterationId<Id> }[],
+  eventsByIteration: ReadonlyMap<IterationId<Id>, readonly SpendStateEvent<Id>[]>,
   spends: readonly SpendRow[],
-): Map<IterationId, number> => {
+): Map<IterationId<Id>, number> => {
   const ordered = [...iterations].sort((a, b) => compareByCreation(a.id, b.id));
   const closedAt = ordered.map((iteration) =>
     playthroughClosedAt(eventsByIteration.get(iteration.id) ?? []),
   );
 
-  const spendByIteration = new Map<IterationId, number>();
+  const spendByIteration = new Map<IterationId<Id>, number>();
   if (ordered.length === 0) return spendByIteration;
   for (const spend of spends) {
     let chosen = ordered[0];

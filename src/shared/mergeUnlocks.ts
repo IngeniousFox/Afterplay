@@ -1,4 +1,4 @@
-import type { AchievementId } from './entityIds';
+import type { AchievementId, EntityId, EntityIdLike } from './entityIds';
 // LA regla de esta zona, en un solo sitio: "una fecha fiable gana a una que
 // no; empatadas, la más temprana".
 //
@@ -33,13 +33,16 @@ import type { AchievementId } from './entityIds';
 // y devuelve la fila GANADORA entera: quien necesite lo que viaja con ella
 // (la sesión, el playthrough) lo saca de ahí, y quien necesite todas las
 // fuentes tiene `rows`.
-export type UnlockCandidate = {
-  achievementId: AchievementId;
+//
+// Genérica también en la representación del id (ver entityIds.ts): el id del
+// logro solo es la clave del mapa.
+export type UnlockCandidate<Id extends EntityIdLike = EntityId> = {
+  achievementId: AchievementId<Id>;
   unlockedAt: Date;
   dateReliable: boolean;
 };
 
-export type MergedUnlock<T extends UnlockCandidate> = {
+export type MergedUnlock<T extends UnlockCandidate<EntityIdLike>> = {
   // La fila que representa al logro en pantalla.
   winner: T;
   // Todas las filas del mismo logro, la ganadora incluida y en el orden en
@@ -47,10 +50,10 @@ export type MergedUnlock<T extends UnlockCandidate> = {
   rows: T[];
 };
 
-export const mergeUnlocksByAchievement = <T extends UnlockCandidate>(
+export const mergeUnlocksByAchievement = <T extends UnlockCandidate<EntityIdLike>>(
   rows: readonly T[],
-): Map<AchievementId, MergedUnlock<T>> => {
-  const merged = new Map<AchievementId, MergedUnlock<T>>();
+): Map<T['achievementId'], MergedUnlock<T>> => {
+  const merged = new Map<T['achievementId'], MergedUnlock<T>>();
 
   for (const row of rows) {
     const existing = merged.get(row.achievementId);

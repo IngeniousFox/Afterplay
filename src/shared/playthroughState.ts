@@ -5,7 +5,7 @@
 // había dejado versiones que no coincidían.
 
 import { compareByCreation } from './entityIds';
-import type { StateEventId } from './entityIds';
+import type { EntityId, EntityIdLike, StateEventId } from './entityIds';
 import type { StateEvent } from './types';
 
 type StateEventType = StateEvent['type'];
@@ -65,10 +65,13 @@ export const closesOpenSession = (type: StateEventType | null | undefined): bool
 // comparten fecha exacta (gana el insertado después). Genérico a propósito —
 // getGames, getGameById, resolveIterationForPlay y el Journey traen cada uno
 // su propia forma de fila con estos tres campos pegados.
-export type RealStateEventCandidate = {
+//
+// Genérico en la representación del id (ver entityIds.ts): el desempate es
+// compareByCreation, que vale igual para enteros que para UUIDv7.
+export type RealStateEventCandidate<Id extends EntityIdLike = EntityId> = {
   type: string;
   occurredAt: Date;
-  id: StateEventId;
+  id: StateEventId<Id>;
 };
 
 // El "último estado real" de un juego/iteración: el evento con occurredAt más
@@ -76,7 +79,7 @@ export type RealStateEventCandidate = {
 // Funciona igual reciba las filas ordenadas o no — recorre todo el array y se
 // queda con la mejor candidata vista hasta el momento, así que no depende de
 // ningún ORDER BY previo.
-export const latestRealStateEvent = <T extends RealStateEventCandidate>(
+export const latestRealStateEvent = <T extends RealStateEventCandidate<EntityIdLike>>(
   events: readonly T[],
 ): T | undefined => {
   let latest: T | undefined;

@@ -1,5 +1,5 @@
 import type { PlanMailboxEntry } from '../planMailbox';
-import type { GameId } from '../entityIds';
+import type { EntityId, EntityIdLike, GameId } from '../entityIds';
 
 // EL ORDEN DEL PLAN ("Up next"), escrito UNA vez (AFTERPLAY-2.0.md §15.2, F-26).
 //
@@ -17,7 +17,14 @@ import type { GameId } from '../entityIds';
 
 // Lo mínimo que hay que saber de un juego para repartir marcas: su id y su
 // marca de fijado (null = no está en Up next).
-export type PinnedPlanRow = { id: GameId; pinnedAt: number | null };
+//
+// Genérico en la representación del id (ver entityIds.ts): el reparto solo usa
+// el id como clave. Lo del buzón de más abajo NO lo es: el buzón desaparece en
+// la 2.0 y se queda con los ids de la app.
+export type PinnedPlanRow<Id extends EntityIdLike = EntityId> = {
+  id: GameId<Id>;
+  pinnedAt: number | null;
+};
 
 // ── REPARTO DE MARCAS AL REORDENAR ─────────────────────────────────────────
 
@@ -29,10 +36,10 @@ export type PinnedPlanRow = { id: GameId; pinnedAt: number | null };
 // Devuelve id → marca nueva SOLO para los ids que cambian de mano. Un mapa vacío
 // significa "no hay reorden que aplicar", y el escritorio lo traduce a `false`,
 // que el buzón lee como fallo (drainMailbox.ts).
-export const redistributePinStamps = (
-  rows: readonly PinnedPlanRow[],
-  orderedIds: readonly GameId[],
-): Map<GameId, number> => {
+export const redistributePinStamps = <Id extends EntityIdLike>(
+  rows: readonly PinnedPlanRow<Id>[],
+  orderedIds: readonly GameId<Id>[],
+): Map<GameId<Id>, number> => {
   const byId = new Map(rows.map((row) => [row.id, row.pinnedAt]));
   // Solo los que SIGUEN fijados: entre el gesto y el commit pudo pasar
   // cualquier cosa (un unpin desde otra máquina vía sync), y los ids

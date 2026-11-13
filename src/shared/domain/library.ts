@@ -1,5 +1,5 @@
 import { compareByCreation } from '../entityIds';
-import type { GameId, IterationId, StateEventId } from '../entityIds';
+import type { EntityId, EntityIdLike, GameId, IterationId, StateEventId } from '../entityIds';
 import { lastPlayedAtFor } from '../lastPlayedAt';
 import { isAddedAtArtifact, latestRealStateEvent, manualHoursAnchor } from '../playthroughState';
 import type { StateEvent } from '../types';
@@ -36,7 +36,14 @@ type SqlInteger = number | bigint;
 const toNumber = (value: SqlInteger | null | undefined): number | null =>
   value === null || value === undefined ? null : Number(value);
 
-export type LibraryGameRow = { id: GameId; addedAt: Date; promotedAt: Date | null };
+// Todos los tipos de filas son genéricos en la representación del id (ver
+// entityIds.ts): la misma regla sirve al esquema 1.x (enteros) y al 2.0
+// (texto). Los mapas y los desempates por id funcionan igual con las dos.
+export type LibraryGameRow<Id extends EntityIdLike = EntityId> = {
+  id: GameId<Id>;
+  addedAt: Date;
+  promotedAt: Date | null;
+};
 
 // Una fila por playthrough, con sus sesiones YA AGREGADAS (iterationSessionTotals):
 //  · sessionCount — TODAS sus sesiones, la abierta incluida.
@@ -45,9 +52,9 @@ export type LibraryGameRow = { id: GameId; addedAt: Date; promotedAt: Date | nul
 //    si sigue abierta); null si no tiene sesiones.
 //  · firstSessionAt — el arranque más temprano: último recurso para fechar
 //    sus horas manuales.
-export type LibraryIterationRow = {
-  id: IterationId;
-  gameId: GameId;
+export type LibraryIterationRow<Id extends EntityIdLike = EntityId> = {
+  id: IterationId<Id>;
+  gameId: GameId<Id>;
   manualTotalPlayed: number | null;
   sessionCount: SqlInteger;
   trackedSeconds: SqlInteger | null;
@@ -55,32 +62,39 @@ export type LibraryIterationRow = {
   firstSessionAt: SqlInteger | null;
 };
 
-export type LibraryStateEventRow = {
-  gameId: GameId;
-  iterationId: IterationId;
+export type LibraryStateEventRow<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
+  iterationId: IterationId<Id>;
   type: StateType;
   occurredAt: Date;
-  id: StateEventId;
+  id: StateEventId<Id>;
 };
 
 // Una sesión ABIERTA que sigue en marcha, ya juzgada por quien llama: en el
 // escritorio toda abierta lo está (el watcher barre las rancias), en el Worker
 // pasa por la regla de frescura del cronómetro (isSessionLive).
-export type LibraryLiveSession = { gameId: GameId; startedAt: Date | SqlInteger };
+export type LibraryLiveSession<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id>;
+  startedAt: Date | SqlInteger;
+};
 
-export type ManualIterationHours = { iterationId: IterationId; hours: number; year: number | null };
+export type ManualIterationHours<Id extends EntityIdLike = EntityId> = {
+  iterationId: IterationId<Id>;
+  hours: number;
+  year: number | null;
+};
 
-export type LibraryGameSummary = {
+export type LibraryGameSummary<Id extends EntityIdLike = EntityId> = {
   totalHours: number;
   sessionCount: number;
   currentState: StateType | null;
   lastPlayedAt: Date | null;
   isLive: boolean;
   liveSince: Date | null;
-  manualIterations: ManualIterationHours[];
+  manualIterations: ManualIterationHours<Id>[];
 };
 
-const EMPTY_SUMMARY = (): LibraryGameSummary => ({
+const EMPTY_SUMMARY = <Id extends EntityIdLike>(): LibraryGameSummary<Id> => ({
   totalHours: 0,
   sessionCount: 0,
   currentState: null,
@@ -107,22 +121,22 @@ const pushTo = <K, T>(map: Map<K, T[]>, key: K, value: T): void => {
 // playthroughs salen a cero). Las filas de juegos que no estén en `games` se
 // ignoran: la población la decide quien llama (la biblioteca excluye los
 // planeados).
-export const deriveLibrary = (input: {
-  games: readonly LibraryGameRow[];
-  iterations: readonly LibraryIterationRow[];
-  stateEvents: readonly LibraryStateEventRow[];
-  liveSessions: readonly LibraryLiveSession[];
+export const deriveLibrary = <Id extends EntityIdLike>(input: {
+  games: readonly LibraryGameRow<Id>[];
+  iterations: readonly LibraryIterationRow<Id>[];
+  stateEvents: readonly LibraryStateEventRow<Id>[];
+  liveSessions: readonly LibraryLiveSession<Id>[];
   timeZone?: string | null;
-}): Map<GameId, LibraryGameSummary> => {
-  const summaries = new Map<GameId, LibraryGameSummary>();
-  const gameById = new Map<GameId, LibraryGameRow>();
+}): Map<GameId<Id>, LibraryGameSummary<Id>> => {
+  const summaries = new Map<GameId<Id>, LibraryGameSummary<Id>>();
+  const gameById = new Map<GameId<Id>, LibraryGameRow<Id>>();
   for (const game of input.games) {
-    summaries.set(game.id, EMPTY_SUMMARY());
+    summaries.set(game.id, EMPTY_SUMMARY<Id>());
     gameById.set(game.id, game);
   }
 
-  const eventsByIteration = new Map<IterationId, LibraryStateEventRow[]>();
-  const eventsByGame = new Map<GameId, LibraryStateEventRow[]>();
+  const eventsByIteration = new Map<IterationId<Id>, LibraryStateEventRow<Id>[]>();
+  const eventsByGame = new Map<GameId<Id>, LibraryStateEventRow<Id>[]>();
   for (const event of input.stateEvents) {
     pushTo(eventsByIteration, event.iterationId, event);
     pushTo(eventsByGame, event.gameId, event);
@@ -140,7 +154,7 @@ export const deriveLibrary = (input: {
     }
   }
 
-  const lastSessionByGame = new Map<GameId, Date>();
+  const lastSessionByGame = new Map<GameId<Id>, Date>();
   for (const row of iterations) {
     const summary = summaries.get(row.gameId);
     if (!summary) continue;
