@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "8efb6060-d114-4d44-8515-78f946933958",
+  "id": "4f6b5f35-2cd9-442c-a86e-fbc5782e1312",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -1929,6 +1929,16 @@
       "default": null,
       "generated": null,
       "name": "protocolVersion",
+      "entityType": "columns",
+      "table": "local_sync_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shortDeviceId",
       "entityType": "columns",
       "table": "local_sync_state"
     },

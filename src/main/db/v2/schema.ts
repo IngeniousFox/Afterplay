@@ -712,6 +712,14 @@ export const localSyncState = localTable(
     lastError: text(),
     lastErrorAt: int({ mode: 'timestamp_ms' }),
     protocolVersion: int(),
+    // Id corto con el que firma su reloj este dispositivo (§8.2): 6
+    // caracteres `[0-9a-z]`, nunca `000000` (reservado al barrido del hub).
+    // Lo asignará el hub al emparejar (fase 3) para que no coincidan dos;
+    // hasta entonces `openLocalDatabase` lo sortea la primera vez y lo guarda
+    // aquí. Tiene que sobrevivir a los reinicios: si cambiase en cada arranque
+    // no pasaría nada grave, pero el mismo PC firmaría con ids distintos y el
+    // desempate de §8.2 dejaría de ser estable para sus propias escrituras.
+    shortDeviceId: text(),
   },
   () => [check('local_sync_state_single_row', sql`"id" = 1`)],
 );

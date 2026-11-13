@@ -242,6 +242,7 @@ CREATE TABLE `local_sync_state` (
 	`lastError` text,
 	`lastErrorAt` integer,
 	`protocolVersion` integer,
+	`shortDeviceId` text,
 	CONSTRAINT "local_sync_state_single_row" CHECK("id" = 1)
 );
 --> statement-breakpoint
