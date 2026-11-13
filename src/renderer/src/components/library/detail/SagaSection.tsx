@@ -12,6 +12,7 @@ import { StatusIcon } from '../../StatusIcon';
 import { AddGameModal } from '../AddGameModal';
 import { WhereToAddDialog } from '../WhereToAddDialog';
 import { SectionLabel } from './SectionLabel';
+import type { GameId } from '../../../../../shared/entityIds';
 
 const PLAN_COLOR = STATUS_META.plan.color;
 
@@ -26,8 +27,8 @@ const pagerButtonClass =
 // Dónde vive un juego de la saga en TU biblioteca. Es lo que decide el badge
 // de la carátula y a dónde lleva el clic (§3.3-3.4).
 type Owned =
-  | { kind: 'library'; gameId: number; state: GameDetail['currentState'] }
-  | { kind: 'plan'; gameId: number }
+  | { kind: 'library'; gameId: GameId; state: GameDetail['currentState'] }
+  | { kind: 'plan'; gameId: GameId }
   | { kind: 'none' };
 
 type SagaSlideProps = {

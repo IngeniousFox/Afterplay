@@ -12,9 +12,10 @@ import {
 import { runRaFullResync } from '../ra/backfill';
 import { requestAchievementsStop, retryFailedAchievements } from '../steam/queue';
 import { replaceUnlockPlacements } from '../steam/syncAchievements';
+import type { GameId } from '../../shared/entityIds';
 
 export const registerAchievementsHandlers = (): void => {
-  handleDb('achievements:getForGame', async (_event, gameId: number) => {
+  handleDb('achievements:getForGame', async (_event, gameId: GameId) => {
     const data = await getGameAchievements(gameId);
 
     // Los ocultos que siguen mudos tras las dos fuentes propias (la API de
@@ -81,14 +82,14 @@ export const registerAchievementsHandlers = (): void => {
   // lista se actualiza sola delante de ti — una tarjeta encima sobraría.
   // forceRaRematch: el botón es el "hoy le han publicado set y lo quiero YA"
   // — re-intenta el emparejado de RA aunque ya se hubiera preguntado.
-  ipcMain.handle('achievements:refreshGame', (_event, gameId: number) =>
+  ipcMain.handle('achievements:refreshGame', (_event, gameId: GameId) =>
     queueAchievementsRefreshForGame(gameId, { notify: false, forceRaRematch: true }),
   );
 
   // Recolocar los desbloqueos ya guardados sobre las sesiones actuales, sin
   // tocar la red — para cuando se corrigen fechas o se asigna a mano una
   // sesión de emulador.
-  handleDb('achievements:replacePlacements', async (_event, gameId: number) =>
+  handleDb('achievements:replacePlacements', async (_event, gameId: GameId) =>
     replaceUnlockPlacements(gameId),
   );
 };

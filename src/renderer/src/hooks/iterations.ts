@@ -2,6 +2,7 @@ import type { UseMutationResult } from '@tanstack/react-query';
 import type { CreateIterationInput, Iteration, UpdateIterationPatch } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
+import type { IterationId } from '../../../shared/entityIds';
 
 // No hay useIterations(gameId) — games:getById ya trae las iteraciones
 // enriquecidas (horas, fechas derivadas, estado) dentro de GameDetail, así
@@ -20,11 +21,11 @@ export const useCreateIteration = (): UseMutationResult<
 export const useUpdateIteration = (): UseMutationResult<
   Iteration | null,
   Error,
-  { id: number; patch: UpdateIterationPatch },
+  { id: IterationId; patch: UpdateIterationPatch },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ id, patch }: { id: number; patch: UpdateIterationPatch }) =>
+    ({ id, patch }: { id: IterationId; patch: UpdateIterationPatch }) =>
       window.api.iterations.update(id, patch),
     [queryKeys.games.all],
   );
@@ -35,8 +36,8 @@ export const useUpdateIteration = (): UseMutationResult<
 // app cuando esto solo invalidaba games.all (bug real, encontrado en
 // auditoría). Compárese con useResetEndlessState (games.ts), una operación
 // más ligera que ya invalidaba las tres correctamente.
-export const useDeleteIteration = (): UseMutationResult<boolean, Error, number, unknown> =>
+export const useDeleteIteration = (): UseMutationResult<boolean, Error, IterationId, unknown> =>
   useInvalidatingMutation(
-    (id: number) => window.api.iterations.delete(id),
+    (id: IterationId) => window.api.iterations.delete(id),
     [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
   );

@@ -52,13 +52,14 @@ import { sessionActivity } from '../lib/sessionActivity';
 import { yearTotals } from '../lib/statsTotals';
 import { revealClass, revealStyle } from '../lib/styles';
 import { GameStats } from './GameStats';
+import { parseEntityId, type GameId } from '../../../shared/entityIds';
 
 // (yearTotals se mudó a lib/statsTotals.ts: es LA regla de las cifras y ahora
 // la comparten esta pantalla y la del modo TV — dos sitios pintando el mismo
 // número no pueden calcularlo cada uno por su cuenta.)
 
 type HeadlineGame = {
-  id: number;
+  id: GameId;
   title: string;
   heroUrl: string | null;
   coverUrl: string | null;
@@ -316,7 +317,7 @@ const StatsHero = ({
   gamesLabel: string;
   spentLabel: string;
   headlineGame: HeadlineGame | null;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
   comparison?: YearComparisonBaseline;
 }): React.JSX.Element => {
   const heroSrc = useImageSrc(headlineGame?.heroUrl ?? null, 'heroes');
@@ -560,7 +561,7 @@ export const Stats = (): React.JSX.Element => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const gameParam = searchParams.get('game');
-  const selectedGameId = gameParam ? Number(gameParam) : null;
+  const selectedGameId = gameParam ? parseEntityId(gameParam) : null;
 
   const [selectedYear, setSelectedYear] = useState<Year>('all');
   const [view, setView] = useState<'overview' | 'journey'>('overview');

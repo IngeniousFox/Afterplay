@@ -49,6 +49,7 @@ import type {
   LudusaviRedirect,
   MappingBackupNode,
 } from './types';
+import type { GameId } from '../../shared/entityIds';
 
 // Orquestación: ludusavi (local) + R2 (nube) + la tabla save_backups
 // (índice). Aquí es donde se cumplen las reglas de PARTIDAS-GUARDADAS.md que
@@ -395,9 +396,9 @@ const mergeRemoteMapping = (
 // fila de la otra, y las dos insertaban el mismo backupName -> filas
 // duplicadas en la lista de versiones y una colgando tras la siguiente poda.
 // Juegos DISTINTOS siguen en paralelo: no comparten prefijo de R2 ni filas.
-const gameBackupChains = new Map<number, Promise<unknown>>();
+const gameBackupChains = new Map<GameId, Promise<unknown>>();
 
-const serializeGameBackup = <T>(gameId: number, task: () => Promise<T>): Promise<T> => {
+const serializeGameBackup = <T>(gameId: GameId, task: () => Promise<T>): Promise<T> => {
   const prev = gameBackupChains.get(gameId) ?? Promise.resolve();
   const result = prev.then(task, task);
   // La cadena nunca se rompe por un fallo (mismo callback en los dos brazos).
@@ -448,7 +449,7 @@ export const backupGameToCloud = async (
 //
 // Nunca lanza: si la nube no responde, el juego se borra igual. Como mucho
 // quedan objetos huérfanos, que es exactamente lo que había antes.
-export const purgeGameSaves = async (gameId: number): Promise<void> => {
+export const purgeGameSaves = async (gameId: GameId): Promise<void> => {
   try {
     const rows = await getSaveBackups(gameId);
     if (rows.length === 0) return;

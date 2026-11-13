@@ -21,6 +21,7 @@ import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../.
 import { CoverThumb } from './CoverThumb';
 import { ExecutablePicker } from './ExecutablePicker';
 import type { OwnedGameMatch } from './SearchStep';
+import type { GameId } from '../../../../../shared/entityIds';
 
 // "hace 3 min" / "hace 2 h" / "ayer". Basta con el trazo gordo: el dato
 // solo está para saber si lo que se ve es de hace un momento o de otro día.
@@ -46,7 +47,7 @@ type FolderScanStepProps = {
   // promociona — y se lleva igual la carpeta y el .exe encontrados. Sin él
   // (alta con una sesión pendiente esperando, donde promocionar dejaría la
   // sesión huérfana) esas filas se marcan pero se apagan.
-  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: GameId, folder: ScanCandidate) => void;
   // Lo que ya tienes, por igdbId — el mismo mapa que usa el buscador. Aquí
   // hace falta para las fichas ALTERNATIVAS y para el buscador de las
   // carpetas sin match, que no pasan por la comprobación del main.
@@ -231,7 +232,7 @@ const Results = ({
 }: {
   results: ScanCandidate[];
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
-  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: GameId, folder: ScanCandidate) => void;
   ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => {
   // Con matches > 0 en los planeados a propósito: la fila se pinta con la
@@ -353,7 +354,7 @@ const CandidateRow = ({
   entry: ScanCandidate;
   index: number;
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
-  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: GameId, folder: ScanCandidate) => void;
   ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => {
   const [showAlternatives, setShowAlternatives] = useState(false);
@@ -548,7 +549,7 @@ const FixMatchRow = ({
 }: {
   entry: ScanCandidate;
   onSelect: (match: IgdbSearchResult, folder: ScanCandidate) => void;
-  onPromotePlanned?: (gameId: number, folder: ScanCandidate) => void;
+  onPromotePlanned?: (gameId: GameId, folder: ScanCandidate) => void;
   ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => {
   const [open, setOpen] = useState(false);
@@ -664,7 +665,7 @@ const MatchCardGrid = ({
   matches: IgdbSearchResult[];
   onPick: (match: IgdbSearchResult) => void;
   // Elegir aquí uno que ya está en tu plan lo promociona, no lo da de alta.
-  onPickPlanned?: (gameId: number) => void;
+  onPickPlanned?: (gameId: GameId) => void;
   ownedByIgdbId: Map<number, OwnedGameMatch>;
 }): React.JSX.Element => (
   <div className="grid grid-cols-4 gap-2.5">

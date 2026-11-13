@@ -65,6 +65,7 @@ import {
   ORIGIN_SEGMENT_OPTIONS,
   PLATFORM_OPTIONS,
 } from './add-game/types';
+import type { GameId, SessionId } from '../../../../shared/entityIds';
 
 // Un resultado del buscador (IGDB o Steam) pasa a ser LA selección. Se
 // convierte aquí, en el borde: a partir de este punto el formulario ya no
@@ -112,12 +113,12 @@ type AddGameModalProps = {
   // Tras crear un juego nuevo (biblioteca o plan) — la pantalla dueña
   // navega a su ficha, para que lo recién añadido quede seleccionado en vez
   // de volver a la lista sin más.
-  onCreated?: (gameId: number) => void;
+  onCreated?: (gameId: GameId) => void;
   // Buscar algo que YA está en la biblioteca no da de alta nada: lleva a su
   // ficha. Sin esto, el resultado sale marcado pero apagado — que es lo que
   // toca donde abrir una ficha no tendría sentido (dentro de Sesiones) o
   // llevaría a la sección equivocada (el alta de un planeado).
-  onOpenExisting?: (gameId: number) => void;
+  onOpenExisting?: (gameId: GameId) => void;
   // Un juego del catálogo YA elegido: el modal se abre directamente en el
   // formulario, saltándose la búsqueda. Lo usa el carrusel de la saga
   // (PLAN-TO-PLAY.md §3.4), donde el juego ya se eligió al pulsar su
@@ -133,7 +134,7 @@ type AddGameModalProps = {
   // …y al crear el juego, esta sesión pendiente se le asigna sola (montar
   // el modal solo al abrirlo, igual que promoteGame — el prellenado vive en
   // los inicializadores).
-  assignSessionId?: number;
+  assignSessionId?: SessionId;
 };
 
 // Lo que el escaneo ya sabe del disco. Promocionar desde ahí no tiene por qué
@@ -150,7 +151,7 @@ type AddGameModalBodyProps = AddGameModalProps & {
   // cuerpo en modo promote. Hace falta montarlo de cero porque todo el
   // prellenado vive en los inicializadores de useState/useForm (ver
   // promoteGame) — y por eso el disco viaja como argumento y no por setValue.
-  onPickPlanned?: (gameId: number, disk?: PromoteDisk) => void;
+  onPickPlanned?: (gameId: GameId, disk?: PromoteDisk) => void;
   promoteDisk?: PromoteDisk;
 };
 
@@ -287,7 +288,7 @@ const AddGameModalBody = ({
   // guarda el id ya creado para que el reintento se salte justo ese paso.
   // OJO: esto cubre SOLO el paso primario — los playthroughs extra llevan su
   // propia cuenta (la poda de `extraPlaythroughs` en el catch de handleSave).
-  const [partialSave, setPartialSave] = useState<{ gameId: number } | null>(null);
+  const [partialSave, setPartialSave] = useState<{ gameId: GameId } | null>(null);
   // El banner de error solo miraba la mutación PRIMARIA — un fallo en
   // assignSession/addIteration/addStateEvent (los pasos que corren DESPUÉS de
   // crear el juego) pasaba totalmente inadvertido: el botón volvía a su
@@ -348,8 +349,8 @@ const AddGameModalBody = ({
   const ownedBySteamAppId = new Map<number, OwnedGameMatch>();
 
   const indexOwned = (
-    games: { id: number; igdbId: number | null; steamAppId: number | null }[],
-    match: (gameId: number) => OwnedGameMatch,
+    games: { id: GameId; igdbId: number | null; steamAppId: number | null }[],
+    match: (gameId: GameId) => OwnedGameMatch,
   ): void => {
     for (const game of games) {
       // UNA sola descripción para las dos claves, no una por mapa: así el
@@ -1010,7 +1011,7 @@ const AddGameModalBody = ({
 const PromotePickedGame = ({
   gameId,
   ...props
-}: AddGameModalProps & { gameId: number; promoteDisk?: PromoteDisk }): React.JSX.Element => {
+}: AddGameModalProps & { gameId: GameId; promoteDisk?: PromoteDisk }): React.JSX.Element => {
   const { data: game, isError } = useGame(gameId);
 
   if (!game) {
@@ -1047,7 +1048,7 @@ const PromotePickedGame = ({
 // pasar a promote (su prellenado vive en los inicializadores), y por eso
 // vive aquí fuera y no dentro.
 export const AddGameModal = (props: AddGameModalProps): React.JSX.Element => {
-  const [picked, setPicked] = useState<{ gameId: number; disk?: PromoteDisk } | null>(null);
+  const [picked, setPicked] = useState<{ gameId: GameId; disk?: PromoteDisk } | null>(null);
 
   // Cerrar el modal descarta la elección: la próxima apertura vuelve a
   // empezar por el buscador y no en la ficha del último planeado. Ajuste

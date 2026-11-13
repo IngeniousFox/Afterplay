@@ -9,11 +9,12 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from '../../ui/alert-dialog';
+import type { GameId } from '../../../../../shared/entityIds';
 
 type DeleteSaveBackupDialogProps = {
   // null = cerrado.
   backup: SaveBackupRow | null;
-  gameId: number;
+  gameId: GameId;
   // Todas las versiones del juego: hacen falta para saber si de esta cuelga
   // alguna otra (ver abajo).
   versions: SaveBackupRow[];

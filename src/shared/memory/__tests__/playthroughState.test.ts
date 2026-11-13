@@ -24,6 +24,7 @@ import {
 } from '../../playthroughState';
 import type { StateEvent } from '../../types';
 import { isMeaningfulStateEvent, listClosedPeriodsWithActivity } from '../chapters';
+import type { IterationId, StateEventId } from '../../entityIds';
 
 type EventType = StateEvent['type'];
 
@@ -31,8 +32,8 @@ type EventType = StateEvent['type'];
 // (getGames, el Journey, resolveIterationForPlay): el trío que mira el helper
 // más el iterationId que NO mira pero que quien llama necesita de vuelta.
 type LogEvent = {
-  id: number;
-  iterationId: number;
+  id: StateEventId;
+  iterationId: IterationId;
   type: EventType;
   occurredAt: Date;
 };

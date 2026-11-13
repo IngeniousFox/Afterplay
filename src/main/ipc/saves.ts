@@ -51,6 +51,7 @@ import {
 } from '../saves/service';
 import { normalizeTitle } from '../lib/titleMatch';
 import { isGameRunning } from '../watcher/runningGames';
+import type { GameId, SaveBackupId } from '../../shared/entityIds';
 
 // Partidas guardadas (PARTIDAS-GUARDADAS.md). Aquí viven las reglas que no
 // son de ninguna capa por separado — sobre todo las de seguridad del
@@ -172,7 +173,7 @@ export const registerSavesHandlers = (): void => {
     return results;
   });
 
-  handleDb('saves:getGameState', async (event, gameId: number): Promise<SavesGameState | null> => {
+  handleDb('saves:getGameState', async (event, gameId: GameId): Promise<SavesGameState | null> => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return null;
@@ -204,7 +205,7 @@ export const registerSavesHandlers = (): void => {
   // para funcionar, no a medias.
   handleDb(
     'saves:setEnabled',
-    async (_event, gameId: number, enabled: boolean, ludusaviName?: string) => {
+    async (_event, gameId: GameId, enabled: boolean, ludusaviName?: string) => {
       const games = await getSaveGames();
       const game = games.find((candidate) => candidate.id === gameId);
 
@@ -222,7 +223,7 @@ export const registerSavesHandlers = (): void => {
   );
 
   // Detección automática: emparejar el título con el nombre que usa ludusavi.
-  handleDb('saves:detect', async (_event, gameId: number): Promise<string | null> => {
+  handleDb('saves:detect', async (_event, gameId: GameId): Promise<string | null> => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return null;
@@ -256,7 +257,7 @@ export const registerSavesHandlers = (): void => {
   // gameId, no por ludusaviName — ver getSaveBackups). Solo tiene sentido
   // sobre un emparejamiento 'auto': uno 'manual' ya se deshace solo al
   // quitar su última carpeta (ver saves:removeFolder, unas líneas más abajo).
-  handleDb('saves:clearDetection', async (_event, gameId: number): Promise<boolean> => {
+  handleDb('saves:clearDetection', async (_event, gameId: GameId): Promise<boolean> => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game || game.saveDetectionSource !== 'auto') return false;
@@ -277,7 +278,7 @@ export const registerSavesHandlers = (): void => {
   //
   // La ruta se guarda tokenizada (<winAppData>/...) para que la misma fila
   // valga en un PC donde el usuario de Windows se llame distinto.
-  handleDb('saves:addFolder', async (_event, gameId: number, folder: string) => {
+  handleDb('saves:addFolder', async (_event, gameId: GameId, folder: string) => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return null;
@@ -297,7 +298,7 @@ export const registerSavesHandlers = (): void => {
     return game.saveLudusaviName ?? game.title;
   });
 
-  handleDb('saves:removeFolder', async (_event, gameId: number, folder: string) => {
+  handleDb('saves:removeFolder', async (_event, gameId: GameId, folder: string) => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return false;
@@ -321,7 +322,7 @@ export const registerSavesHandlers = (): void => {
     return true;
   });
 
-  handleDb('saves:backupNow', async (_event, gameId: number): Promise<SavesBackupResult | null> => {
+  handleDb('saves:backupNow', async (_event, gameId: GameId): Promise<SavesBackupResult | null> => {
     const games = await getSaveGames();
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return null;
@@ -512,14 +513,14 @@ export const registerSavesHandlers = (): void => {
     },
   );
 
-  ipcMain.handle('saves:setRestoreTarget', (_event, gameId: number, target: string | null) => {
+  ipcMain.handle('saves:setRestoreTarget', (_event, gameId: GameId, target: string | null) => {
     setSaveLocationOverride(gameId, target ? toSlashes(target) : null);
   });
 
   // Borrar una versión concreta: primero del bucket, luego del índice. En ese
   // orden a propósito — al revés, un fallo a medias dejaría un objeto
   // huérfano pagando espacio sin que nada lo liste.
-  handleDb('saves:deleteBackup', async (_event, backupId: number, gameId: number) => {
+  handleDb('saves:deleteBackup', async (_event, backupId: SaveBackupId, gameId: GameId) => {
     const rows = await getSaveBackups(gameId);
     const row = rows.find((candidate) => candidate.id === backupId);
     if (!row) return false;

@@ -1,5 +1,6 @@
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useRefreshGame } from '../hooks/useRefreshGame';
+import type { GameId } from '../../../shared/entityIds';
 
 // El botón fantasma de la fila del Plan — el MISMO tratamiento que el de
 // fijar (PinButton): invisible hasta que pasas el ratón por la fila, porque
@@ -13,7 +14,7 @@ export const RefreshGameButton = ({
   gameId,
   title,
 }: {
-  gameId: number;
+  gameId: GameId;
   title: string;
 }): React.JSX.Element => {
   const { refresh, refreshing } = useRefreshGame(gameId, title);

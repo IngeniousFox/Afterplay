@@ -1,3 +1,5 @@
+import type { GameId } from '../../shared/entityIds';
+
 // Puente mínimo entre el watcher y quien necesite saber si un juego está
 // corriendo AHORA. Existe para una regla concreta de las partidas guardadas
 // (PARTIDAS-GUARDADAS.md §10bis.3): nunca restaurar con el juego abierto —
@@ -9,13 +11,13 @@
 // hace falta ni consultar la BD ni escanear procesos otra vez. main/index.ts
 // la conecta al crear el watcher.
 
-let probe: (gameId: number) => boolean = () => false;
+let probe: (gameId: GameId) => boolean = () => false;
 
-export const setRunningGamesProbe = (next: (gameId: number) => boolean): void => {
+export const setRunningGamesProbe = (next: (gameId: GameId) => boolean): void => {
   probe = next;
 };
 
-export const isGameRunning = (gameId: number): boolean => {
+export const isGameRunning = (gameId: GameId): boolean => {
   try {
     return probe(gameId);
   } catch {

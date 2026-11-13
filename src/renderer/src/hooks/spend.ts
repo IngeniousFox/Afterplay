@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
+import type { SpendEventId } from '../../../shared/entityIds';
 
 // Bloque 5B — todos los gastos de la biblioteca (para Total Spent / Avg
 // Cost per Hour, con o sin filtro de año). Misma historia que useGames()/
@@ -28,20 +29,20 @@ export const useAddSpend = (): UseMutationResult<SpendEvent, Error, AddSpendEven
     [queryKeys.games.all, queryKeys.spend.all],
   );
 
-export const useDeleteSpendEvent = (): UseMutationResult<boolean, Error, number, unknown> =>
+export const useDeleteSpendEvent = (): UseMutationResult<boolean, Error, SpendEventId, unknown> =>
   useInvalidatingMutation(
-    (id: number) => window.api.spend.delete(id),
+    (id: SpendEventId) => window.api.spend.delete(id),
     [queryKeys.games.all, queryKeys.spend.all],
   );
 
 export const useUpdateSpendEvent = (): UseMutationResult<
   SpendEvent | null,
   Error,
-  { id: number; patch: UpdateSpendEventPatch },
+  { id: SpendEventId; patch: UpdateSpendEventPatch },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ id, patch }: { id: number; patch: UpdateSpendEventPatch }) =>
+    ({ id, patch }: { id: SpendEventId; patch: UpdateSpendEventPatch }) =>
       window.api.spend.update(id, patch),
     [queryKeys.games.all, queryKeys.spend.all],
   );

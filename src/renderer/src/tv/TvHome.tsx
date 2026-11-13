@@ -18,6 +18,7 @@ import { useTvFocusable } from './focusContext';
 import { forgetHome, recallHome, rememberHome } from './screenMemory';
 import { tvRevealClass, tvRevealStyle } from './styles';
 import { TvGameTile } from './TvGameTile';
+import type { GameId } from '../../../shared/entityIds';
 
 // La pantalla de aterrizaje del modo TV (BIG-PICTURE.md §5.1): el juego
 // "actual" como hero — el vivo si lo hay, si no el último jugado — con SU
@@ -145,7 +146,7 @@ const Shelf = ({
   onFocusGame?: (game: GameListItem) => void;
   // La carátula que debe heredar el foco al remontar (vuelta de una ficha,
   // ver screenMemory) — null en una visita normal.
-  autoFocusId?: number | null;
+  autoFocusId?: GameId | null;
   trailing?: React.ReactNode;
 }): React.JSX.Element | null => {
   if (games.length === 0 && !trailing) return null;
@@ -444,7 +445,7 @@ export const TvHome = (): React.JSX.Element => {
   // el d-pad repinta la sala entera. La card de arriba no se mueve: sigue
   // siendo el hero (el juego vivo o el último tocado). Al volver el foco a
   // sus botones, el fondo vuelve con él (spotId a null).
-  const [spotId, setSpotId] = useState<number | null>(null);
+  const [spotId, setSpotId] = useState<GameId | null>(null);
   const spotGame = useMemo(
     () => games.find((game) => game.id === spotId) ?? hero,
     [games, spotId, hero],
@@ -485,7 +486,7 @@ export const TvHome = (): React.JSX.Element => {
   // cada juego — currentState solo dice "está completado", no cuándo.
   const { data: stateEvents = [] } = useStateEvents();
   const finished = useMemo(() => {
-    const lastCompleted = new Map<number, number>();
+    const lastCompleted = new Map<GameId, number>();
     for (const event of stateEvents) {
       if (event.type !== 'completed') continue;
       const time = event.occurredAt.getTime();
@@ -582,7 +583,7 @@ export const TvHome = (): React.JSX.Element => {
   // commit, 91 por pulsación sumando sus 3 commits. Compilado, la pulsación
   // baja a 41 — y 39 de esos son el fanout del contexto de foco, que vive en
   // focusContext.ts (medido con el harness de 994 juegos).
-  const openGame = (game: GameListItem, focusOnReturn?: number | null): void => {
+  const openGame = (game: GameListItem, focusOnReturn?: GameId | null): void => {
     rememberHome({
       scrollTop: scrollRef.current?.scrollTop ?? 0,
       focusGameId: focusOnReturn === undefined ? game.id : focusOnReturn,

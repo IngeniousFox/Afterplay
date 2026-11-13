@@ -21,10 +21,11 @@ import { revealClass, revealStyle } from '../../../lib/styles';
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
 import { SessionNote } from '../../sessions/SessionNote';
 import { SectionLabel } from './SectionLabel';
+import type { AchievementId, GameId, SessionId } from '../../../../../shared/entityIds';
 
 type SessionHistoryListProps = {
   sessions: Session[];
-  gameId: number;
+  gameId: GameId;
 };
 
 const VISIBLE_LIMIT = 5;
@@ -50,7 +51,7 @@ const SessionRow = ({
   isRecord: boolean;
   // Pulsar un trofeo de la fila salta a SU logro, unas secciones más abajo
   // (LOGROS-REDISENO §1) — el módulo del flash hace de mensajero.
-  onOpenAchievement: (achievementId: number) => void;
+  onOpenAchievement: (achievementId: AchievementId) => void;
   // Parpadeo dorado al llegar desde el aviso de cierre: "esta es la sesión de
   // la que te hablaba". Dos pulsos y se acaba (ver main.css).
   flash: boolean;
@@ -172,7 +173,7 @@ export const SessionHistoryList = ({
   // compartida `achievementId` — sin este mapeo el campo quedaba undefined
   // por estructura y los trofeos de la fila no enlazaban a nada (el boton ni
   // se pintaba), que es justo lo que el rediseño vino a arreglar.
-  const achievementsBySession = new Map<number, SessionAchievementEntry[]>();
+  const achievementsBySession = new Map<SessionId, SessionAchievementEntry[]>();
   for (const entry of achievementsData?.entries ?? []) {
     if (entry.sessionId === null || entry.unlockedAt === null) continue;
     const list = achievementsBySession.get(entry.sessionId) ?? [];

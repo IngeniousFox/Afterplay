@@ -20,6 +20,7 @@ import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
 import { InfoChip } from './InfoChip';
 import { StatTile } from './StatTile';
+import type { IterationId } from '../../../../../shared/entityIds';
 
 // Píldoras por página — las que caben en el ancho del sidebar sin apretarse.
 const PER_PAGE = 4;
@@ -33,7 +34,7 @@ type PlaythroughPanelProps = {
   // necesita saber cuál es el playthrough elegido para mover su marcador,
   // así que la selección vive un nivel más arriba, no aquí dentro.
   selectedIteration: IterationDetail;
-  onSelectIteration: (id: number) => void;
+  onSelectIteration: (id: IterationId) => void;
 };
 
 // La tira de viaje: inicio ──── cuánto duró ──── desenlace. Un playthrough es

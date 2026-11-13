@@ -8,6 +8,7 @@ import { buildIgdbBatchPatch } from '../external/igdbPatch';
 import { fillMissingSgdbIds } from '../external/sgdbBackfill';
 import { isExternalRefreshRunning, startExternalRefresh } from '../external/refresh';
 import { notifyRadarActivity } from './notify';
+import type { GameId } from '../../shared/entityIds';
 
 // EL RADAR DE SECUELAS (PLAN-TO-PLAY.md §4) — la única cosa de todo este
 // documento que corre SOLA, sin que pulses nada.
@@ -130,7 +131,7 @@ const refreshMembership = async (): Promise<number[]> => {
   );
   if (games.length === 0) return [];
   const inIgdb = games.filter(
-    (game): game is { id: number; igdbId: number } => game.igdbId !== null,
+    (game): game is { id: GameId; igdbId: number } => game.igdbId !== null,
   );
 
   // Red fuera del candado, como siempre. Es el MISMO lote que el refresco

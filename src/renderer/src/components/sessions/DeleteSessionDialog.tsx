@@ -6,12 +6,13 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
+import type { SessionId } from '../../../../shared/entityIds';
 
 type DeleteSessionDialogProps = {
   // null = cerrado. `label` es la línea que identifica la sesión al usuario
   // ("Dark Souls — Jul 19, 2026 · 1h 27m") — cada vista la compone con lo
   // que tiene a mano.
-  session: { id: number; label: string } | null;
+  session: { id: SessionId; label: string } | null;
   onClose: () => void;
   // Sesión de emulador aún sin asignar (bandeja Pending): mismo diálogo,
   // pero descarta con deletePending (nunca tocó ningún juego) — sin esto,

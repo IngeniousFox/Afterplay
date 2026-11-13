@@ -5,6 +5,7 @@ import type {
   GameFullRefreshResult,
   RatingsRefreshResult,
 } from '../../shared/types';
+import type { GameId } from '../../shared/entityIds';
 
 // Datos externos de la biblioteca (PLAN-TO-PLAY.md §5): notas y sinopsis de
 // IGDB, fecha de salida con su precisión, sagas, y etiquetas + reseñas de
@@ -20,12 +21,12 @@ export const externalApi = {
   // La de UN juego, desde su ficha: aquí SÍ se espera al resultado (son
   // segundos, no minutos) y vuelve el parte de qué pudo con qué. null = ese
   // juego ya no existe.
-  refreshGame: (gameId: number): Promise<GameFullRefreshResult | null> =>
+  refreshGame: (gameId: GameId): Promise<GameFullRefreshResult | null> =>
     ipcRenderer.invoke('external:refreshGame', gameId),
   // Y la del ⟳ de la card Ratings: solo las tres notas que esa card enseña
   // (las dos de IGDB y el % de Steam). Guarda de paso la sinopsis, las sagas
   // y la fecha completa, que vienen en la misma respuesta de IGDB.
-  refreshRatings: (gameId: number): Promise<RatingsRefreshResult | null> =>
+  refreshRatings: (gameId: GameId): Promise<RatingsRefreshResult | null> =>
     ipcRenderer.invoke('external:refreshRatings', gameId),
   // Mismo contrato que curiosities.onActivity: devuelve la funcion de limpieza
   // que quita el listener, para encajar con el cleanup de useEffect.

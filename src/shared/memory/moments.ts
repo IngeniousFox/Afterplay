@@ -9,9 +9,12 @@
 // del diario), cada uno con sus propias filas — de ahí que los inputs sean
 // formas estructurales mínimas y no los tipos de Drizzle.
 
+import { compareByCreation } from '../entityIds';
+import type { GameId, SessionId } from '../entityIds';
+
 export type MemorySession = {
-  id: number;
-  gameId: number;
+  id: SessionId;
+  gameId: GameId;
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
@@ -19,21 +22,27 @@ export type MemorySession = {
 };
 
 export type Moment =
-  | { type: 'first_session'; gameId: number; sessionId: number; occurredAt: Date }
-  | { type: 'return'; gameId: number; sessionId: number; occurredAt: Date; awayDays: number }
+  | { type: 'first_session'; gameId: GameId; sessionId: SessionId; occurredAt: Date }
+  | { type: 'return'; gameId: GameId; sessionId: SessionId; occurredAt: Date; awayDays: number }
   | {
       type: 'longest_session';
-      gameId: number;
-      sessionId: number;
+      gameId: GameId;
+      sessionId: SessionId;
       occurredAt: Date;
       durationSec: number;
       previousBestSec: number;
     }
-  | { type: 'hours_milestone'; gameId: number; sessionId: number; occurredAt: Date; hours: number }
+  | {
+      type: 'hours_milestone';
+      gameId: GameId;
+      sessionId: SessionId;
+      occurredAt: Date;
+      hours: number;
+    }
   | {
       type: 'sessions_milestone';
-      gameId: number;
-      sessionId: number;
+      gameId: GameId;
+      sessionId: SessionId;
       occurredAt: Date;
       count: number;
     };
@@ -73,9 +82,9 @@ const isMeasured = (session: MemorySession): boolean =>
 // las 25": las cruzaste antes de que existiera el tracking.
 export const deriveMoments = (
   sessions: MemorySession[],
-  manualHoursByGame?: ReadonlyMap<number, number>,
+  manualHoursByGame?: ReadonlyMap<GameId, number>,
 ): Moment[] => {
-  const byGame = new Map<number, MemorySession[]>();
+  const byGame = new Map<GameId, MemorySession[]>();
   for (const session of sessions) {
     const list = byGame.get(session.gameId) ?? [];
     list.push(session);
@@ -87,7 +96,9 @@ export const deriveMoments = (
   for (const [gameId, gameSessions] of byGame) {
     const ordered = gameSessions
       .slice()
-      .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime() || a.id - b.id);
+      .sort(
+        (a, b) => a.startedAt.getTime() - b.startedAt.getTime() || compareByCreation(a.id, b.id),
+      );
 
     let totalHours = manualHoursByGame?.get(gameId) ?? 0;
     let measuredCount = 0;
@@ -177,8 +188,8 @@ export const deriveMoments = (
 
 // Índice por sesión, para pintar los distintivos del diario sin recorrer la
 // lista entera fila a fila.
-export const momentsBySession = (moments: Moment[]): Map<number, Moment[]> => {
-  const map = new Map<number, Moment[]>();
+export const momentsBySession = (moments: Moment[]): Map<SessionId, Moment[]> => {
+  const map = new Map<SessionId, Moment[]>();
   for (const moment of moments) {
     const list = map.get(moment.sessionId) ?? [];
     list.push(moment);

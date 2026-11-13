@@ -1,3 +1,4 @@
+import type { AchievementId } from './entityIds';
 // LA regla de esta zona, en un solo sitio: "una fecha fiable gana a una que
 // no; empatadas, la más temprana".
 //
@@ -33,7 +34,7 @@
 // (la sesión, el playthrough) lo saca de ahí, y quien necesite todas las
 // fuentes tiene `rows`.
 export type UnlockCandidate = {
-  achievementId: number;
+  achievementId: AchievementId;
   unlockedAt: Date;
   dateReliable: boolean;
 };
@@ -48,8 +49,8 @@ export type MergedUnlock<T extends UnlockCandidate> = {
 
 export const mergeUnlocksByAchievement = <T extends UnlockCandidate>(
   rows: readonly T[],
-): Map<number, MergedUnlock<T>> => {
-  const merged = new Map<number, MergedUnlock<T>>();
+): Map<AchievementId, MergedUnlock<T>> => {
+  const merged = new Map<AchievementId, MergedUnlock<T>>();
 
   for (const row of rows) {
     const existing = merged.get(row.achievementId);

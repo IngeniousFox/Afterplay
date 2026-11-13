@@ -9,6 +9,7 @@ import {
   type PlaythroughStateEventRow,
   type ResolvePlaythroughInput,
 } from '../resolvePlaythrough';
+import type { IterationId } from '../../entityIds';
 
 // LA DECISIÓN PURA de "¿en qué playthrough cae jugar a este juego en `at`?".
 //
@@ -23,14 +24,14 @@ import {
 // defecto igual a `at` se prueba la puerta del watcher/Play/cronómetro, que
 // siempre juega AHORA.
 
-type Ev = [iterationId: number, type: PlaythroughStateEventRow['type'], occurredAt: string];
+type Ev = [iterationId: IterationId, type: PlaythroughStateEventRow['type'], occurredAt: string];
 
 const NORMAL: PlaythroughGameRow = { endless: false, isEmulated: false, officialPlatforms: null };
 
 // Los ids de los eventos siguen el orden en que se escriben en la lista, igual
 // que en una base: el empate de instante lo gana el escrito después.
 const decide = (opts: {
-  playthroughs?: (number | PlaythroughRow)[];
+  playthroughs?: (IterationId | PlaythroughRow)[];
   events?: Ev[];
   game?: PlaythroughGameRow | null;
   at: string;
@@ -38,7 +39,7 @@ const decide = (opts: {
 }): PlaythroughDecision => {
   const input: ResolvePlaythroughInput = {
     playthroughs: (opts.playthroughs ?? []).map((p) =>
-      typeof p === 'number' ? { id: p, label: `Playthrough ${p}` } : p,
+      typeof p === 'object' ? p : { id: p, label: `Playthrough ${p}` },
     ),
     events: (opts.events ?? []).map(([iterationId, type, occurredAt], index) => ({
       id: index + 1,

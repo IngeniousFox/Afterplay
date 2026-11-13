@@ -20,6 +20,7 @@ import { StatusIcon } from '../StatusIcon';
 import { GameFilterPanel } from './GameFilterPanel';
 import { NowPlayingCard } from './NowPlayingCard';
 import { GREEN } from '../../lib/colors';
+import { parseEntityId, type GameId } from '../../../../shared/entityIds';
 
 // Mueve la selección `delta` posiciones dentro de `items`. Sin selección
 // previa (o si la actual ya no está en la lista filtrada) entra por el
@@ -42,12 +43,12 @@ const nextSelection = <T,>(items: T[], current: T, delta: 1 | -1): T | undefined
 //   - Cualquier otro render (un refresco del watcher, por ejemplo): si has
 //     desplazado la lista a mano, no debe devolverte de un tirón.
 const useSelectedRowScroll = (
-  selectedId: number | null,
+  selectedId: GameId | null,
   listSize: number,
 ): {
   attachSelectedRow: (node: HTMLDivElement | null) => void;
   onKeyboardMove: () => void;
-  onManualSelect: (nextSelectedId: number | null) => void;
+  onManualSelect: (nextSelectedId: GameId | null) => void;
 } => {
   const lastKeyRef = useRef<string | null>(null);
   const blockRef = useRef<ScrollLogicalPosition>('center');
@@ -411,7 +412,7 @@ const GroupHeader = ({
 const LibraryNavColumn = (): React.JSX.Element => {
   const navigate = useNavigate();
   const detailMatch = useMatch('/games/:id');
-  const selectedId = detailMatch ? Number(detailMatch.params.id) : null;
+  const selectedId = detailMatch ? parseEntityId(detailMatch.params.id) : null;
   const { data: games = [] } = useGames();
   const [search, setSearch] = useState('');
   const [activeOpen, setActiveOpen] = useState(true);
@@ -530,7 +531,7 @@ const LibraryNavColumn = (): React.JSX.Element => {
 const PlanNavColumn = (): React.JSX.Element => {
   const navigate = useNavigate();
   const detailMatch = useMatch('/plan/:id');
-  const selectedId = detailMatch ? Number(detailMatch.params.id) : null;
+  const selectedId = detailMatch ? parseEntityId(detailMatch.params.id) : null;
   const { data: games = [] } = usePlannedGames();
   const [search, setSearch] = useState('');
   const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
@@ -603,7 +604,7 @@ const SessionsNavColumn = (): React.JSX.Element => {
   const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
   const totalSessions = games.reduce((sum, game) => sum + game.sessionCount, 0);
   const gameParam = searchParams.get('game');
-  const selectedId = gameParam ? Number(gameParam) : null;
+  const selectedId = gameParam ? parseEntityId(gameParam) : null;
   const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
     selectedId,
     filtered.length,
@@ -632,7 +633,7 @@ const SessionsNavColumn = (): React.JSX.Element => {
       // null = la fila "All games", que también es seleccionable: subir desde
       // el primer juego llega hasta ella.
       onArrowNavigate={(delta) => {
-        const next = nextSelection<number | null>(
+        const next = nextSelection<GameId | null>(
           [null, ...filtered.map((game) => game.id)],
           selectedId,
           delta,
@@ -680,7 +681,7 @@ const StatsNavColumn = (): React.JSX.Element => {
   const [search, setSearch] = useState('');
   const { filters, setFilters, visible: filtered, genres } = useColumnFilters(games, search);
   const gameParam = searchParams.get('game');
-  const selectedId = gameParam ? Number(gameParam) : null;
+  const selectedId = gameParam ? parseEntityId(gameParam) : null;
   const { attachSelectedRow, onKeyboardMove, onManualSelect } = useSelectedRowScroll(
     selectedId,
     filtered.length,
@@ -712,7 +713,7 @@ const StatsNavColumn = (): React.JSX.Element => {
         />
       }
       onArrowNavigate={(delta) => {
-        const next = nextSelection<number | null>(
+        const next = nextSelection<GameId | null>(
           [null, ...filtered.map((game) => game.id)],
           selectedId,
           delta,

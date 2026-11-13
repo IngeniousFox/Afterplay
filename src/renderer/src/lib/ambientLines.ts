@@ -1,6 +1,7 @@
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../shared/types';
 import { DAY_MS } from './dateMath';
 import { formatElapsed, formatHours, formatMoney } from './format';
+import { entityIdSeed } from '../../../shared/entityIds';
 
 // Lo que el modo ambiente susurra debajo del título.
 //
@@ -194,7 +195,7 @@ export const ambientLines = (
   // juego. El contador desacopla las elecciones entre hechos (sin él, todos
   // los `say` del render caerían en el mismo índice y las variantes irían en
   // bloque). Determinista dentro del render: nada de Math.random.
-  const flavorBase = Math.abs(game.id * 31 + Math.floor(now / DAY_MS));
+  const flavorBase = Math.abs(entityIdSeed(game.id) * 31 + Math.floor(now / DAY_MS));
   let flavorSalt = 0;
   const say = (...phrasings: string[]): string =>
     phrasings[(flavorBase + flavorSalt++) % phrasings.length];

@@ -6,6 +6,7 @@ import { TvFocusLayer } from './focus';
 import { useTvFocusable, useTvLayerIsActive } from './focusContext';
 import { useTvInputDevice } from './inputDevice';
 import { tvSound } from './sound';
+import type { GameId } from '../../../shared/entityIds';
 
 // El teclado en pantalla del modo TV (BIG-PICTURE.md §7.4). Tonto a
 // propósito — value/onChange/onClose y pintar teclas — para que el día que
@@ -187,7 +188,7 @@ const Key = ({
 };
 
 export type TvKeyboardSuggestion = {
-  id: number;
+  id: GameId;
   label: string;
   coverUrl: string | null;
 };
@@ -252,7 +253,7 @@ type TvKeyboardProps = {
   // Presentes (aunque vacíen): la fila reserva su alto para que el panel no
   // dé saltos al aparecer/desaparecer resultados. Ausentes: ni se pinta.
   suggestions?: TvKeyboardSuggestion[];
-  onSuggestion?: (id: number) => void;
+  onSuggestion?: (id: GameId) => void;
 };
 
 // El wrapper solo abre la capa modal; la superficie vive DENTRO para poder

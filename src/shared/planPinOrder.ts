@@ -1,6 +1,7 @@
 import { redistributePinStamps } from './domain/planOrder';
+import type { GameId } from './entityIds';
 
-type PinnedGame = { id: number; planPinnedAt: Date | null };
+type PinnedGame = { id: GameId; planPinnedAt: Date | null };
 
 // Adaptador Date → milisegundos para quien maneja filas del escritorio con
 // `planPinnedAt: Date` (la respuesta optimista del arrastre en el renderer).
@@ -8,8 +9,8 @@ type PinnedGame = { id: number; planPinnedAt: Date | null };
 // misma que usan el commit de SQLite, el drenado del buzón y la PWA.
 export const planPinOrder = (
   games: readonly PinnedGame[],
-  orderedIds: readonly number[],
-): Map<number, number> =>
+  orderedIds: readonly GameId[],
+): Map<GameId, number> =>
   redistributePinStamps(
     games.map((game) => ({ id: game.id, pinnedAt: game.planPinnedAt?.getTime() ?? null })),
     orderedIds,

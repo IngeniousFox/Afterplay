@@ -1,6 +1,7 @@
 import { hoursByGameInYear } from '../../../shared/domain/hours';
 import type { GameListItem, SessionWithGame, SpendEventSummary } from '../../../shared/types';
 import type { Year } from '../components/stats/YearPicker';
+import type { GameId } from '../../../shared/entityIds';
 
 // Las cifras de cabecera de un año (o de toda la vida), y el reparto de horas
 // por juego del que salen. Función suelta y no hook: quien la usa la llama dos
@@ -29,7 +30,7 @@ export const yearTotals = (
   spendEvents: SpendEventSummary[],
   year: Year,
 ): {
-  hoursByGame: Map<number, number>;
+  hoursByGame: Map<GameId, number>;
   totalGames: number;
   totalHours: number;
   totalSpent: number;

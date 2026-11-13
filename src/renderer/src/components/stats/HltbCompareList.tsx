@@ -10,9 +10,10 @@ import { StatCardEmpty } from './StatCardEmpty';
 import { StatsPager } from './StatsPager';
 import { usePagedYear } from './usePagedYear';
 import type { Year } from './YearPicker';
+import { compareByCreation, type GameId, type IterationId } from '../../../../shared/entityIds';
 
 type CompareSession = {
-  iterationId: number;
+  iterationId: IterationId;
   durationSec: number | null;
 };
 
@@ -23,7 +24,7 @@ type HltbCompareListProps = {
   // sesiones ya vienen sin marcadores de borde (getAllSessions).
   sessions: CompareSession[];
   year: Year;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 };
 
 const MAX_ENTRIES = 6;
@@ -45,7 +46,7 @@ export const HltbCompareList = ({
   const entries = useMemo(() => {
     // El ÚLTIMO evento 'completed' de cada juego dentro de la ventana decide
     // qué playthrough se compara (desempate por id, como el resto de la app).
-    const lastCompletedByGame = new Map<number, StateEventSummary>();
+    const lastCompletedByGame = new Map<GameId, StateEventSummary>();
     for (const event of stateEvents) {
       if (event.type !== 'completed') continue;
       if (year !== 'all' && event.occurredAt.getFullYear() !== year) continue;
@@ -53,13 +54,14 @@ export const HltbCompareList = ({
       if (
         !current ||
         event.occurredAt.getTime() > current.occurredAt.getTime() ||
-        (event.occurredAt.getTime() === current.occurredAt.getTime() && event.id > current.id)
+        (event.occurredAt.getTime() === current.occurredAt.getTime() &&
+          compareByCreation(event.id, current.id) > 0)
       ) {
         lastCompletedByGame.set(event.gameId, event);
       }
     }
 
-    const trackedSecondsByIteration = new Map<number, number>();
+    const trackedSecondsByIteration = new Map<IterationId, number>();
     for (const session of sessions) {
       trackedSecondsByIteration.set(
         session.iterationId,

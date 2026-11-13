@@ -16,6 +16,7 @@ import { maybeCelebrateCompletion } from './notifications/complete';
 import { enqueueAchievementToasts } from './notifications/overlay';
 import type { AchievementToast } from './notifications/overlay';
 import type { PendingAchievementsGame } from './queue';
+import type { AchievementId, GameId } from '../../shared/entityIds';
 
 // El juego (nombre y hero) solo se conoce aquí, no dentro de storeUnlocks
 // (que trabaja por gameId) — se rellena al encolar. Y tras la tanda, la
@@ -52,7 +53,7 @@ export type GameAchievementSyncResult = {
 type UnlockInput = { apiName: string; unlockedAt: Date | null };
 
 // Una fila de desbloqueo que YA estaba guardada, para el censo de instantes.
-type StoredInstant = { achievementId: number; unlockedAt: Date };
+type StoredInstant = { achievementId: AchievementId; unlockedAt: Date };
 
 // A partir de cuántos desbloqueos con el MISMO segundo exacto se considera
 // que la fecha es del rescate y no de la hazaña. Cinco es holgado: sacar dos
@@ -87,14 +88,14 @@ const BULK_SAME_SECOND = 5;
 // el sexto de la tanda troceada volvería a pasar por fiable. Dentro de una
 // misma tanda los nulos siguen sin contar (no tienen instante propio).
 const unreliableTimestamps = (
-  batch: { key: number | string; unlockedAt: Date | null }[],
+  batch: { key: AchievementId | string; unlockedAt: Date | null }[],
   stored: StoredInstant[],
 ): Set<number> => {
-  const keysByTime = new Map<number, Set<number | string>>();
+  const keysByTime = new Map<number, Set<AchievementId | string>>();
   for (const unlock of batch) {
     if (!unlock.unlockedAt) continue;
     const time = unlock.unlockedAt.getTime();
-    const keys = keysByTime.get(time) ?? new Set<number | string>();
+    const keys = keysByTime.get(time) ?? new Set<AchievementId | string>();
     keys.add(unlock.key);
     keysByTime.set(time, keys);
   }
@@ -117,7 +118,7 @@ const unreliableTimestamps = (
 // antes de esta llamada). Es lo que decide qué merece un aviso en pantalla:
 // sin esa distinción, la primera pasada por 300 juegos dispararía miles.
 export const storeUnlocks = async (
-  gameId: number,
+  gameId: GameId,
   source: 'steam' | 'emu' | 'ra',
   unlocks: UnlockInput[],
   // Para los desbloqueos sin fecha propia (Steam la perdió, o el crack no la
@@ -362,7 +363,7 @@ export type EmuUnlocksApplied = {
 // juego y solo lo hacen los dos caminos lentos, no el vigilante, que salta con
 // cada fichero que escribe un crack.
 export const applyEmuUnlocksForGame = async (
-  game: { id: number; steamAppId: number; executablePath: string | null },
+  game: { id: GameId; steamAppId: number; executablePath: string | null },
   // Para los desbloqueos sin fecha propia. Cada llamante trae la suya: la
   // sincronización usa el mismo instante que estampa en el juego; el barrido y
   // el vigilante, el de ahora.
@@ -389,7 +390,7 @@ export const applyEmuUnlocksForGame = async (
 // no ha cacheado) o no trae texto para ese logro, la fila se queda como estaba
 // — un "no" de una fuente no borra lo que ya había.
 const fillHiddenDescriptions = async (
-  gameId: number,
+  gameId: GameId,
   appId: number,
   definitions: SteamAchievementDef[],
 ): Promise<void> => {
@@ -660,7 +661,7 @@ export const syncGameAchievements = async (
 // se los colgaba a esa sesión y la pantalla de Sesiones se inventaba que los
 // habías sacado en ese rato — justo lo que prohíbe la regla 1 de
 // LOGROS-IDEAS §1 ("ni en sesiones").
-export const replaceUnlockPlacements = async (gameId: number): Promise<number> => {
+export const replaceUnlockPlacements = async (gameId: GameId): Promise<number> => {
   const windows = await withDbAccess(async () => getSessionWindows(gameId));
   if (windows.length === 0) return 0;
 

@@ -6,6 +6,11 @@ import { formatDateOnly, formatMoney } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
+import {
+  compareEntityIds,
+  type SpendEventId,
+  type StateEventId,
+} from '../../../../shared/entityIds';
 
 // La línea temporal del HistoryList de escritorio (SPEC 4.5/4.6 fusionado:
 // estados y gastos entrelazados por fecha), en LECTURA absoluta para el
@@ -26,7 +31,7 @@ type HistoryEntry =
   | {
       key: string;
       kind: 'status';
-      id: number;
+      id: StateEventId;
       date: Date;
       datePrecision: StateEvent['datePrecision'];
       note: string | null;
@@ -35,7 +40,7 @@ type HistoryEntry =
   | {
       key: string;
       kind: 'spend';
-      id: number;
+      id: SpendEventId;
       date: Date;
       datePrecision: SpendEvent['datePrecision'];
       note: string | null;
@@ -46,11 +51,23 @@ type HistoryEntry =
       // Derivada de gamesTable.addedAt — no existe como evento en la DB.
       key: string;
       kind: 'added';
-      id: number;
       date: Date;
       datePrecision: StateEvent['datePrecision'];
       note: string | null;
     };
+
+// El orden del historial, el mismo que el del escritorio (HistoryList): lo
+// más reciente arriba, la entrada "added" al fondo a igual fecha exacta —
+// primero "entró en Afterplay", luego todo lo demás— y, entre dos eventos
+// reales, el id más alto primero. Ese último desempate mezcla estados y
+// gastos (dos tablas): es un orden estable, no "el creado después".
+const newestFirst = (a: HistoryEntry, b: HistoryEntry): number => {
+  const byDate = b.date.getTime() - a.date.getTime();
+  if (byDate !== 0) return byDate;
+  if (a.kind === 'added') return b.kind === 'added' ? 0 : 1;
+  if (b.kind === 'added') return -1;
+  return compareEntityIds(b.id, a.id);
+};
 
 // La marca de AÑO entre entradas: en historiales largos da un punto de
 // referencia sin leer la fecha de cada fila (misma razón que el escritorio).
@@ -232,19 +249,16 @@ export const TvDetailHistory = ({ game }: { game: GameDetail }): React.JSX.Eleme
         spendType: event.type,
         amount: event.amount,
       })),
-      // id 0 (ningún evento real lo tiene): en empate de fecha exacta el
-      // desempate por id la deja siempre al fondo — primero "entró en
-      // Afterplay", luego todo lo demás.
+      // En empate de fecha exacta va siempre al fondo (ver newestFirst).
       {
         key: 'added',
         kind: 'added',
-        id: 0,
         date: game.addedAt,
         datePrecision: 'datetime',
         note: inheritedNote,
       },
     ];
-    return list.sort((a, b) => b.date.getTime() - a.date.getTime() || b.id - a.id);
+    return list.sort(newestFirst);
   }, [game.stateHistory, game.spendHistory, game.addedAt]);
 
   return (

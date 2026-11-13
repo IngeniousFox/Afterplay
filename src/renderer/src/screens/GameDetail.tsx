@@ -26,9 +26,10 @@ import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholde
 import { useGame, useMoveToPlan } from '../hooks/games';
 import { lastIteration } from '../lib/iterations';
 import { revealClass, revealStyle } from '../lib/styles';
+import type { GameId, IterationId } from '../../../shared/entityIds';
 
 type GameDetailProps = {
-  gameId: number;
+  gameId: GameId;
   onBack: () => void;
   onMovedToPlan: () => void;
 };
@@ -52,7 +53,9 @@ export const GameDetail = ({
   // reciente = la última creada (getGameById ordena las iteraciones por id
   // ascendente).
   const newestId = lastIteration(game?.iterations ?? [])?.id;
-  const [selectedIterationId, setSelectedIterationId] = useState<number | null>(newestId ?? null);
+  const [selectedIterationId, setSelectedIterationId] = useState<IterationId | null>(
+    newestId ?? null,
+  );
   // Al entrar se muestra la más reciente, y si aparece una nueva (p.ej. el
   // watcher creó un playthrough con el detalle abierto) la selección salta a
   // ella. Patrón de "ajustar estado durante el render" (compatible con React

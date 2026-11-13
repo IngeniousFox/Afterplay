@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { GameDetail } from '../src/shared/types';
 import { expect, test } from './fixtures';
+import type { GameId } from '../src/shared/entityIds';
 
 // LA LOGICA DE NEGOCIO, DE PUNTA A PUNTA, CON EL DRIVER DE PRODUCCION.
 //
@@ -47,7 +48,7 @@ const mustFind = <T>(value: T | null | undefined, message: string): T => {
 };
 
 // La ficha completa de un juego, por el mismo canal que usa GameDetail.tsx.
-const fetchGame = (page: Page, gameId: number): Promise<GameDetail | null> =>
+const fetchGame = (page: Page, gameId: GameId): Promise<GameDetail | null> =>
   page.evaluate((id) => globalThis.api.games.getById(id), gameId);
 
 test.describe('logica de negocio (e2e, driver de produccion)', () => {

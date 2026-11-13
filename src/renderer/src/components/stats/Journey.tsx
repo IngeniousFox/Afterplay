@@ -18,6 +18,7 @@ import { formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { revealClass, revealStyle } from '../../lib/styles';
 import { BLUE, GREEN, VIOLET } from '../../lib/colors';
+import type { GameId } from '../../../../shared/entityIds';
 
 // La otra vista de Stats: no cifras, sino el recorrido. Una línea temporal de
 // años y meses con las carátulas de lo que jugaste en cada uno.
@@ -184,7 +185,7 @@ type JourneyProps = {
   games: GameListItem[];
   sessions: SessionWithGame[];
   stateEvents: StateEventSummary[];
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 };
 
 // Sin año: se usa dentro del panel flotante, donde el año ya se ha dicho

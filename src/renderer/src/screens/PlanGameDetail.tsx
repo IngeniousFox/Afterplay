@@ -28,11 +28,12 @@ import {
   revealStyle,
   squareIconButtonClass,
 } from '../lib/styles';
+import type { GameId } from '../../../shared/entityIds';
 
 const PLAN_COLOR = STATUS_META.plan.color;
 
 type PlanGameDetailProps = {
-  gameId: number;
+  gameId: GameId;
   onBack: () => void;
   // Tras pasar el juego a la biblioteca: su ficha ya no vive en /plan.
   onPromoted: () => void;

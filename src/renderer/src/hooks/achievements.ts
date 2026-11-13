@@ -9,16 +9,21 @@ import type {
   SessionUnlock,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
+import type { GameId } from '../../../shared/entityIds';
 
 // Logros de un juego. staleTime Infinity porque solo cambian cuando el main
 // avisa por 'achievements:activity' — y ese aviso ya invalida esta key (ver
 // createAchievementsActivityInvalidator: la ficha del juego sincronizado es
 // justo lo que SÍ se refresca al momento, incluso a media pasada), así que no
 // hace falta refetchear por mount/focus.
-export const useGameAchievements = (gameId: number): UseQueryResult<GameAchievements, Error> =>
+// `null`: mismo contrato que useGame (un id de ruta ilegible, nada que pedir).
+export const useGameAchievements = (
+  gameId: GameId | null,
+): UseQueryResult<GameAchievements, Error> =>
   useQuery({
     queryKey: queryKeys.achievements.game(gameId),
-    queryFn: () => window.api.achievements.getForGame(gameId),
+    queryFn: () => window.api.achievements.getForGame(gameId as GameId),
+    enabled: gameId !== null,
     staleTime: Infinity,
   });
 
@@ -84,7 +89,7 @@ const REFRESH_SPIN_TIMEOUT_MS = 45_000;
 // ya está". Si el juego ni siquiera entró en la cola (sin clave de Steam, o
 // no está en Steam), se para en seco en vez de esperar a nadie.
 export const useRefreshGameAchievements = (
-  gameId: number,
+  gameId: GameId,
 ): { refresh: () => void; refreshing: boolean } => {
   const [refreshing, setRefreshing] = useState(false);
 

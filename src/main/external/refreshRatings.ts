@@ -7,6 +7,7 @@ import type { GamePatch } from '../db/writeTypes';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { getSteamReviewCounts } from '../steam/reviews';
 import { findSteamAppIdFix } from './steamAppIdFix';
+import type { GameId } from '../../shared/entityIds';
 
 // El ⟳ de la card "Ratings" de la ficha — las TRES notas que esa card enseña.
 //
@@ -34,7 +35,7 @@ import { findSteamAppIdFix } from './steamAppIdFix';
 // base de datos.
 //
 // null = ese juego ya no está en la biblioteca.
-export const refreshGameRatings = async (gameId: number): Promise<RatingsRefreshResult | null> => {
+export const refreshGameRatings = async (gameId: GameId): Promise<RatingsRefreshResult | null> => {
   const [game] = await withDbAccess(async () =>
     getDb()
       .select({

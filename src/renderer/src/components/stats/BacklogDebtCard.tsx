@@ -7,6 +7,7 @@ import { DAY_MS } from '../../lib/dateMath';
 import { formatHours, pluralize } from '../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { StatCard } from './StatCard';
+import type { GameId } from '../../../../shared/entityIds';
 
 type BacklogSession = { startedAt: Date; durationSec: number | null };
 
@@ -184,7 +185,7 @@ const computeMovement = (
   // Primer evento que saca a cada juego de la deuda. Los replays no
   // molestan: quedarse con el MÁS TEMPRANO ya da el momento en que dejó de
   // estar pendiente por primera vez.
-  const exitByGame = new Map<number, number>();
+  const exitByGame = new Map<GameId, number>();
   for (const event of stateEvents) {
     if (!TERMINAL_TYPES.has(event.type)) continue;
     const time = event.occurredAt.getTime();

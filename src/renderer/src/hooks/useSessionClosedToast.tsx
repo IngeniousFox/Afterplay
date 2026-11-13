@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SessionClosedToast } from '../components/SessionClosedToast';
 import { queryKeys } from './queryKeys';
+import type { SessionId } from '../../../shared/entityIds';
 
 // Cuánto vive el aviso. Generoso a propósito: el toast trae un campo de texto
 // y escribir "me quedé en el jefe del castillo" lleva más que leer un mensaje.
@@ -13,14 +14,14 @@ const TOAST_DURATION_MS = 15000;
 // pide. Vive fuera de React (un módulo, no un contexto) porque el aviso puede
 // llegar estando en cualquier pantalla: la ficha lo consulta al montar, sin
 // que haya que cablear un provider por toda la app.
-let pendingFlashSessionId: number | null = null;
+let pendingFlashSessionId: SessionId | null = null;
 const flashListeners = new Set<() => void>();
 
 const emitFlashChange = (): void => {
   for (const listener of flashListeners) listener();
 };
 
-export const requestSessionFlash = (sessionId: number): void => {
+export const requestSessionFlash = (sessionId: SessionId): void => {
   pendingFlashSessionId = sessionId;
   // Avisar a quien YA esté montado: si estás viendo la ficha de ese juego, la
   // ruta no cambia al pulsar el aviso, así que no hay remontaje y nadie
@@ -49,7 +50,7 @@ export const subscribeSessionFlash = (listener: () => void): (() => void) => {
   };
 };
 
-export const getPendingSessionFlash = (): number | null => pendingFlashSessionId;
+export const getPendingSessionFlash = (): SessionId | null => pendingFlashSessionId;
 
 // Levanta el aviso de "acabas de cerrar X" cuando el watcher cierra una
 // sesión. Una sola suscripción para toda la app, montada en la raíz.

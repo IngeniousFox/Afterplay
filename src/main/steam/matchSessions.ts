@@ -1,6 +1,12 @@
 import { asc, eq } from 'drizzle-orm';
 import { getDb } from '../db';
 import { iterationsTable, sessionsTable } from '../db/schema';
+import {
+  compareByCreation,
+  type GameId,
+  type IterationId,
+  type SessionId,
+} from '../../shared/entityIds';
 
 // Colgar cada desbloqueo del rato en que pasó (LOGROS.md §4).
 //
@@ -11,16 +17,16 @@ import { iterationsTable, sessionsTable } from '../db/schema';
 // que es lo que luego pueden contar el Journey y los recaps del Loop.
 
 export type SessionWindow = {
-  sessionId: number;
-  iterationId: number;
+  sessionId: SessionId;
+  iterationId: IterationId;
   startedAt: Date;
   // null en una sesión todavía abierta (estás jugando ahora mismo).
   endedAt: Date | null;
 };
 
 export type UnlockPlacement = {
-  sessionId: number | null;
-  iterationId: number | null;
+  sessionId: SessionId | null;
+  iterationId: IterationId | null;
 };
 
 // Margen de gracia al cerrar la sesión. El watcher cierra la sesión cuando el
@@ -39,7 +45,7 @@ const GRACE_MS = 2 * 60 * 1000;
 // arranque, no por posición—, pero esta lista la recorre también quien lea las
 // ventanas en el futuro, y una lista cronológica es lo que todo el mundo
 // asume al mirarla.
-export const getSessionWindows = async (gameId: number): Promise<SessionWindow[]> => {
+export const getSessionWindows = async (gameId: GameId): Promise<SessionWindow[]> => {
   const rows = await getDb()
     .select({
       sessionId: sessionsTable.id,
@@ -85,7 +91,7 @@ export const placeUnlock = (unlockedAt: Date | null, windows: SessionWindow[]): 
     const gana =
       best === null ||
       start > bestStart ||
-      (start === bestStart && window.sessionId > best.sessionId);
+      (start === bestStart && compareByCreation(window.sessionId, best.sessionId) > 0);
     if (gana) best = window;
   }
 

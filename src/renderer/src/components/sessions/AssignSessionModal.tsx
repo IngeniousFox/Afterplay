@@ -10,6 +10,7 @@ import { accentGradientStyle, revealClass, revealStyle } from '../../lib/styles'
 import { GameCover } from '../GameCover';
 import { ModalShell } from '../ui/modal-shell';
 import { BLUE } from '../../lib/colors';
+import type { GameId } from '../../../../shared/entityIds';
 
 // Igual que SearchStep: como mucho un par de chips de género, o la fila se
 // convierte en un muro de píldoras.
@@ -62,7 +63,7 @@ export const AssignSessionModal = ({
     onOpenChange(false);
   };
 
-  const handleAssign = async (gameId: number): Promise<void> => {
+  const handleAssign = async (gameId: GameId): Promise<void> => {
     await assignSession.mutateAsync({ sessionId: session.id, gameId });
     setSearch('');
     onOpenChange(false);

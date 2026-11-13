@@ -6,6 +6,7 @@ import {
   type DetailIterationRow,
   type DetailStateEventRow,
 } from '../gameDetail';
+import type { IterationId, SessionId, StateEventId } from '../../entityIds';
 
 // La ficha de un juego, en el único sitio donde está escrita. Los casos son
 // los que fijaban por separado src/main/db/__tests__/getGameById.test.ts y
@@ -17,8 +18,8 @@ const HOUR_MS = 3_600_000;
 let nextId = 1;
 
 type Session = {
-  id: number;
-  iterationId: number | null;
+  id: SessionId;
+  iterationId: IterationId | null;
   isManual: boolean;
   startedAt: Date;
   endedAt: Date | null;
@@ -27,7 +28,7 @@ type Session = {
 };
 
 const session = (
-  iterationId: number | null,
+  iterationId: IterationId | null,
   startedAt: string,
   hours: number | null,
   extra: Partial<Session> = {},
@@ -47,13 +48,16 @@ const session = (
 
 type Event = DetailStateEventRow & { datePrecision: 'day' | 'datetime' };
 const event = (
-  iterationId: number,
+  iterationId: IterationId,
   type: Event['type'],
   occurredAt: string,
-  id: number = nextId++,
+  id: StateEventId = nextId++,
 ): Event => ({ id, iterationId, type, occurredAt: new Date(occurredAt), datePrecision: 'day' });
 
-const iteration = (id: number, manualTotalPlayed: number | null = null): DetailIterationRow => ({
+const iteration = (
+  id: IterationId,
+  manualTotalPlayed: number | null = null,
+): DetailIterationRow => ({
   id,
   manualTotalPlayed,
 });

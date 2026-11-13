@@ -6,6 +6,7 @@ import { AMBER, BLUE, GRAY, GREEN, TEAL } from '../../lib/colors';
 import { formatByPrecision, formatBytes, pluralize } from '../../lib/format';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
+import type { GameId } from '../../../../shared/entityIds';
 
 // La pestaña Saves de la ficha del sofá — el SavesSection de escritorio en
 // LECTURA ABSOLUTA: aquí no se detecta, no se respalda, no se restaura ni se
@@ -239,7 +240,7 @@ const VersionsBlock = ({
   </div>
 );
 
-export const TvDetailSaves = ({ gameId }: { gameId: number }): React.JSX.Element => {
+export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element => {
   const { data: status } = useSavesStatus();
   // Mismo criterio que el escritorio: el estado se pide en cuanto se sabe si
   // la función existe, no solo cuando TODO está listo — si falta el binario,

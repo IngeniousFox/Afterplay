@@ -15,6 +15,7 @@ import { notifySessionClosed } from './notifySession';
 // La regla de frescura del cronómetro (REMOTO.md §7.4) es la MISMA aquí y en
 // el Worker, así que se importa en vez de reescribirse: ver timerFreshness.ts.
 import { TIMER_STALE_MS, isTimerStale, timerLastBeat } from '../../shared/timerFreshness';
+import { parseEntityId, type GameId, type SessionId } from '../../shared/entityIds';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -72,7 +73,7 @@ const isScreenLocked = (): boolean => {
 // marcha, PARTIDAS-GUARDADAS.md §10bis.3— SIEMPRE abierta para los juegos
 // emulados. null = sesión de emulador todavía sin asignar (bandeja Pending):
 // se está jugando algo, pero aún no se sabe el qué.
-type ActiveSession = { pid: number; sessionId: number; title: string; gameId: number | null };
+type ActiveSession = { pid: number; sessionId: SessionId; title: string; gameId: GameId | null };
 
 // Un objetivo vigilado (juego o emulador) que está corriendo AHORA
 // (verificado por ruta en la Fase 2). Es la "foto actual" que se compara
@@ -159,7 +160,7 @@ export class ProcessWatcher {
   // Cronómetros que parecen abandonados pero cuyo cierre se aplaza porque la
   // copia local no está al día (ver sweepStaleTimerSessions). Solo sirve para
   // que el aviso salga una vez por sesión.
-  private timerSweepDeferred = new Set<number>();
+  private timerSweepDeferred = new Set<SessionId>();
   private readonly getWindow: () => BrowserWindow | null;
   // Bandeja del sistema (SPEC 6, opcional): deja ver de un vistazo qué se
   // está jugando sin abrir la ventana. Se llama con los títulos actualmente
@@ -526,11 +527,9 @@ export class ProcessWatcher {
           // El dueño sale de `active` cuando la clave no lo dice: un juego
           // emulado vive bajo "emu:N" toda la partida y su gameId lo mantiene
           // al día refreshAssignedGames en cada vuelta.
-          const keyGameId = Number(key.slice('game:'.length));
+          const keyGameId = parseEntityId(key.slice('game:'.length));
           const backupGameId =
-            key.startsWith('game:') && Number.isFinite(keyGameId)
-              ? keyGameId
-              : activeSession.gameId;
+            key.startsWith('game:') && keyGameId !== null ? keyGameId : activeSession.gameId;
           if (backupGameId !== null) void scheduleSaveBackup(backupGameId);
         }
 
@@ -630,7 +629,7 @@ export class ProcessWatcher {
     const now = Date.now();
     let changed = false;
     const fresh = isLocalCopyFresh(now);
-    const deferredNow = new Set<number>();
+    const deferredNow = new Set<SessionId>();
 
     for (const session of openSessions) {
       if (session.startedBy !== 'timer') continue;
@@ -881,7 +880,7 @@ export class ProcessWatcher {
   // Trigger corriendo bajo RetroArch dejaba restaurar por encima. El recorrido
   // es de un puñado de entradas (lo que estés jugando a la vez), no hay nada
   // que optimizar.
-  isGameRunning(gameId: number): boolean {
+  isGameRunning(gameId: GameId): boolean {
     for (const session of this.active.values()) {
       if (session.gameId === gameId) return true;
     }
@@ -898,8 +897,8 @@ export class ProcessWatcher {
   // Lo consume el sondeo en vivo de logros de Steam (steam/livePoll.ts), que
   // filtra por steamAppId y por eso no se inmuta con un juego de consola, y el
   // conteo que arma el overlay (main/index.ts).
-  getActiveGameIds(): number[] {
-    const ids = new Set<number>();
+  getActiveGameIds(): GameId[] {
+    const ids = new Set<GameId>();
     for (const session of this.active.values()) {
       if (session.gameId !== null) ids.add(session.gameId);
     }

@@ -6,6 +6,7 @@ import { isExternalRefreshRunning, startExternalRefresh } from '../external/refr
 import { refreshGameEverything } from '../external/refreshGame';
 import { refreshGameRatings } from '../external/refreshRatings';
 import type { ExternalDataStatus } from '../igdb/types';
+import type { GameId } from '../../shared/entityIds';
 
 // Las dos puertas del refresco de datos externos (PLAN-TO-PLAY.md §5.1). La
 // pasada en sí vive en main/external/refresh.ts, con su candado y su progreso:
@@ -52,11 +53,11 @@ export const registerExternalHandlers = (): void => {
   // el propio invoke, sin cola ni canal de eventos. Además de lo que hacen
   // las otras dos puertas, esta refresca los LOGROS, que la pasada de
   // biblioteca no toca (ver refreshGame.ts).
-  ipcMain.handle('external:refreshGame', (_event, gameId: number) => refreshGameEverything(gameId));
+  ipcMain.handle('external:refreshGame', (_event, gameId: GameId) => refreshGameEverything(gameId));
 
   // Puerta 4 — el ⟳ de la card Ratings: SOLO las tres notas que esa card
   // enseña (IGDB + el % de Steam). Más estrecha que la puerta 3 a propósito:
   // un botón dentro de una card refresca lo que hay en esa card, ni más
   // —nada de logros ni de HowLongToBeat— ni menos.
-  ipcMain.handle('external:refreshRatings', (_event, gameId: number) => refreshGameRatings(gameId));
+  ipcMain.handle('external:refreshRatings', (_event, gameId: GameId) => refreshGameRatings(gameId));
 };

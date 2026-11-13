@@ -3,6 +3,7 @@ import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
 import { getGameDetails, getIgdbIdsBySteamAppIds } from '../igdb/api';
 import type { GamePatch } from '../db/writeTypes';
+import type { GameId } from '../../shared/entityIds';
 
 // CUANDO IGDB POR FIN TIENE EL JUEGO — el cambio de fuente.
 //
@@ -39,7 +40,7 @@ import type { GamePatch } from '../db/writeTypes';
 // ¿Qué juegos son candidatos? Los que no tienen igdbId pero sí appid: sin
 // appid no hay por dónde preguntar (un juego de consola sin ficha en IGDB se
 // queda como está, y no hay nada que hacer al respecto).
-export type AdoptionCandidate = { id: number; steamAppId: number };
+export type AdoptionCandidate = { id: GameId; steamAppId: number };
 
 export const findAdoptionCandidates = async (): Promise<AdoptionCandidate[]> =>
   withDbAccess(async () => {
@@ -92,7 +93,7 @@ export const buildIgdbAdoptionPatch = async (igdbId: number): Promise<GamePatch 
 // refresco que la llamó — el juego se queda como estaba y se reintenta en el
 // siguiente.
 export const adoptIgdbForGame = async (
-  gameId: number,
+  gameId: GameId,
   steamAppId: number,
 ): Promise<number | null> => {
   try {

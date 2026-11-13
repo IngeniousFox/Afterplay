@@ -14,6 +14,8 @@
 //
 // Lib PURA, como moments.ts: sin DB, sin Electron, testable a pelo.
 
+import { compareByCreation, compareEntityIds } from '../entityIds';
+import type { GameId } from '../entityIds';
 import { isAddedAtArtifact } from '../playthroughState';
 import type { MemorySession, Moment } from './moments';
 
@@ -39,7 +41,7 @@ export const scopeRange = (scope: ChapterScope): { start: Date; end: Date } =>
     : { start: new Date(scope.year, 0, 1), end: new Date(scope.year + 1, 0, 1) };
 
 export type ChapterGameFacts = {
-  gameId: number;
+  gameId: GameId;
   title: string;
   // Total del periodo: medidas + registradas a mano. Las manuales van también
   // desglosadas en manualHours para que el prompt pueda decir "logged by
@@ -57,13 +59,13 @@ export type ChapterGameFacts = {
 // pinta justo al lado de esas carátulas. null = playthrough sin fechas, esas
 // horas no pertenecen a ningún periodo.
 export type ManualBlock = {
-  gameId: number;
+  gameId: GameId;
   hours: number;
   anchor: Date | null;
 };
 
 export type ChapterCompletion = {
-  gameId: number;
+  gameId: GameId;
   title: string;
   occurredAt: Date;
 };
@@ -76,7 +78,7 @@ export type ChapterCompletion = {
 // abría página. Un cambio de estado ES historia: decidir empezar o soltar un
 // juego dice tanto como las horas.
 export type ChapterStateChange = {
-  gameId: number;
+  gameId: GameId;
   title: string;
   type: string;
   occurredAt: Date;
@@ -85,7 +87,7 @@ export type ChapterStateChange = {
 // Evento de estado con lo mínimo que un capítulo necesita — estructural, para
 // que StateEventSummary (renderer) y las filas del main encajen sin adaptar.
 export type ChapterStateEvent = {
-  gameId: number;
+  gameId: GameId;
   type: string;
   occurredAt: Date;
   // Cuándo se dio de alta el juego, lo único que hace falta para reconocer el
@@ -131,7 +133,7 @@ export const isMeaningfulStateEvent = (event: ChapterStateEvent): boolean =>
 // logro entre fuentes. Solo entran aquí los de fecha FIABLE — la regla 1 de
 // LOGROS-IDEAS.md: una fecha de rescate no fabrica historia en un mes.
 export type ChapterUnlock = {
-  gameId: number;
+  gameId: GameId;
   name: string;
   // La descripción es el hecho NARRATIVO: "Reached the summit" cuenta la
   // escalada. Puede faltar (ocultos sin fuente de descripción).
@@ -152,7 +154,7 @@ export type ChapterAchievements = {
   // logro puede ser de un juego SIN sesiones en el periodo (desbloqueado en
   // otro PC, o jugando sin la app) y entonces no está en chapter.games.
   highlights: {
-    gameId: number;
+    gameId: GameId;
     gameTitle: string;
     name: string;
     description: string | null;
@@ -217,16 +219,16 @@ export const buildChapter = (
   scope: ChapterScope,
   sessions: MemorySession[],
   events: ChapterStateEvent[],
-  titlesByGame: ReadonlyMap<number, string>,
+  titlesByGame: ReadonlyMap<GameId, string>,
   moments: Moment[],
   now: Date,
   manualBlocks: ManualBlock[] = [],
   unlocks: ChapterUnlock[] = [],
 ): Chapter | null => {
   const { start, end } = scopeRange(scope);
-  const titleOf = (gameId: number): string => titlesByGame.get(gameId) ?? 'an untitled game';
+  const titleOf = (gameId: GameId): string => titlesByGame.get(gameId) ?? 'an untitled game';
 
-  const perGame = new Map<number, ChapterGameFacts>();
+  const perGame = new Map<GameId, ChapterGameFacts>();
   let hours = 0;
   let sessionCount = 0;
   let manualHours = 0;
@@ -307,7 +309,8 @@ export const buildChapter = (
   }
 
   const games = [...perGame.values()].sort(
-    (a, b) => b.hours - a.hours || b.sessionCount - a.sessionCount || a.gameId - b.gameId,
+    (a, b) =>
+      b.hours - a.hours || b.sessionCount - a.sessionCount || compareEntityIds(a.gameId, b.gameId),
   );
 
   // Los logros del periodo, curados aquí (el código deriva, la IA redacta):
@@ -336,7 +339,7 @@ export const buildChapter = (
               (a, b) =>
                 (a.globalPercent ?? Number.POSITIVE_INFINITY) -
                   (b.globalPercent ?? Number.POSITIVE_INFINITY) ||
-                a.gameId - b.gameId ||
+                compareEntityIds(a.gameId, b.gameId) ||
                 byCodeUnits(a.name, b.name),
             )
             .slice(0, 6)
@@ -486,7 +489,7 @@ export const canonicalChapterFacts = (
     .sort(
       (a, b) =>
         a.occurredAt.getTime() - b.occurredAt.getTime() ||
-        a.gameId - b.gameId ||
+        compareEntityIds(a.gameId, b.gameId) ||
         // Por unidades de código como todo lo que entra en la firma (ver
         // byCodeUnits). Aquí no cambia ninguna cadena ya sellada: los tipos son
         // un puñado de identificadores ASCII que salen igual con las dos varas,
@@ -532,7 +535,7 @@ export const canonicalChapterFacts = (
     sessions: chapter.sessionCount,
     games: chapter.games
       .slice()
-      .sort((a, b) => a.gameId - b.gameId)
+      .sort((a, b) => compareEntityIds(a.gameId, b.gameId))
       .map((game) => ({
         id: game.gameId,
         title: game.title,
@@ -542,7 +545,10 @@ export const canonicalChapterFacts = (
       })),
     completions: chapter.completions
       .slice()
-      .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.gameId - b.gameId)
+      .sort(
+        (a, b) =>
+          a.occurredAt.getTime() - b.occurredAt.getTime() || compareEntityIds(a.gameId, b.gameId),
+      )
       .map((completion) => ({ id: completion.gameId, on: localDate(completion.occurredAt) })),
     // Las decisiones entran en el hash como cualquier otro hecho — salvo
     // cuando se está reconstruyendo 'noDecisions' para comparar con un recap
@@ -553,7 +559,11 @@ export const canonicalChapterFacts = (
     ...(withStateChanges ? { stateChanges } : {}),
     moments: chapter.moments
       .slice()
-      .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.sessionId - b.sessionId)
+      .sort(
+        (a, b) =>
+          a.occurredAt.getTime() - b.occurredAt.getTime() ||
+          compareByCreation(a.sessionId, b.sessionId),
+      )
       .map((moment) => ({
         type: moment.type,
         game: moment.gameId,

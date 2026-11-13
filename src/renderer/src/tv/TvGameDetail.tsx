@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { parseEntityId } from '../../../shared/entityIds';
 import type { GameDetail } from '../../../shared/types';
 import { GameCover } from '../components/GameCover';
 import { useGameAchievements } from '../hooks/achievements';
@@ -424,7 +425,10 @@ const StatusOption = ({
 export const TvGameDetail = (): React.JSX.Element | null => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const gameId = Number(id);
+  // Un id ilegible (null) no pide nada: useGame se queda sin ficha y la
+  // pantalla cae en "This game is no longer in your library", lo mismo que
+  // con un id que no casa con ninguna fila.
+  const gameId = parseEntityId(id);
   const { data: game, isLoading: gameLoading, isError: gameFailed } = useGame(gameId);
   const { data: curiosityRows = [] } = useCuriosities();
   const { data: achievements } = useGameAchievements(gameId);
@@ -529,7 +533,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
     { action: 'x', label: 'Set status' },
   ]);
 
-  // "Todavía no ha llegado" NO es "ya no existe": la key ['games', id] no
+  // "Todavía no ha llegado" NO es "ya no existe": la key ['games', 'detail', id] no
   // está en caché la primera vez que se abre CADA juego (nadie prefetchea ni
   // hace setQueryData en el renderer), así que `game` es undefined durante
   // todo el viaje IPC de getGameById — que resuelve iteraciones, sesiones y

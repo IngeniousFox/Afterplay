@@ -7,10 +7,11 @@ import { topPlayedEntries } from '../../lib/playedEntries';
 import { GameCover } from '../GameCover';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
+import type { GameId } from '../../../../shared/entityIds';
 
 type MostPlayedListProps = {
   entries: PlayedEntry[];
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 };
 
 const MAX_ENTRIES = 6;

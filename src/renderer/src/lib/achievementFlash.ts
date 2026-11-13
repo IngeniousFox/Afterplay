@@ -1,3 +1,4 @@
+import type { AchievementId } from '../../../shared/entityIds';
 // EL ATERRIZAJE EN UN LOGRO CONCRETO (LOGROS-REDISENO §1).
 //
 // Los mini-trofeos de una sesión eran decorativos: veías que anoche cayeron
@@ -14,7 +15,7 @@
 // el valor —es un efecto secundario— así que leerlo en un inicializador de
 // useState se rompía con el doble-invoke de StrictMode; useSyncExternalStore
 // es la forma correcta de leer un valor externo.
-let pendingAchievementId: number | null = null;
+let pendingAchievementId: AchievementId | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -22,7 +23,7 @@ const emitChange = (): void => {
   for (const listener of listeners) listener();
 };
 
-export const requestAchievementFlash = (achievementId: number): void => {
+export const requestAchievementFlash = (achievementId: AchievementId): void => {
   pendingAchievementId = achievementId;
   // Avisar a quien YA esté montado: si estás viendo la ficha de ese juego
   // (historial de sesiones → su propio logro), la ruta no cambia y no hay
@@ -46,4 +47,4 @@ export const subscribeAchievementFlash = (listener: () => void): (() => void) =>
   };
 };
 
-export const getPendingAchievementFlash = (): number | null => pendingAchievementId;
+export const getPendingAchievementFlash = (): AchievementId | null => pendingAchievementId;

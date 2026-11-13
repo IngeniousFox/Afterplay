@@ -21,6 +21,7 @@ import { parseIsoDate } from '../add-game/precisionDate';
 import { DEFAULT_FORM_VALUES, parseOptionalNumber } from '../add-game/types';
 import { edgeEventPickerValue } from './types';
 import type { EditGameFormValues } from './types';
+import type { IterationId } from '../../../../../shared/entityIds';
 
 // Los tres pasos de handleSave (EditGameModal), extraídos como funciones con
 // nombre — cada uno es uno de los tres caminos mutuamente excluyentes que
@@ -148,7 +149,7 @@ type ExistingIterationMutations = {
 export const saveExistingIteration = async (
   game: GameDetail,
   values: EditGameFormValues,
-  iterationId: number,
+  iterationId: IterationId,
   mutations: ExistingIterationMutations,
 ): Promise<void> => {
   const { updateIteration, updateStateEvent, addStateEvent, deleteStateEvent } = mutations;

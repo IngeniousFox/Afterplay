@@ -6,9 +6,10 @@ import type {
   GameAchievements,
   SessionUnlock,
 } from '../../shared/types';
+import type { GameId } from '../../shared/entityIds';
 
 export const achievementsApi = {
-  getForGame: (gameId: number): Promise<GameAchievements> =>
+  getForGame: (gameId: GameId): Promise<GameAchievements> =>
     ipcRenderer.invoke('achievements:getForGame', gameId),
   getStatus: (): Promise<AchievementsStatus> => ipcRenderer.invoke('achievements:getStatus'),
   // La vista global (salón de la fama, años, muro de 100%, almost there)
@@ -28,9 +29,9 @@ export const achievementsApi = {
   // Vuelve a traer catálogo y desbloqueos de UN juego. Devuelve si entró en
   // la cola (false = sin clave de Steam, o el juego no está en Steam); el
   // resultado llega por onActivity con kind:'synced' y ese gameId.
-  refreshGame: (gameId: number): Promise<boolean> =>
+  refreshGame: (gameId: GameId): Promise<boolean> =>
     ipcRenderer.invoke('achievements:refreshGame', gameId),
-  replacePlacements: (gameId: number): Promise<number> =>
+  replacePlacements: (gameId: GameId): Promise<number> =>
     ipcRenderer.invoke('achievements:replacePlacements', gameId),
   // Mismo contrato que curiosities.onActivity: devuelve la función de
   // limpieza, para encajar con el cleanup de useEffect.

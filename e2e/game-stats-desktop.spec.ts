@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
 import { expect, goTo, launchAfterplay, test } from './fixtures';
 import { DEFAULT_SEED } from './seed';
+import type { GameId } from '../src/shared/entityIds';
 
-const idOf = async (page: Page, title: string): Promise<number> => {
+const idOf = async (page: Page, title: string): Promise<GameId> => {
   const games = await page.evaluate(() => globalThis.api.games.getAll());
   const found = games.find((game) => game.title === title);
   if (!found) throw new Error(`el seed no trae "${title}" — revisa e2e/seed.ts`);

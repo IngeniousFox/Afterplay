@@ -21,10 +21,11 @@ import {
   squareIconButtonClass,
 } from '../../../lib/styles';
 import { AddSpendPopover } from './AddSpendPopover';
+import type { SessionId } from '../../../../../shared/entityIds';
 
 type ActionBarProps = {
   game: GameDetail;
-  liveSessionId: number | null;
+  liveSessionId: SessionId | null;
   onEdit: () => void;
   onChangeCover: () => void;
   onDelete: () => void;

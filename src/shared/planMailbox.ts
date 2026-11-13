@@ -1,3 +1,4 @@
+import type { GameId } from './entityIds';
 // El buzón del Plan (REMOTO.md §6) — lo que el móvil ENCOLA y el escritorio
 // DRENA. Vive en shared porque lo necesitan los tres lados: el Worker para
 // escribir, el main para leer y aplicar, y el renderer/PWA para pintar lo que
@@ -35,8 +36,8 @@ export type PlanMailboxEntry =
   // sean un UPDATE de una columna: la regla del §6.2 es que la web no toca las
   // tablas reales, y una excepción "porque esto es fácil" es justo por donde
   // se cuela el primer bug que sí corrompe.
-  | { type: 'pin'; gameId: number; pinnedAt: number }
-  | { type: 'unpin'; gameId: number }
+  | { type: 'pin'; gameId: GameId; pinnedAt: number }
+  | { type: 'unpin'; gameId: GameId }
   // Reordenar el Up next. Viaja como UNA entrada con el orden entero y no como
   // N pines sueltos: es un solo gesto del usuario, y partirlo permitiría
   // drenar la mitad y dejar un orden que nadie pidió.
@@ -48,6 +49,6 @@ export type PlanMailboxEntry =
   // que un reorden fijara juegos que ya no estaban ni fijados ni planeados.
   // El orden es lo único que el móvil sabe; las fechas son cosa de quien las
   // tiene.
-  | { type: 'reorder'; orderedIds: number[] };
+  | { type: 'reorder'; orderedIds: GameId[] };
 
 export type PlanMailboxType = PlanMailboxEntry['type'];

@@ -1,4 +1,5 @@
-export type PlayedEntry = { id: number; title: string; coverUrl: string | null; hours: number };
+import type { GameId } from '../../../shared/entityIds';
+export type PlayedEntry = { id: GameId; title: string; coverUrl: string | null; hours: number };
 
 // SPEC 10.7 / prototipo — top N por horas, fuera los juegos con 0h en la
 // ventana activa: con un año concreto seleccionado, `entries` trae TODOS los

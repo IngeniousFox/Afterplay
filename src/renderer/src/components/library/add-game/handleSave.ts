@@ -15,6 +15,7 @@ import { parseIsoDate } from './precisionDate';
 import type { PrecisionDateValue } from './precisionDate';
 import { parseOptionalNumber } from './types';
 import type { AddGameFormValues } from './types';
+import type { GameId } from '../../../../../shared/entityIds';
 
 // Los pasos de handleSave (AddGameModal), extraídos como funciones con
 // nombre — uno de los tres caminos mutuamente excluyentes que puede tomar el
@@ -108,7 +109,7 @@ export type ManualPlaythroughInput = {
 // (iterationMode === 'new') — antes eran ~25 líneas de lógica idéntica
 // duplicadas en los dos modales.
 export const addManualPlaythrough = async (
-  gameId: number,
+  gameId: GameId,
   entry: ManualPlaythroughInput,
   mutations: ManualPlaythroughMutations,
 ): Promise<void> => {

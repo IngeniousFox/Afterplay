@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
+import type { GameId, SaveBackupId } from '../../../shared/entityIds';
 
 // Partidas guardadas (PARTIDAS-GUARDADAS.md). Regla de oro que se nota en la
 // forma de estos hooks: NADA se restaura solo (§10bis.0) y nada se comprueba
@@ -147,7 +148,7 @@ export const useDeleteCloudMachine = (): UseMutationResult<number, Error, string
 // local (un --preview que no escribe nada). `enabled` deja no pedirlo hasta
 // que la sección se abre de verdad.
 export const useGameSaves = (
-  gameId: number,
+  gameId: GameId,
   enabled: boolean,
 ): UseQueryResult<SavesGameState | null, Error> =>
   useQuery({
@@ -167,7 +168,7 @@ export const useGameSaves = (
 // nunca puede ser la propia petición la que se reporte aquí (ver el
 // comentario de SavesQueuedEvent). Mismo patrón que useSaveBackupActivity:
 // estado local con reset al cambiar de juego.
-export const useSavesQueuedBehind = (gameId: number): string | null => {
+export const useSavesQueuedBehind = (gameId: GameId): string | null => {
   const [label, setLabel] = useState<string | null>(null);
   const [seenGameId, setSeenGameId] = useState(gameId);
   if (seenGameId !== gameId) {
@@ -222,7 +223,7 @@ export const useSavesScanResults = (): UseQueryResult<SavesScanEntry[] | null, E
 export const useSetSaveBackupEnabled = (): UseMutationResult<
   boolean,
   Error,
-  { gameId: number; enabled: boolean; ludusaviName?: string },
+  { gameId: GameId; enabled: boolean; ludusaviName?: string },
   unknown
 > =>
   useInvalidatingMutation(
@@ -231,7 +232,7 @@ export const useSetSaveBackupEnabled = (): UseMutationResult<
       enabled,
       ludusaviName,
     }: {
-      gameId: number;
+      gameId: GameId;
       enabled: boolean;
       ludusaviName?: string;
     }) => window.api.saves.setEnabled(gameId, enabled, ludusaviName),
@@ -240,18 +241,18 @@ export const useSetSaveBackupEnabled = (): UseMutationResult<
     [queryKeys.games.all, queryKeys.saves.all],
   );
 
-export const useDetectSaves = (): UseMutationResult<string | null, Error, number, unknown> =>
+export const useDetectSaves = (): UseMutationResult<string | null, Error, GameId, unknown> =>
   useInvalidatingMutation(
-    (gameId: number) => window.api.saves.detect(gameId),
+    (gameId: GameId) => window.api.saves.detect(gameId),
     [queryKeys.games.all, queryKeys.saves.all],
   );
 
 // Deshacer un emparejado automático — la vía de escape que faltaba cuando
 // ludusavi casa con el juego equivocado, o con uno sin partidas locales que
 // enseñar (ver SavesSection: el botón "Not the right game?").
-export const useClearSaveDetection = (): UseMutationResult<boolean, Error, number, unknown> =>
+export const useClearSaveDetection = (): UseMutationResult<boolean, Error, GameId, unknown> =>
   useInvalidatingMutation(
-    (gameId: number) => window.api.saves.clearDetection(gameId),
+    (gameId: GameId) => window.api.saves.clearDetection(gameId),
     [queryKeys.games.all, queryKeys.saves.all],
   );
 
@@ -260,11 +261,11 @@ export const useClearSaveDetection = (): UseMutationResult<boolean, Error, numbe
 export const useAddSaveFolder = (): UseMutationResult<
   string | null,
   Error,
-  { gameId: number; folder: string },
+  { gameId: GameId; folder: string },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ gameId, folder }: { gameId: number; folder: string }) =>
+    ({ gameId, folder }: { gameId: GameId; folder: string }) =>
       window.api.saves.addFolder(gameId, folder),
     [queryKeys.games.all, queryKeys.saves.all],
   );
@@ -272,11 +273,11 @@ export const useAddSaveFolder = (): UseMutationResult<
 export const useRemoveSaveFolder = (): UseMutationResult<
   boolean,
   Error,
-  { gameId: number; folder: string },
+  { gameId: GameId; folder: string },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ gameId, folder }: { gameId: number; folder: string }) =>
+    ({ gameId, folder }: { gameId: GameId; folder: string }) =>
       window.api.saves.removeFolder(gameId, folder),
     [queryKeys.games.all, queryKeys.saves.all],
   );
@@ -284,11 +285,11 @@ export const useRemoveSaveFolder = (): UseMutationResult<
 export const useBackupNow = (): UseMutationResult<
   SavesBackupResult | null,
   Error,
-  number,
+  GameId,
   unknown
 > =>
   useInvalidatingMutation(
-    (gameId: number) => window.api.saves.backupNow(gameId),
+    (gameId: GameId) => window.api.saves.backupNow(gameId),
     [queryKeys.saves.all],
   );
 
@@ -306,11 +307,11 @@ export const useRestoreSave = (): UseMutationResult<
 export const useSetRestoreTarget = (): UseMutationResult<
   void,
   Error,
-  { gameId: number; target: string | null },
+  { gameId: GameId; target: string | null },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ gameId, target }: { gameId: number; target: string | null }) =>
+    ({ gameId, target }: { gameId: GameId; target: string | null }) =>
       window.api.saves.setRestoreTarget(gameId, target),
     [queryKeys.saves.all],
   );
@@ -325,7 +326,7 @@ export const useSetRestoreTarget = (): UseMutationResult<
 // se sondea nada, es el main quien avisa cuando de verdad pasa algo.
 const DONE_FLASH_MS = 5000;
 
-export const useSaveBackupActivity = (gameId: number): SavesActivityEvent | null => {
+export const useSaveBackupActivity = (gameId: GameId): SavesActivityEvent | null => {
   const queryClient = useQueryClient();
   // El evento ENTERO, no solo la fase: un "no se pudo hacer la copia" sin
   // decir por qué no sirve para nada — ni al usuario ni para diagnosticarlo
@@ -373,11 +374,11 @@ export const useSaveBackupActivity = (gameId: number): SavesActivityEvent | null
 export const useDeleteSaveBackup = (): UseMutationResult<
   boolean,
   Error,
-  { backupId: number; gameId: number },
+  { backupId: SaveBackupId; gameId: GameId },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ backupId, gameId }: { backupId: number; gameId: number }) =>
+    ({ backupId, gameId }: { backupId: SaveBackupId; gameId: GameId }) =>
       window.api.saves.deleteBackup(backupId, gameId),
     [queryKeys.saves.all],
   );

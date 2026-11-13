@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, goTo, test } from './fixtures';
+import type { GameId } from '../src/shared/entityIds';
 
 // LOS GESTOS DE LA BIBLIOTECA, EN LA UI REAL.
 //
@@ -27,7 +28,7 @@ import { expect, goTo, test } from './fixtures';
 // Los ids no se dan por buenos por el orden de inserción: cada test busca el
 // suyo por título con `idOf`, así que si el seed cambia de orden el test
 // sigue encontrando el juego que le toca en vez de abrir el que ya no es.
-const idOf = async (page: Page, title: string): Promise<number> => {
+const idOf = async (page: Page, title: string): Promise<GameId> => {
   const games = await page.evaluate(() => globalThis.api.games.getAll());
   const found = games.find((game) => game.title === title);
   if (!found) throw new Error(`el seed no trae "${title}" — revisa e2e/seed.ts`);

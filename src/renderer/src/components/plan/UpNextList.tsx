@@ -4,6 +4,7 @@ import type { PlannedGameItem } from '../../../../shared/types';
 import { useReorderUpNext } from '../../hooks/games';
 import { FlipList } from './FlipList';
 import { PlanRow } from './PlanRow';
+import type { GameId } from '../../../../shared/entityIds';
 
 // LA ESTANTERÍA REORDENABLE de Up next (PLAN-TO-PLAY.md §2.2 — el "reordenar
 // arrastrando es v2, solo si hace falta" hizo falta).
@@ -74,7 +75,7 @@ const translateYOf = (element: Element | null): number => {
 };
 
 type Drag = {
-  id: number;
+  id: GameId;
   index: number;
   pointerStartY: number;
   dy: number;
@@ -98,11 +99,11 @@ type Drag = {
 
 type UpNextListProps = {
   games: PlannedGameItem[];
-  onSelect: (id: number) => void;
-  onUnpin: (id: number) => void;
+  onSelect: (id: GameId) => void;
+  onUnpin: (id: GameId) => void;
   // El juego que ACABA de aterrizar aquí por un pin — su fila entra con la
   // animación de llegada (ver PlanRow.landing).
-  highlightId?: number | null;
+  highlightId?: GameId | null;
 };
 
 export const UpNextList = ({
@@ -113,7 +114,7 @@ export const UpNextList = ({
 }: UpNextListProps): React.JSX.Element => {
   const reorder = useReorderUpNext();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const itemRefs = useRef(new Map<number, HTMLDivElement>());
+  const itemRefs = useRef(new Map<GameId, HTMLDivElement>());
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Lo que necesita el autoscroll para seguir trabajando entre pointermove:
   // mientras estás quieto pegado al borde no llega ningún evento, así que el
@@ -366,7 +367,7 @@ export const UpNextList = ({
   // El índice se resuelve por id y no por la posición del map: FlipList es
   // quien recorre `games` ahora, y los manejadores del arrastre necesitan el
   // índice DENTRO de la lista ordenada, no el que le toque al envoltorio.
-  const indexOf = (id: number): number => games.findIndex((game) => game.id === id);
+  const indexOf = (id: GameId): number => games.findIndex((game) => game.id === id);
 
   return (
     // FLIP alrededor de las filas para que soltar un juego de Up next no haga

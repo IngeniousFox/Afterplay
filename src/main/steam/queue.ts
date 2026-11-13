@@ -2,6 +2,7 @@ import { createClaimQueue } from '../lib/claimQueue';
 import { syncGameAchievements } from './syncAchievements';
 import { hasSteamKey } from './api';
 import { notifyAchievementsActivity } from './notify';
+import type { GameId } from '../../shared/entityIds';
 
 // La ÚNICA puerta por la que se sincronizan logros — la misma cola serial con
 // reserva que curiosidades y recaps (lib/claimQueue, clavada por el test de
@@ -21,7 +22,7 @@ import { notifyAchievementsActivity } from './notify';
 // quien encola decide a quién le toca.
 
 export type PendingAchievementsGame = {
-  id: number;
+  id: GameId;
   title: string;
   steamAppId: number;
   // true solo en los refrescos EN VIVO (cerraste el juego, cambiaste su
@@ -40,7 +41,7 @@ export type PendingAchievementsGame = {
 // Los que fallaron en la última pasada, con todo lo que hace falta para
 // reintentarlos sin volver a consultar la lista. Sobrevive a que la cola se
 // vacíe: es justo entonces cuando el botón de "reintentar" tiene sentido.
-const failedGames = new Map<number, PendingAchievementsGame>();
+const failedGames = new Map<GameId, PendingAchievementsGame>();
 
 // La intención VIVA de cada juego: con qué elemento hay que sincronizarlo
 // cuando le llegue el turno. Hace falta porque la reserva de createClaimQueue
@@ -51,12 +52,12 @@ const failedGames = new Map<number, PendingAchievementsGame>();
 // pasada masiva de "Sync now", que no avisa. Ganaba siempre el primero, así
 // que los logros que acababas de sacar se guardaban BIEN pero sin tarjeta
 // flotante y sin el broche dorado del 100%. Fusionando, el aviso no se pierde.
-const intents = new Map<number, PendingAchievementsGame>();
+const intents = new Map<GameId, PendingAchievementsGame>();
 
 // El juego que se está sincronizando AHORA MISMO. Su intención ya se leyó, así
 // que fusionar sobre él ya no llega a tiempo: se guarda para no mentir en el
 // valor de retorno de enqueueAchievements.
-let inFlightId: number | null = null;
+let inFlightId: GameId | null = null;
 
 const queue = createClaimQueue<PendingAchievementsGame>({
   keyOf: (game) => game.id,
@@ -191,7 +192,7 @@ export const enqueueAchievements = (games: PendingAchievementsGame[]): number =>
   // juego repetido dentro de la misma llamada es UNA sincronización. Contando
   // por elemento, un array con duplicados devolvía más juegos de los que iban
   // a pasar.
-  const accepted = new Set<number>();
+  const accepted = new Set<GameId>();
   for (const game of games) {
     const previous = intents.get(game.id);
     // Gana el dato más reciente (rutas, hero, título: quien encola acaba de

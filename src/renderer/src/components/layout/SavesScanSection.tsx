@@ -17,6 +17,7 @@ import { CloudIdentitySection } from './CloudIdentitySection';
 import { CloudInventorySection } from './CloudInventorySection';
 import { SettingsCard } from './SettingsCard';
 import { AMBER, BLUE } from '../../lib/colors';
+import type { GameId } from '../../../../shared/entityIds';
 
 // Escaneo completo de la biblioteca (PARTIDAS-GUARDADAS.md §10.1): BAJO
 // DEMANDA y con un botón, nunca al arrancar la app. Es una sola invocación
@@ -43,7 +44,7 @@ export const SavesScanSection = (): React.JSX.Element => {
   // compartían el único busyGameId, y el finally de la primera lo ponía a
   // null mientras la segunda seguía en vuelo — su spinner desaparecía y su
   // botón se reactivaba a media petición, dejando colar un doble envío.
-  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  const [busyIds, setBusyIds] = useState<Set<GameId>>(new Set());
 
   const ready = status?.ready ?? false;
 
@@ -56,7 +57,7 @@ export const SavesScanSection = (): React.JSX.Element => {
     setResults(await scan.mutateAsync());
   };
 
-  const patchEntry = (gameId: number, enabled: boolean): void => {
+  const patchEntry = (gameId: GameId, enabled: boolean): void => {
     queryClient.setQueryData(
       queryKeys.savesLibraryScan.results,
       (current: SavesScanEntry[] | null | undefined) =>
@@ -68,7 +69,7 @@ export const SavesScanSection = (): React.JSX.Element => {
   // preferencia de una columna booleana, no una operación de riesgo — esperar
   // al ida y vuelta solo se nota como "no ha pasado nada".
   const handleToggle = async (
-    gameId: number,
+    gameId: GameId,
     enabled: boolean,
     ludusaviName: string,
   ): Promise<void> => {
@@ -229,8 +230,8 @@ const ScanResults = ({
   onToggle,
 }: {
   results: SavesScanEntry[];
-  busyIds: Set<number>;
-  onToggle: (gameId: number, enabled: boolean, ludusaviName: string) => void;
+  busyIds: Set<GameId>;
+  onToggle: (gameId: GameId, enabled: boolean, ludusaviName: string) => void;
 }): React.JSX.Element => {
   // Los que han casado con un juego de la biblioteca van primero: son los
   // únicos accionables. El resto se enseña igual, porque saber que ludusavi
@@ -299,7 +300,7 @@ const ScanResults = ({
                 Tailwind solo ve clases literales, no cadenas compuestas. */}
             <button
               type="button"
-              onClick={() => onToggle(entry.gameId as number, !entry.enabled, entry.ludusaviName)}
+              onClick={() => onToggle(entry.gameId as GameId, !entry.enabled, entry.ludusaviName)}
               disabled={entry.gameId !== null && busyIds.has(entry.gameId)}
               className={`flex flex-none items-center gap-1.25 rounded-[7px] border px-2.25 py-1 text-[11px] font-bold transition-colors duration-150 disabled:opacity-70 ${
                 entry.enabled

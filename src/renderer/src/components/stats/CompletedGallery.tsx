@@ -11,12 +11,13 @@ import { StatCardEmpty } from './StatCardEmpty';
 import { StatsPager } from './StatsPager';
 import { usePagedYear } from './usePagedYear';
 import type { Year } from './YearPicker';
+import { compareByCreation, type GameId } from '../../../../shared/entityIds';
 
 type CompletedGalleryProps = {
   stateEvents: StateEventSummary[];
   games: GameListItem[];
   year: Year;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 };
 
 // Una sola fila (grid-cols-8, ver el div de abajo) — ahora que la card ocupa
@@ -53,7 +54,9 @@ export const CompletedGallery = ({
         // queries, o casos raros) no tiene carátula que enseñar.
         gamesById.has(event.gameId),
     )
-    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime() || b.id - a.id);
+    .sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime() || compareByCreation(b.id, a.id),
+    );
 
   // Acotada, no confiada al estado: borrar eventos puede dejar `page` fuera
   // de rango sin que ningún click lo haya pedido.

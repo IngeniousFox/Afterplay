@@ -16,6 +16,7 @@ import { TvScreenTitle } from './TvScreenTitle';
 import { TvKeyboard } from './TvKeyboard';
 import { useTvInputDevice } from './inputDevice';
 import { useTvButtons, useTvLegend } from './tvInput';
+import { parseEntityId, type GameId } from '../../../shared/entityIds';
 
 // La biblioteca entera a escala TV (BIG-PICTURE.md §5.2): parrilla de
 // carátulas, filtros que son BOTONES de verdad (pulsables con A, con clic, y
@@ -423,8 +424,8 @@ export const TvLibrary = (): React.JSX.Element => {
   //
   // Mientras el observador no ha hablado — el primer commit — el ancla es el
   // foco inicial: sin eso la pantalla nacería sin nada que enfocar.
-  const [nearIds, setNearIds] = useState<Set<number> | null>(null);
-  const [focusedGameId, setFocusedGameId] = useState<number | null>(null);
+  const [nearIds, setNearIds] = useState<Set<GameId> | null>(null);
+  const [focusedGameId, setFocusedGameId] = useState<GameId | null>(null);
   const focusAnchor =
     (focusedGameId !== null ? visibleRank.get(focusedGameId) : undefined) ??
     (firstMatchId !== null ? (visibleRank.get(firstMatchId) ?? 0) : 0);
@@ -432,12 +433,13 @@ export const TvLibrary = (): React.JSX.Element => {
   useEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
-    const near = new Set<number>();
+    const near = new Set<GameId>();
     const observer = new IntersectionObserver(
       (entries) => {
         let changed = false;
         for (const entry of entries) {
-          const id = Number((entry.target as HTMLElement).dataset.cellId);
+          const id = parseEntityId((entry.target as HTMLElement).dataset.cellId);
+          if (id === null) continue;
           if (entry.isIntersecting) {
             if (!near.has(id)) {
               near.add(id);
@@ -477,7 +479,7 @@ export const TvLibrary = (): React.JSX.Element => {
   useLayoutEffect(() => {
     if (snapshot && gridRef.current) gridRef.current.scrollTop = snapshot.scrollTop;
   }, [snapshot]);
-  const cellSpotsRef = useRef(new Map<number, { left: number; top: number; visible: boolean }>());
+  const cellSpotsRef = useRef(new Map<GameId, { left: number; top: number; visible: boolean }>());
   useLayoutEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
@@ -485,9 +487,10 @@ export const TvLibrary = (): React.JSX.Element => {
     const cells = grid.querySelectorAll<HTMLElement>('[data-cell-id]');
     const moves: { el: HTMLElement; dx: number; dy: number }[] = [];
     const enters: HTMLElement[] = [];
-    const next = new Map<number, { left: number; top: number; visible: boolean }>();
+    const next = new Map<GameId, { left: number; top: number; visible: boolean }>();
     for (const el of cells) {
-      const id = Number(el.dataset.cellId);
+      const id = parseEntityId(el.dataset.cellId);
+      if (id === null) continue;
       const isVisible = el.dataset.cellVisible === 'true';
       const spot = { left: el.offsetLeft, top: el.offsetTop, visible: isVisible };
       next.set(id, spot);
@@ -552,7 +555,7 @@ export const TvLibrary = (): React.JSX.Element => {
   // El billete de vuelta (screenMemory): al abrir una ficha se guarda el
   // sitio exacto — filtro, query, scroll y qué carátula era. Solo este
   // viaje lo guarda: salir a Home u otra pantalla no deja migas.
-  const openGame = (id: number): void => {
+  const openGame = (id: GameId): void => {
     rememberLibrary({
       filterIndex,
       query,

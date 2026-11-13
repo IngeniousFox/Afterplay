@@ -5,12 +5,13 @@ import type {
   StateEventSummary,
   UpdateStateEventPatch,
 } from '../../shared/types';
+import type { StateEventId } from '../../shared/entityIds';
 
 export const stateEventsApi = {
   add: (input: AddStateEventInput): Promise<StateEvent> =>
     ipcRenderer.invoke('stateEvents:add', input),
   getAll: (): Promise<StateEventSummary[]> => ipcRenderer.invoke('stateEvents:getAll'),
-  update: (id: number, patch: UpdateStateEventPatch): Promise<StateEvent | null> =>
+  update: (id: StateEventId, patch: UpdateStateEventPatch): Promise<StateEvent | null> =>
     ipcRenderer.invoke('stateEvents:update', id, patch),
-  delete: (id: number): Promise<boolean> => ipcRenderer.invoke('stateEvents:delete', id),
+  delete: (id: StateEventId): Promise<boolean> => ipcRenderer.invoke('stateEvents:delete', id),
 };

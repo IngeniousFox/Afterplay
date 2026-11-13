@@ -14,6 +14,7 @@ import type {
   SavesScanEntry,
   SavesStatus,
 } from '../../main/saves/contracts';
+import type { GameId, SaveBackupId } from '../../shared/entityIds';
 
 export const savesApi = {
   getStatus: (): Promise<SavesStatus> => ipcRenderer.invoke('saves:getStatus'),
@@ -42,31 +43,31 @@ export const savesApi = {
     ipcRenderer.invoke('saves:deleteMachine', machineId),
 
   scanLibrary: (): Promise<SavesScanEntry[]> => ipcRenderer.invoke('saves:scanLibrary'),
-  getGameState: (gameId: number): Promise<SavesGameState | null> =>
+  getGameState: (gameId: GameId): Promise<SavesGameState | null> =>
     ipcRenderer.invoke('saves:getGameState', gameId),
 
   // ludusaviName solo lo manda la pantalla de resultados del escaneo, que es
   // la única que ya sabe con qué juego de ludusavi casó cada fila.
-  setEnabled: (gameId: number, enabled: boolean, ludusaviName?: string): Promise<boolean> =>
+  setEnabled: (gameId: GameId, enabled: boolean, ludusaviName?: string): Promise<boolean> =>
     ipcRenderer.invoke('saves:setEnabled', gameId, enabled, ludusaviName),
-  detect: (gameId: number): Promise<string | null> => ipcRenderer.invoke('saves:detect', gameId),
+  detect: (gameId: GameId): Promise<string | null> => ipcRenderer.invoke('saves:detect', gameId),
   // Deshacer un emparejado automático (§4: ludusavi puede casar con el juego
   // equivocado, o con uno sin un solo archivo local) — devuelve a "sin
   // detectar" sin tocar las carpetas propias.
-  clearDetection: (gameId: number): Promise<boolean> =>
+  clearDetection: (gameId: GameId): Promise<boolean> =>
     ipcRenderer.invoke('saves:clearDetection', gameId),
-  addFolder: (gameId: number, folder: string): Promise<string | null> =>
+  addFolder: (gameId: GameId, folder: string): Promise<string | null> =>
     ipcRenderer.invoke('saves:addFolder', gameId, folder),
-  removeFolder: (gameId: number, folder: string): Promise<boolean> =>
+  removeFolder: (gameId: GameId, folder: string): Promise<boolean> =>
     ipcRenderer.invoke('saves:removeFolder', gameId, folder),
 
-  backupNow: (gameId: number): Promise<SavesBackupResult | null> =>
+  backupNow: (gameId: GameId): Promise<SavesBackupResult | null> =>
     ipcRenderer.invoke('saves:backupNow', gameId),
   restore: (request: RestoreRequestInput): Promise<RestoreResult> =>
     ipcRenderer.invoke('saves:restore', request),
-  setRestoreTarget: (gameId: number, target: string | null): Promise<void> =>
+  setRestoreTarget: (gameId: GameId, target: string | null): Promise<void> =>
     ipcRenderer.invoke('saves:setRestoreTarget', gameId, target),
-  deleteBackup: (backupId: number, gameId: number): Promise<boolean> =>
+  deleteBackup: (backupId: SaveBackupId, gameId: GameId): Promise<boolean> =>
     ipcRenderer.invoke('saves:deleteBackup', backupId, gameId),
 
   // Copias automáticas en marcha (al cerrar una sesión). Devuelve la función

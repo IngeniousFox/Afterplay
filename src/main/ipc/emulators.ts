@@ -3,6 +3,7 @@ import type { CreateEmulatorInput } from '../../shared/types';
 import { createEmulator } from '../db/queries/emulators/createEmulator';
 import { deleteEmulator } from '../db/queries/emulators/deleteEmulator';
 import { getEmulators } from '../db/queries/emulators/getEmulators';
+import type { EmulatorId } from '../../shared/entityIds';
 
 // EMULADORES.md — registro de emuladores (Ajustes). El watcher los vigila
 // con el mismo barrido que los juegos; ver getWatchTargets.
@@ -15,7 +16,7 @@ export const registerEmulatorsHandlers = (): void => {
     return createEmulator(input);
   });
 
-  handleDb('emulators:delete', async (_event, id: number) => {
+  handleDb('emulators:delete', async (_event, id: EmulatorId) => {
     return deleteEmulator(id);
   });
 };

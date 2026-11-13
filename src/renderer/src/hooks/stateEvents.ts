@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
+import type { StateEventId } from '../../../shared/entityIds';
 
 // Bloque 5D — todos los cambios de estado de la biblioteca (para "Status
 // Changes" por año en Stats). Misma historia que useSessions()/
@@ -42,11 +43,11 @@ export const useAddStateEvent = (): UseMutationResult<
 export const useUpdateStateEvent = (): UseMutationResult<
   StateEvent | null,
   Error,
-  { id: number; patch: UpdateStateEventPatch },
+  { id: StateEventId; patch: UpdateStateEventPatch },
   unknown
 > =>
   useInvalidatingMutation(
-    ({ id, patch }: { id: number; patch: UpdateStateEventPatch }) =>
+    ({ id, patch }: { id: StateEventId; patch: UpdateStateEventPatch }) =>
       window.api.stateEvents.update(id, patch),
     [queryKeys.games.all, queryKeys.stateEvents.all],
   );
@@ -55,8 +56,8 @@ export const useUpdateStateEvent = (): UseMutationResult<
 // (Beaten/Dropped → Playing, ver saveExistingIteration) y la papelera del
 // History de la ficha. El estado derivado del juego cambia igual que con
 // update, mismas invalidaciones.
-export const useDeleteStateEvent = (): UseMutationResult<boolean, Error, number, unknown> =>
+export const useDeleteStateEvent = (): UseMutationResult<boolean, Error, StateEventId, unknown> =>
   useInvalidatingMutation(
-    (id: number) => window.api.stateEvents.delete(id),
+    (id: StateEventId) => window.api.stateEvents.delete(id),
     [queryKeys.games.all, queryKeys.stateEvents.all],
   );

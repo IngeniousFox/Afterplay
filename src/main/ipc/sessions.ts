@@ -13,11 +13,12 @@ import { updateSessionNote } from '../db/queries/sessions/updateSessionNote';
 import { notifyOverlaySessionStarted } from '../overlay';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
+import type { GameId, SessionId } from '../../shared/entityIds';
 
 // ¿Se juega con emulador? Lo pregunta el Play antes de armar el overlay —
 // ver el porqué en su handler. Corre dentro del withDbAccess de handleDb,
 // como todo lo demás de este fichero.
-const isEmulatedGame = async (gameId: number): Promise<boolean> => {
+const isEmulatedGame = async (gameId: GameId): Promise<boolean> => {
   const [game] = await getDb()
     .select({ isEmulated: gamesTable.isEmulated })
     .from(gamesTable)
@@ -37,7 +38,7 @@ export const registerSessionsHandlers = (): void => {
   // todo en una sola transacción. Devuelve null si ya había una sesión
   // abierta (no debería pasar — el botón está deshabilitado mientras hay una
   // live — pero no es un error, el juego ya se está trackeando igual).
-  handleDb('sessions:startForGame', async (_event, gameId: number) => {
+  handleDb('sessions:startForGame', async (_event, gameId: GameId) => {
     const session = await startGameSession(gameId);
     // El overlay in-game se arma AQUÍ y no esperando al watcher (que sondea
     // cada 5s): pulsar Play y que su atajo no respondiera durante esos
@@ -64,13 +65,13 @@ export const registerSessionsHandlers = (): void => {
     return getAllSessions();
   });
 
-  handleDb('sessions:close', async (_event, id: number, endedAt: Date) => {
+  handleDb('sessions:close', async (_event, id: SessionId, endedAt: Date) => {
     return closeSession(id, endedAt);
   });
 
   // Borrar una sesión cerrada (vista de Sesiones / Session History del
   // detalle) — rechaza abiertas (ver deleteSession.ts).
-  handleDb('sessions:delete', async (_event, id: number) => {
+  handleDb('sessions:delete', async (_event, id: SessionId) => {
     return deleteSession(id);
   });
 
@@ -80,7 +81,7 @@ export const registerSessionsHandlers = (): void => {
     return getPendingSessions();
   });
 
-  handleDb('sessions:assign', async (_event, sessionId: number, gameId: number) => {
+  handleDb('sessions:assign', async (_event, sessionId: SessionId, gameId: GameId) => {
     const session = await assignSession(sessionId, gameId);
     // La asignación es EL momento en que por fin se sabe de qué juego son
     // esas partidas — el equivalente al cierre de sesión de un juego normal
@@ -120,12 +121,12 @@ export const registerSessionsHandlers = (): void => {
     return session;
   });
 
-  handleDb('sessions:deletePending', async (_event, sessionId: number) => {
+  handleDb('sessions:deletePending', async (_event, sessionId: SessionId) => {
     return deletePendingSession(sessionId);
   });
 
   // Diario de sesión — desde el aviso de cierre o desde la fila de la sesión.
-  handleDb('sessions:setNote', async (_event, id: number, note: string) => {
+  handleDb('sessions:setNote', async (_event, id: SessionId, note: string) => {
     return updateSessionNote(id, note);
   });
 };

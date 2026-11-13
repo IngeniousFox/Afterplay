@@ -15,6 +15,7 @@ import {
 import { allSessions } from '../../lib/sessions';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
+import type { SessionId } from '../../../../shared/entityIds';
 
 // El historial COMPLETO de sesiones en la ficha TV — la paridad de sofá del
 // SessionHistoryList de escritorio, en lectura absoluta: métricas arriba en
@@ -171,7 +172,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
   // indexan por sessionId.
   const { data: achievementsData } = useGameAchievements(game.id);
   const achievementsBySession = useMemo(() => {
-    const map = new Map<number, AchievementEntry[]>();
+    const map = new Map<SessionId, AchievementEntry[]>();
     for (const entry of achievementsData?.entries ?? []) {
       if (entry.sessionId === null || entry.unlockedAt === null) continue;
       const list = map.get(entry.sessionId) ?? [];

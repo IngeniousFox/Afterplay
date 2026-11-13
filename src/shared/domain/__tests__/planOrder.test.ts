@@ -11,6 +11,7 @@ import {
   redistributePinStamps,
 } from '../planOrder';
 import type { PendingPlanEntry, PinnedPlanRow } from '../planOrder';
+import type { GameId } from '../../entityIds';
 
 // Las reglas del orden del Plan, ya en UN solo sitio. Los casos de la vista
 // previa del buzón vienen de web/src/lib/__tests__/planPending.test.ts, que
@@ -19,7 +20,7 @@ import type { PendingPlanEntry, PinnedPlanRow } from '../planOrder';
 
 type Juego = PinnedPlanRow & { title: string };
 
-const juego = (id: number, title: string, pinnedAt: number | null = null): Juego => ({
+const juego = (id: GameId, title: string, pinnedAt: number | null = null): Juego => ({
   id,
   title,
   pinnedAt,
@@ -37,7 +38,7 @@ const LEE: PlanShelfReaders<Juego> = {
   releaseSortKey: () => 0,
 };
 
-const pinDe = (games: Juego[], id: number): number | null =>
+const pinDe = (games: Juego[], id: GameId): number | null =>
   games.find((game) => game.id === id)?.pinnedAt ?? null;
 
 const T10 = new Date('2026-01-10T10:00:00Z').getTime();

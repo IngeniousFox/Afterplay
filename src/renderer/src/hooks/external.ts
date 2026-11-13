@@ -9,6 +9,7 @@ import type {
   RatingsRefreshResult,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
+import type { GameId } from '../../../shared/entityIds';
 
 // Datos externos (PLAN-TO-PLAY.md §5): notas, sinopsis, fecha completa y
 // sagas de IGDB + etiquetas y reseñas de Steam. Un mecanismo, dos puertas.
@@ -115,12 +116,12 @@ export const useRefreshPlanData = (): UseMutationResult<number, Error, void, unk
 export const useRefreshGameEverything = (): UseMutationResult<
   GameFullRefreshResult | null,
   Error,
-  number,
+  GameId,
   unknown
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (gameId: number) => window.api.external.refreshGame(gameId),
+    mutationFn: (gameId: GameId) => window.api.external.refreshGame(gameId),
     onSuccess: () => {
       // Todo lo que toca vive en la fila del juego, salvo los logros, que
       // tienen su propio árbol. La cobertura de Ajustes también se mueve: este
@@ -141,12 +142,12 @@ export const useRefreshGameEverything = (): UseMutationResult<
 export const useRefreshGameRatings = (): UseMutationResult<
   RatingsRefreshResult | null,
   Error,
-  number,
+  GameId,
   unknown
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (gameId: number) => window.api.external.refreshRatings(gameId),
+    mutationFn: (gameId: GameId) => window.api.external.refreshRatings(gameId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       // El conteo de Ajustes también cambia: este juego puede haber pasado

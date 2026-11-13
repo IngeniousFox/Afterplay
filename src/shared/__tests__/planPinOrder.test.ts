@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { planPinOrder } from '../planPinOrder';
+import type { GameId } from '../entityIds';
 
-const pinned = (id: number, stamp: number | null): { id: number; planPinnedAt: Date | null } => ({
+const pinned = (id: GameId, stamp: number | null): { id: GameId; planPinnedAt: Date | null } => ({
   id,
   planPinnedAt: stamp === null ? null : new Date(stamp),
 });

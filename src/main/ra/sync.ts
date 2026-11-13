@@ -6,6 +6,7 @@ import { enqueueAchievementToasts } from '../steam/notifications/overlay';
 import { notifyAchievementsActivity } from '../steam/notify';
 import { storeUnlocks } from '../steam/syncAchievements';
 import { getRaGameProgress, raBadgeLockedUrl, raBadgeUrl } from './api';
+import type { GameId } from '../../shared/entityIds';
 
 // Sincronizar los logros de RetroAchievements de UN juego ya emparejado
 // (RETROACHIEVEMENTS.md §4): catálogo y desbloqueos vienen JUNTOS en una
@@ -15,7 +16,7 @@ import { getRaGameProgress, raBadgeLockedUrl, raBadgeUrl } from './api';
 // emparejado con sesiones, mismos avisos.
 
 export const syncRaGame = async (
-  game: { id: number; title: string; raGameId: number; heroUrl: string | null },
+  game: { id: GameId; title: string; raGameId: number; heroUrl: string | null },
   // Solo los refrescos EN VIVO avisan en pantalla — la misma regla que
   // Steam: el primer volcado de un historial de años no es noticia de hoy.
   notify = false,

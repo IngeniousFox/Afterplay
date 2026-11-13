@@ -19,6 +19,8 @@
 // Los tipos de entrada son ESTRUCTURALES y mínimos: cada lado trae sus SELECTs
 // recortados, y lo único que importa es que lleven estos campos.
 
+import { compareByCreation } from '../entityIds';
+import type { IterationId, StateEventId } from '../entityIds';
 import { endsPlaythrough, latestRealStateEvent } from '../playthroughState';
 import type { StateEvent } from '../types';
 import { nextPlaythroughLabel } from './nextPlaythroughLabel';
@@ -27,14 +29,14 @@ type StateEventType = StateEvent['type'];
 
 // Un playthrough (fila de `iterations`) del juego. La etiqueta hace falta para
 // numerar el siguiente si hay que crear uno.
-export type PlaythroughRow = { id: number; label: string };
+export type PlaythroughRow = { id: IterationId; label: string };
 
 // Un evento de estado de cualquiera de esos playthroughs. El id desempata dos
 // eventos en el mismo instante (manda el escrito después, ver
 // latestRealStateEvent) y además forma parte de la firma "cerrado al vuelo".
 export type PlaythroughStateEventRow = {
-  id: number;
-  iterationId: number;
+  id: StateEventId;
+  iterationId: IterationId;
   type: StateEventType;
   occurredAt: Date;
 };
@@ -92,8 +94,8 @@ export type NewPlaythroughValues = {
 //   · create — crea un playthrough con estos valores, escríbele estos eventos y
 //              cuelga la sesión de él.
 export type PlaythroughDecision =
-  | { kind: 'use'; iterationId: number }
-  | { kind: 'resume'; iterationId: number; events: PlaythroughEventToWrite[] }
+  | { kind: 'use'; iterationId: IterationId }
+  | { kind: 'resume'; iterationId: IterationId; events: PlaythroughEventToWrite[] }
   | { kind: 'create'; playthrough: NewPlaythroughValues; events: PlaythroughEventToWrite[] };
 
 // El día natural LOCAL de una fecha, para preguntar "¿esto es de hoy?". Local
@@ -154,13 +156,13 @@ export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): Playt
   // La "última" es la de id más alto y no "la última que existía en `at`": una
   // iteración recién creada por Add Game no tiene ni un evento del que sacar su
   // fecha, y es justo el destino bueno cuando no hay nada activo.
-  const playthroughs = [...input.playthroughs].sort((a, b) => a.id - b.id);
+  const playthroughs = [...input.playthroughs].sort((a, b) => compareByCreation(a.id, b.id));
   const knownIds = new Set(playthroughs.map((playthrough) => playthrough.id));
 
   // Ordenados por fecha y, a igualdad, por id: la firma "cerrado al vuelo" de
   // abajo depende del orden ('started' primero, 'completed' después) y aquí no
   // se puede heredar del ORDER BY de nadie.
-  const eventsByIteration = new Map<number, PlaythroughStateEventRow[]>();
+  const eventsByIteration = new Map<IterationId, PlaythroughStateEventRow[]>();
   for (const event of input.events) {
     if (!knownIds.has(event.iterationId)) continue;
     const list = eventsByIteration.get(event.iterationId) ?? [];
@@ -171,14 +173,14 @@ export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): Playt
   // El estado A FECHA `at` (lo posterior a `at` no existe todavía para esta
   // pregunta: un 'completed' de agosto no decide dónde cae una sesión de
   // julio) — es quien elige la rama nuevo/reanudar.
-  const latestTypeAt = new Map<number, StateEventType>();
+  const latestTypeAt = new Map<IterationId, StateEventType>();
   // El estado HOY, con el log entero. Solo se consulta si a fecha `at` no
   // había nada activo, y está para no romper "como mucho un playthrough
   // activo por juego" con una escritura retroactiva (ver cabecera).
-  const latestTypeNow = new Map<number, StateEventType>();
+  const latestTypeNow = new Map<IterationId, StateEventType>();
   // Iteraciones que ya tienen un 'started' en `at` o después: para ellas el
   // evento sobra, la activación ya está escrita y con mejor fecha.
-  const startedFromAt = new Set<number>();
+  const startedFromAt = new Set<IterationId>();
   // Los playthroughs históricos que fabricó ESTA regla: log de exactamente
   // dos eventos, 'started' y 'completed', en el MISMO instante. Es una firma
   // que una mano no produce (las fechas tecleadas caen a medianoche del día y
@@ -187,11 +189,11 @@ export const resolvePlaythroughForPlay = (input: ResolvePlaythroughInput): Playt
   // de emulador se asignan de varias en varias, y si cada una viera "el último
   // terminó" abriría otro Playthrough — cinco tardes de la misma partida,
   // cinco playthroughs Beaten.
-  const autoClosedRuns = new Set<number>();
+  const autoClosedRuns = new Set<IterationId>();
 
   for (const [iterationId, unsorted] of eventsByIteration) {
     const iterationEvents = [...unsorted].sort(
-      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.id - b.id,
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || compareByCreation(a.id, b.id),
     );
 
     // "El más reciente" sale del helper compartido: ignora 'plan_to_play' —

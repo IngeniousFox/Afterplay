@@ -4,6 +4,8 @@
 // renderer al pintar el Journey y el historial — y tenerlas por duplicado ya
 // había dejado versiones que no coincidían.
 
+import { compareByCreation } from './entityIds';
+import type { StateEventId } from './entityIds';
 import type { StateEvent } from './types';
 
 type StateEventType = StateEvent['type'];
@@ -66,7 +68,7 @@ export const closesOpenSession = (type: StateEventType | null | undefined): bool
 export type RealStateEventCandidate = {
   type: string;
   occurredAt: Date;
-  id: number;
+  id: StateEventId;
 };
 
 // El "último estado real" de un juego/iteración: el evento con occurredAt más
@@ -89,7 +91,8 @@ export const latestRealStateEvent = <T extends RealStateEventCandidate>(
 
     const isNewer = event.occurredAt.getTime() > latest.occurredAt.getTime();
     const isSameDateButHigherId =
-      event.occurredAt.getTime() === latest.occurredAt.getTime() && event.id > latest.id;
+      event.occurredAt.getTime() === latest.occurredAt.getTime() &&
+      compareByCreation(event.id, latest.id) > 0;
 
     if (isNewer || isSameDateButHigherId) {
       latest = event;

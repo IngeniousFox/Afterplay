@@ -29,6 +29,7 @@ import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { notifyAchievementsActivity } from '../steam/notify';
 import { warmImageCache, warmSteamData } from '../external/warmNewGame';
+import type { GameId } from '../../shared/entityIds';
 
 // warmImageCache y warmSteamData viven en external/warmNewGame.ts desde que
 // el alta desde el MÓVIL (que entra por el buzón del Plan, no por aquí) se
@@ -75,7 +76,7 @@ export const registerGamesHandlers = (): void => {
     return getGames();
   });
 
-  handleDb('games:getById', async (_event, id: number) => {
+  handleDb('games:getById', async (_event, id: GameId) => {
     return getGameById(id);
   });
 
@@ -133,13 +134,13 @@ export const registerGamesHandlers = (): void => {
 
   // "Up next" (PLAN-TO-PLAY.md §2.2) — fijar/soltar un planeado como
   // prioridad de verdad. Un solo campo, sin nada externo que resolver.
-  handleDb('games:setPlanPinned', async (_event, id: number, pinned: boolean) => {
+  handleDb('games:setPlanPinned', async (_event, id: GameId, pinned: boolean) => {
     return setPlanPinned(id, pinned);
   });
 
   // Y reordenarlos arrastrando: reparte los timestamps de planPinnedAt que ya
   // existen en el orden nuevo (ver la query para el porqué).
-  handleDb('games:reorderUpNext', async (_event, orderedIds: number[]) => {
+  handleDb('games:reorderUpNext', async (_event, orderedIds: GameId[]) => {
     return reorderUpNext(orderedIds);
   });
 
@@ -153,11 +154,11 @@ export const registerGamesHandlers = (): void => {
     return game;
   });
 
-  handleDb('games:moveToPlan', async (_event, gameId: number) => {
+  handleDb('games:moveToPlan', async (_event, gameId: GameId) => {
     return moveToPlan(gameId);
   });
 
-  handleDb('games:update', async (_event, id: number, rawPatch: UpdateGamePatch) => {
+  handleDb('games:update', async (_event, id: GameId, rawPatch: UpdateGamePatch) => {
     // El aviso explícito de siempre para el appid: tiene su propio editor y
     // mandarlo aquí es un error de quien llama, no algo que tragarse.
     if ('steamAppId' in rawPatch || 'steamAppIdManual' in rawPatch) {
@@ -181,7 +182,7 @@ export const registerGamesHandlers = (): void => {
     return game;
   });
 
-  handleDb('games:setSteamAppId', async (_event, id: number, appId: number) => {
+  handleDb('games:setSteamAppId', async (_event, id: GameId, appId: number) => {
     const game = await setSteamAppId(id, appId);
     if (!game) return null;
     notifyAchievementsActivity({ kind: 'synced', gameId: id, catalogCount: 0, unlockedCount: 0 });
@@ -190,7 +191,7 @@ export const registerGamesHandlers = (): void => {
     return game;
   });
 
-  handleDb('games:delete', async (_event, id: number) => {
+  handleDb('games:delete', async (_event, id: GameId) => {
     // Antes de borrar la fila: sus copias de partida. La tabla save_backups
     // cuelga de games con ON DELETE CASCADE, así que el índice se va solo —
     // pero los objetos de R2 y la carpeta local NO, y sin esto se quedarían
@@ -203,7 +204,7 @@ export const registerGamesHandlers = (): void => {
 
   // Conversión a endless: limpia desenlaces y marcadores de partida discreta
   // CONSERVANDO sesiones trackeadas y horas manuales (ver la query).
-  handleDb('games:resetEndlessState', async (_event, id: number) => {
+  handleDb('games:resetEndlessState', async (_event, id: GameId) => {
     return resetEndlessState(id);
   });
 

@@ -1,4 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { parseEntityId } from '../../../shared/entityIds';
+import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
 import { GameDetail } from './GameDetail';
 
 // GameDetail no sabe nada de router — este wrapper traduce el :id de la URL
@@ -6,9 +8,22 @@ import { GameDetail } from './GameDetail';
 export const GameDetailRoute = (): React.JSX.Element => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const gameId = parseEntityId(id);
+  // Un id ilegible no casa con ninguna fila: el mismo final que la ficha de
+  // un juego que ya no existe (GameDetail sin datos), sin pedir nada.
+  if (gameId === null) {
+    return (
+      <QueryStatePlaceholder
+        isLoading={false}
+        errorText="Couldn't load this game."
+        backLabel="Back to library"
+        onBack={() => navigate('/games', { viewTransition: true })}
+      />
+    );
+  }
   return (
     <GameDetail
-      gameId={Number(id)}
+      gameId={gameId}
       // viewTransition: envuelve el cambio de ruta en
       // document.startViewTransition() — el navegador hace un cross-fade
       // nativo entre el estado anterior y el nuevo en vez del corte seco de

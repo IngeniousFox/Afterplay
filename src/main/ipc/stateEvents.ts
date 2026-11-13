@@ -4,6 +4,7 @@ import { addStateEvent } from '../db/queries/stateEvents/addStateEvent';
 import { deleteStateEvent } from '../db/queries/stateEvents/deleteStateEvent';
 import { getAllStateEvents } from '../db/queries/stateEvents/getAllStateEvents';
 import { updateStateEvent } from '../db/queries/stateEvents/updateStateEvent';
+import type { StateEventId } from '../../shared/entityIds';
 
 export const registerStateEventsHandlers = (): void => {
   handleDb('stateEvents:add', async (_event, input: AddStateEventInput) => {
@@ -14,11 +15,11 @@ export const registerStateEventsHandlers = (): void => {
     return getAllStateEvents();
   });
 
-  handleDb('stateEvents:update', async (_event, id: number, patch: UpdateStateEventPatch) => {
+  handleDb('stateEvents:update', async (_event, id: StateEventId, patch: UpdateStateEventPatch) => {
     return updateStateEvent(id, patch);
   });
 
-  handleDb('stateEvents:delete', async (_event, id: number) => {
+  handleDb('stateEvents:delete', async (_event, id: StateEventId) => {
     return deleteStateEvent(id);
   });
 };

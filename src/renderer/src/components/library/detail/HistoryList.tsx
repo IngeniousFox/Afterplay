@@ -21,6 +21,11 @@ import { DateWithPrecisionPicker } from '../add-game/DateWithPrecisionPicker';
 import type { PrecisionDateValue } from '../add-game/precisionDate';
 import { parseIsoDate, toPickerValue } from '../add-game/precisionDate';
 import { fieldLabelClass, textInputClass } from '../add-game/styles';
+import {
+  compareEntityIds,
+  type SpendEventId,
+  type StateEventId,
+} from '../../../../../shared/entityIds';
 
 type HistoryListProps = {
   stateHistory: StateEvent[];
@@ -43,7 +48,7 @@ type Entry =
   | {
       key: string;
       kind: 'status';
-      id: number;
+      id: StateEventId;
       date: Date;
       datePrecision: StateEvent['datePrecision'];
       note: string | null;
@@ -52,7 +57,7 @@ type Entry =
   | {
       key: string;
       kind: 'spend';
-      id: number;
+      id: SpendEventId;
       date: Date;
       datePrecision: SpendEvent['datePrecision'];
       note: string | null;
@@ -64,11 +69,24 @@ type Entry =
       // la hereda del evento 'plan_to_play' que esta entrada oculta.
       key: string;
       kind: 'added';
-      id: number;
       date: Date;
       datePrecision: StateEvent['datePrecision'];
       note: string | null;
     };
+
+// El orden de la lista: lo más reciente arriba y, a igual fecha EXACTA, la
+// entrada "Added" siempre al fondo (un juego planeado comparte addedAt con su
+// 'plan_to_play' al milisegundo: primero "entró en Afterplay", luego todo lo
+// demás). Entre dos eventos reales, el id más alto primero. Ese último
+// desempate mezcla eventos de estado y gastos —dos tablas— y comparar sus ids
+// solo es un orden estable, no "el creado después" (AFTERPLAY-2.0.md §15.5).
+const newestFirst = (a: Entry, b: Entry): number => {
+  const byDate = b.date.getTime() - a.date.getTime();
+  if (byDate !== 0) return byDate;
+  if (a.kind === 'added') return b.kind === 'added' ? 0 : 1;
+  if (b.kind === 'added') return -1;
+  return compareEntityIds(b.id, a.id);
+};
 
 // El valor de picker de una entrada existente. 'datetime' (eventos creados
 // en vivo por la app, con hora real) cae a 'day' para el picker — pero solo
@@ -146,25 +164,21 @@ export const HistoryList = ({
       note: event.note,
       event,
     })),
-    // id 0 (ningún evento real lo tiene): en empate de fecha exacta (un
-    // juego planeado comparte addedAt con su evento 'plan_to_play' al
-    // milisegundo) el desempate por id la deja siempre al fondo — primero
-    // "entró en Afterplay", luego todo lo demás. La nota del 'plan_to_play'
-    // oculto ("Recommended by Marta…") se hereda aquí para que no se pierda
-    // al ocultar el evento.
+    // En empate de fecha exacta va siempre al fondo (ver newestFirst). La
+    // nota del 'plan_to_play' oculto ("Recommended by Marta…") se hereda aquí
+    // para que no se pierda al ocultar el evento.
     ...(addedAt
       ? [
           {
             key: 'added',
             kind: 'added',
-            id: 0,
             date: addedAt,
             datePrecision: 'datetime',
             note: stateHistory.find((event) => event.type === 'plan_to_play')?.note ?? null,
           } satisfies Entry,
         ]
       : []),
-  ].sort((a, b) => b.date.getTime() - a.date.getTime() || b.id - a.id);
+  ].sort(newestFirst);
 
   if (entries.length === 0) return null;
 

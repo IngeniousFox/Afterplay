@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { computePlanDebt, filterQueue } from '../../../../shared/planShelves';
 import type { PlannedGameItem } from '../../../../shared/types';
 import { PLAN_SHELF_READERS, sortByLens, splitPlanSections } from '../plan';
+import type { GameId } from '../../../../shared/entityIds';
 
 // El reparto del Plan tal y como lo pide la pantalla del escritorio: las
 // estanterías salen de src/shared/planShelves (probadas con valores escritos en
@@ -80,7 +81,7 @@ const juegos = [
   }),
 ];
 
-const ids = (games: PlannedGameItem[]): number[] => games.map((game) => game.id);
+const ids = (games: PlannedGameItem[]): GameId[] => games.map((game) => game.id);
 
 describe('splitPlanSections: el reparto compartido más la lente del escritorio', () => {
   const secciones = splitPlanSections(juegos, 'oldest');

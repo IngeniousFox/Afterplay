@@ -3,6 +3,8 @@ import {
   latestRealStateEvent,
   type RealStateEventCandidate,
 } from '../playthroughState';
+import { compareByCreation } from '../entityIds';
+import type { IterationId } from '../entityIds';
 import type { StateEvent } from '../types';
 
 // EL GASTO DE UN JUEGO Y SU REPARTO ENTRE PLAYTHROUGHS, escrito UNA vez
@@ -53,16 +55,16 @@ export const playthroughClosedAt = (events: readonly SpendStateEvent[]): Date | 
 // atribuir nada y el mapa sale vacío (el total del juego sigue contando, ver
 // totalSpendOf).
 export const splitSpendByPlaythrough = (
-  iterations: readonly { id: number }[],
-  eventsByIteration: ReadonlyMap<number, readonly SpendStateEvent[]>,
+  iterations: readonly { id: IterationId }[],
+  eventsByIteration: ReadonlyMap<IterationId, readonly SpendStateEvent[]>,
   spends: readonly SpendRow[],
-): Map<number, number> => {
-  const ordered = [...iterations].sort((a, b) => a.id - b.id);
+): Map<IterationId, number> => {
+  const ordered = [...iterations].sort((a, b) => compareByCreation(a.id, b.id));
   const closedAt = ordered.map((iteration) =>
     playthroughClosedAt(eventsByIteration.get(iteration.id) ?? []),
   );
 
-  const spendByIteration = new Map<number, number>();
+  const spendByIteration = new Map<IterationId, number>();
   if (ordered.length === 0) return spendByIteration;
   for (const spend of spends) {
     let chosen = ordered[0];

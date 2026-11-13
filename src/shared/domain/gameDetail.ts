@@ -1,3 +1,5 @@
+import { compareByCreation } from '../entityIds';
+import type { IterationId, StateEventId } from '../entityIds';
 import { latestRealStateEvent, leavesEndDate } from '../playthroughState';
 import type { StateEvent } from '../types';
 import { resolveIterationHours, trackedSecondsOf } from './hours';
@@ -20,10 +22,10 @@ import { costPerHourOf, splitSpendByPlaythrough, totalSpendOf } from './spend';
 
 type StateType = StateEvent['type'];
 
-export type DetailIterationRow = { id: number; manualTotalPlayed: number | null };
+export type DetailIterationRow = { id: IterationId; manualTotalPlayed: number | null };
 
 export type DetailSessionRow = {
-  iterationId: number | null;
+  iterationId: IterationId | null;
   isManual: boolean;
   startedAt: Date;
   endedAt: Date | null;
@@ -31,8 +33,8 @@ export type DetailSessionRow = {
 };
 
 export type DetailStateEventRow = {
-  id: number;
-  iterationId: number;
+  id: StateEventId;
+  iterationId: IterationId;
   type: StateType;
   occurredAt: Date;
   datePrecision: unknown;
@@ -101,7 +103,8 @@ const firstStartedEvent = <E extends DetailStateEventRow>(events: readonly E[]):
     if (
       first === null ||
       event.occurredAt.getTime() < first.occurredAt.getTime() ||
-      (event.occurredAt.getTime() === first.occurredAt.getTime() && event.id < first.id)
+      (event.occurredAt.getTime() === first.occurredAt.getTime() &&
+        compareByCreation(event.id, first.id) < 0)
     ) {
       first = event;
     }
@@ -163,7 +166,7 @@ export const deriveGameDetail = <
   const { sessions, stateEvents, spendEvents } = input;
   // En orden de creación (id): el reparto del gasto recorre los playthroughs
   // en ese orden y la ficha los enseña igual. Los dos SELECTs ya lo piden.
-  const iterations = [...input.iterations].sort((a, b) => a.id - b.id);
+  const iterations = [...input.iterations].sort((a, b) => compareByCreation(a.id, b.id));
 
   const sessionsByIteration = groupBy(sessions, (session) => session.iterationId);
   const eventsByIteration = groupBy(stateEvents, (event) => event.iterationId);
@@ -221,7 +224,8 @@ export const deriveGameDetail = <
   let firstPlanEvent: E | null = null;
   for (const event of stateEvents) {
     if (event.type !== 'plan_to_play') continue;
-    if (firstPlanEvent === null || event.id < firstPlanEvent.id) firstPlanEvent = event;
+    if (firstPlanEvent === null || compareByCreation(event.id, firstPlanEvent.id) < 0)
+      firstPlanEvent = event;
   }
 
   return {

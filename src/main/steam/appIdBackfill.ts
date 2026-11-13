@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
 import { getSteamAppIds } from '../igdb/api';
+import type { GameId } from '../../shared/entityIds';
 
 // Backfill del appid de Steam (LOGROS.md) — el "regenerado hacia atrás" para
 // los juegos que ya existían antes de la columna: TODOS, planeados y
@@ -48,7 +49,7 @@ export const runSteamAppIdBackfill = async (): Promise<void> => {
     // El isNotNull de la query ya lo garantiza, pero el tipo no lo sabe: este
     // filtro es lo que se lo cuenta a TypeScript, sin un `!` que mienta.
     const withIgdbId = pending.filter(
-      (game): game is { id: number; igdbId: number } => game.igdbId !== null,
+      (game): game is { id: GameId; igdbId: number } => game.igdbId !== null,
     );
 
     let found = 0;

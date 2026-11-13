@@ -1,6 +1,7 @@
 import { Trophy } from 'lucide-react';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { isRare, percentLabel, rarityAccent } from '../../lib/achievements';
+import type { AchievementId } from '../../../../shared/entityIds';
 
 // Los trofeos de UNA sesión, como pieza compartida (LOGROS-IDEAS.md §2.1):
 // la píldora con la cuenta —teñida del más raro de la tanda, el mismo
@@ -19,7 +20,7 @@ import { isRare, percentLabel, rarityAccent } from '../../lib/achievements';
 // enteros por estructura. El id NO se puede unificar por estructura (uno lo
 // llama `id`, el otro `achievementId`), así que viaja explícito.
 export type SessionAchievementEntry = {
-  achievementId?: number;
+  achievementId?: AchievementId;
   displayName: string;
   iconUrl: string | null;
   globalPercent: number | null;
@@ -39,7 +40,7 @@ export const AchievementMiniIcon = ({
   entry: SessionAchievementEntry;
   // Con onOpen (y un id que abrir), el icono es un botón que navega al
   // logro; sin él, la miniatura decorativa de siempre.
-  onOpen?: (achievementId: number) => void;
+  onOpen?: (achievementId: AchievementId) => void;
 }): React.JSX.Element => {
   const src = useImageSrc(entry.iconUrl, 'achievements');
   const rare = isRare(entry.globalPercent);
@@ -77,7 +78,7 @@ export const AchievementMiniIcon = ({
   return (
     <button
       type="button"
-      onClick={() => onOpen(entry.achievementId as number)}
+      onClick={() => onOpen(entry.achievementId as AchievementId)}
       title={title}
       aria-label={`Open achievement: ${entry.displayName}`}
       // La crecida y la sombra al pasar son lo que dice "esto se pulsa" sin
@@ -103,7 +104,7 @@ export const SessionAchievements = ({
   onOpen,
 }: {
   entries: SessionAchievementEntry[];
-  onOpen?: (achievementId: number) => void;
+  onOpen?: (achievementId: AchievementId) => void;
 }): React.JSX.Element | null => {
   if (entries.length === 0) return null;
 

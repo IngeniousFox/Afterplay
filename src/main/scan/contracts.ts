@@ -1,4 +1,5 @@
 import type { IgdbSearchResult } from '../igdb/types';
+import type { GameId } from '../../shared/entityIds';
 
 // Contrato del escaneo de carpetas (modo "Scan your folders" de Add Game).
 // Aparte de folders.ts para que shared/types.ts lo reexporte sin arrastrar
@@ -37,7 +38,7 @@ export type ScanCandidate = ScannedFolder & {
   // acabas de instalar no es un juego "ya añadido" que estorbe, es justo el
   // que querías pasar a la biblioteca — y el escaneo acaba de encontrarle la
   // carpeta y el .exe, que es lo que hay que rellenar para hacerlo.
-  plannedGameId: number | null;
+  plannedGameId: GameId | null;
 };
 
 // Lo que ve la pantalla de escaneo. Ya no es solo la lista: como el

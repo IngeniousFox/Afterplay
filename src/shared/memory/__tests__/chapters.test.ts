@@ -10,10 +10,11 @@ import {
 } from '../chapters';
 import type { MemorySession } from '../moments';
 import { deriveMoments } from '../moments';
+import type { GameId } from '../../entityIds';
 
 let nextId = 1;
 const session = (
-  gameId: number,
+  gameId: GameId,
   startedAt: string,
   hours: number,
   overrides: Partial<MemorySession> = {},
@@ -30,13 +31,13 @@ const session = (
   };
 };
 
-const completed = (gameId: number, occurredAt: string): ChapterStateEvent => ({
+const completed = (gameId: GameId, occurredAt: string): ChapterStateEvent => ({
   gameId,
   type: 'completed',
   occurredAt: new Date(occurredAt),
 });
 
-const stateChange = (gameId: number, type: string, occurredAt: string): ChapterStateEvent => ({
+const stateChange = (gameId: GameId, type: string, occurredAt: string): ChapterStateEvent => ({
   gameId,
   type,
   occurredAt: new Date(occurredAt),

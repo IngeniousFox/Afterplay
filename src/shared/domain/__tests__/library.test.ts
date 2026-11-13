@@ -8,6 +8,7 @@ import {
   type LibraryLiveSession,
   type LibraryStateEventRow,
 } from '../library';
+import type { GameId, IterationId } from '../../entityIds';
 
 // La biblioteca en el único sitio donde está escrita. Cubre lo que fijaban
 // por separado getGames.test.ts / queryPerformance.test.ts en el escritorio y
@@ -18,7 +19,7 @@ const ADDED_AT = new Date('2026-01-01T00:00:00Z');
 let nextId = 1;
 
 const game = (
-  id: number,
+  id: GameId,
   extra: { addedAt?: Date; promotedAt?: Date | null } = {},
 ): LibraryGameRow => ({
   id,
@@ -27,8 +28,8 @@ const game = (
 });
 
 const iteration = (
-  id: number,
-  gameId: number,
+  id: IterationId,
+  gameId: GameId,
   extra: Partial<LibraryIterationRow> = {},
 ): LibraryIterationRow => ({
   id,
@@ -42,8 +43,8 @@ const iteration = (
 });
 
 const event = (
-  gameId: number,
-  iterationId: number,
+  gameId: GameId,
+  iterationId: IterationId,
   type: LibraryStateEventRow['type'],
   occurredAt: string | Date,
 ): LibraryStateEventRow => ({
@@ -60,7 +61,7 @@ const derive = (input: {
   stateEvents?: LibraryStateEventRow[];
   liveSessions?: LibraryLiveSession[];
   timeZone?: string | null;
-}): Map<number, LibraryGameSummary> =>
+}): Map<GameId, LibraryGameSummary> =>
   deriveLibrary({
     games: input.games,
     iterations: input.iterations ?? [],

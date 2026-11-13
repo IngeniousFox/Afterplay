@@ -14,6 +14,7 @@ import { fillMissingSgdbIds } from './sgdbBackfill';
 import { notifyExternalActivity } from './notify';
 import { findSteamAppIdFixes } from './steamAppIdFix';
 import { mergeSteamPatch, type SteamGamePatch } from './steamData';
+import type { GameId } from '../../shared/entityIds';
 
 // Datos externos de la biblioteca (PLAN-TO-PLAY.md §5): UN solo mecanismo con
 // DOS puertas — el botón de la cabecera del Plan (solo los planeados, la
@@ -128,7 +129,7 @@ export type RefreshScope = 'plan' | 'all';
 // ellos todavía no lo tienen). Entra igual en la pasada: lo de Steam sí se le
 // puede pedir, solo se salta la parte de IGDB.
 type TargetGame = {
-  id: number;
+  id: GameId;
   igdbId: number | null;
   title: string;
   steamAppId: number | null;
@@ -174,7 +175,7 @@ const selectTargets = async (scope: RefreshScope): Promise<TargetGame[]> =>
 // es justo el refresco masivo que la cabecera descarta. Query aparte de
 // selectTargets a propósito: se lee justo antes de la repesca, con el estado
 // más fresco, y solo las filas que tocan.
-type HltbOrphan = { id: number; igdbId: number | null; title: string; releaseYear: number | null };
+type HltbOrphan = { id: GameId; igdbId: number | null; title: string; releaseYear: number | null };
 
 const selectHltbOrphans = async (scope: RefreshScope): Promise<HltbOrphan[]> =>
   withDbAccess(async () => {
@@ -291,12 +292,12 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
   // gameId -> appid recién resuelto. Se guarda en memoria y se escribe en la
   // transacción del final, como todo lo demás: si IGDB o Steam fallan a
   // mitad, no se ha tocado ni una fila.
-  const foundAppIds = new Map<number, number>();
+  const foundAppIds = new Map<GameId, number>();
   // De esos, cuales son CORRECCIONES de un appid que ya existia (apuntaba al
   // playtest o a otro producto) y no estrenos. foundAppIds los lleva juntos
   // porque la fontaneria de la pasada es identica para los dos; el parte
   // final NO puede mezclarlos -- ver appIdsFixed en ExternalRefreshSummary.
-  const correctedGameIds = new Set<number>();
+  const correctedGameIds = new Set<GameId>();
   // EL appid de un juego a estas alturas de la pasada: el que ya tenía o el
   // que acaba de aparecer. Un solo sitio que lo decida, porque lo preguntan
   // tres: a quién se le pide a Steam, con qué appid, y a quién se le estampa
@@ -423,7 +424,7 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
     // Las RESEÑAS sí van una a una con su pausa: el resumen es por juego y no
     // hay endpoint de lotes. Esta es la parte que de verdad se ve avanzar, y
     // la única que justifica la barra de progreso.
-    const steamByGameId = new Map<number, SteamGamePatch | null>();
+    const steamByGameId = new Map<GameId, SteamGamePatch | null>();
     for (const [index, game] of steamTargets.entries()) {
       if (index > 0) await sleep(STEAM_REVIEWS_DELAY_MS);
       emit('steam', index, game.title);
@@ -452,7 +453,7 @@ const runPass = async (scope: RefreshScope, initialGames: TargetGame[]): Promise
     const orphans = (await selectHltbOrphans(scope)).filter((orphan) =>
       idsInThisPass.has(orphan.id),
     );
-    const hltbByGameId = new Map<number, HltbTimes>();
+    const hltbByGameId = new Map<GameId, HltbTimes>();
     let hltbChecked = 0;
     let hltbFailureStreak = 0;
     for (const [index, orphan] of orphans.entries()) {

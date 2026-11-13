@@ -7,6 +7,7 @@ import type {
   RatingsRefreshResult,
   SgdbImages,
 } from '../src/shared/types';
+import type { GameId } from '../src/shared/entityIds';
 
 // LAS INTEGRACIONES DE VERDAD, CONTRA LAS APIS DE VERDAD.
 //
@@ -421,7 +422,7 @@ test.describe('integraciones externas', () => {
 
     await page.waitForFunction(
       () =>
-        (globalThis as { __synced?: { gameId: number }[] }).__synced?.some((e) => e.gameId === 5),
+        (globalThis as { __synced?: { gameId: GameId }[] }).__synced?.some((e) => e.gameId === 5),
       undefined,
       { timeout: 30_000 },
     );

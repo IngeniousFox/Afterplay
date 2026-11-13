@@ -14,6 +14,7 @@ import { useWindowVisible } from '../../hooks/useWindowVisible';
 import { useAchievementsOverview } from '../../hooks/achievements';
 import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
 import { GREEN } from '../../lib/colors';
+import type { GameId } from '../../../../shared/entityIds';
 
 // El modo ambiente: cuando dejas de tocar la app, la biblioteca se pone a
 // desfilar sola.
@@ -271,26 +272,26 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
   // no por diapositiva: con 300 juegos y miles de sesiones, recorrerlo todo
   // cada 26 segundos sería tirar trabajo a la basura.
   const indexes = useMemo(() => {
-    const sessionsByGame = new Map<number, SessionWithGame[]>();
+    const sessionsByGame = new Map<GameId, SessionWithGame[]>();
     for (const session of sessions) {
       const list = sessionsByGame.get(session.gameId) ?? [];
       list.push(session);
       sessionsByGame.set(session.gameId, list);
     }
 
-    const eventsByGame = new Map<number, StateEventSummary[]>();
+    const eventsByGame = new Map<GameId, StateEventSummary[]>();
     for (const event of stateEvents) {
       const list = eventsByGame.get(event.gameId) ?? [];
       list.push(event);
       eventsByGame.set(event.gameId, list);
     }
 
-    const spendByGame = new Map<number, number>();
+    const spendByGame = new Map<GameId, number>();
     for (const event of spendEvents) {
       spendByGame.set(event.gameId, (spendByGame.get(event.gameId) ?? 0) + event.amount);
     }
 
-    const curiositiesByGame = new Map<number, string[]>();
+    const curiositiesByGame = new Map<GameId, string[]>();
     for (const row of curiosityRows) {
       const list = curiositiesByGame.get(row.gameId) ?? [];
       list.push(row.text);
@@ -300,7 +301,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     // Ranking por horas: da el "tu juego más jugado" y el "#3 de tu
     // biblioteca". Solo cuentan los que tienen horas — un juego a cero no
     // ocupa puesto.
-    const rankByGame = new Map<number, number>();
+    const rankByGame = new Map<GameId, number>();
     allGames
       .filter((game) => game.totalHours > 0)
       .sort((a, b) => b.totalHours - a.totalHours)
@@ -328,7 +329,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       list.push(game);
       gamesByGenre.set(genre, list);
     }
-    const genreRankByGame = new Map<number, number>();
+    const genreRankByGame = new Map<GameId, number>();
     for (const list of gamesByGenre.values()) {
       list
         .filter((game) => game.totalHours > 0)
@@ -346,7 +347,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       list.push(game);
       byAddedDay.set(key, list);
     }
-    const addedSameDayByGame = new Map<number, string>();
+    const addedSameDayByGame = new Map<GameId, string>();
     for (const list of byAddedDay.values()) {
       if (list.length < 2 || list.length > 3) continue;
       for (const game of list) {
@@ -357,7 +358,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
 
     // Compañeros de quinta (mismo año de lanzamiento) y el decano absoluto.
     const releaseYearCounts = new Map<number, number>();
-    let oldestReleaseId: number | null = null;
+    let oldestReleaseId: GameId | null = null;
     let oldestReleaseYear = Infinity;
     for (const game of allGames) {
       if (game.releaseYear === null) continue;
@@ -370,8 +371,8 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
 
     // El primer y el último 'completed' de toda la biblioteca — dos frases
     // exclusivas, como oldest/newest.
-    let firstCompletionGameId: number | null = null;
-    let latestCompletionGameId: number | null = null;
+    let firstCompletionGameId: GameId | null = null;
+    let latestCompletionGameId: GameId | null = null;
     let firstCompletionAt = Infinity;
     let latestCompletionAt = -Infinity;
     for (const event of stateEvents) {
@@ -401,8 +402,8 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     const chronological = sessions
       .filter((session) => !session.isManual)
       .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
-    const previousTitleByGame = new Map<number, string>();
-    const seen = new Set<number>();
+    const previousTitleByGame = new Map<GameId, string>();
+    const seen = new Set<GameId>();
     for (let position = 0; position < chronological.length; position++) {
       const session = chronological[position];
       if (seen.has(session.gameId)) continue;

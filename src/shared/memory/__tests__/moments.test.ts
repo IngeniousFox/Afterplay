@@ -7,12 +7,13 @@ import {
   momentsBySession,
   RETURN_GAP_DAYS,
 } from '../moments';
+import type { GameId } from '../../entityIds';
 
 // Fábrica de sesiones medidas: fechas legibles, duración en horas, y el fin
 // calculado del tirón — los tests hablan de jugadas, no de milisegundos.
 let nextId = 1;
 const session = (
-  gameId: number,
+  gameId: GameId,
   startedAt: string,
   hours: number,
   overrides: Partial<MemorySession> = {},

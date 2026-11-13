@@ -39,6 +39,7 @@ import { hasMeasuredDuration, sessionDurationStats } from '../lib/sessionStats';
 import { sessionActivity } from '../lib/sessionActivity';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
 import { longestStreak, playedDayKeys } from '../lib/streaks';
+import type { GameId } from '../../../shared/entityIds';
 
 const GameDataCard = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
   <div
@@ -61,7 +62,7 @@ const GameDataCard = ({ children }: { children: React.ReactNode }): React.JSX.El
 );
 
 type GameStatsProps = {
-  gameId: number;
+  gameId: GameId;
   onOpenGame: () => void;
   onClearFilter: () => void;
 };

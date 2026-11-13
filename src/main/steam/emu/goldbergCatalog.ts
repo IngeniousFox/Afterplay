@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../db';
 import { achievementsTable } from '../../db/schema';
+import type { GameId } from '../../../shared/entityIds';
 
 // Escribir el achievements.json que a Goldberg/GSE le falta (LOGROS.md §7.2).
 //
@@ -117,7 +118,7 @@ export const findSteamSettingsDirs = (root: string): string[] => [
 // Escribe el catálogo donde falte. Devuelve cuántos ficheros escribió (0 es
 // el caso normal: juego sin Goldberg, o con el catálogo ya puesto).
 export const ensureGoldbergCatalog = async (
-  gameId: number,
+  gameId: GameId,
   installDirectory: string | null,
 ): Promise<number> => {
   if (!installDirectory || !existsSync(installDirectory)) return 0;

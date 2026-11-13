@@ -1,3 +1,5 @@
+import { compareByCreation } from '../entityIds';
+import type { GameId, IterationId, StateEventId } from '../entityIds';
 import { lastPlayedAtFor } from '../lastPlayedAt';
 import { isAddedAtArtifact, latestRealStateEvent, manualHoursAnchor } from '../playthroughState';
 import type { StateEvent } from '../types';
@@ -34,7 +36,7 @@ type SqlInteger = number | bigint;
 const toNumber = (value: SqlInteger | null | undefined): number | null =>
   value === null || value === undefined ? null : Number(value);
 
-export type LibraryGameRow = { id: number; addedAt: Date; promotedAt: Date | null };
+export type LibraryGameRow = { id: GameId; addedAt: Date; promotedAt: Date | null };
 
 // Una fila por playthrough, con sus sesiones YA AGREGADAS (iterationSessionTotals):
 //  · sessionCount — TODAS sus sesiones, la abierta incluida.
@@ -44,8 +46,8 @@ export type LibraryGameRow = { id: number; addedAt: Date; promotedAt: Date | nul
 //  · firstSessionAt — el arranque más temprano: último recurso para fechar
 //    sus horas manuales.
 export type LibraryIterationRow = {
-  id: number;
-  gameId: number;
+  id: IterationId;
+  gameId: GameId;
   manualTotalPlayed: number | null;
   sessionCount: SqlInteger;
   trackedSeconds: SqlInteger | null;
@@ -54,19 +56,19 @@ export type LibraryIterationRow = {
 };
 
 export type LibraryStateEventRow = {
-  gameId: number;
-  iterationId: number;
+  gameId: GameId;
+  iterationId: IterationId;
   type: StateType;
   occurredAt: Date;
-  id: number;
+  id: StateEventId;
 };
 
 // Una sesión ABIERTA que sigue en marcha, ya juzgada por quien llama: en el
 // escritorio toda abierta lo está (el watcher barre las rancias), en el Worker
 // pasa por la regla de frescura del cronómetro (isSessionLive).
-export type LibraryLiveSession = { gameId: number; startedAt: Date | SqlInteger };
+export type LibraryLiveSession = { gameId: GameId; startedAt: Date | SqlInteger };
 
-export type ManualIterationHours = { iterationId: number; hours: number; year: number | null };
+export type ManualIterationHours = { iterationId: IterationId; hours: number; year: number | null };
 
 export type LibraryGameSummary = {
   totalHours: number;
@@ -111,16 +113,16 @@ export const deriveLibrary = (input: {
   stateEvents: readonly LibraryStateEventRow[];
   liveSessions: readonly LibraryLiveSession[];
   timeZone?: string | null;
-}): Map<number, LibraryGameSummary> => {
-  const summaries = new Map<number, LibraryGameSummary>();
-  const gameById = new Map<number, LibraryGameRow>();
+}): Map<GameId, LibraryGameSummary> => {
+  const summaries = new Map<GameId, LibraryGameSummary>();
+  const gameById = new Map<GameId, LibraryGameRow>();
   for (const game of input.games) {
     summaries.set(game.id, EMPTY_SUMMARY());
     gameById.set(game.id, game);
   }
 
-  const eventsByIteration = new Map<number, LibraryStateEventRow[]>();
-  const eventsByGame = new Map<number, LibraryStateEventRow[]>();
+  const eventsByIteration = new Map<IterationId, LibraryStateEventRow[]>();
+  const eventsByGame = new Map<GameId, LibraryStateEventRow[]>();
   for (const event of input.stateEvents) {
     pushTo(eventsByIteration, event.iterationId, event);
     pushTo(eventsByGame, event.gameId, event);
@@ -132,13 +134,13 @@ export const deriveLibrary = (input: {
   // falta (las dos consultas ya lo piden) para no pagar un sort por nada.
   let iterations = input.iterations;
   for (let index = 1; index < iterations.length; index++) {
-    if (iterations[index - 1].id > iterations[index].id) {
-      iterations = [...iterations].sort((a, b) => a.id - b.id);
+    if (compareByCreation(iterations[index - 1].id, iterations[index].id) > 0) {
+      iterations = [...iterations].sort((a, b) => compareByCreation(a.id, b.id));
       break;
     }
   }
 
-  const lastSessionByGame = new Map<number, Date>();
+  const lastSessionByGame = new Map<GameId, Date>();
   for (const row of iterations) {
     const summary = summaries.get(row.gameId);
     if (!summary) continue;

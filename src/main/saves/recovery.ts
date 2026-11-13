@@ -10,6 +10,7 @@ import { listVersions, MAPPING_FILE } from './mapping';
 import { deriveLocations } from './paths';
 import * as r2 from './r2';
 import type { BackupMapping } from './types';
+import type { SaveBackupId } from '../../shared/entityIds';
 
 // Recuperación del índice a partir del bucket (PARTIDAS-GUARDADAS.md §9).
 //
@@ -277,7 +278,7 @@ export const deleteMachineFromCloud = async (machineId: string): Promise<number>
   await r2.deleteKeys([r2.machineKey(machineId)]);
 
   const games = await getSaveGames();
-  const doomedRowIds: number[] = [];
+  const doomedRowIds: SaveBackupId[] = [];
   for (const game of games) {
     for (const row of await getSaveBackups(game.id)) {
       if (row.machineId === machineId) doomedRowIds.push(row.id);

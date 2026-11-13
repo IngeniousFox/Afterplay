@@ -6,6 +6,7 @@ import { maybeCelebrateCompletion } from './notifications/complete';
 import { enqueueAchievementToasts } from './notifications/overlay';
 import { notifyAchievementsActivity } from './notify';
 import { storeUnlocks } from './syncAchievements';
+import type { GameId } from '../../shared/entityIds';
 
 // El sondeo en vivo de logros de Steam — el gemelo de ra/livePoll.ts, y por
 // el mismo motivo: hasta ahora los logros de Steam LEGÍTIMO solo se recogían
@@ -32,7 +33,7 @@ const INTERVAL_MS = 30_000;
 let timer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
 
-const tick = async (getActiveGameIds: () => number[]): Promise<void> => {
+const tick = async (getActiveGameIds: () => GameId[]): Promise<void> => {
   // Sin clave no hay API, y sin SteamID64 no se sabe DE QUIÉN leer los
   // desbloqueos — getPlayerUnlocks devolvería null en cada tick. Se
   // comprueba aquí para no montar ni la consulta a la DB.
@@ -104,7 +105,7 @@ const tick = async (getActiveGameIds: () => number[]): Promise<void> => {
   }
 };
 
-export const startSteamLivePoll = (getActiveGameIds: () => number[]): void => {
+export const startSteamLivePoll = (getActiveGameIds: () => GameId[]): void => {
   stopSteamLivePoll();
   timer = setInterval(() => void tick(getActiveGameIds), INTERVAL_MS);
 };

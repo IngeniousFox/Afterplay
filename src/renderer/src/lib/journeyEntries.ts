@@ -14,6 +14,7 @@ import {
   latestRealStateEvent,
   manualHoursAnchor,
 } from '../../../shared/playthroughState';
+import type { GameId, IterationId } from '../../../shared/entityIds';
 
 export type JourneySession = Pick<
   SessionWithGame,
@@ -32,7 +33,7 @@ export type JourneyEntry = {
   // entradas. El resto son un playthrough cada una.
   kind: 'endless' | 'playthrough';
   iterationLabel: string;
-  gameId: number;
+  gameId: GameId;
   title: string;
   coverUrl: string | null;
   heroUrl: string | null;
@@ -126,16 +127,19 @@ export const buildEntries = (
   stateEvents: StateEventSummary[],
 ): JourneyEntry[] => {
   const gameById = new Map(games.map((game) => [game.id, game]));
-  const sessionsByIteration = new Map<number, SessionWithGame[]>();
-  const eventsByIteration = new Map<number, StateEventSummary[]>();
+  const sessionsByIteration = new Map<IterationId, SessionWithGame[]>();
+  const eventsByIteration = new Map<IterationId, StateEventSummary[]>();
   // Los endless se consultan por juego y el resto por playthrough. Indexar
   // ambas rutas aquí evita recorrer el archivo entero por cada endless.
-  const sessionsByGame = new Map<number, SessionWithGame[]>();
-  const eventsByGame = new Map<number, StateEventSummary[]>();
-  const manualByGame = new Map<number, Map<number, GameListItem['manualIterations'][number]>>();
+  const sessionsByGame = new Map<GameId, SessionWithGame[]>();
+  const eventsByGame = new Map<GameId, StateEventSummary[]>();
+  const manualByGame = new Map<
+    GameId,
+    Map<IterationId, GameListItem['manualIterations'][number]>
+  >();
 
   for (const game of games) {
-    const byIteration = new Map<number, GameListItem['manualIterations'][number]>();
+    const byIteration = new Map<IterationId, GameListItem['manualIterations'][number]>();
     for (const manual of game.manualIterations) {
       // Igual que find(): si una entrada se repite, manda la primera.
       if (!byIteration.has(manual.iterationId)) byIteration.set(manual.iterationId, manual);
@@ -168,7 +172,7 @@ export const buildEntries = (
   // medidas, eventos del log, o solo unas horas apuntadas a mano. Las tres
   // valen — un "me pasé esto en 2015, 60 horas" merece su carátula igual que
   // uno que trackeó la app entera.
-  const iterationIds = new Set<number>([
+  const iterationIds = new Set<IterationId>([
     ...sessionsByIteration.keys(),
     ...eventsByIteration.keys(),
     ...games.flatMap((game) => game.manualIterations.map((entry) => entry.iterationId)),
@@ -286,7 +290,7 @@ export const buildEntries = (
     if (!game.endless) continue;
     const gameSessions = sessionsByGame.get(game.id) ?? [];
     const gameEvents = meaningfulEvents(eventsByGame.get(game.id) ?? [], game);
-    const meaningfulByIteration = new Map<number, StateEventSummary[]>();
+    const meaningfulByIteration = new Map<IterationId, StateEventSummary[]>();
     for (const event of gameEvents) {
       const iterationEvents = meaningfulByIteration.get(event.iterationId) ?? [];
       iterationEvents.push(event);

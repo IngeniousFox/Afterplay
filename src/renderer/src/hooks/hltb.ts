@@ -2,6 +2,7 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HltbTimes } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
+import type { GameId } from '../../../shared/entityIds';
 
 export const useHltbTimes = (
   title: string,
@@ -26,12 +27,12 @@ export const useHltbTimes = (
 export const useRefreshGameHltb = (): UseMutationResult<
   HltbTimes | null,
   Error,
-  number,
+  GameId,
   unknown
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (gameId: number) => window.api.hltb.refreshGame(gameId),
+    mutationFn: (gameId: GameId) => window.api.hltb.refreshGame(gameId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.games.all }),
   });
 };

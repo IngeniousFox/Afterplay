@@ -6,7 +6,7 @@ import { queryKeys } from './queryKeys';
 // pasar por ninguna mutation del renderer, así que el caché de ['games'] no se
 // enteraría por su cuenta. Aquí nos suscribimos al aviso IPC que el main emite
 // tras cada arranque/cierre de sesión e invalidamos ['games'] — que cascada
-// por prefijo a ['games', id] — para que biblioteca y detalle se refresquen en
+// por prefijo a ['games', 'detail', id] — para que biblioteca y detalle se refresquen en
 // tiempo real (card a "PLAYING", horas recalculadas al cerrar, etc.).
 //
 // LO QUE CUESTA CADA AVISO, medido con el QueryClient de verdad sobre la

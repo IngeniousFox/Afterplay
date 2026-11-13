@@ -10,9 +10,10 @@ import { parseIsoDate, todayValue } from '../add-game/precisionDate';
 import { SegmentedButtonGroup } from '../add-game/SegmentedButtonGroup';
 import { fieldLabelClass, textInputClass, textInputFocusClass } from '../add-game/styles';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
+import type { GameId } from '../../../../../shared/entityIds';
 
 type AddSpendPopoverProps = {
-  gameId: number;
+  gameId: GameId;
 };
 
 const TYPE_OPTIONS: { value: SpendEvent['type']; label: string }[] = [

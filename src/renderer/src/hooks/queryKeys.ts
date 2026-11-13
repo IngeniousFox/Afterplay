@@ -1,7 +1,8 @@
 import type { GetSgdbImagesInput } from '../../../shared/types';
+import type { GameId } from '../../../shared/entityIds';
 
 // TanStack Query invalida por PREFIJO: invalidar ['games'] invalida también
-// ['games', 5], ['games', 5, 'spend']... cualquier key que empiece igual.
+// ['games', 'detail', 5], ['games', 'planned']... cualquier key que empiece igual.
 // Por eso casi ninguna mutation necesita saber la key exacta de lo que
 // afecta — con invalidar games.all (['games']) ya cascada a todo lo demás.
 //
@@ -17,7 +18,12 @@ import type { GetSgdbImagesInput } from '../../../shared/types';
 export const queryKeys = {
   games: {
     all: ['games'] as const,
-    detail: (id: number) => ['games', id] as const,
+    // La ficha lleva su propio segmento ('detail') delante del id: con el id
+    // pegado al prefijo, ['games', id] compartía posición con 'planned' y
+    // 'plannedExtras', y lo único que las distinguía era que el id fuese un
+    // número — algo que deja de ser cierto con los ids de texto de la 2.0
+    // (AFTERPLAY-2.0.md §15.5). Sigue colgando del prefijo ['games'].
+    detail: (id: GameId | null) => ['games', 'detail', id] as const,
     // Bajo el prefijo ['games'] a propósito: cualquier mutation que ya
     // invalide games.all refresca también la lista del Plan sin tocarla.
     planned: ['games', 'planned'] as const,
@@ -32,8 +38,8 @@ export const queryKeys = {
     // de la app fuera de este censo, así que quien venía a decidir si una
     // mutation nueva tiene que refrescar los extras del Plan no la veía. De
     // paso queda escrito lo que hoy solo se cumplía por suerte: el predicate
-    // de useSetSessionNote (hooks/sessions.ts) filtra ['games', <número>], y
-    // esta key lleva un STRING en esa posición — no entra, que es lo correcto
+    // de useSetSessionNote (hooks/sessions.ts) filtra ['games', 'detail', …], y
+    // esta key lleva otro segmento en esa posición — no entra, que es lo correcto
     // (una nota de sesión no toca nada de lo que viaja en los extras).
     plannedExtras: ['games', 'plannedExtras'] as const,
   },
@@ -65,7 +71,7 @@ export const queryKeys = {
     // está escrito entero en useLocalBackupsUsage.
     localUsage: ['saves', 'localUsage'] as const,
     identityNeeded: ['saves', 'identityNeeded'] as const,
-    game: (gameId: number) => ['saves', 'game', gameId] as const,
+    game: (gameId: GameId) => ['saves', 'game', gameId] as const,
   },
   // El resultado del escaneo de "Game saves" en Ajustes — FUERA del árbol de
   // saves.* a propósito: no tiene queryFn de verdad (no hay "dame el último
@@ -135,7 +141,7 @@ export const queryKeys = {
   achievements: {
     all: ['achievements'] as const,
     status: ['achievements', 'status'] as const,
-    game: (gameId: number) => ['achievements', 'game', gameId] as const,
+    game: (gameId: GameId | null) => ['achievements', 'game', gameId] as const,
     // Bajo el prefijo ['achievements'] a propósito: la invalidación de la
     // raíz (useAchievementsActivitySync) la refresca sin saber que existe.
     // El año en la key: cada filtro de Stats es su propia consulta cacheada.

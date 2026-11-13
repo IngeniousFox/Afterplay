@@ -10,6 +10,7 @@ import { resolveSgdbId } from '../sgdb/api';
 import { adoptIgdbForGame } from './adoptIgdb';
 import { findSteamAppIdFix } from './steamAppIdFix';
 import { getSteamGameData } from './steamData';
+import type { GameId } from '../../shared/entityIds';
 
 // "Actualízalo TODO" de UN juego — el botón de su ficha.
 //
@@ -48,7 +49,7 @@ import { getSteamGameData } from './steamData';
 //    ELECCIÓN tuya del CoverPicker. Volver a pedirlos podría cambiarte la
 //    portada que elegiste a mano.
 export const refreshGameEverything = async (
-  gameId: number,
+  gameId: GameId,
 ): Promise<GameFullRefreshResult | null> => {
   const [game] = await withDbAccess(async () =>
     getDb()

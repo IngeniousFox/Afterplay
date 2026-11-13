@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, goTo, test } from './fixtures';
+import type { GameId } from '../src/shared/entityIds';
 
 // EL ATERRIZAJE EN UN LOGRO, DE PUNTA A PUNTA.
 //
@@ -24,7 +25,7 @@ import { expect, goTo, test } from './fixtures';
 // reciente para que la fila con trofeos entre en las cinco que el historial
 // enseña sin desplegar.
 
-const idOf = async (page: Page, title: string): Promise<number> => {
+const idOf = async (page: Page, title: string): Promise<GameId> => {
   const games = await page.evaluate(() => globalThis.api.games.getAll());
   const found = games.find((game) => game.title === title);
   if (!found) throw new Error(`el seed no trae "${title}" — revisa e2e/seed.ts`);

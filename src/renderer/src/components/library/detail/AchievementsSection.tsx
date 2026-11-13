@@ -32,6 +32,7 @@ import {
 import { AMBER, GREEN } from '../../../lib/colors';
 import { formatByPrecision } from '../../../lib/format';
 import { revealClass, revealStyle } from '../../../lib/styles';
+import type { AchievementId, GameId } from '../../../../../shared/entityIds';
 
 // LOS LOGROS DE LA FICHA, tras el rediseño (LOGROS-REDISENO.md §2).
 //
@@ -43,7 +44,7 @@ import { revealClass, revealStyle } from '../../../lib/styles';
 // aterrizando desde una sesión con el parpadeo dorado.
 
 type AchievementsSectionProps = {
-  gameId: number;
+  gameId: GameId;
 };
 
 // Cuántos se pintan plegada. Un juego puede tener 200 logros y la ficha no es
@@ -713,7 +714,7 @@ export const AchievementsSection = ({
   // Ajustar-estado-durante-render (mismo patron que el sembrado de
   // CredentialsSection), no un efecto: React re-renderiza en el acto con el
   // estado bueno, sin frame intermedio con el logro aun escondido.
-  const [handledFlash, setHandledFlash] = useState<number | null>(null);
+  const [handledFlash, setHandledFlash] = useState<AchievementId | null>(null);
   if (flashIsMine && handledFlash !== pendingFlash) {
     setHandledFlash(pendingFlash);
     setQuery('');

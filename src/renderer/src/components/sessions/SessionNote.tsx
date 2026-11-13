@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { useSetSessionNote } from '../../hooks/sessions';
 import { AMBER } from '../../lib/colors';
 import { toast } from 'sonner';
+import type { SessionId } from '../../../../shared/entityIds';
 
 type SessionNoteProps = {
-  sessionId: number;
+  sessionId: SessionId;
   note: string | null;
 };
 

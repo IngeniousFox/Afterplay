@@ -10,6 +10,7 @@ import { AMBER, GREEN } from '../../lib/colors';
 import { formatElapsed } from '../../lib/format';
 import { GameCover } from '../GameCover';
 import { AssignSessionModal } from '../sessions/AssignSessionModal';
+import type { GameId, SessionId } from '../../../../shared/entityIds';
 
 // Lo que estás jugando AHORA, anclado al fondo de la columna de navegación —
 // que vive en RootLayout, así que la tarjeta te acompaña por toda la app.
@@ -23,7 +24,7 @@ import { AssignSessionModal } from '../sessions/AssignSessionModal';
 // peaje de espacio permanente a cambio de información que ya está en la lista.
 
 type LiveEntry =
-  | { kind: 'game'; startedAt: Date; game: GameListItem; sessionId: number | null }
+  | { kind: 'game'; startedAt: Date; game: GameListItem; sessionId: SessionId | null }
   // Sesión de emulador todavía sin asignar: está viva y estás jugando ALGO,
   // pero no hay juego, ni carátula, ni título — solo el emulador. Se enseña
   // igualmente porque es el empujón natural para asignarla (si no, se queda
@@ -38,7 +39,7 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
 
   // La sesión abierta de cada juego, para poder pararla desde aquí sin ir a
   // su ficha (GameListItem sabe que está vivo, pero no con qué sesión).
-  const openSessionByGame = new Map<number, number>();
+  const openSessionByGame = new Map<GameId, SessionId>();
   for (const session of sessions) {
     if (session.endedAt === null) openSessionByGame.set(session.gameId, session.id);
   }
@@ -182,7 +183,7 @@ const GameEntry = ({
           <button
             type="button"
             onClick={() =>
-              closeSession.mutate({ id: entry.sessionId as number, endedAt: new Date() })
+              closeSession.mutate({ id: entry.sessionId as SessionId, endedAt: new Date() })
             }
             disabled={closeSession.isPending}
             title="Stop session"

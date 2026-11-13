@@ -19,6 +19,7 @@ import { formatHours, pluralize } from '../lib/format';
 import { groupPageByDate } from '../lib/sessionGroups';
 import { sessionDurationStats } from '../lib/sessionStats';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
+import { parseEntityId, type SessionId } from '../../../shared/entityIds';
 
 const PAGE_SIZE = 20;
 
@@ -30,7 +31,7 @@ export const Sessions = (): React.JSX.Element => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const gameParam = searchParams.get('game');
-  const gameId = gameParam ? Number(gameParam) : null;
+  const gameId = gameParam ? parseEntityId(gameParam) : null;
 
   const { data: sessions = [], isLoading, isError, refetch } = useSessions();
   const { data: games = [] } = useGames();
@@ -67,7 +68,7 @@ export const Sessions = (): React.JSX.Element => {
   // momentos de arriba.
   const { data: sessionUnlocks = [] } = useSessionUnlocks();
   const unlocksBySession = useMemo(() => {
-    const map = new Map<number, SessionUnlock[]>();
+    const map = new Map<SessionId, SessionUnlock[]>();
     for (const unlock of sessionUnlocks) {
       const list = map.get(unlock.sessionId) ?? [];
       list.push(unlock);

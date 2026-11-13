@@ -11,6 +11,7 @@ import {
 } from '../../lib/styles';
 import { AddGameModal } from './AddGameModal';
 import { GameGrid } from './GameGrid';
+import type { GameId } from '../../../../shared/entityIds';
 
 type GameListScreenProps = {
   title: string;
@@ -38,7 +39,7 @@ type GameListScreenProps = {
   // restaura el punto exacto de la lista (ver useScrollMemory). Distinta por
   // pantalla para que Library y Plan no se pisen la posición.
   scrollKey: string;
-  onSelectGame: (id: number) => void;
+  onSelectGame: (id: GameId) => void;
 };
 
 // Desde el rediseño del Plan (PLAN-TO-PLAY.md §1) esta pantalla ya solo la

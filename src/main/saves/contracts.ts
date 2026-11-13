@@ -2,6 +2,7 @@
 // si siguiera tirando de db/schema el renderer volvería a depender de la
 // forma de las tablas por la puerta de atrás (F-42).
 import type { SaveBackupRow } from '../../shared/dto';
+import type { GameId, SaveBackupId } from '../../shared/entityIds';
 
 // Contrato del IPC de partidas guardadas. Vive aparte de orchestrator.ts a
 // propósito: shared/types.ts lo reexporta para el renderer, y así ese import
@@ -27,7 +28,7 @@ export type SavesScanEntry = {
   registryKeys: string[];
   steamIdInPath: boolean;
   // Con qué juego de la biblioteca ha casado, si ha casado con alguno.
-  gameId: number | null;
+  gameId: GameId | null;
   gameTitle: string | null;
   enabled: boolean;
 };
@@ -69,8 +70,8 @@ export type RestoreMode =
   | 'export';
 
 export type RestoreRequestInput = {
-  gameId: number;
-  backupId: number;
+  gameId: GameId;
+  backupId: SaveBackupId;
   mode: RestoreMode;
   // Obligatorio salvo en 'in-place'.
   target?: string;
@@ -153,7 +154,7 @@ export type CloudFolder = {
   // Título de la biblioteca si el igdbId casa con un juego; null si no está
   // (juego borrado, o biblioteca aún sin recuperar).
   gameTitle: string | null;
-  gameId: number | null;
+  gameId: GameId | null;
   backupCount: number;
   totalBytes: number;
   // Cuántas de esas versiones NO están en el índice local — o sea, lo que la
@@ -213,7 +214,7 @@ export type LocalBackupsUsage = {
 // (§10.2). Las cuatro fases son las que un humano necesita distinguir:
 // "va a pasar", "está pasando", "ya está" y "no ha podido ser".
 export type SavesActivityEvent = {
-  gameId: number;
+  gameId: GameId;
   phase: 'scheduled' | 'uploading' | 'done' | 'failed';
   // Solo en 'done': cuántas versiones nuevas se subieron (0 si la partida no
   // había cambiado desde la última copia).
@@ -235,6 +236,6 @@ export type SavesActivityEvent = {
 // en ese instante es, por construcción, SIEMPRE ajeno (la propia petición
 // nunca puede ser lo que ve corriendo antes de haberse encolado ella misma).
 export type SavesQueuedEvent = {
-  gameId: number;
+  gameId: GameId;
   label: string;
 };

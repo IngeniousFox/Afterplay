@@ -13,6 +13,7 @@ import {
   isAchievementsQueueRunning,
 } from './queue';
 import { applyEmuUnlocksForGame } from './syncAchievements';
+import type { GameId } from '../../shared/entityIds';
 
 // La pasada de logros: encuentra los juegos pendientes y los encola. Mismo
 // papel que curiosities/backfill.ts — el trabajo real lo hace la cola, esto
@@ -145,7 +146,7 @@ export const runEmuUnlocksSweep = async (): Promise<void> => {
 // girando eternamente esperando algo que nunca va a pasar — por eso la pata de
 // Steam mira lo que devolvió el encolado y no da por hecho que entró.
 export const queueAchievementsRefreshForGame = async (
-  gameId: number,
+  gameId: GameId,
   { notify = true, forceRaRematch = false }: { notify?: boolean; forceRaRematch?: boolean } = {},
 ): Promise<boolean> => {
   let steamQueued = false;

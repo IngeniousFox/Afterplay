@@ -2,8 +2,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, goTo, test } from './fixtures';
+import type { GameId } from '../src/shared/entityIds';
 
-const gameId = async (page: Page, title: string, planned = false): Promise<number> => {
+const gameId = async (page: Page, title: string, planned = false): Promise<GameId> => {
   const games = await page.evaluate(
     (plan) => (plan ? globalThis.api.games.getPlanned() : globalThis.api.games.getAll()),
     planned,
@@ -45,7 +46,7 @@ const markdownScript = (): string => {
   return parser;
 };
 
-const savedNotes = (page: Page, id: number): Promise<string | null | undefined> =>
+const savedNotes = (page: Page, id: GameId): Promise<string | null | undefined> =>
   page.evaluate((target) => globalThis.api.games.getById(target).then((game) => game?.notes), id);
 
 test.describe('notes and deferred renderer content', () => {

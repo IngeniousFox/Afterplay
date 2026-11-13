@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { useRefreshGameEverything } from './external';
 import type { GameFullRefreshResult } from '../../../shared/types';
+import type { GameId } from '../../../shared/entityIds';
 
 // El gesto "actualízalo TODO" de UN juego, entero: la llamada, el parte y los
 // avisos. Vivía dentro de ActionBar.tsx, que es la barra de la ficha de
@@ -39,7 +40,7 @@ export const describeRefresh = (result: GameFullRefreshResult): string => {
 };
 
 export const useRefreshGame = (
-  gameId: number,
+  gameId: GameId,
   title: string,
 ): { refresh: () => void; refreshing: boolean } => {
   const refreshEverything = useRefreshGameEverything();

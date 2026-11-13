@@ -5,6 +5,7 @@ import { SteamFallback } from './SteamFallback';
 import { BLUE } from '../../../lib/colors';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
+import type { GameId } from '../../../../../shared/entityIds';
 
 type SearchStepProps = {
   query: string;
@@ -43,7 +44,7 @@ type SearchStepProps = {
 // mismos. Sin onPick la fila se marca pero se apaga: es lo que toca cuando no
 // hay ningún sitio sensato al que llevarte (ya está donde tiene que estar).
 export type OwnedGameMatch = {
-  gameId: number;
+  gameId: GameId;
   where: 'plan' | 'library';
   label: string;
   color: string;

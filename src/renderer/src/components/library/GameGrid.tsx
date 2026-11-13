@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { GameListItem } from '../../../../shared/types';
 import { GameCard } from './GameCard';
+import type { GameId } from '../../../../shared/entityIds';
 
 // La entrada escalonada de la parrilla — en CADA visita a la pantalla, como
 // las secciones de Stats (petición explícita: una entrada que solo corre a
@@ -32,7 +33,7 @@ const INTRO_STAGGER_CAP = 18;
 
 type GameGridProps = {
   games: GameListItem[];
-  onSelectGame: (id: number) => void;
+  onSelectGame: (id: GameId) => void;
 };
 
 // SPEC 10.6 — auto-fill con mínimo 196px por card y 20px de gap.

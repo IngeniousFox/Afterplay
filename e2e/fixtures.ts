@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { _electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { createSandbox, type Sandbox, type SandboxOptions } from './sandbox';
+import type { GameId } from '../src/shared/entityIds';
 
 // EL ARRANQUE DE LA APP PARA UN TEST E2E.
 //
@@ -96,9 +97,9 @@ export type Route =
   | '/plan'
   | '/sessions'
   | '/stats'
-  | `/stats?game=${number}`
-  | `/games/${number}`
-  | `/plan/${number}`;
+  | `/stats?game=${GameId}`
+  | `/games/${GameId}`
+  | `/plan/${GameId}`;
 
 export const goTo = async (page: Page, route: Route): Promise<void> => {
   await page.evaluate((target) => {

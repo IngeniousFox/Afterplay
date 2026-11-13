@@ -7,12 +7,13 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from '../../ui/alert-dialog';
+import type { SpendEventId, StateEventId } from '../../../../../shared/entityIds';
 
 export type DeletableHistoryEntry = {
   // Las dos clases de entrada borrables de la línea temporal — cada una con
   // su mutación y su frase de consecuencias, mismo diálogo.
   kind: 'status' | 'spend';
-  id: number;
+  id: StateEventId | SpendEventId;
   // Tal y como se ve en la fila ("Beaten · Jul 19, 2026" / "€12.99 ·
   // Purchase · Jul 19, 2026") — la compone HistoryList, que ya tiene el
   // estado o el importe y la fecha formateados a mano.

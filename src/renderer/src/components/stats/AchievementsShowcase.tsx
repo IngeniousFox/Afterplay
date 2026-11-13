@@ -13,6 +13,7 @@ import { floatingPanelClass } from '../../lib/styles';
 import { GameCover } from '../GameCover';
 import { StatsPager } from './StatsPager';
 import { usePagedYear } from './usePagedYear';
+import type { GameId } from '../../../../shared/entityIds';
 
 // El bloque de trofeos de Stats (LOGROS-IDEAS.md §3-4): la vitrina de la
 // CASA entera — salón de la fama, perfil de rareza, muro de 100% y "almost
@@ -190,7 +191,7 @@ const FameMedallion = ({
 }: {
   entry: AchievementsOverview['hallOfFame'][number];
   rank: number;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 }): React.JSX.Element => {
   const src = useImageSrc(entry.iconUrl, 'achievements');
   const accent = rarityAccent(entry.globalPercent);
@@ -308,7 +309,7 @@ const RarestHero = ({
   totalUnlocked: number;
   year: number | 'all';
   timeFormat: TimeFormat;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 }): React.JSX.Element => {
   const src = useImageSrc(entry.iconUrl, 'achievements');
   const accent = rarityAccent(entry.globalPercent);
@@ -546,7 +547,7 @@ const AlmostThereRow = ({
 }: {
   game: AchievementsOverview['almostThere'][number];
   index: number;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 }): React.JSX.Element => {
   const src = useImageSrc(game.coverUrl, 'covers');
   const percent = Math.round((game.unlocked / game.total) * 100);
@@ -698,7 +699,7 @@ const TopGameRow = ({
 }: {
   game: NonNullable<AchievementsOverview['topGames']>[number];
   maxTotal: number;
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 }): React.JSX.Element => {
   const src = useImageSrc(game.coverUrl, 'covers');
   return (
@@ -745,7 +746,7 @@ export const AchievementsShowcase = ({
   onOpenGame,
 }: {
   year: number | 'all';
-  onOpenGame: (gameId: number) => void;
+  onOpenGame: (gameId: GameId) => void;
 }): React.JSX.Element | null => {
   const { data } = useAchievementsOverview(year);
   const { data: timeFormat = '24h' } = useTimeFormat();

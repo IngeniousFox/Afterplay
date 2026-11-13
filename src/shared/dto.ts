@@ -1,4 +1,13 @@
 import type { EventDatePrecision } from './dateTypes';
+import type {
+  EmulatorId,
+  GameId,
+  IterationId,
+  SaveBackupId,
+  SessionId,
+  SpendEventId,
+  StateEventId,
+} from './entityIds';
 
 // ── LAS ENTIDADES QUE CRUZAN AL RENDERER, A LA PWA Y AL WORKER ─────────────
 //
@@ -26,7 +35,7 @@ export type IterationRating = 1 | 2 | 3 | 4 | 5;
 // Un juego tal como lo guarda la tabla `games`. El significado de cada
 // columna está documentado en el esquema; aquí solo se fija la forma.
 export type GameRow = {
-  id: number;
+  id: GameId;
   title: string;
   coverUrl: string | null;
   heroUrl: string | null;
@@ -79,8 +88,8 @@ export type GameRow = {
 
 // Un playthrough (tabla `iterations`).
 export type Iteration = {
-  id: number;
-  gameId: number;
+  id: IterationId;
+  gameId: GameId;
   label: string;
   playedPlatform: string;
   origin: string;
@@ -93,9 +102,9 @@ export type Iteration = {
 // Una sesión de juego (tabla `sessions`). iterationId es null en las de
 // emulador todavía sin asignar (bandeja "Pending").
 export type Session = {
-  id: number;
-  iterationId: number | null;
-  emulatorId: number | null;
+  id: SessionId;
+  iterationId: IterationId | null;
+  emulatorId: EmulatorId | null;
   isManual: boolean;
   startedAt: Date;
   endedAt: Date | null;
@@ -108,8 +117,8 @@ export type Session = {
 
 // Una entrada del log de estados (tabla `state_events`).
 export type StateEvent = {
-  id: number;
-  iterationId: number;
+  id: StateEventId;
+  iterationId: IterationId;
   type: StateEventType;
   occurredAt: Date;
   datePrecision: EventDatePrecision;
@@ -118,8 +127,8 @@ export type StateEvent = {
 
 // Un gasto (tabla `spend_events`).
 export type SpendEvent = {
-  id: number;
-  gameId: number;
+  id: SpendEventId;
+  gameId: GameId;
   type: SpendEventType;
   amount: number;
   occurredAt: Date;
@@ -129,15 +138,15 @@ export type SpendEvent = {
 
 // Un emulador registrado (tabla `emulators`).
 export type Emulator = {
-  id: number;
+  id: EmulatorId;
   name: string;
   executablePath: string;
 };
 
 // Una versión de partida guardada subida al bucket (tabla `save_backups`).
 export type SaveBackupRow = {
-  id: number;
-  gameId: number;
+  id: SaveBackupId;
+  gameId: GameId;
   createdAt: Date;
   backupName: string;
   r2Key: string;
@@ -183,7 +192,7 @@ export type UpdateGamePatch = {
 // iterations:create — StatusCard, TvGameDetail, Add/Edit game. `label` vacío
 // o null = el main autogenera "Playthrough N".
 export type CreateIterationInput = {
-  gameId: number;
+  gameId: GameId;
   label?: string | null;
   playedPlatform: string;
   origin: string;
@@ -205,7 +214,7 @@ export type UpdateIterationPatch = {
 // stateEvents:add — todos los menús de estado (ficha, TV, toast de cierre).
 // occurredAt y note opcionales, como en la tabla: sin fecha, "ahora".
 export type AddStateEventInput = {
-  iterationId: number;
+  iterationId: IterationId;
   type: StateEventType;
   occurredAt?: Date;
   datePrecision: EventDatePrecision;
@@ -214,7 +223,7 @@ export type AddStateEventInput = {
 
 // spend:add — el popover de añadir gasto.
 export type AddSpendEventInput = {
-  gameId: number;
+  gameId: GameId;
   type: SpendEventType;
   amount: number;
   occurredAt?: Date;

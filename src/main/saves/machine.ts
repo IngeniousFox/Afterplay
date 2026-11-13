@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { toSlashes } from './paths';
+import type { GameId } from '../../shared/entityIds';
 
 // Capa POR MÁQUINA de las partidas guardadas (PARTIDAS-GUARDADAS.md §7.2):
 // un fichero plano en userData que NO sincroniza nunca.
@@ -187,10 +188,10 @@ export const markIdentityReconciled = (bucket: string): void => {
   });
 };
 
-export const getSaveLocationOverride = (gameId: number): MachineSaveOverride | null =>
+export const getSaveLocationOverride = (gameId: GameId): MachineSaveOverride | null =>
   read().saveLocationOverrides[String(gameId)] ?? null;
 
-export const setSaveLocationOverride = (gameId: number, target: string | null): void => {
+export const setSaveLocationOverride = (gameId: GameId, target: string | null): void => {
   const file = read();
   const overrides = { ...file.saveLocationOverrides };
   if (target)

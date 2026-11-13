@@ -56,6 +56,7 @@ import type {
   SessionWithGame,
   TimeFormat,
 } from '../../../shared/types';
+import type { SessionId } from '../../../shared/entityIds';
 
 // La capa del overlay in-game (OVERLAY.md + decisión 2026-08-07): pantalla
 // completa estilo Steam, con el lenguaje de la casa — el arte del juego dos
@@ -891,9 +892,9 @@ export const OverlayHud = (): React.JSX.Element | null => {
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
   const live = games.find((game) => game.isLive) ?? null;
-  // -1 con nada en vivo: catálogo vacío inofensivo, y el orden de hooks
-  // queda estable (no se puede llamar condicionalmente).
-  const { data: achievements } = useGameAchievements(live?.id ?? -1);
+  // null con nada en vivo: no se pide nada (catálogo vacío inofensivo), y el
+  // orden de hooks queda estable (no se puede llamar condicionalmente).
+  const { data: achievements } = useGameAchievements(live?.id ?? null);
   const heroSrc = useImageSrc(live?.heroUrl ?? null, 'heroes');
   const coverSrc = useImageSrc(live?.coverUrl ?? null, 'covers');
 
@@ -1101,7 +1102,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // main (cada desbloqueo lleva su sessionId); aquí solo se agrupa, igual
   // que en la pantalla de Sesiones y el historial de la ficha.
   const unlocksBySession = useMemo(() => {
-    const map = new Map<number, SessionAchievementEntry[]>();
+    const map = new Map<SessionId, SessionAchievementEntry[]>();
     for (const unlock of sessionUnlocks) {
       const list = map.get(unlock.sessionId);
       if (list) list.push(unlock);

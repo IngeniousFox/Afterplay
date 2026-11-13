@@ -1,3 +1,4 @@
+import type { GameId } from '../../../shared/entityIds';
 // ADÓNDE VUELVES al salir de una ficha (modo TV): las pantallas se
 // desmontan al navegar (key por ruta en el layout), así que sin esto abrir
 // un juego desde una búsqueda te devolvía a una Library recién nacida —
@@ -17,14 +18,14 @@ export type LibrarySnapshot = {
   filterIndex: number;
   query: string;
   scrollTop: number;
-  focusGameId: number;
+  focusGameId: GameId;
 };
 
 export type HomeSnapshot = {
   scrollTop: number;
   // null = se abrió desde el hero (Details): se restaura el scroll y el
   // foco vuelve al Play de siempre.
-  focusGameId: number | null;
+  focusGameId: GameId | null;
 };
 
 let library: LibrarySnapshot | null = null;

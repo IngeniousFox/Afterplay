@@ -4,6 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { AchievementActivityEvent } from '../../../../shared/types';
 import { createAchievementsActivityInvalidator } from '../achievements';
 import { queryKeys } from '../queryKeys';
+import type { GameId } from '../../../../shared/entityIds';
 
 // LA REGLA DE INVALIDACIÓN DE LOGROS, probada sin montar React — que es
 // justamente por lo que está exportada aparte del hook (ver su comentario).
@@ -41,7 +42,7 @@ const progress = (running: boolean): AchievementActivityEvent => ({
   currentTitle: null,
 });
 
-const synced = (gameId: number): AchievementActivityEvent => ({
+const synced = (gameId: GameId): AchievementActivityEvent => ({
   kind: 'synced',
   gameId,
   catalogCount: 0,

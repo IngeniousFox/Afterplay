@@ -35,6 +35,7 @@ import {
   revealClass,
   revealStyle,
 } from '../lib/styles';
+import type { GameId } from '../../../shared/entityIds';
 
 const PLAN_COLOR = STATUS_META.plan.color;
 
@@ -222,7 +223,7 @@ export const PlanToPlay = (): React.JSX.Element => {
   // lista vacía en una lista — son juegos que ni tienes ni has apuntado.
   const isEmpty = games.length === 0;
 
-  const openGame = (id: number): void => {
+  const openGame = (id: GameId): void => {
     void navigate(`/plan/${id}`);
   };
 
@@ -239,7 +240,7 @@ export const PlanToPlay = (): React.JSX.Element => {
   //
   // Con el destino guardado, solo la sección a la que el juego LLEGA enciende
   // la animación; la que lo pierde no hace nada.
-  const [justMoved, setJustMoved] = useState<{ id: number; toUpNext: boolean } | null>(null);
+  const [justMoved, setJustMoved] = useState<{ id: GameId; toUpNext: boolean } | null>(null);
   const justMovedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => clearTimeout(justMovedTimer.current ?? undefined), []);
 
@@ -247,7 +248,7 @@ export const PlanToPlay = (): React.JSX.Element => {
   const landingInUpNext = justMoved?.toUpNext === true ? justMoved.id : null;
   const landingInQueue = justMoved?.toUpNext === false ? justMoved.id : null;
 
-  const togglePin = (id: number, pinned: boolean): void => {
+  const togglePin = (id: GameId, pinned: boolean): void => {
     setJustMoved({ id, toUpNext: pinned });
     clearTimeout(justMovedTimer.current ?? undefined);
     // Ventana holgada sobre los 750ms de la animación: cubre el viaje por

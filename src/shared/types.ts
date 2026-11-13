@@ -1,4 +1,13 @@
 import type { DatePrecision, EventDatePrecision } from './dateTypes';
+import type {
+  AchievementId,
+  EmulatorId,
+  GameId,
+  IterationId,
+  RadarGameId,
+  SessionId,
+  StateEventId,
+} from './entityIds';
 export type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes';
 
 // Las entidades y los inputs del IPC viven en dto.ts, declarados a mano: shared/
@@ -61,8 +70,8 @@ export type { SteamSearchResult } from '../main/steam/store';
 // Sesión de emulador pendiente de asignar (bandeja "Pending" de la vista de
 // Sesiones) — con el nombre del emulador ya resuelto para pintarla.
 export type PendingSession = {
-  id: number;
-  emulatorId: number;
+  id: SessionId;
+  emulatorId: EmulatorId;
   emulatorName: string;
   startedAt: Date;
   endedAt: Date | null;
@@ -191,7 +200,7 @@ export type CreatePlannedGameInput = {
 // YA existente — nada de borrar y recrear, el historial (incluida la
 // entrada de "Plan to Play") se conserva.
 export type PromotePlannedGameInput = Omit<CreateGameWithDetailsInput, 'source'> & {
-  gameId: number;
+  gameId: GameId;
 };
 
 // Resultado del picker de carpeta (Install directory, Add/Edit game) — el
@@ -259,7 +268,7 @@ export type ImageRedownloadEvent = {
 };
 
 export type GameListItem = {
-  id: number;
+  id: GameId;
   // Identidad en el catálogo de IGDB — aquí para que el buscador de Add Game
   // reconozca qué resultados ya están en tu Plan to play y te lleve a
   // promocionarlos en vez de darlos de alta por segunda vez.
@@ -319,7 +328,7 @@ export type GameListItem = {
   // tiempos disjuntos (ver resolveIterationHours). El iterationId sirve para
   // emparejar cada bloque de horas manuales con su playthrough — lo usa el
   // "You vs HowLongToBeat", que compara UN playthrough concreto.
-  manualIterations: { iterationId: number; hours: number; year: number | null }[];
+  manualIterations: { iterationId: IterationId; hours: number; year: number | null }[];
   currentState: StateEvent['type'] | null;
   // Cuándo se tocó por última vez, para el orden "Last played" de las
   // columnas de navegación. Sale de la última SESIÓN; si el juego no tiene
@@ -367,7 +376,7 @@ export type PlannedGameListItem = GameListItem & {
 // 63% del peso de la lista vieja, ahora en su propio canal para que los
 // consumidores escuetos no lo paguen en cada 'games:changed'.
 export type PlannedGameExtras = {
-  id: number;
+  id: GameId;
   // El heroUrl real del planeado (ver el aviso sobre el canal escueto).
   heroUrl: string | null;
   // La sinopsis de IGDB — la segunda línea de la fila, siempre con
@@ -408,7 +417,7 @@ export type PlannedGameItem = PlannedGameListItem & Omit<PlannedGameExtras, 'id'
 // de tu biblioteca: es una noticia sobre uno que aún no existe, y por eso
 // vive en su propia tabla y solo aparece en "On the horizon".
 export type RadarGame = {
-  id: number;
+  id: RadarGameId;
   igdbId: number;
   title: string;
   coverUrl: string | null;
@@ -511,7 +520,7 @@ export type StartupKeysImport = { ok: true; imported: number } | { ok: false; me
 // modo ambiente mezcla con sus frases de memoria personal.
 
 export type CuriositySummary = {
-  gameId: number;
+  gameId: GameId;
   text: string;
 };
 
@@ -535,7 +544,7 @@ export type CuriosityActivityEvent =
       failed: number;
       currentTitle: string | null;
     }
-  | { kind: 'generated'; gameId: number };
+  | { kind: 'generated'; gameId: GameId };
 
 // ── Logros (LOGROS.md) ─────────────────────────────────────────────────────
 // El catálogo de un juego más TUS desbloqueos, ya fundidos por la query de
@@ -548,7 +557,7 @@ export type CuriosityActivityEvent =
 export type AchievementSource = 'steam' | 'emu' | 'ra';
 
 export type AchievementEntry = {
-  id: number;
+  id: AchievementId;
   apiName: string;
   displayName: string;
   // null en los ocultos que aún no has desbloqueado — Steam guarda el
@@ -569,12 +578,12 @@ export type AchievementEntry = {
   sources: AchievementSource[];
   // El rato en el que caiste, si se pudo cruzar con tus sesiones. Null es
   // normal y honesto: lo sacaste antes de usar Afterplay, o en otro PC.
-  sessionId: number | null;
-  iterationId: number | null;
+  sessionId: SessionId | null;
+  iterationId: IterationId | null;
 };
 
 export type GameAchievements = {
-  gameId: number;
+  gameId: GameId;
   // null si el juego no está en Steam (no hay de dónde sacarlos).
   steamAppId: number | null;
   // Cuándo se trajo el catálogo y cuándo tus desbloqueos. Null = nunca.
@@ -605,8 +614,8 @@ export type AchievementsStatus = {
 // Un desbloqueo colgado de su sesión, con lo mínimo para pintarlo en una
 // fila de sesión (pantalla de Sesiones, historial de la ficha, toast).
 export type SessionUnlock = {
-  sessionId: number;
-  achievementId: number;
+  sessionId: SessionId;
+  achievementId: AchievementId;
   displayName: string;
   iconUrl: string | null;
   globalPercent: number | null;
@@ -642,7 +651,7 @@ export type AchievementsOverview = {
   // descendente). null en All Time.
   topGames:
     | {
-        gameId: number;
+        gameId: GameId;
         title: string;
         coverUrl: string | null;
         total: number;
@@ -654,8 +663,8 @@ export type AchievementsOverview = {
   hallOfFame: {
     // Para ENLAZAR con el logro concreto en la ficha (aterrizaje dorado):
     // desde Stats se abre el juego Y se pide ese logro, no solo el juego.
-    achievementId: number;
-    gameId: number;
+    achievementId: AchievementId;
+    gameId: GameId;
     gameTitle: string;
     displayName: string;
     iconUrl: string | null;
@@ -666,7 +675,7 @@ export type AchievementsOverview = {
   // Juegos al 100% (solo con desbloqueos conocidos — regla 2). completedAt =
   // la fecha del ÚLTIMO logro, y solo si todas las del juego son fiables.
   perfectGames: {
-    gameId: number;
+    gameId: GameId;
     title: string;
     coverUrl: string | null;
     total: number;
@@ -675,13 +684,13 @@ export type AchievementsOverview = {
   // A un empujón del 100%: qué juegos y qué falta (sin descripciones de
   // ocultos — regla 3).
   almostThere: {
-    gameId: number;
+    gameId: GameId;
     title: string;
     coverUrl: string | null;
     unlocked: number;
     total: number;
     missing: {
-      achievementId: number;
+      achievementId: AchievementId;
       displayName: string;
       iconUrl: string | null;
       globalPercent: number | null;
@@ -711,7 +720,7 @@ export type AchievementActivityEvent =
       failed: number;
       currentTitle: string | null;
     }
-  | { kind: 'synced'; gameId: number; catalogCount: number; unlockedCount: number };
+  | { kind: 'synced'; gameId: GameId; catalogCount: number; unlockedCount: number };
 
 // ── Recaps del Loop (AFTERPLAY-LOOP.md §3) ────────────────────────────────
 // La prosa de cada periodo cerrado, generada una vez y leída en el Journey y
@@ -759,12 +768,12 @@ export type MemoryActivityEvent =
 // Cambio de estado suelto para el desglose "Status Changes" de Stats por
 // año (Bloque 5D) — ver getAllStateEvents.ts.
 export type StateEventSummary = {
-  id: number;
-  gameId: number;
+  id: StateEventId;
+  gameId: GameId;
   // Playthrough dueño del evento — "You vs HowLongToBeat" lo usa para
   // comparar las horas de ESE playthrough (el último completado), no las
   // totales del juego.
-  iterationId: number;
+  iterationId: IterationId;
   type: StateEvent['type'];
   occurredAt: Date;
   datePrecision: StateEvent['datePrecision'];
@@ -779,7 +788,7 @@ export type StateEventSummary = {
 export type SpendEventSummary = {
   // Stats no lo usa (sus métricas son sumas globales), pero el modo ambiente
   // sí: necesita el gasto DE UN juego para poder decir su coste por hora.
-  gameId: number;
+  gameId: GameId;
   amount: number;
   occurredAt: Date;
 };
@@ -788,8 +797,8 @@ export type SpendEventSummary = {
 // getAllSessions.ts. Campos explícitos (no `Session & {...}`) para reflejar
 // exactamente lo que su select() devuelve.
 export type SessionWithGame = {
-  id: number;
-  iterationId: number;
+  id: SessionId;
+  iterationId: IterationId;
   isManual: boolean;
   startedAt: Date;
   endedAt: Date | null;
@@ -797,7 +806,7 @@ export type SessionWithGame = {
   lastHeartbeatAt: Date | null;
   datePrecision: EventDatePrecision;
   note: string | null;
-  gameId: number;
+  gameId: GameId;
   gameTitle: string;
   coverUrl: string | null;
 };
@@ -807,12 +816,12 @@ export type SessionWithGame = {
 // escribir la nota — el renderer no puede saberlo por su cuenta: quien
 // detecta que el proceso murió es el watcher.
 export type SessionClosedEvent = {
-  sessionId: number;
-  gameId: number;
+  sessionId: SessionId;
+  gameId: GameId;
   // Playthrough dueño de la sesión recién cerrada — es donde los botones de
   // estado rápido del toast escriben su evento (AFTERPLAY-LOOP.md §6): la
   // sesión acaba de registrarse ahí, así que ese ES el playthrough activo.
-  iterationId: number;
+  iterationId: IterationId;
   // Decide qué botones ofrece el toast: Beaten/Dropped para juegos normales,
   // Resting para endless (un endless no se "termina").
   endless: boolean;
@@ -844,7 +853,7 @@ export type SessionClosedEvent = {
 // v2: las fechas viven en el log de estados) — con lo justo para prellenar
 // el picker del Edit y parchear el evento al guardar.
 export type IterationEdgeEvent = {
-  id: number;
+  id: StateEventId;
   occurredAt: Date;
   datePrecision: EventDatePrecision;
 };

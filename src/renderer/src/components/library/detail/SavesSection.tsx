@@ -39,9 +39,10 @@ import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatBytes, pluralize } from '../../../lib/format';
 import { DeleteSaveBackupDialog } from './DeleteSaveBackupDialog';
 import { RestoreSaveDialog } from './RestoreSaveDialog';
+import type { GameId } from '../../../../../shared/entityIds';
 
 type SavesSectionProps = {
-  gameId: number;
+  gameId: GameId;
   gameTitle: string;
 };
 
@@ -302,7 +303,7 @@ const Detected = ({
   onAddFile,
   onRestore,
 }: {
-  gameId: number;
+  gameId: GameId;
   state: SavesGameState;
   addingFolder: boolean;
   onAddFolder: () => void;
@@ -499,7 +500,7 @@ const FoldersBlock = ({
   onAdd,
   onAddFile,
 }: {
-  gameId: number;
+  gameId: GameId;
   detectedLocations: string[];
   ownPaths: string[];
   adding: boolean;
@@ -754,7 +755,7 @@ const RestoreTargetRow = ({
   gameId,
   target,
 }: {
-  gameId: number;
+  gameId: GameId;
   target: string | null;
 }): React.JSX.Element | null => {
   const setRestoreTarget = useSetRestoreTarget();
@@ -796,7 +797,7 @@ const VersionList = ({
   blockedReason,
   onRestore,
 }: {
-  gameId: number;
+  gameId: GameId;
   versions: SaveBackupRow[];
   // Motivo por el que restaurar no se puede AHORA (juego abierto, motor
   // ausente...). null = se puede.

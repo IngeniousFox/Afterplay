@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
 import { gamesTable } from '../db/schema';
 import { getHltbTimes } from '../hltb/api';
+import type { GameId } from '../../shared/entityIds';
 
 export const registerHltbHandlers = (): void => {
   ipcMain.handle('hltb:getTimes', async (_event, title: string, releaseYear: number | null) => {
@@ -29,7 +30,7 @@ export const registerHltbHandlers = (): void => {
   // tardar segundos y retener el candado ahí bloquearía un swap de conexión
   // en caliente (ver attemptSyncUpgrade en db/index.ts) por una espera que no
   // tiene nada que ver con la base de datos.
-  ipcMain.handle('hltb:refreshGame', async (_event, gameId: number) => {
+  ipcMain.handle('hltb:refreshGame', async (_event, gameId: GameId) => {
     const [game] = await withDbAccess(async () =>
       getDb()
         .select({ title: gamesTable.title, releaseYear: gamesTable.releaseYear })

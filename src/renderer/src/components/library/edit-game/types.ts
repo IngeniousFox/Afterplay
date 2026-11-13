@@ -4,6 +4,7 @@ import type { PastStatusKey } from '../../../lib/gameStatus';
 import type { PrecisionDateValue } from '../add-game/DateWithPrecisionPicker';
 import { toPickerValue } from '../add-game/precisionDate';
 import type { ManualPlaythroughEntry } from '../add-game/types';
+import type { IterationId } from '../../../../../shared/entityIds';
 
 // Formulario único para juego + la iteración que se esté viendo/creando en
 // el momento de guardar (SPEC 4.5: "nuevo manual" vs "editar existente" son
@@ -22,7 +23,7 @@ export type EditGameFormValues = {
   // ya no secuestran este formulario de uno en uno, se apilan en
   // `newPlaythroughs` como en Add Game.
   iterationMode: 'none' | 'existing';
-  selectedIterationId: number | null;
+  selectedIterationId: IterationId | null;
   // Playthroughs manuales preparados en ESTA edición y todavía sin crear. Se
   // acumulan visualmente y solo se escriben al guardar; a partir de ahí ya son
   // playthroughs normales y aparecen en el desplegable.

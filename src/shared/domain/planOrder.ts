@@ -1,4 +1,5 @@
 import type { PlanMailboxEntry } from '../planMailbox';
+import type { GameId } from '../entityIds';
 
 // EL ORDEN DEL PLAN ("Up next"), escrito UNA vez (AFTERPLAY-2.0.md §15.2, F-26).
 //
@@ -16,7 +17,7 @@ import type { PlanMailboxEntry } from '../planMailbox';
 
 // Lo mínimo que hay que saber de un juego para repartir marcas: su id y su
 // marca de fijado (null = no está en Up next).
-export type PinnedPlanRow = { id: number; pinnedAt: number | null };
+export type PinnedPlanRow = { id: GameId; pinnedAt: number | null };
 
 // ── REPARTO DE MARCAS AL REORDENAR ─────────────────────────────────────────
 
@@ -30,8 +31,8 @@ export type PinnedPlanRow = { id: number; pinnedAt: number | null };
 // que el buzón lee como fallo (drainMailbox.ts).
 export const redistributePinStamps = (
   rows: readonly PinnedPlanRow[],
-  orderedIds: readonly number[],
-): Map<number, number> => {
+  orderedIds: readonly GameId[],
+): Map<GameId, number> => {
   const byId = new Map(rows.map((row) => [row.id, row.pinnedAt]));
   // Solo los que SIGUEN fijados: entre el gesto y el commit pudo pasar
   // cualquier cosa (un unpin desde otra máquina vía sync), y los ids
@@ -92,7 +93,7 @@ export type PendingPlanPreview<G> = {
   // ficha a la que entrar ni nada que se pueda fijar todavía.
   ghosts: PendingPlanGhost[];
   // Qué juegos tienen un cambio sin drenar, para marcarlos como pendientes.
-  touched: Set<number>;
+  touched: Set<GameId>;
 };
 
 // Los pendientes del buzón aplicados ENCIMA del plan leído, tal y como los va a
@@ -115,9 +116,9 @@ export const applyPendingPlanEntries = <G extends PinnedPlanRow>(
 ): PendingPlanPreview<G> => {
   // Estado de trabajo: la marca actual de cada juego, que las órdenes van
   // modificando en cadena.
-  const pinnedAt = new Map<number, number | null>(games.map((game) => [game.id, game.pinnedAt]));
+  const pinnedAt = new Map<GameId, number | null>(games.map((game) => [game.id, game.pinnedAt]));
   const ghosts: PendingPlanGhost[] = [];
-  const touched = new Set<number>();
+  const touched = new Set<GameId>();
 
   for (const { id, entry } of pending) {
     if (entry.type === 'add') {

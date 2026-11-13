@@ -16,6 +16,7 @@ import { AMBER, GREEN } from '../../lib/colors';
 import { formatByPrecision } from '../../lib/format';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
+import type { GameId } from '../../../../shared/entityIds';
 
 // La pestaña Achievements de la ficha del sofá — el gabinete de trofeos a
 // escala de tele: anillo de progreso, contadores de rareza y la lista entera
@@ -217,7 +218,7 @@ const TvAchievementRow = ({
   );
 };
 
-export const TvDetailAchievements = ({ gameId }: { gameId: number }): React.JSX.Element => {
+export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.Element => {
   const { data } = useGameAchievements(gameId);
   const { data: timeFormat = '24h' } = useTimeFormat();
 

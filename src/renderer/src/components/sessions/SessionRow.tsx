@@ -15,12 +15,13 @@ import {
 import { GameCover } from '../GameCover';
 import { SessionAchievements, type SessionAchievementEntry } from './SessionAchievements';
 import { SessionNote } from './SessionNote';
+import type { AchievementId } from '../../../../shared/entityIds';
 
 type SessionRowProps = {
   session: SessionWithGame;
   // Abrir UN logro concreto en la ficha (LOGROS-REDISENO §1): la pantalla
   // pone la navegación; la fila solo dice cuál se pulsó.
-  onOpenAchievement?: (achievementId: number) => void;
+  onOpenAchievement?: (achievementId: AchievementId) => void;
   // Duración de la sesión más larga del filtro activo — la fila lleva un
   // relleno proporcional a ella (estilo Most Played: la fila ES la barra),
   // así el ojo compara duraciones sin leer un solo número. 0 = sin barra.

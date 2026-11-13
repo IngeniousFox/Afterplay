@@ -4,6 +4,7 @@ import { isLudusaviAvailable } from './binary';
 import { notifySavesActivity } from './notify';
 import { backupGameToCloud } from './orchestrator';
 import { isR2Configured } from './r2';
+import type { GameId } from '../../shared/entityIds';
 
 // El único disparador automático de toda la función: cerrar una sesión
 // (PARTIDAS-GUARDADAS.md §10.2). Y solo hace BACKUP — restaurar no se
@@ -16,9 +17,9 @@ import { isR2Configured } from './r2';
 // cierre la pillaría a medias.
 const DELAY_MS = 8000;
 
-const pending = new Set<number>();
+const pending = new Set<GameId>();
 
-export const scheduleSaveBackup = (gameId: number): void => {
+export const scheduleSaveBackup = (gameId: GameId): void => {
   // Dos cierres seguidos del mismo juego (relanzar rápido) no encolan dos
   // backups: el que ya está esperando cubre los dos.
   if (pending.has(gameId)) return;
@@ -37,7 +38,7 @@ export const scheduleSaveBackup = (gameId: number): void => {
   }, DELAY_MS).unref?.();
 };
 
-const runBackup = async (gameId: number): Promise<void> => {
+const runBackup = async (gameId: GameId): Promise<void> => {
   // Las dos puertas de §9.2. Sin credenciales de R2 esto ni se intenta: nada
   // de reintentos ni de errores por sesión — la función simplemente no
   // existe hasta que haya claves.

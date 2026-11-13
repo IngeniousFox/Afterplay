@@ -21,9 +21,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../hooks/queryKeys';
 import { ModalShell } from '../../ui/modal-shell';
 import { AMBER, BLUE } from '../../../lib/colors';
+import type { GameId } from '../../../../../shared/entityIds';
 
 type RestoreSaveDialogProps = {
-  gameId: number;
+  gameId: GameId;
   gameTitle: string;
   backup: SaveBackupRow;
   currentTarget: string | null;

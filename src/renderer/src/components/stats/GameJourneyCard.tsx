@@ -7,6 +7,7 @@ import { formatByPrecision } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { StatusIcon } from '../StatusIcon';
 import { StatCard } from './StatCard';
+import { compareByCreation } from '../../../../shared/entityIds';
 
 type JourneySession = { startedAt: Date; endedAt: Date | null };
 
@@ -32,7 +33,9 @@ export const GameJourneyCard = ({
   // entrada — mismo criterio que el History de la ficha).
   const events = [...stateHistory]
     .filter((event) => event.type !== 'plan_to_play')
-    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.id - b.id);
+    .sort(
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || compareByCreation(a.id, b.id),
+    );
 
   const addedMeta = getGameStatusMeta(null);
   const nodes = [

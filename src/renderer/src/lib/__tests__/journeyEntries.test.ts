@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { baseGame, baseSession, baseEvent, syntheticJourney } from './journeyFixtures';
 import { buildEntries, groupEntriesByYearMonth, type JourneyEntry } from '../journeyEntries';
+import type { GameId } from '../../../../shared/entityIds';
 
 // Una entrada del viaje con lo minimo: la agrupacion solo mira lastAt, el
 // resto viaja de paquete.
@@ -97,14 +98,14 @@ describe('buildEntries', () => {
     let gameIdReads = 0;
     const countedSessions = sessions.map((session) => ({
       ...session,
-      get gameId(): number {
+      get gameId(): GameId {
         gameIdReads++;
         return session.gameId;
       },
     }));
     const countedEvents = events.map((event) => ({
       ...event,
-      get gameId(): number {
+      get gameId(): GameId {
         gameIdReads++;
         return event.gameId;
       },

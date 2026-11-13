@@ -7,6 +7,7 @@ import type { RaGameListEntry } from './api';
 import { raConsoleIdsForPlatforms } from './consoles';
 import { readRaState, writeRaState } from './state';
 import { syncRaGame } from './sync';
+import type { GameId } from '../../shared/entityIds';
 
 // El emparejado y las pasadas de RetroAchievements (RETROACHIEVEMENTS.md
 // §5-6). La regla de oro que gobierna todo el archivo: ningún "no" de RA se
@@ -48,7 +49,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 // Tipo exportado solo para que los tests puedan tipar sus fixtures (ver la
 // export de matchAgainstLists más abajo).
 export type MatchCandidate = {
-  id: number;
+  id: GameId;
   title: string;
   releaseYear: number | null;
   officialPlatforms: string[] | null;
@@ -156,14 +157,14 @@ export const breakTieByPlayedPlatform = (
 // Las plataformas apuntadas de unos pocos juegos. Se pide SOLO cuando hay
 // empates (un puñado, y en la mayoría de pasadas ninguno), así que el camino
 // normal no paga esta consulta.
-const readPlayedPlatforms = async (gameIds: number[]): Promise<Map<number, string[]>> => {
+const readPlayedPlatforms = async (gameIds: GameId[]): Promise<Map<GameId, string[]>> => {
   const rows = await withDbAccess(async () =>
     getDb()
       .select({ gameId: iterationsTable.gameId, playedPlatform: iterationsTable.playedPlatform })
       .from(iterationsTable)
       .where(inArray(iterationsTable.gameId, gameIds)),
   );
-  const byGame = new Map<number, string[]>();
+  const byGame = new Map<GameId, string[]>();
   for (const row of rows) {
     const platforms = byGame.get(row.gameId);
     if (platforms) platforms.push(row.playedPlatform);
@@ -196,7 +197,7 @@ let raSyncChainRunning = false;
 // El tipo es justo lo que pide syncRaGame — no MatchCandidate, que trae
 // releaseYear/officialPlatforms que aquí ya no hacen falta (el emparejado ya
 // pasó).
-type SyncableRaGame = { id: number; title: string; raGameId: number; heroUrl: string | null };
+type SyncableRaGame = { id: GameId; title: string; raGameId: number; heroUrl: string | null };
 
 const runRaSyncChain = async (games: SyncableRaGame[]): Promise<void> => {
   for (const game of games) {
@@ -317,7 +318,7 @@ export const runRaStartupPass = async (): Promise<void> => {
       const playedPlatforms =
         tiedGameIds.length > 0
           ? await readPlayedPlatforms(tiedGameIds)
-          : new Map<number, string[]>();
+          : new Map<GameId, string[]>();
 
       // raGameId null = "no está en RA" O "empate irresoluble"; `tied` solo
       // lleva algo en el segundo caso, que es el que hay que contar.
@@ -487,7 +488,7 @@ export const runRaFullResync = async (): Promise<number> => {
 // juego sin set sería pagar cientos de KB por un no casi seguro (el barrido
 // periódico ya lo reintenta con su cadencia).
 export const refreshRaForGame = async (
-  gameId: number,
+  gameId: GameId,
   notify: boolean,
   forceRematch = false,
 ): Promise<boolean> => {

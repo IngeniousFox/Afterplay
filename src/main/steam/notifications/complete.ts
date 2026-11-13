@@ -2,6 +2,7 @@ import { countDistinct, eq } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../../db';
 import { achievementsTable, achievementUnlocksTable } from '../../db/schema';
 import { enqueueAchievementToasts } from './overlay';
+import type { GameId } from '../../../shared/entityIds';
 
 // La celebración del 100% (LOGROS-IDEAS.md §3.6): cuando una tanda de
 // desbloqueos EN VIVO deja un juego con todos sus logros, cae la tarjeta
@@ -36,10 +37,10 @@ const AFTER_BATCH_MS = 1500;
 // vigilante. Vive en memoria y se pierde al reiniciar, y da igual: aquí solo
 // se llega con desbloqueos NUEVOS, y en un juego ya completo no queda
 // ninguno.
-const celebratedAtTotal = new Map<number, number>();
+const celebratedAtTotal = new Map<GameId, number>();
 
 export const maybeCelebrateCompletion = (
-  gameId: number,
+  gameId: GameId,
   gameTitle: string,
   gameHeroUrl: string | null,
 ): void => {
