@@ -1604,6 +1604,10 @@ Salida: la base 2.0 local (`Afterplay2.db`, en la misma carpeta de datos).
 - Suma de gasto, total y por juego.
 - Para cada juego: estado, horas totales y último día jugado, calculados con el código de 1.x sobre el origen y con el de 2.0 sobre el destino. Deben coincidir.
 - Ninguna referencia huérfana.
+- **Conciliación columna a columna** (añadida el 2026-11-13). Las comprobaciones de arriba no detectan que se pierda o se altere un dato que no entra en ningún cálculo: una nota, una valoración, una etiqueta, una carátula elegida a mano, el texto de un recap. Por eso:
+  - Cada columna del esquema 1.x tiene declarado en el código del importador su destino en el 2.0, o el motivo por el que se descarta. Un test recorre el esquema 1.x y falla si alguna columna no está declarada.
+  - La validación recorre todas las filas del origen y compara cada valor con el del destino, tras la transformación declarada. Cualquier diferencia hace fallar la migración.
+  - El informe da, por tabla y columna, las filas comprobadas, las coincidencias, las diferencias (por id antiguo, nunca el contenido) y los descartes con su motivo.
 
 El informe de validación se guarda en el log. Si falla, se borra `Afterplay2.db`, se suelta el reclamo del corte y la 1.x sigue como estaba.
 
@@ -1837,10 +1841,20 @@ La fase se hace en dos tandas. La primera es solo añadir: la app sigue funciona
 - **Ids con nombre.** Unos 150 ficheros dejan de escribir `number` para los ids y de asumir que lo son (rutas, desempates, claves de consulta). Con el alias cambiado a texto, los únicos errores de tipos que quedan son la frontera con la base 1.x y los ids literales de tests y fixtures (unos 580). La app sigue con ids numéricos y se comporta igual.
 - **Comprobado.** Lint y tipos de los cinco proyectos sin errores, 1.538 tests, build y la suite completa de Playwright.
 
-**Segunda tanda, sin empezar.** Es mayor de lo que este plan contaba: además de las 65 consultas de `db/queries/`, hay **29 ficheros fuera de `db/` que consultan la base directamente** (refrescos externos, Steam, RetroAchievements, radar, imágenes, `index.ts`). Orden previsto:
+**Segunda tanda, en curso.** Es mayor de lo que este plan contaba: además de las 65 consultas de `db/queries/` hay 39 ficheros fuera de `db/` que tocan la base, 26 de ellos directamente (refrescos externos, Steam, RetroAchievements, radar, imágenes, `index.ts`). El inventario completo, el contrato de cada DTO, las decisiones tomadas y el reparto están en `src/main/db/v2/CONSULTAS.md`.
 
-1. Consultas 2.0 en `src/main/db/v2/queries/`, por dominio, con sus tests sobre una base vacía. Sigue siendo solo añadir.
-2. El cambio: el main abre la base 2.0, el IPC y los 29 ficheros pasan a las consultas nuevas y a la puerta, `EntityId` pasa a texto, desaparece el sync de Turso del escritorio y se rehace la semilla de los e2e.
+| Paso                              | Qué es                                                                                                                                                                                              | Estado a 2026-11-13       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Tipos y reglas genéricos en el id | Para que convivan consultas con ids de texto y el Worker con ids numéricos                                                                                                                          | Hecho                     |
+| Inventario y contrato             | `CONSULTAS.md`                                                                                                                                                                                      | Hecho                     |
+| P0 · Piezas comunes               | `src/main/db/v2/queries/common/`: contexto, dispositivo, lectura de un juego, filas vivas, etiquetas, comprobaciones externas, cierre de sesiones, fixtures                                         | En curso                  |
+| Importador, primera versión       | `src/main/db/v2/importer/` y `scripts/import-1x-to-v2.ts`. Adelantado desde la fase 8 para trabajar con datos reales y comparar la 2.0 con la 1.x juego a juego                                     | En curso                  |
+| P1 a P8 · Consultas por dominio   | Biblioteca y ficha; altas y Plan; playthroughs, estados y gasto; sesiones y watcher; logros; refresco externo; partidas; recaps, curiosidades y radar. En paralelo, cada uno en su carpeta          | Sin empezar: esperan a P0 |
+| P9 · El cambio                    | El main abre la base 2.0, el IPC y los 39 ficheros pasan a las consultas nuevas y a la puerta, `EntityId` pasa a texto, desaparece el sync de Turso del escritorio, se rehace la semilla de los e2e | Sin empezar               |
+
+**Para retomar el trabajo otro día:** comprobar que P0 y el importador están terminados y con commit (`git log`), leer §4 y §5.0 de `CONSULTAS.md`, y lanzar P1 a P8 en paralelo. Cada paquete escribe solo en su carpeta de `src/main/db/v2/queries/` y no toca la app, así que hasta P9 la app sigue funcionando con el esquema 1.x. Después de P9, el perfil de desarrollo se rellena con el importador.
+
+**Decisión del usuario (2026-11-13):** el completado al 100 % de logros se cuenta por fuente; Steam y RetroAchievements son dos hitos distintos. Cómo se enseña en la interfaz se decide al adaptar el renderer.
 
 El Worker y la PWA siguen sobre el esquema 1.x hasta la fase 5.
 
@@ -1919,17 +1933,20 @@ API v2 sobre el hub, PWA adaptada, concesiones, enriquecimiento.
 
 Sobre una **copia** completa de los datos reales: importar, validar, sembrar un hub de pruebas, emparejar un segundo perfil, usar la app unos días.
 
-**Salida:** validación limpia sobre datos reales; ningún escenario de §17.3 en rojo; lista de sorpresas vacía o resuelta.
+**Antes de empezar el ensayo: una revisión independiente** de la puerta de escritura (`src/main/db/v2/store/`), del importador y del motor de fusión, hecha por alguien que no haya participado en escribirlos y con un único encargo: buscar formas de perder o alterar datos. Ese código se escribió deprisa y se ha comprobado con tests y con informes, no leyendo cada línea.
+
+**Salida:** validación limpia sobre datos reales; ningún escenario de §17.3 en rojo; lista de sorpresas vacía o resuelta; revisión independiente hecha y sus hallazgos resueltos.
 
 ### §20.11 Fase 10 — Corte (S)
 
 1. Publicar la 1.8 y esperar a que esté en todos los PCs.
 2. Desplegar el hub de producción.
 3. Publicar la 2.0.
-4. Aceptar la actualización en el primer PC. Vigilar la validación y la siembra.
-5. Aceptarla en los demás.
-6. Segunda persona, cuando quiera.
-7. A los 60 días: retirar el Worker antiguo y archivar la base de Turso.
+4. Antes de aceptar la actualización en cada PC: una copia manual de `Afterplay.db` y de `machine-saves.json` **fuera** de la carpeta de datos de la app, además de las copias automáticas. Es la red que queda si falla todo lo demás.
+5. Aceptar la actualización en el primer PC. Vigilar la validación y la siembra.
+6. Aceptarla en los demás.
+7. Segunda persona, cuando quiera.
+8. A los 60 días: retirar el Worker antiguo y archivar la base de Turso.
 
 ### §20.12 Dependencias entre fases
 
