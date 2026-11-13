@@ -86,6 +86,7 @@ export const EXTERNAL_CHECK_SOURCES = [
   'steam_appid',
   'steam_store',
   'steam_achievements',
+  'steam_unlocks',
   'ra_match',
   'ra_achievements',
   'hltb',
