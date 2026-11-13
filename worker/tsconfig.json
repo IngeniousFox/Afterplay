@@ -23,5 +23,5 @@
     "../src/main/db/queries/games/iterationHours.ts",
     "../src/shared/**/*.ts"
   ],
-  "exclude": ["../src/shared/memory/__tests__"]
+  "exclude": ["../src/shared/memory/__tests__", "../src/shared/sync/__tests__"]
 }
