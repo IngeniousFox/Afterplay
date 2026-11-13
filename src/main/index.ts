@@ -18,6 +18,8 @@ import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
 import { registerContextMenu } from './lib/contextMenu';
+import { applyDevProfile } from './lib/devProfile';
+import { isDevProfile, withDevProfileSuffix } from './lib/devProfileRules';
 import { applyE2EUserData, isE2E } from './lib/e2e';
 import { wasOpenedHiddenAtLogin } from './lib/loginItem';
 import { applyYoutubeReferer } from './lib/youtubeReferer';
@@ -136,6 +138,12 @@ let preBigPictureState: { bounds: Electron.Rectangle; isMaximized: boolean } | n
 // call — including the lazy one inside getDb() — so it's the very first thing
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
+
+// Un perfil de desarrollo (AFTERPLAY_DEV_PROFILE, solo sin empaquetar) lleva
+// la carpeta de datos a otra parte: una copia de tus datos para trastear, sin
+// tocar la de la app instalada. Mismo sitio y mismo motivo que la línea de
+// abajo. Ver lib/devProfile.ts.
+applyDevProfile();
 
 // Y, si esto es un test de extremo a extremo, la carpeta de datos AISLADA —
 // aquí y no más abajo por lo mismo que setName: todo lo que cuelga de
@@ -302,7 +310,7 @@ function createWindow(): void {
     // activo): nace directamente a pantalla completa, sin parpadeo de
     // ventana normal por medio.
     fullscreen: bigPictureMode,
-    title: 'Afterplay',
+    title: withDevProfileSuffix('Afterplay'),
     icon,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' } : {}),
@@ -314,6 +322,12 @@ function createWindow(): void {
 
   const window = mainWindow;
   trackWindowState(window);
+
+  // En un perfil de desarrollo el título de la ventana lleva el nombre del
+  // perfil, y hay que impedir que el <title> de la página lo pise: con el
+  // perfil y la app instalada abiertos a la vez, es lo único que las distingue
+  // en la barra de tareas y en Alt+Tab.
+  if (isDevProfile()) window.on('page-title-updated', (event) => event.preventDefault());
 
   // DOS RELOJES, y hasta hoy iban en fila: el renderer (~155 ms medidos desde
   // que se crea la ventana hasta su primer frame) y la base de datos (470 ms

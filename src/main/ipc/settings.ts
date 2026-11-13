@@ -11,6 +11,7 @@ import { getDb, getLastSyncFailure, runSyncCycle, withDbAccess } from '../db';
 import { saveBackupsTable } from '../db/schema';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
+import { isDevProfile } from '../lib/devProfileRules';
 import { isE2E } from '../lib/e2e';
 import { openPathResult } from '../lib/openPath';
 import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
@@ -68,6 +69,9 @@ export const registerSettingsHandlers = (): void => {
     // puede aislar por sí solo: aquí se corta. Un test puede pulsar el
     // interruptor y comprobar la UI; el sistema operativo no se entera.
     if (isE2E()) return;
+    // Un perfil de desarrollo tampoco: registraría en el arranque de Windows
+    // el Electron de desarrollo, no la app.
+    if (isDevProfile()) return;
     app.setLoginItemSettings(
       process.platform === 'win32'
         ? { openAtLogin: enabled, args: enabled ? [HIDDEN_LAUNCH_ARG] : [] }

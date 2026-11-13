@@ -1,5 +1,6 @@
 import { app, Menu, Tray } from 'electron';
 import icon from '../lib/appIcon';
+import { withDevProfileSuffix } from '../lib/devProfileRules';
 
 export type TrayCallbacks = {
   onOpen: () => void;
@@ -12,7 +13,7 @@ export type TrayCallbacks = {
 // no todo el mundo hace clic derecho para descubrir el menú.
 export const createAppTray = ({ onOpen, onQuit }: TrayCallbacks): Tray => {
   const tray = new Tray(icon);
-  tray.setToolTip(app.getName());
+  tray.setToolTip(withDevProfileSuffix(app.getName()));
 
   const menu = Menu.buildFromTemplate([
     { label: `Open ${app.getName()}`, click: onOpen },
@@ -28,5 +29,6 @@ export const createAppTray = ({ onOpen, onQuit }: TrayCallbacks): Tray => {
 // Mejora progresiva opcional (SPEC 3E): el tooltip refleja de un vistazo si
 // hay algo en marcha ahora mismo, sin tener que abrir la ventana.
 export const setTrayActiveGames = (tray: Tray, titles: string[]): void => {
-  tray.setToolTip(titles.length > 0 ? `${app.getName()} — ${titles.join(', ')}` : app.getName());
+  const name = withDevProfileSuffix(app.getName());
+  tray.setToolTip(titles.length > 0 ? `${name} — ${titles.join(', ')}` : name);
 };

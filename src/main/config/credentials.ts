@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron';
 import { parse } from 'dotenv';
 import { existsSync, readFileSync, renameSync, unlinkSync } from 'fs';
 import { writeFileAtomicSync } from '../lib/atomicWrite';
+import { isDevProfile } from '../lib/devProfileRules';
 import { isE2E } from '../lib/e2e';
 import {
   CREDENTIAL_KEYS as SHARED_CREDENTIAL_KEYS,
@@ -335,6 +336,10 @@ const importLegacyEnv = (): void => {
   // que lleva la base que el dueño tenga activa ese día. Es el escenario
   // exacto del 3-ago-2026, y la razón de que el modo E2E exista (ver e2e.ts).
   if (isE2E()) return;
+  // Y en un perfil de desarrollo tampoco, por el mismo motivo: su carpeta
+  // nace sin credentials.json y el .env del proyecto puede apuntar a la base
+  // real. Las claves de un perfil son las de su carpeta (ver devProfile.ts).
+  if (isDevProfile()) return;
 
   const userDataEnvPath = join(app.getPath('userData'), '.env');
   const candidates = [userDataEnvPath];

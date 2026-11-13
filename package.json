@@ -24,6 +24,8 @@
     "benchmark:db": "tsx --test --experimental-test-module-mocks scripts/benchmark-db.ts",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
+    "dev:v2": "tsx scripts/dev-profile.ts v2",
+    "dev:v2:seed": "tsx scripts/seed-dev-profile.ts v2",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "install-electron",
     "ludusavi:fetch": "tsx scripts/fetch-ludusavi.ts",

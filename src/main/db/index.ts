@@ -6,6 +6,7 @@ import { migrate } from 'drizzle-orm/tursodatabase-sync/migrator';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { remoteLabel } from '../config/credentials';
+import { devProfileBlocksRemote } from '../lib/devProfileRules';
 import { e2eBlocksSync } from '../lib/e2e';
 import { isWalOutOfStep, localConnectionOptions } from './localConnection';
 import { removeEmptySidecars } from './sidecars';
@@ -43,7 +44,12 @@ const hasRemoteConfigured = (): boolean =>
   // En un test E2E, la remota está cerrada salvo que ese test la haya pedido
   // con las dos llaves (credenciales de Turso en su sandbox Y la bandera; ver
   // e2e.ts). Un test que teclee credenciales en Ajustes no abre nada.
-  !e2eBlocksSync() && Boolean(process.env.DATABASE_URL && process.env.DATABASE_AUTH_TOKEN);
+  !e2eBlocksSync() &&
+  Boolean(process.env.DATABASE_URL && process.env.DATABASE_AUTH_TOKEN) &&
+  // Un perfil de desarrollo trabaja sobre una COPIA de la biblioteca: solo
+  // sincroniza con una base cuyo nombre diga que es de desarrollo. Con las
+  // credenciales de producción pegadas por error, se queda en local.
+  !devProfileBlocksRemote(remoteLabel(process.env.DATABASE_URL));
 
 // QUÉ base de datos remota es esta, para decirlo en cada log de conexión.
 //

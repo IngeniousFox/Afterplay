@@ -12,6 +12,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
 import { getConfigValue } from '../config/store';
+import { devProfileBlocksBucket } from '../lib/devProfileRules';
 import { storageTargetFromEnv, type StorageTarget } from './storageConfig';
 
 // Cloudflare R2 (PARTIDAS-GUARDADAS.md §9). API compatible con S3 —el mismo
@@ -60,8 +61,15 @@ export const beginStorageMigration = async (): Promise<() => void> => {
   };
 };
 
-const activeTarget = (): StorageTarget | null =>
-  storageTargetFromEnv(getConfigValue('saveStorageProvider'));
+const activeTarget = (): StorageTarget | null => {
+  const target = storageTargetFromEnv(getConfigValue('saveStorageProvider'));
+  // Un perfil de desarrollo es, para el bucket, un PC más: sube, lista y PODA.
+  // Contra el bucket real sería un segundo PC fantasma borrando copias de
+  // verdad, así que solo trabaja con un bucket de desarrollo; con cualquier
+  // otro, la función queda como "sin configurar" (ver devProfileRules.ts).
+  if (target && devProfileBlocksBucket(target.bucket)) return null;
+  return target;
+};
 
 // La puerta de §9.2: sin las cuatro claves, la función entera queda
 // deshabilitada. No hay modo degradado "solo local" a propósito — un backup
