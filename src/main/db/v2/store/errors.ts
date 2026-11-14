@@ -29,14 +29,26 @@ export type StoreErrorCode =
   | 'not_deletable'
   /** Ya hay una sesión propia abierta para el mismo objetivo (§7.7). */
   | 'open_session'
+  /**
+   * El padre del registro (`children`) al que se engancha la fila tiene
+   * lápida: un hijo vivo bajo un padre borrado sería invisible (F-11) pero se
+   * subiría y ocuparía sitio (revisión, hallazgo 5).
+   */
+  | 'parent_deleted'
   /** Uso indebido de `transaction` (asíncrona, o dentro de otra ajena). */
-  | 'transaction';
+  | 'transaction'
+  /**
+   * SQLite deshizo la transacción entera por su cuenta (disco lleno, E/S,
+   * memoria): la operación en curso ya no puede confirmar nada. El error de
+   * SQLite va en `cause` (revisión, hallazgo 4).
+   */
+  | 'aborted';
 
 export class StoreError extends Error {
   readonly code: StoreErrorCode;
 
-  constructor(code: StoreErrorCode, message: string) {
-    super(message);
+  constructor(code: StoreErrorCode, message: string, options?: { cause?: unknown }) {
+    super(message, options);
     this.name = 'StoreError';
     this.code = code;
   }

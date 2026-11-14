@@ -12,6 +12,7 @@ import {
   uuidv7,
 } from '../../../../shared/sync/ids';
 import type { SyncedTableEntry, SyncedTableName } from '../registry';
+import { assertNoNul } from './columns';
 import { StoreError } from './errors';
 import type { RowOf } from './types';
 
@@ -82,6 +83,10 @@ export function idForNewRow(
   if (requested !== undefined && (typeof requested !== 'string' || requested.length === 0)) {
     throw new StoreError('invalid_value', `${name}.id: se esperaba un texto no vacío`);
   }
+  // Revisión, hallazgo 2: un id con NUL se leería cortado y no volvería a
+  // encontrar su fila. Solo puede llegar en un id `given` (los demás se calculan
+  // de columnas ya validadas o tienen que ser un UUID).
+  if (typeof requested === 'string') assertNoNul(name, 'id', requested);
   switch (entry.id.kind) {
     case 'given':
       if (requested === undefined) {

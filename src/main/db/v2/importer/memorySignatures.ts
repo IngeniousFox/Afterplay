@@ -21,6 +21,11 @@ import type { ResealedMemory } from './queryValidation';
 // - Solo los recaps que trae esta importación. Uno que ya estaba sellado con
 //   ids 2.0 (una segunda ejecución, o un recap regenerado en la 2.0) casa con
 //   `ids: 'v2'` y no se toca.
+// - Y solo se REESCRIBEN los que esta misma ejecución ha insertado (revisión,
+//   sospecha sobre este módulo). Uno que ya estaba en la base pudo llegar por
+//   sync o editarse en la 2.0: reescribirlo sin reloj ni `syncDirty` cambiaría
+//   un dato que nadie subiría nunca y que divergiría entre PCs. Se comprueba
+//   igual (para el informe y la validación), pero se deja como está.
 // - La firma que casa se escribe CONSERVANDO los relojes de la fila: es la
 //   misma información, solo cambia de ids, y como el resto de lo importado
 //   tiene que perder frente a cualquier edición posterior. Por eso se escribe
@@ -46,6 +51,8 @@ export interface MemorySignatureReport {
   readonly matches: Record<string, number>;
   /** Firmas reescritas con ids 2.0 en esta ejecución. */
   readonly resealed: number;
+  /** Casan con ids 1.x pero no se reescriben: la fila ya estaba antes de esta ejecución. */
+  readonly notResealedPreexisting: number;
   /** De los que no casan: cuántos tienen juegos del capítulo sin id 1.x. */
   readonly mismatchWithUnmappedGames: number;
   /** Clave del periodo (`month:2026-06`) de cada recap que no casa: sin contenido. */
@@ -64,6 +71,8 @@ export function resealMemorySignatures(
   target: LocalDatabase,
   plan: ImportPlan,
   now: Date,
+  /** Ids de `generated_memories` insertados en esta ejecución (`writePlan`). */
+  insertedNow: ReadonlySet<string>,
 ): ResealResult {
   const imported = new Set((plan.rows.get('generated_memories') ?? []).map((row) => row.id));
   const outcomes: Record<MemorySignatureOutcome, number> = {
@@ -76,6 +85,7 @@ export function resealMemorySignatures(
   const expected = new Map<string, ResealedMemory>();
   const mismatchScopes: string[] = [];
   let resealed = 0;
+  let preexisting = 0;
   let unmapped = 0;
   if (imported.size === 0) {
     return { report: emptyReport(outcomes), expected };
@@ -96,14 +106,20 @@ export function resealMemorySignatures(
     if (check.status === 'match') {
       const key = `${check.ids}:${check.generation}`;
       matches[key] = (matches[key] ?? 0) + 1;
-      const changed = check.sourceHash !== memory.storedHash;
-      if (changed) {
+      const differs = check.sourceHash !== memory.storedHash;
+      if (differs && !insertedNow.has(memory.id)) {
+        // Ya estaba: no es nuestro reescribirlo (ver la cabecera).
+        preexisting += 1;
+        expected.set(memory.id, { expectedHash: memory.storedHash, resealed: false });
+        continue;
+      }
+      if (differs) {
         const result = update.run(check.sourceHash, memory.id, memory.storedHash);
         if (Number(result.changes) !== 1)
           throw new Error(`recap ${memory.id}: no se pudo resellar`);
         resealed += 1;
       }
-      expected.set(memory.id, { expectedHash: check.sourceHash, resealed: changed });
+      expected.set(memory.id, { expectedHash: check.sourceHash, resealed: differs });
     } else {
       if (check.status === 'mismatch' && check.unmappedGameIds?.length) unmapped += 1;
       if (check.status === 'mismatch')
@@ -117,6 +133,7 @@ export function resealMemorySignatures(
       outcomes,
       matches,
       resealed,
+      notResealedPreexisting: preexisting,
       mismatchWithUnmappedGames: unmapped,
       mismatchScopes: mismatchScopes.sort(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -131,6 +148,7 @@ function emptyReport(outcomes: Record<MemorySignatureOutcome, number>): MemorySi
     outcomes,
     matches: {},
     resealed: 0,
+    notResealedPreexisting: 0,
     mismatchWithUnmappedGames: 0,
     mismatchScopes: [],
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,

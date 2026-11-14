@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { eq } from 'drizzle-orm';
@@ -7,6 +8,7 @@ import { maxStoredClock, randomShortDeviceId } from '../connection';
 import { localSyncState } from '../schema';
 import {
   LOCAL,
+  OTHER,
   MIGRATIONS_FOLDER,
   T0,
   count,
@@ -162,6 +164,37 @@ describe('conexión 2.0: id corto del reloj', () => {
       assert.ok(isDeviceShortId(second.shortDeviceId));
     } finally {
       second.close();
+    }
+  });
+
+  // Revisión, hallazgo 6 (venía de __review__/connection.review.test.ts).
+  it('si la base se copia a otro PC, el otro sortea su propio id corto', () => {
+    const pathA = newFile();
+    const a = openTestDb({ path: pathA, deviceId: LOCAL });
+    seedBasics(a.store);
+    const shortA = a.shortDeviceId;
+    const maxA = maxStoredClock(a.db);
+    a.close();
+    // El usuario estrena PC y se lleva su base (o restaura en él una copia).
+    const pathB = newFile();
+    copyFileSync(pathA, pathB);
+    const b = openTestDb({ path: pathB, deviceId: OTHER });
+    try {
+      assert.notEqual(b.shortDeviceId, shortA, 'dos PCs no firman con el mismo id corto');
+      assert.equal(b.clock.dev, b.shortDeviceId);
+      // Queda guardado para este dispositivo, y su reloj sigue por encima de la base.
+      const row = b.db.select().from(localSyncState).get();
+      assert.equal(row?.shortDeviceIdFor, OTHER);
+      assert.ok(b.clock.now().slice(0, 18) > maxA.slice(0, 18));
+    } finally {
+      b.close();
+    }
+    // El PC original, con su base, conserva el suyo.
+    const again = openTestDb({ path: pathA, deviceId: LOCAL });
+    try {
+      assert.equal(again.shortDeviceId, shortA);
+    } finally {
+      again.close();
     }
   });
 

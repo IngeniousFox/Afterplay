@@ -137,6 +137,138 @@ describe('transaction: atomicidad', () => {
   });
 });
 
+// Revisión, hallazgo 3 (venían de __review__/store.review.test.ts).
+describe('transaction: funciones asíncronas', () => {
+  it('no deja escrito NADA de una transacción rechazada por ser async', async () => {
+    const { gameId } = seedBasics(local.store);
+    let thrown: unknown = null;
+    try {
+      // Error de programación verosímil: alguien añade un `await` dentro.
+      local.store.transaction((async () => {
+        local.store.patch('games', gameId, { notes: 'antes del await' });
+        await Promise.resolve();
+        local.store.patch('games', gameId, { title: 'después del await' });
+      }) as unknown as () => void);
+    } catch (error) {
+      thrown = error;
+    }
+    assert.ok(isStoreError(thrown, 'transaction'), 'la puerta rechaza la función async');
+    // Dejar correr la continuación de la función async, si la hubiera.
+    await new Promise((resolve) => setImmediate(resolve));
+    const row = rawRow(local, 'games', gameId);
+    assert.equal(row?.notes, null, 'lo de antes del await no se escribió');
+    assert.equal(row?.title, 'Celeste', 'lo de después del await no se escribió');
+    assert.equal(changes.length, 4, 'solo los avisos de seedBasics');
+  });
+
+  it('si una función normal devuelve la promesa de otra async, su continuación no puede escribir', async () => {
+    const { gameId } = seedBasics(local.store);
+    let continuation: unknown = 'no llegó a correr';
+    const inner = async (): Promise<void> => {
+      local.store.patch('games', gameId, { notes: 'antes del await' });
+      await Promise.resolve();
+      try {
+        local.store.patch('games', gameId, { title: 'después del await' });
+        continuation = null;
+      } catch (error) {
+        continuation = error;
+      }
+    };
+    assert.throws(
+      () => local.store.transaction(() => inner()),
+      (error) => isStoreError(error, 'transaction'),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.ok(isStoreError(continuation, 'transaction'), 'la puerta está bloqueada');
+    const row = rawRow(local, 'games', gameId);
+    assert.equal(row?.notes, null, 'lo de antes del await se deshizo');
+    assert.equal(row?.title, 'Celeste', 'lo de después del await no se escribió');
+    // En la siguiente vuelta del bucle de eventos la puerta vuelve a funcionar.
+    await new Promise((resolve) => setImmediate(resolve));
+    local.store.patch('games', gameId, { notes: 'ya se puede' });
+    assert.equal(rawRow(local, 'games', gameId)?.notes, 'ya se puede');
+  });
+});
+
+// Revisión, hallazgo 4 (venía de __review__/store.review.test.ts).
+describe('transaction: SQLite deshace la transacción entera', () => {
+  /** Simula un error que hace a SQLite deshacer TODA la transacción (SQLITE_FULL, IOERR, NOMEM). */
+  const armBoom = (): void =>
+    local.db.$client.exec(
+      `CREATE TEMP TRIGGER boom BEFORE UPDATE OF notes ON games
+         WHEN NEW.notes = 'BOOM' BEGIN SELECT RAISE(ROLLBACK, 'disco lleno simulado'); END`,
+    );
+
+  it('una escritura capturada por quien llama no acaba confirmada fuera de la transacción', () => {
+    const { gameId } = seedBasics(local.store);
+    armBoom();
+    let inner: unknown = null;
+    let outer: unknown = null;
+    try {
+      local.store.transaction(() => {
+        local.store.patch('games', gameId, { title: 'A (parte 1 de la operación)' });
+        try {
+          local.store.patch('games', gameId, { notes: 'BOOM' });
+        } catch (error) {
+          // Quien llama trata el fallo de la parte interna como opcional.
+          inner = error;
+        }
+        local.store.patch('games', gameId, { title: 'B (parte 2 de la operación)' });
+        throw new Error('la operación externa falla y debe deshacerse entera');
+      });
+    } catch (error) {
+      outer = error;
+    }
+    // El error de dentro dice que la transacción se perdió y conserva el original.
+    assert.ok(isStoreError(inner, 'aborted'));
+    assert.ok(sqliteError(/disco lleno simulado/)((inner as Error).cause));
+    // La parte 2 ya no pudo escribir: la externa falla con `aborted`.
+    assert.ok(isStoreError(outer, 'aborted'));
+    assert.equal(rawRow(local, 'games', gameId)?.title, 'Celeste');
+    assert.equal(local.db.$client.isTransaction, false);
+  });
+
+  it('tampoco confirma si quien llama se traga todos los errores y devuelve con normalidad', () => {
+    const { gameId } = seedBasics(local.store);
+    armBoom();
+    changes.length = 0;
+    assert.throws(
+      () =>
+        local.store.transaction(() => {
+          local.store.patch('games', gameId, { title: 'A' });
+          try {
+            local.store.patch('games', gameId, { notes: 'BOOM' });
+          } catch {
+            // se ignora
+          }
+          try {
+            local.store.patch('games', gameId, { title: 'B' });
+          } catch {
+            // se ignora también
+          }
+          return 'ok';
+        }),
+      (error) => isStoreError(error, 'aborted'),
+    );
+    assert.equal(rawRow(local, 'games', gameId)?.title, 'Celeste');
+    assert.equal(changes.length, 0, 'no se avisa de nada');
+    // Y la puerta sigue funcionando después.
+    local.store.patch('games', gameId, { title: 'C' });
+    assert.equal(rawRow(local, 'games', gameId)?.title, 'C');
+  });
+
+  it('fuera de una transacción anidada, el error original sale tal cual', () => {
+    const { gameId } = seedBasics(local.store);
+    armBoom();
+    assert.throws(
+      () => local.store.patch('games', gameId, { notes: 'BOOM' }),
+      sqliteError(/disco lleno simulado/),
+    );
+    assert.equal(local.db.$client.isTransaction, false);
+  });
+});
+
 describe('aviso de cambios', () => {
   it('una escritura suelta avisa una vez, ya confirmada', () => {
     let inTransaction: boolean | undefined;

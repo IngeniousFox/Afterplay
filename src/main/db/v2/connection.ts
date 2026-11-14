@@ -83,7 +83,7 @@ export function openLocalDatabase(options: OpenLocalDatabaseOptions): LocalDatab
     }
 
     const wall = options.wall ?? Date.now;
-    const shortDeviceId = ensureShortDeviceId(db);
+    const shortDeviceId = ensureShortDeviceId(db, deviceId);
     // §8.2 "Arranque": por encima del mayor reloj de la base. Importa al
     // restaurar una copia hecha con un reloj adelantado: sin esto, una
     // escritura local podría llevar un reloj menor que la fila que modifica,
@@ -173,18 +173,38 @@ export function randomShortDeviceId(): string {
  * Lee el id corto de `local_sync_state` y lo sortea la primera vez. Si lo
  * guardado no es válido (una edición a mano, una base de otra versión) se
  * sortea otro: solo desempata relojes (§8.2) y ningún dato depende de él.
+ *
+ * Revisión, hallazgo 6: también se sortea otro si se sorteó para OTRO
+ * dispositivo (la base se copió a este PC). Si no, dos PCs con la misma base
+ * firmarían con el mismo id corto. El reloj no retrocede por cambiar de id:
+ * arranca igualmente por encima del mayor reloj guardado (`maxStoredClock`).
  */
-function ensureShortDeviceId(db: LocalDb): string {
+function ensureShortDeviceId(db: LocalDb, deviceId: string): string {
   db.insert(localSyncState).values({ id: 1 }).onConflictDoNothing().run();
   const row = db
-    .select({ shortDeviceId: localSyncState.shortDeviceId })
+    .select({
+      shortDeviceId: localSyncState.shortDeviceId,
+      shortDeviceIdFor: localSyncState.shortDeviceIdFor,
+    })
     .from(localSyncState)
     .where(eq(localSyncState.id, 1))
     .get();
   const stored = row?.shortDeviceId;
-  if (isDeviceShortId(stored) && !isReservedDeviceShortId(stored)) return stored;
-  const fresh = randomShortDeviceId();
-  db.update(localSyncState).set({ shortDeviceId: fresh }).where(eq(localSyncState.id, 1)).run();
+  if (
+    isDeviceShortId(stored) &&
+    !isReservedDeviceShortId(stored) &&
+    row?.shortDeviceIdFor === deviceId
+  ) {
+    return stored;
+  }
+  let fresh = randomShortDeviceId();
+  // Que el nuevo no repita por azar el del otro PC (1 entre 2.000 millones,
+  // pero cuesta una comparación).
+  while (fresh === stored) fresh = randomShortDeviceId();
+  db.update(localSyncState)
+    .set({ shortDeviceId: fresh, shortDeviceIdFor: deviceId })
+    .where(eq(localSyncState.id, 1))
+    .run();
   return fresh;
 }
 

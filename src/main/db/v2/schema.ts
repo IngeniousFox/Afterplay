@@ -721,6 +721,13 @@ export const localSyncState = localTable(
     // no pasaría nada grave, pero el mismo PC firmaría con ids distintos y el
     // desempate de §8.2 dejaría de ser estable para sus propias escrituras.
     shortDeviceId: text(),
+    // El `deviceId` (machineId) para el que se sorteó `shortDeviceId`.
+    // Revisión, hallazgo 6: el id corto vive en la base y no en el PC; si se
+    // copia `Afterplay2.db` a otro PC (estrenar equipo, restaurar una copia),
+    // los dos firmarían con el mismo id corto y el desempate de §8.2 dejaría
+    // de distinguirlos. Si quien abre la base no es este dispositivo, se
+    // sortea otro.
+    shortDeviceIdFor: text(),
   },
   () => [check('local_sync_state_single_row', sql`"id" = 1`)],
 );

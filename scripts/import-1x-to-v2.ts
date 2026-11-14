@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { openLocalDatabase } from '../src/main/db/v2/connection';
 import {
   EXPECTED_QUERY_DIFFERENCES,
@@ -12,6 +12,8 @@ import {
   type ImportReport,
   type LegacyQueryViews,
 } from '../src/main/db/v2/importer';
+import { isInsideAppData, isLiveDatabase } from '../src/main/db/v2/importer/appData';
+import { copySourceConsistently, removeDatabaseFiles } from '../src/main/db/v2/importer/sourceCopy';
 
 // IMPORTA UNA COPIA DE UNA BASE 1.x A UNA BASE 2.0 NUEVA (AFTERPLAY-2.0.md §19.5).
 //
@@ -25,9 +27,15 @@ import {
 //
 // PROTECCIONES, como audit-1x-data.ts:
 // - Nunca lee la base EN USO de la app (`Afterplay.db` de su carpeta de datos
-//   o de un perfil de desarrollo): solo copias. Y ni siquiera lee la copia en
-//   su sitio: la copia antes a una carpeta temporal y trabaja sobre esa.
+//   o de un perfil de desarrollo): solo copias. Y ni siquiera abre la copia en
+//   su sitio: la copia antes a la carpeta temporal y trabaja sobre esa.
 // - Nunca escribe dentro de la carpeta de datos de la app ni de sus perfiles.
+// - Las dos reglas viven en importer/appData.ts y el propio importador las
+//   vuelve a comprobar (revisión, sospecha sobre importer/index.ts).
+//
+// COPIA CONSISTENTE: se copian el `.db` y su `-wal`/`-journal` y se lee una
+// copia de un solo fichero sacada con `VACUUM INTO`, sin abrir el origen
+// (importer/sourceCopy.ts; revisión, sospecha sobre este script).
 //
 // VALIDACIÓN CON CONSULTAS (importer/queryValidation.ts): por defecto, antes
 // de importar se toma la foto de las lecturas 1.x sobre la copia, con su
@@ -71,15 +79,6 @@ const fail = (message: string): never => {
   process.exit(1);
 };
 
-// Carpetas de datos de la app: `Afterplay` y los perfiles `Afterplay-dev-*`.
-const APP_FOLDER = /^afterplay(-dev-.*)?$/i;
-const isInsideAppData = (path: string): boolean =>
-  resolve(path)
-    .split(sep)
-    .some((part) => APP_FOLDER.test(part));
-const isLiveDatabase = (path: string): boolean =>
-  /^afterplay2?\.db$/i.test(basename(path)) && APP_FOLDER.test(basename(dirname(resolve(path))));
-
 const newestBackup = (): string => {
   const appData = process.env.APPDATA;
   if (!appData) return fail('No encuentro %APPDATA%: indica la copia con --from.');
@@ -104,17 +103,20 @@ if (isInsideAppData(out))
   fail('--out no puede estar dentro de la carpeta de datos de la app ni de sus perfiles.');
 if (!existsSync(dirname(resolve(out)))) fail('La carpeta de --out no existe.');
 
-// Un solo fichero en la carpeta temporal del sistema (no una carpeta: la
+// Ficheros sueltos en la carpeta temporal del sistema (no una carpeta: la
 // limpieza de los tests, `pretest`, solo conoce carpetas de fixtures y esto no
-// lo es). Se abre en solo lectura, así que SQLite no le deja ficheros al lado,
-// y se borra en el finally pase lo que pase.
-const copy = join(tmpdir(), `afterplay-import-${randomUUID()}.db`);
+// lo es): la copia literal (`.raw.db` y sus acompañantes) y la consistente
+// (`.db`), que se abre en solo lectura. Todo se borra en el finally pase lo
+// que pase.
+const stem = join(tmpdir(), `afterplay-import-${randomUUID()}`);
+const raw = `${stem}.raw.db`;
+const copy = `${stem}.db`;
 void main().then((code) => process.exit(code));
 
 async function main(): Promise<number> {
   let exitCode = 0;
   try {
-    copyFileSync(from, copy);
+    copySourceConsistently(from, raw, copy);
     // La foto 1.x primero (asíncrona, conexión propia que se cierra al acabar);
     // después la importación, que abre la copia en solo lectura.
     let legacyQueryViews: LegacyQueryViews | undefined;
@@ -139,8 +141,7 @@ async function removeCopy(): Promise<void> {
   const gc = (globalThis as { gc?: () => void }).gc;
   for (let attempt = 0; ; attempt++) {
     try {
-      for (const suffix of ['', '-wal', '-shm', '-journal'])
-        rmSync(`${copy}${suffix}`, { force: true });
+      for (const file of [copy, raw]) removeDatabaseFiles(file);
       return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EBUSY' || attempt >= 20) throw error;
@@ -204,6 +205,11 @@ function print(report: ImportReport): void {
   }
   console.log('\n── Hechos');
   for (const [name, n] of Object.entries(report.facts)) line(name, n);
+  const sc = report.sourceChecks;
+  console.log('\n── Comprobaciones del origen');
+  line('sellos de máquina en el futuro (fuera del techo de relojes)', sc.futureStamps);
+  for (const [column, n] of Object.entries(sc.futureStampsByColumn)) line(`    ${column}`, n);
+  line('textos con NUL', sc.nulTexts);
   if (report.installs) {
     console.log('\n── Instalaciones reclamadas');
     for (const [name, n] of Object.entries(report.installs)) line(name, n);
@@ -245,6 +251,7 @@ function print(report: ImportReport): void {
   for (const [outcome, n] of Object.entries(m.outcomes)) line(`  ${outcome}`, n);
   for (const [kind, n] of Object.entries(m.matches)) line(`    casan (${kind})`, n);
   line('firmas reescritas con ids 2.0', m.resealed);
+  line('no reescritas: el recap ya estaba en la base', m.notResealedPreexisting);
   line('no casan con juegos sin id 1.x', m.mismatchWithUnmappedGames);
 
   const q = report.queryValidation;

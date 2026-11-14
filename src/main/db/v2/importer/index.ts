@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { LocalDatabase } from '../connection';
 import { DEFAULT_CURRENCY } from '../queries/common/currency';
+import { assertImportPathsAllowed, fileOf } from './appData';
 import {
   buildImportPlan,
   ImportBlockedError,
@@ -44,6 +45,7 @@ import { writePlan, type TargetTableCount } from './write';
 // segundos (ver el informe del ensayo).
 
 export { ImportBlockedError } from './build';
+export { LegacyNulTextError } from './source';
 export { LEGACY_DEVICE_ID } from './build';
 export { legacyUuid } from './legacyIds';
 export type { ValidationReport } from './validate';
@@ -97,6 +99,18 @@ export interface ImportReport {
   /** El recálculo de las firmas de los recaps (§19.5). */
   readonly memorySignatures: MemorySignatureReport;
   readonly validation: ValidationReport;
+  /**
+   * Lo que se comprobó del origen antes de construir el plan (revisión,
+   * hallazgos 1 y 2). `futureStamps`: sellos de máquina posteriores a "ahora",
+   * que no cuentan para el techo de los relojes (sus datos se importan tal
+   * cual). `nulTexts`: textos con NUL; siempre 0 en un informe, porque con
+   * alguno la importación se niega (`LegacyNulTextError`).
+   */
+  readonly sourceChecks: {
+    readonly futureStamps: number;
+    readonly futureStampsByColumn: Readonly<Record<string, number>>;
+    readonly nulTexts: number;
+  };
   /** La validación con las consultas, o null si no se trajo la foto 1.x. */
   readonly queryValidation: QueryValidationReport | null;
   readonly elapsedMs: number;
@@ -122,7 +136,13 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
   if (options.deviceId !== undefined && options.deviceId !== target.deviceId) {
     throw new Error('importLegacyDatabase: deviceId no coincide con el de la base 2.0');
   }
-  const data = withLegacySource(options.source, readLegacyData);
+  assertImportPathsAllowed(
+    typeof options.source === 'string' ? options.source : fileOf(options.source.location()),
+    fileOf(target.db.$client.location()),
+  );
+  // "Ahora" antes de leer: el techo de los relojes no puede pasar de aquí (hallazgo 1).
+  const now = options.now ?? Date.now();
+  const data = withLegacySource(options.source, (db) => readLegacyData(db, { now }));
   if (data.pendingMailbox > 0 && !options.devIgnorePendingMailbox) {
     throw new ImportBlockedError(
       `El buzón del móvil tiene ${data.pendingMailbox} orden(es) pendiente(s). Abre la 1.x para que se apliquen ` +
@@ -138,10 +158,15 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
       data.pendingMailbox;
   }
 
-  const now = options.now ?? Date.now();
+  const futureStamps = Object.values(data.futureStamps).reduce((sum, n) => sum + n, 0);
   return target.store.transaction(() => {
     const written = writePlan(target.db.$client, plan);
-    const signatures = resealMemorySignatures(target, plan, new Date(now));
+    const signatures = resealMemorySignatures(
+      target,
+      plan,
+      new Date(now),
+      written.insertedIds.get('generated_memories') ?? new Set(),
+    );
     const installs = options.claimInstalls
       ? claimInstalls(target, plan.context, { pathExists: options.pathExists, now })
       : null;
@@ -160,11 +185,16 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
       : null;
     const report: ImportReport = {
       source: plan.source,
-      target: written,
+      target: written.counts,
       facts: plan.facts,
       installs,
       memorySignatures: signatures.report,
       validation,
+      sourceChecks: {
+        futureStamps,
+        futureStampsByColumn: data.futureStamps,
+        nulTexts: 0,
+      },
       queryValidation,
       elapsedMs: Math.round(performance.now() - started),
     };
@@ -178,9 +208,10 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
 /** Solo construye el plan (sin escribir): para tests y diagnósticos. */
 export function planLegacyImport(
   source: string | DatabaseSync,
-  options: { currency?: string; devCloseOpenSessions?: boolean } = {},
+  options: { currency?: string; devCloseOpenSessions?: boolean; now?: number } = {},
 ): ImportPlan {
-  const data = withLegacySource(source, readLegacyData);
+  const now = options.now ?? Date.now();
+  const data = withLegacySource(source, (db) => readLegacyData(db, { now }));
   return buildImportPlan(data, {
     currency: options.currency ?? DEFAULT_CURRENCY,
     devCloseOpenSessions: options.devCloseOpenSessions ?? false,

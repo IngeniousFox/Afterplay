@@ -295,3 +295,64 @@ describe('patch: errores', () => {
     assert.deepEqual(local.store.patch('games', gameId, { igdbId: 1 }).changed, ['igdbId']);
   });
 });
+
+// Revisión, hallazgo 2 (venía de __review__/store.review.test.ts). El test de
+// la revisión pedía que una nota con NUL se leyera igual que se escribió: no
+// se puede (el driver corta al leer), así que el contrato pasa a ser que la
+// puerta la rechaza y no escribe nada.
+describe('patch: textos con el carácter NUL', () => {
+  it('una nota con \0 se rechaza con invalid_value y no se escribe', () => {
+    assert.throws(
+      () => local.store.patch('games', gameId, { notes: 'antes\u0000después' }),
+      (error) => fails('invalid_value')(error) && /NUL/.test((error as Error).message),
+    );
+    assert.equal(rawRow(local, 'games', gameId)?.notes, null);
+    // Tampoco al crear, ni en un id indicado por quien llama.
+    assert.throws(
+      () => local.store.create('games', { title: 'a\u0000b', addedAt: new Date(T0) }),
+      fails('invalid_value'),
+    );
+    assert.throws(
+      () =>
+        local.store.create('devices', {
+          id: 'pc\u0000c',
+          name: 'PC-C',
+          kind: 'desktop',
+          os: 'windows',
+          firstSeenAt: new Date(T0),
+        }),
+      fails('invalid_value'),
+    );
+  });
+
+  it('en una columna JSON no hace falta: va escapado y se lee entero', () => {
+    const genres = ['RPG\u0000con NUL'];
+    local.store.patch('games', gameId, { genresOverride: genres });
+    const stored = String(rawRow(local, 'games', gameId)?.genresOverride);
+    assert.ok(!stored.includes('\u0000'), 'el texto guardado no lleva el byte nulo');
+    assert.deepEqual(JSON.parse(stored), genres);
+    // Y el parche igual no es un cambio (la lectura casa con lo escrito).
+    assert.deepEqual(local.store.patch('games', gameId, { genresOverride: genres }).changed, []);
+  });
+});
+
+// Revisión, hallazgo 7 (venía de __review__/connection.review.test.ts).
+describe('patch: JSON que no se puede representar', () => {
+  it('un Set, un Map o un Date en una columna JSON se rechazan en vez de guardarse como otra cosa', () => {
+    for (const value of [new Set(['RPG']), new Map([['a', 1]]), new Date(T0), [1, Number.NaN]]) {
+      assert.throws(
+        () => local.store.patch('games', gameId, { genresOverride: value as unknown as string[] }),
+        fails('invalid_value'),
+        String(value),
+      );
+    }
+    assert.equal(rawRow(local, 'games', gameId)?.genresOverride, null);
+  });
+
+  it('un objeto con claves undefined sí vale (JSON las quita y se comparan igual)', () => {
+    local.store.patch('games', gameId, {
+      saveCustomPaths: [{ path: 'C:/x', note: undefined }] as never,
+    });
+    assert.ok(rawRow(local, 'games', gameId)?.saveCustomPaths);
+  });
+});

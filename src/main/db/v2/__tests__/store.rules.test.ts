@@ -259,3 +259,107 @@ describe('una sesión abierta por dispositivo y objetivo (§7.7)', () => {
     local.store.patch('sessions', unassigned, { note: 'x', lastSeenAt: new Date(T0) });
   });
 });
+
+// Revisión, hallazgo 5 (los dos primeros venían de __review__/store.review.test.ts).
+describe('un hijo del registro no queda vivo bajo un padre con lápida', () => {
+  const parentDeleted = (error: unknown): boolean => isStoreError(error, 'parent_deleted');
+
+  it('no se crea un evento de estado en un playthrough borrado', () => {
+    local = openTestDb();
+    const { playthroughId } = seedBasics(local.store);
+    local.store.remove('playthroughs', playthroughId);
+    assert.throws(
+      () =>
+        local.store.create('state_events', {
+          playthroughId,
+          type: 'started',
+          occurredAt: new Date(T0),
+          datePrecision: 'day',
+        }),
+      parentDeleted,
+      'un hijo vivo de un padre borrado queda invisible (F-11) pero se sube y ocupa',
+    );
+  });
+
+  it('no se mueve una sesión a un playthrough borrado', () => {
+    local = openTestDb();
+    const { gameId, playthroughId } = seedBasics(local.store);
+    const { id: doomed } = local.store.create('playthroughs', {
+      gameId,
+      playedPlatform: 'PC',
+      origin: 'Steam',
+    });
+    local.store.remove('playthroughs', doomed);
+    const { id: sessionId } = local.store.create(
+      'sessions',
+      session(playthroughId, { endedAt: new Date(T0 + 3_600_000) }),
+    );
+    // Tiempo jugado que desaparecería de todas las lecturas sin que nadie lo borre.
+    assert.throws(
+      () => local.store.patch('sessions', sessionId, { playthroughId: doomed }),
+      parentDeleted,
+    );
+    assert.equal(rawRow(local, 'sessions', sessionId)?.playthroughId, playthroughId);
+  });
+
+  it('tampoco se resucita un hijo cuyo padre sigue borrado', () => {
+    local = openTestDb();
+    const { gameId } = seedBasics(local.store);
+    local.store.create('plan_entries', { gameId, plannedAt: new Date(T0) });
+    local.store.remove('games', gameId);
+    assert.throws(
+      () => local.store.create('plan_entries', { gameId, plannedAt: new Date(T0) }),
+      parentDeleted,
+    );
+    // Con el juego resucitado, sí.
+    local.store.create('games', { title: 'Celeste', igdbId: 26226, addedAt: new Date(T0) });
+    assert.equal(
+      local.store.create('plan_entries', { gameId, plannedAt: new Date(T0) }).outcome,
+      'resurrected',
+    );
+  });
+
+  it('una sesión de emulador ya asignada a un juego no es hija del emulador', () => {
+    local = openTestDb();
+    const { playthroughId } = seedBasics(local.store);
+    const emulatorId = local.store.create('emulators', { name: 'Dolphin' }).id;
+    const closed = { endedAt: new Date(T0 + 1000) };
+    const assigned = local.store.create(
+      'sessions',
+      session(playthroughId, { emulatorId, ...closed }),
+    );
+    const unassigned = local.store.create('sessions', session(null, { emulatorId, ...closed }));
+    local.store.remove('emulators', emulatorId);
+    // La asignada sobrevive a la cascada y se puede seguir editando…
+    assert.equal(rawRow(local, 'sessions', assigned.id)?.syncDeleted, null);
+    local.store.patch('sessions', assigned.id, { note: 'sigue siendo tiempo jugado' });
+    // …pero no se puede desasignar: volvería a ser hija del emulador borrado.
+    assert.throws(
+      () => local.store.patch('sessions', assigned.id, { playthroughId: null }),
+      parentDeleted,
+    );
+    // Una sesión nueva sin asignar en el emulador borrado tampoco.
+    assert.throws(
+      () => local.store.create('sessions', session(null, { emulatorId })),
+      parentDeleted,
+    );
+    assert.notEqual(rawRow(local, 'sessions', unassigned.id)?.syncDeleted, null);
+  });
+
+  it('un hijo huérfano llegado por sync se puede seguir editando en lo que no lo engancha', () => {
+    local = openTestDb();
+    const { playthroughId } = seedBasics(local.store);
+    local.store.remove('playthroughs', playthroughId);
+    // Un evento que otro PC creó antes de ver el borrado (F-11).
+    insertSynced(local, 'state_events', {
+      id: '0194c2f0-cccc-7000-8000-00000000000c',
+      playthroughId,
+      type: 'started',
+      occurredAt: T0,
+      datePrecision: 'day',
+    });
+    local.store.patch('state_events', '0194c2f0-cccc-7000-8000-00000000000c', { note: 'x' });
+    // Y la cascada de `remove` sigue pudiendo marcarlo (pone lápidas, no crea hijos).
+    local.store.remove('state_events', '0194c2f0-cccc-7000-8000-00000000000c');
+  });
+});

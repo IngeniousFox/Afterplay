@@ -15,9 +15,11 @@ import {
 //   de la fecha de dominio de cada fila (alta, inicio de sesión, fecha del
 //   evento…), que es pasada, y las fechas que caen en el futuro (un gasto
 //   tecleado con fecha de mañana) se recortan al TECHO del origen: el instante
-//   más reciente que la propia base sabe que ya ha pasado (ver `sourceCeiling`
-//   en source.ts). El techo es anterior a la importación, así que lo importado
-//   siempre pierde contra lo que se escriba después.
+//   más reciente que la propia base sabe que ya ha pasado (`ceilingMs` en
+//   source.ts). El techo nunca pasa de la hora de la importación (los sellos
+//   de máquina en el futuro no cuentan: revisión, hallazgo 1), así que lo
+//   importado siempre pierde contra lo que se escriba después y no arrastra el
+//   reloj del dispositivo al futuro.
 // - ORDEN: dentro de cada tabla, los relojes crecen estrictamente en el orden
 //   (fecha de dominio, id antiguo). Con eso, dos eventos del mismo playthrough
 //   a la misma hora se desempatan por `syncCreated` igual que la 1.x lo hacía

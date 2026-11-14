@@ -331,11 +331,11 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
   });
 
   // ── Dispositivo `legacy` ─────────────────────────────────────────────────
-  const firstSeen = Math.min(
-    ...data.games.map((g) => req(g.addedAt)),
-    ...sessions.map((s) => req(s.startedAt)),
-    ceiling,
-  );
+  // Con un bucle y no `Math.min(...filas)`: pasar decenas de miles de
+  // argumentos desborda la pila (revisión, sospecha sobre build.ts).
+  let firstSeen = ceiling;
+  for (const g of data.games) firstSeen = Math.min(firstSeen, req(g.addedAt));
+  for (const s of sessions) firstSeen = Math.min(firstSeen, req(s.startedAt));
   push(
     'devices',
     makeRow(

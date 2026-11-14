@@ -36,11 +36,20 @@ export interface TargetTableCount {
   alreadyPresentDifferent: number;
 }
 
-export function writePlan(
-  client: DatabaseSync,
-  plan: ImportPlan,
-): Record<string, TargetTableCount> {
+export interface WriteResult {
+  readonly counts: Record<string, TargetTableCount>;
+  /**
+   * Ids de las filas insertadas EN ESTA EJECUCIÓN, por tabla. Lo que se
+   * reescribe después de insertar (las firmas de los recaps) solo puede tocar
+   * estas: una fila que ya estaba pudo llegar por sync o editarse en la 2.0
+   * (revisión, sospecha sobre memorySignatures.ts).
+   */
+  readonly insertedIds: ReadonlyMap<SyncedTableName, ReadonlySet<string>>;
+}
+
+export function writePlan(client: DatabaseSync, plan: ImportPlan): WriteResult {
   const counts: Record<string, TargetTableCount> = {};
+  const insertedIds = new Map<SyncedTableName, Set<string>>();
   // En el orden del registro: padre antes que hijo, por las claves foráneas.
   for (const entry of syncedEntries) {
     const name = entry.name as SyncedTableName;
@@ -53,6 +62,8 @@ export function writePlan(
     };
     counts[name] = count;
     if (rows.length === 0) continue;
+    const inserted = new Set<string>();
+    insertedIds.set(name, inserted);
     const columns = Object.keys(rows[0].values);
     const insert = client.prepare(
       `INSERT INTO "${name}" (${columns.map((c) => `"${c}"`).join(', ')}) ` +
@@ -63,6 +74,7 @@ export function writePlan(
       const result = insert.run(...columns.map((c) => row.values[c] as SQLInputValue));
       if (Number(result.changes) === 1) {
         count.inserted += 1;
+        inserted.add(row.id);
         continue;
       }
       count.alreadyPresent += 1;
@@ -104,5 +116,5 @@ export function writePlan(
     if (existing?.newId !== entry.newId) mapCount.alreadyPresentDifferent += 1;
   }
   counts.local_legacy_ids = mapCount;
-  return counts;
+  return { counts, insertedIds };
 }

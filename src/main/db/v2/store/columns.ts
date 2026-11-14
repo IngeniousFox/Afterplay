@@ -1,4 +1,5 @@
 import { getTableConfig, type SQLiteColumn, type SQLiteTable } from 'drizzle-orm/sqlite-core';
+import { sameValue } from '../../../../shared/sync/fieldClocks';
 import { SYNC_COLUMN_NAMES } from '../schema';
 import { StoreError } from './errors';
 
@@ -121,6 +122,22 @@ const invalid = (table: string, column: ColumnInfo, value: unknown, expected: st
 };
 
 /**
+ * Revisión, hallazgo 2: `node:sqlite` (y también `@libsql/client`, el driver
+ * de la 1.x) CORTA un texto en el primer carácter NUL al leerlo, aunque SQLite
+ * lo guarde entero. Un texto con NUL se escribiría bien y se leería cortado:
+ * la fila "cambiaría" en cada parche (F-33) y la primera edición que la
+ * reescribiera perdería el resto del texto. Se rechaza al escribir.
+ */
+export function assertNoNul(table: string, column: string, value: string): void {
+  if (value.includes('\u0000')) {
+    throw new StoreError(
+      'invalid_value',
+      `${table}.${column}: el texto contiene el carácter NUL (U+0000), que SQLite no devuelve entero al leer`,
+    );
+  }
+}
+
+/**
  * Valida un valor que no es null para la columna. Es estricta a propósito:
  * aceptar `5` en un booleano o milisegundos en una fecha "funcionaría" (la
  * columna los convierte), pero esconde errores de quien llama y el valor
@@ -130,6 +147,7 @@ function validate(table: string, column: ColumnInfo, value: unknown): void {
   switch (column.kind) {
     case 'text':
       if (typeof value !== 'string') invalid(table, column, value, 'un texto');
+      assertNoNul(table, column.name, value as string);
       return;
     case 'enum':
       if (typeof value !== 'string' || !column.enumValues?.includes(value)) {
@@ -166,6 +184,18 @@ function validate(table: string, column: ColumnInfo, value: unknown): void {
       // `undefined` = no serializable (una función, un símbolo). Un JSON que
       // no vuelve igual tras guardarse no se puede comparar con lo leído.
       if (typeof text !== 'string') invalid(table, column, value, 'un valor JSON');
+      // Revisión, hallazgo 7: `JSON.stringify` acepta un `Set`, un `Map`, una
+      // instancia de clase o un `Date` y los convierte en otra cosa (`{}`, un
+      // texto…) sin avisar: se guardaría un valor distinto del que se quiso
+      // escribir. Solo vale lo que vuelve IGUAL de su ida y vuelta por JSON,
+      // con la misma comparación que decide qué columnas cambian (`sameValue`,
+      // que ya trata igual una clave `undefined` que una ausente).
+      if (!sameValue(JSON.parse(text as string), value)) {
+        invalid(table, column, value, 'un valor JSON que vuelva igual al leerlo');
+      }
+      // Un NUL dentro de un texto del JSON no hace falta rechazarlo (a
+      // diferencia de las columnas de texto): JSON lo escribe escapado
+      // (`\u0000`), el texto guardado no lleva el byte nulo y se lee entero.
       return;
     }
   }

@@ -1853,7 +1853,20 @@ La fase se hace en dos tandas. La primera es solo añadir: la app sigue funciona
 | P1 a P8 · Consultas por dominio   | Biblioteca y ficha; altas y Plan; playthroughs, estados y gasto; sesiones y watcher; logros; refresco externo; partidas; recaps, curiosidades y radar. En paralelo, cada uno en su carpeta          | Hecho e integrado, con una prueba que recorre todos los paquetes juntos                                                                                                                                          |
 | P9 · El cambio                    | El main abre la base 2.0, el IPC y los 39 ficheros pasan a las consultas nuevas y a la puerta, `EntityId` pasa a texto, desaparece el sync de Turso del escritorio, se rehace la semilla de los e2e | Sin empezar                                                                                                                                                                                                      |
 
-**Para retomar el trabajo otro día:** todo lo anterior a P9 está hecho y con commit. Lo siguiente es P9: el plan llamada por llamada está en los informes de cada paquete, resumidos en `CONSULTAS.md` §4 y §5.0 (qué cambia en `watcher.ts`, en los refrescos, en `saves/`, en el IPC). Antes del ensayo general (§20.10) queda pendiente la revisión independiente de la puerta de escritura, el importador y el motor de fusión. Las decisiones de la fase están en `CONSULTAS.md` §5.0 (R-01 a R-18, I-01 a I-19).
+**Para retomar el trabajo otro día:** todo lo anterior a P9 está hecho y con commit. Lo siguiente es P9: el plan llamada por llamada está en los informes de cada paquete, resumidos en `CONSULTAS.md` §4 y §5.0 (qué cambia en `watcher.ts`, en los refrescos, en `saves/`, en el IPC). La revisión independiente de la puerta y el importador está hecha (abajo); la del motor de fusión queda para cuando exista, en la fase 3. La base del perfil `Afterplay-dev-v2` se creó con la migración anterior y hay que regenerarla con el importador antes de usarla. Las decisiones de la fase están en `CONSULTAS.md` §5.0 (R-01 a R-18, I-01 a I-19).
+
+**Revisión independiente (2026-11-14).** Una revisión hecha por quien no escribió el código, con el único encargo de buscar formas de perder o alterar datos en la puerta de escritura, la conexión, el reloj y el importador. Encontró siete fallos, cada uno reproducido con un test, y cinco sospechas. Todos están arreglados:
+
+- Un sello con fecha futura en la 1.x (el PC con la hora mal) adelantaba el reloj del dispositivo para siempre. Ahora el reloj importado no pasa de "ahora"; los datos se importan tal cual y el informe cuenta los sellos futuros.
+- Un texto con el carácter nulo se cortaba al leerlo y la validación no lo veía, porque comparaba contra la misma lectura cortada. La puerta lo rechaza y el importador aborta si encuentra alguno, contándolos en SQL sobre los bytes.
+- Una función asíncrona dentro de una transacción la dejaba a medias: se rechaza antes de ejecutarla.
+- Si SQLite deshacía la transacción entera a mitad de un savepoint, el error quedaba tapado y lo siguiente se escribía suelto. Ahora la transacción queda abortada con el error original.
+- Se podía crear un hijo vivo bajo un padre con lápida: la puerta lo rechaza.
+- El id corto del reloj vivía en la base, así que copiarla a otro PC duplicaba el firmante. Ahora va ligado al `deviceId` y se sortea de nuevo si no coincide. La migración única se regeneró por esa columna.
+- La puerta aceptaba `Set`, `Map` o `Date` en columnas JSON y los guardaba como `{}`: ahora los rechaza.
+- Sospechas resueltas: el importador lee el origen como una foto coherente, dentro de una transacción; el script copia la base con su `-wal`; solo se resellan las firmas de los recaps insertados en esa ejecución; un `Math.min(...)` que desbordaba con muchas filas se cambió por un bucle; la protección contra leer la base en uso está en la función, no solo en el script.
+
+Ensayo repetido con datos reales: 0 diferencias inesperadas, 119 recaps casando, idempotente y determinista, 0 sellos futuros y 0 textos con nulo. Queda para la fase 10 que esa protección bloqueará el corte real, porque la app tendrá que leer su propia base: hará falta una excepción explícita.
 
 **Decisiones del usuario (2026-11-13):**
 

@@ -13,12 +13,13 @@ import {
 import {
   isSyncedTableName,
   registry,
+  syncedEntries,
   type SyncedTableEntry,
   type SyncedTableName,
 } from '../registry';
 import { playthroughs, sessions } from '../schema';
 import { normalizeValues, tableInfo, type TableInfo } from './columns';
-import { StoreError } from './errors';
+import { isStoreError, StoreError } from './errors';
 import { idForNewRow } from './ids';
 import { foreignWriteAllowed, type ForeignWrite, type ForeignWriteRule } from './owner';
 import type {
@@ -84,6 +85,13 @@ type StoredRow = Record<string, unknown> & {
  */
 type WriteMode = 'create' | 'patch' | 'cascade' | 'nullify';
 
+/** Un padre del registro de una tabla (la entrada `children` vista desde el hijo). */
+interface ParentLink {
+  readonly parent: SyncedTableEntry;
+  readonly column: string;
+  readonly onlyWhereNull: string | undefined;
+}
+
 /** Columnas de una sesión que deciden si está abierta y para qué objetivo. */
 const SESSION_STATE_COLUMNS = ['endedAt', 'playthroughId', 'emulatorId', DELETED_COLUMN];
 
@@ -97,9 +105,23 @@ export class WriteStore {
   private readonly listeners = new Set<StoreChangeListener>();
   private readonly immutableCache = new Map<string, ReadonlySet<string>>();
   private readonly readById = new Map<string, { get(values: { id: string }): unknown }>();
+  private readonly parentCache = new Map<string, readonly ParentLink[]>();
 
   /** Profundidad de `transaction`: 0 = fuera de toda transacción de la puerta. */
   private depth = 0;
+  /**
+   * Revisión, hallazgo 3: una función de `transaction` devolvió una promesa.
+   * Hasta que el control vuelva al bucle de eventos, toda escritura lanza: lo
+   * que esa función hiciera tras su primer `await` correría fuera de la
+   * transacción ya deshecha y se confirmaría suelto.
+   */
+  private poisoned = false;
+  /**
+   * Revisión, hallazgo 4: SQLite deshizo la transacción exterior por su cuenta
+   * (SQLITE_FULL, IOERR, NOMEM…). Guarda el error original; mientras la
+   * transacción exterior no termine, toda escritura lanza.
+   */
+  private aborted: { readonly cause: unknown } | null = null;
   /** Lo tocado en la transacción en curso, para avisar al confirmarla. */
   private pending = new Map<SyncedTableName, Set<string>>();
 
@@ -165,6 +187,7 @@ export class WriteStore {
         };
       }
 
+      this.assertParentsAlive(entry, normalized, null);
       if (table === 'sessions') {
         this.assertSingleOpenSession(id, { ...normalized, [DELETED_COLUMN]: null }, null);
       }
@@ -367,8 +390,37 @@ export class WriteStore {
    * No se puede abrir dentro de una transacción ajena (por ejemplo, un
    * `db.transaction` de Drizzle): la puerta no sabría cuándo se confirma y
    * avisaría de cambios que luego se deshacen.
+   *
+   * Dos defensas de la revisión:
+   * - Hallazgo 3: una función `async` se rechaza ANTES de ejecutarla (lo de
+   *   antes del primer `await` se desharía y lo de después se escribiría
+   *   fuera). Si una función normal devuelve una promesa (llama a otra async),
+   *   se deshace todo y la puerta queda bloqueada hasta que el control vuelva
+   *   al bucle de eventos, para que la continuación tras el `await` no pueda
+   *   escribir. Una continuación que espere a E/S real (un `fetch`) correría
+   *   después y ya no estaría bloqueada: la defensa de verdad es el rechazo
+   *   previo, y esto cubre el caso en que la promesa llega indirectamente.
+   * - Hallazgo 4: si tras un error SQLite ya no está en transacción (la deshizo
+   *   entera: disco lleno, E/S, memoria), no hay savepoint al que volver ni
+   *   nada que confirmar. La operación exterior queda abortada: toda escritura
+   *   posterior lanza `aborted` (con el error original en `cause`) y la
+   *   exterior no confirma aunque quien llama capture el error. Sin esto,
+   *   `ROLLBACK TO` fallaba con "no such savepoint" tapando el error real, y lo
+   *   escrito después se confirmaba suelto, fuera de toda transacción.
    */
   transaction<T>(fn: () => T): T {
+    if (this.poisoned) {
+      throw new StoreError(
+        'transaction',
+        'la puerta está bloqueada: una transacción devolvió una promesa y su continuación no puede escribir',
+      );
+    }
+    if (isAsyncFunction(fn)) {
+      throw new StoreError(
+        'transaction',
+        'store.transaction necesita una función síncrona, no async (el driver es síncrono, §8.9)',
+      );
+    }
     const client = this.db.$client;
     if (this.depth === 0) {
       if (client.isTransaction) {
@@ -384,9 +436,13 @@ export class WriteStore {
       client.exec('BEGIN IMMEDIATE');
       this.depth = 1;
       this.pending = new Map();
+      this.aborted = null;
       let result: T;
       try {
-        result = assertSync(fn());
+        result = this.assertSync(fn());
+        // Quien llama pudo capturar el aviso de que la transacción se perdió
+        // y devolver con normalidad: no hay nada que confirmar.
+        if (this.aborted || !client.isTransaction) throw this.abortedError();
         client.exec('COMMIT');
       } catch (error) {
         if (client.isTransaction) client.exec('ROLLBACK');
@@ -394,21 +450,29 @@ export class WriteStore {
         throw error;
       } finally {
         this.depth = 0;
+        this.aborted = null;
       }
       const change = this.takePending();
       if (change) this.emit(change);
       return result;
     }
 
+    if (this.aborted || !client.isTransaction) throw this.abortedError();
     const savepoint = `store_${this.depth}`;
     const snapshot = clonePending(this.pending);
     client.exec(`SAVEPOINT ${savepoint}`);
     this.depth += 1;
     try {
-      const result = assertSync(fn());
+      const result = this.assertSync(fn());
       client.exec(`RELEASE ${savepoint}`);
       return result;
     } catch (error) {
+      if (this.aborted || !client.isTransaction) {
+        // SQLite deshizo la transacción entera: no queda savepoint.
+        if (isStoreError(error, 'aborted')) throw error;
+        this.aborted ??= { cause: error };
+        throw this.abortedError();
+      }
       client.exec(`ROLLBACK TO ${savepoint}`);
       client.exec(`RELEASE ${savepoint}`);
       this.pending = snapshot;
@@ -416,6 +480,37 @@ export class WriteStore {
     } finally {
       this.depth -= 1;
     }
+  }
+
+  /**
+   * Falla si `fn` devolvió una promesa, y bloquea la puerta hasta la próxima
+   * vuelta del bucle de eventos (hallazgo 3; ver `transaction`).
+   */
+  private assertSync<T>(result: T): T {
+    if (!isThenable(result)) return result;
+    // Que la promesa rechazada no acabe como "unhandled rejection": quien
+    // llama recibe el error de la puerta, no la promesa.
+    (result as unknown as Promise<unknown>).then(undefined, () => undefined);
+    if (!this.poisoned) {
+      this.poisoned = true;
+      setImmediate(() => {
+        this.poisoned = false;
+      });
+    }
+    throw new StoreError(
+      'transaction',
+      'store.transaction necesita una función síncrona (el driver es síncrono, §8.9): devolvió una promesa',
+    );
+  }
+
+  private abortedError(): StoreError {
+    this.aborted ??= { cause: undefined };
+    return new StoreError(
+      'aborted',
+      'SQLite ha deshecho la transacción entera (disco lleno, error de E/S o de memoria): ' +
+        'no se puede seguir escribiendo en ella ni confirmarla',
+      { cause: this.aborted.cause },
+    );
   }
 
   /** Registra un oyente de cambios confirmados. Devuelve la función para quitarlo. */
@@ -457,9 +552,15 @@ export class WriteStore {
       }
       this.assertOwnerForPatch(entry, row, changed);
     }
+    const next: Record<string, unknown> = { ...row };
+    for (const column of changed) next[column] = changes[column];
+    // La cascada de `remove` pone lápidas y la anulación quita referencias:
+    // ninguna de las dos deja un hijo vivo colgando de otro padre, así que la
+    // regla solo mira lo que escribe quien llama (`create` y `patch`).
+    if (mode === 'create' || mode === 'patch') {
+      this.assertParentsAlive(entry, next, new Set(changed));
+    }
     if (name === 'sessions') {
-      const next: Record<string, unknown> = { ...row };
-      for (const column of changed) next[column] = changes[column];
       this.assertSingleOpenSession(row.id, next, changed);
     }
 
@@ -497,6 +598,69 @@ export class WriteStore {
         `${table}: la fila ${row.id} es de otro dispositivo; no se puede cambiar ${columns.join(', ')}`,
       );
     }
+  }
+
+  /**
+   * Revisión, hallazgo 5: un hijo del registro (`children`) no puede quedar
+   * VIVO bajo un padre con lápida. La regla de lectura (F-11) lo trataría como
+   * borrado, así que desaparecería sin que nadie lo borrase (una sesión movida
+   * a un playthrough borrado es tiempo jugado que se esfuma de todas las
+   * lecturas), pero seguiría subiendo y ocupando sitio.
+   *
+   * Solo se comprueba lo que cambia: la columna que apunta al padre, la de
+   * `onlyWhereNull` (que decide si la fila es hija) o la lápida de la propia
+   * fila (resucitarla). `touched` null = fila nueva, todo cuenta. Así, editar
+   * otra columna de un hijo huérfano llegado por sync (F-11, H-4) sigue
+   * pudiéndose. Un padre que no existe no es asunto de esta regla: lo decide
+   * la clave foránea.
+   *
+   * No aplica a la cascada de `remove` (pone lápidas) ni al importador, que
+   * escribe por debajo de la puerta y crea legítimamente entradas del Plan con
+   * lápida y filas cuyos padres pueden estar borrados.
+   */
+  private assertParentsAlive(
+    entry: SyncedTableEntry,
+    next: Readonly<Record<string, unknown>>,
+    touched: ReadonlySet<string> | null,
+  ): void {
+    if (next[DELETED_COLUMN] != null) return; // con lápida no es un hijo vivo
+    for (const link of this.parentLinks(entry)) {
+      if (
+        touched &&
+        !touched.has(link.column) &&
+        !touched.has(DELETED_COLUMN) &&
+        !(link.onlyWhereNull !== undefined && touched.has(link.onlyWhereNull))
+      ) {
+        continue;
+      }
+      // Con `onlyWhereNull`, la fila solo es hija mientras esa columna sea
+      // null (una sesión de emulador ya asignada a un juego no lo es).
+      if (link.onlyWhereNull !== undefined && next[link.onlyWhereNull] != null) continue;
+      const parentId = next[link.column];
+      if (typeof parentId !== 'string') continue;
+      const parent = this.readRow(link.parent, tableInfo(link.parent.table), parentId);
+      if (parent && parent.syncDeleted !== null) {
+        throw new StoreError(
+          'parent_deleted',
+          `${entry.name}.${link.column}: ${link.parent.name} ${parentId} está borrado`,
+        );
+      }
+    }
+  }
+
+  /** Los padres del registro de una tabla: las entradas que la tienen en `children`. */
+  private parentLinks(entry: SyncedTableEntry): readonly ParentLink[] {
+    const cached = this.parentCache.get(entry.name);
+    if (cached) return cached;
+    const links: ParentLink[] = [];
+    for (const parent of syncedEntries) {
+      for (const child of parent.children) {
+        if (child.table !== entry.name) continue;
+        links.push({ parent, column: child.column, onlyWhereNull: child.onlyWhereNull });
+      }
+    }
+    this.parentCache.set(entry.name, links);
+    return links;
   }
 
   /**
@@ -676,16 +840,13 @@ const clonePending = (
 ): Map<SyncedTableName, Set<string>> =>
   new Map([...pending].map(([table, ids]) => [table, new Set(ids)]));
 
-function assertSync<T>(result: T): T {
-  if (
-    result !== null &&
-    (typeof result === 'object' || typeof result === 'function') &&
-    typeof (result as { then?: unknown }).then === 'function'
-  ) {
-    throw new StoreError(
-      'transaction',
-      'store.transaction necesita una función síncrona (el driver es síncrono, §8.9)',
-    );
-  }
-  return result;
-}
+const isThenable = (value: unknown): boolean =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  typeof (value as { then?: unknown }).then === 'function';
+
+/** ¿Es una función `async` (o un generador async)? Se ven sin ejecutarlas. */
+const isAsyncFunction = (fn: unknown): boolean => {
+  const tag = Object.prototype.toString.call(fn);
+  return tag === '[object AsyncFunction]' || tag === '[object AsyncGeneratorFunction]';
+};

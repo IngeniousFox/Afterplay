@@ -584,4 +584,41 @@ describe('firmas de los recaps', () => {
     assert.equal(again.target.generated_memories.alreadyPresentDifferent, 0);
     assert.equal(again.queryValidation?.ok, true);
   });
+
+  // Revisión, sospecha sobre memorySignatures.ts.
+  it('no reescribe la firma de un recap que ya estaba en la base antes de esta ejecución', async () => {
+    const { db } = scenario();
+    await withMemories(db);
+    const target = track(openTarget());
+    importLegacyDatabase({ source: db.client, target, now: NOW });
+    // El recap de enero "llega por sync" (o se restaura) con la firma 1.x y
+    // los relojes de otro PC: ya no es una fila de esta importación.
+    const legacyHash = (
+      db.client
+        .prepare(`SELECT sourceHash FROM generated_memories WHERE scopeKey = '2024-01'`)
+        .get() as { sourceHash: string }
+    ).sourceHash;
+    target.db.$client
+      .prepare(
+        `UPDATE generated_memories SET sourceHash = ?, syncDirty = 0 WHERE id = 'month:2024-01'`,
+      )
+      .run(legacyHash);
+    const before = {
+      ...target.db.$client
+        .prepare(`SELECT * FROM generated_memories WHERE id = 'month:2024-01'`)
+        .get(),
+    };
+    const again = importLegacyDatabase({ source: db.client, target, now: NOW });
+    const after = {
+      ...target.db.$client
+        .prepare(`SELECT * FROM generated_memories WHERE id = 'month:2024-01'`)
+        .get(),
+    };
+    assert.deepEqual(after, before, 'la fila que ya estaba no se toca (ni firma ni syncDirty)');
+    assert.equal(again.memorySignatures.resealed, 0);
+    assert.equal(again.memorySignatures.notResealedPreexisting, 1);
+    assert.deepEqual(again.memorySignatures.matches, { 'legacy:noAchievements': 1 });
+    // La conciliación espera la firma que quedó, no la que se habría puesto.
+    assert.equal(again.validation.columns.tables.generated_memories.sourceHash.differences, 0);
+  });
 });
