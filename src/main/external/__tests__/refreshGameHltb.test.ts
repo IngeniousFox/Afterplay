@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { gamesTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
+import { gameMetadata } from '../../db/v2/schema';
 
 // "ACTUALIZALO TODO" Y LOS TIEMPOS DE HOWLONGTOBEAT (refreshGame.ts).
 //
@@ -15,9 +16,9 @@ import { gamesTable } from '../../db/schema';
 // juego tenia desde el alta. En silencio, columna a columna y con el boton que
 // el usuario pulsa para MEJORAR su ficha.
 //
-// QUE ES REAL Y QUE ES DOBLE: la base es real (harness con las migraciones del
-// repo) y refreshGameEverything corre entera, incluida su escritura por
-// updateGame. Doblado, todo lo que sale a la red y la cola de logros.
+// QUE ES REAL Y QUE ES DOBLE: la base es real (base 2.0 en memoria con las
+// migraciones del repo, appDbHarness.ts) y refreshGameEverything corre entera,
+// incluida su escritura en la caché externa (game_metadata). Doblado, todo lo que sale a la red y la cola de logros.
 
 type TiemposHltb = {
   hltbMain: number | null;
@@ -72,40 +73,43 @@ mock.module('../steamData', {
 });
 
 let refreshGameEverything: typeof import('../refreshGame').refreshGameEverything;
-let db: TestDb;
+let fx: QueryFixture;
 
 before(async () => {
   ({ refreshGameEverything } = await import('../refreshGame'));
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   hltbImpl = async () => null;
 });
 
 after(() => {
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
 // Un juego que ya vino con los tres tramos del dia del alta.
-const conLosTresTiempos = async (): Promise<number> =>
-  makeGame(db, {
+const conLosTresTiempos = async (): Promise<string> =>
+  seedGame(fx.ctx, {
     title: 'Juego con tiempos de siempre',
-    hltbMain: 12,
-    hltbMainExtras: 20,
-    hltbCompletionist: 41,
+    metadata: { hltbMain: 12, hltbMainExtras: 20, hltbCompletionist: 41 },
   });
 
-const tiemposDe = async (id: number): Promise<TiemposHltb> => {
-  const [row] = await db
+const tiemposDe = async (id: string): Promise<TiemposHltb> => {
+  const row = fx.ctx.db
     .select({
-      hltbMain: gamesTable.hltbMain,
-      hltbMainExtras: gamesTable.hltbMainExtras,
-      hltbCompletionist: gamesTable.hltbCompletionist,
+      hltbMain: gameMetadata.hltbMain,
+      hltbMainExtras: gameMetadata.hltbMainExtras,
+      hltbCompletionist: gameMetadata.hltbCompletionist,
     })
-    .from(gamesTable)
-    .where(eq(gamesTable.id, id));
-  return row;
+    .from(gameMetadata)
+    .where(eq(gameMetadata.gameId, id))
+    .get();
+  return {
+    hltbMain: row?.hltbMain ?? null,
+    hltbMainExtras: row?.hltbMainExtras ?? null,
+    hltbCompletionist: row?.hltbCompletionist ?? null,
+  };
 };
 
 describe('el refresco entero de un juego y los tiempos de HowLongToBeat', () => {
@@ -151,7 +155,7 @@ describe('el refresco entero de un juego y los tiempos de HowLongToBeat', () => 
   });
 
   it('un juego que no tenia ninguno se queda solo con el tramo que HLTB si supo', async () => {
-    const gameId = await makeGame(db, { title: 'Huerfano' });
+    const gameId = seedGame(fx.ctx, { title: 'Huerfano' });
     hltbImpl = async () => ({ hltbMain: null, hltbMainExtras: null, hltbCompletionist: 60 });
 
     await refreshGameEverything(gameId);

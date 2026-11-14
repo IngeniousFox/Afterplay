@@ -1,7 +1,6 @@
 import type { GameRow } from '../../shared/types';
-import { and, eq } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { applyWarmSteamData } from '../db/v2/queries/external';
 import { getSteamGameData } from './steamData';
 import { cacheImage } from '../images/cache';
 
@@ -44,14 +43,9 @@ export const warmSteamData = (game: Pick<GameRow, 'id' | 'steamAppId'>): void =>
   const appId = game.steamAppId;
   if (appId === null) return;
   void getSteamGameData(appId)
-    .then(async (data) => {
-      if (!data) return;
-      await withDbAccess(async () =>
-        getDb()
-          .update(gamesTable)
-          .set({ ...data, steamSpyCheckedAt: new Date() })
-          .where(and(eq(gamesTable.id, game.id), eq(gamesTable.steamAppId, appId))),
-      );
+    .then((data) => {
+      // La escritura relee el juego: si el appid cambió mientras tanto, no escribe.
+      applyWarmSteamData(appCtx(), game.id, appId, data);
     })
     .catch((error) => {
       console.error('[steam] fallo guardando etiquetas del alta:', error);

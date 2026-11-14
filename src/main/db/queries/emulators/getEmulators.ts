@@ -4,7 +4,7 @@ import type { Emulator } from '../../../../shared/types';
 import { emulatorColumns } from '../../projections';
 import { emulatorsTable } from '../../schema';
 
-export const getEmulators = async (): Promise<Emulator[]> => {
+export const getEmulators = async (): Promise<Emulator<number>[]> => {
   const db = getDb();
   return db
     .select(emulatorColumns)

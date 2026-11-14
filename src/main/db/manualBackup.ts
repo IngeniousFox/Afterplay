@@ -24,7 +24,7 @@ import { vacuumInto } from './backupCore';
 // automáticas y le rompía el intervalo y la rotación.
 export const createManualBackup = async (directory: string): Promise<string> => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filePath = join(directory, `Afterplay-manual-${timestamp}.db`);
+  const filePath = join(directory, `Afterplay2-manual-${timestamp}.db`);
 
   if (existsSync(filePath)) {
     throw new Error('Ya existe una copia con ese nombre — inténtalo de nuevo en un momento.');

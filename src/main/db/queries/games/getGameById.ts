@@ -31,7 +31,7 @@ import { canMoveToPlanWhere } from './moveToPlan';
 // sobre la biblioteca real: 1,0 ms de media y 1,4 ms el peor de los 333 (el
 // juego con 20 sesiones); con 95 sesiones en un solo juego, 2,7 ms. El coste
 // crece con lo que la ficha ENSEÑA, que es lo justo.
-export const getGameById = async (id: number): Promise<GameDetail | null> => {
+export const getGameById = async (id: number): Promise<GameDetail<number> | null> => {
   const db = getDb();
 
   const [game] = await db
@@ -78,7 +78,7 @@ export const getGameById = async (id: number): Promise<GameDetail | null> => {
   // porque el watcher barre las de cronómetro rancias en cada ciclo.
   const derived = deriveGameDetail({ iterations, sessions, stateEvents, spendEvents });
 
-  const iterationDetails: IterationDetail[] = derived.iterations.map((entry) => ({
+  const iterationDetails: IterationDetail<number>[] = derived.iterations.map((entry) => ({
     ...entry.iteration,
     hours: entry.hours,
     startedAt: entry.startedAt,

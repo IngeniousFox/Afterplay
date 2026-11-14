@@ -9,7 +9,6 @@ import {
   type PlaythroughStateEventRow,
   type ResolvePlaythroughInput,
 } from '../resolvePlaythrough';
-import type { IterationId } from '../../entityIds';
 
 // LA DECISIÓN PURA de "¿en qué playthrough cae jugar a este juego en `at`?".
 //
@@ -24,14 +23,17 @@ import type { IterationId } from '../../entityIds';
 // defecto igual a `at` se prueba la puerta del watcher/Play/cronómetro, que
 // siempre juega AHORA.
 
-type Ev = [iterationId: IterationId, type: PlaythroughStateEventRow['type'], occurredAt: string];
+// Los ids se escriben como números por legibilidad y se pasan a texto en
+// `decide`; los de evento llevan relleno para que el orden de escritura se
+// conserve al compararlos como texto.
+type Ev = [iterationId: number, type: PlaythroughStateEventRow['type'], occurredAt: string];
 
 const NORMAL: PlaythroughGameRow = { endless: false, isEmulated: false, officialPlatforms: null };
 
 // Los ids de los eventos siguen el orden en que se escriben en la lista, igual
 // que en una base: el empate de instante lo gana el escrito después.
 const decide = (opts: {
-  playthroughs?: (IterationId | PlaythroughRow)[];
+  playthroughs?: (number | PlaythroughRow)[];
   events?: Ev[];
   game?: PlaythroughGameRow | null;
   at: string;
@@ -39,11 +41,11 @@ const decide = (opts: {
 }): PlaythroughDecision => {
   const input: ResolvePlaythroughInput = {
     playthroughs: (opts.playthroughs ?? []).map((p) =>
-      typeof p === 'object' ? p : { id: p, label: `Playthrough ${p}` },
+      typeof p === 'object' ? p : { id: String(p), label: `Playthrough ${p}` },
     ),
     events: (opts.events ?? []).map(([iterationId, type, occurredAt], index) => ({
-      id: index + 1,
-      iterationId,
+      id: String(index + 1).padStart(4, '0'),
+      iterationId: String(iterationId),
       type,
       occurredAt: new Date(occurredAt),
     })),
@@ -70,7 +72,7 @@ describe('resolvePlaythroughForPlay: cuando ya hay algo en marcha', () => {
         events: [[1, 'started', '2026-01-10T18:00:00Z']],
         at: '2026-01-12T21:00:00Z',
       }),
-      { kind: 'use', iterationId: 1 },
+      { kind: 'use', iterationId: '1' },
     );
   });
 
@@ -85,7 +87,7 @@ describe('resolvePlaythroughForPlay: cuando ya hay algo en marcha', () => {
           ],
           at: '2026-02-01T19:00:00Z',
         }),
-        { kind: 'resume', iterationId: 1, events: [started('2026-02-01T19:00:00Z')] },
+        { kind: 'resume', iterationId: '1', events: [started('2026-02-01T19:00:00Z')] },
       );
     }
   });
@@ -93,7 +95,7 @@ describe('resolvePlaythroughForPlay: cuando ya hay algo en marcha', () => {
   it('el playthrough sin un solo evento (recién dado de alta) se estrena, no se crea otro', () => {
     assert.deepEqual(decide({ playthroughs: [1], at: '2026-03-05T20:00:00Z' }), {
       kind: 'resume',
-      iterationId: 1,
+      iterationId: '1',
       events: [started('2026-03-05T20:00:00Z')],
     });
   });
@@ -108,14 +110,14 @@ describe('resolvePlaythroughForPlay: cuando ya hay algo en marcha', () => {
         ],
         at: '2026-01-10T18:00:00Z',
       }),
-      { kind: 'use', iterationId: 1 },
+      { kind: 'use', iterationId: '1' },
     );
   });
 
   it('no se fía del orden de entrada: la "última" es la de id más alto', () => {
     assert.deepEqual(decide({ playthroughs: [7, 3], at: '2026-03-05T20:00:00Z' }), {
       kind: 'resume',
-      iterationId: 7,
+      iterationId: '7',
       events: [started('2026-03-05T20:00:00Z')],
     });
   });
@@ -176,7 +178,7 @@ describe('resolvePlaythroughForPlay: cuando el último terminó', () => {
   it('la etiqueta sale del número más alto usado, con el recuento como suelo', () => {
     const labelOf = (labels: string[]): string | false => {
       const decision = decide({
-        playthroughs: labels.map((label, index) => ({ id: index + 1, label })),
+        playthroughs: labels.map((label, index) => ({ id: String(index + 1), label })),
         events: labels.map((_, index): Ev => [index + 1, 'completed', '2026-01-20T22:00:00Z']),
         at: '2026-03-01T18:00:00Z',
       });
@@ -197,7 +199,7 @@ describe('resolvePlaythroughForPlay: cuando el último terminó', () => {
         game: { ...NORMAL, endless: true },
         at: '2026-07-01T18:00:00Z',
       }),
-      { kind: 'resume', iterationId: 1, events: [started('2026-07-01T18:00:00Z')] },
+      { kind: 'resume', iterationId: '1', events: [started('2026-07-01T18:00:00Z')] },
     );
   });
 
@@ -227,7 +229,7 @@ describe('resolvePlaythroughForPlay: la foto se toma en `at`, no hoy', () => {
         at: '2026-07-20T21:00:00Z',
         now: '2026-08-10T12:00:00Z',
       }),
-      { kind: 'use', iterationId: 1 },
+      { kind: 'use', iterationId: '1' },
     );
   });
 
@@ -241,7 +243,7 @@ describe('resolvePlaythroughForPlay: la foto se toma en `at`, no hoy', () => {
         ],
         at: '2026-01-10T18:00:00Z',
       }),
-      { kind: 'use', iterationId: 1 },
+      { kind: 'use', iterationId: '1' },
     );
   });
 
@@ -301,22 +303,32 @@ describe('resolvePlaythroughForPlay: la foto se toma en `at`, no hoy', () => {
         at: '2026-07-21T20:00:00Z',
         now: '2026-08-13T12:00:00Z',
       }),
-      { kind: 'use', iterationId: 2 },
+      { kind: 'use', iterationId: '2' },
     );
   });
 
   it('la firma depende del orden real, no del de entrada: completed antes en la lista también cuenta', () => {
     const decision = resolvePlaythroughForPlay({
-      playthroughs: [{ id: 2, label: 'Playthrough 2' }],
+      playthroughs: [{ id: '2', label: 'Playthrough 2' }],
       events: [
-        { id: 11, iterationId: 2, type: 'completed', occurredAt: new Date('2026-07-20T21:00:00Z') },
-        { id: 10, iterationId: 2, type: 'started', occurredAt: new Date('2026-07-20T21:00:00Z') },
+        {
+          id: '11',
+          iterationId: '2',
+          type: 'completed',
+          occurredAt: new Date('2026-07-20T21:00:00Z'),
+        },
+        {
+          id: '10',
+          iterationId: '2',
+          type: 'started',
+          occurredAt: new Date('2026-07-20T21:00:00Z'),
+        },
       ],
       game: NORMAL,
       at: new Date('2026-07-21T20:00:00Z'),
       now: new Date('2026-08-13T12:00:00Z'),
     });
-    assert.deepEqual(decision, { kind: 'use', iterationId: 2 });
+    assert.deepEqual(decision, { kind: 'use', iterationId: '2' });
   });
 
   it('el cerrado al vuelo NO se reutiliza si la jugada es de hoy: estrena otro abierto', () => {
@@ -370,7 +382,7 @@ describe('resolvePlaythroughForPlay: la foto se toma en `at`, no hoy', () => {
         at: '2026-07-20T21:00:00Z',
         now: '2026-08-13T12:00:00Z',
       }),
-      { kind: 'resume', iterationId: 1, events: [started('2026-07-20T21:00:00Z')] },
+      { kind: 'resume', iterationId: '1', events: [started('2026-07-20T21:00:00Z')] },
     );
   });
 
@@ -385,7 +397,7 @@ describe('resolvePlaythroughForPlay: la foto se toma en `at`, no hoy', () => {
         at: '2026-07-20T21:00:00Z',
         now: '2026-08-20T12:00:00Z',
       }),
-      { kind: 'use', iterationId: 1 },
+      { kind: 'use', iterationId: '1' },
     );
   });
 });
@@ -405,7 +417,7 @@ describe('resolvePlaythroughForPlay: como mucho un playthrough activo por juego'
         at: '2026-07-20T21:00:00Z',
         now: '2026-08-13T12:00:00Z',
       }),
-      { kind: 'use', iterationId: 1 },
+      { kind: 'use', iterationId: '1' },
     );
   });
 
@@ -420,7 +432,7 @@ describe('resolvePlaythroughForPlay: como mucho un playthrough activo por juego'
         ],
         at: '2026-03-15T19:00:00Z',
       }),
-      { kind: 'use', iterationId: 2 },
+      { kind: 'use', iterationId: '2' },
     );
   });
 
@@ -431,7 +443,7 @@ describe('resolvePlaythroughForPlay: como mucho un playthrough activo por juego'
         events: [[99, 'started', '2026-01-01T00:00:00Z']],
         at: '2026-03-05T20:00:00Z',
       }),
-      { kind: 'resume', iterationId: 1, events: [started('2026-03-05T20:00:00Z')] },
+      { kind: 'resume', iterationId: '1', events: [started('2026-03-05T20:00:00Z')] },
     );
   });
 });

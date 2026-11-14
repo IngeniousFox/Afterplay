@@ -12,7 +12,7 @@ import { achievementsTable, achievementUnlocksTable, gamesTable } from '../../sc
 export const getAchievementsStatus = async (
   running: boolean,
   failedGames: number,
-): Promise<AchievementsStatus> => {
+): Promise<AchievementsStatus<number>> => {
   const db = getDb();
   const total = db.select({ n: count() }).from(achievementsTable);
   const unlocked = db

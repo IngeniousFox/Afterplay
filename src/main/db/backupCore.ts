@@ -1,5 +1,4 @@
-import { sql } from 'drizzle-orm';
-import { getDb } from '.';
+import { appLocalDb } from './v2/appDb';
 import { removeEmptySidecars } from './sidecars';
 
 // VACUUM INTO — la forma segura de SQLite de sacar una copia consistente
@@ -11,7 +10,8 @@ import { removeEmptySidecars } from './sidecars';
 // ligados para la ruta — de ahí el escapado manual de comillas simples.
 export const vacuumInto = async (filePath: string): Promise<void> => {
   const escaped = filePath.replace(/'/g, "''");
-  await getDb().run(sql.raw(`VACUUM INTO '${escaped}'`));
+  // La base 2.0 (node:sqlite, síncrona): la copia sale entera en esta llamada.
+  appLocalDb().db.$client.exec(`VACUUM INTO '${escaped}'`);
   // Aquí y no en cada llamador: la basura la genera ESTA operación, así que
   // la recoge ESTA operación. Si no, la copia manual también sembraba un
   // -wal suelto en la carpeta que hubiera elegido el usuario.

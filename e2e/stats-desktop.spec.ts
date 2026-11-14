@@ -434,7 +434,7 @@ test.describe('Stats de escritorio', () => {
     await goTo(window, '/stats');
 
     await window.locator('button.afterplay-stats-leader[aria-label="Open Terraria"]').click();
-    await expect(window).toHaveURL(/#\/games\/\d+$/);
+    await expect(window).toHaveURL(/#\/games\/[0-9a-f-]+$/);
   });
 
   test('Almost There conserva una composición potente con varios juegos', async ({}, testInfo) => {

@@ -233,11 +233,11 @@ const Inventory = ({
       <div className="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
         {inventory.folders.map((folder) => (
           <div
-            key={`${folder.igdbId}-${folder.machineId}`}
+            key={`${folder.saveKey}-${folder.machineId}`}
             className="flex items-center gap-2 px-1 py-1 text-[11.5px]"
           >
             <span className="min-w-0 flex-1 truncate text-foreground">
-              {folder.gameTitle ?? `Not in your library (IGDB ${folder.igdbId})`}
+              {folder.gameTitle ?? `Not in your library (save key ${folder.saveKey})`}
             </span>
             {folder.unknownCount > 0 && (
               <span className="flex-none text-[10.5px] font-bold" style={{ color: AMBER }}>

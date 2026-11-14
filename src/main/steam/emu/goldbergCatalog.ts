@@ -1,8 +1,7 @@
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
-import { getDb } from '../../db';
-import { achievementsTable } from '../../db/schema';
+import { appCtx } from '../../db/v2/appDb';
+import { getGoldbergCatalogItems } from '../../db/v2/queries/achievements';
 import type { GameId } from '../../../shared/entityIds';
 
 // Escribir el achievements.json que a Goldberg/GSE le falta (LOGROS.md §7.2).
@@ -127,15 +126,7 @@ export const ensureGoldbergCatalog = async (
   const missing = dirs.filter((dir) => !existsSync(join(dir, 'achievements.json')));
   if (missing.length === 0) return 0;
 
-  const rows = await getDb()
-    .select({
-      apiName: achievementsTable.apiName,
-      displayName: achievementsTable.displayName,
-      description: achievementsTable.description,
-      hidden: achievementsTable.hidden,
-    })
-    .from(achievementsTable)
-    .where(eq(achievementsTable.gameId, gameId));
+  const rows = getGoldbergCatalogItems(appCtx(), gameId);
   if (rows.length === 0) return 0;
 
   const catalog: GoldbergAchievement[] = rows.map((row) => ({

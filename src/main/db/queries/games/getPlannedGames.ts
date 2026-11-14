@@ -22,7 +22,7 @@ import { gamesTable } from '../../schema';
 // un juego de Library al Plan conserva aquella primera fecha, y un juego que
 // nunca estuvo en el Plan empieza a esperar desde hoy sin alterar su fecha
 // original de alta en Afterplay.
-export const getPlannedGames = async (): Promise<PlannedGameListItem[]> => {
+export const getPlannedGames = async (): Promise<PlannedGameListItem<number>[]> => {
   const db = getDb();
   const firstPlanAt = sql<number | null>`(
     select se.occurredAt
@@ -102,7 +102,7 @@ export const getPlannedGames = async (): Promise<PlannedGameListItem[]> => {
 // 661 reales. Misma condición WHERE que getPlannedGames a propósito: cada id
 // del canal escueto tiene su fila aquí, y el renderer los junta por id
 // (usePlannedGamesWithExtras) sin casos raros que resolver.
-export const getPlannedGameExtras = async (): Promise<PlannedGameExtras[]> => {
+export const getPlannedGameExtras = async (): Promise<PlannedGameExtras<number>[]> => {
   const db = getDb();
 
   // La nota de "por qué lo planeo" vive en el evento 'plan_to_play', que

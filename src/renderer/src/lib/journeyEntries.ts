@@ -222,10 +222,14 @@ export const buildEntries = (
         at: session.startedAt,
         precision: session.datePrecision,
       })),
-      ...relevantEvents.map((event) => ({
-        at: event.occurredAt,
-        precision: event.datePrecision,
-      })),
+      // Un evento sin fecha conocida ('unknown', R-07: un alta o una promoción
+      // sin fecha) no marca el principio ni el final de nada: su `occurredAt`
+      // es solo el momento en que se apuntó.
+      ...relevantEvents.flatMap((event) =>
+        event.datePrecision === 'unknown'
+          ? []
+          : [{ at: event.occurredAt, precision: event.datePrecision }],
+      ),
     ];
     // Solo horas manuales, sin una sola fecha: se cae al ancla que dé quien
     // llama y, en última instancia, al alta del juego. Precisión 'year' para

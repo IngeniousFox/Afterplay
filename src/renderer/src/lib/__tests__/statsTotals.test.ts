@@ -15,13 +15,13 @@ const juego = (
   manual: { hours: number; year: number | null }[] = [],
 ): GameListItem =>
   ({
-    id,
+    id: String(id),
     totalHours,
-    manualIterations: manual.map((m, i) => ({ iterationId: id * 100 + i, ...m })),
+    manualIterations: manual.map((m, i) => ({ iterationId: String(id * 100 + i), ...m })),
   }) as unknown as GameListItem;
 
 const sesion = (gameId: number, startedAt: Date, durationSec: number | null): SessionWithGame =>
-  ({ gameId, startedAt, durationSec }) as unknown as SessionWithGame;
+  ({ gameId: String(gameId), startedAt, durationSec }) as unknown as SessionWithGame;
 
 const gasto = (amount: number, occurredAt: Date): SpendEventSummary =>
   ({ amount, occurredAt }) as unknown as SpendEventSummary;
@@ -54,9 +54,9 @@ describe('yearTotals: las cifras de cabecera de Stats', () => {
     assert.deepEqual(
       [...totales.hoursByGame],
       [
-        [1, 12.5],
-        [2, 0],
-        [3, 0],
+        ['1', 12.5],
+        ['2', 0],
+        ['3', 0],
       ],
     );
     // GAMES PLAYED: solo los que se tocaron ese año.
@@ -68,7 +68,7 @@ describe('yearTotals: las cifras de cabecera de Stats', () => {
 
   it('un playthrough manual de 200 h terminado en 2019 cuenta en 2019', () => {
     const totales = yearTotals(juegos, sesiones, gastos, 2019);
-    assert.equal(totales.hoursByGame.get(1), 200);
+    assert.equal(totales.hoursByGame.get('1'), 200);
     assert.equal(totales.totalSpent, 30);
   });
 
@@ -77,9 +77,9 @@ describe('yearTotals: las cifras de cabecera de Stats', () => {
     assert.deepEqual(
       [...totales.hoursByGame],
       [
-        [1, 300],
-        [2, 4],
-        [3, 1],
+        ['1', 300],
+        ['2', 4],
+        ['3', 1],
       ],
     );
     assert.equal(totales.totalGames, 3);

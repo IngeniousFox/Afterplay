@@ -17,7 +17,7 @@ import {
 
 let nextId = 1;
 const event = (type: SpendStateEvent['type'], occurredAt: string): SpendStateEvent => ({
-  id: nextId++,
+  id: String(nextId++).padStart(4, '0'),
   type,
   occurredAt: new Date(occurredAt),
 });
@@ -56,71 +56,71 @@ describe('el reparto del gasto (splitSpendByPlaythrough)', () => {
   it('el DLC de años después va al playthrough que estaba abierto, no al que tenía un plan_to_play', () => {
     const events = new Map([
       [
-        1,
+        '1',
         [
           event('started', '2023-05-01T00:00:00Z'),
           event('completed', '2023-06-01T00:00:00Z'),
           event('plan_to_play', '2026-08-13T10:00:00Z'),
         ],
       ],
-      [2, [event('started', '2026-07-01T00:00:00Z')]],
+      ['2', [event('started', '2026-07-01T00:00:00Z')]],
     ]);
-    const split = splitSpendByPlaythrough([{ id: 1 }, { id: 2 }], events, [
+    const split = splitSpendByPlaythrough([{ id: '1' }, { id: '2' }], events, [
       spend('2023-04-20T00:00:00Z', 60),
       spend('2026-07-05T00:00:00Z', 25),
     ]);
     assert.deepEqual(
       [...split],
       [
-        [1, 60],
-        [2, 25],
+        ['1', 60],
+        ['2', 25],
       ],
     );
   });
 
   it('un gasto en el instante exacto del cierre se queda en el playthrough que cerraba', () => {
     const events = new Map([
-      [1, [event('completed', '2026-03-01T00:00:00Z')]],
-      [2, [event('started', '2026-09-01T00:00:00Z')]],
+      ['1', [event('completed', '2026-03-01T00:00:00Z')]],
+      ['2', [event('started', '2026-09-01T00:00:00Z')]],
     ]);
-    const split = splitSpendByPlaythrough([{ id: 1 }, { id: 2 }], events, [
+    const split = splitSpendByPlaythrough([{ id: '1' }, { id: '2' }], events, [
       spend('2026-03-01T00:00:00Z', 20),
     ]);
-    assert.equal(split.get(1), 20);
-    assert.equal(split.get(2), undefined);
+    assert.equal(split.get('1'), 20);
+    assert.equal(split.get('2'), undefined);
   });
 
   it('un milisegundo después del cierre ya es del siguiente', () => {
     const events = new Map([
-      [1, [event('completed', '2026-03-01T00:00:00Z')]],
-      [2, [event('started', '2026-09-01T00:00:00Z')]],
+      ['1', [event('completed', '2026-03-01T00:00:00Z')]],
+      ['2', [event('started', '2026-09-01T00:00:00Z')]],
     ]);
-    const split = splitSpendByPlaythrough([{ id: 1 }, { id: 2 }], events, [
+    const split = splitSpendByPlaythrough([{ id: '1' }, { id: '2' }], events, [
       spend('2026-03-01T00:00:00.001Z', 20),
     ]);
-    assert.equal(split.get(1), undefined);
-    assert.equal(split.get(2), 20);
+    assert.equal(split.get('1'), undefined);
+    assert.equal(split.get('2'), 20);
   });
 
   it('lo comprado antes de arrancar cae en el primero, y lo posterior al último cierre en el último', () => {
     const events = new Map([
-      [1, [event('completed', '2020-01-01T00:00:00Z')]],
-      [2, [event('dropped', '2021-01-01T00:00:00Z')]],
+      ['1', [event('completed', '2020-01-01T00:00:00Z')]],
+      ['2', [event('dropped', '2021-01-01T00:00:00Z')]],
     ]);
-    const split = splitSpendByPlaythrough([{ id: 1 }, { id: 2 }], events, [
+    const split = splitSpendByPlaythrough([{ id: '1' }, { id: '2' }], events, [
       spend('2019-01-01T00:00:00Z', 10),
       spend('2025-01-01T00:00:00Z', 5),
     ]);
-    assert.equal(split.get(1), 10);
-    assert.equal(split.get(2), 5);
+    assert.equal(split.get('1'), 10);
+    assert.equal(split.get('2'), 5);
   });
 
   it('no depende del orden en que lleguen los playthroughs', () => {
-    const events = new Map([[1, [event('completed', '2026-03-01T00:00:00Z')]]]);
-    const split = splitSpendByPlaythrough([{ id: 2 }, { id: 1 }], events, [
+    const events = new Map([['1', [event('completed', '2026-03-01T00:00:00Z')]]]);
+    const split = splitSpendByPlaythrough([{ id: '2' }, { id: '1' }], events, [
       spend('2026-01-01T00:00:00Z', 7),
     ]);
-    assert.equal(split.get(1), 7);
+    assert.equal(split.get('1'), 7);
   });
 
   it('sin playthroughs no hay a quién atribuir nada, pero el total sigue contando', () => {

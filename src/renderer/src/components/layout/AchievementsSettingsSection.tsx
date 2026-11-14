@@ -6,6 +6,7 @@ import {
   useStopAchievements,
   useSyncAchievements,
 } from '../../hooks/achievements';
+import { ACHIEVEMENT_SOURCE_LABEL } from '../../lib/achievementSources';
 import { AMBER } from '../../lib/colors';
 import { missingKeyHint } from '../../lib/settingsTabs';
 import { SettingsCard } from './SettingsCard';
@@ -60,6 +61,24 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
       : `${base} Add your SteamID64 to read which ones you've unlocked.`;
   })();
 
+  // Las cifras de cada catálogo por separado (R-11): un 100 % de Steam y uno
+  // de RetroAchievements son hitos distintos, y la suma de arriba no dice
+  // cuántos juegos tienes completos en cada uno. Solo las fuentes con algún
+  // juego sincronizado; con la pasada en marcha manda la línea de progreso.
+  const sourceLines =
+    status && !running
+      ? (['steam', 'ra'] as const)
+          .filter((source) => status.bySource[source].syncedGames > 0)
+          .map((source) => {
+            const numbers = status.bySource[source];
+            const perfect = numbers.perfectGames > 0 ? ` · ${numbers.perfectGames} at 100%` : '';
+            return {
+              source,
+              text: `${ACHIEVEMENT_SOURCE_LABEL[source]}: ${numbers.unlockedAchievements} of ${numbers.totalAchievements} in ${numbers.syncedGames} game${numbers.syncedGames === 1 ? '' : 's'}${perfect}`,
+            };
+          })
+      : [];
+
   return (
     <SettingsCard
       layout="row"
@@ -76,6 +95,14 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
               {statusLine}
             </div>
           )}
+          {sourceLines.map((line) => (
+            <div
+              key={line.source}
+              className="mt-0.5 text-[11px] text-muted-foreground/75 tabular-nums"
+            >
+              {line.text}
+            </div>
+          ))}
           {/* Ni sync.isError ni retry.isError se miraban antes: un rechazo
               (clave revocada, sin red) antes del primer evento de progreso
               volvía el botón a su reposo sin dejar ni rastro de por qué. */}

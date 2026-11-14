@@ -3,27 +3,29 @@ import { asc, eq } from 'drizzle-orm';
 import type { BrowserWindow } from 'electron';
 import { basename } from 'node:path';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
 import {
-  cleanupDbs,
-  freshDb,
-  makeEmulator,
-  makeGame,
-  makeIteration,
-  makeOpenSession,
-  makeStateEvent,
-  type TestDb,
-} from '../../db/__tests__/harness';
+  asOtherDevice,
+  seedEmulator,
+  seedGame,
+  seedPlaythrough,
+  seedSession,
+  seedStateEvent,
+  type QueryFixture,
+} from '../../db/v2/queries/common/__tests__/fixtures';
+import { closeSession } from '../../db/v2/queries/sessions';
+import { assignSession } from '../../db/v2/queries/sessions/edit';
 import {
-  markRemotePullSucceeded,
-  REMOTE_FRESH_MS,
-  resetRemoteFreshness,
-  setRemoteExpected,
-} from '../../db/remoteFreshness';
-import { iterationsTable, sessionsTable, stateEventsTable } from '../../db/schema';
+  localSessionBeats,
+  playthroughs,
+  sessions as sessionsTable,
+  stateEvents,
+} from '../../db/v2/schema';
+import type { StateEventType } from '../../db/v2/schema';
 import type { SessionClosedEvent } from '../../../shared/types';
 
 // EL CICLO DEL WATCHER, contra una lista de procesos de mentira y la BASE DE
-// DATOS DE VERDAD (el andamio de db/__tests__/harness).
+// DATOS DE VERDAD (una base 2.0 en memoria, db/v2/__tests__/appDbHarness.ts).
 //
 // Por qué la base real y no dobles de las consultas: lo que hay que blindar
 // aquí no son las llamadas, son las CONSECUENCIAS — que al arrancar un juego
@@ -96,10 +98,10 @@ mock.module('../../overlay', {
 // El backup de partidas guardadas se dispara al cerrar sesión
 // (PARTIDAS-GUARDADAS.md §10.2). Aquí solo se apunta A QUÉ JUEGO: con quién se
 // dispara y con quién no es una regla del watcher, subirlo a R2 no.
-const backupsScheduled: number[] = [];
+const backupsScheduled: string[] = [];
 mock.module('../../saves/sessionHook', {
   namedExports: {
-    scheduleSaveBackup: (gameId: number): void => {
+    scheduleSaveBackup: (gameId: string): void => {
       backupsScheduled.push(gameId);
     },
   },
@@ -127,7 +129,7 @@ before(async () => {
 });
 
 after(() => {
-  cleanupDbs();
+  closeAppDbFixture();
   console.log = realConsoleLog;
   console.error = realConsoleError;
 });
@@ -153,8 +155,9 @@ const quit = (pid: number): void => {
   systemProcesses = systemProcesses.filter((proc) => proc.pid !== pid);
 };
 
-// La regla de frescura del §7.4 se mide contra el reloj del sistema, así que
-// los cronómetros son los únicos casos que no pueden llevar fecha fija. El
+// La regla de frescura del §7.4 se mide contra el reloj del sistema (y la base
+// del test usa ese mismo reloj, ver beforeEach), así que los cronómetros son
+// los únicos casos que no pueden llevar fecha fija. El
 // ancla se toma una vez, y las horas elegidas (1h / 26h) quedan lejísimos del
 // borde de las 24h: ningún retraso de la máquina puede cambiar el veredicto, y
 // las duraciones siguen saliendo exactas porque las dos fechas salen de aquí.
@@ -163,7 +166,7 @@ const hoursAgo = (hours: number): Date => new Date(ANCHOR_MS - hours * 3_600_000
 
 // ── Estado por test ───────────────────────────────────────────────────────
 
-let db: TestDb;
+let fx: QueryFixture;
 let watcher: InstanceType<typeof ProcessWatcher>;
 const rendererChannels: string[] = [];
 const trayUpdates: string[][] = [];
@@ -178,10 +181,10 @@ const fakeWindow = {
 };
 
 beforeEach(async () => {
-  db = await freshDb();
-  // Sin remoto configurado, que es como corre casi toda la suite: la copia
-  // local es la única y siempre vale. Los tests del desfase lo activan.
-  resetRemoteFreshness();
+  // Con el reloj del sistema: el watcher mide la gracia de arranque y el
+  // abandono de los cronómetros contra Date.now(), y la base tiene que fechar
+  // las sesiones que abre con ese mismo reloj.
+  fx = freshAppDb({ realClock: true });
   systemProcesses = [];
   screenLocked = false;
   rendererChannels.length = 0;
@@ -238,76 +241,143 @@ const resumeAndSettle = async (): Promise<void> => {
   await nextTick();
 };
 
+// Lo que se lee de una sesión. `iterationId` es el playthrough (el nombre de
+// la 1.x se conserva para que los casos se lean igual que antes) y
+// `lastHeartbeatAt` el latido local de este PC, o el último visto si no lo hay.
 type SessionRow = {
-  id: number;
-  iterationId: number | null;
-  emulatorId: number | null;
+  id: string;
+  iterationId: string | null;
+  emulatorId: string | null;
   startedAt: Date;
   endedAt: Date | null;
   durationSec: number | null;
   lastHeartbeatAt: Date | null;
-  startedBy: 'watcher' | 'timer';
+  startedBy: 'watcher' | 'timer' | 'play';
 };
 
+// Orden de creación: los ids son UUIDv7.
 const sessions = async (): Promise<SessionRow[]> =>
-  db
+  fx.ctx.db
     .select({
       id: sessionsTable.id,
-      iterationId: sessionsTable.iterationId,
+      iterationId: sessionsTable.playthroughId,
       emulatorId: sessionsTable.emulatorId,
       startedAt: sessionsTable.startedAt,
       endedAt: sessionsTable.endedAt,
       durationSec: sessionsTable.durationSec,
-      lastHeartbeatAt: sessionsTable.lastHeartbeatAt,
+      beatAt: localSessionBeats.beatAt,
+      lastSeenAt: sessionsTable.lastSeenAt,
       startedBy: sessionsTable.startedBy,
     })
     .from(sessionsTable)
-    .orderBy(asc(sessionsTable.id));
+    .leftJoin(localSessionBeats, eq(localSessionBeats.sessionId, sessionsTable.id))
+    .orderBy(asc(sessionsTable.id))
+    .all()
+    .map(({ beatAt, lastSeenAt, ...row }) => ({ ...row, lastHeartbeatAt: beatAt ?? lastSeenAt }));
 
 const openSessions = async (): Promise<SessionRow[]> =>
   (await sessions()).filter((session) => session.endedAt === null);
 
 // El log de estado de un playthrough, en orden. Es donde se ve si el watcher
 // dejó el juego en Playing — y si lo dejó DOS veces.
-const stateLog = async (iterationId: number): Promise<string[]> => {
-  const rows = await db
-    .select({ type: stateEventsTable.type, occurredAt: stateEventsTable.occurredAt })
-    .from(stateEventsTable)
-    .where(eq(stateEventsTable.iterationId, iterationId))
-    .orderBy(asc(stateEventsTable.occurredAt), asc(stateEventsTable.id));
-  return rows.map((row) => row.type);
-};
+const stateLog = async (iterationId: string): Promise<string[]> =>
+  fx.ctx.db
+    .select({ type: stateEvents.type })
+    .from(stateEvents)
+    .where(eq(stateEvents.playthroughId, iterationId))
+    .orderBy(asc(stateEvents.occurredAt), asc(stateEvents.id))
+    .all()
+    .map((row) => row.type);
 
-const iterationIds = async (gameId: number): Promise<number[]> => {
-  const rows = await db
-    .select({ id: iterationsTable.id })
-    .from(iterationsTable)
-    .where(eq(iterationsTable.gameId, gameId))
-    .orderBy(asc(iterationsTable.id));
-  return rows.map((row) => row.id);
-};
+const iterationIds = async (gameId: string): Promise<string[]> =>
+  fx.ctx.db
+    .select({ id: playthroughs.id })
+    .from(playthroughs)
+    .where(eq(playthroughs.gameId, gameId))
+    .orderBy(asc(playthroughs.id))
+    .all()
+    .map((row) => row.id);
 
-// Una sesión abierta SIN dueño reconocible. No cabe en makeOpenSession (que
-// pide iteración) y es un estado real: emulatorId es SET NULL al borrar un
-// emulador, así que una pendiente puede quedarse sin juego y sin emulador.
-const makeOrphanOpenSession = async (startedAt: string, lastHeartbeatAt: string): Promise<void> => {
-  await db.insert(sessionsTable).values({
-    iterationId: null,
-    emulatorId: null,
-    isManual: false,
+// Las fábricas del mundo, con la forma de las de la 1.x: un juego con su .exe
+// instalado en ESTE PC, un playthrough, un evento, una sesión abierta.
+const makeGame = async (options: {
+  title: string;
+  executablePath?: string;
+  isEmulated?: boolean;
+  planned?: boolean;
+}): Promise<string> =>
+  seedGame(fx.ctx, {
+    title: options.title,
+    isEmulated: options.isEmulated ?? false,
+    planned: options.planned ?? false,
+    ...(options.executablePath ? { install: { executablePath: options.executablePath } } : {}),
+  });
+
+const makeIteration = async (
+  gameId: string,
+  options: { label?: string; playedPlatform?: string } = {},
+): Promise<string> =>
+  seedPlaythrough(fx.ctx, {
+    gameId,
+    ...(options.label ? { customLabel: options.label } : {}),
+    ...(options.playedPlatform ? { playedPlatform: options.playedPlatform } : {}),
+  });
+
+const makeStateEvent = async (
+  playthroughId: string,
+  type: StateEventType,
+  occurredAt: string,
+): Promise<string> =>
+  seedStateEvent(fx.ctx, { playthroughId, type, occurredAt: new Date(occurredAt) });
+
+const makeEmulator = async (options: { executablePath: string }): Promise<string> =>
+  seedEmulator(fx.ctx, { name: 'RetroArch', executablePath: options.executablePath });
+
+// Una sesión abierta de ESTE PC. `lastHeartbeatAt` es su último visto: el
+// latido local (local_session_beats) solo lo escribe el watcher en marcha.
+const makeOpenSession = async (
+  playthroughId: string | null,
+  startedAt: string,
+  options: {
+    lastHeartbeatAt?: Date;
+    startedBy?: 'watcher' | 'play' | 'timer';
+    emulatorId?: string;
+  } = {},
+): Promise<string> =>
+  seedSession(fx.ctx, {
+    playthroughId,
+    emulatorId: options.emulatorId ?? null,
     startedAt: new Date(startedAt),
     endedAt: null,
-    durationSec: null,
-    lastHeartbeatAt: new Date(lastHeartbeatAt),
-    datePrecision: 'datetime',
+    startedBy: options.startedBy ?? 'play',
+    ...(options.lastHeartbeatAt ? { lastSeenAt: options.lastHeartbeatAt } : {}),
   });
+
+// Un cronómetro del MÓVIL: otra máquina, que lo abrió y es su dueña (R-12).
+const makePhoneTimer = async (
+  playthroughId: string,
+  startedAt: Date,
+  lastSeenAt: Date,
+): Promise<string> =>
+  asOtherDevice(fx.ctx, { name: 'Móvil' }).seedSession({
+    playthroughId,
+    startedAt,
+    endedAt: null,
+    startedBy: 'timer',
+    lastSeenAt,
+  });
+
+// Lo que hace un hito terminal (Beaten, Stop) con la sesión abierta: la cierra
+// una persona, en ese instante.
+const closeByMilestone = (sessionId: string, endedAt: Date): void => {
+  assert.ok(closeSession(fx.ctx, sessionId, { endedAt, closedBy: 'user' }));
 };
 
 // ══ El ciclo: arranque, cierre y latido ═══════════════════════════════════
 
 describe('un proceso vigilado que arranca', () => {
   it('abre una sesion, deja el playthrough en Playing y avisa a la ventana Y al HUD', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4100, EXE_CELESTE);
 
     await cycle();
@@ -336,7 +406,7 @@ describe('un proceso vigilado que arranca', () => {
   it('no abre una segunda sesion en los ciclos siguientes mientras el proceso viva', async () => {
     // SPEC 4.5: como mucho UNA sesión abierta por juego. Dos sesiones vivas
     // del mismo juego son las mismas horas contadas dos veces.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4101, EXE_CELESTE);
 
     await cycle();
@@ -352,10 +422,10 @@ describe('un proceso vigilado que arranca', () => {
   });
 
   it('retomar un juego ya terminado abre un playthrough NUEVO, y solo uno activo', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const finished = await makeIteration(db, gameId, { label: 'Playthrough 1' });
-    await makeStateEvent(db, finished, 'started', '2026-01-01T10:00:00Z');
-    await makeStateEvent(db, finished, 'completed', '2026-02-01T10:00:00Z');
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const finished = await makeIteration(gameId, { label: 'Playthrough 1' });
+    await makeStateEvent(finished, 'started', '2026-01-01T10:00:00Z');
+    await makeStateEvent(finished, 'completed', '2026-02-01T10:00:00Z');
     launch(4102, EXE_CELESTE);
 
     await cycle();
@@ -374,7 +444,7 @@ describe('un proceso vigilado que arranca', () => {
 
 describe('un proceso vigilado que se cierra', () => {
   it('cierra su sesion con duracion medida, canta el aviso y dispara el backup', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4200, EXE_CELESTE);
     await cycle();
     quit(4200);
@@ -402,23 +472,21 @@ describe('un proceso vigilado que se cierra', () => {
     // juego de verdad y el watcher pasa por aquí: sin la guarda volvería a
     // cantar "sesión cerrada" con una sesión que terminó hace horas, y el
     // diario se pediría por segunda vez.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4201, EXE_CELESTE);
     await cycle();
 
     const [live] = await sessions();
-    await db
-      .update(sessionsTable)
-      .set({ endedAt: new Date('2026-04-01T20:00:00Z'), durationSec: 3600 })
-      .where(eq(sessionsTable.id, live.id));
+    const hito = new Date(live.startedAt.getTime() + 1000);
+    closeByMilestone(live.id, hito);
 
     quit(4201);
     await cycle();
 
     const [session] = await sessions();
     // La hora de fin que puso el hito se respeta: no se pisa con "ahora".
-    assert.equal(session.endedAt?.toISOString(), '2026-04-01T20:00:00.000Z');
-    assert.equal(session.durationSec, 3600);
+    assert.equal(session.endedAt?.getTime(), hito.getTime());
+    assert.equal(session.durationSec, 1);
     assert.deepEqual(closedEvents, []);
     assert.equal(watcher.isGameRunning(gameId), false);
     // El backup SÍ se dispara: la sesión estaba cerrada, pero la partida
@@ -427,8 +495,8 @@ describe('un proceso vigilado que se cierra', () => {
   });
 
   it('dos juegos a la vez se siguen por separado: cerrar uno no toca al otro', async () => {
-    const celeste = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const hollow = await makeGame(db, { title: 'Hollow Knight', executablePath: EXE_HOLLOW });
+    const celeste = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const hollow = await makeGame({ title: 'Hollow Knight', executablePath: EXE_HOLLOW });
     launch(4210, EXE_CELESTE);
     launch(4211, EXE_HOLLOW);
 
@@ -449,7 +517,7 @@ describe('un proceso vigilado que se cierra', () => {
     // El latido es lo único que salva las horas si la app muere de golpe: sin
     // él, la reconciliación del próximo arranque cerraría la sesión en su
     // startedAt y la partida entera valdría cero.
-    await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4220, EXE_CELESTE);
 
     await cycle();
@@ -475,15 +543,15 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
     // null (no duplica), pero sin adoptarla nunca entra en `active` — y la
     // sección de cierres solo mira `active`. Resultado: había que esperar
     // SIEMPRE al botón Stop manual, aunque el juego llevara horas cerrado.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
 
     // Un ciclo en vacío primero: a partir de aquí la reconciliación del
     // arranque ya está hecha, así que lo que pase después es adopción por
     // ciclo y no el barrido del primer arranque.
     await cycle();
 
-    const playSessionId = await makeOpenSession(db, iterationId, '2026-03-01T18:00:00Z');
+    const playSessionId = await makeOpenSession(iterationId, '2026-03-01T18:00:00Z');
     launch(4300, EXE_CELESTE);
     await cycle();
 
@@ -513,13 +581,13 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
     // abierto (PARTIDAS-GUARDADAS.md §10bis.3). O sea: con Chrono Trigger
     // corriendo bajo RetroArch, la app te dejaba escribirle el backup por
     // debajo. Ahora quien contesta es el dueño de la sesión, no la clave.
-    const gameId = await makeGame(db, { title: 'Chrono Trigger', isEmulated: true });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Emulated' });
-    const emulatorId = await makeEmulator(db, { executablePath: EXE_RETROARCH });
+    const gameId = await makeGame({ title: 'Chrono Trigger', isEmulated: true });
+    const iterationId = await makeIteration(gameId, { playedPlatform: 'Emulated' });
+    const emulatorId = await makeEmulator({ executablePath: EXE_RETROARCH });
 
     await cycle();
 
-    const sessionId = await makeOpenSession(db, iterationId, '2026-03-02T20:00:00Z', {
+    const sessionId = await makeOpenSession(iterationId, '2026-03-02T20:00:00Z', {
       emulatorId,
     });
     launch(4310, EXE_RETROARCH);
@@ -557,25 +625,22 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
     // devolviera fila, asi que pulsar Beaten/Dropped con RetroArch todavia
     // abierto —que cierra la sesion en ese instante— dejaba a ese juego SIN
     // backup automatico para siempre.
-    const gameId = await makeGame(db, { title: 'Chrono Trigger', isEmulated: true });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Emulated' });
-    const emulatorId = await makeEmulator(db, { executablePath: EXE_RETROARCH });
+    const gameId = await makeGame({ title: 'Chrono Trigger', isEmulated: true });
+    const iterationId = await makeIteration(gameId, { playedPlatform: 'Emulated' });
+    const emulatorId = await makeEmulator({ executablePath: EXE_RETROARCH });
 
     await cycle();
 
-    const sessionId = await makeOpenSession(db, iterationId, '2026-03-02T20:00:00Z', {
+    const sessionId = await makeOpenSession(iterationId, '2026-03-02T20:00:00Z', {
       emulatorId,
     });
     launch(4340, EXE_RETROARCH);
     await cycle();
     assert.equal(watcher.isGameRunning(gameId), true, 'la sesion asignada se adopta con su juego');
 
-    // Beaten con el emulador vivo: addStateEvent cierra la sesion abierta de la
-    // iteracion en ese mismo instante.
-    await db
-      .update(sessionsTable)
-      .set({ endedAt: new Date('2026-03-02T22:00:00Z'), durationSec: 7200 })
-      .where(eq(sessionsTable.id, sessionId));
+    // Beaten con el emulador vivo: el hito cierra la sesion abierta del
+    // playthrough en ese mismo instante.
+    closeByMilestone(sessionId, new Date('2026-03-02T22:00:00Z'));
 
     quit(4340);
     await cycle();
@@ -596,9 +661,8 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
     // su dueño en cada vuelta, ese juego se quedaba fuera de isGameRunning()
     // el resto de la partida aunque la fila de la DB ya dijera a quién
     // pertenece.
-    const gameId = await makeGame(db, { title: 'Chrono Trigger', isEmulated: true });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Emulated' });
-    await makeEmulator(db, { executablePath: EXE_RETROARCH });
+    const gameId = await makeGame({ title: 'Chrono Trigger', isEmulated: true });
+    await makeEmulator({ executablePath: EXE_RETROARCH });
     launch(4330, EXE_RETROARCH);
 
     await cycle();
@@ -606,9 +670,9 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
     assert.equal(pending.iterationId, null, 'nace en la bandeja Pending, sin juego');
     assert.equal(watcher.isGameRunning(gameId), false);
 
-    // Lo que hace assignSession: cuelga la sesión de la iteración y CONSERVA el
-    // emulatorId (EMULADORES.md §5).
-    await db.update(sessionsTable).set({ iterationId }).where(eq(sessionsTable.id, pending.id));
+    // assignSession de verdad: cuelga la sesión de un playthrough del juego y
+    // CONSERVA el emulatorId (EMULADORES.md §5).
+    assert.ok(assignSession(fx.ctx, pending.id, gameId));
     await cycle();
 
     assert.equal((await sessions()).length, 1, 'no se abre otra: se sigue la misma');
@@ -617,7 +681,7 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
   });
 
   it('un emulador suelto abre una sesion sin juego (bandeja Pending) y no canta nada al cerrarse', async () => {
-    const emulatorId = await makeEmulator(db, { executablePath: EXE_RETROARCH });
+    const emulatorId = await makeEmulator({ executablePath: EXE_RETROARCH });
     launch(4320, EXE_RETROARCH);
 
     await cycle();
@@ -644,9 +708,9 @@ describe('adopcion de sesiones ajenas, ciclo a ciclo', () => {
 
 describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
   it('se cierran en su ULTIMO LATIDO, sin sumar el hueco con la app apagada', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
-    await makeOpenSession(db, iterationId, '2026-01-10T18:00:00Z', {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    await makeOpenSession(iterationId, '2026-01-10T18:00:00Z', {
       lastHeartbeatAt: new Date('2026-01-10T20:30:00Z'),
     });
     // Nada corriendo: la app se cerró de golpe (corte de luz) con el juego vivo.
@@ -660,9 +724,9 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
   });
 
   it('si nunca llegaron a latir se cierran en su arranque: cero, sin inventar horas', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
-    await makeOpenSession(db, iterationId, '2026-01-10T18:00:00Z');
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    await makeOpenSession(iterationId, '2026-01-10T18:00:00Z');
 
     await cycle();
 
@@ -672,9 +736,9 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
   });
 
   it('se ADOPTAN si su juego sigue corriendo, en vez de cerrarse a lo tonto', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
-    const sessionId = await makeOpenSession(db, iterationId, '2026-01-10T18:00:00Z', {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    const sessionId = await makeOpenSession(iterationId, '2026-01-10T18:00:00Z', {
       lastHeartbeatAt: new Date('2026-01-10T20:30:00Z'),
     });
     launch(4400, EXE_CELESTE);
@@ -693,15 +757,10 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
     assert.notEqual(session.endedAt, null);
   });
 
-  it('una sesion sin dueno reconocible tambien se cierra en su ultimo latido', async () => {
-    await makeOrphanOpenSession('2026-01-10T18:00:00Z', '2026-01-10T19:00:00Z');
-
-    await cycle();
-
-    const [session] = await sessions();
-    assert.equal(session.endedAt?.toISOString(), '2026-01-10T19:00:00.000Z');
-    assert.equal(session.durationSec, 3600);
-  });
+  // La "sesión sin dueño reconocible" de la 1.x (emulatorId a null tras borrar
+  // el emulador) no existe en la 2.0: borrar deja lápida y la sesión de un
+  // emulador o un playthrough borrado ya no es una sesión viva (liveSession),
+  // así que el watcher ni la ve.
 
   it('un juego SIN .exe configurado conserva su sesion manual para siempre: no hay proceso que echar de menos', async () => {
     // La mitad BUENA del guardián `reconciled`, y sigue intacta: pulsar Play en
@@ -709,11 +768,11 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
     // que ningún proceso va a respaldar nunca. No es un objetivo vigilado, así
     // que el barrido por ciclo ni la mira — si la cerrara, la mataría a los
     // cinco segundos de empezar a jugar. Solo el Stop manual la cierra.
-    const gameId = await makeGame(db, { title: 'Celeste' });
-    const iterationId = await makeIteration(db, gameId);
+    const gameId = await makeGame({ title: 'Celeste' });
+    const iterationId = await makeIteration(gameId);
 
     await cycle();
-    await makeOpenSession(db, iterationId, '2026-03-01T18:00:00Z');
+    await makeOpenSession(iterationId, '2026-03-01T18:00:00Z');
     await cycle();
     await cycle();
 
@@ -733,12 +792,12 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
     //
     // Se cierra en su último latido, que no lo hay: `startedAt`. Duración cero,
     // que es la verdad de lo que se jugó.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
 
     await cycle();
     // Muy anterior a la gracia de dos minutos: el .exe tuvo tiempo de sobra.
-    await makeOpenSession(db, iterationId, '2026-03-01T18:00:00Z');
+    await makeOpenSession(iterationId, '2026-03-01T18:00:00Z');
     await cycle();
 
     const [session] = await sessions();
@@ -754,13 +813,13 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
     // en nacer (y más si compila shaders): cerrar en el primer ciclo que no lo
     // ve mataría la sesión del juego que todavía está arrancando. La gracia son
     // dos minutos, atada a los 90s del armado del overlay.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
 
     await cycle();
     // Recién pulsado Play: la hora de ahora mismo, no una fija — lo que se
     // mide es el rato que lleva abierta contra el reloj real.
-    await makeOpenSession(db, iterationId, new Date().toISOString());
+    await makeOpenSession(iterationId, new Date().toISOString());
     await cycle();
     await cycle();
 
@@ -778,18 +837,13 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
     // (bandeja Pending) cuyo proceso ya no está. Aquí no hay Play manual que
     // proteger — un emulador SIEMPRE tiene .exe configurado, así que si no
     // aparece es que no está.
-    const emulatorId = await makeEmulator(db, { executablePath: EXE_RETROARCH });
+    const emulatorId = await makeEmulator({ executablePath: EXE_RETROARCH });
     await cycle();
 
-    await db.insert(sessionsTable).values({
-      iterationId: null,
+    await makeOpenSession(null, '2026-03-01T18:00:00Z', {
       emulatorId,
-      isManual: false,
-      startedAt: new Date('2026-03-01T18:00:00Z'),
-      endedAt: null,
-      durationSec: null,
+      startedBy: 'watcher',
       lastHeartbeatAt: new Date('2026-03-01T19:00:00Z'),
-      datePrecision: 'datetime',
     });
     await cycle();
 
@@ -811,29 +865,45 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     // Sin la marca startedBy, reconcileOpenSessions no encontraba su proceso
     // (nunca lo habrá: es una Switch, o GeForce Now) y la cerraba en el acto
     // con endedAt = startedAt. Duración 0, cada vez que arrancabas la app.
-    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
-    await makeOpenSession(db, iterationId, hoursAgo(3).toISOString(), {
-      startedBy: 'timer',
-      lastHeartbeatAt: hoursAgo(1),
-    });
+    const gameId = await makeGame({ title: 'Tears of the Kingdom' });
+    const iterationId = await makeIteration(gameId, { playedPlatform: 'Switch' });
+    await makePhoneTimer(iterationId, hoursAgo(3), hoursAgo(1));
 
     await cycle();
 
     assert.equal((await openSessions()).length, 1);
   });
 
-  it('§7.4: uno sin latir 24h se cierra en su ultimo latido, y no solo al arrancar', async () => {
+  it('§7.4 y R-12: uno sin latir 24h lo cierra su dueño, no este PC', async () => {
+    // En la 1.x el PC barría los cronómetros abandonados del móvil, y como su
+    // copia de Turso podía ir atrasada (PC suspendido mientras el móvil seguía
+    // midiendo) hacía falta esperar a un pull reciente para no pisar horas
+    // buenas. En la 2.0 eso lo resuelve la regla del dueño: una sesión solo la
+    // cierra el dispositivo que la abrió, así que el PC ni lo intenta.
+    const gameId = await makeGame({ title: 'Tears of the Kingdom' });
+    const iterationId = await makeIteration(gameId, { playedPlatform: 'Switch' });
+    await cycle();
+
+    await makePhoneTimer(iterationId, hoursAgo(28), hoursAgo(26));
+    await cycle();
+    await cycle();
+
+    const [session] = await sessions();
+    assert.equal(session.endedAt, null, 'el cronometro del movil sigue abierto');
+    assert.equal(session.durationSec, null);
+  });
+
+  it('§7.4: un cronometro PROPIO sin latir 24h se cierra en su ultimo latido, y no solo al arrancar', async () => {
     // El barrido corre en CADA ciclo a propósito: la app vive días en la
     // bandeja, así que con la regla solo en el arranque un cronómetro
     // olvidado por la noche se quedaba LIVE y sin horas hasta el siguiente
     // reinicio. Este cronómetro nace DESPUÉS del primer ciclo justamente para
     // demostrarlo.
-    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
+    const gameId = await makeGame({ title: 'Tears of the Kingdom' });
+    const iterationId = await makeIteration(gameId, { playedPlatform: 'Switch' });
     await cycle();
 
-    await makeOpenSession(db, iterationId, hoursAgo(28).toISOString(), {
+    await makeOpenSession(iterationId, hoursAgo(28).toISOString(), {
       startedBy: 'timer',
       lastHeartbeatAt: hoursAgo(26),
     });
@@ -845,77 +915,15 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     assert.equal(session.durationSec, 7200);
   });
 
-  // ── La copia local desfasada (db/remoteFreshness.ts) ──────────────────────
-  // El caso real: cronómetro arrancado en el móvil con el PC encendido, PC
-  // suspendido, tres horas de consola, "parar" en el móvil. Al volver, el PC
-  // seguía viendo la sesión abierta y muda, la cerraba en su último latido
-  // (el arranque: 0s) y el push pisaba en Turso las tres horas buenas.
-
-  it('con Turso configurado y SIN sync todavia, un cronometro que parece abandonado no se toca', async () => {
-    // El sondeo del arranque va por delante del primer sync: lo que hay en
-    // local es la foto de la última vez que el PC estuvo despierto.
-    setRemoteExpected(true);
-    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
-    // Nunca latió: el móvil se bloqueó nada más arrancar. Cerrarla aquí era
-    // dejarla en duración cero.
-    await makeOpenSession(db, iterationId, hoursAgo(30).toISOString(), { startedBy: 'timer' });
-
-    await cycle();
-    await cycle();
-
-    const [session] = await sessions();
-    assert.equal(session.endedAt, null, 'sigue abierta: quien sabe si esta parada es Turso');
-    assert.equal(session.durationSec, null);
-  });
-
-  it('en cuanto hay un pull reciente, el barrido vuelve a cerrar lo que siga abierto', async () => {
-    setRemoteExpected(true);
-    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
-    await makeOpenSession(db, iterationId, hoursAgo(28).toISOString(), {
-      startedBy: 'timer',
-      lastHeartbeatAt: hoursAgo(26),
-    });
-    await cycle();
-    assert.equal((await openSessions()).length, 1);
-
-    // El sync baja lo que haya: si el móvil la hubiera parado, el pull la
-    // traería ya cerrada y aquí no quedaría nada que barrer. Sigue abierta,
-    // así que ahora sí es un abandono de verdad.
-    markRemotePullSucceeded();
-    await cycle();
-
-    const [session] = await sessions();
-    assert.equal(session.endedAt?.getTime(), hoursAgo(26).getTime());
-    assert.equal(session.durationSec, 7200);
-  });
-
-  it('un pull de hace horas no cuenta: al volver de suspension se espera al siguiente', async () => {
-    setRemoteExpected(true);
-    // El último sync bueno fue antes de suspender.
-    markRemotePullSucceeded(Date.now() - REMOTE_FRESH_MS - 60_000);
-    const gameId = await makeGame(db, { title: 'Tears of the Kingdom' });
-    const iterationId = await makeIteration(db, gameId, { playedPlatform: 'Switch' });
-    await makeOpenSession(db, iterationId, hoursAgo(30).toISOString(), { startedBy: 'timer' });
-
-    await cycle();
-
-    assert.equal((await openSessions()).length, 1);
-  });
-
   it('mientras el cronometro este fresco, su juego en marcha NO abre sesion propia', async () => {
     // REMOTO.md §7 + el bucle de arranques: el .exe está vivo pero su tiempo
     // lo lleva el móvil. Abrirle sesión propia serían dos sesiones vivas del
     // mismo juego, o sea las mismas horas contadas dos veces.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
     await cycle();
 
-    const timerSessionId = await makeOpenSession(db, iterationId, hoursAgo(2).toISOString(), {
-      startedBy: 'timer',
-      lastHeartbeatAt: hoursAgo(0.5),
-    });
+    const timerSessionId = await makePhoneTimer(iterationId, hoursAgo(2), hoursAgo(0.5));
     launch(4500, EXE_CELESTE);
     await cycle();
     await cycle();
@@ -938,15 +946,13 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
 
   it('en cuanto se pone rancio, el MISMO ciclo le devuelve al juego su sesion propia', async () => {
     // La foto `openSessions` se toma ANTES del barrido de rancios, así que el
-    // bucle de arranques vuelve a mirar la frescura por su cuenta. Sin ese
-    // segundo vistazo, el cronómetro ya cerrado seguía contando como vivo
-    // durante un ciclo entero: la sesión de verdad llegaba 5s tarde y encima
-    // se cantaba el aviso de "lo lleva el cronómetro" cuando ya no era cierto.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
-    const iterationId = await makeIteration(db, gameId);
+    // bucle de arranques vuelve a mirar la frescura por su cuenta: un
+    // cronómetro rancio ya no retiene al juego, lo cierre quien lo cierre.
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
     await cycle();
 
-    const timerSessionId = await makeOpenSession(db, iterationId, hoursAgo(28).toISOString(), {
+    const timerSessionId = await makeOpenSession(iterationId, hoursAgo(28).toISOString(), {
       startedBy: 'timer',
       lastHeartbeatAt: hoursAgo(26),
     });
@@ -959,7 +965,7 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
     assert.equal(rows[0].endedAt?.getTime(), hoursAgo(26).getTime());
     assert.equal(rows[1].startedBy, 'watcher');
     assert.equal(rows[1].endedAt, null);
-    // Misma iteración: el relevo no abre un playthrough nuevo.
+    // Mismo playthrough: el relevo no abre uno nuevo.
     assert.equal(rows[1].iterationId, iterationId);
     assert.equal(watcher.isGameRunning(gameId), true);
   });
@@ -969,7 +975,7 @@ describe('cronometros del movil, que no tienen proceso que vigilar', () => {
 
 describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
   it('bloquear cierra YA las sesiones activas, aunque el juego siga corriendo detras', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4600, EXE_CELESTE);
     await cycle();
     assert.equal(watcher.isGameRunning(gameId), true);
@@ -984,7 +990,7 @@ describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
   });
 
   it('con el PC bloqueado el sondeo ni escanea: no se reabre nada a los 5 segundos', async () => {
-    await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4610, EXE_CELESTE);
     await cycle();
     screenLocked = true;
@@ -1003,7 +1009,7 @@ describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
     // aviso despausaba con la pantalla aún bloqueada y el juego seguía sumando
     // todos los minutos que tardaras en teclear. Quien decide es poll(),
     // preguntándole al sistema si la pantalla sigue bloqueada.
-    await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4620, EXE_CELESTE);
     await cycle();
     const closedId = (await sessions())[0].id;
@@ -1042,7 +1048,7 @@ describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
     // GENERACION: al despertar con contrasena Windows manda 'resume' antes que
     // 'unlock-screen', y ese resume despausa el booleano mientras el ciclo
     // viejo sigue en vuelo — se creia vigente otra vez.
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4640, EXE_CELESTE);
     await cycle();
     assert.equal((await openSessions()).length, 1);
@@ -1075,7 +1081,7 @@ describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
     // un unlock/resume tardío llamaba a resume() -> poll() con la base
     // desmontándose. El ScanWatcher hermano ya se blindaba con este flag;
     // este no lo tenía.
-    await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     launch(4630, EXE_CELESTE);
     await cycle();
     screenLocked = true;
@@ -1095,7 +1101,7 @@ describe('el tiempo con la pantalla bloqueada no es tiempo jugado', () => {
 
 describe('el barrido de dos fases descarta lo que no es', () => {
   it('un .exe con el mismo nombre desde otra carpeta no cuenta como el juego', async () => {
-    const gameId = await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
     // Mismo nombre de exe, otra ruta: otro programa. La Fase 1 lo propone y
     // la Fase 2 tiene que tirarlo.
     systemProcesses.push({ pid: 4700, name: 'celeste.exe', cmd: 'd:\\otros\\celeste.exe /q' });
@@ -1119,7 +1125,7 @@ describe('el barrido de dos fases descarta lo que no es', () => {
     // así que el error es ENOENT y no cuenta — igual que un EACCES por
     // permisos. Tratar cualquier fallo como señal daría falsos positivos
     // permanentes: un juego marcado "en marcha" para siempre.
-    const gameId = await makeGame(db, {
+    const gameId = await makeGame({
       title: 'Neverness to Everness',
       executablePath: 'C:\\Games\\NoExiste\\nte.exe',
     });
@@ -1134,7 +1140,7 @@ describe('el barrido de dos fases descarta lo que no es', () => {
   it('un juego de Plan to Play no se vigila aunque tenga .exe configurado', async () => {
     // Un juego planeado, por definición, todavía no lo juegas dentro de la
     // app: abrirle una sesión lo sacaría solo del Plan.
-    await makeGame(db, { title: 'Silksong', planned: true, executablePath: EXE_CELESTE });
+    await makeGame({ title: 'Silksong', planned: true, executablePath: EXE_CELESTE });
     launch(4720, EXE_CELESTE);
 
     await cycle();

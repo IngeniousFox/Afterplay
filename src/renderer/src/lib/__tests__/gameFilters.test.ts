@@ -12,7 +12,7 @@ import type { GameListItem } from '../../../../shared/types';
 import { applyFilters, countActiveFilters, EMPTY_FILTERS } from '../gameFilters';
 
 const makeGame = (overrides: Partial<GameListItem> = {}): GameListItem => ({
-  id: 1,
+  id: '1',
   igdbId: null,
   steamAppId: null,
   title: 'Game',
@@ -40,20 +40,20 @@ const makeGame = (overrides: Partial<GameListItem> = {}): GameListItem => ({
 
 describe('applyFilters', () => {
   it('dentro del MISMO grupo va en OR: Playing o Beaten trae los dos estados', () => {
-    const playing = makeGame({ id: 1, currentState: 'started' });
-    const beaten = makeGame({ id: 2, currentState: 'completed' });
-    const dropped = makeGame({ id: 3, currentState: 'dropped' });
+    const playing = makeGame({ id: '1', currentState: 'started' });
+    const beaten = makeGame({ id: '2', currentState: 'completed' });
+    const dropped = makeGame({ id: '3', currentState: 'dropped' });
     const result = applyFilters([playing, beaten, dropped], {
       ...EMPTY_FILTERS,
       statuses: ['playing', 'beaten'],
     });
-    assert.deepEqual(result.map((g) => g.id).sort(), [1, 2]);
+    assert.deepEqual(result.map((g) => g.id).sort(), ['1', '2']);
   });
 
   it('entre grupos DISTINTOS va en AND: estado Y era a la vez, no una u otra', () => {
-    const playingNow = makeGame({ id: 1, currentState: 'started', releaseYear: 2022 });
-    const playingOld = makeGame({ id: 2, currentState: 'started', releaseYear: 2005 });
-    const beatenNow = makeGame({ id: 3, currentState: 'completed', releaseYear: 2022 });
+    const playingNow = makeGame({ id: '1', currentState: 'started', releaseYear: 2022 });
+    const playingOld = makeGame({ id: '2', currentState: 'started', releaseYear: 2005 });
+    const beatenNow = makeGame({ id: '3', currentState: 'completed', releaseYear: 2022 });
     const result = applyFilters([playingNow, playingOld, beatenNow], {
       ...EMPTY_FILTERS,
       statuses: ['playing'],
@@ -61,54 +61,54 @@ describe('applyFilters', () => {
     });
     assert.deepEqual(
       result.map((g) => g.id),
-      [1],
+      ['1'],
     );
   });
 
   it('el genero va en AND consigo mismo: RPG y Strategy exige las DOS, no basta con una', () => {
-    const both = makeGame({ id: 1, genres: ['RPG', 'Strategy'] });
-    const onlyRpg = makeGame({ id: 2, genres: ['RPG'] });
+    const both = makeGame({ id: '1', genres: ['RPG', 'Strategy'] });
+    const onlyRpg = makeGame({ id: '2', genres: ['RPG'] });
     const result = applyFilters([both, onlyRpg], {
       ...EMPTY_FILTERS,
       genres: ['RPG', 'Strategy'],
     });
     assert.deepEqual(
       result.map((g) => g.id),
-      [1],
+      ['1'],
     );
   });
 
   it('las banderas tambien van en AND consigo mismas: Emulado y Endless exige las dos', () => {
-    const bothFlags = makeGame({ id: 1, isEmulated: true, endless: true });
-    const onlyEmulated = makeGame({ id: 2, isEmulated: true, endless: false });
+    const bothFlags = makeGame({ id: '1', isEmulated: true, endless: true });
+    const onlyEmulated = makeGame({ id: '2', isEmulated: true, endless: false });
     const result = applyFilters([bothFlags, onlyEmulated], {
       ...EMPTY_FILTERS,
       flags: ['emulated', 'endless'],
     });
     assert.deepEqual(
       result.map((g) => g.id),
-      [1],
+      ['1'],
     );
   });
 
   it('un juego sin ano de lanzamiento no cuela en NINGUN cubo de era', () => {
-    const noYear = makeGame({ id: 1, releaseYear: null });
-    const tens = makeGame({ id: 2, releaseYear: 2015 });
+    const noYear = makeGame({ id: '1', releaseYear: null });
+    const tens = makeGame({ id: '2', releaseYear: 2015 });
     const result = applyFilters([noYear, tens], { ...EMPTY_FILTERS, eras: ['tens'] });
     assert.deepEqual(
       result.map((g) => g.id),
-      [2],
+      ['2'],
     );
   });
 
   it('release-desc manda los juegos sin ano al final, no los trata como ano 0', () => {
-    const noYear = makeGame({ id: 1, title: 'Sin ano', releaseYear: null });
-    const recent = makeGame({ id: 2, title: 'Reciente', releaseYear: 2023 });
-    const old = makeGame({ id: 3, title: 'Viejo', releaseYear: 1998 });
+    const noYear = makeGame({ id: '1', title: 'Sin ano', releaseYear: null });
+    const recent = makeGame({ id: '2', title: 'Reciente', releaseYear: 2023 });
+    const old = makeGame({ id: '3', title: 'Viejo', releaseYear: 1998 });
     const result = applyFilters([noYear, recent, old], { ...EMPTY_FILTERS, sort: 'release-desc' });
     assert.deepEqual(
       result.map((g) => g.id),
-      [2, 3, 1],
+      ['2', '3', '1'],
     );
   });
 });

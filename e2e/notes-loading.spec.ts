@@ -123,6 +123,10 @@ test.describe('notes and deferred renderer content', () => {
     const editor = page.getByRole('textbox', { name: 'Game notes' });
     await expect(editor.locator('h2')).toHaveText('Where I stopped');
     await expect(editor.locator('strong')).toHaveText('bright');
+    // Clic en el último párrafo antes de ir al final: si el foco del editor
+    // llega después del Control+End, el cursor se queda al principio y el
+    // texto nuevo acaba dentro del título.
+    await editor.locator('p').last().click();
     await editor.press('Control+End');
     await editor.press('Enter');
     await editor.pressSequentially('Next: reach the lighthouse.');
@@ -145,7 +149,12 @@ test.describe('notes and deferred renderer content', () => {
     await expect(page.getByText('Next: reach the lighthouse.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Edit notes', exact: true }).click();
     await expect(editor).not.toContainText('cancelled draft');
-    await editor.fill('');
+    // Vaciar a mano: fill('') a veces deja el primer bloque como título vacío
+    // ("##"). Tras borrarlo todo, Mod+Alt+0 lo devuelve a párrafo.
+    await editor.click();
+    await editor.press('Control+a');
+    await editor.press('Delete');
+    await editor.press('Control+Alt+0');
     await page.getByRole('button', { name: 'Save notes', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(await savedNotes(page, id)).toBeNull();

@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
-import { eq } from 'drizzle-orm';
-import { achievementUnlocksTable, achievementsTable, gamesTable } from '../../db/schema';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
+import { and, eq } from 'drizzle-orm';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { setSteamAppId } from '../../db/v2/queries/games/setSteamAppId';
+import {
+  seedCatalog,
+  seedGame,
+  type QueryFixture,
+  type SeedGameOptions,
+} from '../../db/v2/queries/common/__tests__/fixtures';
+import { achievementCatalogs, achievementUnlocks, externalChecks } from '../../db/v2/schema';
 import type { SteamAchievementDef, SteamUnlock } from '../api';
 import type { PendingAchievementsGame } from '../queue';
 import type { EmuUnlock } from '../emu/parsers';
 
 // QUÉ SE DA POR SINCRONIZADO Y QUÉ NO — la decisión de syncGameAchievements
 // que más caro sale cuando falla, porque es de una sola dirección: la única
-// pasada AUTOMÁTICA (la del arranque) solo mira los juegos con
-// achievementsSyncedAt a null, así que estampar esa fecha por error saca al
+// pasada AUTOMÁTICA (la del arranque) solo mira los juegos sin comprobación
+// de logros de Steam (`external_checks`), así que apuntarla por error saca al
 // juego de la lista PARA SIEMPRE. No hay reintento, no hay TTL, no hay aviso:
 // el juego se queda con cero logros y la tarjeta de Ajustes diciendo que está
 // al día, y la única salida es que el usuario adivine que tiene que pulsar
@@ -22,8 +29,9 @@ import type { EmuUnlock } from '../emu/parsers';
 // trabajo de este test — con una errata en la clave, el fallo no es un juego,
 // son los 541.
 //
-// La base es la REAL del andamio (lo que se comprueba es lo que quedó en
-// `games` y en `achievements`, no a quién se llamó). Lo falso es Steam y las
+// La base es una 2.0 REAL en memoria (appDbHarness.ts): lo que se comprueba es
+// lo que quedó en `external_checks` y en `achievement_catalogs`, no a quién se
+// llamó. Lo falso es Steam y las
 // dos fuentes locales, que aquí no pintan nada: leen disco y registro.
 
 let schemaResponse: SteamAchievementDef[] = [];
@@ -76,16 +84,14 @@ mock.module('../notifications/complete', {
   namedExports: { maybeCelebrateCompletion: (): void => {} },
 });
 
-let db: TestDb;
+let fx: QueryFixture;
 let syncGameAchievements: typeof import('../syncAchievements').syncGameAchievements;
-let setSteamAppId: typeof import('../../db/queries/games/setSteamAppId').setSteamAppId;
 
 before(async () => {
   ({ syncGameAchievements } = await import('../syncAchievements'));
-  ({ setSteamAppId } = await import('../../db/queries/games/setSteamAppId'));
 });
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   schemaResponse = [];
   percentagesResponse = null;
   playerUnlocks = null;
@@ -94,7 +100,7 @@ beforeEach(async () => {
   emuAppIdsRead.length = 0;
   steamAppIdsRead.length = 0;
 });
-after(() => cleanupDbs());
+after(() => closeAppDbFixture());
 
 // ── Fábricas locales ───────────────────────────────────────────────────────
 
@@ -108,7 +114,10 @@ const def = (apiName: string, sortIndex = 0): SteamAchievementDef => ({
   sortIndex,
 });
 
-const pending = (id: number): PendingAchievementsGame => ({
+const makeGame = (options: Partial<SeedGameOptions>): string =>
+  seedGame(fx.ctx, { title: 'Juego de prueba', ...options });
+
+const pending = (id: string): PendingAchievementsGame => ({
   id,
   title: 'Juego de prueba',
   steamAppId: 440,
@@ -117,27 +126,30 @@ const pending = (id: number): PendingAchievementsGame => ({
   heroUrl: null,
 });
 
-// La marca de "ya se le trajo el catálogo": null = sigue pendiente, y es lo
-// único que hace que el arranque lo vuelva a mirar.
-const syncedAtOf = async (gameId: number): Promise<Date | null> => {
-  const [row] = await db
-    .select({ syncedAt: gamesTable.achievementsSyncedAt })
-    .from(gamesTable)
-    .where(eq(gamesTable.id, gameId));
-  return row.syncedAt;
-};
+// La marca de "ya se le trajo el catálogo": sin comprobación sigue pendiente,
+// y es lo único que hace que el arranque lo vuelva a mirar.
+const syncedAtOf = async (gameId: string): Promise<Date | null> =>
+  fx.ctx.db
+    .select({ checkedAt: externalChecks.checkedAt })
+    .from(externalChecks)
+    .where(and(eq(externalChecks.gameId, gameId), eq(externalChecks.source, 'steam_achievements')))
+    .get()?.checkedAt ?? null;
 
-const catalogOf = async (gameId: number): Promise<string[]> => {
-  const rows = await db
-    .select({ apiName: achievementsTable.apiName })
-    .from(achievementsTable)
-    .where(eq(achievementsTable.gameId, gameId));
-  return rows.map((row) => row.apiName).sort();
-};
+const steamCatalog = (gameId: string): (typeof achievementCatalogs.$inferSelect)['items'] =>
+  fx.ctx.db
+    .select({ items: achievementCatalogs.items })
+    .from(achievementCatalogs)
+    .where(and(eq(achievementCatalogs.gameId, gameId), eq(achievementCatalogs.source, 'steam')))
+    .get()?.items ?? [];
+
+const catalogOf = async (gameId: string): Promise<string[]> =>
+  steamCatalog(gameId)
+    .map((item) => item.apiName)
+    .sort();
 
 describe('syncGameAchievements: un catálogo vacío no siempre significa lo mismo', () => {
   it('does not write an in-flight response for the previous App ID', async () => {
-    const gameId = await makeGame(db, { steamAppId: 441, steamAppIdManual: true });
+    const gameId = makeGame({ steamAppId: 441, steamAppIdSource: 'manual' });
     schemaResponse = [def('OLD_WIN')];
     percentagesResponse = new Map([['OLD_WIN', 10]]);
 
@@ -148,11 +160,9 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
   });
 
   it('after correcting the App ID, reads both crack and Steam unlocks for the new ID', async () => {
-    const gameId = await makeGame(db, { steamAppId: 100 });
-    await db
-      .insert(achievementsTable)
-      .values({ gameId, apiName: 'WRONG', displayName: 'Wrong game', sortIndex: 0 });
-    await setSteamAppId(gameId, 440);
+    const gameId = makeGame({ steamAppId: 100 });
+    seedCatalog(fx.ctx, { gameId, items: [{ apiName: 'WRONG', displayName: 'Wrong game' }] });
+    setSteamAppId(fx.ctx, gameId, 440);
     schemaResponse = [def('CRACK_WIN'), def('STEAM_WIN', 1)];
     percentagesResponse = new Map([
       ['CRACK_WIN', 12],
@@ -168,8 +178,14 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
     assert.deepEqual(emuAppIdsRead, [440]);
     assert.deepEqual(steamAppIdsRead, [440]);
     assert.deepEqual(await catalogOf(gameId), ['CRACK_WIN', 'STEAM_WIN']);
+    // El origen de un emulador lleva el PC que lo leyó: `emu@<deviceId>`.
     assert.deepEqual(
-      (await db.select().from(achievementUnlocksTable)).map((row) => row.source).sort(),
+      fx.ctx.db
+        .select({ origin: achievementUnlocks.origin })
+        .from(achievementUnlocks)
+        .all()
+        .map((row) => row.origin.split('@')[0])
+        .sort(),
       ['emu', 'steam'],
     );
   });
@@ -183,7 +199,7 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
     // entraba, no insertaba nada y estampaba la fecha: 541 juegos marcados como
     // sincronizados y con cero logros, y ni corregir la clave lo deshacía
     // porque ya no quedaba ninguno pendiente que mirar.
-    const gameId = await makeGame(db, { steamAppId: 440 });
+    const gameId = makeGame({ steamAppId: 440 });
     schemaResponse = [];
     percentagesResponse = new Map([
       ['TF_SCOUT', 34.2],
@@ -211,7 +227,7 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
     // El borde contrario, y el que impide que el arreglo se convierta en
     // repreguntar la biblioteca entera cada arranque: 7 Days to Die tiene stats
     // y ni un logro, la rareza contesta con un mapa VACÍO y ese [] es verdad.
-    const gameId = await makeGame(db, { steamAppId: 440 });
+    const gameId = makeGame({ steamAppId: 440 });
     schemaResponse = [];
     percentagesResponse = new Map();
 
@@ -226,7 +242,7 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
     // Enter the kOS anuncia logros en su ficha de Steam y aun así da 403 en los
     // dos endpoints. Marcarlo sería grabar como definitivo un "no" que caduca
     // solo, y sus 34 logros no aparecerían nunca.
-    const gameId = await makeGame(db, { steamAppId: 440 });
+    const gameId = makeGame({ steamAppId: 440 });
     schemaResponse = [];
     percentagesResponse = null;
 
@@ -238,7 +254,7 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
   it('con catálogo de verdad se guardan los logros, su rareza y la fecha', async () => {
     // El camino feliz, para que los tres de arriba no puedan pasar por estar
     // rotos todos en la misma dirección.
-    const gameId = await makeGame(db, { steamAppId: 440 });
+    const gameId = makeGame({ steamAppId: 440 });
     schemaResponse = [def('TF_SCOUT', 0), def('TF_SOLDIER', 1)];
     percentagesResponse = new Map([['TF_SCOUT', 34.2]]);
 
@@ -248,13 +264,8 @@ describe('syncGameAchievements: un catálogo vacío no siempre significa lo mism
     assert.deepEqual(await catalogOf(gameId), ['TF_SCOUT', 'TF_SOLDIER']);
     assert.notEqual(await syncedAtOf(gameId), null);
 
-    const [scout] = await db
-      .select({
-        globalPercent: achievementsTable.globalPercent,
-        displayName: achievementsTable.displayName,
-      })
-      .from(achievementsTable)
-      .where(eq(achievementsTable.apiName, 'TF_SCOUT'));
+    const scout = steamCatalog(gameId).find((item) => item.apiName === 'TF_SCOUT');
+    assert.ok(scout);
     assert.equal(scout.globalPercent, 34.2);
     assert.equal(scout.displayName, 'Logro TF_SCOUT');
   });

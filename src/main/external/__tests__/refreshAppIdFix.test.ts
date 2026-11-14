@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { gamesTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
+import { gameMetadata, games } from '../../db/v2/schema';
 import type { ExternalRefreshEvent } from '../../../shared/types';
 
 // EL APPID CORREGIDO Y LO QUE ARRASTRA — en las dos rutas que lo corrigen sin
@@ -29,24 +30,25 @@ import type { ExternalRefreshEvent } from '../../../shared/types';
 // appid viejo. Eso tambien se comprueba aqui, mirando la fila en el momento de
 // la llamada.
 //
-// QUE ES REAL Y QUE ES DOBLE: la base es real (harness con las migraciones del
-// repo) y runPass corre entera. Doblado, todo lo que sale a la red y la cola de
+// QUE ES REAL Y QUE ES DOBLE: la base es real (base 2.0 en memoria con las
+// migraciones del repo, appDbHarness.ts) y runPass corre entera. Doblado, todo lo que sale a la red y la cola de
 // logros; el notificador tambien, porque el final de la pasada es asincrono y
 // su evento 'done' es la unica señal fiable de "ya termino".
 
 // gameId -> el appid que la fila tenia EN EL MOMENTO de encolar sus logros.
-const queued: { gameId: number; notify: boolean | undefined; appIdEntonces: number | null }[] = [];
+const queued: { gameId: string; notify: boolean | undefined; appIdEntonces: number | null }[] = [];
 
 mock.module('../../steam/backfill', {
   namedExports: {
     queueAchievementsRefreshForGame: async (
-      gameId: number,
+      gameId: string,
       options?: { notify?: boolean },
     ): Promise<boolean> => {
-      const [row] = await db
-        .select({ steamAppId: gamesTable.steamAppId })
-        .from(gamesTable)
-        .where(eq(gamesTable.id, gameId));
+      const row = fx.ctx.db
+        .select({ steamAppId: games.steamAppId })
+        .from(games)
+        .where(eq(games.id, gameId))
+        .get();
       queued.push({ gameId, notify: options?.notify, appIdEntonces: row?.steamAppId ?? null });
       return true;
     },
@@ -146,7 +148,7 @@ mock.module('../notify', {
 
 let startExternalRefresh: typeof import('../refresh').startExternalRefresh;
 let refreshGameRatings: typeof import('../refreshRatings').refreshGameRatings;
-let db: TestDb;
+let fx: QueryFixture;
 
 before(async () => {
   ({ startExternalRefresh } = await import('../refresh'));
@@ -154,7 +156,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   queued.length = 0;
   fixes = new Map();
   fixForOne = undefined;
@@ -162,34 +164,42 @@ beforeEach(async () => {
 });
 
 after(() => {
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
+// El appid vive en `games`; las etiquetas y las reseñas, en la caché externa
+// (`game_metadata`).
 const filaDe = async (
-  id: number,
+  id: string,
 ): Promise<{
   steamAppId: number | null;
   steamTags: { name: string; votes: number }[] | null;
   steamPositive: number | null;
 }> => {
-  const [row] = await db
-    .select({
-      steamAppId: gamesTable.steamAppId,
-      steamTags: gamesTable.steamTags,
-      steamPositive: gamesTable.steamPositive,
-    })
-    .from(gamesTable)
-    .where(eq(gamesTable.id, id));
-  return row;
+  const game = fx.ctx.db
+    .select({ steamAppId: games.steamAppId })
+    .from(games)
+    .where(eq(games.id, id))
+    .get();
+  const metadata = fx.ctx.db
+    .select({ steamTags: gameMetadata.steamTags, steamPositive: gameMetadata.steamPositive })
+    .from(gameMetadata)
+    .where(eq(gameMetadata.gameId, id))
+    .get();
+  return {
+    steamAppId: game?.steamAppId ?? null,
+    steamTags: metadata?.steamTags ?? null,
+    steamPositive: metadata?.steamPositive ?? null,
+  };
 };
 
 describe('la pasada de biblioteca cuando el appid apuntaba a otro producto', () => {
   it('respects an App ID fixed by the user', async () => {
-    const gameId = await makeGame(db, {
+    const gameId = seedGame(fx.ctx, {
       title: 'User matched game',
       igdbId: 710,
       steamAppId: 123456,
-      steamAppIdManual: true,
+      steamAppIdSource: 'manual',
     });
     fixes = new Map([[710, 999999]]);
 
@@ -202,15 +212,11 @@ describe('la pasada de biblioteca cuando el appid apuntaba a otro producto', () 
   });
 
   it('corrige el appid, tira lo del producto viejo y re-encola sus logros', async () => {
-    const remake = await makeGame(db, {
+    const remake = seedGame(fx.ctx, {
       title: 'Trails in the Sky 2nd Chapter',
       igdbId: 700,
       steamAppId: 251150,
-      steamTags: [{ name: 'JRPG', votes: 900 }],
-      steamPositive: 3000,
-      // Ya sincronizado: sin re-encolar, la pasada de logros del arranque no
-      // volveria a mirarlo nunca (solo recoge los que lo tienen a null).
-      achievementsSyncedAt: new Date('2026-08-01T00:00:00Z'),
+      metadata: { steamTags: [{ name: 'JRPG', votes: 900 }], steamPositive: 3000 },
     });
     fixes = new Map([[700, 3005430]]);
 
@@ -239,7 +245,7 @@ describe('la pasada de biblioteca cuando el appid apuntaba a otro producto', () 
   });
 
   it('sin correcciones no se encola nada: el appid bueno es identidad del juego', async () => {
-    await makeGame(db, { title: 'Con su appid de siempre', igdbId: 701, steamAppId: 400 });
+    seedGame(fx.ctx, { title: 'Con su appid de siempre', igdbId: 701, steamAppId: 400 });
 
     const done = waitForDone();
     await startExternalRefresh('all');
@@ -257,10 +263,11 @@ describe('la pasada de biblioteca cuando el appid apuntaba a otro producto', () 
 // vuelve a encontrar nada que corregir.
 describe('el boton de refrescar las notas cuando el appid apuntaba a otro producto', () => {
   it('does not replace a manually fixed App ID', async () => {
-    const gameId = await makeGame(db, {
+    const gameId = seedGame(fx.ctx, {
+      title: 'User matched game',
       igdbId: 811,
       steamAppId: 123456,
-      steamAppIdManual: true,
+      steamAppIdSource: 'manual',
     });
     fixForOne = 999999;
 
@@ -271,12 +278,11 @@ describe('el boton de refrescar las notas cuando el appid apuntaba a otro produc
   });
 
   it('corrige el appid, tira las reseñas del producto viejo y re-encola sus logros', async () => {
-    const remake = await makeGame(db, {
+    const remake = seedGame(fx.ctx, {
       title: 'Trails in the Sky 2nd Chapter',
       igdbId: 800,
       steamAppId: 251150,
-      steamPositive: 3000,
-      achievementsSyncedAt: new Date('2026-08-01T00:00:00Z'),
+      metadata: { steamPositive: 3000 },
     });
     fixForOne = 3005430;
 
@@ -298,7 +304,7 @@ describe('el boton de refrescar las notas cuando el appid apuntaba a otro produc
   });
 
   it('sin correccion, este boton sigue sin tocar los logros', async () => {
-    const juego = await makeGame(db, {
+    const juego = seedGame(fx.ctx, {
       title: 'Con su appid de siempre',
       igdbId: 801,
       steamAppId: 400,

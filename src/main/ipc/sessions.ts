@@ -1,15 +1,16 @@
-import { eq } from 'drizzle-orm';
 import { handleDb } from './dbHandle';
-import { getDb } from '../db';
-import { gamesTable } from '../db/schema';
-import { closeSession } from '../db/queries/sessions/closeSession';
-import { deleteSession } from '../db/queries/sessions/deleteSession';
-import { getAllSessions } from '../db/queries/sessions/getAllSessions';
-import { assignSession } from '../db/queries/sessions/assignSession';
-import { deletePendingSession } from '../db/queries/sessions/deletePendingSession';
-import { getPendingSessions } from '../db/queries/sessions/getPendingSessions';
-import { startGameSession } from '../db/queries/sessions/startGameSession';
-import { updateSessionNote } from '../db/queries/sessions/updateSessionNote';
+import { appCtx } from '../db/v2/appDb';
+import { readGameRow } from '../db/v2/queries/common';
+import {
+  assignSession,
+  closeSession,
+  deletePendingSession,
+  deleteSession,
+  getAllSessions,
+  getPendingSessions,
+  startGameSession,
+  updateSessionNote,
+} from '../db/v2/queries/sessions';
 import { notifyOverlaySessionStarted } from '../overlay';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
@@ -18,14 +19,8 @@ import type { GameId, SessionId } from '../../shared/entityIds';
 // ¿Se juega con emulador? Lo pregunta el Play antes de armar el overlay —
 // ver el porqué en su handler. Corre dentro del withDbAccess de handleDb,
 // como todo lo demás de este fichero.
-const isEmulatedGame = async (gameId: GameId): Promise<boolean> => {
-  const [game] = await getDb()
-    .select({ isEmulated: gamesTable.isEmulated })
-    .from(gamesTable)
-    .where(eq(gamesTable.id, gameId))
-    .limit(1);
-  return game?.isEmulated === true;
-};
+const isEmulatedGame = (gameId: GameId): boolean =>
+  readGameRow(appCtx(), gameId)?.isEmulated === true;
 
 // Modelo v2: fuera sessions:add y sessions:updateMilestone*(...) — los
 // marcadores de borde ya no existen; las fechas y desenlaces de un
@@ -39,7 +34,7 @@ export const registerSessionsHandlers = (): void => {
   // abierta (no debería pasar — el botón está deshabilitado mientras hay una
   // live — pero no es un error, el juego ya se está trackeando igual).
   handleDb('sessions:startForGame', async (_event, gameId: GameId) => {
-    const session = await startGameSession(gameId);
+    const session = startGameSession(appCtx(), gameId, 'play');
     // El overlay in-game se arma AQUÍ y no esperando al watcher (que sondea
     // cada 5s): pulsar Play y que su atajo no respondiera durante esos
     // segundos era justo lo que se sentía roto. Solo si la sesión abrió de
@@ -57,32 +52,33 @@ export const registerSessionsHandlers = (): void => {
     // perderlo. Antes de la gracia el primer cero la desmontaba en <=5s; con
     // ella, no. El juego emulado tampoco pierde nada a cambio: el HUD aún no
     // sabe pintar sesiones de emulador (pendiente conocido de OVERLAY.md).
-    if (session && !(await isEmulatedGame(gameId))) notifyOverlaySessionStarted();
+    if (session && !isEmulatedGame(gameId)) notifyOverlaySessionStarted();
     return session;
   });
 
   handleDb('sessions:getAll', async () => {
-    return getAllSessions();
+    return getAllSessions(appCtx());
   });
 
   handleDb('sessions:close', async (_event, id: SessionId, endedAt: Date) => {
-    return closeSession(id, endedAt);
+    // Un Stop pulsado por una persona (R-12).
+    return closeSession(appCtx(), id, { endedAt, closedBy: 'user' });
   });
 
   // Borrar una sesión cerrada (vista de Sesiones / Session History del
   // detalle) — rechaza abiertas (ver deleteSession.ts).
   handleDb('sessions:delete', async (_event, id: SessionId) => {
-    return deleteSession(id);
+    return deleteSession(appCtx(), id);
   });
 
   // EMULADORES.md — bandeja de sesiones de emulador sin asignar y su
   // asignación a un juego de la biblioteca.
   handleDb('sessions:getPending', async () => {
-    return getPendingSessions();
+    return getPendingSessions(appCtx());
   });
 
   handleDb('sessions:assign', async (_event, sessionId: SessionId, gameId: GameId) => {
-    const session = await assignSession(sessionId, gameId);
+    const session = assignSession(appCtx(), sessionId, gameId);
     // La asignación es EL momento en que por fin se sabe de qué juego son
     // esas partidas — el equivalente al cierre de sesión de un juego normal
     // (§10.2), que aquí pasó de largo porque la sesión era de emulador. Solo
@@ -122,11 +118,11 @@ export const registerSessionsHandlers = (): void => {
   });
 
   handleDb('sessions:deletePending', async (_event, sessionId: SessionId) => {
-    return deletePendingSession(sessionId);
+    return deletePendingSession(appCtx(), sessionId);
   });
 
   // Diario de sesión — desde el aviso de cierre o desde la fila de la sesión.
   handleDb('sessions:setNote', async (_event, id: SessionId, note: string) => {
-    return updateSessionNote(id, note);
+    return updateSessionNote(appCtx(), id, note);
   });
 };

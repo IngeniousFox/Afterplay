@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { gamesTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import {
+  seedGame,
+  type QueryFixture,
+  type SeedGameOptions,
+} from '../../db/v2/queries/common/__tests__/fixtures';
+import { gameInstalls, gameMetadata, games, planEntries } from '../../db/v2/schema';
 import type { GameRow } from '../../../shared/types';
 
 // games:update SOLO ESCRIBE LAS CLAVES DE SU LISTA CERRADA (F-42).
@@ -16,14 +21,14 @@ import type { GameRow } from '../../../shared/types';
 // aviso del editor de appid, encolar logros al tocar exe/carpeta) sigue igual.
 //
 // QUÉ ES REAL Y QUÉ ES DOBLE: el handler (ipc/games.ts), el filtro
-// (ipc/gamePatch.ts), updateGame y la base (andamio con las migraciones reales)
-// son de verdad. Doblados: electron, el registro del IPC (handleDb, para poder
+// (ipc/gamePatch.ts), updateGame y la base (2.0 en memoria con las migraciones
+// reales, appDbHarness.ts) son de verdad. Doblados: electron, el registro del IPC (handleDb, para poder
 // llamar al handler a mano) y los módulos de red/colas que games.ts arrastra al
 // importarse, que este test no ejercita.
 
 type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>;
 const handlers = new Map<string, Handler>();
-const achievementsQueued: number[] = [];
+const achievementsQueued: string[] = [];
 
 mock.module('electron', {
   namedExports: {
@@ -42,7 +47,7 @@ mock.module('../dbHandle', {
 
 mock.module('../../steam/backfill', {
   namedExports: {
-    queueAchievementsRefreshForGame: async (gameId: number): Promise<boolean> => {
+    queueAchievementsRefreshForGame: async (gameId: string): Promise<boolean> => {
       achievementsQueued.push(gameId);
       return true;
     },
@@ -55,24 +60,15 @@ mock.module('../../external/warmNewGame', {
 mock.module('../../curiosities/backfill', {
   namedExports: { generateCuriositiesInBackground: (): void => {} },
 });
-mock.module('../../saves/orchestrator', {
-  namedExports: { purgeGameSaves: async (): Promise<void> => {} },
-});
 mock.module('../../steam/notify', {
   namedExports: { notifyAchievementsActivity: (): void => {} },
 });
 mock.module('../../lib/openPath', {
   namedExports: { openPathResult: async (): Promise<{ ok: true }> => ({ ok: true }) },
 });
-mock.module('../../db/queries/games/createGameWithDetails', {
-  namedExports: { createGameWithDetails: async (): Promise<never> => assert.fail('no se usa') },
-});
-mock.module('../../db/queries/games/createPlannedGame', {
-  namedExports: { createPlannedGame: async (): Promise<never> => assert.fail('no se usa') },
-});
 
-let update: (id: number, patch: Record<string, unknown>) => Promise<GameRow | null>;
-let db: TestDb;
+let update: (id: string, patch: Record<string, unknown>) => Promise<GameRow | null>;
+let fx: QueryFixture;
 
 before(async () => {
   const { registerGamesHandlers } = await import('../games');
@@ -83,27 +79,54 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   achievementsQueued.length = 0;
 });
 
-after(cleanupDbs);
-
-const readRow = async (id: number): Promise<typeof gamesTable.$inferSelect> => {
-  const [row] = await db.select().from(gamesTable).where(eq(gamesTable.id, id));
-  return row;
-};
+after(closeAppDbFixture);
 
 const ADDED_AT = new Date('2026-01-01T00:00:00Z');
 
+const makeGame = (options: Partial<SeedGameOptions> = {}): string =>
+  seedGame(fx.ctx, { title: 'Juego', addedAt: ADDED_AT, ...options });
+
+// Lo que el renderer podría intentar pisar vive repartido en la 2.0: la
+// identidad en `games`, la caché externa en `game_metadata`, el Plan en
+// `plan_entries` y las rutas en `game_installs`.
+type FilaLeida = typeof games.$inferSelect & {
+  summary: string | null;
+  ratingCritics: number | null;
+  steamTags: (typeof gameMetadata.$inferSelect)['steamTags'];
+  planned: boolean;
+};
+
+const readRow = async (id: string): Promise<FilaLeida> => {
+  const game = fx.ctx.db.select().from(games).where(eq(games.id, id)).get();
+  assert.ok(game);
+  const metadata = fx.ctx.db.select().from(gameMetadata).where(eq(gameMetadata.gameId, id)).get();
+  const planned = fx.ctx.db
+    .select({ id: planEntries.id })
+    .from(planEntries)
+    .where(eq(planEntries.gameId, id))
+    .all();
+  return {
+    ...game,
+    summary: metadata?.summary ?? null,
+    ratingCritics: metadata?.ratingCritics ?? null,
+    steamTags: metadata?.steamTags ?? null,
+    planned: planned.length > 0,
+  };
+};
+
+const installOf = (id: string): typeof gameInstalls.$inferSelect | undefined =>
+  fx.ctx.db.select().from(gameInstalls).where(eq(gameInstalls.gameId, id)).get();
+
 describe('games:update', () => {
   it('escribe las claves permitidas y descarta en silencio las que no lo están', async () => {
-    const id = await makeGame(db, {
+    const id = makeGame({
       title: 'Antes',
       notes: null,
-      summary: 'Sinopsis de IGDB',
-      ratingCritics: 80,
-      planned: false,
+      metadata: { summary: 'Sinopsis de IGDB', ratingCritics: 80 },
       raGameId: null,
     });
 
@@ -137,7 +160,7 @@ describe('games:update', () => {
   });
 
   it('un patch con SOLO claves prohibidas no escribe nada y devuelve el juego', async () => {
-    const id = await makeGame(db, { title: 'Intacto', summary: null });
+    const id = makeGame({ title: 'Intacto' });
 
     const returned = await update(id, { summary: 'No', planned: true });
 
@@ -148,7 +171,7 @@ describe('games:update', () => {
   });
 
   it('sigue rechazando el appid con el aviso de su editor, sin escribir', async () => {
-    const id = await makeGame(db, { title: 'Con appid', steamAppId: 10 });
+    const id = makeGame({ title: 'Con appid', steamAppId: 10 });
 
     await assert.rejects(update(id, { steamAppId: 20, title: 'No' }), /Steam App ID editor/);
     await assert.rejects(update(id, { steamAppIdManual: true }), /Steam App ID editor/);
@@ -159,7 +182,7 @@ describe('games:update', () => {
   });
 
   it('encola los logros solo cuando el patch toca exe o carpeta', async () => {
-    const id = await makeGame(db);
+    const id = makeGame();
 
     await update(id, { notes: 'Nada que ver con la instalación' });
     assert.deepEqual(achievementsQueued, []);
@@ -167,5 +190,7 @@ describe('games:update', () => {
     await update(id, { installDirectory: 'D:/Juegos/X', installSizeBytes: 1024 });
     await update(id, { executablePath: 'D:/Juegos/X/x.exe' });
     assert.deepEqual(achievementsQueued, [id, id]);
+    // Y las rutas quedan en la instalación de ESTE PC, no en el juego.
+    assert.equal(installOf(id)?.executablePath, 'D:/Juegos/X/x.exe');
   });
 });

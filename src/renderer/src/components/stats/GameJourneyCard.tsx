@@ -1,10 +1,11 @@
 import { cn } from '../../lib/utils';
-import type { StateEvent } from '../../../../shared/types';
+import type { PlanHistory, StateEvent } from '../../../../shared/types';
 import type { CSSProperties } from 'react';
 import { useTimeFormat } from '../../hooks/settings';
 import { calendarDaysBetween, daysBetween, humanizeSpan } from '../../lib/dateMath';
 import { formatByPrecision } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
+import { enteredViaPlan, planMilestones } from '../../lib/planMilestones';
 import { StatusIcon } from '../StatusIcon';
 import { StatCard } from './StatCard';
 import { compareByCreation } from '../../../../shared/entityIds';
@@ -13,6 +14,8 @@ type JourneySession = { startedAt: Date; endedAt: Date | null };
 
 type GameJourneyCardProps = {
   addedAt: Date;
+  // El paso por el Plan (R-06): sus dos hitos van en la tira como nodos.
+  planHistory: PlanHistory | null;
   stateHistory: StateEvent[];
   sessions: JourneySession[];
 };
@@ -24,28 +27,37 @@ type GameJourneyCardProps = {
 // History del detalle — aquí condensados en una tira, no en lista editable.
 export const GameJourneyCard = ({
   addedAt,
+  planHistory,
   stateHistory,
   sessions,
 }: GameJourneyCardProps): React.JSX.Element => {
   const { data: timeFormat = '24h' } = useTimeFormat();
 
-  // Cronológico ascendente, sin 'plan_to_play' (el nodo "Added" ya cuenta esa
-  // entrada — mismo criterio que el History de la ficha).
-  const events = [...stateHistory]
-    .filter((event) => event.type !== 'plan_to_play')
+  // Cronológico ascendente. Los eventos sin fecha ('unknown', el papeleo del
+  // alta o de la promoción sin fecha, R-07) no son un paso del viaje: no
+  // consta cuándo fueron y su fecha es solo un ancla.
+  const events = stateHistory
+    .filter((event) => event.datePrecision !== 'unknown')
     .sort(
       (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || compareByCreation(a.id, b.id),
     );
 
-  const addedMeta = getGameStatusMeta(null);
+  // "Added" sobra si el juego entró por el Plan: el nodo "Added to Plan" lo
+  // cuenta el mismo día (mismo criterio que el History de la ficha).
+  const planMeta = getGameStatusMeta('plan_to_play');
+  const derivedNodes = [
+    ...(enteredViaPlan(addedAt, planHistory)
+      ? []
+      : [{ key: 'added', meta: getGameStatusMeta(null), label: 'Added', date: addedAt }]),
+    ...planMilestones(planHistory).map((milestone) => ({
+      key: milestone.key,
+      meta: planMeta,
+      label: milestone.label,
+      date: milestone.date,
+    })),
+  ];
   const nodes = [
-    {
-      key: 'added',
-      meta: addedMeta,
-      label: 'Added',
-      date: addedAt,
-      precision: 'day' as const,
-    },
+    ...derivedNodes.map((node) => ({ ...node, precision: 'day' as const })),
     ...events.map((event) => ({
       key: `event-${event.id}`,
       meta: getGameStatusMeta(event.type),
@@ -53,7 +65,7 @@ export const GameJourneyCard = ({
       date: event.occurredAt,
       precision: event.datePrecision,
     })),
-  ];
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   // Derivados: espera en el backlog (added → primer started), tiempo hasta
   // el primer Beaten (primer started → primer completed posterior), y hace

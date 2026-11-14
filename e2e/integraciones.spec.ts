@@ -1,5 +1,5 @@
 import { missingFor } from './credentials';
-import { expect, test } from './fixtures';
+import { expect, gameIdOf, test } from './fixtures';
 import type {
   CollectionGame,
   GameFullRefreshResult,
@@ -267,25 +267,29 @@ test.describe('integraciones externas', () => {
     test.setTimeout(60_000);
 
     const { window: page } = afterplay;
+    const acII = gameIdOf(afterplay.sandbox, "Assassin's Creed II");
 
-    // El id 1 del seed es "Assassin's Creed II" (appid 33230, sin igdbId
+    // "Assassin's Creed II" del seed (appid 33230, sin igdbId
     // guardado — nunca se dio de alta desde IGDB). Este es EXACTAMENTE el
     // botón que habría cazado en vivo la rotación de HowLongToBeat de agosto
     // de 2026: pide IGDB, HowLongToBeat y Steam, y encola los logros, todo de
     // una vez.
-    const result = await page.evaluate(async () => {
+    const result = await page.evaluate(async (id) => {
       try {
-        return await globalThis.api.external.refreshGame(1);
+        return await globalThis.api.external.refreshGame(id);
       } catch (error) {
         return { e2eError: error instanceof Error ? error.message : String(error) };
       }
-    });
+    }, acII);
 
     expect(
       failed(result) ? result.e2eError : 'ok',
       'external.refreshGame falló — src/main/external/refreshGame.ts',
     ).toBe('ok');
-    expect(result, 'el juego 1 no existe en este sandbox — revisa e2e/seed.ts').not.toBeNull();
+    expect(
+      result,
+      "Assassin's Creed II no existe en este sandbox — revisa e2e/sandbox.ts",
+    ).not.toBeNull();
 
     const r = result as GameFullRefreshResult;
     // El veredicto que de verdad importa para esta cicatriz: si HLTB rota
@@ -301,7 +305,7 @@ test.describe('integraciones externas', () => {
     expect(r.steam).toBe('had-it');
 
     // Y que de verdad ESCRIBIÓ, no que solo contestó bien.
-    const game = await page.evaluate(() => globalThis.api.games.getById(1));
+    const game = await page.evaluate((id) => globalThis.api.games.getById(id), acII);
     expect(
       game?.hltbMain ?? null,
       'la pasada dijo hltb: updated pero no escribió nada',
@@ -315,32 +319,36 @@ test.describe('integraciones externas', () => {
     test.setTimeout(60_000);
 
     const { window: page } = afterplay;
+    const horticulture = gameIdOf(afterplay.sandbox, 'Strange Horticulture');
 
     // El ⟳ de la card Ratings, a diferencia del botón de "actualizar todo" de
     // arriba, NO adopta un igdbId nuevo — eso es cosa exclusiva de
-    // refreshGame.ts. Todo el seed tiene igdbId a null, así que en el id 2
-    // ("Strange Horticulture", appid 1574580) esta ruta se queda SOLO con
+    // refreshGame.ts. Todo el seed tiene igdbId a null, así que en
+    // "Strange Horticulture" (appid 1574580) esta ruta se queda SOLO con
     // Steam: es la decisión real que separa un botón del otro, y por eso el
     // test exige `ratings: null` en vez de limitarse a "no lanzó".
-    const result = await page.evaluate(async () => {
+    const result = await page.evaluate(async (id) => {
       try {
-        return await globalThis.api.external.refreshRatings(2);
+        return await globalThis.api.external.refreshRatings(id);
       } catch (error) {
         return { e2eError: error instanceof Error ? error.message : String(error) };
       }
-    });
+    }, horticulture);
 
     expect(
       failed(result) ? result.e2eError : 'ok',
       'external.refreshRatings falló — src/main/external/refreshRatings.ts',
     ).toBe('ok');
-    expect(result, 'el juego 2 no existe en este sandbox — revisa e2e/seed.ts').not.toBeNull();
+    expect(
+      result,
+      'Strange Horticulture no existe en este sandbox — revisa e2e/sandbox.ts',
+    ).not.toBeNull();
 
     const r = result as RatingsRefreshResult;
     expect(r.ratings, 'sin igdbId no debería haber notas de IGDB en esta ruta').toBeNull();
     expect(r.steam).toBe('updated');
 
-    const game = await page.evaluate(() => globalThis.api.games.getById(2));
+    const game = await page.evaluate((id) => globalThis.api.games.getById(id), horticulture);
     expect(typeof game?.steamPositive).toBe('number');
     expect(typeof game?.steamNegative).toBe('number');
   });
@@ -351,19 +359,20 @@ test.describe('integraciones externas', () => {
     test.setTimeout(60_000);
 
     const { window: page } = afterplay;
+    const acII = gameIdOf(afterplay.sandbox, "Assassin's Creed II");
 
-    // El juego 1 (Assassin's Creed II) ya trae tiempos del seed — por eso NO
+    // Assassin's Creed II ya trae tiempos del seed — por eso NO
     // basta con comprobar que la fila tiene números después de refrescar: eso
     // sería cierto igual aunque el paso de ESCRITURA estuviera roto y se
     // hubiera limitado a conservar los del alta. Se compara el valor que
     // devuelve la llamada con el que queda de verdad guardado en la fila.
-    const times = await page.evaluate(async () => {
+    const times = await page.evaluate(async (id) => {
       try {
-        return await globalThis.api.hltb.refreshGame(1);
+        return await globalThis.api.hltb.refreshGame(id);
       } catch (error) {
         return { e2eError: error instanceof Error ? error.message : String(error) };
       }
-    });
+    }, acII);
 
     expect(
       failed(times) ? times.e2eError : 'ok',
@@ -374,7 +383,7 @@ test.describe('integraciones externas', () => {
     const t = times as HltbResult;
     expect(t.hltbMain ?? 0).toBeGreaterThan(0);
 
-    const game = await page.evaluate(() => globalThis.api.games.getById(1));
+    const game = await page.evaluate((id) => globalThis.api.games.getById(id), acII);
     expect(game?.hltbMain, 'la fila no tiene el valor que la llamada acaba de devolver').toBe(
       t.hltbMain,
     );
@@ -390,14 +399,15 @@ test.describe('integraciones externas', () => {
     test.setTimeout(60_000);
 
     const { window: page } = afterplay;
+    const terraria = gameIdOf(afterplay.sandbox, 'Terraria');
 
-    // Terraria (id 5 del seed, appid 105600): catálogo de logros grande y
+    // Terraria (del seed, appid 105600): catálogo de logros grande y
     // estable para probar la cadena entera con la clave de .env.test —
     // encolar, esperar el evento 'synced' de achievements:activity (el
     // resultado NO viaja en la respuesta del invoke, ver
     // achievements:refreshGame en ipc/achievements.ts), y leer lo que quedó
     // guardado con getForGame.
-    const queued = await page.evaluate(async () => {
+    const queued = await page.evaluate(async (id) => {
       try {
         (globalThis as { __synced?: unknown[] }).__synced = [];
         globalThis.api.achievements.onActivity((event) => {
@@ -405,11 +415,11 @@ test.describe('integraciones externas', () => {
             (globalThis as { __synced?: unknown[] }).__synced?.push(event);
           }
         });
-        return await globalThis.api.achievements.refreshGame(5);
+        return await globalThis.api.achievements.refreshGame(id);
       } catch (error) {
         return { e2eError: error instanceof Error ? error.message : String(error) };
       }
-    });
+    }, terraria);
 
     expect(
       failed(queued) ? queued.e2eError : 'ok',
@@ -421,13 +431,16 @@ test.describe('integraciones externas', () => {
     ).toBe(true);
 
     await page.waitForFunction(
-      () =>
-        (globalThis as { __synced?: { gameId: GameId }[] }).__synced?.some((e) => e.gameId === 5),
-      undefined,
+      (id) =>
+        (globalThis as { __synced?: { gameId: GameId }[] }).__synced?.some((e) => e.gameId === id),
+      terraria,
       { timeout: 30_000 },
     );
 
-    const achievements = await page.evaluate(() => globalThis.api.achievements.getForGame(5));
+    const achievements = await page.evaluate(
+      (id) => globalThis.api.achievements.getForGame(id),
+      terraria,
+    );
     expect(achievements.steamAppId).toBe(105600);
     expect(
       achievements.syncedAt,

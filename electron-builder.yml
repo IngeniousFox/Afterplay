@@ -6,7 +6,10 @@ files:
   # Con solo exclusiones, builder incluía todo el repo, incluso worker/.dev.vars.
   # package.json y las dependencias de producción se añaden automáticamente.
   - out/**
-  - drizzle/**
+  # Las migraciones de la base 2.0 (db/v2/appDb.ts las aplica al abrirla).
+  # Las de la 1.x (drizzle/) ya no viajan: el escritorio no abre esa base, y
+  # el importador la lee tal cual, sin migrarla.
+  - drizzle-v2/**
   - resources/**
   - '!**/{.env,.env.*,.dev.vars,.dev.vars.*,.npmrc}'
 # Ludusavi va como carpeta entera (binario + material legal) a

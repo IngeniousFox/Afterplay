@@ -1,7 +1,7 @@
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
 
 export const baseGame = (overrides: Partial<GameListItem> = {}): GameListItem => ({
-  id: 1,
+  id: '1',
   igdbId: null,
   steamAppId: null,
   title: 'Test Game',
@@ -28,8 +28,8 @@ export const baseGame = (overrides: Partial<GameListItem> = {}): GameListItem =>
 });
 
 export const baseSession = (overrides: Partial<SessionWithGame> = {}): SessionWithGame => ({
-  id: 1,
-  iterationId: 10,
+  id: '1',
+  iterationId: '10',
   isManual: false,
   startedAt: new Date(2021, 0, 1),
   endedAt: null,
@@ -37,16 +37,18 @@ export const baseSession = (overrides: Partial<SessionWithGame> = {}): SessionWi
   lastHeartbeatAt: null,
   datePrecision: 'datetime',
   note: null,
-  gameId: 1,
+  gameId: '1',
   gameTitle: 'Test Game',
   coverUrl: null,
+  deviceId: 'device-a',
+  closedBy: null,
   ...overrides,
 });
 
 export const baseEvent = (overrides: Partial<StateEventSummary> = {}): StateEventSummary => ({
-  id: 1,
-  gameId: 1,
-  iterationId: 10,
+  id: '1',
+  gameId: '1',
+  iterationId: '10',
   type: 'started',
   occurredAt: new Date(2021, 0, 1),
   datePrecision: 'datetime',
@@ -67,12 +69,12 @@ export const syntheticJourney = (
     const manualIterations = [] as GameListItem['manualIterations'];
     for (let iteration = 0; iteration < 3; iteration++) {
       const iterationId = gameId * 10 + iteration;
-      manualIterations.push({ iterationId, hours: 2, year: 2021 + iteration });
+      manualIterations.push({ iterationId: String(iterationId), hours: 2, year: 2021 + iteration });
       events.push(
         baseEvent({
-          id: events.length + 1,
-          gameId,
-          iterationId,
+          id: String(events.length + 1),
+          gameId: String(gameId),
+          iterationId: String(iterationId),
           type: 'started',
           occurredAt: new Date(2021 + iteration, 0, 1),
         }),
@@ -82,9 +84,9 @@ export const syntheticJourney = (
       const at = new Date(2021 + (i % 3), i % 12, 1 + (i % 27), i % 24);
       sessions.push(
         baseSession({
-          id: sessions.length + 1,
-          gameId,
-          iterationId: gameId * 10 + (i % 3),
+          id: String(sessions.length + 1),
+          gameId: String(gameId),
+          iterationId: String(gameId * 10 + (i % 3)),
           startedAt: at,
           endedAt: new Date(at.getTime() + 3600_000),
           note: i % 5 === 0 ? `Note ${i}` : null,
@@ -93,7 +95,7 @@ export const syntheticJourney = (
     }
     games.push(
       baseGame({
-        id: gameId,
+        id: String(gameId),
         endless: gameId % 2 === 0,
         manualIterations,
         totalHours: sessionsPerGame + 6,

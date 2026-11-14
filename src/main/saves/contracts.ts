@@ -147,11 +147,13 @@ export type IdentityCheck = {
 // propio listado —ListObjectsV2 devuelve Size por objeto—, así que conocer el
 // total exacto no cuesta ni una lectura extra.
 
-// Una carpeta de juego de una máquina: saves/<igdbId>/<machineId>/
+// Una carpeta de juego de una máquina: saves/<saveKey>/<machineId>/
 export type CloudFolder = {
-  igdbId: number;
+  // El prefijo del juego en el bucket (games.saveKey: el igdbId en decimal
+  // para lo que venía de la 1.x).
+  saveKey: string;
   machineId: string;
-  // Título de la biblioteca si el igdbId casa con un juego; null si no está
+  // Título de la biblioteca si el saveKey casa con un juego; null si no está
   // (juego borrado, o biblioteca aún sin recuperar).
   gameTitle: string | null;
   gameId: GameId | null;

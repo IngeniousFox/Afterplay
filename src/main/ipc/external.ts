@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron';
-import { isNotNull, isNull, sql } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { getExternalDataCounts } from '../db/v2/queries/external';
 import { isExternalRefreshRunning, startExternalRefresh } from '../external/refresh';
 import { refreshGameEverything } from '../external/refreshGame';
 import { refreshGameRatings } from '../external/refreshRatings';
@@ -17,20 +16,7 @@ export const registerExternalHandlers = (): void => {
   // (abrir Ajustes a mitad, volver al Plan) la vea ocupada desde el primer
   // frame, sin esperar al siguiente evento de progreso.
   ipcMain.handle('external:status', async (): Promise<ExternalDataStatus> => {
-    const [row] = await withDbAccess(async () =>
-      getDb()
-        .select({
-          total: sql<number>`count(*)`,
-          withRatings: sql<number>`count(*) filter (where ${gamesTable.ratingCritics} is not null or ${gamesTable.ratingUsers} is not null)`,
-          withSummary: sql<number>`count(*) filter (where ${isNotNull(gamesTable.summary)})`,
-          withFullDate: sql<number>`count(*) filter (where ${isNotNull(gamesTable.releaseDate)})`,
-          neverChecked: sql<number>`count(*) filter (where ${isNull(gamesTable.ratingsCheckedAt)})`,
-          steamEligible: sql<number>`count(*) filter (where ${isNotNull(gamesTable.steamAppId)})`,
-          withSteamData: sql<number>`count(*) filter (where ${isNotNull(gamesTable.steamTags)} or ${isNotNull(gamesTable.steamPositive)})`,
-          withHltb: sql<number>`count(*) filter (where ${gamesTable.hltbMain} is not null or ${gamesTable.hltbMainExtras} is not null or ${gamesTable.hltbCompletionist} is not null)`,
-        })
-        .from(gamesTable),
-    );
+    const row = getExternalDataCounts(appCtx());
     return { ...row, running: isExternalRefreshRunning() };
   });
 

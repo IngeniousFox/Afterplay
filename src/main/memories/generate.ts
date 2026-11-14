@@ -2,8 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Chapter, ChapterScope } from '../../shared/memory/chapters';
 import type { RecapPayload } from '../../shared/memory/payload';
-import { withDbAccess } from '../db';
-import { insertMemory } from '../db/queries/memories/insertMemory';
+import { appCtx } from '../db/v2/appDb';
+import { insertMemory } from '../db/v2/queries/loop';
 import { stripTags } from '../curiosities/stripTags';
 import { chapterHash } from './hash';
 
@@ -401,15 +401,13 @@ export const generateMemoryForChapter = async (chapter: Chapter): Promise<boolea
     throw new Error('no se pudo interpretar la respuesta del modelo como payload de recap');
   }
 
-  await withDbAccess(() =>
-    insertMemory({
-      scopeType: chapter.scopeType,
-      scopeKey: chapter.scopeKey,
-      payload,
-      sourceHash: chapterHash(chapter),
-      model: MODEL,
-      promptVersion: PROMPT_VERSION,
-    }),
-  );
+  insertMemory(appCtx(), {
+    scopeType: chapter.scopeType,
+    scopeKey: chapter.scopeKey,
+    payload,
+    sourceHash: chapterHash(chapter),
+    model: MODEL,
+    promptVersion: PROMPT_VERSION,
+  });
   return true;
 };

@@ -1,26 +1,32 @@
 import { parse } from 'yaml';
-import { createSaveBackup } from '../db/queries/saves/createSaveBackup';
-import { deleteSaveBackups } from '../db/queries/saves/deleteSaveBackups';
-import { getSaveBackups } from '../db/queries/saves/getSaveBackups';
-import { getSaveGames } from '../db/queries/saves/getSaveGames';
+import { appCtx } from '../db/v2/appDb';
+import {
+  deleteDeviceSaveBackups,
+  listIndexedSaveObjectKeys,
+  listSaveGames,
+  parseSaveObjectKey,
+  recoverSaveBackups,
+  saveFolderPrefix,
+  type BucketDevice,
+  type RecoveredSaveBackup,
+  type SaveGame,
+} from '../db/v2/queries/saves';
 import type { CloudFolder, CloudInventory, RecoveryResult } from './contracts';
 import type { MachineManifest } from './identity';
-import { getMachineId, setPruneFloor } from './machine';
+import { setPruneFloor } from './machine';
 import { listVersions, MAPPING_FILE } from './mapping';
 import { deriveLocations } from './paths';
 import * as r2 from './r2';
 import type { BackupMapping } from './types';
-import type { SaveBackupId } from '../../shared/entityIds';
 
 // Recuperación del índice a partir del bucket (PARTIDAS-GUARDADAS.md §9).
 //
 // El índice save_backups es lo ÚNICO que hace restaurable un backup: sin su
 // fila, el zip está ahí arriba pagándose y la app no puede ni verlo ni
-// borrarlo. Y ese índice viaja por Turso, así que una reinstalación sin sync
-// configurado lo pierde entero.
+// borrarlo. Una reinstalación sin sync lo pierde entero.
 //
 // Esto lo reconstruye leyendo el bucket, que sabe explicarse solo:
-//   · la clave da el igdbId y el machineId  (saves/<igdbId>/<machineId>/…)
+//   · la clave da el saveKey y el dispositivo  (saves/<saveKey>/<deviceId>/…)
 //   · el mapping.yaml da el nombre de ludusavi, las versiones, sus fechas,
 //     de qué completo cuelga cada diferencial, sus ficheros y el registro
 //   · machines/<id>.json da el nombre del PC y su %USERPROFILE%
@@ -28,42 +34,38 @@ import type { SaveBackupId } from '../../shared/entityIds';
 
 const SAVES_PREFIX = 'saves/';
 
-type ParsedKey = { igdbId: number; machineId: string; file: string };
-
-// saves/<igdbId>/<machineId>/<fichero> — cualquier otra forma se ignora en
-// vez de adivinar: el bucket puede tener cosas que no ha puesto Afterplay.
-const parseKey = (key: string): ParsedKey | null => {
-  const parts = key.split('/');
-  if (parts.length !== 4 || parts[0] !== 'saves') return null;
-  const igdbId = Number(parts[1]);
-  if (!Number.isInteger(igdbId) || igdbId <= 0) return null;
-  if (!parts[2] || !parts[3]) return null;
-  return { igdbId, machineId: parts[2], file: parts[3] };
-};
-
 type FolderObjects = { key: string; size: number; file: string };
 
-const groupByFolder = (
-  objects: { key: string; size: number }[],
-): Map<string, { igdbId: number; machineId: string; objects: FolderObjects[] }> => {
-  const folders = new Map<
-    string,
-    { igdbId: number; machineId: string; objects: FolderObjects[] }
-  >();
+type BucketFolder = { saveKey: string; machineId: string; objects: FolderObjects[] };
+
+// saves/<saveKey>/<deviceId>/<fichero> (queries/saves/objectKey.ts) —
+// cualquier otra forma se ignora en vez de adivinar: el bucket puede tener
+// cosas que no ha puesto Afterplay.
+const groupByFolder = (objects: { key: string; size: number }[]): Map<string, BucketFolder> => {
+  const folders = new Map<string, BucketFolder>();
   for (const object of objects) {
-    const parsed = parseKey(object.key);
+    const parsed = parseSaveObjectKey(object.key);
     if (!parsed) continue;
-    const id = `${parsed.igdbId}/${parsed.machineId}`;
+    const id = `${parsed.saveKey}/${parsed.deviceId}`;
     const entry = folders.get(id) ?? {
-      igdbId: parsed.igdbId,
-      machineId: parsed.machineId,
+      saveKey: parsed.saveKey,
+      machineId: parsed.deviceId,
       objects: [],
     };
-    entry.objects.push({ key: object.key, size: object.size, file: parsed.file });
+    entry.objects.push({ key: object.key, size: object.size, file: parsed.backupName });
     folders.set(id, entry);
   }
   return folders;
 };
+
+// La carpeta del bucket casa con el juego por su saveKey (el igdbId en decimal
+// para todo lo que venía de la 1.x).
+const gamesBySaveKey = (games: SaveGame[]): Map<string, SaveGame> =>
+  new Map(
+    games.flatMap((game): [string, SaveGame][] =>
+      game.saveKey === null ? [] : [[game.saveKey, game]],
+    ),
+  );
 
 const readManifests = async (): Promise<Map<string, MachineManifest>> => {
   const byId = new Map<string, MachineManifest>();
@@ -87,16 +89,13 @@ export const scanBucket = async (): Promise<CloudInventory> => {
   const objects = await r2.listKeys(SAVES_PREFIX);
   const folders = groupByFolder(objects);
   const manifests = await readManifests();
-  const games = await getSaveGames();
-  const gameByIgdbId = new Map(games.map((game) => [game.igdbId, game]));
-  const currentMachineId = getMachineId();
+  const ctx = appCtx();
+  const gameBySaveKey = gamesBySaveKey(listSaveGames(ctx));
+  const currentMachineId = ctx.deviceId;
 
   // Las claves que el índice ya conoce, de TODOS los juegos — es lo que
   // distingue "esto ya se puede restaurar" de "esto está huérfano".
-  const knownKeys = new Set<string>();
-  for (const game of games) {
-    for (const row of await getSaveBackups(game.id)) knownKeys.add(row.r2Key);
-  }
+  const knownKeys = listIndexedSaveObjectKeys(ctx);
 
   const machineTotals = new Map<string, { totalBytes: number; backupCount: number }>();
   const result: CloudFolder[] = [];
@@ -116,9 +115,9 @@ export const scanBucket = async (): Promise<CloudInventory> => {
     machine.backupCount += zips.length;
     machineTotals.set(folder.machineId, machine);
 
-    const game = gameByIgdbId.get(folder.igdbId);
+    const game = gameBySaveKey.get(folder.saveKey);
     result.push({
-      igdbId: folder.igdbId,
+      saveKey: folder.saveKey,
       machineId: folder.machineId,
       gameTitle: game?.title ?? null,
       gameId: game?.id ?? null,
@@ -164,15 +163,13 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
   const objects = await r2.listKeys(SAVES_PREFIX);
   const folders = groupByFolder(objects);
   const manifests = await readManifests();
-  const games = await getSaveGames();
-  const gameByIgdbId = new Map(games.map((game) => [game.igdbId, game]));
+  const gameBySaveKey = gamesBySaveKey(listSaveGames(appCtx()));
+  const knownKeys = listIndexedSaveObjectKeys(appCtx());
 
-  const knownKeys = new Set<string>();
-  for (const game of games) {
-    for (const row of await getSaveBackups(game.id)) knownKeys.add(row.r2Key);
-  }
-
-  let recovered = 0;
+  // Primero se lee todo el bucket (red) y después se escribe en UNA
+  // transacción (recoverSaveBackups), que relee cada juego.
+  const pending: RecoveredSaveBackup[] = [];
+  const devices = new Map<string, BucketDevice>();
   let skippedNoGame = 0;
   let unreadableFolders = 0;
 
@@ -183,16 +180,16 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
     // en lo que ya sabemos.
     if (zips.every((object) => knownKeys.has(object.key))) continue;
 
-    const game = gameByIgdbId.get(folder.igdbId);
+    const game = gameBySaveKey.get(folder.saveKey);
     if (!game) {
       // El juego no está en la biblioteca: sus backups siguen ahí y se
       // recuperarán en cuanto se añada. No se inventa un juego a partir de
-      // un igdbId — eso es decisión del usuario, no de una recuperación.
+      // una carpeta — eso es decisión del usuario, no de una recuperación.
       skippedNoGame += zips.filter((object) => !knownKeys.has(object.key)).length;
       continue;
     }
 
-    const prefix = r2.gamePrefix(folder.igdbId, folder.machineId);
+    const prefix = saveFolderPrefix(folder.saveKey, folder.machineId);
     const raw = await r2.readText(`${prefix}${MAPPING_FILE}`);
     if (!raw) {
       unreadableFolders++;
@@ -227,27 +224,36 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
       // existe solo daría un error al restaurar.
       if (!sizeByName.has(version.name)) continue;
 
-      await createSaveBackup({
+      if (!devices.has(folder.machineId)) {
+        devices.set(folder.machineId, {
+          deviceId: folder.machineId,
+          name: manifest?.machineName ?? null,
+          home: manifest?.home ?? (guessHome(version.files) || null),
+        });
+      }
+      pending.push({
         gameId: game.id,
-        createdAt: version.when ? new Date(version.when) : new Date(),
-        backupName: version.name,
         r2Key: key,
+        createdAt: version.when ? new Date(version.when) : null,
         // Tamaño REAL del objeto en el bucket, no el del mapping: es lo que
         // se está pagando.
         sizeBytes: sizeByName.get(version.name) ?? 0,
         ludusaviName,
         differential: version.differential,
         parentBackupName: version.differential ? version.chain[0] : null,
-        machineId: folder.machineId,
-        machineName: manifest?.machineName ?? 'Unknown PC',
-        machineHome: manifest?.home ?? guessHome(version.files),
         locations: deriveLocations(version.files),
         hasRegistry: version.hasRegistry,
       });
       knownKeys.add(key);
-      recovered++;
     }
   }
+
+  const written = recoverSaveBackups(appCtx(), {
+    devices: [...devices.values()],
+    backups: pending,
+  });
+  const recovered = written.recovered;
+  skippedNoGame += written.skippedNoGame;
 
   // El índice conoce ahora versiones que esta máquina NO tiene en su carpeta
   // local: sin este suelo, el siguiente backup las daría por caducadas y las
@@ -266,25 +272,20 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
 // no está (visible y arreglable) y nunca un objeto huérfano pagando espacio
 // sin que nada lo liste.
 export const deleteMachineFromCloud = async (machineId: string): Promise<number> => {
-  if (machineId === getMachineId()) {
+  if (machineId === appCtx().deviceId) {
     throw new Error("That's this PC — deleting its folder would wipe your own backups.");
   }
 
   const objects = await r2.listKeys(SAVES_PREFIX);
-  const doomed = objects.filter((object) => parseKey(object.key)?.machineId === machineId);
+  const doomed = objects.filter((object) => parseSaveObjectKey(object.key)?.deviceId === machineId);
   await r2.deleteKeys(doomed.map((object) => object.key));
   // Y su manifiesto: sin él la máquina deja de existir también para la
   // reconciliación de identidad.
   await r2.deleteKeys([r2.machineKey(machineId)]);
 
-  const games = await getSaveGames();
-  const doomedRowIds: SaveBackupId[] = [];
-  for (const game of games) {
-    for (const row of await getSaveBackups(game.id)) {
-      if (row.machineId === machineId) doomedRowIds.push(row.id);
-    }
-  }
-  await deleteSaveBackups(doomedRowIds);
+  // El índice después del bucket: lápida a todas sus copias (una de las
+  // rutas de mantenimiento de R-13).
+  deleteDeviceSaveBackups(appCtx(), machineId);
 
   return doomed.length;
 };

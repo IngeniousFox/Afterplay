@@ -9,6 +9,7 @@ import type {
   DatePrecision,
   ExternalCheckSource,
   SessionClosedBy,
+  SessionSource,
   StateEventDatePrecision,
   StateEventType,
   UnlockOrigin,
@@ -66,10 +67,18 @@ export interface OpenQueryDbOptions {
   readonly start?: number;
   /** Por defecto true. Con false, la base queda sin la fila de este PC. */
   readonly withThisDevice?: boolean;
+  /**
+   * El reloj del sistema en vez del falso. Para probar código que mide contra
+   * `Date.now()` (el vigilante de procesos); `fx.wall` sigue existiendo, pero
+   * `advance`/`set` no mueven nada.
+   */
+  readonly realClock?: boolean;
 }
 
 export function openQueryDb(options: OpenQueryDbOptions = {}): QueryFixture {
-  const wall = fakeWall(options.start ?? T0);
+  const wall: FakeWall = options.realClock
+    ? { wall: () => Date.now(), advance: () => {}, set: () => {} }
+    : fakeWall(options.start ?? T0);
   const local = openTestDb({ deviceId: options.deviceId ?? LOCAL, wall: wall.wall });
   const ctx = createQueryContext(local, { now: () => new Date(wall.wall()) });
   if (options.withThisDevice ?? true) {
@@ -202,6 +211,8 @@ export interface SeedSessionOptions {
   readonly closedBy?: SessionClosedBy | null;
   readonly lastSeenAt?: Date | null;
   readonly note?: string | null;
+  /** Por defecto `measured`; `legacy_manual` es la sesión tecleada de la 1.x. */
+  readonly source?: SessionSource;
 }
 
 function sessionValues(
@@ -217,7 +228,7 @@ function sessionValues(
     emulatorId: options.emulatorId ?? null,
     deviceId,
     startedBy: options.startedBy ?? 'watcher',
-    source: 'measured',
+    source: options.source ?? 'measured',
     startedAt,
     endedAt,
     durationSec: endedAt === null ? null : computeDurationSec(startedAt, endedAt),

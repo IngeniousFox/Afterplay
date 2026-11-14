@@ -10,7 +10,7 @@ import { iterationSessionTotals } from './iterationHours';
 // src/shared/domain/library.ts (deriveLibrary), compartidas con el Worker
 // (AFTERPLAY-2.0.md §15.2, F-26). Aquí solo se traen las filas y se monta la
 // respuesta.
-export const getGames = async (): Promise<GameListItem[]> => {
+export const getGames = async (): Promise<GameListItem<number>[]> => {
   const db = getDb();
 
   // Alfabético, insensible a mayúsculas — sin esto SQLite ordena ASCII puro
@@ -110,7 +110,7 @@ export const getGames = async (): Promise<GameListItem[]> => {
   // barre en cada ciclo las de cronómetro rancias (sweepStaleTimerSessions).
   // El arranque más reciente de las abiertas de cada playthrough ya viene del
   // agregado (liveSince); deriveLibrary elige entre playthroughs.
-  const liveSessions: LibraryLiveSession[] = [];
+  const liveSessions: LibraryLiveSession<number>[] = [];
   for (const row of iterations) {
     if (row.liveSince !== null) liveSessions.push({ gameId: row.gameId, startedAt: row.liveSince });
   }

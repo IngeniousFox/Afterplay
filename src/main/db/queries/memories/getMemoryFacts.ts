@@ -26,14 +26,14 @@ import {
 // (AFTERPLAY-LOOP.md §7.4) sale del modelo, no de un WHERE que recordar.
 
 export type MemoryFacts = {
-  sessions: MemorySession[];
-  events: ChapterStateEvent[];
+  sessions: MemorySession<number>[];
+  events: ChapterStateEvent<number>[];
   titlesByGame: Map<number, string>;
   // Un bloque por playthrough con horas manuales, anclado con la MISMA regla
   // que Stats y el Journey (manualHoursAnchor: el fin si lo hay, si no el
   // inicio, y si el log entero calla la primera sesión medida) — los capítulos
   // deben contar lo mismo que las pantallas que tienen al lado.
-  manualBlocks: ManualBlock[];
+  manualBlocks: ManualBlock<number>[];
   // Suma por juego de esos bloques — la línea base de los hitos de horas de
   // deriveMoments (ahí no importa el ancla, solo cuánto había ya jugado).
   manualHoursByGame: Map<number, number>;
@@ -41,7 +41,7 @@ export type MemoryFacts = {
   // fuentes (LOGROS-IDEAS.md §2.3) — la materia del bloque de logros de cada
   // capítulo. Los de fecha no fiable ni salen de aquí: una fecha de rescate
   // no puede fabricar historia en ningún mes.
-  unlocks: ChapterUnlock[];
+  unlocks: ChapterUnlock<number>[];
 };
 
 export const getMemoryFacts = async (): Promise<MemoryFacts> => {
@@ -135,7 +135,7 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     }
   }
 
-  const manualBlocks: ManualBlock[] = [];
+  const manualBlocks: ManualBlock<number>[] = [];
   const manualHoursByGame = new Map<number, number>();
   for (const row of manualRows) {
     const hours = row.hours ?? 0;
@@ -217,7 +217,7 @@ export const getMemoryFacts = async (): Promise<MemoryFacts> => {
     // tienes: una fila por logro, no por (logro, fuente).
     .groupBy(achievementUnlocksTable.achievementId);
 
-  const unlocks: ChapterUnlock[] = unlockRows;
+  const unlocks: ChapterUnlock<number>[] = unlockRows;
 
   return { sessions, events, titlesByGame, manualBlocks, manualHoursByGame, unlocks };
 };

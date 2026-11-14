@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
 import { getCuriositiesStatus, runCuriositiesBackfill } from '../curiosities/backfill';
-import { getAllCuriosities } from '../db/queries/curiosities/getAllCuriosities';
+import { appCtx } from '../db/v2/appDb';
+import { getAllCuriosities } from '../db/v2/queries/loop';
 
 export const registerCuriositiesHandlers = (): void => {
   handleDb('curiosities:getAll', async () => {
-    return getAllCuriosities();
+    return getAllCuriosities(appCtx());
   });
 
   handleDb('curiosities:getStatus', async () => {

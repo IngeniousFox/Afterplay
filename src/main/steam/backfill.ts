@@ -1,8 +1,11 @@
-import { and, eq, isNotNull, like } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { getAchievementsStatus } from '../db/queries/achievements/getAchievementsStatus';
-import { getPendingAchievementsGames } from '../db/queries/achievements/getPendingAchievementsGames';
-import { achievementsTable, gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import {
+  getAchievementsRefreshTarget,
+  getAchievementsStatus,
+  getEmuUnlockTargets,
+  getPendingAchievementsGames,
+} from '../db/v2/queries/achievements';
+import { hasRaCredentials } from '../ra/api';
 import type { AchievementsStatus } from '../../shared/types';
 import { refreshRaForGame } from '../ra/backfill';
 import { hasSteamKey } from './api';
@@ -20,9 +23,13 @@ import type { GameId } from '../../shared/entityIds';
 // solo decide a quién le toca.
 
 export const getSteamAchievementsStatus = async (): Promise<AchievementsStatus> =>
-  withDbAccess(async () =>
-    getAchievementsStatus(isAchievementsQueueRunning(), getFailedAchievementsCount()),
-  );
+  getAchievementsStatus(appCtx(), {
+    running: isAchievementsQueueRunning(),
+    failedGames: getFailedAchievementsCount(),
+    hasApiKey: Boolean(process.env.STEAM_API_KEY),
+    hasUserId: Boolean(process.env.STEAM_USER_ID64),
+    hasRaCredentials: hasRaCredentials(),
+  });
 
 // full=true resincroniza TODOS los juegos de Steam — es el botón "Sync now"
 // de Ajustes. Con false solo se traen los catálogos que faltan, que es lo
@@ -30,7 +37,7 @@ export const getSteamAchievementsStatus = async (): Promise<AchievementsStatus> 
 export const runAchievementsBackfill = async (full: boolean): Promise<number> => {
   if (!hasSteamKey()) return 0;
 
-  const pending = await withDbAccess(async () => getPendingAchievementsGames(full));
+  const pending = getPendingAchievementsGames(appCtx(), full);
   if (pending.length === 0) return 0;
 
   // Lo que devuelve el encolado, no los candidatos: este número acaba en la
@@ -46,7 +53,6 @@ export const runAchievementsBackfill = async (full: boolean): Promise<number> =>
 // cientos de peticiones a Steam.
 export const runAchievementsStartupPass = async (): Promise<void> => {
   try {
-    await clearIconlessAchievementIcons();
     const queued = await runAchievementsBackfill(false);
     if (queued > 0) {
       // Solo ASCII en los console.log, misma convencion que
@@ -56,30 +62,6 @@ export const runAchievementsStartupPass = async (): Promise<void> => {
   } catch (error) {
     console.warn('[steam] fallo en la pasada inicial de logros (se reintentara):', error);
   }
-};
-
-// Limpieza de una vez: los iconos que se guardaron apuntando al DIRECTORIO
-// del appid en vez de a un fichero (asi devuelve Steam el icono de un logro
-// que su desarrollador aun no ha puesto, ver images/steamCdn.ts). No son una
-// imagen que falte: son una URL que NUNCA va a funcionar, y cada una era un
-// 403 y un aviso en consola por cada logro del juego.
-//
-// Va aqui y no en una migracion porque es dato de una fuente externa, no
-// esquema: se corrige en cada arranque, es instantaneo (dos UPDATE con LIKE)
-// y es idempotente. Lo que se sincronice a partir de ahora ya nace bien
-// (normalizeIconUrl en steam/api.ts).
-const clearIconlessAchievementIcons = async (): Promise<void> => {
-  await withDbAccess(async () => {
-    const db = getDb();
-    await db
-      .update(achievementsTable)
-      .set({ iconUrl: null })
-      .where(like(achievementsTable.iconUrl, '%/'));
-    await db
-      .update(achievementsTable)
-      .set({ iconGrayUrl: null })
-      .where(like(achievementsTable.iconGrayUrl, '%/'));
-  });
 };
 
 // El barrido de emuladores del arranque (LOGROS.md §7): para cada juego con
@@ -92,23 +74,14 @@ const clearIconlessAchievementIcons = async (): Promise<void> => {
 // pulses Sync now.
 export const runEmuUnlocksSweep = async (): Promise<void> => {
   try {
-    const games = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          steamAppId: gamesTable.steamAppId,
-          executablePath: gamesTable.executablePath,
-          installDirectory: gamesTable.installDirectory,
-        })
-        .from(gamesTable)
-        .where(and(isNotNull(gamesTable.steamAppId), isNotNull(gamesTable.achievementsSyncedAt))),
-    );
+    // Los juegos con catálogo de Steam: los que el arranque ya sincronizó.
+    const games = getEmuUnlockTargets(appCtx());
 
     let withUnlocks = 0;
     for (const game of games) {
       if (game.steamAppId === null) continue;
 
-      await withDbAccess(async () => ensureGoldbergCatalog(game.id, game.installDirectory));
+      await ensureGoldbergCatalog(game.id, game.installDirectory);
 
       // Fila a fila y por el helper compartido: es la MISMA regla que aplica
       // el vigilante en vivo (emu/watcher.ts), y tenerla escrita dos veces ya
@@ -153,21 +126,8 @@ export const queueAchievementsRefreshForGame = async (
 
   if (hasSteamKey()) {
     try {
-      const [game] = await withDbAccess(async () =>
-        getDb()
-          .select({
-            id: gamesTable.id,
-            title: gamesTable.title,
-            steamAppId: gamesTable.steamAppId,
-            executablePath: gamesTable.executablePath,
-            installDirectory: gamesTable.installDirectory,
-            heroUrl: gamesTable.heroUrl,
-          })
-          .from(gamesTable)
-          .where(and(eq(gamesTable.id, gameId), isNotNull(gamesTable.steamAppId)))
-          .limit(1),
-      );
-      if (game && game.steamAppId !== null) {
+      const game = getAchievementsRefreshTarget(appCtx(), gameId);
+      if (game) {
         // El valor de retorno, no un true fijo: si este juego ya está EN VUELO
         // su intención se leyó antes de que llegáramos, así que el refresco que
         // el usuario acaba de pedir no va a pasar por él. Prometerlo dejaba al

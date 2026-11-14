@@ -7,6 +7,7 @@ import { useTimeFormat } from '../../hooks/settings';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { requestAchievementFlash } from '../../lib/achievementFlash';
 import { percentLabel, rarityAccent, ULTRA_VIOLET } from '../../lib/achievements';
+import { ACHIEVEMENT_SOURCE_LABEL } from '../../lib/achievementSources';
 import { AMBER, GREEN } from '../../lib/colors';
 import { formatByPrecision } from '../../lib/format';
 import { floatingPanelClass } from '../../lib/styles';
@@ -618,7 +619,8 @@ const AlmostThereRow = ({
       </div>
       <div className="relative z-1 min-w-0 flex-1 self-stretch py-0.5">
         <div className="text-[11px] font-black tracking-[.16em] text-primary/60 uppercase">
-          Final stretch · #{String(index + 1).padStart(2, '0')}
+          Final stretch · #{String(index + 1).padStart(2, '0')} ·{' '}
+          {ACHIEVEMENT_SOURCE_LABEL[game.source]}
         </div>
         <div className="mt-1 truncate text-[13.5px] font-extrabold tracking-[-.01em] text-foreground">
           {game.title}
@@ -1099,7 +1101,12 @@ export const AchievementsShowcase = ({
           </div>
           <div className="afterplay-almost-grid mt-4 grid grid-cols-2 gap-3 [@media(max-width:_1040px)]:grid-cols-1">
             {data.almostThere.map((game, index) => (
-              <AlmostThereRow key={game.gameId} game={game} index={index} onOpenGame={onOpenGame} />
+              <AlmostThereRow
+                key={`${game.gameId}-${game.source}`}
+                game={game}
+                index={index}
+                onOpenGame={onOpenGame}
+              />
             ))}
           </div>
         </div>
@@ -1155,7 +1162,7 @@ export const AchievementsShowcase = ({
             }`}
           >
             {perfectShown.map((game) => (
-              <div key={game.gameId} className="group/perfect relative">
+              <div key={`${game.gameId}-${game.source}`} className="group/perfect relative">
                 <button
                   type="button"
                   onClick={() => onOpenGame(game.gameId)}
@@ -1216,7 +1223,7 @@ export const AchievementsShowcase = ({
                     {game.title}
                   </span>
                   <span style={{ color: AMBER }}>
-                    All {game.total} achievements
+                    All {game.total} {ACHIEVEMENT_SOURCE_LABEL[game.source]} achievements
                     {game.completedAt &&
                       ` — ${formatByPrecision(game.completedAt, 'day', timeFormat)}`}
                   </span>

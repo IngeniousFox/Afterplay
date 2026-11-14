@@ -18,9 +18,9 @@ describe('sessionActivity', () => {
     const a = new Date(2024, 1, 2, 23);
     const b = new Date(2024, 2, 3, 1);
     const sessions = [
-      baseSession({ id: 1, startedAt: a, endedAt: a, durationSec: 10 }),
-      baseSession({ id: 2, startedAt: b, endedAt: b, durationSec: 30 }),
-      baseSession({ id: 3, startedAt: a, endedAt: a, durationSec: 20 }),
+      baseSession({ id: '1', startedAt: a, endedAt: a, durationSec: 10 }),
+      baseSession({ id: '2', startedAt: b, endedAt: b, durationSec: 30 }),
+      baseSession({ id: '3', startedAt: a, endedAt: a, durationSec: 20 }),
     ];
     Object.freeze(sessions);
     const result = sessionActivity(sessions);
@@ -32,16 +32,16 @@ describe('sessionActivity', () => {
 
   it('cada pantalla conserva su política de sesiones manuales y año', () => {
     const at = new Date(2024, 4, 1);
-    const measured = baseSession({ id: 1, startedAt: at, endedAt: at, durationSec: 60 });
+    const measured = baseSession({ id: '1', startedAt: at, endedAt: at, durationSec: 60 });
     const legacy = baseSession({
-      id: 2,
+      id: '2',
       startedAt: at,
       endedAt: at,
       isManual: true,
       durationSec: 600,
     });
     const previous = baseSession({
-      id: 3,
+      id: '3',
       startedAt: new Date(2023, 1, 1),
       endedAt: at,
       durationSec: 900,
@@ -57,8 +57,8 @@ describe('sessionActivity', () => {
 
   it('mantiene días de duración cero y resuelve empates de sesión por orden de entrada', () => {
     const at = new Date(2024, 11, 31);
-    const first = baseSession({ id: 1, startedAt: at, endedAt: at, durationSec: null });
-    const second = baseSession({ id: 2, startedAt: at, endedAt: at, durationSec: 0 });
+    const first = baseSession({ id: '1', startedAt: at, endedAt: at, durationSec: null });
+    const second = baseSession({ id: '2', startedAt: at, endedAt: at, durationSec: 0 });
     const result = sessionActivity([first, second]);
     assert.equal(result.longest, first);
     assert.equal(result.daysPlayed, 1);

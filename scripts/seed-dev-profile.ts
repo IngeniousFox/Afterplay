@@ -15,6 +15,7 @@ import {
   isValidProfileName,
   profileFolderName,
 } from '../src/main/lib/devProfileRules';
+import { LOCAL_DATABASE_FILE } from '../src/main/db/v2/importer/appData';
 import { DATABASE_CREDENTIAL_KEYS, ENV_BY_CREDENTIAL_KEY } from '../src/shared/credentialKeys';
 
 // Siembra un PERFIL DE DESARROLLO (lib/devProfile.ts) con una copia de tus
@@ -25,11 +26,13 @@ import { DATABASE_CREDENTIAL_KEYS, ENV_BY_CREDENTIAL_KEY } from '../src/shared/c
 //   npm run dev:v2:seed -- --from C:\ruta\copia.db
 //   npm run dev:v2:seed -- --keys-file C:\ruta\afterplay-keys.json
 //   npm run dev:v2:seed -- --keys-file C:\ruta\afterplay-keys.json --bucket afterplay2-test
-//   npm run dev:v2:seed -- --empty               -> sin base: la baja de su remota de desarrollo
+//   npm run dev:v2:seed -- --empty               -> sin base: la app arranca vacía
 //
-// DOS FORMAS DE TENER DATOS, y no se mezclan:
-//   - Perfil SIN remota configurada: copia local (lo de arriba).
-//   - Perfil CON remota de desarrollo: --empty, y los datos vienen de ella.
+// LA BASE 2.0 SALE DE LA COPIA 1.x. El script deja la copia como
+// Afterplay.db y BORRA la Afterplay2.db que tuviera el perfil: en el siguiente
+// `npm run dev:v2` la app no encuentra base 2.0 e importa esa copia
+// (db/v2/appDb.ts, solo en el perfil de desarrollo). Así una base 2.0 creada
+// con un esquema anterior se rehace con --force sin tocar nada a mano.
 //
 // QUÉ COPIA
 //   - La base: la copia de seguridad más reciente de la app instalada
@@ -136,6 +139,13 @@ const targetDb = join(targetDir, 'Afterplay.db');
 // Los ficheros que el motor de sync deja junto a la base. Si se quedaran los
 // de una base anterior al lado de la copia nueva, no cuadrarían con ella.
 const SIDECARS = ['-wal', '-shm', '-info', '-changes', '-wal-revert'];
+// La base 2.0 del perfil. Se borra siempre que cambia la 1.x, para que la app
+// la vuelva a importar en vez de seguir con una que ya no le corresponde.
+const targetDbV2 = join(targetDir, LOCAL_DATABASE_FILE);
+const removeDatabases = (): void => {
+  for (const suffix of ['', ...SIDECARS]) rmSync(`${targetDb}${suffix}`, { force: true });
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${targetDbV2}${suffix}`, { force: true });
+};
 
 const seedDatabase = (): void => {
   const sourceDb = option('--from') ?? newestBackup();
@@ -146,12 +156,13 @@ const seedDatabase = (): void => {
     fail('Esa es la base EN USO de la app instalada. Usa una copia de seguridad.');
   }
 
-  for (const suffix of ['', ...SIDECARS]) rmSync(`${targetDb}${suffix}`, { force: true });
+  removeDatabases();
   copyFileSync(sourceDb, targetDb);
 
   const sizeMb = (statSync(targetDb).size / 1024 / 1024).toFixed(1);
   console.log(`[seed] base: ${sourceDb}`);
   console.log(`[seed]    -> ${targetDb} (${sizeMb} MB)`);
+  console.log(`[seed] base 2.0: se importará de esa copia al arrancar (${LOCAL_DATABASE_FILE})`);
 
   writeFileSync(
     join(targetDir, 'dev-profile.json'),
@@ -169,16 +180,11 @@ const seedDatabase = (): void => {
 };
 
 if (flag('--empty')) {
-  // Dejar el perfil SIN base, para que la descargue entera de su remota de
-  // desarrollo en el siguiente arranque, como un PC nuevo.
-  //
-  // Es el único camino limpio para enganchar un perfil a una remota: una base
-  // local con contenido pero sin los ficheros del motor de sync no se "une" a
-  // la remota — el motor la sustituye por la descarga y deja a su lado el WAL
-  // de la base anterior, que ya no cuadra (visto el 13-nov-2026: "Conversion
-  // error: Expected text value" y la app sin arrancar).
-  for (const suffix of ['', ...SIDECARS]) rmSync(`${targetDb}${suffix}`, { force: true });
-  console.log('[seed] base: perfil vaciado; la descargará de su remota de desarrollo al arrancar');
+  // Dejar el perfil SIN base: la app 2.0 crea una vacía al arrancar, como un
+  // PC nuevo. (Antes servía para bajarla de una remota de Turso; el
+  // escritorio 2.0 ya no sincroniza con Turso, R-14.)
+  removeDatabases();
+  console.log('[seed] base: perfil vaciado; la app arrancará con una base 2.0 vacía');
 } else if (!existsSync(targetDb) || force) {
   seedDatabase();
 } else if (keysFile !== null) {
@@ -270,6 +276,4 @@ for (const name of ['config.json', 'scan-cache.json', 'ra-state.json']) {
 console.log(
   `\n[seed] listo. Arráncalo con: npm run dev:v2${profile === 'v2' ? '' : ` (perfil ${profile})`}`,
 );
-console.log(
-  '[seed] la base remota y el bucket de desarrollo se ponen en los Ajustes del perfil.\n',
-);
+console.log('[seed] el bucket de desarrollo se pone en los Ajustes del perfil.\n');

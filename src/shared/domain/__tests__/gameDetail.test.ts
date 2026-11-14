@@ -16,6 +16,9 @@ import type { IterationId, SessionId, StateEventId } from '../../entityIds';
 
 const HOUR_MS = 3_600_000;
 let nextId = 1;
+// Ids de texto con relleno: el orden de escritura (que la ficha mira en
+// `firstPlanEvent`) se conserva también al comparar como texto.
+const newId = (): string => String(nextId++).padStart(6, '0');
 
 type Session = {
   id: SessionId;
@@ -28,15 +31,15 @@ type Session = {
 };
 
 const session = (
-  iterationId: IterationId | null,
+  iterationId: number | null,
   startedAt: string,
   hours: number | null,
   extra: Partial<Session> = {},
 ): Session => {
   const start = new Date(startedAt);
   return {
-    id: nextId++,
-    iterationId,
+    id: newId(),
+    iterationId: iterationId === null ? null : String(iterationId),
     isManual: false,
     startedAt: start,
     endedAt: hours === null ? null : new Date(start.getTime() + hours * HOUR_MS),
@@ -48,17 +51,20 @@ const session = (
 
 type Event = DetailStateEventRow & { datePrecision: 'day' | 'datetime' };
 const event = (
-  iterationId: IterationId,
+  iterationId: number,
   type: Event['type'],
   occurredAt: string,
-  id: StateEventId = nextId++,
-): Event => ({ id, iterationId, type, occurredAt: new Date(occurredAt), datePrecision: 'day' });
-
-const iteration = (
-  id: IterationId,
-  manualTotalPlayed: number | null = null,
-): DetailIterationRow => ({
+  id: StateEventId = newId(),
+): Event => ({
   id,
+  iterationId: String(iterationId),
+  type,
+  occurredAt: new Date(occurredAt),
+  datePrecision: 'day',
+});
+
+const iteration = (id: number, manualTotalPlayed: number | null = null): DetailIterationRow => ({
+  id: String(id),
   manualTotalPlayed,
 });
 
@@ -218,10 +224,10 @@ describe('en vivo', () => {
 
 describe('la primera entrada en el Plan', () => {
   it('es el primer plan_to_play ESCRITO (id), no el de fecha más temprana', () => {
-    const first = event(1, 'plan_to_play', '2025-05-01T09:00:00Z', 100);
+    const first = event(1, 'plan_to_play', '2025-05-01T09:00:00Z', '100');
     const detail = derive({
-      stateEvents: [first, event(1, 'plan_to_play', '2024-01-01T00:00:00Z', 101)],
+      stateEvents: [first, event(1, 'plan_to_play', '2024-01-01T00:00:00Z', '101')],
     });
-    assert.equal(detail.firstPlanEvent?.id, 100);
+    assert.equal(detail.firstPlanEvent?.id, '100');
   });
 });

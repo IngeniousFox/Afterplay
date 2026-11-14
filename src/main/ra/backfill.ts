@@ -1,6 +1,14 @@
-import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable, iterationsTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import {
+  applyRaMatchResults,
+  forgetRaMatchChecks,
+  readPlayedPlatforms,
+  readRaRefreshTarget,
+  selectRaCatalogPending,
+  selectRaMatchCandidates,
+  selectRaMatchedGames,
+  selectRaUnmatchedPlatforms,
+} from '../db/v2/queries/external';
 import { diceCoefficient, findBestTitleMatch, normalizeTitle } from '../lib/titleMatch';
 import { getRaConsoles, getRaGameList, hasRaCredentials } from './api';
 import type { RaGameListEntry } from './api';
@@ -15,10 +23,8 @@ import type { GameId } from '../../shared/entityIds';
 // re-pregunta porque los sets se publican cada semana y las consolas nuevas
 // cada año.
 
-// Cada cuánto se re-intenta el emparejado de los que siguen sin set. Los
-// sets nuevos salen semanalmente; preguntar cada pocos días llega de sobra
-// y son ~1 petición por consola con juegos pendientes.
-const REMATCH_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
+// Cada cuánto se re-intenta el emparejado de los que siguen sin set: lo
+// decide la comprobación `ra_match` (RA_REMATCH_AFTER_MS, 4 días).
 
 // Umbral PROPIO por encima del genérico de findBestTitleMatch (0.5): las
 // listas de RA no traen año, así que no hay desempate — sin él, un 0.6 de
@@ -154,25 +160,6 @@ export const breakTieByPlayedPlatform = (
   return hits.length === 1 ? hits[0].raGameId : null;
 };
 
-// Las plataformas apuntadas de unos pocos juegos. Se pide SOLO cuando hay
-// empates (un puñado, y en la mayoría de pasadas ninguno), así que el camino
-// normal no paga esta consulta.
-const readPlayedPlatforms = async (gameIds: GameId[]): Promise<Map<GameId, string[]>> => {
-  const rows = await withDbAccess(async () =>
-    getDb()
-      .select({ gameId: iterationsTable.gameId, playedPlatform: iterationsTable.playedPlatform })
-      .from(iterationsTable)
-      .where(inArray(iterationsTable.gameId, gameIds)),
-  );
-  const byGame = new Map<GameId, string[]>();
-  for (const row of rows) {
-    const platforms = byGame.get(row.gameId);
-    if (platforms) platforms.push(row.playedPlatform);
-    else byGame.set(row.gameId, [row.playedPlatform]);
-  }
-  return byGame;
-};
-
 // El aviso del empate con NOMBRE de consola y no solo el id: "Mega Drive (1)"
 // se entiende, "1" manda a buscar la tabla de IDs de RA. Los nombres solo los
 // tiene quien haya bajado GetConsoleIDs (el nivel 2); el refresco de un juego
@@ -232,25 +219,14 @@ export const runRaStartupPass = async (): Promise<void> => {
     // "nuevo" y los candidatos de abajo ya lo cubren sin tocar nada.
     if (newConsoleIds.length > 0 && state.knownConsoleIds.length > 0) {
       const newSet = new Set(newConsoleIds);
-      const all = await withDbAccess(async () =>
-        getDb()
-          .select({ id: gamesTable.id, officialPlatforms: gamesTable.officialPlatforms })
-          .from(gamesTable)
-          .where(isNull(gamesTable.raGameId)),
-      );
+      const all = selectRaUnmatchedPlatforms(appCtx());
       const toReset = all
         .filter((game) =>
           raConsoleIdsForPlatforms(game.officialPlatforms).some((id) => newSet.has(id)),
         )
         .map((game) => game.id);
       if (toReset.length > 0) {
-        await withDbAccess(async () =>
-          getDb().transaction(async (tx) => {
-            for (const id of toReset) {
-              await tx.update(gamesTable).set({ raCheckedAt: null }).where(eq(gamesTable.id, id));
-            }
-          }),
-        );
+        forgetRaMatchChecks(appCtx(), toReset);
         // Solo ASCII en los console.log, convencion de la casa.
         console.log(
           `[ra] ${newConsoleIds.length} consola(s) nueva(s) en RA - ${toReset.length} juego(s) vuelven a ser candidatos`,
@@ -260,24 +236,7 @@ export const runRaStartupPass = async (): Promise<void> => {
     writeRaState({ knownConsoleIds: consoles.map((entry) => entry.id) });
 
     // ── Nivel 2: emparejar candidatos ────────────────────────────────────
-    const cutoff = new Date(Date.now() - REMATCH_AFTER_MS);
-    const candidates = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          releaseYear: gamesTable.releaseYear,
-          officialPlatforms: gamesTable.officialPlatforms,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(
-          and(
-            isNull(gamesTable.raGameId),
-            or(isNull(gamesTable.raCheckedAt), lt(gamesTable.raCheckedAt, cutoff)),
-          ),
-        ),
-    );
+    const candidates = selectRaMatchCandidates(appCtx());
 
     const withConsoles = candidates
       .map((game) => ({ game, consoleIds: raConsoleIdsForPlatforms(game.officialPlatforms) }))
@@ -317,7 +276,7 @@ export const runRaStartupPass = async (): Promise<void> => {
       );
       const playedPlatforms =
         tiedGameIds.length > 0
-          ? await readPlayedPlatforms(tiedGameIds)
+          ? readPlayedPlatforms(appCtx(), tiedGameIds)
           : new Map<GameId, string[]>();
 
       // raGameId null = "no está en RA" O "empate irresoluble"; `tied` solo
@@ -331,16 +290,11 @@ export const runRaStartupPass = async (): Promise<void> => {
         return { game, raGameId, tied: raGameId === null ? match.tied : [] };
       });
 
-      const checkedAt = new Date();
-      await withDbAccess(async () =>
-        getDb().transaction(async (tx) => {
-          for (const { game, raGameId } of resolved) {
-            await tx
-              .update(gamesTable)
-              .set({ raGameId, raCheckedAt: checkedAt })
-              .where(eq(gamesTable.id, game.id));
-          }
-        }),
+      // Una transacción que relee: un juego borrado o emparejado por otro
+      // camino durante la red no se toca.
+      applyRaMatchResults(
+        appCtx(),
+        resolved.map(({ game, raGameId }) => ({ gameId: game.id, raGameId })),
       );
 
       const matchedCount = resolved.filter((entry) => entry.raGameId !== null).length;
@@ -384,43 +338,9 @@ export const runRaStartupPass = async (): Promise<void> => {
     // quedaban con raGameId y sin catálogo hasta que otro camino los tocara,
     // así que lo que veías dependía de quién hubiera corrido primero.
     //
-    // Lo que sigue cojo y NO se arregla aquí — achievementsSyncedAt es UNA
-    // marca para DOS fuentes, y se pisan en las dos direcciones:
-    //
-    //   · Steam -> RA: a un juego cuyo catálogo de Steam ya llegó, este nivel
-    //     no le trae el de RA (la marca ya está puesta). Se lo traen el "Sync
-    //     now" o el botón de la ficha.
-    //   · RA -> Steam: al revés es peor, porque aquí sí se escribe. syncRaGame
-    //     estampa achievementsSyncedAt (ra/sync.ts) y la pasada automática de
-    //     Steam pide justo isNull(achievementsSyncedAt)
-    //     (db/queries/achievements/getPendingAchievementsGames.ts), así que un
-    //     juego con las dos fuentes queda fuera del backfill de catálogo de
-    //     Steam para siempre. En el arranque normal no muerde: index.ts lanza
-    //     la pasada de Steam antes y su cola ya se llevó su lista. Muerde
-    //     cuando Steam no llegó a encolarlo — sin API key todavía, fallo de
-    //     red o 429 en la cola, o el bail deliberado de steam/syncAchievements
-    //     para el juego que aún no ha salido (403). Ese bail existe justo para
-    //     que el próximo arranque lo vuelva a coger, y con un set de RA ya no
-    //     lo consigue: su comentario ("no estampar para que el arranque lo
-    //     vuelva a coger") es media verdad desde que este nivel existe. La
-    //     salida que le queda al usuario es "Sync now" o jugar el juego.
-    //
-    // El arreglo de verdad es una marca por fuente (o una columna `source` en
-    // achievements): schema y queries ajenas a este fichero.
-    const pendingSync = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          raGameId: gamesTable.raGameId,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(isNull(gamesTable.achievementsSyncedAt)),
-    );
-    const toSync = pendingSync.filter(
-      (game): game is typeof game & { raGameId: number } => game.raGameId !== null,
-    );
+    // Cada fuente lleva su propia comprobación (`ra_achievements` aquí), así
+    // que el catálogo de Steam ya no tapa el de RA ni al revés.
+    const toSync = selectRaCatalogPending(appCtx());
     // Si un "Sync now" ya está sincronizando en cadena, este nivel 3 sobra
     // (aquel cubre TODOS los emparejados, estos incluidos) y correrlo a la
     // vez es justo lo que el candado evita. Se salta sin más: no hay nada que
@@ -449,19 +369,7 @@ export const runRaFullResync = async (): Promise<number> => {
   // arranque): no arrancar una segunda o se solapan y disparan el 429.
   if (raSyncChainRunning) return 0;
 
-  const games = await withDbAccess(async () =>
-    getDb()
-      .select({
-        id: gamesTable.id,
-        title: gamesTable.title,
-        raGameId: gamesTable.raGameId,
-        heroUrl: gamesTable.heroUrl,
-      })
-      .from(gamesTable),
-  );
-  const matched = games.filter(
-    (game): game is typeof game & { raGameId: number } => game.raGameId !== null,
-  );
+  const matched = selectRaMatchedGames(appCtx());
   if (matched.length === 0) return 0;
 
   raSyncChainRunning = true;
@@ -495,21 +403,7 @@ export const refreshRaForGame = async (
   if (!hasRaCredentials()) return false;
 
   try {
-    const [game] = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          releaseYear: gamesTable.releaseYear,
-          officialPlatforms: gamesTable.officialPlatforms,
-          raGameId: gamesTable.raGameId,
-          raCheckedAt: gamesTable.raCheckedAt,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(eq(gamesTable.id, gameId))
-        .limit(1),
-    );
+    const game = readRaRefreshTarget(appCtx(), gameId);
     if (!game) return false;
 
     let raGameId = game.raGameId;
@@ -519,7 +413,7 @@ export const refreshRaForGame = async (
       // esperaba al próximo arranque para emparejarse. El force solo
       // distingue RE-preguntar lo ya negado (el botón de la ficha) de no
       // repagar listas en cada cierre de sesión de un juego sin set.
-      if (!forceRematch && game.raCheckedAt !== null) return false;
+      if (!forceRematch && game.raMatchAsked) return false;
       const consoleIds = raConsoleIdsForPlatforms(game.officialPlatforms);
       if (consoleIds.length === 0) return false;
       const lists = new Map<number, RaGameListEntry[]>();
@@ -531,7 +425,7 @@ export const refreshRaForGame = async (
         // Mismo desempate que el nivel 2. Si tampoco aquí desempata, hueco y
         // aviso — con los ids pelados: no compensa una petición más de
         // GetConsoleIDs por un juego suelto solo para redactarlo.
-        const played = await readPlayedPlatforms([gameId]);
+        const played = readPlayedPlatforms(appCtx(), [gameId]);
         raGameId = breakTieByPlayedPlatform(match.tied, played.get(gameId) ?? []);
         if (raGameId === null) {
           console.warn(
@@ -541,12 +435,8 @@ export const refreshRaForGame = async (
       } else {
         raGameId = match.kind === 'matched' ? match.raGameId : null;
       }
-      await withDbAccess(async () =>
-        getDb()
-          .update(gamesTable)
-          .set({ raGameId, raCheckedAt: new Date() })
-          .where(eq(gamesTable.id, gameId)),
-      );
+      const applied = applyRaMatchResults(appCtx(), [{ gameId, raGameId }]);
+      if (applied.skipped > 0) return false;
       if (raGameId === null) return false;
     }
 

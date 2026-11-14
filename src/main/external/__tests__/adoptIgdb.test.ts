@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
-import { asc } from 'drizzle-orm';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { gamesTable } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
+import { games } from '../../db/v2/schema';
 
 // LA ADOPCION POR LOTES: CUANDO IGDB POR FIN TIENE EL JUEGO.
 //
@@ -15,8 +16,9 @@ import { gamesTable } from '../../db/schema';
 // el parte de Ajustes cantaba "0 adoptados". Encima el fallo cortaba la cola
 // para los que venian detras.
 //
-// QUE ES REAL Y QUE ES DOBLE: la base es real (harness con las migraciones del
-// repo) y adoptIgdbForCandidates corre entera. Doblado, solo IGDB.
+// QUE ES REAL Y QUE ES DOBLE: la base es real (una base 2.0 en memoria con las
+// migraciones del repo, appDbHarness.ts) y adoptIgdbForCandidates corre
+// entera. Doblado, solo IGDB.
 
 type DetalleFalso = {
   igdbId: number;
@@ -83,14 +85,16 @@ console.log = (...args: unknown[]): void => {
 };
 
 let adoptIgdbForCandidates: typeof import('../adoptIgdb').adoptIgdbForCandidates;
-let db: TestDb;
+let fx: QueryFixture;
+let ids: string[] = [];
 
 before(async () => {
   ({ adoptIgdbForCandidates } = await import('../adoptIgdb'));
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
+  ids = [];
   detailsAsked.length = 0;
   warned.length = 0;
   logged.length = 0;
@@ -101,20 +105,22 @@ beforeEach(async () => {
 after(() => {
   console.warn = realWarn;
   console.log = realLog;
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
+// El igdbId de cada uno de los cinco, en el orden en que se dieron de alta.
 const adoptados = async (): Promise<(number | null)[]> =>
-  (await db.select({ igdbId: gamesTable.igdbId }).from(gamesTable).orderBy(asc(gamesTable.id))).map(
-    (row) => row.igdbId,
+  ids.map(
+    (id) =>
+      fx.ctx.db.select({ igdbId: games.igdbId }).from(games).where(eq(games.id, id)).get()
+        ?.igdbId ?? null,
   );
 
 // Cinco juegos dados de alta solo con Steam, con appids 501..505 — que es de
 // donde IGDB los reconoce.
-const cincoDeSoloSteam = async (): Promise<number[]> => {
-  const ids: number[] = [];
+const cincoDeSoloSteam = async (): Promise<string[]> => {
   for (let i = 1; i <= 5; i++) {
-    ids.push(await makeGame(db, { title: `Solo Steam ${i}`, steamAppId: 500 + i }));
+    ids.push(seedGame(fx.ctx, { title: `Solo Steam ${i}`, steamAppId: 500 + i }));
   }
   return ids;
 };
@@ -130,7 +136,7 @@ describe('la adopcion por lotes de los juegos que solo estaban en Steam', () => 
     };
 
     const adopted = await adoptIgdbForCandidates(
-      [1, 2, 3, 4, 5].map((i) => ({ id: i, steamAppId: 500 + i })),
+      [1, 2, 3, 4, 5].map((i) => ({ gameId: ids[i - 1], steamAppId: 500 + i })),
     );
 
     assert.equal(adopted, 4, 'el contador cuenta los que SI se adoptaron, no cero');
@@ -145,7 +151,7 @@ describe('la adopcion por lotes de los juegos que solo estaban en Steam', () => 
       throw new Error('IGDB no contesta');
     };
 
-    assert.equal(await adoptIgdbForCandidates([{ id: 1, steamAppId: 501 }]), 0);
+    assert.equal(await adoptIgdbForCandidates([{ gameId: ids[0], steamAppId: 501 }]), 0);
     assert.deepEqual(detailsAsked, [], 'sin lote no hay a quien pedirle el detalle');
     assert.deepEqual(await adoptados(), [null, null, null, null, null]);
   });
@@ -161,7 +167,7 @@ describe('la adopcion por lotes de los juegos que solo estaban en Steam', () => 
     detailImpl = (igdbId) => (igdbId === 61_502 ? null : detalle(igdbId));
 
     const adopted = await adoptIgdbForCandidates(
-      [1, 2, 3].map((i) => ({ id: i, steamAppId: 500 + i })),
+      [1, 2, 3].map((i) => ({ gameId: ids[i - 1], steamAppId: 500 + i })),
     );
 
     assert.equal(adopted, 1);

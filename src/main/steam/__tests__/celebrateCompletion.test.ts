@@ -1,15 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
-import { and, eq } from 'drizzle-orm';
-import { achievementsTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
 import {
-  cleanupDbs,
-  freshDb,
-  makeAchievement,
-  makeGame,
-  makeUnlock,
-  type TestDb,
-} from '../../db/__tests__/harness';
+  seedCatalog,
+  seedGame,
+  seedUnlock,
+  type QueryFixture,
+} from '../../db/v2/queries/common/__tests__/fixtures';
 import type { AchievementToast } from '../notifications/overlay';
 
 // EL BROCHE DORADO DEL 100% (LOGROS-IDEAS.md §3.6) y la única pregunta que
@@ -22,7 +19,7 @@ import type { AchievementToast } from '../notifications/overlay';
 // juego programan dos comprobaciones, las dos ven el juego completo y las dos
 // encolan la misma tarjeta dorada.
 //
-// La base es la REAL del andamio: lo que se prueba es la cuenta contra las
+// La base es una 2.0 REAL en memoria (appDbHarness.ts): lo que se prueba es la cuenta contra las
 // tablas, no a quién se llamó. Lo falso es la cola de avisos, que arrastra
 // Electron.
 
@@ -35,7 +32,7 @@ mock.module('../notifications/overlay', {
   },
 });
 
-let db: TestDb;
+let fx: QueryFixture;
 let maybeCelebrateCompletion: typeof import('../notifications/complete').maybeCelebrateCompletion;
 
 // El propio AFTER_BATCH_MS del módulo (1500) más margen: la comprobación va en
@@ -48,17 +45,24 @@ before(async () => {
   ({ maybeCelebrateCompletion } = await import('../notifications/complete'));
 });
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   toasts.length = 0;
 });
-after(() => cleanupDbs());
+after(() => closeAppDbFixture());
 
 // Un juego con `total` logros de los que `unlocked` están sacados.
-const gameWith = async (total: number, unlocked: number): Promise<number> => {
-  const gameId = await makeGame(db, { title: 'Celeste' });
-  for (let index = 0; index < total; index++) {
-    const achievementId = await makeAchievement(db, gameId, `A${index}`, { sortIndex: index });
-    if (index < unlocked) await makeUnlock(db, achievementId, '2026-01-10T19:00:00Z');
+const gameWith = async (total: number, unlocked: number): Promise<string> => {
+  const gameId = seedGame(fx.ctx, { title: 'Celeste' });
+  seedCatalog(fx.ctx, {
+    gameId,
+    items: Array.from({ length: total }, (_, index) => ({ apiName: `A${index}` })),
+  });
+  for (let index = 0; index < unlocked; index++) {
+    seedUnlock(fx.ctx, {
+      gameId,
+      apiName: `A${index}`,
+      unlockedAt: new Date('2026-01-10T19:00:00Z'),
+    });
   }
   return gameId;
 };
@@ -85,9 +89,8 @@ describe('maybeCelebrateCompletion: la tarjeta dorada sale UNA vez por 100%', ()
 
   it('un juego al que le falta un logro no celebra, y celebra al cerrarlo', async () => {
     // El borde contrario: la memoria de celebrados no puede convertirse en un
-    // cepo. Se usa un juego distinto del test anterior a propósito — ese
-    // registro es estado de módulo y sobrevive al vaciado de la base.
-    await makeGame(db, { title: 'Relleno para no repetir id' });
+    // cepo. Cada base nueva da ids nuevos, así que este juego no es el del
+    // test anterior aunque ese registro sea estado de módulo.
     const gameId = await gameWith(2, 1);
 
     maybeCelebrateCompletion(gameId, 'Celeste', null);
@@ -95,11 +98,7 @@ describe('maybeCelebrateCompletion: la tarjeta dorada sale UNA vez por 100%', ()
     assert.deepEqual(toasts, []);
 
     // Cae el que faltaba: ahora sí.
-    const [pendiente] = await db
-      .select({ id: achievementsTable.id })
-      .from(achievementsTable)
-      .where(and(eq(achievementsTable.gameId, gameId), eq(achievementsTable.apiName, 'A1')));
-    await makeUnlock(db, pendiente.id, '2026-01-10T20:00:00Z');
+    seedUnlock(fx.ctx, { gameId, apiName: 'A1', unlockedAt: new Date('2026-01-10T20:00:00Z') });
 
     maybeCelebrateCompletion(gameId, 'Celeste', null);
     await sleep(AFTER_CHECK_MS);

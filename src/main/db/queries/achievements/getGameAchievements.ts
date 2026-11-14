@@ -14,7 +14,7 @@ import { mergeUnlocksByAchievement } from './mergeUnlocks';
 // por primera vez?", y esa respuesta no cambia porque después lo compraras en
 // Steam, pero tampoco puede contestarla la fecha inventada de un rescate. El
 // desempate entero está en mergeUnlocks.ts.
-export const getGameAchievements = async (gameId: number): Promise<GameAchievements> => {
+export const getGameAchievements = async (gameId: number): Promise<GameAchievements<number>> => {
   const db = getDb();
 
   const [game] = await db
@@ -27,7 +27,7 @@ export const getGameAchievements = async (gameId: number): Promise<GameAchieveme
     .where(eq(gamesTable.id, gameId))
     .limit(1);
 
-  const empty: GameAchievements = {
+  const empty: GameAchievements<number> = {
     gameId,
     steamAppId: game?.steamAppId ?? null,
     syncedAt: game?.syncedAt ?? null,
@@ -78,7 +78,7 @@ export const getGameAchievements = async (gameId: number): Promise<GameAchieveme
   // única consulta que usa las dos mitades del helper.
   const mergedById = mergeUnlocksByAchievement(unlocks);
 
-  const entries: AchievementEntry[] = definitions.map((definition) => {
+  const entries: AchievementEntry<number>[] = definitions.map((definition) => {
     const merged = mergedById.get(definition.id);
     return {
       id: definition.id,

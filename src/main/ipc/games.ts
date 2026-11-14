@@ -8,23 +8,29 @@ import type {
   UpdateGamePatch,
 } from '../../shared/types';
 import { generateCuriositiesInBackground } from '../curiosities/backfill';
-import { createGameWithDetails } from '../db/queries/games/createGameWithDetails';
-import { createPlannedGame } from '../db/queries/games/createPlannedGame';
-import { deleteGame } from '../db/queries/games/deleteGame';
-import { purgeGameSaves } from '../saves/orchestrator';
-import { getGameById } from '../db/queries/games/getGameById';
-import { getGames } from '../db/queries/games/getGames';
+import { resolveGameEnrichment } from '../external/resolveGameEnrichment';
+import { appCtx } from '../db/v2/appDb';
 import {
+  GameWriteError,
+  createGameWithDetails,
+  createPlannedGame,
+  deleteGame,
+  findLiveGameIdForIgdb,
+  moveToPlan,
+  planEnrichmentRequest,
+  promotePlannedGame,
+  reorderUpNext,
+  resetEndlessState,
+  setPlanPinned,
+  setSteamAppId,
+  updateGame,
+} from '../db/v2/queries/games';
+import {
+  getGameById,
+  getGames,
   getPlannedGameExtras,
   getPlannedGames,
-  reorderUpNext,
-  setPlanPinned,
-} from '../db/queries/games/getPlannedGames';
-import { promotePlannedGame } from '../db/queries/games/promotePlannedGame';
-import { moveToPlan } from '../db/queries/games/moveToPlan';
-import { resetEndlessState } from '../db/queries/games/resetEndlessState';
-import { updateGame } from '../db/queries/games/updateGame';
-import { setSteamAppId } from '../db/queries/games/setSteamAppId';
+} from '../db/v2/queries/library';
 import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { notifyAchievementsActivity } from '../steam/notify';
@@ -71,17 +77,32 @@ import type { GameId } from '../../shared/entityIds';
 // (-62%, medido con JSON.stringify sobre los 661 reales), los extras solo
 // cruzan el IPC mientras la pantalla del Plan está montada, y un pin o un
 // arrastre de Up next refetchean solo la lista escueta.
+// El alta 2.0 en dos pasos: la red primero (fuera de cualquier transacción) y
+// después una sola escritura. Antes de ir a la red se mira si el juego ya está
+// vivo: el id determinista no admite un duplicado (I-02) y la llamada se
+// gastaría para nada.
+const enrichForNewGame = async (
+  input: CreateGameWithDetailsInput | CreatePlannedGameInput,
+): Promise<Awaited<ReturnType<typeof resolveGameEnrichment>>> => {
+  if ('igdbId' in input.source && findLiveGameIdForIgdb(appCtx(), input.source.igdbId) !== null) {
+    throw new GameWriteError('already_exists', 'Este juego ya está en tu biblioteca o en el Plan.');
+  }
+  const request = planEnrichmentRequest(input);
+  return resolveGameEnrichment(request.source, request.overrides);
+};
+
 export const registerGamesHandlers = (): void => {
   handleDb('games:getAll', async () => {
-    return getGames();
+    return getGames(appCtx());
   });
 
   handleDb('games:getById', async (_event, id: GameId) => {
-    return getGameById(id);
+    return getGameById(appCtx(), id);
   });
 
   handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
-    const game = await createGameWithDetails(input);
+    const enrichment = await enrichForNewGame(input);
+    const game = createGameWithDetails(appCtx(), input, enrichment);
     warmImageCache(game);
     warmSteamData(game);
     // Sus curiosidades del modo ambiente, de fondo (mismo espíritu que la
@@ -96,18 +117,19 @@ export const registerGamesHandlers = (): void => {
 
   // Sección Plan to Play (alta reducida + lista propia + paso a biblioteca).
   handleDb('games:getPlanned', async () => {
-    return getPlannedGames();
+    return getPlannedGames(appCtx());
   });
 
   // El segundo canal de la lista del Plan (ver la tabla de payloads de
   // arriba): solo lo pide la query de extras del renderer, que únicamente
   // está suscrita mientras la pantalla del Plan está montada.
   handleDb('games:getPlannedExtras', async () => {
-    return getPlannedGameExtras();
+    return getPlannedGameExtras(appCtx());
   });
 
   handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
-    const game = await createPlannedGame(input);
+    const enrichment = await enrichForNewGame(input);
+    const game = createPlannedGame(appCtx(), input, enrichment);
     warmImageCache(game);
     // Las etiquetas SÍ, a diferencia de las curiosidades: la tienda de Steam
     // contesta sobre el juego tengas la cuenta que tengas, y las etiquetas son
@@ -135,17 +157,17 @@ export const registerGamesHandlers = (): void => {
   // "Up next" (PLAN-TO-PLAY.md §2.2) — fijar/soltar un planeado como
   // prioridad de verdad. Un solo campo, sin nada externo que resolver.
   handleDb('games:setPlanPinned', async (_event, id: GameId, pinned: boolean) => {
-    return setPlanPinned(id, pinned);
+    return setPlanPinned(appCtx(), id, pinned);
   });
 
   // Y reordenarlos arrastrando: reparte los timestamps de planPinnedAt que ya
   // existen en el orden nuevo (ver la query para el porqué).
   handleDb('games:reorderUpNext', async (_event, orderedIds: GameId[]) => {
-    return reorderUpNext(orderedIds);
+    return reorderUpNext(appCtx(), orderedIds);
   });
 
   handleDb('games:promote', async (_event, input: PromotePlannedGameInput) => {
-    const game = await promotePlannedGame(input);
+    const game = promotePlannedGame(appCtx(), input);
     warmImageCache(game);
     generateCuriositiesInBackground(game);
     // Pasar de plan a biblioteca es cuando el juego estrena carpeta y exe —
@@ -155,7 +177,7 @@ export const registerGamesHandlers = (): void => {
   });
 
   handleDb('games:moveToPlan', async (_event, gameId: GameId) => {
-    return moveToPlan(gameId);
+    return moveToPlan(appCtx(), gameId);
   });
 
   handleDb('games:update', async (_event, id: GameId, rawPatch: UpdateGamePatch) => {
@@ -167,7 +189,7 @@ export const registerGamesHandlers = (): void => {
     // Y cualquier otra clave fuera de la lista cerrada se descarta antes de
     // escribir: el tipo no viaja por el IPC (ver gamePatch.ts).
     const patch = pickUpdateGamePatch(rawPatch);
-    const game = await updateGame(id, patch);
+    const game = updateGame(appCtx(), id, patch);
     if (game) warmImageCache(game);
 
     // Señalar dónde está instalado un juego es JUSTO lo que le faltaba a la
@@ -183,7 +205,7 @@ export const registerGamesHandlers = (): void => {
   });
 
   handleDb('games:setSteamAppId', async (_event, id: GameId, appId: number) => {
-    const game = await setSteamAppId(id, appId);
+    const game = setSteamAppId(appCtx(), id, appId);
     if (!game) return null;
     notifyAchievementsActivity({ kind: 'synced', gameId: id, catalogCount: 0, unlockedCount: 0 });
     warmSteamData(game);
@@ -192,20 +214,16 @@ export const registerGamesHandlers = (): void => {
   });
 
   handleDb('games:delete', async (_event, id: GameId) => {
-    // Antes de borrar la fila: sus copias de partida. La tabla save_backups
-    // cuelga de games con ON DELETE CASCADE, así que el índice se va solo —
-    // pero los objetos de R2 y la carpeta local NO, y sin esto se quedarían
-    // ahí para siempre pagando espacio sin que nada los liste ni los pueda
-    // borrar. Nunca lanza: no poder limpiar la nube no puede impedir borrar
-    // un juego (PARTIDAS-GUARDADAS.md §9.1).
-    await purgeGameSaves(id);
-    return deleteGame(id);
+    // Borrar un juego ya no borra sus copias de partidas (§12.7, I-07): las
+    // filas de save_backups y los objetos del bucket se quedan, y volver a
+    // añadir el juego las recupera.
+    return deleteGame(appCtx(), id);
   });
 
   // Conversión a endless: limpia desenlaces y marcadores de partida discreta
   // CONSERVANDO sesiones trackeadas y horas manuales (ver la query).
   handleDb('games:resetEndlessState', async (_event, id: GameId) => {
-    return resetEndlessState(id);
+    return resetEndlessState(appCtx(), id);
   });
 
   // Botón Play y botón "abrir carpeta" — ni uno ni otro es acceso a datos

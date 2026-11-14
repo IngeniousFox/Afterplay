@@ -30,7 +30,7 @@ import { scopeKeyOf } from '../../shared/memory/chapters';
 // ── Mocks de dominio (registrados ANTES de importar las colas) ────────────
 // Estado mutable por test: cada test reasigna la implementación que necesita.
 
-type AnyGame = { id: number; title: string };
+type AnyGame = { id: string; title: string };
 type SteamGame = import('../steam/queue').PendingAchievementsGame;
 
 let generateCuriositiesImpl: (game: AnyGame) => Promise<void> = async () => {};
@@ -151,12 +151,12 @@ after(() => {
   console.error = realConsoleError;
 });
 
-const game = (id: number, title = `Juego ${id}`): AnyGame => ({ id, title });
+const game = (id: number, title = `Juego ${id}`): AnyGame => ({ id: String(id), title });
 const steamGame = (
   id: number,
   title = `Juego ${id}`,
 ): import('../steam/queue').PendingAchievementsGame => ({
-  id,
+  id: String(id),
   title,
   steamAppId: 100000 + id,
   executablePath: null,
@@ -192,7 +192,7 @@ test('curiosities: sin ANTHROPIC_API_KEY encolar es un no-op (y no reserva nada)
   delete process.env.ANTHROPIC_API_KEY;
   const calls: number[] = [];
   generateCuriositiesImpl = async (g) => {
-    calls.push(g.id);
+    calls.push(Number(g.id));
   };
 
   curiositiesQueue.enqueueCuriosities([game(101)] as never[]);
@@ -215,7 +215,7 @@ test('curiosities: procesa en serie, en orden FIFO, uno en vuelo como mucho', as
   generateCuriositiesImpl = async (g) => {
     inFlight++;
     maxInFlight = Math.max(maxInFlight, inFlight);
-    calls.push(g.id);
+    calls.push(Number(g.id));
     await sleep(15);
     inFlight--;
   };
@@ -243,7 +243,7 @@ test('curiosities: secuencia exacta de eventos de progreso y "generated" por jue
   );
   const generated = curiosityEvents.filter((e) => e.kind === 'generated');
   assert.deepEqual(
-    generated.map((e) => e.gameId),
+    generated.map((e) => Number(e.gameId)),
     [121, 122],
   );
 });
@@ -252,7 +252,7 @@ test('curiosities: la reserva impide encolar dos veces; al terminar se libera', 
   const gate = deferred();
   const calls: number[] = [];
   generateCuriositiesImpl = async (g) => {
-    calls.push(g.id);
+    calls.push(Number(g.id));
     await gate.promise;
   };
 
@@ -266,7 +266,7 @@ test('curiosities: la reserva impide encolar dos veces; al terminar se libera', 
 
   // Terminado, la reserva se soltó: volver a encolarlo procesa de nuevo.
   generateCuriositiesImpl = async (g) => {
-    calls.push(g.id);
+    calls.push(Number(g.id));
   };
   curiositiesQueue.enqueueCuriosities([game(131)] as never[]);
   await waitUntil(() => !curiositiesQueue.isCuriositiesQueueRunning(), 'cola curiosities vacía');
@@ -276,7 +276,7 @@ test('curiosities: la reserva impide encolar dos veces; al terminar se libera', 
 test('curiosities: encolar a mitad de racha se suma a la racha (sin resetear contadores ni segundo worker)', async () => {
   const gate = deferred();
   generateCuriositiesImpl = async (g) => {
-    if (g.id === 141) await gate.promise;
+    if (g.id === '141') await gate.promise;
   };
 
   curiositiesQueue.enqueueCuriosities([game(141, 'Uno')] as never[]);
@@ -300,8 +300,8 @@ test('curiosities: encolar a mitad de racha se suma a la racha (sin resetear con
 test('curiosities: un fallo no tumba la racha, cuenta en failed y libera la reserva', async () => {
   const calls: number[] = [];
   generateCuriositiesImpl = async (g) => {
-    calls.push(g.id);
-    if (g.id === 151) throw new Error('boom');
+    calls.push(Number(g.id));
+    if (g.id === '151') throw new Error('boom');
   };
 
   curiositiesQueue.enqueueCuriosities([game(151), game(152)] as never[]);
@@ -312,13 +312,13 @@ test('curiosities: un fallo no tumba la racha, cuenta en failed y libera la rese
   assert.deepEqual([final?.running, final?.done, final?.total, final?.failed], [false, 2, 2, 1]);
   // Solo el que salió bien emite 'generated'.
   assert.deepEqual(
-    curiosityEvents.filter((e) => e.kind === 'generated').map((e) => e.gameId),
+    curiosityEvents.filter((e) => e.kind === 'generated').map((e) => Number(e.gameId)),
     [152],
   );
 
   // El fallido quedó libre para reintentarse.
   generateCuriositiesImpl = async (g) => {
-    calls.push(g.id);
+    calls.push(Number(g.id));
   };
   curiositiesQueue.enqueueCuriosities([game(151)] as never[]);
   await waitUntil(() => !curiositiesQueue.isCuriositiesQueueRunning(), 'cola curiosities vacía');
@@ -327,7 +327,7 @@ test('curiosities: un fallo no tumba la racha, cuenta en failed y libera la rese
 
 test('curiosities: una racha nueva arranca con los contadores a cero', async () => {
   generateCuriositiesImpl = async (g) => {
-    if (g.id === 161) throw new Error('boom');
+    if (g.id === '161') throw new Error('boom');
   };
   curiositiesQueue.enqueueCuriosities([game(161)] as never[]);
   await waitUntil(() => !curiositiesQueue.isCuriositiesQueueRunning(), 'primera racha');
@@ -351,8 +351,8 @@ test('curiosities: si la clave desaparece a mitad, lo pendiente se suelta (y que
   const gate = deferred();
   const calls: number[] = [];
   generateCuriositiesImpl = async (g) => {
-    calls.push(g.id);
-    if (g.id === 171) await gate.promise;
+    calls.push(Number(g.id));
+    if (g.id === '171') await gate.promise;
   };
 
   curiositiesQueue.enqueueCuriosities([game(171), game(172), game(173)] as never[]);
@@ -503,7 +503,7 @@ test('steam: sin STEAM_API_KEY encolar es un no-op', async () => {
   delete process.env.STEAM_API_KEY;
   const calls: number[] = [];
   syncGameAchievementsImpl = async (g) => {
-    calls.push(g.id);
+    calls.push(Number(g.id));
     return { catalogCount: 0, unlockedCount: 0 };
   };
 
@@ -516,8 +516,8 @@ test('steam: sin STEAM_API_KEY encolar es un no-op', async () => {
 test('steam: serie FIFO y evento synced con los conteos del resultado', async () => {
   const calls: number[] = [];
   syncGameAchievementsImpl = async (g) => {
-    calls.push(g.id);
-    return { catalogCount: g.id === 211 ? 7 : 12, unlockedCount: g.id === 211 ? 3 : 5 };
+    calls.push(Number(g.id));
+    return { catalogCount: g.id === '211' ? 7 : 12, unlockedCount: g.id === '211' ? 3 : 5 };
   };
 
   steamQueue.enqueueAchievements([steamGame(211, 'Alpha'), steamGame(212, 'Beta')]);
@@ -526,7 +526,7 @@ test('steam: serie FIFO y evento synced con los conteos del resultado', async ()
   assert.deepEqual(calls, [211, 212]);
   const synced = achievementEvents.filter((e) => e.kind === 'synced');
   assert.deepEqual(
-    synced.map((e) => [e.gameId, e.catalogCount, e.unlockedCount]),
+    synced.map((e) => [Number(e.gameId), e.catalogCount, e.unlockedCount]),
     [
       [211, 7, 3],
       [212, 12, 5],
@@ -545,7 +545,7 @@ test('steam: serie FIFO y evento synced con los conteos del resultado', async ()
 
 test('steam: los fallidos se recuerdan, retryFailed los reencola una sola vez y el éxito los limpia', async () => {
   syncGameAchievementsImpl = async (g) => {
-    if (g.id === 221) throw new Error('boom sync');
+    if (g.id === '221') throw new Error('boom sync');
     return { catalogCount: 1, unlockedCount: 0 };
   };
 
@@ -583,8 +583,8 @@ test('steam: stop a mitad — termina el juego en vuelo, suelta el resto, y la r
   const gate = deferred();
   const calls: number[] = [];
   syncGameAchievementsImpl = async (g) => {
-    calls.push(g.id);
-    if (g.id === 241) await gate.promise;
+    calls.push(Number(g.id));
+    if (g.id === '241') await gate.promise;
     return { catalogCount: 0, unlockedCount: 0 };
   };
 
@@ -608,8 +608,8 @@ test('steam: la reserva impide duplicar mientras está encolado o en vuelo', asy
   const gate = deferred();
   const calls: number[] = [];
   syncGameAchievementsImpl = async (g) => {
-    calls.push(g.id);
-    if (g.id === 251) await gate.promise;
+    calls.push(Number(g.id));
+    if (g.id === '251') await gate.promise;
     return { catalogCount: 0, unlockedCount: 0 };
   };
 

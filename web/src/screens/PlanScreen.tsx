@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { PlanMailboxEntry } from '../../../src/shared/planMailbox';
+import type { PlanMailboxEntry } from '../api';
 import {
   computePlanDebt,
   filterQueue,

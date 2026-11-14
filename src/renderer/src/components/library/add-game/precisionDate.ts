@@ -1,4 +1,4 @@
-import type { EventDatePrecision } from '../../../../../shared/types';
+import type { StateEventDatePrecision } from '../../../../../shared/types';
 
 // Tipos + helpers puros de PrecisionDateValue, separados de
 // DateWithPrecisionPicker.tsx (que solo puede exportar el componente en sí
@@ -65,7 +65,13 @@ export const currentYear = (): number => new Date().getFullYear();
 // que derivan un PrecisionDateValue de un ancla/entrada ya guardada
 // (edit-game/types.ts anchorPickerValue, detail/HistoryList.tsx
 // entryPickerValue).
-export const toPickerValue = (date: Date, precision: EventDatePrecision): PrecisionDateValue => ({
-  precision: precision === 'datetime' ? 'day' : precision,
-  isoDate: toIsoDate(date),
-});
+//
+// Un evento sin fecha ('unknown') abre el picker VACÍO: la fecha de la fila es
+// solo un ancla, y proponerla como si fuera la buena la acabaría guardando.
+export const toPickerValue = (
+  date: Date,
+  precision: StateEventDatePrecision,
+): PrecisionDateValue | null =>
+  precision === 'unknown'
+    ? null
+    : { precision: precision === 'datetime' ? 'day' : precision, isoDate: toIsoDate(date) };

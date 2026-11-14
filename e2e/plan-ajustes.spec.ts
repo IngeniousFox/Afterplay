@@ -16,7 +16,8 @@ import type { SeedGame } from './sandbox';
 //    decide el orden (splitPlanSections, lib/plan.ts) y no un accidente del
 //    orden de inserción; y que promocionar un planeado (promotePlannedGame.ts)
 //    es una ACTUALIZACIÓN del mismo id, no un borrar-y-recrear — así que el
-//    historial (el 'plan_to_play' de cuando se planeó) tiene que seguir ahí.
+//    historial del Plan (planHistory: cuándo entró y cuándo salió) tiene
+//    que seguir ahí.
 //  - Ajustes: que guardar una clave desde el formulario (CredentialsSection)
 //    de verdad llega a credentials.json (settings:setCredentials) y no solo
 //    al estado local del formulario; y que exportar/importar (el traslado a
@@ -279,13 +280,18 @@ test.describe('Plan to play — promocionar', () => {
         // games:getAll ya filtra planned=false en el propio SQL
         // (getGames.ts) — estar en esta lista ES la prueba de planned=false,
         // sin que el canal tenga que traer el campo.
-        hasPlanToPlayEvent: detail?.stateHistory.some((event) => event.type === 'plan_to_play'),
+        // La 2.0 ya no guarda un evento 'plan_to_play': el paso por el Plan
+        // queda en planHistory, con su salida sellada al promocionar.
+        planHistory: detail?.planHistory ?? null,
+        stateTypes: detail?.stateHistory.map((event) => event.type) ?? [],
       };
     }, target.id);
 
     expect(after.inPlan).toBe(false);
     expect(after.inLibrary).toBe(true);
-    expect(after.hasPlanToPlayEvent).toBe(true);
+    expect(after.planHistory, 'promocionar borró el paso por el Plan').not.toBeNull();
+    expect(after.planHistory?.leftAt, 'la salida del Plan no quedó sellada').not.toBeNull();
+    expect(after.stateTypes).not.toContain('plan_to_play');
   });
 });
 
@@ -349,7 +355,9 @@ test('un Unplayed comprado vuelve al Plan desde su ficha; uno jugado no ofrece e
     if (!result.detail || !result.plannedAt) throw new Error('El juego no llegó al Plan');
     expect(result.detail.addedAt).toEqual(originalAddedAt);
     expect(result.detail.spendHistory.map((spend) => spend.type)).toEqual(['purchase']);
-    expect(result.detail.stateHistory.map((event) => event.type)).toEqual(['plan_to_play']);
+    expect(result.detail.stateHistory).toEqual([]);
+    expect(result.detail.planHistory?.plannedAt.getTime()).toBe(result.plannedAt.getTime());
+    expect(result.detail.planHistory?.leftAt ?? null).toBeNull();
     expect(result.plannedAt.getTime()).toBeGreaterThanOrEqual(firstPlanAt);
     expect(result.plannedAt.getTime()).toBeLessThanOrEqual(Date.now());
     expect(result.stillInLibrary).toBe(false);

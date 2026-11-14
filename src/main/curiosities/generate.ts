@@ -1,8 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { withDbAccess } from '../db';
-import type { PendingCuriositiesGame } from '../db/queries/curiosities/getPendingCuriositiesGames';
-import { storeCuriosities } from '../db/queries/curiosities/storeCuriosities';
+import { appCtx } from '../db/v2/appDb';
+import { storeCuriosities, type PendingCuriositiesGame } from '../db/v2/queries/loop';
 import { stripTags } from './stripTags';
 import { getWikipediaArticle } from './wikipedia';
 
@@ -179,6 +178,6 @@ export const generateCuriositiesForGame = async (game: PendingCuriositiesGame): 
   const article = await getWikipediaArticle(game.igdbId);
   const texts = await callClaude(apiKey, game, article);
 
-  await withDbAccess(() => storeCuriosities(game.id, texts));
+  storeCuriosities(appCtx(), game.id, texts, MODEL);
   return texts.length;
 };

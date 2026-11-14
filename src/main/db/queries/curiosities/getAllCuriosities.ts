@@ -6,7 +6,7 @@ import { curiositiesTable } from '../../schema';
 // son unas pocas frases por juego, y el ambiente necesita las del juego que
 // toque en cada diapositiva — un mapa gameId→frases en el renderer sale más
 // barato que una query por diapositiva cada 26 segundos.
-export const getAllCuriosities = async (): Promise<CuriositySummary[]> => {
+export const getAllCuriosities = async (): Promise<CuriositySummary<number>[]> => {
   const db = getDb();
   return db
     .select({

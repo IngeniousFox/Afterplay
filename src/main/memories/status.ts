@@ -6,11 +6,13 @@ import {
 } from '../../shared/memory/chapters';
 import type { Moment } from '../../shared/memory/moments';
 import { deriveMoments } from '../../shared/memory/moments';
-import { withDbAccess } from '../db';
-import type { LatestMemory } from '../db/queries/memories/getLatestMemories';
-import { getLatestMemories } from '../db/queries/memories/getLatestMemories';
-import type { MemoryFacts } from '../db/queries/memories/getMemoryFacts';
-import { getMemoryFacts } from '../db/queries/memories/getMemoryFacts';
+import { appCtx } from '../db/v2/appDb';
+import {
+  getLatestMemories,
+  getMemoryFacts,
+  type LatestMemory,
+  type MemoryFacts,
+} from '../db/v2/queries/loop';
 import { CURRENT_FAMILY_MODELS, PROMPT_VERSION } from './generate';
 import { chapterHash, legacyChapterHash } from './hash';
 
@@ -29,7 +31,7 @@ export type FactsSnapshot = {
 };
 
 export const loadFactsSnapshot = async (): Promise<FactsSnapshot> => {
-  const facts = await withDbAccess(() => getMemoryFacts());
+  const facts = getMemoryFacts(appCtx());
   return { facts, moments: deriveMoments(facts.sessions, facts.manualHoursByGame) };
 };
 
@@ -68,7 +70,7 @@ export const computeMemoriesOverview = async (
   now: Date = new Date(),
 ): Promise<{ overview: MemoriesOverview; snapshot: FactsSnapshot }> => {
   const snapshot = await loadFactsSnapshot();
-  const stored = await withDbAccess(() => getLatestMemories());
+  const stored = getLatestMemories(appCtx());
 
   const byScope = new Map<string, LatestMemory>(
     stored.map((memory) => [`${memory.scopeType}:${memory.scopeKey}`, memory]),

@@ -1,8 +1,12 @@
-import { and, eq, isNull } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import {
+  applySgdbResult,
+  failed,
+  selectSgdbCandidates,
+  type RefreshScope,
+  type SourceFailure,
+} from '../db/v2/queries/external';
 import { resolveSgdbId } from '../sgdb/api';
-import type { RefreshScope } from './refresh';
 
 // EL ID DE STEAMGRIDDB DE LOS QUE NO LO TIENEN.
 //
@@ -70,18 +74,7 @@ export const fillMissingSgdbIds = async (scope: RefreshScope = 'all'): Promise<n
     // propio helper, así que se mira la variable que lee sgdb/client.ts.
     if (!process.env.STEAMGRIDDB_API_KEY) return 0;
 
-    const missing = isNull(gamesTable.steamGridDbId);
-    const pending = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          releaseYear: gamesTable.releaseYear,
-          steamAppId: gamesTable.steamAppId,
-        })
-        .from(gamesTable)
-        .where(scope === 'plan' ? and(eq(gamesTable.planned, true), missing) : missing),
-    );
+    const pending = selectSgdbCandidates(appCtx(), scope);
     if (pending.length === 0) return 0;
 
     let found = 0;
@@ -93,18 +86,16 @@ export const fillMissingSgdbIds = async (scope: RefreshScope = 'all'): Promise<n
       if (index > 0) await sleep(SGDB_DELAY_MS);
 
       const startedAt = Date.now();
-      const sgdbId = await resolveSgdbId(game);
+      let sgdbId: number | null | SourceFailure;
+      try {
+        sgdbId = await resolveSgdbId(game);
+      } catch (error) {
+        sgdbId = failed(error);
+      }
       slowStreak = Date.now() - startedAt >= SGDB_SLOW_CALL_MS ? slowStreak + 1 : 0;
 
-      if (sgdbId !== null) {
-        await withDbAccess(async () =>
-          getDb()
-            .update(gamesTable)
-            .set({ steamGridDbId: sgdbId })
-            .where(eq(gamesTable.id, game.id)),
-        );
-        found++;
-      }
+      // La escritura relee el juego: si ganó un id a mano mientras tanto, no lo pisa.
+      if (applySgdbResult(appCtx(), game.gameId, sgdbId) === 'filled') found++;
 
       if (slowStreak >= SGDB_ABORT_AFTER) {
         // Nada de topes silenciosos: se dice cuántos se quedan sin mirar (los

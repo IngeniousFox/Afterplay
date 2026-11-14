@@ -2,11 +2,13 @@ import { app } from 'electron';
 import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { vacuumInto } from './backupCore';
-import { withDbAccess } from '.';
 import { getConfigValue } from '../config/store';
 import { removeSidecars, sweepStraySidecars } from './sidecars';
 
-const BACKUP_PREFIX = 'Afterplay-';
+// Afterplay2-: las copias de la base 2.0 no se mezclan con las de la 1.x
+// (Afterplay-<sello>.db), que se quedan en la carpeta sin rotar: son la vuelta
+// atrás si la 2.0 sale mal.
+const BACKUP_PREFIX = 'Afterplay2-';
 const BACKUP_SUFFIX = '.db';
 
 const getBackupsDir = (): string => join(app.getPath('userData'), 'backups');
@@ -26,7 +28,7 @@ const STAMP_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})$/;
 
 // La fecha que lleva el nombre de una copia, o null si el fichero no sigue el
 // patrón. Y sí pasa: la carpeta es del usuario y puede tener dentro cualquier
-// cosa que empiece por "Afterplay-" —una copia manual, un fichero que él mismo
+// cosa que empiece por "Afterplay2-" —una copia manual, un fichero que él mismo
 // dejó ahí—, así que este null es quien decide qué es una copia automática y
 // qué no (ver listBackups). Reconstruida con el constructor de Date en LOCAL
 // —igual que se escribió— para que las horas salgan bien aunque de por medio
@@ -44,7 +46,7 @@ const backupPathFor = (date: Date): string =>
 
 // Las copias AUTOMÁTICAS de la carpeta, las únicas que este mecanismo cuenta
 // para el intervalo y rota. Se exige que el sello se pueda LEER, no solo que
-// el nombre empiece por "Afterplay-": con el filtro anterior una copia manual
+// el nombre empiece por "Afterplay2-": con el filtro anterior una copia manual
 // guardada aquí (el diálogo de "Back up now" no propone carpeta, así que se
 // puede elegir esta) se colaba en la lista, ordenaba siempre la última —su
 // nombre no lleva el sello, y cualquier letra ordena después de un dígito—,
@@ -121,7 +123,7 @@ export const runDailyBackup = async (): Promise<void> => {
   if (existsSync(filePath)) return;
 
   try {
-    await withDbAccess(() => vacuumInto(filePath));
+    await vacuumInto(filePath);
     console.log(`[backup] copia local creada: ${filePath}`);
   } catch (error) {
     console.warn('[backup] no se pudo crear la copia local:', error);

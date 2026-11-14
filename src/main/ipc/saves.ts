@@ -1,10 +1,22 @@
 import { ipcMain, shell } from 'electron';
 import { handleDb } from './dbHandle';
-import { getSaveGames, type SaveGame } from '../db/queries/saves/getSaveGames';
-import { updateGame } from '../db/queries/games/updateGame';
-import { getSaveBackups } from '../db/queries/saves/getSaveBackups';
-import { deleteSaveBackups } from '../db/queries/saves/deleteSaveBackups';
-import { getSaveBackupsUsage } from '../db/queries/saves/getSaveBackupsUsage';
+import { appCtx } from '../db/v2/appDb';
+import {
+  addSaveFolder,
+  clearSaveDetection,
+  deletePlannedSaveBackups,
+  getSaveBackup,
+  getSaveBackupsUsage,
+  getSaveGame,
+  listSaveGames,
+  pairDetectedSaveNameIfUnpaired,
+  planSaveBackupDeletion,
+  removeSaveFolder,
+  setDetectedSaveName,
+  setSaveBackupEnabled,
+  setSaveRestoreTarget,
+  type SaveGame,
+} from '../db/v2/queries/saves';
 import { getLudusaviLegalFiles, isLudusaviAvailable } from '../saves/binary';
 import type {
   CloudInventory,
@@ -26,7 +38,6 @@ import {
   keepCurrentIdentity,
   needsIdentityCheck,
 } from '../saves/identity';
-import { getMachineId, setSaveLocationOverride } from '../saves/machine';
 import {
   backupGameToCloud,
   buildCustomGames,
@@ -77,7 +88,7 @@ export const registerSavesHandlers = (): void => {
 
   // Espacio ocupado en R2, para Ajustes (API & Sync) — SUM local sobre
   // save_backups, cero llamadas al bucket (ver getSaveBackupsUsage).
-  handleDb('saves:getUsage', async () => getSaveBackupsUsage());
+  handleDb('saves:getUsage', async () => getSaveBackupsUsage(appCtx()));
 
   // Espacio ocupado en DISCO por save-backups/, y cuánto de eso es
   // prescindible (ya en R2, o huérfano) — ver saves/localUsage.ts.
@@ -127,7 +138,7 @@ export const registerSavesHandlers = (): void => {
   // Escaneo completo: bajo demanda y con un botón, nunca al arrancar (§10.1).
   // Es una sola invocación que compara todo lo instalado contra el manifest.
   handleDb('saves:scanLibrary', async (): Promise<SavesScanEntry[]> => {
-    const games = await getSaveGames();
+    const games = listSaveGames(appCtx());
     const scanned = await scanLibrary(buildCustomGames(games));
 
     // El emparejamiento se hace por el nombre que ya guardamos y, si no lo
@@ -153,10 +164,7 @@ export const registerSavesHandlers = (): void => {
       // Guardar el nombre NO sube nada: subir exige `saveBackupEnabled`, que
       // sigue siendo una decisión aparte y explícita (§10.5).
       if (match && !match.saveLudusaviName) {
-        await updateGame(match.id, {
-          saveLudusaviName: entry.ludusaviName,
-          saveDetectionSource: 'auto',
-        });
+        pairDetectedSaveNameIfUnpaired(appCtx(), match.id, entry.ludusaviName);
       }
 
       results.push({
@@ -174,7 +182,7 @@ export const registerSavesHandlers = (): void => {
   });
 
   handleDb('saves:getGameState', async (event, gameId: GameId): Promise<SavesGameState | null> => {
-    const games = await getSaveGames();
+    const games = listSaveGames(appCtx());
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return null;
 
@@ -205,27 +213,15 @@ export const registerSavesHandlers = (): void => {
   // para funcionar, no a medias.
   handleDb(
     'saves:setEnabled',
-    async (_event, gameId: GameId, enabled: boolean, ludusaviName?: string) => {
-      const games = await getSaveGames();
-      const game = games.find((candidate) => candidate.id === gameId);
-
-      // Solo se rellena si el juego no tenía emparejamiento. Uno con carpeta
-      // elegida a mano manda sobre lo que diga el manifest: para eso se
-      // molestó el usuario en elegirla.
-      const pairing =
-        ludusaviName && !game?.saveLudusaviName
-          ? { saveLudusaviName: ludusaviName, saveDetectionSource: 'auto' as const }
-          : {};
-
-      await updateGame(gameId, { saveBackupEnabled: enabled, ...pairing });
-      return true;
-    },
+    async (_event, gameId: GameId, enabled: boolean, ludusaviName?: string) =>
+      // Solo empareja si el juego no lo estaba: una carpeta elegida a mano
+      // manda sobre lo que diga el manifest.
+      setSaveBackupEnabled(appCtx(), gameId, enabled, ludusaviName),
   );
 
   // Detección automática: emparejar el título con el nombre que usa ludusavi.
   handleDb('saves:detect', async (_event, gameId: GameId): Promise<string | null> => {
-    const games = await getSaveGames();
-    const game = games.find((candidate) => candidate.id === gameId);
+    const game = getSaveGame(appCtx(), gameId);
     if (!game) return null;
 
     const ludusaviName = await findLudusaviName(game.title);
@@ -235,8 +231,7 @@ export const registerSavesHandlers = (): void => {
     // en cada máquina desde el manifest, y guardar la ya resuelta es justo el
     // error que crea el problema entre PCs (§7.1). Las carpetas que el
     // usuario haya añadido a mano SÍ se conservan: son suyas, no detectadas.
-    await updateGame(gameId, { saveLudusaviName: ludusaviName, saveDetectionSource: 'auto' });
-    return ludusaviName;
+    return setDetectedSaveName(appCtx(), gameId, ludusaviName) ? ludusaviName : null;
   });
 
   // Deshacer un emparejado AUTOMÁTICO. Hacía falta y no existía: ludusavi
@@ -257,14 +252,9 @@ export const registerSavesHandlers = (): void => {
   // gameId, no por ludusaviName — ver getSaveBackups). Solo tiene sentido
   // sobre un emparejamiento 'auto': uno 'manual' ya se deshace solo al
   // quitar su última carpeta (ver saves:removeFolder, unas líneas más abajo).
-  handleDb('saves:clearDetection', async (_event, gameId: GameId): Promise<boolean> => {
-    const games = await getSaveGames();
-    const game = games.find((candidate) => candidate.id === gameId);
-    if (!game || game.saveDetectionSource !== 'auto') return false;
-
-    await updateGame(gameId, { saveLudusaviName: null, saveDetectionSource: null });
-    return true;
-  });
+  handleDb('saves:clearDetection', async (_event, gameId: GameId): Promise<boolean> =>
+    clearSaveDetection(appCtx(), gameId),
+  );
 
   // Añadir una carpeta a mano (§10.3). Dos casos en la misma operación:
   //
@@ -278,52 +268,26 @@ export const registerSavesHandlers = (): void => {
   //
   // La ruta se guarda tokenizada (<winAppData>/...) para que la misma fila
   // valga en un PC donde el usuario de Windows se llame distinto.
-  handleDb('saves:addFolder', async (_event, gameId: GameId, folder: string) => {
-    const games = await getSaveGames();
-    const game = games.find((candidate) => candidate.id === gameId);
-    if (!game) return null;
-
-    const tokenized = tokenizePath(folder);
-    const current = game.saveCustomPaths ?? [];
+  handleDb('saves:addFolder', async (_event, gameId: GameId, folder: string) =>
     // Sin duplicados: elegir dos veces la misma carpeta la respaldaría dos
     // veces y solo serviría para inflar el zip.
-    const next = current.includes(tokenized) ? current : [...current, tokenized];
+    addSaveFolder(appCtx(), gameId, tokenizePath(folder)),
+  );
 
-    await updateGame(gameId, {
-      saveCustomPaths: next,
-      ...(game.saveLudusaviName
-        ? {}
-        : { saveLudusaviName: game.title, saveDetectionSource: 'manual' as const }),
-    });
-    return game.saveLudusaviName ?? game.title;
-  });
-
-  handleDb('saves:removeFolder', async (_event, gameId: GameId, folder: string) => {
-    const games = await getSaveGames();
-    const game = games.find((candidate) => candidate.id === gameId);
-    if (!game) return false;
-
+  handleDb('saves:removeFolder', async (_event, gameId: GameId, folder: string) =>
     // Llega expandida (es la que se enseña), así que se compara expandiendo
     // las guardadas en vez de tokenizar la de entrada — así da igual si la
-    // carpeta dejó de encajar con algún marcador desde que se guardó.
-    const next = (game.saveCustomPaths ?? []).filter(
-      (candidate) => expandPath(candidate).toLowerCase() !== toSlashes(folder).toLowerCase(),
-    );
-
-    await updateGame(gameId, {
-      saveCustomPaths: next.length > 0 ? next : null,
-      // Un juego que SOLO existía por su carpeta se queda sin nada que
-      // respaldar: se devuelve a "sin detectar" en vez de dejar un
-      // emparejamiento que ya no apunta a ningún sitio.
-      ...(next.length === 0 && game.saveDetectionSource === 'manual'
-        ? { saveLudusaviName: null, saveDetectionSource: null }
-        : {}),
-    });
-    return true;
-  });
+    // carpeta dejó de encajar con algún marcador desde que se guardó. Un juego
+    // que SOLO existía por su carpeta vuelve a "sin detectar".
+    removeSaveFolder(
+      appCtx(),
+      gameId,
+      (stored) => expandPath(stored).toLowerCase() === toSlashes(folder).toLowerCase(),
+    ),
+  );
 
   handleDb('saves:backupNow', async (_event, gameId: GameId): Promise<SavesBackupResult | null> => {
-    const games = await getSaveGames();
+    const games = listSaveGames(appCtx());
     const game = games.find((candidate) => candidate.id === gameId);
     if (!game) return null;
     return backupGameToCloud(game, games);
@@ -335,7 +299,7 @@ export const registerSavesHandlers = (): void => {
   handleDb(
     'saves:restore',
     async (_event, request: RestoreRequestInput): Promise<RestoreResult> => {
-      const games = await getSaveGames();
+      const games = listSaveGames(appCtx());
       const game = games.find((candidate) => candidate.id === request.gameId);
       if (!game) throw new Error('That game no longer exists.');
 
@@ -346,8 +310,7 @@ export const registerSavesHandlers = (): void => {
         throw new Error('The game is running right now. Close it before restoring.');
       }
 
-      const rows = await getSaveBackups(game.id);
-      const row = rows.find((candidate) => candidate.id === request.backupId);
+      const row = getSaveBackup(appCtx(), request.backupId, game.id);
       if (!row) throw new Error("That version isn't in the cloud any more.");
 
       const target = request.target ? toSlashes(request.target) : null;
@@ -450,14 +413,14 @@ export const registerSavesHandlers = (): void => {
         }
       }
 
-      const outcome = await runRestore(game, row, { ...request, target: target ?? undefined });
+      const outcome = await runRestore(row, { ...request, target: target ?? undefined });
 
       // Los avisos se calculan aquí y no en la UI: son consecuencia de lo que
       // ludusavi va a hacer de verdad, que es justo lo que acaba de devolver.
       const warnings: string[] = [];
       // Regla 4: aviso reforzado si el backup viene de otra máquina — la
       // fecha de "su" partida y la de la tuya no son comparables a ojo.
-      if (row.machineId !== getMachineId()) {
+      if (row.machineId !== appCtx().deviceId) {
         warnings.push(
           `This backup was made on another PC (${row.machineName}) — make sure it's the save you expect before overwriting anything.`,
         );
@@ -506,7 +469,7 @@ export const registerSavesHandlers = (): void => {
       // Recordar el destino elegido, pero SOLO en el modo que es una decisión
       // sobre esta máquina. Exportar es de un solo uso y no deja rastro.
       if (!request.preview && request.mode === 'custom-path' && target) {
-        setSaveLocationOverride(game.id, target);
+        setSaveRestoreTarget(appCtx(), game.id, target);
       }
 
       return { ...outcome, warnings };
@@ -514,40 +477,29 @@ export const registerSavesHandlers = (): void => {
   );
 
   ipcMain.handle('saves:setRestoreTarget', (_event, gameId: GameId, target: string | null) => {
-    setSaveLocationOverride(gameId, target ? toSlashes(target) : null);
+    setSaveRestoreTarget(appCtx(), gameId, target ? toSlashes(target) : null);
   });
 
   // Borrar una versión concreta: primero del bucket, luego del índice. En ese
   // orden a propósito — al revés, un fallo a medias dejaría un objeto
   // huérfano pagando espacio sin que nada lo liste.
   handleDb('saves:deleteBackup', async (_event, backupId: SaveBackupId, gameId: GameId) => {
-    const rows = await getSaveBackups(gameId);
-    const row = rows.find((candidate) => candidate.id === backupId);
-    if (!row) return false;
-
     // Un completo del que cuelgan diferenciales no se puede borrar solo: se
-    // llevaría por delante los que dependen de él (§9.1).
-    //
-    // Y "dependen de él" incluye la máquina, no solo el nombre: getSaveBackups
-    // devuelve las filas de TODOS los PCs (la tabla viaja por Turso) y cada
-    // máquina tiene su propio prefijo en R2, así que un diferencial de otra
-    // nunca cuelga de un completo de esta por mucho que el nombre coincida. Y
-    // coincide de verdad: al recuperar el índice desde la nube se crean filas
-    // con el machineId de la instalación anterior y, si se decide conservar la
-    // identidad actual, el siguiente backup sube los MISMOS zips de la MISMA
-    // carpeta bajo el id nuevo — mismo backupName, mismo parentBackupName, otra
-    // máquina. Sin este filtro, borrar el completo nuevo se llevaba el objeto y
-    // la fila del diferencial ajeno: una versión que desaparece del otro PC sin
-    // que nadie la haya tocado. La limpieza local de más abajo ya distinguía la
-    // máquina; esta selección se había quedado fuera.
-    const dependents = rows.filter(
-      (candidate) =>
-        candidate.parentBackupName === row.backupName && candidate.machineId === row.machineId,
-    );
-    const doomed = [row, ...dependents];
+    // llevaría por delante los que dependen de él (§9.1). Y "dependen de él"
+    // incluye la máquina, no solo el nombre: cada máquina tiene su propio
+    // prefijo en el bucket, así que un diferencial de otra nunca cuelga de un
+    // completo de esta por mucho que el nombre coincida (y coincide de verdad
+    // tras recuperar el índice y conservar la identidad actual). El plan lo
+    // decide planSaveBackupDeletion.
+    const plan = planSaveBackupDeletion(appCtx(), backupId, gameId);
+    if (!plan) return false;
+    const [row] = plan.doomed;
+    const doomed = plan.doomed;
 
     await deleteKeys(doomed.map((candidate) => candidate.r2Key));
-    await deleteSaveBackups(doomed.map((candidate) => candidate.id));
+    // Una copia de otro PC es el borrado cruzado de R-13 (ruta de
+    // mantenimiento); las propias van por la regla normal del dueño.
+    deletePlannedSaveBackups(appCtx(), plan);
 
     // Y de la carpeta LOCAL, si la copia se hizo en este PC. Sin este paso
     // el borrado no servía de nada: el zip seguía en disco y el siguiente
@@ -561,7 +513,7 @@ export const registerSavesHandlers = (): void => {
     // parte que importa ya está hecha. El zip huérfano que pueda quedar lo
     // recoge el barrido de save-backups/ de Ajustes (localUsage.ts) la
     // próxima vez que se limpie.
-    if (row.machineId === getMachineId()) {
+    if (plan.isOwn) {
       try {
         deleteLocalBackups(
           row.ludusaviName,

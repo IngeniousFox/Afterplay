@@ -3,24 +3,23 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, beforeEach, describe, it } from 'node:test';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
 import {
-  cleanupDbs,
-  freshDb,
-  makeAchievement,
-  makeGame,
-  type TestDb,
-} from '../../db/__tests__/harness';
+  seedCatalog,
+  seedGame,
+  type QueryFixture,
+} from '../../db/v2/queries/common/__tests__/fixtures';
 
 // DÓNDE BUSCA AFTERPLAY LAS steam_settings DE GSE (emu/goldbergCatalog.ts).
 //
 // QUÉ ES REAL Y QUÉ ES DOBLE: las carpetas de juego son de verdad, en un
 // temporal, con la forma exacta de cada caso — vacías salvo lo que el
-// emulador mira. La base es la del andamio, enchufada a getDb() al importarlo
-// (por eso el módulo se carga con import() DESPUÉS, ver harness.ts).
+// emulador mira. La base es una 2.0 en memoria (appDbHarness.ts), enchufada a
+// appCtx() al importarlo (por eso el módulo se carga con import() DESPUÉS).
 
 let findSteamSettingsDirs: typeof import('../emu/goldbergCatalog').findSteamSettingsDirs;
 let ensureGoldbergCatalog: typeof import('../emu/goldbergCatalog').ensureGoldbergCatalog;
-let db: TestDb;
+let fx: QueryFixture;
 
 const carpetas: string[] = [];
 
@@ -29,11 +28,11 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
 });
 
 after(() => {
-  cleanupDbs();
+  closeAppDbFixture();
   for (const dir of carpetas) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -89,9 +88,14 @@ describe('findSteamSettingsDirs', () => {
 describe('ensureGoldbergCatalog en un juego de Unreal', () => {
   it('escribe el achievements.json que le falta a GSE, con los logros del catálogo', async () => {
     const root = juego(join(UNREAL, 'steam_settings'));
-    const gameId = await makeGame(db, { installDirectory: root });
-    await makeAchievement(db, gameId, 'ACH_FIRST_STEP', { displayName: 'First step' });
-    await makeAchievement(db, gameId, 'ACH_SECRET', { hidden: true });
+    const gameId = seedGame(fx.ctx, { title: 'Elliot', install: { installDirectory: root } });
+    seedCatalog(fx.ctx, {
+      gameId,
+      items: [
+        { apiName: 'ACH_FIRST_STEP', displayName: 'First step' },
+        { apiName: 'ACH_SECRET', hidden: true },
+      ],
+    });
 
     const escritos = await ensureGoldbergCatalog(gameId, root);
 
@@ -109,8 +113,8 @@ describe('ensureGoldbergCatalog en un juego de Unreal', () => {
     const root = juego(join(UNREAL, 'steam_settings'));
     const fichero = join(root, UNREAL, 'steam_settings', 'achievements.json');
     writeFileSync(fichero, '[]');
-    const gameId = await makeGame(db, { installDirectory: root });
-    await makeAchievement(db, gameId, 'ACH_FIRST_STEP');
+    const gameId = seedGame(fx.ctx, { title: 'Elliot', install: { installDirectory: root } });
+    seedCatalog(fx.ctx, { gameId, items: [{ apiName: 'ACH_FIRST_STEP' }] });
 
     assert.equal(await ensureGoldbergCatalog(gameId, root), 0);
     assert.equal(readFileSync(fichero, 'utf8'), '[]');

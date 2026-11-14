@@ -6,8 +6,12 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, beforeEach, it, mock } from 'node:test';
-import { saveBackupsTable } from '../../db/schema';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import {
+  seedGame,
+  seedSaveBackup,
+  type QueryFixture,
+} from '../../db/v2/queries/common/__tests__/fixtures';
 import { storageTargetFrom } from '../storageConfig';
 
 const workspace = mkdtempSync(join(tmpdir(), 'afterplay-test-'));
@@ -56,7 +60,7 @@ const server = createServer((request, response) => {
   response.end(body);
 });
 let endpoint: string;
-let db: TestDb;
+let fx: QueryFixture;
 let verifyMigratedRestore: typeof import('../verifyStorageRestore').verifyMigratedRestore;
 before(async () => {
   server.listen(0, '127.0.0.1');
@@ -65,26 +69,23 @@ before(async () => {
   ({ verifyMigratedRestore } = await import('../verifyStorageRestore'));
 });
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   previewCalled = false;
 });
 after(() => {
   server.close();
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
 it('downloads a differential chain from the destination and previews restore without writing saves', async () => {
-  const gameId = await makeGame(db);
-  await db.insert(saveBackupsTable).values({
+  const gameId = seedGame(fx.ctx, { title: 'Test Game', saveKey: '1' });
+  seedSaveBackup(fx.ctx, {
     gameId,
     backupName: 'backup-diff.zip',
     parentBackupName: 'backup-full.zip',
     differential: true,
     r2Key: 'saves/1/machine/backup-diff.zip',
     ludusaviName: 'Test Game',
-    machineId: 'machine',
-    machineName: 'Test PC',
-    machineHome: 'C:/Users/Test',
   });
   const target = storageTargetFrom('s3', {
     s3Endpoint: endpoint,

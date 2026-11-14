@@ -1,4 +1,4 @@
-import type { PendingCuriositiesGame } from '../db/queries/curiosities/getPendingCuriositiesGames';
+import type { PendingCuriositiesGame } from '../db/v2/queries/loop';
 import { createClaimQueue } from '../lib/claimQueue';
 import { generateCuriositiesForGame } from './generate';
 import { notifyCuriositiesActivity } from './notify';

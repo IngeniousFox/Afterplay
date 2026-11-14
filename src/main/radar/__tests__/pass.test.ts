@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { radarGamesTable } from '../../db/schema';
+import { isNull } from 'drizzle-orm';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
+import { radarGames } from '../../db/v2/schema';
 import type { RadarActivityEvent } from '../../../shared/types';
 
 // runRadarPass: "LA PRIMERA PASADA DE LA VIDA SIEMBRA EN SILENCIO" (§4.4).
@@ -146,20 +148,25 @@ before(() => {
 after(() => {
   console.log = realLog;
   console.warn = realWarn;
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
-let db: TestDb;
+let fx: QueryFixture;
 
+// Las filas vivas: lo que sale del radar se queda como lápida (syncDeleted).
 const leerRadarGames = async (): Promise<{ igdbId: number }[]> =>
-  db.select({ igdbId: radarGamesTable.igdbId }).from(radarGamesTable);
+  fx.ctx.db
+    .select({ igdbId: radarGames.igdbId })
+    .from(radarGames)
+    .where(isNull(radarGames.syncDeleted))
+    .all();
 
 // ── Guardas de entrada, independientes del estado de módulo ────────────────
 // (No tocan `running`/`alreadySown`: runRadarPass sale ANTES de sellar nada.)
 
 describe('runRadarPass — guardas de entrada', () => {
   beforeEach(async () => {
-    db = await freshDb();
+    fx = freshAppDb();
   });
 
   it('sin claves de Twitch configuradas, no hace nada y no toca la tabla', async () => {
@@ -189,13 +196,13 @@ describe('runRadarPass — guardas de entrada', () => {
 
 describe('runRadarPass — la primera pasada de la vida siembra en silencio', () => {
   before(async () => {
-    db = await freshDb();
+    fx = freshAppDb();
     process.env.TWITCH_CLIENT_ID = 'test-client-id';
     process.env.TWITCH_CLIENT_SECRET = 'test-client-secret';
     config.radarLastRunAt = 0;
 
     // Tu único juego en biblioteca, ya en IGDB, perteneciente a la saga 555.
-    await makeGame(db, { title: 'Fable', igdbId: 100, planned: false });
+    seedGame(fx.ctx, { title: 'Fable', igdbId: 100 });
     externalDataByIgdbId = new Map([
       [
         100,
@@ -293,7 +300,7 @@ describe('runRadarPass — la primera pasada de la vida siembra en silencio', ()
 
   it('un juego que ya añadiste a la biblioteca desaparece del radar (deja de ser "pendiente")', async () => {
     // Añades tú mismo, desde la ficha, uno de los descubrimientos (204).
-    await makeGame(db, { title: 'Fable 204', igdbId: 204, planned: false });
+    seedGame(fx.ctx, { title: 'Fable 204', igdbId: 204 });
     // Y aparece SU appid en IGDB también, para que la fase 1 lo procese sin
     // reventar por falta de datos externos.
     externalDataByIgdbId.set(204, {

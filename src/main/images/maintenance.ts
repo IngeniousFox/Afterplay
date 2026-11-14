@@ -1,9 +1,8 @@
 import { existsSync } from 'fs';
 import { readdir, rm, stat } from 'fs/promises';
-import { isNotNull } from 'drizzle-orm';
 import { join } from 'path';
-import { getDb } from '../db';
-import { achievementsTable, gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { collectUsedImages as collectUsedImagesV2 } from '../db/v2/queries/external';
 import type { ImageCacheType, ImageCacheUsage, ImageRedownloadEvent } from '../../shared/types';
 import {
   IMAGE_CACHE_TYPES,
@@ -15,7 +14,7 @@ import {
 
 // Mantenimiento de la caché de imágenes: cuánto ocupa, qué sobra y volver a
 // bajarlo todo. Es local del todo — estas carpetas viven en userData, no
-// viajan a Turso, así que nada de lo que se haga aquí toca a la biblioteca.
+// viajan a ningún sitio, así que nada de lo que se haga aquí toca a la biblioteca.
 //
 // La idea de fondo: la caché NO es un dato tuyo, es una copia de algo que
 // está en internet. Borrarla no pierde nada, solo obliga a volver a
@@ -26,25 +25,10 @@ import {
 // cada juego, y los dos iconos (color y gris) de cada logro.
 type UsedImage = { url: string; type: ImageCacheType };
 
+// Las URLs efectivas (override ?? caché) de juegos vivos y de los logros de
+// sus catálogos vivos (queries/external/usedImages.ts).
 const collectUsedImages = async (): Promise<UsedImage[]> => {
-  const db = getDb();
-  const games = await db
-    .select({ coverUrl: gamesTable.coverUrl, heroUrl: gamesTable.heroUrl })
-    .from(gamesTable);
-  const achievements = await db
-    .select({ iconUrl: achievementsTable.iconUrl, iconGrayUrl: achievementsTable.iconGrayUrl })
-    .from(achievementsTable)
-    .where(isNotNull(achievementsTable.iconUrl));
-
-  const used: UsedImage[] = [];
-  for (const game of games) {
-    if (game.coverUrl) used.push({ url: game.coverUrl, type: 'covers' });
-    if (game.heroUrl) used.push({ url: game.heroUrl, type: 'heroes' });
-  }
-  for (const achievement of achievements) {
-    if (achievement.iconUrl) used.push({ url: achievement.iconUrl, type: 'achievements' });
-    if (achievement.iconGrayUrl) used.push({ url: achievement.iconGrayUrl, type: 'achievements' });
-  }
+  const used: UsedImage[] = collectUsedImagesV2(appCtx());
 
   // El mismo icono se repite entre juegos (los grises por defecto de Steam,
   // sobre todo) y dos juegos pueden compartir carátula: sin esto, el total

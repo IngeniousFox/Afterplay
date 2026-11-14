@@ -11,4 +11,5 @@ export {
   monthKey,
   twelveMonthWindow,
   yearsDesc,
+  UNKNOWN_SPAN_LABEL,
 } from '../../../shared/dateMath';

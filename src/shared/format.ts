@@ -1,4 +1,14 @@
-import type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes';
+import type {
+  DatePrecision,
+  EventDatePrecision,
+  StateEventDatePrecision,
+  TimeFormat,
+} from './dateTypes';
+
+// Lo que se pinta en vez de una fecha cuando el evento no la tiene: 'unknown'
+// es "no consta cuándo pasó" (un alta o una promoción sin fecha). La fecha que
+// lleva la fila es solo un ancla para ordenar; enseñarla sería inventarla.
+export const UNKNOWN_DATE_LABEL = 'Date unknown';
 
 // "1 game" / "3 games" — usado en las cabeceras de las columnas de nav
 // (Library/Sessions/Stats) y en la vista de Sesiones.
@@ -60,7 +70,8 @@ export const formatTime = (date: Date, timeFormat: TimeFormat): string =>
 // sin i18n, así que dejar que esto cambie de idioma solo (el navegador de
 // pruebas de Claude Code está en es-ES, y salía "15 de julio de 2026" aquí
 // en medio de una interfaz en inglés) sería inconsistente.
-export const formatDateOnly = (date: Date, precision: DatePrecision): string => {
+export const formatDateOnly = (date: Date, precision: DatePrecision | 'unknown'): string => {
+  if (precision === 'unknown') return UNKNOWN_DATE_LABEL;
   if (precision === 'year') return String(date.getFullYear());
   if (precision === 'month') {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -76,7 +87,7 @@ export const formatDateOnly = (date: Date, precision: DatePrecision): string => 
 // en silencio.
 export const formatByPrecision = (
   date: Date,
-  precision: EventDatePrecision,
+  precision: StateEventDatePrecision,
   timeFormat: TimeFormat,
 ): string => {
   if (precision !== 'datetime') return formatDateOnly(date, precision);

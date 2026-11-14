@@ -37,7 +37,7 @@ export const canMoveToPlanWhere = (gameId: number): SQL => sql`
 // Se conserva la fila del juego, su fecha de alta, su iteración, las compras
 // y cualquier entrada anterior del Plan. Si vino directamente de Library,
 // esta es su primera entrada al Plan y la fecha de espera empieza hoy.
-export const moveToPlan = async (gameId: number): Promise<GameRow> => {
+export const moveToPlan = async (gameId: number): Promise<GameRow<number>> => {
   const db = getDb();
   return db.transaction(async (tx) => {
     const [game] = await tx

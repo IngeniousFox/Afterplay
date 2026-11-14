@@ -10,19 +10,18 @@ import {
 } from '../chapters';
 import type { MemorySession } from '../moments';
 import { deriveMoments } from '../moments';
-import type { GameId } from '../../entityIds';
 
 let nextId = 1;
 const session = (
-  gameId: GameId,
+  gameId: number,
   startedAt: string,
   hours: number,
   overrides: Partial<MemorySession> = {},
 ): MemorySession => {
   const start = new Date(startedAt);
   return {
-    id: nextId++,
-    gameId,
+    id: String(nextId++).padStart(4, '0'),
+    gameId: String(gameId),
     startedAt: start,
     endedAt: new Date(start.getTime() + hours * 3600 * 1000),
     durationSec: Math.round(hours * 3600),
@@ -31,21 +30,21 @@ const session = (
   };
 };
 
-const completed = (gameId: GameId, occurredAt: string): ChapterStateEvent => ({
-  gameId,
+const completed = (gameId: number, occurredAt: string): ChapterStateEvent => ({
+  gameId: String(gameId),
   type: 'completed',
   occurredAt: new Date(occurredAt),
 });
 
-const stateChange = (gameId: GameId, type: string, occurredAt: string): ChapterStateEvent => ({
-  gameId,
+const stateChange = (gameId: number, type: string, occurredAt: string): ChapterStateEvent => ({
+  gameId: String(gameId),
   type,
   occurredAt: new Date(occurredAt),
 });
 
 const TITLES = new Map([
-  [1, 'Hollow Knight'],
-  [2, 'Outer Wilds'],
+  ['1', 'Hollow Knight'],
+  ['2', 'Outer Wilds'],
 ]);
 
 const NOW = new Date('2026-07-15T12:00');
@@ -85,7 +84,7 @@ describe('buildChapter', () => {
     assert.equal(chapter.soFar, false);
     assert.equal(chapter.sessionCount, 3);
     assert.equal(Math.round(chapter.hours), 6);
-    assert.equal(chapter.dominant?.gameId, 1);
+    assert.equal(chapter.dominant?.gameId, '1');
     assert.equal(chapter.dominant?.title, 'Hollow Knight');
     assert.equal(chapter.completions.length, 1);
     // Los momentos del capítulo son solo los que cayeron dentro: las dos
@@ -309,20 +308,20 @@ describe('buildChapter con bloques manuales', () => {
 
   it('un mes cuyo único contenido son horas manuales también tiene historia', () => {
     const chapter = buildChapter(JUNE, [], [], TITLES, [], NOW, [
-      { gameId: 1, hours: 30, anchor: new Date('2026-06-20T00:00') },
+      { gameId: '1', hours: 30, anchor: new Date('2026-06-20T00:00') },
     ]);
     assert.ok(chapter);
     assert.equal(chapter.hours, 30);
     assert.equal(chapter.manualHours, 30);
     assert.equal(chapter.sessionCount, 0);
-    assert.equal(chapter.dominant?.gameId, 1);
+    assert.equal(chapter.dominant?.gameId, '1');
     assert.equal(chapter.games[0].manualHours, 30);
   });
 
   it('sin ancla, o anclado fuera del mes, no cuenta', () => {
     const chapter = buildChapter(JUNE, [], [], TITLES, [], NOW, [
-      { gameId: 1, hours: 30, anchor: null },
-      { gameId: 2, hours: 10, anchor: new Date('2026-07-02T00:00') },
+      { gameId: '1', hours: 30, anchor: null },
+      { gameId: '2', hours: 10, anchor: new Date('2026-07-02T00:00') },
     ]);
     assert.equal(chapter, null);
   });
@@ -330,7 +329,7 @@ describe('buildChapter con bloques manuales', () => {
   it('se suma a las sesiones medidas del mismo juego, desglosado aparte', () => {
     const tracked = session(1, '2026-06-05T18:00', 2);
     const chapter = buildChapter(JUNE, [tracked], [], TITLES, [], NOW, [
-      { gameId: 1, hours: 30, anchor: new Date('2026-06-20T00:00') },
+      { gameId: '1', hours: 30, anchor: new Date('2026-06-20T00:00') },
     ]);
     assert.ok(chapter);
     assert.equal(Math.round(chapter.hours), 32);
@@ -340,7 +339,7 @@ describe('buildChapter con bloques manuales', () => {
 
   it('marca actividad para la detección y el backfill', () => {
     const { months } = listClosedPeriodsWithActivity([], [], NOW, [
-      { gameId: 1, hours: 30, anchor: new Date('2026-04-10T00:00') },
+      { gameId: '1', hours: 30, anchor: new Date('2026-04-10T00:00') },
     ]);
     assert.deepEqual(
       months.map((scope) => scopeKeyOf(scope)),
@@ -351,7 +350,7 @@ describe('buildChapter con bloques manuales', () => {
   it('cambiar las horas manuales cambia el hash — el recap pasa a stale', () => {
     const withHours = (hours: number): Chapter | null =>
       buildChapter(JUNE, [], [], TITLES, [], NOW, [
-        { gameId: 1, hours, anchor: new Date('2026-06-20T00:00') },
+        { gameId: '1', hours, anchor: new Date('2026-06-20T00:00') },
       ]);
     const before = withHours(30);
     const after = withHours(45);

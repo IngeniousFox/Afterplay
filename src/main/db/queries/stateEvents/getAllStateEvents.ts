@@ -10,7 +10,7 @@ import { iterationsTable, stateEventsTable } from '../../schema';
 // no su historial). id/datePrecision/iterationLabel los pide la galería de
 // completados de Stats (key estable + fecha con su precisión + qué
 // playthrough se completó en el tooltip de cada carátula).
-export const getAllStateEvents = async (): Promise<StateEventSummary[]> => {
+export const getAllStateEvents = async (): Promise<StateEventSummary<number>[]> => {
   const db = getDb();
   return db
     .select({

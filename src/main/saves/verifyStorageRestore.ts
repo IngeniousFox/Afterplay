@@ -3,9 +3,8 @@ import { createWriteStream } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { desc } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { saveBackupsTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { getLatestSaveBackup } from '../db/v2/queries/saves';
 import { MAPPING_FILE } from './mapping';
 import { createStorageClient } from './r2';
 import {
@@ -20,18 +19,7 @@ import type { StorageTarget } from './storageConfig';
 // Con la versión más reciente del índice se prepara un workspace desechable
 // DESDE EL DESTINO y se ejecuta el preview de restore (sin tocar partidas).
 export const verifyMigratedRestore = async (destination: StorageTarget): Promise<void> => {
-  const [backup] = await withDbAccess(async () =>
-    getDb()
-      .select({
-        r2Key: saveBackupsTable.r2Key,
-        backupName: saveBackupsTable.backupName,
-        parentBackupName: saveBackupsTable.parentBackupName,
-        ludusaviName: saveBackupsTable.ludusaviName,
-      })
-      .from(saveBackupsTable)
-      .orderBy(desc(saveBackupsTable.createdAt))
-      .limit(1),
-  );
+  const backup = getLatestSaveBackup(appCtx());
   if (!backup) return;
 
   const slash = backup.r2Key.lastIndexOf('/');

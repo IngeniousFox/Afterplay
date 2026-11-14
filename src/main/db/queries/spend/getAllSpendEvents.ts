@@ -9,7 +9,7 @@ import { spendEventsTable } from '../../schema';
 // El gameId no lo usa Stats (sus métricas son sumas globales), pero sí el
 // modo ambiente, que necesita saber cuánto costó UN juego concreto para
 // poder decir su coste por hora. Sale gratis: ya estamos leyendo la tabla.
-export const getAllSpendEvents = async (): Promise<SpendEventSummary[]> => {
+export const getAllSpendEvents = async (): Promise<SpendEventSummary<number>[]> => {
   const db = getDb();
   return db
     .select({

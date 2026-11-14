@@ -1,6 +1,5 @@
-import { inArray } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { getSteamLivePollGames } from '../db/v2/queries/achievements';
 import { getPlayerUnlocks, getSteamUserId, hasSteamKey } from './api';
 import { maybeCelebrateCompletion } from './notifications/complete';
 import { enqueueAchievementToasts } from './notifications/overlay';
@@ -49,21 +48,9 @@ const tick = async (getActiveGameIds: () => GameId[]): Promise<void> => {
     // Solo los que están corriendo Y tienen appid — un juego de consola
     // emulado no tiene nada que preguntarle a Steam (sus logros son de RA, y
     // los cubre el otro sondeo).
-    const games = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          steamAppId: gamesTable.steamAppId,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(inArray(gamesTable.id, activeIds)),
-    );
+    const games = getSteamLivePollGames(appCtx(), activeIds);
 
     for (const game of games) {
-      if (game.steamAppId === null) continue;
-
       // null = Steam se niega a contestar (perfil privado, juego que no
       // tienes, sin stats). NO es "cero desbloqueos": no se sabe nada, y
       // tratarlo como una lista vacía sería inventarse una respuesta.

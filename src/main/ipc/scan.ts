@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
 import { getConfigValue, setConfigValue } from '../config/store';
-import { getOwnedGames } from '../db/queries/games/getOwnedGames';
+import { appCtx } from '../db/v2/appDb';
+import { getOwnedGames } from '../db/v2/queries/library';
 
 import { getCachedEntries, getLastScanAt } from '../scan/cache';
 import type { ScannedFolder, ScanReport } from '../scan/contracts';
@@ -28,7 +29,7 @@ const buildReport = async (): Promise<ScanReport> => {
   // Tu colección entera —biblioteca y plan— de la consulta PROPIA del
   // escaneo (getOwnedGames, ver su porqué allí). Los títulos van tal cual:
   // findInLibrary se encarga de normalizarlos y limpiarlos.
-  const owned = await getOwnedGames();
+  const owned = getOwnedGames(appCtx());
   const libraryTitles = owned.filter((game) => !game.planned).map((game) => game.title);
   const planned = owned.filter((game) => game.planned);
   const plannedTitles = planned.map((game) => game.title);

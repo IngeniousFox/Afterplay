@@ -2,17 +2,16 @@ import assert from 'node:assert/strict';
 import { before, describe, it, mock } from 'node:test';
 import type { RaGameListEntry } from '../api';
 
-// backfill.ts importa '../db' (src/main/db/index.ts), que arrastra
-// '@tursodatabase/sync' y 'electron' — ninguno de los dos carga bajo tsx. El
-// módulo bajo prueba nunca llega a llamar a getDb/withDbAccess (matchAgainstLists
-// y breakTieByPlayedPlatform son puras), pero el mock tiene que existir para que
-// el IMPORT del fichero no reviente. Va antes del import, patrón de la casa.
-mock.module('../../db', {
+// backfill.ts importa '../db/v2/appDb', que arrastra 'electron' (no carga
+// bajo tsx). El módulo bajo prueba nunca llega a pedir la base
+// (matchAgainstLists y breakTieByPlayedPlatform son puras), pero el mock tiene
+// que existir para que el IMPORT del fichero no reviente. Va antes del import,
+// patrón de la casa.
+mock.module('../../db/v2/appDb', {
   namedExports: {
-    getDb: (): unknown => {
+    appCtx: (): unknown => {
       throw new Error('matchAgainstLists/breakTieByPlayedPlatform no deberían tocar la base');
     },
-    withDbAccess: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
   },
 });
 
@@ -44,11 +43,11 @@ before(async () => {
 //
 // QUÉ ES REAL: las dos funciones tal cual están en producción, sin ningún
 // doble de su propia lógica.
-// QUÉ ES DOBLE: SOLO '../db' (ver arriba), y únicamente porque el import del
+// QUÉ ES DOBLE: SOLO '../db/v2/appDb' (ver arriba), y únicamente porque el import del
 // fichero completo lo exige — no porque el código bajo prueba lo llame.
 
 const game = (overrides: Partial<MatchCandidate> = {}): MatchCandidate => ({
-  id: 1,
+  id: 'game-1',
   title: 'Mega Man X',
   releaseYear: null,
   officialPlatforms: null,

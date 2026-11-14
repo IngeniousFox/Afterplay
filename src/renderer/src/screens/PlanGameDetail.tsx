@@ -218,7 +218,11 @@ export const PlanGameDetail = ({
             </div>
 
             <div className={`mt-7.5 ${revealClass}`} style={revealStyle(4)}>
-              <HistoryList stateHistory={game.stateHistory} spendHistory={game.spendHistory} />
+              <HistoryList
+                stateHistory={game.stateHistory}
+                spendHistory={game.spendHistory}
+                planHistory={game.planHistory}
+              />
             </div>
 
             {/* Sí, también en un planeado: el catálogo de Steam responde

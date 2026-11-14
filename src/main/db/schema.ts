@@ -626,7 +626,7 @@ export const planMailboxTable = sqliteTable(
     // Duplicado del `type` que ya va dentro del payload, a propósito: permite
     // filtrar e indexar sin abrir el JSON de cada fila.
     type: text().$type<PlanMailboxType>().notNull(),
-    payload: text({ mode: 'json' }).$type<PlanMailboxEntry>().notNull(),
+    payload: text({ mode: 'json' }).$type<PlanMailboxEntry<number>>().notNull(),
     createdAt: int({ mode: 'timestamp_ms' })
       .notNull()
       .$defaultFn(() => new Date()),

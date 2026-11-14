@@ -1,25 +1,28 @@
 import { handleDb } from './dbHandle';
 import type { AddSpendEventInput, UpdateSpendEventPatch } from '../../shared/types';
-import { addSpendEvent } from '../db/queries/spend/addSpendEvent';
-import { deleteSpendEvent } from '../db/queries/spend/deleteSpendEvent';
-import { getAllSpendEvents } from '../db/queries/spend/getAllSpendEvents';
-import { updateSpendEvent } from '../db/queries/spend/updateSpendEvent';
+import { appCtx } from '../db/v2/appDb';
+import {
+  addSpendEvent,
+  deleteSpendEvent,
+  getAllSpendEvents,
+  updateSpendEvent,
+} from '../db/v2/queries/playthroughs';
 import type { SpendEventId } from '../../shared/entityIds';
 
 export const registerSpendHandlers = (): void => {
   handleDb('spend:add', async (_event, input: AddSpendEventInput) => {
-    return addSpendEvent(input);
+    return addSpendEvent(appCtx(), input);
   });
 
   handleDb('spend:getAll', async () => {
-    return getAllSpendEvents();
+    return getAllSpendEvents(appCtx());
   });
 
   handleDb('spend:delete', async (_event, id: SpendEventId) => {
-    return deleteSpendEvent(id);
+    return deleteSpendEvent(appCtx(), id);
   });
 
   handleDb('spend:update', async (_event, id: SpendEventId, patch: UpdateSpendEventPatch) => {
-    return updateSpendEvent(id, patch);
+    return updateSpendEvent(appCtx(), id, patch);
   });
 };

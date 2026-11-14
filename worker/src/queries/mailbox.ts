@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { planMailboxTable } from '../../../src/main/db/schema';
-import type { PlanMailboxEntry } from '../../../src/shared/planMailbox';
+import type { PlanMailboxEntry } from '../api-types';
 import { isCrediblePinStamp } from '../../../src/shared/domain/planOrder';
 import type { TenantDb } from '../db';
 

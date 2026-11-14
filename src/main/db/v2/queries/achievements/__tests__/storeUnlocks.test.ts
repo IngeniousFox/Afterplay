@@ -23,7 +23,7 @@ import {
   syncUpdatedOf,
 } from './helpers';
 
-// Port de src/main/steam/__tests__/storeUnlocks.test.ts sobre el esquema 2.0,
+// Port del antiguo steam/__tests__/storeUnlocks.test.ts (1.x, retirado) al esquema 2.0,
 // caso por caso, más los propios del 2.0 (origen por PC, R-15, guardas de
 // identidad, "no escribe si nada cambia"). La vía `emu` de la 1.x es aquí
 // `feed: 'emu'`, que escribe filas `emu@<este PC>` del catálogo de Steam.

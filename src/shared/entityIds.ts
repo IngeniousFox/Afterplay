@@ -32,8 +32,8 @@
 // (`GameId<Id>`) para que un tipo genérico pueda seguir diciendo QUÉ id es
 // cada campo sin fijar su representación.
 
-/** La representación de un id. Hoy entero (1.x); en la 2.0, texto. */
-export type EntityId = number;
+/** La representación de un id: texto (UUIDv7, UUIDv5 o compuesto, §7.2). */
+export type EntityId = string;
 
 /**
  * Cualquiera de las dos representaciones. Es la restricción de los parámetros
@@ -66,9 +66,8 @@ export type RadarGameId<Id extends EntityIdLike = EntityId> = Id;
  * que usa la app, no cualquiera.
  */
 export const parseEntityId = (raw: string | null | undefined): EntityId | null => {
-  if (raw === null || raw === undefined || raw === '') return null;
-  const parsed = Number(raw);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  if (raw === null || raw === undefined) return null;
+  return isEntityId(raw) ? raw : null;
 };
 
 /**
@@ -83,8 +82,14 @@ export const entityIdToString = (id: EntityIdLike): string => String(id);
  * consulta. Ligada a `EntityId`, como `parseEntityId`: su cuerpo cambia el día
  * del cambio de esquema, porque lo que pregunta es "¿es un id DE LA APP?".
  */
-export const isEntityId = (value: unknown): value is EntityId =>
-  typeof value === 'number' && Number.isSafeInteger(value);
+export function isEntityId(value: unknown): value is EntityId {
+  return typeof value === 'string' && ENTITY_ID.test(value);
+}
+
+// Un id 2.0: UUID en minúsculas, o un compuesto de partes así separadas por
+// ':' (`<gameId>:steam`). Sin espacios ni '/', para que viaje tal cual en una
+// ruta o un atributo del DOM.
+const ENTITY_ID = /^[0-9a-z][0-9a-z_.@-]*(?::[0-9a-z_.@-]+)*$/;
 
 // Comparación con `<`/`>` y no con la resta: la resta solo existe para
 // números. Para enteros da el mismo SIGNO que `a - b` (que es todo lo que mira

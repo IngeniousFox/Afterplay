@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { gamesTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
+import { gameMetadata } from '../../db/v2/schema';
 import type { ExternalRefreshEvent } from '../../../shared/types';
 
 // LA REPESCA DE HUERFANOS DE HOWLONGTOBEAT (refresh.ts, §5.2 del PLAN).
@@ -20,8 +21,8 @@ import type { ExternalRefreshEvent } from '../../../shared/types';
 //      con la lista entera.
 //   5. El parte cuenta la verdad: hltbChecked/hltbFound.
 //
-// QUE ES REAL Y QUE ES DOBLE: la base es real (harness con las migraciones
-// del repo) y runPass corre entero, de la seleccion a la transaccion final.
+// QUE ES REAL Y QUE ES DOBLE: la base es real (base 2.0 en memoria con las
+// migraciones del repo, appDbHarness.ts) y runPass corre entero, de la seleccion a la transaccion final.
 // Doblado, TODO lo que sale a la red: IGDB, Steam (tags y reseñas), la
 // adopcion, el backfill de SGDB, las correcciones de appid — y HLTB, que es
 // el que se observa. El notificador tambien, porque el final de la pasada es
@@ -116,14 +117,14 @@ mock.module('../notify', {
 });
 
 let startExternalRefresh: typeof import('../refresh').startExternalRefresh;
-let db: TestDb;
+let fx: QueryFixture;
 
 before(async () => {
   ({ startExternalRefresh } = await import('../refresh'));
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   hltbAsked.length = 0;
   hltbImpl = async () => null;
   midPass = null;
@@ -131,27 +132,35 @@ beforeEach(async () => {
 });
 
 after(() => {
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
-const tiemposDe = async (id: number): Promise<TiemposHltb> => {
-  const [row] = await db
+const tiemposDe = async (id: string): Promise<TiemposHltb> => {
+  const row = fx.ctx.db
     .select({
-      hltbMain: gamesTable.hltbMain,
-      hltbMainExtras: gamesTable.hltbMainExtras,
-      hltbCompletionist: gamesTable.hltbCompletionist,
+      hltbMain: gameMetadata.hltbMain,
+      hltbMainExtras: gameMetadata.hltbMainExtras,
+      hltbCompletionist: gameMetadata.hltbCompletionist,
     })
-    .from(gamesTable)
-    .where(eq(gamesTable.id, id));
-  return row;
+    .from(gameMetadata)
+    .where(eq(gameMetadata.gameId, id))
+    .get();
+  return {
+    hltbMain: row?.hltbMain ?? null,
+    hltbMainExtras: row?.hltbMainExtras ?? null,
+    hltbCompletionist: row?.hltbCompletionist ?? null,
+  };
 };
 
 describe('la repesca de huerfanos de HowLongToBeat', () => {
   it('pregunta solo por los huerfanos, escribe el match y respeta al que no lo tiene', async () => {
-    const huerfano = await makeGame(db, { title: 'Huerfano con suerte', releaseYear: 2024 });
-    const sinMatch = await makeGame(db, { title: 'Huerfano de nicho' });
+    const huerfano = seedGame(fx.ctx, {
+      title: 'Huerfano con suerte',
+      metadata: { releaseYear: 2024 },
+    });
+    const sinMatch = seedGame(fx.ctx, { title: 'Huerfano de nicho' });
     // UN solo tiempo ya puesto basta para quedar fuera: HLTB ya lo conocio.
-    const conTiempos = await makeGame(db, { title: 'Ya tenia', hltbMain: 30 });
+    const conTiempos = seedGame(fx.ctx, { title: 'Ya tenia', metadata: { hltbMain: 30 } });
 
     hltbImpl = async (title) =>
       title === 'Huerfano con suerte'
@@ -193,8 +202,8 @@ describe('la repesca de huerfanos de HowLongToBeat', () => {
   });
 
   it('la puerta del Plan solo repesca planeados', async () => {
-    await makeGame(db, { title: 'De biblioteca, huerfano' });
-    const planeado = await makeGame(db, { title: 'Planeado huerfano', planned: true });
+    seedGame(fx.ctx, { title: 'De biblioteca, huerfano' });
+    const planeado = seedGame(fx.ctx, { title: 'Planeado huerfano', planned: true });
 
     hltbImpl = async () => ({ hltbMain: 8, hltbMainExtras: null, hltbCompletionist: null });
 
@@ -218,10 +227,10 @@ describe('la repesca de huerfanos de HowLongToBeat', () => {
     // entera— caia en el hueco: se le pedian los tiempos a HLTB gastando la
     // peticion y su pausa, el parte los contaba como recuperados… y su fila no
     // se escribia nunca. "N tiempos recuperados" con uno de ellos a null.
-    const deSiempre = await makeGame(db, { title: 'Huerfano de siempre' });
-    let recienLlegado = 0;
+    const deSiempre = seedGame(fx.ctx, { title: 'Huerfano de siempre' });
+    let recienLlegado = '';
     midPass = async () => {
-      recienLlegado = await makeGame(db, { title: 'Alta a mitad de pasada' });
+      recienLlegado = seedGame(fx.ctx, { title: 'Alta a mitad de pasada' });
     };
     hltbImpl = async () => ({ hltbMain: 9, hltbMainExtras: null, hltbCompletionist: null });
 
@@ -248,7 +257,7 @@ describe('la repesca de huerfanos de HowLongToBeat', () => {
 
   it('se rinde tras tres fallos seguidos en vez de recorrer la lista entera', async () => {
     for (let i = 0; i < 5; i++) {
-      await makeGame(db, { title: `Huerfano ${i}` });
+      seedGame(fx.ctx, { title: `Huerfano ${i}` });
     }
     hltbImpl = async () => {
       throw new Error('HLTB caido (o rotado otra vez)');
@@ -267,7 +276,7 @@ describe('la repesca de huerfanos de HowLongToBeat', () => {
 
   it('un fallo suelto no corta la repesca: la racha se resetea con cada exito', async () => {
     for (const title of ['A', 'B', 'C', 'D']) {
-      await makeGame(db, { title: `Huerfano ${title}` });
+      seedGame(fx.ctx, { title: `Huerfano ${title}` });
     }
     // Falla, acierta, falla, acierta: cuatro preguntados, ningun abandono.
     let call = 0;

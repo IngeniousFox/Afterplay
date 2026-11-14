@@ -1,6 +1,5 @@
-import { countDistinct, eq } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../../db';
-import { achievementsTable, achievementUnlocksTable } from '../../db/schema';
+import { appCtx } from '../../db/v2/appDb';
+import { getGameCompletion } from '../../db/v2/queries/achievements';
 import { enqueueAchievementToasts } from './overlay';
 import type { GameId } from '../../../shared/entityIds';
 
@@ -37,7 +36,7 @@ const AFTER_BATCH_MS = 1500;
 // vigilante. Vive en memoria y se pierde al reiniciar, y da igual: aquí solo
 // se llega con desbloqueos NUEVOS, y en un juego ya completo no queda
 // ninguno.
-const celebratedAtTotal = new Map<GameId, number>();
+const celebratedAtTotal = new Map<string, number>();
 
 export const maybeCelebrateCompletion = (
   gameId: GameId,
@@ -47,31 +46,21 @@ export const maybeCelebrateCompletion = (
   setTimeout(() => {
     void (async () => {
       try {
-        const [row] = await withDbAccess(async () =>
-          getDb()
-            .select({
-              // countDistinct, no count: el leftJoin saca una fila por cada
-              // (logro, fuente de desbloqueo), así que un logro sacado por
-              // Steam Y por emulador contaba DOBLE en el total. total>unlocked
-              // se quedaba true incluso al 100% real y la tarjeta dorada no
-              // salía nunca — justo en la instalación de doble fuente para la
-              // que existe.
-              total: countDistinct(achievementsTable.id),
-              unlocked: countDistinct(achievementUnlocksTable.achievementId),
-            })
-            .from(achievementsTable)
-            .leftJoin(
-              achievementUnlocksTable,
-              eq(achievementUnlocksTable.achievementId, achievementsTable.id),
-            )
-            .where(eq(achievementsTable.gameId, gameId)),
-        );
-        if (!row || row.total === 0 || row.unlocked < row.total) {
-          celebratedAtTotal.delete(gameId);
-          return;
-        }
-        if (celebratedAtTotal.get(gameId) === row.total) return;
-        celebratedAtTotal.set(gameId, row.total);
+        // Por fuente (R-11, decisión del usuario): un 100 % de Steam y uno de
+        // RetroAchievements son dos hitos distintos, cada uno con su aviso.
+        // La memoria de "ya celebrado" va por (juego, fuente) y guarda el
+        // total: un DLC que añade logros reabre el hito.
+        const completed = getGameCompletion(appCtx(), gameId).filter((source) => {
+          const key = `${gameId}:${source.source}`;
+          if (!source.complete || source.total === 0) {
+            celebratedAtTotal.delete(key);
+            return false;
+          }
+          if (celebratedAtTotal.get(key) === source.total) return false;
+          celebratedAtTotal.set(key, source.total);
+          return true;
+        });
+        if (completed.length === 0) return;
 
         // Solo ASCII en los console.log, convencion de la casa.
         console.log(`[steam] 100% de logros: ${gameTitle}`);

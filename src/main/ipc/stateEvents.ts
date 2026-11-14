@@ -1,25 +1,28 @@
 import { handleDb } from './dbHandle';
 import type { AddStateEventInput, UpdateStateEventPatch } from '../../shared/types';
-import { addStateEvent } from '../db/queries/stateEvents/addStateEvent';
-import { deleteStateEvent } from '../db/queries/stateEvents/deleteStateEvent';
-import { getAllStateEvents } from '../db/queries/stateEvents/getAllStateEvents';
-import { updateStateEvent } from '../db/queries/stateEvents/updateStateEvent';
+import { appCtx } from '../db/v2/appDb';
+import {
+  addStateEvent,
+  deleteStateEvent,
+  getAllStateEvents,
+  updateStateEvent,
+} from '../db/v2/queries/playthroughs';
 import type { StateEventId } from '../../shared/entityIds';
 
 export const registerStateEventsHandlers = (): void => {
   handleDb('stateEvents:add', async (_event, input: AddStateEventInput) => {
-    return addStateEvent(input);
+    return addStateEvent(appCtx(), input);
   });
 
   handleDb('stateEvents:getAll', async () => {
-    return getAllStateEvents();
+    return getAllStateEvents(appCtx());
   });
 
   handleDb('stateEvents:update', async (_event, id: StateEventId, patch: UpdateStateEventPatch) => {
-    return updateStateEvent(id, patch);
+    return updateStateEvent(appCtx(), id, patch);
   });
 
   handleDb('stateEvents:delete', async (_event, id: StateEventId) => {
-    return deleteStateEvent(id);
+    return deleteStateEvent(appCtx(), id);
   });
 };

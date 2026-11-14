@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { cleanupDbs, freshDb, makeGame, type TestDb } from '../../db/__tests__/harness';
-import { gamesTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
+import { games } from '../../db/v2/schema';
 
 // EL RELLENO DE IDS DE STEAMGRIDDB (external/sgdbBackfill.ts).
 //
@@ -19,8 +20,8 @@ import { gamesTable } from '../../db/schema';
 //   4. Sin clave no se pregunta nada: cada llamada fallaria igual y con la
 //      pausa de por medio serian minutos de espera por nada.
 //
-// QUE ES REAL Y QUE ES DOBLE: la base es real (harness con las migraciones del
-// repo) y fillMissingSgdbIds corre entera. Doblado, solo lo que sale a la red
+// QUE ES REAL Y QUE ES DOBLE: la base es real (base 2.0 en memoria con las
+// migraciones del repo, appDbHarness.ts) y fillMissingSgdbIds corre entera. Doblado, solo lo que sale a la red
 // (sgdb/api). El RELOJ se dobla en el test de la valvula —y solo Date, no los
 // timers— porque el criterio de "esto no es una respuesta, es el servicio
 // ahogado" son los segundos que tarda la llamada: sin eso, ese test tardaria
@@ -52,7 +53,7 @@ console.warn = (...args: unknown[]): void => {
 };
 
 let fillMissingSgdbIds: typeof import('../sgdbBackfill').fillMissingSgdbIds;
-let db: TestDb;
+let fx: QueryFixture;
 let keyBefore: string | undefined;
 
 before(async () => {
@@ -60,7 +61,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   asked.length = 0;
   warned.length = 0;
   sgdbImpl = () => ({ id: null });
@@ -76,22 +77,27 @@ afterEach(() => {
 
 after(() => {
   console.warn = realWarn;
-  cleanupDbs();
+  closeAppDbFixture();
 });
 
-const sgdbIdDe = async (id: number): Promise<number | null> => {
-  const [row] = await db
-    .select({ steamGridDbId: gamesTable.steamGridDbId })
-    .from(gamesTable)
-    .where(eq(gamesTable.id, id));
-  return row.steamGridDbId;
+const sgdbIdDe = async (id: string): Promise<number | null> => {
+  const row = fx.ctx.db
+    .select({ steamGridDbId: games.sgdbId })
+    .from(games)
+    .where(eq(games.id, id))
+    .get();
+  return row?.steamGridDbId ?? null;
 };
 
 describe('el relleno de ids de SteamGridDB', () => {
   it('pregunta solo por los que no lo tienen y escribe lo que encuentra', async () => {
-    const sinId = await makeGame(db, { title: 'Sin arte todavia', steamAppId: 400 });
-    const conId = await makeGame(db, { title: 'Elegido a mano', steamGridDbId: 777 });
-    const sinMatch = await makeGame(db, { title: 'Que SGDB no conoce' });
+    const sinId = seedGame(fx.ctx, { title: 'Sin arte todavia', steamAppId: 400 });
+    const conId = seedGame(fx.ctx, {
+      title: 'Elegido a mano',
+      sgdbId: 777,
+      sgdbIdSource: 'manual',
+    });
+    const sinMatch = seedGame(fx.ctx, { title: 'Que SGDB no conoce' });
 
     sgdbImpl = (game) => ({ id: game.title === 'Sin arte todavia' ? 123 : null });
 
@@ -108,8 +114,8 @@ describe('el relleno de ids de SteamGridDB', () => {
   });
 
   it('la puerta del Plan solo rellena planeados', async () => {
-    await makeGame(db, { title: 'De biblioteca' });
-    const planeado = await makeGame(db, { title: 'Planeado', planned: true });
+    seedGame(fx.ctx, { title: 'De biblioteca' });
+    const planeado = seedGame(fx.ctx, { title: 'Planeado', planned: true });
 
     sgdbImpl = () => ({ id: 55 });
 
@@ -123,7 +129,7 @@ describe('el relleno de ids de SteamGridDB', () => {
   });
 
   it('se rinde tras tres llamadas seguidas al limite de espera y dice cuantas quedan', async () => {
-    for (let i = 0; i < 5; i++) await makeGame(db, { title: `Juego ${i}` });
+    for (let i = 0; i < 5; i++) seedGame(fx.ctx, { title: `Juego ${i}` });
 
     // Solo Date: los timers de verdad siguen corriendo, asi que la pausa entre
     // juegos es la real (son 300 ms, no hay que fingirla) y lo unico falso es
@@ -143,7 +149,7 @@ describe('el relleno de ids de SteamGridDB', () => {
   });
 
   it('una llamada lenta suelta no corta el relleno: la racha se resetea', async () => {
-    for (const title of ['A', 'B', 'C', 'D']) await makeGame(db, { title: `Juego ${title}` });
+    for (const title of ['A', 'B', 'C', 'D']) seedGame(fx.ctx, { title: `Juego ${title}` });
 
     mock.timers.enable({ apis: ['Date'] });
     let call = 0;
@@ -158,7 +164,7 @@ describe('el relleno de ids de SteamGridDB', () => {
   });
 
   it('sin clave de SteamGridDB no se pregunta nada', async () => {
-    await makeGame(db, { title: 'Cualquiera' });
+    seedGame(fx.ctx, { title: 'Cualquiera' });
     delete process.env.STEAMGRIDDB_API_KEY;
 
     assert.equal(await fillMissingSgdbIds(), 0);

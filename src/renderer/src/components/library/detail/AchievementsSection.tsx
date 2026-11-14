@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState, useSyncExternalStore } from 'react';
-import type { AchievementEntry, TimeFormat } from '../../../../../shared/types';
+import type { AchievementEntry, SourceCompletion, TimeFormat } from '../../../../../shared/types';
 import { useGameAchievements, useRefreshGameAchievements } from '../../../hooks/achievements';
 import { useFlashLanding } from '../../../hooks/useFlashLanding';
 import { useImageSrc } from '../../../hooks/useImageSrc';
@@ -29,8 +29,10 @@ import {
   ULTRA_RARE,
   ULTRA_VIOLET,
 } from '../../../lib/achievements';
+import { ACHIEVEMENT_SOURCE_LABEL } from '../../../lib/achievementSources';
 import { AMBER, GREEN } from '../../../lib/colors';
 import { formatByPrecision } from '../../../lib/format';
+import { cn } from '../../../lib/utils';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import type { AchievementId, GameId } from '../../../../../shared/entityIds';
 
@@ -207,6 +209,7 @@ const TrophyCase = ({
   timeFormat,
   onRefresh,
   refreshing,
+  completion,
 }: {
   unlockedCount: number;
   total: number;
@@ -224,6 +227,8 @@ const TrophyCase = ({
   timeFormat: TimeFormat;
   onRefresh: () => void;
   refreshing: boolean;
+  // Completado de cada catálogo (R-11). Solo se pinta con más de uno.
+  completion: SourceCompletion[];
 }): React.JSX.Element => {
   // El acento de la vitrina: el 100% celebra en ámbar por encima de todo; si
   // no, manda la rareza de la pieza.
@@ -408,9 +413,52 @@ const TrophyCase = ({
           </button>
         </span>
       </div>
+      {completion.length > 1 && <SourceCompletionRow completion={completion} />}
     </div>
   );
 };
+
+// ── El completado por fuente ───────────────────────────────────────────────
+// Un juego con catálogo de Steam Y de RetroAchievements tiene DOS 100 %
+// distintos que no se suman (decisión R-11): el anillo de arriba cuenta todos
+// los logros juntos, y esta línea dice cómo va cada catálogo por su cuenta.
+// Con una sola fuente no se pinta: repetiría el anillo.
+
+const SourceCompletionRow = ({
+  completion,
+}: {
+  completion: SourceCompletion[];
+}): React.JSX.Element => (
+  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/[0.07] px-6 py-2.5">
+    {completion.map((source) => (
+      <span
+        key={source.source}
+        className="flex items-baseline gap-1.5 text-[11.5px] tabular-nums"
+        title={
+          source.complete && source.completedAt
+            ? `100% since ${source.completedAt.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`
+            : undefined
+        }
+      >
+        <span className="text-[10px] font-bold tracking-[.12em] text-muted-foreground uppercase">
+          {ACHIEVEMENT_SOURCE_LABEL[source.source]}
+        </span>
+        {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
+            desbloqueos de esta fuente. */}
+        {!source.known ? (
+          <span className="text-muted-foreground/60">not synced yet</span>
+        ) : (
+          <span
+            className={cn('font-extrabold', !source.complete && 'text-foreground')}
+            style={source.complete ? { color: AMBER } : undefined}
+          >
+            {source.complete ? '100%' : `${source.unlocked} of ${source.total}`}
+          </span>
+        )}
+      </span>
+    ))}
+  </div>
+);
 
 // ── La lista ────────────────────────────────────────────────────────────────
 // Fuera las cajas: filas de dos líneas con divisor de un pelo dentro de un
@@ -798,6 +846,7 @@ export const AchievementsSection = ({
           timeFormat={timeFormat}
           onRefresh={refresh}
           refreshing={refreshing}
+          completion={data.completion}
         />
       </div>
 

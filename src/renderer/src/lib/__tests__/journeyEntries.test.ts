@@ -19,7 +19,7 @@ const entry = (key: string, lastAt: Date): JourneyEntry => ({
   key,
   kind: 'playthrough',
   iterationLabel: 'Playthrough 1',
-  gameId: 1,
+  gameId: '1',
   title: 'A game',
   coverUrl: null,
   heroUrl: null,
@@ -122,8 +122,8 @@ describe('buildEntries', () => {
 
   it('conserva orden, referencias, empates de fecha y precisión sin mutar el archivo', () => {
     const at = new Date(2024, 2, 1);
-    const first = Object.freeze(baseSession({ id: 1, startedAt: at, note: 'first' }));
-    const second = Object.freeze(baseSession({ id: 2, startedAt: at, note: ' last ' }));
+    const first = Object.freeze(baseSession({ id: '1', startedAt: at, note: 'first' }));
+    const second = Object.freeze(baseSession({ id: '2', startedAt: at, note: ' last ' }));
     const event = Object.freeze(baseEvent({ occurredAt: at, datePrecision: 'year' }));
     const sessions = [first, second];
     const events = [event];
@@ -146,19 +146,19 @@ describe('buildEntries', () => {
       endless: true,
       totalHours: 7,
       manualIterations: [
-        { iterationId: 10, hours: 3, year: 2023 },
-        { iterationId: 11, hours: 4, year: 2024 },
+        { iterationId: '10', hours: 3, year: 2023 },
+        { iterationId: '11', hours: 4, year: 2024 },
       ],
     });
     const events = [
-      baseEvent({ iterationId: 10, occurredAt: new Date(2023, 4, 1) }),
-      baseEvent({ iterationId: 11, occurredAt: new Date(2024, 7, 1) }),
-      baseEvent({ iterationId: 11, type: 'plan_to_play', occurredAt: new Date(2025, 0, 1) }),
-      baseEvent({ gameId: 2, iterationId: 20, occurredAt: new Date(2025, 2, 1) }),
+      baseEvent({ iterationId: '10', occurredAt: new Date(2023, 4, 1) }),
+      baseEvent({ iterationId: '11', occurredAt: new Date(2024, 7, 1) }),
+      baseEvent({ iterationId: '11', type: 'plan_to_play', occurredAt: new Date(2025, 0, 1) }),
+      baseEvent({ gameId: '2', iterationId: '20', occurredAt: new Date(2025, 2, 1) }),
     ];
-    const entries = buildEntries([game, baseGame({ id: 2 })], [], events);
+    const entries = buildEntries([game, baseGame({ id: '2' })], [], events);
     assert.deepEqual(
-      entries.filter((item) => item.gameId === 1).map((item) => [item.key, item.hours]),
+      entries.filter((item) => item.gameId === '1').map((item) => [item.key, item.hours]),
       [
         ['endless:1:2024-7', 4],
         ['endless:1:2023-4', 3],
@@ -168,17 +168,17 @@ describe('buildEntries', () => {
 
   it('descarta el evento pegado al alta como hito, pero cuenta uno fechado a mano', () => {
     const addedAt = new Date(2020, 0, 1, 10, 0, 0);
-    const game = baseGame({ id: 1, addedAt });
+    const game = baseGame({ id: '1', addedAt });
     // A 2s del alta: dentro del margen de 5s de isAddedAtArtifact, es papeleo.
     const artifactEvent = baseEvent({
-      id: 1,
-      iterationId: 10,
+      id: '1',
+      iterationId: '10',
       type: 'started',
       occurredAt: new Date(addedAt.getTime() + 2000),
     });
     const realEvent = baseEvent({
-      id: 2,
-      iterationId: 10,
+      id: '2',
+      iterationId: '10',
       type: 'completed',
       occurredAt: new Date(2021, 5, 15),
       datePrecision: 'day',
@@ -190,16 +190,16 @@ describe('buildEntries', () => {
   });
 
   it('un evento plan_to_play nunca es hito del viaje, aunque no este pegado al alta', () => {
-    const game = baseGame({ id: 1, addedAt: new Date(2020, 0, 1) });
+    const game = baseGame({ id: '1', addedAt: new Date(2020, 0, 1) });
     // Muy lejos del alta (2019 vs 2020): no lo filtra isAddedAtArtifact, solo
     // el que sea 'plan_to_play' puede sacarlo de la mezcla.
     const planEvent = baseEvent({
-      id: 1,
-      iterationId: 10,
+      id: '1',
+      iterationId: '10',
       type: 'plan_to_play',
       occurredAt: new Date(2019, 0, 1),
     });
-    const session = baseSession({ id: 1, iterationId: 10, startedAt: new Date(2021, 2, 1) });
+    const session = baseSession({ id: '1', iterationId: '10', startedAt: new Date(2021, 2, 1) });
     const entries = buildEntries([game], [session], [planEvent]);
     assert.equal(entries.length, 1);
     assert.equal(entries[0].firstAt.getTime(), session.startedAt.getTime());
@@ -207,8 +207,8 @@ describe('buildEntries', () => {
 
   it('una iteracion con horas manuales pero sin una sola sesion o evento propio se descarta (no hay de donde sacar el gameId)', () => {
     const game = baseGame({
-      id: 1,
-      manualIterations: [{ iterationId: 99, hours: 20, year: 2015 }],
+      id: '1',
+      manualIterations: [{ iterationId: '99', hours: 20, year: 2015 }],
     });
     const entries = buildEntries([game], [], []);
     assert.equal(entries.length, 0);
@@ -217,10 +217,10 @@ describe('buildEntries', () => {
   it('horas manuales sin ninguna fecha de verdad caen a mitad del ano que se les asigno', () => {
     // El plan_to_play no cuenta como hito (test de arriba) pero SI sirve para
     // sacar el gameId de la iteracion, que es lo unico que la deja entrar.
-    const planEvent = baseEvent({ id: 1, iterationId: 10, type: 'plan_to_play' });
+    const planEvent = baseEvent({ id: '1', iterationId: '10', type: 'plan_to_play' });
     const game = baseGame({
-      id: 1,
-      manualIterations: [{ iterationId: 10, hours: 15, year: 2015 }],
+      id: '1',
+      manualIterations: [{ iterationId: '10', hours: 15, year: 2015 }],
     });
     const entries = buildEntries([game], [], [planEvent]);
     assert.equal(entries.length, 1);
@@ -230,17 +230,22 @@ describe('buildEntries', () => {
   });
 
   it('la nota es la mas reciente CON TEXTO, saltando las sesiones sin nota', () => {
-    const game = baseGame({ id: 1 });
+    const game = baseGame({ id: '1' });
     const s1 = baseSession({
-      id: 1,
-      iterationId: 10,
+      id: '1',
+      iterationId: '10',
       startedAt: new Date(2021, 0, 1),
       note: 'donde lo deje la primera vez',
     });
-    const s2 = baseSession({ id: 2, iterationId: 10, startedAt: new Date(2021, 0, 5), note: null });
+    const s2 = baseSession({
+      id: '2',
+      iterationId: '10',
+      startedAt: new Date(2021, 0, 5),
+      note: null,
+    });
     const s3 = baseSession({
-      id: 3,
-      iterationId: 10,
+      id: '3',
+      iterationId: '10',
       startedAt: new Date(2021, 0, 10),
       note: '   ',
     });
@@ -250,16 +255,16 @@ describe('buildEntries', () => {
   });
 
   it('un endless se trocea por mes y las horas sin repartir van al mes MAS RECIENTE', () => {
-    const game = baseGame({ id: 1, endless: true, totalHours: 10 });
+    const game = baseGame({ id: '1', endless: true, totalHours: 10 });
     const marchSession = baseSession({
-      id: 1,
-      iterationId: 10,
+      id: '1',
+      iterationId: '10',
       startedAt: new Date(2024, 2, 5),
       durationSec: 3600, // 1h medida
     });
     const octSession = baseSession({
-      id: 2,
-      iterationId: 10,
+      id: '2',
+      iterationId: '10',
       startedAt: new Date(2024, 9, 5),
       durationSec: 3600 * 2, // 2h medidas
     });
@@ -274,26 +279,26 @@ describe('buildEntries', () => {
   });
 
   it('un endless sin ninguna hora no genera ninguna entrada (no se abre un mes vacio porque si)', () => {
-    const game = baseGame({ id: 1, endless: true, totalHours: 0 });
+    const game = baseGame({ id: '1', endless: true, totalHours: 0 });
     const entries = buildEntries([game], [], []);
     assert.equal(entries.length, 0);
   });
 
   it('las entradas finales salen ordenadas de la mas reciente a la mas antigua', () => {
-    const gameA = baseGame({ id: 1, title: 'A' });
-    const gameB = baseGame({ id: 2, title: 'B' });
+    const gameA = baseGame({ id: '1', title: 'A' });
+    const gameB = baseGame({ id: '2', title: 'B' });
     const oldEvent = baseEvent({
-      id: 1,
-      gameId: 1,
-      iterationId: 10,
+      id: '1',
+      gameId: '1',
+      iterationId: '10',
       type: 'completed',
       occurredAt: new Date(2019, 0, 1),
       datePrecision: 'day',
     });
     const newEvent = baseEvent({
-      id: 2,
-      gameId: 2,
-      iterationId: 20,
+      id: '2',
+      gameId: '2',
+      iterationId: '20',
       type: 'completed',
       occurredAt: new Date(2023, 0, 1),
       datePrecision: 'day',
@@ -301,7 +306,7 @@ describe('buildEntries', () => {
     const entries = buildEntries([gameA, gameB], [], [oldEvent, newEvent]);
     assert.deepEqual(
       entries.map((e) => e.gameId),
-      [2, 1],
+      ['2', '1'],
     );
   });
 });

@@ -14,7 +14,7 @@ import { useUpdateIteration } from '../../../hooks/iterations';
 import { useTimeFormat } from '../../../hooks/settings';
 import { useCountUp } from '../../../hooks/useCountUp';
 import { AMBER, BLUE, GREEN } from '../../../lib/colors';
-import { humanizeSpanByPrecision } from '../../../lib/dateMath';
+import { humanizeSpanByPrecision, UNKNOWN_SPAN_LABEL } from '../../../lib/dateMath';
 import { formatByPrecision, formatHours, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
 import { StatusIcon } from '../../StatusIcon';
@@ -103,7 +103,9 @@ const JourneyStrip = ({
         <span className="flex-none text-[10.5px] font-semibold whitespace-nowrap text-muted-foreground">
           {/* "Same year so far" no se lee bien — con un tramo que no es una
               duración, el sufijo sobra. */}
-          {isOngoing && !span.startsWith('Same') ? `${span} so far` : span}
+          {isOngoing && !span.startsWith('Same') && span !== UNKNOWN_SPAN_LABEL
+            ? `${span} so far`
+            : span}
         </span>
         <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
         <span

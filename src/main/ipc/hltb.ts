@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron';
-import { eq } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { applyHltbRefreshResult, readHltbRefreshTarget } from '../db/v2/queries/external';
 import { getHltbTimes } from '../hltb/api';
 import type { GameId } from '../../shared/entityIds';
 
@@ -31,33 +30,15 @@ export const registerHltbHandlers = (): void => {
   // en caliente (ver attemptSyncUpgrade en db/index.ts) por una espera que no
   // tiene nada que ver con la base de datos.
   ipcMain.handle('hltb:refreshGame', async (_event, gameId: GameId) => {
-    const [game] = await withDbAccess(async () =>
-      getDb()
-        .select({ title: gamesTable.title, releaseYear: gamesTable.releaseYear })
-        .from(gamesTable)
-        .where(eq(gamesTable.id, gameId))
-        .limit(1),
-    );
+    // La red fuera de cualquier transacción; la escritura relee el juego
+    // (queries/external/hltbRefresh.ts) y respeta lo elegido a mano.
+    const game = readHltbRefreshTarget(appCtx(), gameId);
     if (!game) return null;
 
     const times = await getHltbTimes(game.title, game.releaseYear);
-    // Sin match con confianza suficiente: NO se pisa lo que ya había con
-    // tres nulls. Que hoy HLTB no lo reconozca no invalida lo que sí
-    // encontramos el día del alta — borrarlo sería perder un dato bueno a
-    // cambio de nada.
     if (!times) return null;
 
-    await withDbAccess(async () =>
-      getDb()
-        .update(gamesTable)
-        .set({
-          hltbMain: times.hltbMain,
-          hltbMainExtras: times.hltbMainExtras,
-          hltbCompletionist: times.hltbCompletionist,
-        })
-        .where(eq(gamesTable.id, gameId)),
-    );
-
+    applyHltbRefreshResult(appCtx(), gameId, times);
     return times;
   });
 };

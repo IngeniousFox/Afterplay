@@ -1,24 +1,21 @@
 import type { Page } from '@playwright/test';
 import type { GameDetail } from '../src/shared/types';
-import { expect, test } from './fixtures';
+import { expect, gameIdOf, test, type LaunchedApp } from './fixtures';
 import type { GameId } from '../src/shared/entityIds';
 
 // LA LOGICA DE NEGOCIO, DE PUNTA A PUNTA, CON EL DRIVER DE PRODUCCION.
 //
-// Nada de esto lo puede cubrir un test de unidad: el andamio de unidad
-// (src/main/db/__tests__/harness.ts) abre la base con @libsql/client, pero la
-// app instalada abre la MISMA base con drizzle-orm/tursodatabase-sync (el
-// paquete @tursodatabase/sync — ver src/main/db/index.ts), y los dos drivers
-// no tienen por que comportarse igual en lo fino: si aplican de verdad el
-// ON DELETE CASCADE del esquema, si el PRAGMA foreign_keys sobrevive a la
-// transaccion, si una columna `real` redondea al volver por el IPC. Aqui se
-// pregunta TODO eso por el camino real: renderer (page.evaluate) -> preload
-// (globalThis.api, tipado con la firma real) -> IPC -> main -> el driver de
-// produccion -> Afterplay.db en disco, y de vuelta.
+// Los tests de unidad de las consultas 2.0 corren la MISMA base (node:sqlite,
+// migraciones del repo) pero en memoria y llamando a las consultas a pelo. Lo
+// que solo se ve aqui es el camino entero: renderer (page.evaluate) -> preload
+// (globalThis.api, tipado con la firma real) -> IPC -> main -> la base 2.0
+// en disco (Afterplay2.db), y de vuelta — si una fecha o una columna `real`
+// sobreviven al IPC, si el handler pasa los ids de texto tal cual, si la
+// transaccion de verdad deja el estado que la ficha lee despues.
 //
 // QUE ES REAL: la base entera (migraciones del repo, igual que el sembrado),
-// el driver, la transaccion de addStateEvent.ts/resolveIterationForPlay.ts,
-// las derivaciones de getGameById.ts. Ni un mock.module en todo el fichero.
+// las transacciones de playthroughs/stateEvents, las derivaciones de la ficha
+// (library/getGameById.ts). Ni un mock.module en todo el fichero.
 //
 // QUE ES DOBLE: solo la biblioteca de partida (sembrada desde fuera, ver
 // e2e/sandbox.ts) y la red — IGDB/HLTB/Steam/RetroAchievements —, que ninguno
@@ -27,14 +24,17 @@ import type { GameId } from '../src/shared/entityIds';
 // firma en el preload tumbe este fichero en vez de manifestarse como un botón
 // que ya no hace nada.
 //
-// LOS IDS son los que deja el sembrado por defecto (e2e/seed.ts), por orden
-// de insercion: Assassin's Creed II = 1, Strange Horticulture = 2,
-// 007 First Light = 3, ... , The Legend of Zelda: Link's Awakening = 7,
-// Alan Wake = 8. Documentado tambien en sandbox.ts/seed.ts.
-const AC_II = 1;
-const FIRST_LIGHT = 3;
-const ZELDA_LA = 7;
-const ALAN_WAKE = 8;
+// LOS JUEGOS son los del sembrado por defecto (e2e/seed.ts). Sus ids son de
+// texto y cambian en cada sandbox, asi que cada test los busca por titulo.
+const TITLES = {
+  AC_II: "Assassin's Creed II",
+  FIRST_LIGHT: '007 First Light',
+  ZELDA_LA: "The Legend of Zelda: Link's Awakening",
+  ALAN_WAKE: 'Alan Wake',
+} as const;
+
+const idOf = (afterplay: LaunchedApp, key: keyof typeof TITLES): GameId =>
+  gameIdOf(afterplay.sandbox, TITLES[key]);
 
 // Un `.find()` que no encuentra nada (o un games.getById que devuelve null
 // porque el id ya no existe) es casi siempre el sembrado moviendose por
@@ -56,11 +56,9 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const AC_II = idOf(afterplay, 'AC_II');
 
-    const game = mustFind(
-      await fetchGame(page, AC_II),
-      "Assassin's Creed II deberia existir (id 1)",
-    );
+    const game = mustFind(await fetchGame(page, AC_II), "Assassin's Creed II deberia existir");
     expect(game.iterations).toHaveLength(2);
     const [first, second] = game.iterations;
 
@@ -97,8 +95,9 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const ALAN_WAKE = idOf(afterplay, 'ALAN_WAKE');
 
-    const before = mustFind(await fetchGame(page, ALAN_WAKE), 'Alan Wake deberia existir (id 8)');
+    const before = mustFind(await fetchGame(page, ALAN_WAKE), 'Alan Wake deberia existir');
     expect(before.iterations).toHaveLength(1);
     expect(before.currentState).toBe('dropped');
     const oldIterationId = before.iterations[0].id;
@@ -148,10 +147,11 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const ZELDA_LA = idOf(afterplay, 'ZELDA_LA');
 
     const before = mustFind(
       await fetchGame(page, ZELDA_LA),
-      "Zelda: Link's Awakening deberia existir (id 7)",
+      "Zelda: Link's Awakening deberia existir",
     );
     const seededIterationId = before.iterations[0].id;
 
@@ -218,8 +218,11 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     expect(seeded.currentState).toBe('dropped');
   });
 
-  test('borrar un juego no deja huerfanos: ON DELETE CASCADE de verdad', async ({ afterplay }) => {
+  test('borrar un juego no deja huerfanos: sus sesiones y eventos desaparecen con el', async ({
+    afterplay,
+  }) => {
     const { window: page } = afterplay;
+    const FIRST_LIGHT = idOf(afterplay, 'FIRST_LIGHT');
 
     const sessionsBefore = await page.evaluate(() => globalThis.api.sessions.getAll());
     const ownSessionsBefore = sessionsBefore.filter((session) => session.gameId === FIRST_LIGHT);
@@ -234,8 +237,8 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     expect(deleted).toBe(true);
 
     // Ni una sesion del juego borrado sigue viva — y las de los DEMAS juegos
-    // del sandbox tampoco desaparecieron por el camino (el cascade es por
-    // FK, no un DELETE FROM sessions a lo bruto).
+    // del sandbox tampoco desaparecieron por el camino: la lapida del juego
+    // arrastra solo lo suyo (deleteGame en la 2.0), no un borrado a lo bruto.
     const sessionsAfter = await page.evaluate(() => globalThis.api.sessions.getAll());
     expect(sessionsAfter.some((session) => session.gameId === FIRST_LIGHT)).toBe(false);
     expect(sessionsAfter).toHaveLength(sessionsBefore.length - ownSessionsBefore.length);
@@ -246,15 +249,13 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     expect(await fetchGame(page, FIRST_LIGHT)).toBeNull();
   });
 
-  test('resetEndlessState: pasar a endless borra el log salvo plan_to_play y conserva horas y sesiones', async ({
+  test('resetEndlessState: pasar a endless borra el log de estados y conserva horas y sesiones', async ({
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const FIRST_LIGHT = idOf(afterplay, 'FIRST_LIGHT');
 
-    const before = mustFind(
-      await fetchGame(page, FIRST_LIGHT),
-      '007 First Light deberia existir (id 3)',
-    );
+    const before = mustFind(await fetchGame(page, FIRST_LIGHT), '007 First Light deberia existir');
     expect(before.currentState).toBe('completed');
     const hoursBefore = before.totalHours;
     const sessionsBefore = before.iterations[0].sessions.length;
@@ -284,6 +285,7 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const FIRST_LIGHT = idOf(afterplay, 'FIRST_LIGHT');
 
     const sessions = await page.evaluate(() => globalThis.api.sessions.getAll());
     const target = mustFind(
@@ -314,11 +316,9 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const AC_II = idOf(afterplay, 'AC_II');
 
-    const before = mustFind(
-      await fetchGame(page, AC_II),
-      "Assassin's Creed II deberia existir (id 1)",
-    );
+    const before = mustFind(await fetchGame(page, AC_II), "Assassin's Creed II deberia existir");
     const secondPlaythrough = before.iterations[1];
     expect(secondPlaythrough.currentState).toBe('completed');
     expect(secondPlaythrough.endedAt).not.toBeNull();
@@ -359,11 +359,9 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
+    const FIRST_LIGHT = idOf(afterplay, 'FIRST_LIGHT');
 
-    const before = mustFind(
-      await fetchGame(page, FIRST_LIGHT),
-      '007 First Light deberia existir (id 3)',
-    );
+    const before = mustFind(await fetchGame(page, FIRST_LIGHT), '007 First Light deberia existir');
     const iteration = before.iterations[0];
     expect(iteration.manualTotalPlayed).toBeNull();
     const trackedHours = iteration.hours;

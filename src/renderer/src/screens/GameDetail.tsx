@@ -158,6 +158,7 @@ export const GameDetail = ({
                 stateHistory={game.stateHistory}
                 spendHistory={game.spendHistory}
                 addedAt={game.addedAt}
+                planHistory={game.planHistory}
               />
             </div>
 

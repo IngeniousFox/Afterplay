@@ -742,6 +742,7 @@ export const GameStats = ({
           />
           <GameJourneyCard
             addedAt={game.addedAt}
+            planHistory={game.planHistory}
             stateHistory={game.stateHistory}
             sessions={realSessions}
           />

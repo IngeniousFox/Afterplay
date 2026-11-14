@@ -1,4 +1,4 @@
-import type { GameId } from './entityIds';
+import type { EntityId, EntityIdLike, GameId } from './entityIds';
 // El buzón del Plan (REMOTO.md §6) — lo que el móvil ENCOLA y el escritorio
 // DRENA. Vive en shared porque lo necesitan los tres lados: el Worker para
 // escribir, el main para leer y aplicar, y el renderer/PWA para pintar lo que
@@ -22,7 +22,11 @@ export type MailboxGameSource = { igdbId: number } | { steamAppId: number };
 // PAYLOAD JSON DESDE EL MINUTO UNO (§6.4). El "alta de juego normal con sus
 // gastos" que el §1.1 deja para más adelante es AMPLIAR este payload, no
 // reescribir el mecanismo. Merece la pena aunque hoy solo se use para el Plan.
-export type PlanMailboxEntry =
+//
+// Genérico en el id como el resto de contratos (shared/entityIds.ts): el
+// Worker y la PWA siguen sobre el esquema 1.x, con ids numéricos, hasta la
+// fase 5, y lo usan como `PlanMailboxEntry<number>`.
+export type PlanMailboxEntry<Id extends EntityIdLike = EntityId> =
   | {
       type: 'add';
       source: MailboxGameSource;
@@ -36,8 +40,8 @@ export type PlanMailboxEntry =
   // sean un UPDATE de una columna: la regla del §6.2 es que la web no toca las
   // tablas reales, y una excepción "porque esto es fácil" es justo por donde
   // se cuela el primer bug que sí corrompe.
-  | { type: 'pin'; gameId: GameId; pinnedAt: number }
-  | { type: 'unpin'; gameId: GameId }
+  | { type: 'pin'; gameId: GameId<Id>; pinnedAt: number }
+  | { type: 'unpin'; gameId: GameId<Id> }
   // Reordenar el Up next. Viaja como UNA entrada con el orden entero y no como
   // N pines sueltos: es un solo gesto del usuario, y partirlo permitiría
   // drenar la mitad y dejar un orden que nadie pidió.
@@ -49,6 +53,6 @@ export type PlanMailboxEntry =
   // que un reorden fijara juegos que ya no estaban ni fijados ni planeados.
   // El orden es lo único que el móvil sabe; las fechas son cosa de quien las
   // tiene.
-  | { type: 'reorder'; orderedIds: GameId[] };
+  | { type: 'reorder'; orderedIds: GameId<Id>[] };
 
 export type PlanMailboxType = PlanMailboxEntry['type'];

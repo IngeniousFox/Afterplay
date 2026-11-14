@@ -65,10 +65,15 @@ mock.module('../r2', {
     isR2Configured: () => r2Configured,
   },
 });
-mock.module('../../db/queries/saves/getLocalBackupsIndex', {
+// El índice se dobla entero: lo que se caracteriza aquí es el disco, y el
+// contexto de la base no llega a usarse (appDb arrastra 'electron').
+mock.module('../../db/v2/appDb', {
+  namedExports: { appCtx: () => ({}) },
+});
+mock.module('../../db/v2/queries/saves', {
   namedExports: {
-    getOwnBackupEntries: async () => ownEntries,
-    getKnownLudusaviNames: async () => knownNames,
+    listOwnBackupEntries: () => ownEntries,
+    listKnownLudusaviNames: () => knownNames,
   },
 });
 

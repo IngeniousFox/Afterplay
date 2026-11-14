@@ -4,7 +4,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { toSlashes } from './paths';
-import type { GameId } from '../../shared/entityIds';
 
 // Capa POR MÁQUINA de las partidas guardadas (PARTIDAS-GUARDADAS.md §7.2):
 // un fichero plano en userData que NO sincroniza nunca.
@@ -188,14 +187,11 @@ export const markIdentityReconciled = (bucket: string): void => {
   });
 };
 
-export const getSaveLocationOverride = (gameId: GameId): MachineSaveOverride | null =>
-  read().saveLocationOverrides[String(gameId)] ?? null;
-
-export const setSaveLocationOverride = (gameId: GameId, target: string | null): void => {
-  const file = read();
-  const overrides = { ...file.saveLocationOverrides };
-  if (target)
-    overrides[String(gameId)] = { target: toSlashes(target), setAt: new Date().toISOString() };
-  else delete overrides[String(gameId)];
-  write({ ...file, saveLocationOverrides: overrides });
-};
+// Los destinos que la 1.x guardaba aquí, por id numérico de juego. Solo los
+// lee el primer arranque de la 2.0 para pasarlos a local_save_state
+// (db/v2/appDb.ts); desde entonces el destino vive en la base.
+export const listLegacySaveLocationOverrides = (): [string, string][] =>
+  Object.entries(read().saveLocationOverrides).map(([gameId, override]) => [
+    gameId,
+    override.target,
+  ]);

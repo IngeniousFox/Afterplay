@@ -130,12 +130,12 @@ describe('la marca de un pin del buzón: el mismo criterio en los tres lados', (
 describe('vista previa del buzón: el plan tal y como lo dejará el drenado', () => {
   it('un pin pendiente se previsualiza con su propio pinnedAt, no con "ahora"', () => {
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda')],
-      [orden(1, { type: 'pin', gameId: 1, pinnedAt: T10 })],
+      [juego('1', 'Zelda')],
+      [orden(1, { type: 'pin', gameId: '1', pinnedAt: T10 })],
       AHORA,
     );
-    assert.equal(pinDe(overlay.games, 1), T10);
-    assert.ok(overlay.touched.has(1), 'el juego tocado tiene que marcarse como pendiente');
+    assert.equal(pinDe(overlay.games, '1'), T10);
+    assert.ok(overlay.touched.has('1'), 'el juego tocado tiene que marcarse como pendiente');
   });
 
   it('el orden previsto es el que aplicará el PC, no el del render', () => {
@@ -143,59 +143,62 @@ describe('vista previa del buzón: el plan tal y como lo dejará el drenado', ()
     // fijó desde el PC a las 12:00. Sellar el pendiente con "ahora" lo pondría
     // el último y la fila saltaría al drenar.
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda'), juego(2, 'Alan Wake', T12)],
-      [orden(1, { type: 'pin', gameId: 1, pinnedAt: T10 })],
+      [juego('1', 'Zelda'), juego('2', 'Alan Wake', T12)],
+      [orden(1, { type: 'pin', gameId: '1', pinnedAt: T10 })],
       AHORA,
     );
     assert.deepEqual(
       sortUpNext(overlay.games, LEE).map((game) => game.id),
-      [1, 2],
+      ['1', '2'],
     );
   });
 
   it('dos pines pendientes conservan SU separación, sin empatar al milisegundo', () => {
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda'), juego(2, 'Alan Wake')],
+      [juego('1', 'Zelda'), juego('2', 'Alan Wake')],
       [
-        orden(1, { type: 'pin', gameId: 1, pinnedAt: T10 }),
-        orden(2, { type: 'pin', gameId: 2, pinnedAt: T10 + 600_000 }),
+        orden(1, { type: 'pin', gameId: '1', pinnedAt: T10 }),
+        orden(2, { type: 'pin', gameId: '2', pinnedAt: T10 + 600_000 }),
       ],
       AHORA,
     );
-    assert.notEqual(pinDe(overlay.games, 1), pinDe(overlay.games, 2));
+    assert.notEqual(pinDe(overlay.games, '1'), pinDe(overlay.games, '2'));
     assert.deepEqual(
       sortUpNext(overlay.games, LEE).map((game) => game.id),
-      [1, 2],
+      ['1', '2'],
     );
   });
 
   it('la última orden sobre el mismo juego manda, y soltar deja el pin en null', () => {
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda', T10)],
-      [orden(1, { type: 'unpin', gameId: 1 }), orden(2, { type: 'pin', gameId: 1, pinnedAt: T12 })],
+      [juego('1', 'Zelda', T10)],
+      [
+        orden(1, { type: 'unpin', gameId: '1' }),
+        orden(2, { type: 'pin', gameId: '1', pinnedAt: T12 }),
+      ],
       AHORA,
     );
-    assert.equal(pinDe(overlay.games, 1), T12);
+    assert.equal(pinDe(overlay.games, '1'), T12);
 
     const soltado = applyPendingPlanEntries(
-      [juego(1, 'Zelda', T10)],
-      [orden(1, { type: 'unpin', gameId: 1 })],
+      [juego('1', 'Zelda', T10)],
+      [orden(1, { type: 'unpin', gameId: '1' })],
       AHORA,
     );
-    assert.equal(pinDe(soltado.games, 1), null);
+    assert.equal(pinDe(soltado.games, '1'), null);
   });
 
   it('un reorden pendiente reparte las marcas que YA existen, sin inventar ninguna', () => {
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda', T10), juego(2, 'Alan Wake', T12)],
-      [orden(1, { type: 'reorder', orderedIds: [2, 1] })],
+      [juego('1', 'Zelda', T10), juego('2', 'Alan Wake', T12)],
+      [orden(1, { type: 'reorder', orderedIds: ['2', '1'] })],
       AHORA,
     );
-    assert.equal(pinDe(overlay.games, 2), T10);
-    assert.equal(pinDe(overlay.games, 1), T12);
+    assert.equal(pinDe(overlay.games, '2'), T10);
+    assert.equal(pinDe(overlay.games, '1'), T12);
     assert.deepEqual(
       sortUpNext(overlay.games, LEE).map((game) => game.id),
-      [2, 1],
+      ['2', '1'],
     );
   });
 
@@ -204,29 +207,32 @@ describe('vista previa del buzón: el plan tal y como lo dejará el drenado', ()
     // false (fallo) y no tocaría nada, y la vista previa no puede prever otra
     // cosa.
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda', T10), juego(2, 'Alan Wake', T12)],
-      [orden(1, { type: 'unpin', gameId: 2 }), orden(2, { type: 'reorder', orderedIds: [2, 1] })],
+      [juego('1', 'Zelda', T10), juego('2', 'Alan Wake', T12)],
+      [
+        orden(1, { type: 'unpin', gameId: '2' }),
+        orden(2, { type: 'reorder', orderedIds: ['2', '1'] }),
+      ],
       AHORA,
     );
-    assert.equal(pinDe(overlay.games, 1), T10);
-    assert.equal(pinDe(overlay.games, 2), null);
+    assert.equal(pinDe(overlay.games, '1'), T10);
+    assert.equal(pinDe(overlay.games, '2'), null);
   });
 
   it('un pin con marca no creíble se prevé con "ahora", que es lo que hará el drenado', () => {
     // El Worker ya rechaza estas órdenes; aquí se fija que, si alguna llegara,
     // la vista previa y el drenado (pinStamp → setPlanPinned sin marca) coinciden.
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda')],
-      [orden(1, { type: 'pin', gameId: 1, pinnedAt: 0 })],
+      [juego('1', 'Zelda')],
+      [orden(1, { type: 'pin', gameId: '1', pinnedAt: 0 })],
       AHORA,
     );
-    assert.equal(pinDe(overlay.games, 1), AHORA);
+    assert.equal(pinDe(overlay.games, '1'), AHORA);
   });
 
   it('las altas salen como fantasmas y un tipo desconocido se ignora sin reventar', () => {
-    const desconocida = { type: 'archive', gameId: 1 } as unknown as PlanMailboxEntry;
+    const desconocida = { type: 'archive', gameId: '1' } as unknown as PlanMailboxEntry;
     const overlay = applyPendingPlanEntries(
-      [juego(1, 'Zelda', T10)],
+      [juego('1', 'Zelda', T10)],
       [
         orden(7, {
           type: 'add',
@@ -240,7 +246,7 @@ describe('vista previa del buzón: el plan tal y como lo dejará el drenado', ()
       AHORA,
     );
     assert.deepEqual(overlay.ghosts, [{ mailboxId: 7, title: 'Celeste', coverUrl: null }]);
-    assert.equal(pinDe(overlay.games, 1), T10);
+    assert.equal(pinDe(overlay.games, '1'), T10);
     assert.equal(overlay.touched.size, 0);
   });
 });

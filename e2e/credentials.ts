@@ -29,11 +29,11 @@ import type { CredentialsValues } from '../src/shared/types';
 // concreta se saltan solos diciendo cuál falta. Un clon recién bajado tiene
 // que poder ejecutar `npm run test:e2e` sin configurar nada.
 //
-// LAS DOS DE LA BASE DE DATOS SON DISTINTAS y por eso van aparte (ver
-// `withRemote` en sandbox.ts): una clave de IGDB abre un catálogo público,
-// pero DATABASE_URL abre una biblioteca. Además, sincronizar el sandbox
-// contra una remota compartida rompería los tests (dejarían de ver solo lo
-// sembrado) y ensuciaría esa remota con juegos de mentira en cada pasada.
+// LAS DOS DE LA BASE DE DATOS NO ENTRAN NUNCA: una clave de IGDB abre un
+// catálogo público, pero DATABASE_URL abre una biblioteca. La app 2.0 ya no
+// se conecta a Turso (R-14), así que en el sandbox no tienen nada que hacer,
+// y una credencial de producción no debe estar cerca de un proceso que pulsa
+// botones solo.
 
 const ENV_TEST_PATH = join(process.cwd(), '.env.test');
 
@@ -69,13 +69,11 @@ const readEnvTest = (): TestCredentials => {
 // releerlo por cada arranque solo multiplicaría accesos a disco.
 export const testCredentials = readEnvTest();
 
-// Lo que se escribe en el credentials.json del sandbox. Las de la base de
-// datos solo si el test las pide EXPLÍCITAMENTE (ver la cabecera).
-export const credentialsForSandbox = (withRemote: boolean): Partial<CredentialsValues> => {
+// Lo que se escribe en el credentials.json del sandbox: todo .env.test menos
+// las de la base de datos (ver la cabecera).
+export const credentialsForSandbox = (): Partial<CredentialsValues> => {
   const values = { ...testCredentials.values };
-  if (!withRemote) {
-    for (const key of DATABASE_CREDENTIAL_KEYS) delete values[key];
-  }
+  for (const key of DATABASE_CREDENTIAL_KEYS) delete values[key];
   return values;
 };
 

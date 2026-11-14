@@ -92,15 +92,18 @@ export type PendingPlanGhost = {
   coverUrl: string | null;
 };
 
-export type PendingPlanEntry = { id: number; entry: PlanMailboxEntry };
+export type PendingPlanEntry<Id extends EntityIdLike = EntityId> = {
+  id: number;
+  entry: PlanMailboxEntry<Id>;
+};
 
-export type PendingPlanPreview<G> = {
+export type PendingPlanPreview<G, Id extends EntityIdLike = EntityId> = {
   games: G[];
   // Altas encoladas que aún no son juegos: se pintan aparte porque no tienen
   // ficha a la que entrar ni nada que se pueda fijar todavía.
   ghosts: PendingPlanGhost[];
   // Qué juegos tienen un cambio sin drenar, para marcarlos como pendientes.
-  touched: Set<GameId>;
+  touched: Set<GameId<Id>>;
 };
 
 // Los pendientes del buzón aplicados ENCIMA del plan leído, tal y como los va a
@@ -116,16 +119,18 @@ export type PendingPlanPreview<G> = {
 // es creíble (mailboxPinStamp). El Worker ya rechaza esas órdenes, así que en
 // la práctica no se usa; se pide como parámetro para que la función siga siendo
 // pura y prevea EXACTAMENTE lo mismo que el drenado.
-export const applyPendingPlanEntries = <G extends PinnedPlanRow>(
+export const applyPendingPlanEntries = <Id extends EntityIdLike, G extends PinnedPlanRow<Id>>(
   games: readonly G[],
-  pending: readonly PendingPlanEntry[],
+  pending: readonly PendingPlanEntry<Id>[],
   now: number,
-): PendingPlanPreview<G> => {
+): PendingPlanPreview<G, Id> => {
   // Estado de trabajo: la marca actual de cada juego, que las órdenes van
   // modificando en cadena.
-  const pinnedAt = new Map<GameId, number | null>(games.map((game) => [game.id, game.pinnedAt]));
+  const pinnedAt = new Map<GameId<Id>, number | null>(
+    games.map((game) => [game.id, game.pinnedAt]),
+  );
   const ghosts: PendingPlanGhost[] = [];
-  const touched = new Set<GameId>();
+  const touched = new Set<GameId<Id>>();
 
   for (const { id, entry } of pending) {
     if (entry.type === 'add') {

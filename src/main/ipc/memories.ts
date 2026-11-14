@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import type { GeneratedMemorySummary } from '../../shared/types';
-import { getLatestMemories } from '../db/queries/memories/getLatestMemories';
+import { appCtx } from '../db/v2/appDb';
+import { getLatestMemories } from '../db/v2/queries/loop';
 import {
   getMemoriesStatus,
   regenerateStaleMemories,
@@ -13,7 +14,7 @@ export const registerMemoriesHandlers = (): void => {
   // El último recap de cada periodo — lo que el Journey y Sessions pintan.
   // El sourceHash se queda en el main: al renderer solo le importa la prosa.
   handleDb('memories:getAll', async (): Promise<GeneratedMemorySummary[]> => {
-    const latest = await getLatestMemories();
+    const latest = getLatestMemories(appCtx());
     return latest.map(({ scopeType, scopeKey, payload, createdAt }) => ({
       scopeType,
       scopeKey,

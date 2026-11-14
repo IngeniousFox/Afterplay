@@ -1,8 +1,9 @@
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import {
+  applySteamAppIdBackfill,
+  selectSteamAppIdBackfillCandidates,
+} from '../db/v2/queries/external';
 import { getSteamAppIds } from '../igdb/api';
-import type { GameId } from '../../shared/entityIds';
 
 // Backfill del appid de Steam (LOGROS.md) — el "regenerado hacia atrás" para
 // los juegos que ya existían antes de la columna: TODOS, planeados y
@@ -32,53 +33,21 @@ export const runSteamAppIdBackfill = async (): Promise<void> => {
     // juego sin ficha allí (existe en Steam y ellos aún no lo tienen) no puede
     // pasar por aquí. Se queda sin marcar a propósito — el día que IGDB lo
     // añada y el juego gane su id, esta pasada lo recogerá sola.
-    const pending = await withDbAccess(async () =>
-      getDb()
-        .select({ id: gamesTable.id, igdbId: gamesTable.igdbId })
-        .from(gamesTable)
-        .where(
-          and(
-            isNull(gamesTable.steamAppIdCheckedAt),
-            isNotNull(gamesTable.igdbId),
-            eq(gamesTable.steamAppIdManual, false),
-          ),
-        ),
-    );
-    if (pending.length === 0) return;
-
-    // El isNotNull de la query ya lo garantiza, pero el tipo no lo sabe: este
-    // filtro es lo que se lo cuenta a TypeScript, sin un `!` que mienta.
-    const withIgdbId = pending.filter(
-      (game): game is { id: GameId; igdbId: number } => game.igdbId !== null,
-    );
+    const withIgdbId = selectSteamAppIdBackfillCandidates(appCtx());
+    if (withIgdbId.length === 0) return;
 
     let found = 0;
     for (let start = 0; start < withIgdbId.length; start += BATCH_SIZE) {
       const batch = withIgdbId.slice(start, start + BATCH_SIZE);
       const appIds = await getSteamAppIds(batch.map((game) => game.igdbId));
-
-      // Los que no salieron en la respuesta también se marcan (checkedAt con
-      // appid null): "no está en Steam" es una respuesta, no un pendiente.
-      const checkedAt = new Date();
-      await withDbAccess(() =>
-        getDb().transaction(async (tx) => {
-          for (const game of batch) {
-            await tx
-              .update(gamesTable)
-              .set({
-                steamAppId: appIds.get(game.igdbId) ?? null,
-                steamAppIdCheckedAt: checkedAt,
-              })
-              .where(and(eq(gamesTable.id, game.id), eq(gamesTable.steamAppIdManual, false)));
-          }
-        }),
+      // La escritura relee cada juego: un appid fijado a mano mientras tanto no se pisa.
+      const applied = applySteamAppIdBackfill(
+        appCtx(),
+        batch.map((candidate) => ({ candidate, appId: appIds.get(candidate.igdbId) ?? null })),
       );
-      found += appIds.size;
+      found += applied.found;
     }
 
-    // Solo ASCII en los console.log de este archivo, misma convención que
-    // watcher/watcher.ts: la consola de Windows no siempre usa UTF-8 y los
-    // acentos salen como "est├ín".
     console.log(`[steam] backfill de appids: ${found}/${withIgdbId.length} juegos estan en Steam`);
   } catch (error) {
     // IGDB caído o sin red: nada queda a medias (los lotes son atómicos) y

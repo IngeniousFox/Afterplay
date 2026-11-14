@@ -4,6 +4,7 @@ import type { GameDetail, SpendEvent, StateEvent } from '../../../../shared/type
 import { AMBER, VIOLET } from '../../lib/colors';
 import { formatDateOnly, formatMoney } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
+import { enteredViaPlan, planMilestones } from '../../lib/planMilestones';
 import { useTvFocusable } from '../focusContext';
 import { tvRevealClass, tvRevealStyle } from '../styles';
 import {
@@ -16,8 +17,9 @@ import {
 // estados y gastos entrelazados por fecha), en LECTURA absoluta para el
 // sofá — editar erratas es trabajo de escritorio, aquí solo se recuerda.
 // Misma contabilidad que el original: la entrada sintética "Added to
-// Afterplay" al fondo, el 'plan_to_play' oculto (misma fecha, misma
-// información) y su nota heredada por la added para que no se pierda.
+// Afterplay" al fondo y el paso por el Plan ("Added to Plan", "Left the
+// Plan", lib/planMilestones.ts), con "Added to Afterplay" fuera cuando el
+// juego entró por el Plan.
 
 const SPEND_TYPE_LABEL: Record<SpendEvent['type'], string> = {
   purchase: 'Purchase',
@@ -48,24 +50,41 @@ type HistoryEntry =
       amount: number;
     }
   | {
-      // Derivada de gamesTable.addedAt — no existe como evento en la DB.
+      // Derivada de games.addedAt — no existe como evento en la DB.
       key: string;
       kind: 'added';
       date: Date;
       datePrecision: StateEvent['datePrecision'];
       note: string | null;
+    }
+  | {
+      // "Added to Plan" / "Left the Plan" — derivadas de planHistory (R-06).
+      key: string;
+      kind: 'plan';
+      label: string;
+      date: Date;
+      datePrecision: StateEvent['datePrecision'];
+      note: string | null;
     };
 
+// Las derivadas a igual fecha EXACTA, de abajo arriba (mismo orden que el
+// HistoryList de escritorio): entró en Afterplay, entró en el Plan, salió
+// del Plan; los eventos reales, encima.
+const DERIVED_RANK: Record<string, number> = { added: 0, 'plan-added': 1, 'plan-left': 2 };
+const derivedRank = (entry: HistoryEntry): number =>
+  entry.kind === 'added' || entry.kind === 'plan' ? DERIVED_RANK[entry.key] : 3;
+
 // El orden del historial, el mismo que el del escritorio (HistoryList): lo
-// más reciente arriba, la entrada "added" al fondo a igual fecha exacta —
-// primero "entró en Afterplay", luego todo lo demás— y, entre dos eventos
-// reales, el id más alto primero. Ese último desempate mezcla estados y
+// más reciente arriba, las derivadas por debajo de los eventos reales a igual
+// fecha exacta (DERIVED_RANK) y, entre dos eventos reales, el id más alto
+// primero. Ese último desempate mezcla estados y
 // gastos (dos tablas): es un orden estable, no "el creado después".
 const newestFirst = (a: HistoryEntry, b: HistoryEntry): number => {
   const byDate = b.date.getTime() - a.date.getTime();
   if (byDate !== 0) return byDate;
-  if (a.kind === 'added') return b.kind === 'added' ? 0 : 1;
-  if (b.kind === 'added') return -1;
+  const byRank = derivedRank(b) - derivedRank(a);
+  if (byRank !== 0) return byRank;
+  if (a.kind === 'added' || a.kind === 'plan' || b.kind === 'added' || b.kind === 'plan') return 0;
   return compareEntityIds(b.id, a.id);
 };
 
@@ -116,20 +135,25 @@ const HistoryRowTv = ({
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({});
   // 'added' comparte look con Unplayed (gris, círculo) — es el estado con el
-  // que todo juego entra a la app. Los gastos van en el ámbar del dinero.
+  // que todo juego entra a la app; las del Plan, el de Plan to Play. Los
+  // gastos van en el ámbar del dinero.
   const statusMeta =
     entry.kind === 'status'
       ? getGameStatusMeta(entry.type)
       : entry.kind === 'added'
         ? getGameStatusMeta(null)
-        : null;
+        : entry.kind === 'plan'
+          ? getGameStatusMeta('plan_to_play')
+          : null;
   const color = statusMeta ? statusMeta.color : AMBER;
   const title =
     entry.kind === 'status'
       ? getGameStatusMeta(entry.type).label
       : entry.kind === 'added'
         ? 'Added to Afterplay'
-        : formatMoney(entry.amount);
+        : entry.kind === 'plan'
+          ? entry.label
+          : formatMoney(entry.amount);
   // Solo fecha, nunca hora — decisión heredada del escritorio: el historial
   // es la línea temporal del juego (a qué días pasó qué) y el minuto a
   // minuto vive en Sessions. Un evento 'datetime' se pinta como día.
@@ -222,15 +246,8 @@ const HistoryRowTv = ({
 
 export const TvDetailHistory = ({ game }: { game: GameDetail }): React.JSX.Element => {
   const entries = useMemo<HistoryEntry[]>(() => {
-    // Con la added en la línea temporal, el 'plan_to_play' es redundante
-    // (misma fecha, misma información: "entró en la app vía Plan") — se
-    // oculta del pintado y su nota ("Recommended by…") la hereda la added.
-    const visibleStateHistory = game.stateHistory.filter((event) => event.type !== 'plan_to_play');
-    const inheritedNote =
-      game.stateHistory.find((event) => event.type === 'plan_to_play')?.note ?? null;
-
     const list: HistoryEntry[] = [
-      ...visibleStateHistory.map((event): HistoryEntry => ({
+      ...game.stateHistory.map((event): HistoryEntry => ({
         key: `status-${event.id}`,
         kind: 'status',
         id: event.id,
@@ -249,17 +266,29 @@ export const TvDetailHistory = ({ game }: { game: GameDetail }): React.JSX.Eleme
         spendType: event.type,
         amount: event.amount,
       })),
-      // En empate de fecha exacta va siempre al fondo (ver newestFirst).
-      {
-        key: 'added',
-        kind: 'added',
-        date: game.addedAt,
+      ...planMilestones(game.planHistory).map((milestone): HistoryEntry => ({
+        key: milestone.key,
+        kind: 'plan',
+        label: milestone.label,
+        date: milestone.date,
         datePrecision: 'datetime',
-        note: inheritedNote,
-      },
+        note: milestone.note,
+      })),
+      // Sobra si el juego entró por el Plan: "Added to Plan" ya lo cuenta.
+      ...(enteredViaPlan(game.addedAt, game.planHistory)
+        ? []
+        : [
+            {
+              key: 'added',
+              kind: 'added',
+              date: game.addedAt,
+              datePrecision: 'datetime',
+              note: null,
+            } satisfies HistoryEntry,
+          ]),
     ];
     return list.sort(newestFirst);
-  }, [game.stateHistory, game.spendHistory, game.addedAt]);
+  }, [game.stateHistory, game.spendHistory, game.addedAt, game.planHistory]);
 
   return (
     <div

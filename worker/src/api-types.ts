@@ -231,11 +231,9 @@ export type ActiveTimer = {
 // Los tipos de las órdenes viven en shared/planMailbox.ts, que es el contrato
 // que comparten los TRES lados (Worker, escritorio y PWA). Se reexportan aquí
 // para que la web los reciba por el mismo sitio que todo lo demás.
-export type {
-  MailboxGameSource,
-  PlanMailboxEntry,
-  PlanMailboxType,
-} from '../../src/shared/planMailbox';
+// El Worker sigue sobre el esquema 1.x: sus ids son enteros.
+export type { MailboxGameSource, PlanMailboxType } from '../../src/shared/planMailbox';
+export type PlanMailboxEntry = import('../../src/shared/planMailbox').PlanMailboxEntry<number>;
 
 export type SearchResult = {
   // De dónde sale, igual que el `source` del alta del escritorio: o el juego
@@ -255,12 +253,12 @@ export type SearchResult = {
 export type PendingEntry = {
   id: number;
   createdAt: number;
-  entry: import('../../src/shared/planMailbox').PlanMailboxEntry;
+  entry: PlanMailboxEntry;
 };
 
 export type MailboxFailure = {
   id: number;
-  entry: import('../../src/shared/planMailbox').PlanMailboxEntry;
+  entry: PlanMailboxEntry;
   error: string;
 };
 

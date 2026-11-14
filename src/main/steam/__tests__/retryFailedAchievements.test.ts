@@ -63,7 +63,7 @@ const waitUntil = async (condition: () => boolean, what: string): Promise<void> 
 };
 
 const game = (id: number): PendingAchievementsGame => ({
-  id,
+  id: String(id),
   title: `Juego ${id}`,
   steamAppId: 400 + id,
   executablePath: null,

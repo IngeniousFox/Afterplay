@@ -1,6 +1,5 @@
-import { isNotNull } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../db';
-import { gamesTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { selectRaMatchedGames } from '../db/v2/queries/external';
 import { maybeCelebrateCompletion } from '../steam/notifications/complete';
 import { enqueueAchievementToasts } from '../steam/notifications/overlay';
 import { notifyAchievementsActivity } from '../steam/notify';
@@ -37,17 +36,7 @@ const tick = async (isEmulatorRunning: () => boolean): Promise<void> => {
     const recent = await getRaRecentUnlocks(LOOKBACK_MINUTES);
     if (recent.length === 0) return;
 
-    const games = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          raGameId: gamesTable.raGameId,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(isNotNull(gamesTable.raGameId)),
-    );
+    const games = selectRaMatchedGames(appCtx());
 
     // Agrupar por juego: una tanda de desbloqueos del mismo juego entra
     // junta en storeUnlocks (mismo emparejado de sesiones, un solo aviso
@@ -83,6 +72,7 @@ const tick = async (isEmulatorRunning: () => boolean): Promise<void> => {
             unlockedAt: unlock.unlockedAt,
           })),
           new Date(),
+          { raGameId },
         );
         if (fresh.length === 0) continue;
 

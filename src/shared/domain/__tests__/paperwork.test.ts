@@ -178,7 +178,7 @@ describe('DTOs: los valores 2.0 cuelgan de la representación del id', () => {
     const v2: StateEvent<string>['datePrecision'] = 'unknown';
     const play: Session<string>['startedBy'] = 'play';
     // @ts-expect-error — el esquema 1.x no puede guardar 'unknown' (dtoSync.ts).
-    const v1: StateEvent['datePrecision'] = 'unknown';
+    const v1: StateEvent<number>['datePrecision'] = 'unknown';
     // @ts-expect-error — ni 'play'.
     const v1Play: Session<number>['startedBy'] = 'play';
     assert.deepEqual([v2, play, v1, v1Play], ['unknown', 'play', 'unknown', 'play']);

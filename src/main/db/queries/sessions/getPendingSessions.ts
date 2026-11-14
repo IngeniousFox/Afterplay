@@ -8,7 +8,7 @@ import { emulatorsTable, sessionsTable } from '../../schema';
 // ninguna iteración, quedan automáticamente FUERA de getAllSessions/getGames/
 // stats (todos hacen inner join con iterations) — la regla "no cuentan en
 // ninguna estadística hasta asignarse" sale gratis del propio modelo.
-export const getPendingSessions = async (): Promise<PendingSession[]> => {
+export const getPendingSessions = async (): Promise<PendingSession<number>[]> => {
   const db = getDb();
 
   return (

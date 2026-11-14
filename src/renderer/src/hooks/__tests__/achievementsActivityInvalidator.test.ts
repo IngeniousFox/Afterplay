@@ -56,7 +56,7 @@ describe('createAchievementsActivityInvalidator', () => {
     const { client, calls } = spyClient();
     const invalidate = createAchievementsActivityInvalidator(client);
 
-    invalidate(synced(7));
+    invalidate(synced('7'));
 
     assert.deepEqual(calls, [{ key: ALL, refetchType: 'active' }]);
   });
@@ -66,14 +66,14 @@ describe('createAchievementsActivityInvalidator', () => {
     const invalidate = createAchievementsActivityInvalidator(client);
 
     invalidate(progress(true));
-    invalidate(synced(7));
-    invalidate(synced(9));
+    invalidate(synced('7'));
+    invalidate(synced('9'));
 
     assert.deepEqual(calls, [
       { key: ALL, refetchType: 'none' },
-      { key: queryKeys.achievements.game(7), refetchType: 'active' },
+      { key: queryKeys.achievements.game('7'), refetchType: 'active' },
       { key: ALL, refetchType: 'none' },
-      { key: queryKeys.achievements.game(9), refetchType: 'active' },
+      { key: queryKeys.achievements.game('9'), refetchType: 'active' },
     ]);
   });
 
@@ -82,11 +82,11 @@ describe('createAchievementsActivityInvalidator', () => {
     const invalidate = createAchievementsActivityInvalidator(client);
 
     invalidate(progress(true));
-    invalidate(synced(7));
+    invalidate(synced('7'));
     calls.length = 0;
 
     invalidate(progress(false));
-    invalidate(synced(9));
+    invalidate(synced('9'));
 
     assert.deepEqual(calls, [
       { key: ALL, refetchType: 'active' },
@@ -98,15 +98,15 @@ describe('createAchievementsActivityInvalidator', () => {
     const { client, calls } = spyClient();
     const invalidate = createAchievementsActivityInvalidator(client, () => false);
 
-    invalidate(synced(7));
+    invalidate(synced('7'));
     invalidate(progress(true));
-    invalidate(synced(9));
+    invalidate(synced('9'));
     invalidate(progress(false));
 
     assert.deepEqual(calls, [
       { key: ALL, refetchType: 'none' },
       { key: ALL, refetchType: 'none' },
-      { key: queryKeys.achievements.game(9), refetchType: 'none' },
+      { key: queryKeys.achievements.game('9'), refetchType: 'none' },
       { key: ALL, refetchType: 'none' },
     ]);
   });
@@ -121,15 +121,15 @@ describe('createAchievementsActivityInvalidator', () => {
     const invalidate = createAchievementsActivityInvalidator(client, () => visible);
 
     invalidate(progress(true));
-    invalidate(synced(7));
+    invalidate(synced('7'));
     visible = true;
-    invalidate(synced(9));
+    invalidate(synced('9'));
 
     assert.deepEqual(calls, [
       { key: ALL, refetchType: 'none' },
-      { key: queryKeys.achievements.game(7), refetchType: 'none' },
+      { key: queryKeys.achievements.game('7'), refetchType: 'none' },
       { key: ALL, refetchType: 'none' },
-      { key: queryKeys.achievements.game(9), refetchType: 'active' },
+      { key: queryKeys.achievements.game('9'), refetchType: 'active' },
     ]);
   });
 });

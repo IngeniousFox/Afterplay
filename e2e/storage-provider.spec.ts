@@ -168,9 +168,9 @@ test('a new installation can choose S3 without a migration', async () => {
       dialog.getByRole('button', { name: /Cloud saves.*S3 compatible.*Configured/ }),
     ).toBeVisible();
     expect(await page.evaluate(() => globalThis.api.settings.getSaveStorageProvider())).toBe('s3');
-    expect((await page.evaluate(() => globalThis.api.settings.getCredentials())).s3AddressingMode).toBe(
-      'virtual',
-    );
+    expect(
+      (await page.evaluate(() => globalThis.api.settings.getCredentials())).s3AddressingMode,
+    ).toBe('virtual');
   } finally {
     await app.close();
     sandbox.cleanup();

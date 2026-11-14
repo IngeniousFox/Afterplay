@@ -8,7 +8,7 @@ import { after, before, beforeEach, describe, it, mock } from 'node:test';
 //
 // El "cada cuanto toca" y la rotacion salen los dos de listar la carpeta y
 // quedarse con el ULTIMO nombre. Mientras el filtro fue solo "empieza por
-// Afterplay- y acaba en .db", una copia manual guardada ahi (el dialogo de
+// Afterplay2- y acaba en .db", una copia manual guardada ahi (el dialogo de
 // "Back up now" no propone carpeta, asi que se puede elegir esa) ordenaba
 // siempre la ultima, su nombre no llevaba sello legible, y el "no hay ultimo
 // del que medir" convertia el intervalo en "una copia por arranque" mientras
@@ -19,7 +19,7 @@ import { after, before, beforeEach, describe, it, mock } from 'node:test';
 // borrando ficheros de verdad en una carpeta temporal. Lo doblado es lo que no
 // existe fuera de la app: electron (app.getPath), el VACUUM INTO (aqui basta
 // con que el fichero aparezca donde toca, que es lo unico que la rotacion
-// mira), el acceso a la DB y la configuracion de Ajustes.
+// mira) y la configuracion de Ajustes.
 //
 // Para lanzarlo solo:
 //   npx tsx --test --experimental-test-module-mocks src/main/db/__tests__/dailyBackup.test.ts
@@ -33,13 +33,8 @@ mock.module('electron', {
 });
 
 // La ruta se resuelve desde AQUI (src/main/db/__tests__), o sea los mismos
-// ficheros que dailyBackup.ts importa como '.', './backupCore' y
+// ficheros que dailyBackup.ts importa como './backupCore' y
 // '../config/store'. Node casa los dobles por URL resuelta.
-mock.module('../index', {
-  namedExports: {
-    withDbAccess: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
-  },
-});
 
 mock.module('../backupCore', {
   namedExports: {
@@ -83,7 +78,7 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 // mano y no importado: si el formato del nombre cambiara, estos tests tienen
 // que enterarse por un rojo, no adaptarse solos.
 const automatica = (date: Date): string =>
-  `Afterplay-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_` +
+  `Afterplay2-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_` +
   `${pad(date.getHours())}-${pad(date.getMinutes())}.db`;
 
 const escribir = (name: string): void => writeFileSync(join(backupsDir(), name), 'x');
@@ -98,7 +93,7 @@ describe('la copia automatica no confunde una copia manual con una suya', () => 
     // NO toca; pero la manual ordena la ultima ('m' de manual va detras de
     // cualquier digito de un ano) y su nombre no lleva sello.
     escribir(automatica(horasAtras(1)));
-    escribir('Afterplay-manual-2026-08-13T20-23-11-000Z.db');
+    escribir('Afterplay2-manual-2026-08-13T20-23-11-000Z.db');
     const antes = ficheros();
 
     await runDailyBackup();
@@ -114,13 +109,13 @@ describe('la copia automatica no confunde una copia manual con una suya', () => 
     config.backupCount = 2;
     const viejas = [horasAtras(96), horasAtras(72), horasAtras(48)].map(automatica);
     for (const name of viejas) escribir(name);
-    escribir('Afterplay-manual-2026-08-13T20-23-11-000Z.db');
+    escribir('Afterplay2-manual-2026-08-13T20-23-11-000Z.db');
 
     await runDailyBackup();
 
     const restantes = ficheros();
     assert.ok(
-      restantes.includes('Afterplay-manual-2026-08-13T20-23-11-000Z.db'),
+      restantes.includes('Afterplay2-manual-2026-08-13T20-23-11-000Z.db'),
       'la rotacion se ha llevado la copia manual',
     );
     const automaticas = restantes.filter((name) => !name.includes('manual'));
@@ -133,7 +128,7 @@ describe('la copia automatica no confunde una copia manual con una suya', () => 
     // El borde contrario, para que el filtro nuevo no deje a la app sin copias:
     // una carpeta donde lo unico que hay es la manual sigue siendo "no hay
     // ninguna automatica todavia", y eso si es "toca ya".
-    escribir('Afterplay-manual-2026-08-13T20-23-11-000Z.db');
+    escribir('Afterplay2-manual-2026-08-13T20-23-11-000Z.db');
 
     await runDailyBackup();
 
@@ -146,6 +141,22 @@ describe('la copia automatica no confunde una copia manual con una suya', () => 
     await runDailyBackup();
 
     assert.equal(ficheros().length, 1);
+  });
+
+  it('las copias de la 1.x se quedan donde estan: ni cuentan ni rotan', async () => {
+    // Afterplay-<sello>.db son las copias de la base 1.x, de antes del cambio:
+    // la vuelta atras si la 2.0 sale mal. Mismo sello, otro prefijo, y la
+    // rotacion de la 2.0 no las ve.
+    config.backupCount = 1;
+    const deLaUnoX = `Afterplay-${automatica(horasAtras(200)).slice('Afterplay2-'.length)}`;
+    escribir(deLaUnoX);
+    escribir(automatica(horasAtras(96)));
+
+    await runDailyBackup();
+
+    const restantes = ficheros();
+    assert.ok(restantes.includes(deLaUnoX), 'la rotacion se ha llevado una copia de la 1.x');
+    assert.equal(restantes.filter((name) => name.startsWith('Afterplay2-')).length, 1);
   });
 
   it('con la retencion apagada (0) no se toca nada', async () => {

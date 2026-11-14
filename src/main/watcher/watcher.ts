@@ -1,14 +1,20 @@
 import { powerMonitor, type BrowserWindow } from 'electron';
 import { closeSync, openSync } from 'node:fs';
-import { withDbAccess } from '../db';
-import { isLocalCopyFresh } from '../db/remoteFreshness';
-import { getWatchTargets, type WatchTarget } from '../db/queries/games/getWatchTargets';
-import { closeSession, closeSessionIfOpen } from '../db/queries/sessions/closeSession';
-import { createEmulatorSession } from '../db/queries/sessions/createEmulatorSession';
-import { getOpenSessions, type OpenSession } from '../db/queries/sessions/getOpenSessions';
-import { getSessionClosedInfo } from '../db/queries/sessions/getSessionClosedInfo';
-import { heartbeatSessions } from '../db/queries/sessions/heartbeatSessions';
-import { startGameSession } from '../db/queries/sessions/startGameSession';
+import { appCtx } from '../db/v2/appDb';
+import {
+  captureStoreError,
+  closeSession,
+  closeSessionIfOpen,
+  createEmulatorSession,
+  getOpenSessions,
+  getSessionClosedInfo,
+  getWatchTargets,
+  heartbeatSessions,
+  startGameSession,
+  type OpenSession,
+  type WatchTarget,
+} from '../db/v2/queries/sessions';
+import type { Session } from '../../shared/dto';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { sendToOverlay } from '../overlay';
 import { notifySessionClosed } from './notifySession';
@@ -106,6 +112,40 @@ const openSessionKey = (session: OpenSession): string | null => {
   return null;
 };
 
+// Los cierres del watcher son siempre del dueño (R-12: 'owner'; el Stop de una
+// persona va por el IPC con 'user'). Cada escritura por sesión se aísla con
+// captureStoreError: la puerta deshace SOLO esa sesión y el ciclo sigue con
+// las demás (queries/sessions/errors.ts). null = no la ha cerrado esta llamada
+// (o la puerta la rechazó, que queda en el log).
+const ownerClose = (
+  sessionId: SessionId,
+  endedAt: Date,
+  mode: 'if-open' | 'always',
+): Session<string> | null => {
+  const input = { endedAt, closedBy: 'owner' } as const;
+  const result = captureStoreError(() =>
+    mode === 'if-open'
+      ? closeSessionIfOpen(appCtx(), sessionId, input)
+      : closeSession(appCtx(), sessionId, input),
+  );
+  if (result.ok) return result.value;
+  console.error(`[watcher] la base rechazo cerrar la sesion ${sessionId}:`, result.error);
+  return null;
+};
+
+// Abrir la sesión de un objetivo recién visto: la ÚNICA bifurcación
+// juego/emulador del watcher (ver el bucle de arranques).
+const openSessionFor = (target: WatchTarget): Session<string> | null => {
+  const result = captureStoreError(() =>
+    target.kind === 'game'
+      ? startGameSession(appCtx(), target.refId, 'watcher')
+      : createEmulatorSession(appCtx(), target.refId),
+  );
+  if (result.ok) return result.value;
+  console.error(`[watcher] la base rechazo abrir sesion para ${target.key}:`, result.error);
+  return null;
+};
+
 // SPEC sección 6/7 + EMULADORES.md — el watcher vive en el main, observa los
 // procesos del sistema cada ~5s (no lanza nada) y traduce arranques/cierres
 // en sesiones automáticas. Enfoque de dos fases: barrido barato por nombre
@@ -157,10 +197,6 @@ export class ProcessWatcher {
   // abortado a medias lo deje como estaba es lo que se quiere: al volver de
   // una pausa no hay que volver a contar lo mismo).
   private timerHeldKeys = new Set<string>();
-  // Cronómetros que parecen abandonados pero cuyo cierre se aplaza porque la
-  // copia local no está al día (ver sweepStaleTimerSessions). Solo sirve para
-  // que el aviso salga una vez por sesión.
-  private timerSweepDeferred = new Set<SessionId>();
   private readonly getWindow: () => BrowserWindow | null;
   // Bandeja del sistema (SPEC 6, opcional): deja ver de un vistazo qué se
   // está jugando sin abrir la ventana. Se llama con los títulos actualmente
@@ -198,8 +234,8 @@ export class ProcessWatcher {
   }
 
   // ¿Ha CADUCADO este ciclo? Pregunta obligatoria antes de cada escritura de
-  // poll(), porque withDbAccess es un contador y no un mutex (ver db/index.ts):
-  // no serializa nada, así que pause() puede colarse en cualquiera de los
+  // poll(): nada serializa el ciclo con pause(), así que pause() puede
+  // colarse en cualquiera de los
   // awaits del ciclo —cerrando las sesiones y vaciando `active` por debajo— y
   // el ciclo reanudaría con la foto de ANTES: abriendo sesión nueva por un
   // juego que el bloqueo acaba de cerrar (y latiéndola durante todo el
@@ -256,7 +292,7 @@ export class ProcessWatcher {
     if (this.active.size === 0) return;
 
     const endedAt = new Date();
-    await withDbAccess(async () => {
+    {
       // Cada cierre en su try/catch: si uno falla (la DB justo en un swap, un
       // corte), los demás se cierran igual y `active` se vacía pase lo que
       // pase (finally). Sin esto, un solo rechazo dejaba `active` intacto —
@@ -265,7 +301,7 @@ export class ProcessWatcher {
       try {
         for (const [key, activeSession] of this.active) {
           try {
-            await closeSession(activeSession.sessionId, endedAt);
+            ownerClose(activeSession.sessionId, endedAt, 'always');
             console.log(
               `[watcher] [${reason}] ${key} pausado -> sesion ${activeSession.sessionId} cerrada`,
             );
@@ -276,7 +312,7 @@ export class ProcessWatcher {
       } finally {
         this.active.clear();
       }
-    });
+    }
 
     this.notifyRenderer();
     this.onActiveGamesChange?.(this.getActiveTitles());
@@ -311,11 +347,9 @@ export class ProcessWatcher {
     const generation = this.generation;
 
     try {
-      // Los dos tramos que tocan la DB van dentro de withDbAccess() para no
-      // pisarse con un swap de conexión en caliente (ver attemptSyncUpgrade
-      // en db/index.ts). El scan() de procesos queda fuera a propósito: puede
-      // tardar segundos y no toca la DB — no debe retener el candado.
-      const targets = await withDbAccess(() => getWatchTargets());
+      // La base 2.0 es síncrona: leer y escribir no abre huecos. El único
+      // hueco largo del ciclo es scan(), que puede tardar segundos.
+      const targets = getWatchTargets(appCtx());
       const running = await this.scan(targets);
 
       // scan() puede tardar segundos, y en ese hueco el PC ha podido
@@ -326,7 +360,7 @@ export class ProcessWatcher {
       // Por generación y no por el booleano: ver isStale.
       if (this.isStale(generation)) return;
 
-      const changed = await withDbAccess(async () => {
+      const changed = await (async (): Promise<boolean> => {
         let changed = false;
 
         // Foto única de las sesiones abiertas para todo el ciclo: la comparten
@@ -335,7 +369,7 @@ export class ProcessWatcher {
         // ahora sale en cada vuelta porque el barrido la necesita siempre — un
         // SELECT diminuto por índice sobre el SQLite local, del mismo orden que
         // el getWatchTargets que ya se paga cada 5s.
-        const openSessions = await getOpenSessions();
+        const openSessions = getOpenSessions(appCtx());
 
         // Y otra vez, que este await también es un hueco por el que cabe una
         // pausa: de aquí para abajo todo lo que hace este bloque es ESCRIBIR
@@ -463,10 +497,7 @@ export class ProcessWatcher {
             // él; un emulador crea una sesión sin juego asignado (bandeja
             // Pending, EMULADORES.md §4). Cierre, latido, adopción y
             // reconciliación son idénticos para los dos a partir de aquí.
-            const session =
-              info.target.kind === 'game'
-                ? await startGameSession(info.target.refId)
-                : await createEmulatorSession(info.target.refId);
+            const session = openSessionFor(info.target);
             if (session) {
               this.active.set(key, {
                 pid: info.pid,
@@ -492,7 +523,7 @@ export class ProcessWatcher {
         for (const [key, activeSession] of this.active) {
           if (running.has(key)) continue;
 
-          const closed = await closeSessionIfOpen(activeSession.sessionId, new Date());
+          const closed = ownerClose(activeSession.sessionId, new Date(), 'if-open');
           this.active.delete(key);
           console.log(
             `[watcher] [stop] ${key} cerrado -> sesion ${activeSession.sessionId} cerrada`,
@@ -504,7 +535,7 @@ export class ProcessWatcher {
           // un juego — una de emulador sin asignar no tiene de qué hablar
           // todavía, y su aviso saldría sin título.
           if (closed && closed.iterationId !== null) {
-            const info = await getSessionClosedInfo(closed.id);
+            const info = getSessionClosedInfo(appCtx(), closed.id);
             if (info) notifySessionClosed(info);
           }
 
@@ -541,13 +572,20 @@ export class ProcessWatcher {
         // pausa por medio es justo lo que no hay que escribir: sería sellar
         // como jugado el instante en que se bloqueó la pantalla.
         if (this.isStale(generation)) return changed;
-        await heartbeatSessions(
+        const beat = heartbeatSessions(
+          appCtx(),
           Array.from(this.active.values(), (session) => session.sessionId),
           new Date(),
         );
+        for (const failure of beat.failed) {
+          console.error(
+            `[watcher] la base rechazo el latido de la sesion ${failure.sessionId}:`,
+            failure.error,
+          );
+        }
 
         return changed;
-      });
+      })();
 
       // La red final: entre el último control y la escritura que le sigue
       // siempre queda un hueco de un await, así que lo que este ciclo haya
@@ -615,39 +653,19 @@ export class ProcessWatcher {
   // relee en cada vuelta, así que una sesión ya cerrada no vuelve a entrar
   // aquí.
   //
-  // Y SOLO CON LA COPIA LOCAL AL DÍA (db/remoteFreshness.ts). Esta regla se
-  // aplica sobre lo que el PC cree que pasó en Turso, y si lleva horas sin
-  // bajar nada —venía de suspensión, arrancó sin red, o este es el sondeo del
-  // arranque, que va por delante del primer sync— la sesión que aquí sigue
-  // "abierta y muda" puede estar parada en el móvil con sus horas bien
-  // puestas. Cerrarla aquí era peor que no hacer nada: el ciclo de sync sube
-  // antes de bajar, así que el cierre local (en el último latido conocido,
-  // casi siempre el arranque: duración cero) pisaba en Turso el "parar" bueno.
-  // Sin sync reciente no se cierra nada; el Worker aplica la misma regla
-  // contra Turso en cuanto alguien abre la web, y el siguiente pull lo trae.
+  // Y SOLO LOS PROPIOS: el cierre pasa por la regla del dueño (R-12), así que
+  // el cronómetro de otro dispositivo (el móvil) no se cierra aquí —
+  // closeSessionIfOpen devuelve null—; lo cierra su dueño con esta misma regla.
   private async sweepStaleTimerSessions(openSessions: OpenSession[]): Promise<boolean> {
     const now = Date.now();
     let changed = false;
-    const fresh = isLocalCopyFresh(now);
-    const deferredNow = new Set<SessionId>();
 
     for (const session of openSessions) {
       if (session.startedBy !== 'timer') continue;
       if (!isTimerStale(session, now)) continue;
 
-      if (!fresh) {
-        deferredNow.add(session.sessionId);
-        // Una línea por sesión, no una cada 5s durante horas sin red.
-        if (!this.timerSweepDeferred.has(session.sessionId)) {
-          console.log(
-            `[watcher] [info] sesion ${session.sessionId} de cronometro parece abandonada, pero la copia local no esta al dia con Turso - espero al proximo sync antes de cerrarla`,
-          );
-        }
-        continue;
-      }
-
       const lastBeat = timerLastBeat(session);
-      const closed = await closeSessionIfOpen(session.sessionId, lastBeat);
+      const closed = ownerClose(session.sessionId, lastBeat, 'if-open');
       if (!closed) continue;
       console.log(
         `[watcher] [info] sesion ${session.sessionId} de cronometro sin latir ${TIMER_STALE_MS / 3_600_000}h - cerrada en su ultimo latido`,
@@ -655,7 +673,6 @@ export class ProcessWatcher {
       changed = true;
     }
 
-    this.timerSweepDeferred = deferredNow;
     return changed;
   }
 
@@ -693,7 +710,7 @@ export class ProcessWatcher {
         });
       } else {
         const endedAt = session.lastHeartbeatAt ?? session.startedAt;
-        await closeSession(session.sessionId, endedAt);
+        ownerClose(session.sessionId, endedAt, 'always');
         console.log(
           `[watcher] [info] sesion ${session.sessionId} (${key ?? 'sin dueno'}) recuperada al arrancar - cerrada en su ultimo latido`,
         );
@@ -784,7 +801,7 @@ export class ProcessWatcher {
       if (now - session.startedAt.getTime() < ProcessWatcher.UNSEEN_GRACE_MS) continue;
 
       const endedAt = session.lastHeartbeatAt ?? session.startedAt;
-      const closed = await closeSessionIfOpen(session.sessionId, endedAt);
+      const closed = ownerClose(session.sessionId, endedAt, 'if-open');
       if (!closed) continue;
       console.log(
         `[watcher] [info] sesion ${session.sessionId} (${key}) sin proceso a la vista - cerrada, su .exe nunca aparecio`,

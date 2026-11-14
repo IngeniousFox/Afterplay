@@ -1,8 +1,7 @@
 import { watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { and, isNotNull } from 'drizzle-orm';
-import { getDb, withDbAccess } from '../../db';
-import { gamesTable } from '../../db/schema';
+import { appCtx } from '../../db/v2/appDb';
+import { getEmuUnlockTargets } from '../../db/v2/queries/achievements';
 import { existingEmuBases } from './locations';
 import { applyEmuUnlocksForGame } from '../syncAchievements';
 import { maybeCelebrateCompletion } from '../notifications/complete';
@@ -69,18 +68,9 @@ const flush = async (): Promise<void> => {
 
   flushing = true;
   try {
-    const games = await withDbAccess(async () =>
-      getDb()
-        .select({
-          id: gamesTable.id,
-          title: gamesTable.title,
-          steamAppId: gamesTable.steamAppId,
-          executablePath: gamesTable.executablePath,
-          heroUrl: gamesTable.heroUrl,
-        })
-        .from(gamesTable)
-        .where(and(isNotNull(gamesTable.steamAppId), isNotNull(gamesTable.achievementsSyncedAt))),
-    );
+    // Solo juegos con catálogo de Steam ya sincronizado: sin catálogo no hay
+    // con qué emparejar los apiName que escribe el crack.
+    const games = getEmuUnlockTargets(appCtx(), appIds);
 
     for (const appId of appIds) {
       // Cada appid en su try/catch. Antes, un solo fallo (la DB en pleno swap,

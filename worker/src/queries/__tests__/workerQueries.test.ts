@@ -15,7 +15,7 @@ import {
   sessionsTable,
   stateEventsTable,
 } from '../../../../src/main/db/schema';
-import type { PlanMailboxEntry } from '../../../../src/shared/planMailbox';
+import type { PlanMailboxEntry } from '../../api-types';
 // El umbral y el predicado de frescura se importan de src/shared y NO del
 // Worker: son los MISMOS que importa el watcher del escritorio, así que fijar
 // aquí el número fija los dos lados a la vez. Cuando cada lado tenía su copia

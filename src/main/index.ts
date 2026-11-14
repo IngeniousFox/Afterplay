@@ -12,8 +12,8 @@ import {
 import { join } from 'path';
 import icon, { pngIcon } from './lib/appIcon';
 import { initCredentials } from './config/credentials';
-import { runMigrations, runSyncCycle } from './db';
 import { runDailyBackup } from './db/dailyBackup';
+import { closeAppDb, initAppDb } from './db/v2/appDb';
 import type { Tray } from 'electron';
 import { registerImageProtocolHandler, registerImageProtocolScheme } from './images/protocol';
 import { registerIpcHandlers } from './ipc';
@@ -29,8 +29,6 @@ import { getSavedWindowOptions, trackWindowState } from './lib/windowState';
 import { setCuriositiesNotifier } from './curiosities/notify';
 import { setExternalNotifier } from './external/notify';
 import { runMemoriesDailyTick } from './memories/detect';
-import { runPlanMailboxDrain } from './plan/drainMailbox';
-import { notifyPulledChanges, onSyncCompleted } from './db';
 import { runSteamAppIdBackfill } from './steam/appIdBackfill';
 import {
   queueAchievementsRefreshForGame,
@@ -98,10 +96,6 @@ let splashWindow: BrowserWindow | null = null;
 let watcher: ProcessWatcher | null = null;
 let scanWatcher: ScanWatcher | null = null;
 let tray: Tray | null = null;
-let syncTimer: ReturnType<typeof setInterval> | null = null;
-// Más espaciado que el watcher de procesos (5s) a propósito — sincronizar
-// con Turso es una llamada de red de verdad, no un sondeo local barato.
-const SYNC_INTERVAL_MS = 60_000;
 // El tic de la detección de recaps (AFTERPLAY-LOOP.md §3.3). Cada hora, pero
 // el trabajo real solo pasa una vez por día de calendario (ver
 // memories/detect.ts) — el intervalo corto es solo para no perder el cambio
@@ -135,7 +129,7 @@ let preBigPictureState: { bounds: Electron.Rectangle; isMaximized: boolean } | n
 
 // Overrides the userData folder name (would otherwise be "afterplay", lowercase,
 // taken from package.json's "name"). Must run before any app.getPath('userData')
-// call — including the lazy one inside getDb() — so it's the very first thing
+// call — including the one inside initAppDb() — so it's the very first thing
 // this module does, before app.whenReady() or anything async.
 app.setName('Afterplay');
 
@@ -169,10 +163,10 @@ registerImageProtocolScheme();
 // 'second-instance' y se va en milisegundos, sin ventana ni DB.
 //
 // El candado se toma a nivel de módulo, así que el mensaje puede llegar
-// mientras el arranque todavía va por dentro de runMigrations (con la base de
-// Turso dormida es justo la espera larga y visible por la que existe el splash
-// — y por tanto justo el hueco en el que a uno le da por hacer doble clic otra
-// vez). Durante ese hueco la petición se APARCA en vez de atenderse, y la
+// mientras el arranque todavía está abriendo la base (la primera vez, con la
+// importación de la 1.x, es justo la espera larga y visible por la que existe
+// el splash — y por tanto justo el hueco en el que a uno le da por hacer doble
+// clic otra vez). Durante ese hueco la petición se APARCA en vez de atenderse, y la
 // recoge revealWhenReady al enseñar la ventana.
 //
 // Aparcar sigue siendo obligatorio aunque la ventana ya exista desde antes de
@@ -189,9 +183,9 @@ registerImageProtocolScheme();
 // puede pasar (createWindow se defiende solo, y los handlers se registran
 // antes), pero el primero sí.
 //
-// Y LA PUERTA ES "¿SE HA ENSEÑADO YA LA VENTANA?", no "¿acabaron las
-// migraciones?". Aquí había un `startupFinished` marcado al terminar
-// runMigrations, y esa definición se quedó vieja el día que nació el TERCER
+// Y LA PUERTA ES "¿SE HA ENSEÑADO YA LA VENTANA?", no "¿está abierta la
+// base?". Aquí había un `startupFinished` marcado al terminar las
+// migraciones, y esa definición se quedó vieja el día que nació el TERCER
 // RELOJ (startupContentPainted, más abajo): desde entonces la ventana NO se
 // enseña al acabar de migrar, sino cuando además llega
 // 'window:startup-content-ready' (o vencen los CONTENT_GATE_MAX_MS). En ese
@@ -213,7 +207,7 @@ let pendingWindowRequest: 'show' | 'bigpicture' | null = null;
 
 // El segundo de los TRES relojes que deciden cuándo se enseña la ventana (el
 // primero es 'ready-to-show'): la base de datos, lista al terminar
-// runMigrations. Ver revealWhenReady en createWindow.
+// initAppDb. Ver revealWhenReady en createWindow.
 let dbReady = false;
 let revealPendingWindow: (() => void) | null = null;
 
@@ -329,19 +323,15 @@ function createWindow(): void {
   // en la barra de tareas y en Alt+Tab.
   if (isDevProfile()) window.on('page-title-updated', (event) => event.preventDefault());
 
-  // DOS RELOJES, y hasta hoy iban en fila: el renderer (~155 ms medidos desde
-  // que se crea la ventana hasta su primer frame) y la base de datos (470 ms
-  // de comprobación de Turso con la base despierta, hasta 4 s con ella
-  // dormida). La ventana se creaba DESPUÉS de migrar, así que esos dos tiempos
-  // se sumaban. Ahora se crea antes y corren a la vez: enseña el que llegue
-  // SEGUNDO. Medido sobre seis arranques de cada: la ventana pasaba de
-  // aparecer 161 ms después de que la base estuviera lista a aparecer 6 ms
-  // después.
+  // DOS RELOJES: el renderer (~155 ms medidos desde que se crea la ventana
+  // hasta su primer frame) y la base de datos. La ventana se crea antes de
+  // abrir la base y el renderer carga en su propio proceso mientras tanto:
+  // enseña el que llegue SEGUNDO.
   //
   // Enseñarla en cuanto el renderer esté, sin esperar a la base, se descartó a
   // propósito: la app aparecería con todo vacío mientras las consultas esperan
-  // en la puerta de withDbAccess, que es exactamente el hueco que el splash
-  // existe para tapar (ver splash/splash.ts).
+  // en la cola de IPC, que es exactamente el hueco que el splash existe para
+  // tapar (ver splash/splash.ts).
   let rendererReady = false;
   let revealed = false;
   const revealWhenReady = (): void => {
@@ -625,27 +615,6 @@ const forwardToWindowAndOverlay = (channel: string) => {
   };
 };
 
-// El drenado del buzón del Plan (REMOTO.md §6.2), registrado UNA vez como
-// tarea posterior al sync.
-//
-// No se llama desde ningún sitio a mano: lo dispara runSyncCycle justo después
-// de un pull correcto (ver onSyncCompleted en db/index.ts). Así corre en los
-// tres sitios que sincronizan —arranque, tic de 60s y guardar credenciales en
-// Ajustes— sin que ninguno tenga que acordarse, y nunca sin que haya habido
-// pull de verdad.
-//
-// Avisa al renderer al terminar porque los hooks de juegos usan
-// `staleTime: Infinity`, y eso solo se sostiene si todo el que escribe avisa.
-//
-// Con el MISMO emisor que usa el pull (notifyPulledChanges, en db/index.ts) y
-// no con una pareja mainWindow+sendToOverlay escrita aquí: los dos disparaban
-// en el mismo ciclo —las filas del buzón bajan por pull— y el overlay es un
-// BrowserWindow más, así que aquello no sumaba destinatarios, solo una segunda
-// invalidación del caché de react-query en las dos ventanas.
-onSyncCompleted(async () => {
-  await runPlanMailboxDrain(notifyPulledChanges);
-});
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -675,17 +644,16 @@ app.whenReady().then(async () => {
   });
 
   // Splash — tan pronto como Electron deja crear ventanas, antes de nada
-  // más (migraciones, conexión con Turso, arranque del bundle del
-  // renderer...). Si la app la abrió Windows sola al iniciar sesión, no
+  // más (abrir la base, arranque del bundle del renderer...). Si la app la abrió Windows sola al iniciar sesión, no
   // hay nada que enseñar todavía (arranca directa a la bandeja, SPEC 3E) —
   // mismo chequeo que createWindow() usa para decidir si mostrarse, con la
   // misma excepción: --bigpicture quiere pantalla.
   if (!wasOpenedHiddenAtLogin() || bigPictureMode) splashWindow = createSplashWindow();
   mark('splash creado');
 
-  // Credenciales (Twitch/IGDB, SteamGridDB, Turso) del almacén cifrado de
-  // userData a process.env — TIENE que ir tras whenReady (safeStorage lo
-  // exige) y antes de runMigrations (la conexión con Turso las lee ahí).
+  // Credenciales (Twitch/IGDB, SteamGridDB, almacenamiento) del almacén
+  // cifrado de userData a process.env — TIENE que ir tras whenReady
+  // (safeStorage lo exige).
   // Sin ninguna configurada la app arranca igual, en modo local: las claves
   // se meten desde Ajustes y se aplican en caliente, sin reiniciar.
   try {
@@ -716,57 +684,38 @@ app.whenReady().then(async () => {
     app.quit();
   });
 
-  // LA VENTANA, ANTES DE MIGRAR — y esto es un cambio de orden con motivo
-  // medido, no una reordenación estética.
-  //
-  // Aquí antes se esperaba a runMigrations() y solo después se creaba la
-  // ventana, así que dos esperas que no dependen la una de la otra se sumaban:
-  // la comprobación de Turso (470 ms medidos con la base despierta; hasta los
-  // 4 s de CONNECT_TIMEOUT_MS con ella dormida) y el arranque del renderer
-  // (~155 ms hasta su primer frame). Creándola aquí corren a la vez y el
-  // arranque paga solo la más larga: mediana de 6 arranques de cada, 1034 ms
-  // -> 898 ms desde que se lanza el .exe hasta ver la ventana.
-  //
-  // Lo que hace que esto sea seguro y no una carrera es la puerta de arranque
-  // de withDbAccess (db/index.ts): las consultas que el renderer dispara al
-  // montar ya no revientan con "getDb() llamado antes de runMigrations()", se
-  // quedan esperando y entran solas en cuanto hay conexión. La ventana no se
-  // ENSEÑA hasta que las dos cosas están (ver revealWhenReady): el splash
-  // sigue tapando exactamente el mismo hueco que tapaba antes.
-  //
-  // Lo que NO se ha tocado: el orden interno de las migraciones ni el
-  // protocolo de sync. Ahí dentro todo pasa exactamente igual y en el mismo
-  // orden, solo que con la ventana ya cargando por su cuenta.
+  // LA VENTANA, ANTES DE ABRIR LA BASE: el renderer arranca en su propio
+  // proceso mientras el principal abre (y la primera vez importa) la base, así
+  // que las dos esperas no se suman. Es seguro porque los handlers ya están
+  // registrados y la apertura es síncrona: ninguna petición del renderer se
+  // atiende antes de que la base esté abierta. La ventana no se ENSEÑA hasta
+  // que las dos cosas están (ver revealWhenReady).
   createWindow();
   mark('ventana creada (el renderer empieza a cargar)');
 
-  // Apply pending DB migrations before anything else touches the database.
-  // A failed migration means the app can't run correctly, so it quits
-  // instead of continuing into a broken state.
+  // La base 2.0 (db/v2/appDb.ts): migra su esquema y, la primera vez en el
+  // perfil de desarrollo o en un e2e, importa la 1.x (con copia previa en
+  // backups/). Es SÍNCRONA: mientras corre, el proceso principal no atiende
+  // nada, así que las peticiones que el renderer ya haya lanzado esperan en
+  // la cola de IPC y entran con la base abierta. Si falla, la app no puede
+  // funcionar: se avisa con el motivo real y se cierra.
   try {
-    await runMigrations();
+    initAppDb();
   } catch (error) {
-    console.error('Database migration failed:', error);
+    console.error('[v2] no se pudo abrir la base:', error);
     splashWindow?.close();
-    // Con la instancia única (§1.1), "la app ya estaba abierta" ha dejado de
-    // ser una causa posible de este error — el texto ya no la enmascara y
-    // puede señalar a los culpables reales que quedan.
-    // El mensaje real y no solo el genérico: cuando el que falla es el
-    // verificador de una reconstrucción de tabla, ahí viene QUÉ tablas
-    // perdieron filas y DÓNDE está la copia de justo antes — datos que no
-    // sirven de nada enterrados en una consola que nadie va a mirar.
     dialog.showErrorBox(
       'Afterplay',
-      'No se pudo preparar la base de datos (¿otro programa está usando el archivo, o falló una migración?). La app se va a cerrar.\n\n' +
+      'No se pudo preparar la base de datos. La app se va a cerrar.\n\n' +
         (error instanceof Error ? error.message : String(error)),
     );
     app.quit();
     return;
   }
-  mark('migraciones + conexion con Turso');
+  mark('base 2.0 abierta');
 
   // El otro reloj de la ventana (ver revealWhenReady en createWindow): si el
-  // renderer ya terminó —lo normal ahora, porque tarda menos que Turso— esto
+  // renderer ya terminó esto
   // la enseña en el acto; si no, la enseñará su propio 'ready-to-show'.
   //
   // Y aquí NO se abre la puerta de las peticiones de segunda instancia: eso lo
@@ -777,13 +726,9 @@ app.whenReady().then(async () => {
   dbReady = true;
   revealPendingWindow?.();
 
-  // Sin await: VACUUM INTO copia el fichero .db entero — 133 ms medidos sobre
-  // la base real (18 MB) — y nada de lo que sigue depende de que esa copia
-  // exista ya. Va DESPUÉS de enseñar la ventana, y no antes como estaba: las
-  // sentencias de una misma conexión libsql se sirven en fila, así que lanzarlo
-  // junto a las migraciones ponía esos 133 ms por delante de las primeras
-  // consultas del renderer los arranques en que tocaba copia (una cada 6 h por
-  // defecto). Gateado por su propio withDbAccess (ver dailyBackup.ts).
+  // VACUUM INTO copia el fichero .db entero y nada de lo que sigue depende de
+  // que esa copia exista ya. Va DESPUÉS de enseñar la ventana: la copia es
+  // síncrona y no debe ir por delante de las primeras consultas del renderer.
   void runDailyBackup().catch((error: unknown) => {
     console.warn('[backup] fallo inesperado en la copia diaria (sigo igualmente):', error);
   });
@@ -983,24 +928,15 @@ app.whenReady().then(async () => {
   powerMonitor.on('resume', () => watcher?.resume());
   powerMonitor.on('unlock-screen', () => watcher?.resume());
 
-  // Sync con Turso (Bloque 4): la conexión decidió si tiene sync o no al
-  // arrancar (dentro de runMigrations()). Si arrancó sin red, cada ciclo
-  // reintenta el ascenso en caliente (con el candado de withDbAccess — ver
-  // db/index.ts); con sync activo, solo sube/baja cambios. El primer ciclo
-  // se lanza ya mismo (sin esperar el intervalo) — "sync manual al
-  // arrancar" — sin bloquear el resto del arranque.
+  // Las pasadas de fondo del arranque. El escritorio 2.0 ya no sincroniza
+  // con Turso (el sync nuevo es la fase 3), así que no esperan a ningún pull:
+  // arrancan ya, sin bloquear el resto del arranque.
+  //
   // Detección automática de recaps pendientes (AFTERPLAY-LOOP.md §3.3): una
   // pasada al arrancar y un tic horario que solo trabaja una vez por día de
   // calendario — la app vive semanas en la bandeja sin reiniciarse y el
-  // cambio de mes tiene que notarse solo. Encadenada tras el PRIMER sync a
-  // propósito: si el otro PC ya generó junio, el sync lo baja y aquí ni se
-  // paga de nuevo. (Y si el sync falla, el tic horario la recoge — la
-  // carrera de dos PCs generando a la vez la absorbe el upsert, §7.1.)
-  // El backfill de appids de Steam (LOGROS.md) cuelga del mismo primer sync
-  // que los recaps, por el mismo motivo: si el otro PC ya lo hizo, aquí no
-  // queda nada que preguntar. Tras la primera pasada es un no-op.
-  void runSyncCycle().then(async () => {
-    mark('primer ciclo de sync terminado');
+  // cambio de mes tiene que notarse solo.
+  void (async () => {
     // EN UN TEST E2E, HASTA AQUI Y NO MAS.
     //
     // Todo lo de abajo son pasadas de fondo que SALEN A LA RED en cuanto hay
@@ -1021,12 +957,6 @@ app.whenReady().then(async () => {
       mark('pasadas de arranque OMITIDAS (modo E2E)');
       return;
     }
-    // El buzón ya se ha drenado aquí dentro: runSyncCycle lo dispara solo tras
-    // el pull (ver onSyncCompleted arriba). Un alta encolada existe por tanto
-    // como juego ANTES de que pasen por encima el backfill de appids y las
-    // pasadas de logros, que es justo lo que hace falta para que no se quede
-    // esperando al siguiente arranque.
-    //
     // De aquí para abajo el orden ya no es una fila: cada pasada corre en
     // paralelo con las que no comparten NI api NI filas, y en fila con las
     // que sí. Las promesas se recogen en const (antes eran void) solo para
@@ -1055,26 +985,14 @@ app.whenReady().then(async () => {
     // watcher arranca cuando el barrido termina, como siempre.
     //
     // En paralelo con la pasada de RA porque no comparten nada: el barrido es
-    // disco+DB sin una sola petición, y sus juegos son disjuntos de los de RA
-    // (elige achievementsSyncedAt NOT NULL; el nivel 3 de RA sincroniza justo
-    // los NULL). Hasta hoy sus ~420 ms medidos de tráfico contra la base (957
-    // withDbAccess sobre ~478 juegos con catálogo, RENDIMIENTO.md) iban por
-    // DELANTE de toda la pasada de RA, que mientras tanto no hacía nada.
+    // disco y base sin una sola petición.
     const emuSweep = runEmuUnlocksSweep().then(() => startEmuWatcher());
     // RetroAchievements (RETROACHIEVEMENTS.md): emparejado + catálogos de lo
     // emulado retro.
     //
-    // ENCADENADA a la pasada de Steam, y ese orden sostiene algo: la marca
-    // achievementsSyncedAt es UNA sola para las dos fuentes, así que
-    // sincronizar por RA un juego que además está en Steam la estampa igual y
-    // lo saca de la lista de catálogos pendientes de Steam hasta un "Sync
-    // now" (getPendingAchievementsGames filtra por
-    // isNull(achievementsSyncedAt)). Hasta hoy ese orden era una carrera
-    // ganada por margen (la pasada de Steam iba con void y solo el barrido de
-    // emuladores por medio le daba ventaja); el .then lo vuelve garantía: RA
-    // no arranca hasta que la de Steam eligió su lista y encoló. Lo que se
-    // espera es solo su DB, no su cola: 21 ms en régimen y 40 con iconos que
-    // limpiar, medidos con el volumen real (994 juegos / 39.808 logros).
+    // Detrás de la pasada de Steam: ya no hace falta para las marcas (cada
+    // fuente tiene su propia comprobación en la 2.0), pero así RA y Steam no
+    // compiten por la red en el mismo instante del arranque.
     const raPass = steamPass.then(() => runRaStartupPass());
     // Su sondeo en vivo — solo pregunta mientras el watcher vea un emulador
     // corriendo, así que no choca con la pasada de arriba.
@@ -1090,15 +1008,7 @@ app.whenReady().then(async () => {
     // de saberlo sin recompilar.
     await Promise.allSettled([memoriesTick, radarTick, emuSweep, raPass]);
     mark('pasadas de arranque terminadas');
-  });
-  // Cada ciclo sincroniza Y drena (el drenado va dentro, ver onSyncCompleted).
-  //
-  // Que el buzón se mire en cada tic y no solo al arrancar es lo que lo hace
-  // servir de algo en el uso normal de esta app: vive semanas en la bandeja
-  // sin reiniciarse — el mismo motivo por el que existe el tic horario de más
-  // abajo — así que lo encolado desde el móvil se aplicaba solo tras un
-  // reinicio completo.
-  syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
+  })();
   memoriesTimer = setInterval(() => {
     void runMemoriesDailyTick();
     // Mismo tic para el radar: la app puede pasar semanas sin reiniciarse
@@ -1163,8 +1073,14 @@ app.on('before-quit', () => {
   stopEmuWatcher();
   stopRaLivePoll();
   stopSteamLivePoll();
-  if (syncTimer) clearInterval(syncTimer);
   if (memoriesTimer) clearInterval(memoriesTimer);
+});
+
+// La base se cierra lo último, cuando ya no queda ventana ni vigilante: una
+// pasada de fondo que todavía esté en marcha falla con su propio aviso en vez
+// de escribir en una conexión cerrada a medias.
+app.on('will-quit', () => {
+  closeAppDb();
 });
 
 // In this file you can include the rest of your app's specific main process

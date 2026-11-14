@@ -1,8 +1,12 @@
 import { ipcMain } from 'electron';
 import { handleDb } from './dbHandle';
-import { getAchievementsOverview } from '../db/queries/achievements/getAchievementsOverview';
-import { getGameAchievements } from '../db/queries/achievements/getGameAchievements';
-import { getSessionUnlocks } from '../db/queries/achievements/getSessionUnlocks';
+import { appCtx } from '../db/v2/appDb';
+import {
+  getAchievementsOverview,
+  getGameAchievements,
+  getSessionUnlocks,
+  replaceUnlockPlacements,
+} from '../db/v2/queries/achievements';
 import { getHiddenDescriptions } from '../steam/hiddenDescriptions';
 import {
   getSteamAchievementsStatus,
@@ -11,12 +15,11 @@ import {
 } from '../steam/backfill';
 import { runRaFullResync } from '../ra/backfill';
 import { requestAchievementsStop, retryFailedAchievements } from '../steam/queue';
-import { replaceUnlockPlacements } from '../steam/syncAchievements';
 import type { GameId } from '../../shared/entityIds';
 
 export const registerAchievementsHandlers = (): void => {
   handleDb('achievements:getForGame', async (_event, gameId: GameId) => {
-    const data = await getGameAchievements(gameId);
+    const data = getGameAchievements(appCtx(), gameId);
 
     // Los ocultos que siguen mudos tras las dos fuentes propias (la API de
     // Steam nunca los da; el schema local solo cubre juegos de tu cuenta).
@@ -45,12 +48,12 @@ export const registerAchievementsHandlers = (): void => {
   // La vista global para el bloque de trofeos de Stats (LOGROS-IDEAS.md).
   // year=null → All Time; con año, las piezas temporales se acotan a él.
   handleDb('achievements:getOverview', async (_event, year: number | null) =>
-    getAchievementsOverview(year),
+    getAchievementsOverview(appCtx(), year),
   );
 
   // Los desbloqueos colgados de sesiones, para las filas de la pantalla de
   // Sesiones — una consulta para todas en vez de una por juego.
-  handleDb('achievements:getSessionUnlocks', async () => getSessionUnlocks());
+  handleDb('achievements:getSessionUnlocks', async () => getSessionUnlocks(appCtx()));
 
   // Encola y devuelve cuántos juegos entraron: la sincronización va de uno en
   // uno por la cola (steam/queue.ts) y su progreso viaja por el canal de
@@ -90,6 +93,6 @@ export const registerAchievementsHandlers = (): void => {
   // tocar la red — para cuando se corrigen fechas o se asigna a mano una
   // sesión de emulador.
   handleDb('achievements:replacePlacements', async (_event, gameId: GameId) =>
-    replaceUnlockPlacements(gameId),
+    replaceUnlockPlacements(appCtx(), gameId),
   );
 };

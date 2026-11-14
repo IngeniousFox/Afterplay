@@ -61,7 +61,7 @@ const readPlaythroughRows = async (
 ): Promise<{
   game: { endless: boolean; isEmulated: boolean; officialPlatforms: string[] | null } | undefined;
   playthroughs: { id: number; label: string }[];
-  events: PlaythroughStateEventRow[];
+  events: PlaythroughStateEventRow<number>[];
 }> => {
   const [games, playthroughs, events] = await db.batch([
     db

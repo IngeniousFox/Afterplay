@@ -1,7 +1,7 @@
 import { Bookmark, Circle, Moon, Pause, Play, Trophy, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { leavesEndDate } from '../../../shared/playthroughState';
-import type { StateEvent } from '../../../shared/types';
+import type { StateEvent, WritableStateEventType } from '../../../shared/types';
 import {
   createStatusMeta,
   STATE_TO_STATUS_KEY,
@@ -51,7 +51,7 @@ export const quickStatusOptions = (endless: boolean): PastStatusKey[] =>
   endless ? ['resting'] : ['beaten', 'dropped'];
 
 // Vocabulario de la UI (STATUS_META) -> vocabulario de la DB (StateEvent.type).
-export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, StateEvent['type']> = {
+export const STATUS_TO_STATE_TYPE: Record<PastStatusKey, WritableStateEventType> = {
   playing: 'started',
   beaten: 'completed',
   dropped: 'dropped',

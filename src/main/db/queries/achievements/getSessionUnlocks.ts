@@ -9,7 +9,7 @@ import { mergeUnlocksByAchievement } from './mergeUnlocks';
 // sin que la vista tenga que pedir los logros de cada juego. Solo viajan los
 // que tienen sessionId — los huérfanos del pasado no pertenecen a ninguna
 // fila (regla 3 del documento).
-export const getSessionUnlocks = async (): Promise<SessionUnlock[]> => {
+export const getSessionUnlocks = async (): Promise<SessionUnlock<number>[]> => {
   const db = getDb();
 
   // La fila NO se filtra por sessionId, pero el LOGRO sí: el fundido de abajo
@@ -52,7 +52,7 @@ export const getSessionUnlocks = async (): Promise<SessionUnlock[]> => {
   // cayeron en la MISMA sesión: un logro sacado con el crack en 2025 y otra
   // vez en Steam en 2026 salía en las dos filas de sesión —dos trofeos donde
   // hay uno— y la suma de la pantalla ya no cuadraba con los logros del juego.
-  const result: SessionUnlock[] = [];
+  const result: SessionUnlock<number>[] = [];
   for (const { winner } of mergeUnlocksByAchievement(rows).values()) {
     if (winner.sessionId === null) continue;
     result.push({

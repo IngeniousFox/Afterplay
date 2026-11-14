@@ -1,17 +1,21 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
-import { migrate } from 'drizzle-orm/libsql/migrator';
+import { openLocalDatabase } from '../src/main/db/v2/connection';
+import { LOCAL_DATABASE_FILE } from '../src/main/db/v2/importer/appData';
+import { createQueryContext } from '../src/main/db/v2/queries/common/context';
+import { ensureThisDevice } from '../src/main/db/v2/queries/common/device';
 import {
-  achievementsTable,
-  achievementUnlocksTable,
-  gamesTable,
-  iterationsTable,
-  sessionsTable,
-  stateEventsTable,
-} from '../src/main/db/schema';
+  seedCatalog,
+  seedCheck,
+  seedGame,
+  seedPlaythrough,
+  seedSession,
+  seedStateEvent,
+  seedUnlock,
+} from '../src/main/db/v2/queries/common/__tests__/fixtures';
+import type { AchievementSource, UnlockOrigin } from '../src/main/db/v2/schema';
 import type { CredentialsValues, SaveStorageProvider } from '../src/shared/types';
 import { credentialsForSandbox } from './credentials';
 import { DEFAULT_SEED } from './seed';
@@ -22,14 +26,26 @@ import { DEFAULT_SEED } from './seed';
 // escribe: su base, sus credenciales, sus copias, su caché de imágenes, su
 // config. Aquí se le fabrica un mundo entero de mentira en %TEMP% para que
 // todo eso caiga ahí y se borre al terminar — la instalación del dueño ni se
-// entera, y su base de producción es literalmente inalcanzable (el gate de
-// src/main/lib/e2e.ts, que se enciende con la MISMA variable que trae esta
-// carpeta, apaga la importación del .env y el sync remoto).
+// entera (el gate de src/main/lib/e2e.ts, que se enciende con la MISMA
+// variable que trae esta carpeta, apaga la importación del .env).
 //
-// LA BASE SE SIEMBRA DESDE FUERA, con las migraciones REALES del repo (las
-// mismas de drizzle/, igual que el andamio de los tests de unidad): así un
-// test no depende de la red ni del alta por IGDB para tener biblioteca, y una
+// LA BASE SE SIEMBRA DESDE FUERA: la base 2.0 (Afterplay2.db) con las
+// migraciones REALES del repo (drizzle-v2/) y escrita POR LA PUERTA, con los
+// mismos `seed*` que los tests de las consultas 2.0
+// (src/main/db/v2/queries/common/__tests__/fixtures.ts). Así un test no
+// depende de la red ni del alta por IGDB para tener biblioteca, y una
 // migración que rompa el esquema tumba estos tests antes que la app de nadie.
+//
+// EL DISPOSITIVO: la base 2.0 sabe qué filas son de ESTE PC (sesiones,
+// instalaciones, desbloqueos del emulador) por su `deviceId`, que la app saca
+// de machine-saves.json. El sandbox inventa uno, siembra con él y lo deja
+// escrito en ese fichero, así que la app arranca siendo el PC dueño de todo
+// lo sembrado. Sin eso las sesiones serían "de otro dispositivo" y la app no
+// podría ni cerrarlas.
+//
+// LOS IDS son de texto (UUIDv7) y cambian en cada sandbox: un test no escribe
+// ids a mano, los busca por título con `gameIdOf` (§20.3.1 de
+// docs/AFTERPLAY-2.0.md).
 //
 // LAS CREDENCIALES salen de .env.test y de ningún otro sitio (ver
 // e2e/credentials.ts: la lista blanca es lo que hace segura toda esta
@@ -47,10 +63,16 @@ import { DEFAULT_SEED } from './seed';
 export type Sandbox = {
   userDataDir: string;
   dbPath: string;
-  // Si este sandbox lleva credenciales de Turso (o sea, si el test pidió
-  // sync). El arranque lo necesita para decidir si abre esa puerta.
-  withRemote: boolean;
+  // El id de cada juego sembrado, por título.
+  gameIds: ReadonlyMap<string, string>;
   cleanup: () => void;
+};
+
+/** El id de un juego sembrado. Lanza si el título no está: el sembrado cambió. */
+export const gameIdOf = (sandbox: Sandbox, title: string): string => {
+  const id = sandbox.gameIds.get(title);
+  if (!id) throw new Error(`el sembrado no tiene "${title}"`);
+  return id;
 };
 
 // UN JUEGO DE LA BIBLIOTECA DE PRUEBA.
@@ -76,9 +98,10 @@ export type SeedGame = {
   endless?: boolean;
   // Sin .exe que vigilar; sus sesiones llegan por asignacion manual.
   isEmulated?: boolean;
-  // null = no esta en Steam (retro emulado). Sin poner, se inventa uno y se
-  // marca como "ya comprobado" para que los barridos de fondo del arranque no
-  // tengan nada que buscar: un test no debe esperar a la red ni tocarla.
+  // null = no esta en Steam (retro emulado). Sin poner, se inventa uno. En los
+  // dos casos se marca como "ya comprobado" para que los barridos de fondo del
+  // arranque no tengan nada que buscar: un test no debe esperar a la red ni
+  // tocarla.
   steamAppId?: number | null;
   releaseYear?: number | null;
   genres?: string[];
@@ -89,13 +112,17 @@ export type SeedGame = {
   // Cuando paso de Plan a biblioteca: la segunda referencia del papeleo (ver
   // isAddedAtArtifact), sin la cual los eventos de un promote pasan por jugada.
   promotedAt?: Date;
-  // Los playthroughs. Sin esto el juego nace con uno vacio (lo que crea el
-  // alta de verdad), que es la forma de un juego "intacto".
+  // Los playthroughs. Sin esto un juego de la biblioteca nace con uno vacio
+  // (lo que crea el alta de verdad), que es la forma de un juego "intacto". Un
+  // PLANEADO no tiene ninguno en la 2.0 (el Plan es `plan_entries`): de los
+  // suyos solo cuenta el evento 'plan_to_play', que pasa a ser su fecha de
+  // entrada en el Plan.
   playthroughs?: SeedPlaythrough[];
   // Logros SINTETICOS: se generan `total` definiciones y se desbloquean las
   // `unlocked` primeras. Las cifras salen de juegos reales pero recortadas --
   // sembrar los 39.881 logros de la biblioteca real en cada test seria pagar
-  // segundos por arranque para pintar una barra de progreso.
+  // segundos por arranque para pintar una barra de progreso. 'emu' es un logro
+  // de Steam visto por el emulador de ESTE PC (origen `emu@<deviceId>`).
   achievements?: { total: number; unlocked: number; source?: 'steam' | 'emu' | 'ra' };
 };
 
@@ -123,16 +150,14 @@ const PLACEHOLDER_CREDENTIALS: Partial<CredentialsValues> = {
   twitchClientSecret: 'e2e-fake-client-secret',
 };
 
-const credentialsFileFor = (
-  withRemote: boolean,
-  overrides: Partial<CredentialsValues> = {},
-): string => {
-  if (!withRemote && (overrides.databaseUrl || overrides.databaseAuthToken)) {
-    throw new Error(
-      'An E2E sandbox cannot receive remote database credentials without withRemote.',
-    );
+const credentialsFileFor = (overrides: Partial<CredentialsValues> = {}): string => {
+  // La 2.0 no abre Turso (R-14): un sandbox con credenciales de la base remota
+  // sería un test de algo que ya no existe, y una credencial de producción
+  // cerca de un proceso que pulsa botones solo.
+  if (overrides.databaseUrl || overrides.databaseAuthToken) {
+    throw new Error('An E2E sandbox cannot receive remote database credentials.');
   }
-  const fromEnvTest = credentialsForSandbox(withRemote);
+  const fromEnvTest = credentialsForSandbox();
   const values = {
     ...(Object.keys(fromEnvTest).length > 0 ? fromEnvTest : PLACEHOLDER_CREDENTIALS),
     ...overrides,
@@ -154,86 +179,116 @@ const credentialsFileFor = (
 const APPID_BASE = 1_000_000;
 const CHECKED_AT = new Date('2026-01-01T00:00:00Z');
 
-const seedDatabase = async (dbPath: string, games: SeedGame[]): Promise<void> => {
-  const client = createClient({ url: `file:${dbPath}` });
-  const db = drizzle({ client });
+// El catálogo y el origen de cada fuente del sembrado.
+const ACHIEVEMENT_SOURCE: Record<'steam' | 'emu' | 'ra', AchievementSource> = {
+  steam: 'steam',
+  emu: 'steam',
+  ra: 'ra',
+};
+
+const seedDatabase = (dbPath: string, deviceId: string, games: SeedGame[]): Map<string, string> => {
+  const local = openLocalDatabase({
+    path: dbPath,
+    deviceId,
+    migrationsFolder: join(process.cwd(), 'drizzle-v2'),
+  });
+  const gameIds = new Map<string, string>();
   try {
-    await migrate(db, { migrationsFolder: 'drizzle' });
+    const ctx = createQueryContext(local);
+    ensureThisDevice(ctx, {
+      name: MACHINE_NAME,
+      home: homedir(),
+      appVersion: '0.0.0-e2e',
+      schemaVersion: 1,
+      now: new Date(),
+    });
 
     for (const [index, seed] of games.entries()) {
-      const [game] = await db
-        .insert(gamesTable)
-        .values({
-          title: seed.title,
-          planned: seed.planned ?? false,
-          planPinnedAt: seed.pinnedAt ?? null,
-          endless: seed.endless ?? false,
-          isEmulated: seed.isEmulated ?? false,
-          notes: seed.notes ?? null,
+      const declared = seed.playthroughs ?? [];
+      // La fecha de entrada en el Plan: la del 'plan_to_play' que traiga, como
+      // hace el importador con la 1.x.
+      const plannedAt = declared
+        .flatMap((play) => play.events ?? [])
+        .find((event) => event.type === 'plan_to_play')?.at;
+      const addedAt = seed.addedAt ?? CHECKED_AT;
+      const steamAppId = seed.steamAppId === undefined ? APPID_BASE + index : seed.steamAppId;
+
+      const gameId = seedGame(ctx, {
+        title: seed.title,
+        endless: seed.endless ?? false,
+        isEmulated: seed.isEmulated ?? false,
+        notes: seed.notes ?? null,
+        addedAt,
+        promotedAt: seed.promotedAt ?? null,
+        steamAppId,
+        metadata: {
           releaseYear: seed.releaseYear ?? null,
           genres: seed.genres ?? null,
           hltbMain: seed.hltb?.main ?? null,
           hltbMainExtras: seed.hltb?.extras ?? null,
           hltbCompletionist: seed.hltb?.completionist ?? null,
-          addedAt: seed.addedAt ?? CHECKED_AT,
-          promotedAt: seed.promotedAt ?? null,
-          steamAppId: seed.steamAppId === undefined ? APPID_BASE + index : seed.steamAppId,
-          // Los cuatro "ya preguntado" van puestos para que los barridos de
-          // fondo del arranque (appids, notas, etiquetas) no tengan nada que
-          // hacer: un test no debe esperar a la red ni tocarla sin pedirlo.
-          steamAppIdCheckedAt: CHECKED_AT,
-          ratingsCheckedAt: CHECKED_AT,
-          steamSpyCheckedAt: CHECKED_AT,
-        })
-        .returning({ id: gamesTable.id });
+        },
+        planned: seed.planned
+          ? { plannedAt: plannedAt ?? addedAt, pinnedAt: seed.pinnedAt ?? null }
+          : undefined,
+      });
+      gameIds.set(seed.title, gameId);
 
-      // Sin playthroughs declarados, uno vacio: es lo que crea el alta de
-      // verdad, o sea la forma de un juego recien anadido y sin tocar.
-      const playthroughs: SeedPlaythrough[] = seed.playthroughs?.length ? seed.playthroughs : [{}];
+      // Los tres "ya preguntado" van puestos para que los barridos de fondo
+      // del arranque (appids, notas, etiquetas) no tengan nada que hacer: un
+      // test no debe esperar a la red ni tocarla sin pedirlo.
+      seedCheck(ctx, {
+        gameId,
+        source: 'steam_appid',
+        status: steamAppId === null ? 'empty' : 'ok',
+        checkedAt: CHECKED_AT,
+      });
+      seedCheck(ctx, { gameId, source: 'igdb_ratings', checkedAt: CHECKED_AT });
+      seedCheck(ctx, { gameId, source: 'steam_store', checkedAt: CHECKED_AT });
+
+      // Un planeado no tiene playthroughs; uno de la biblioteca sin ninguno
+      // declarado nace con uno vacio, como en el alta de verdad.
+      const playthroughs: SeedPlaythrough[] = seed.planned
+        ? []
+        : declared.length > 0
+          ? declared
+          : [{}];
 
       // La sesion de la que colgaran los logros conseguidos (ver mas abajo).
-      let linkedSession: { id: number; iterationId: number } | null = null;
+      let linkedSession: { id: string; playthroughId: string } | null = null;
 
       for (const [position, play] of playthroughs.entries()) {
-        const [iteration] = await db
-          .insert(iterationsTable)
-          .values({
-            gameId: game.id,
-            label: play.label ?? `Playthrough ${position + 1}`,
-            playedPlatform: play.platform ?? 'Steam',
-            origin: play.origin ?? 'Purchased',
-            format: play.format ?? 'digital',
-            manualTotalPlayed: play.manualHours ?? null,
-          })
-          .returning({ id: iterationsTable.id });
+        const label = play.label ?? null;
+        const playthroughId = seedPlaythrough(ctx, {
+          gameId,
+          // La etiqueta automática ya es "Playthrough N": solo se guarda una
+          // propia si es otra.
+          customLabel: label === `Playthrough ${position + 1}` ? null : label,
+          playedPlatform: play.platform ?? 'Steam',
+          origin: play.origin ?? 'Purchased',
+          format: play.format ?? 'digital',
+          manualHours: play.manualHours ?? null,
+        });
 
-        // Ni sessions ni state_events llevan gameId: cuelgan de la ITERACION,
-        // y de ahi sale el juego. Drizzle ignoraba en silencio un gameId de
-        // mas -- lo caza el typecheck de tsconfig.e2e.json.
         for (const session of play.sessions ?? []) {
-          const [row] = await db
-            .insert(sessionsTable)
-            .values({
-              iterationId: iteration.id,
-              startedAt: session.at,
-              endedAt: new Date(session.at.getTime() + session.hours * 3_600_000),
-              durationSec: Math.round(session.hours * 3600),
-              isManual: session.manual ?? false,
-              startedBy: 'watcher',
-              datePrecision: 'datetime',
-            })
-            .returning({ id: sessionsTable.id });
           // Se guarda la ULTIMA sesion sembrada, que por orden cronologico es
           // la mas reciente: de ella colgaran los logros (abajo), y asi la
           // fila con trofeos es una de las cinco que el historial ensena sin
           // desplegar. En la app de verdad, lo que se saca con el cronometro
           // en marcha queda atado a su sesion igual que aqui.
-          linkedSession = { id: row.id, iterationId: iteration.id };
+          const id = seedSession(ctx, {
+            playthroughId,
+            startedAt: session.at,
+            endedAt: new Date(session.at.getTime() + session.hours * 3_600_000),
+            source: session.manual ? 'legacy_manual' : 'measured',
+          });
+          linkedSession = { id, playthroughId };
         }
 
         for (const event of play.events ?? []) {
-          await db.insert(stateEventsTable).values({
-            iterationId: iteration.id,
+          if (event.type === 'plan_to_play') continue;
+          seedStateEvent(ctx, {
+            playthroughId,
             type: event.type,
             occurredAt: event.at,
             datePrecision: event.precision ?? 'day',
@@ -243,66 +298,84 @@ const seedDatabase = async (dbPath: string, games: SeedGame[]): Promise<void> =>
 
       if (seed.achievements) {
         const { total, unlocked, source = 'steam' } = seed.achievements;
-        const rows = await db
-          .insert(achievementsTable)
-          .values(
-            Array.from({ length: total }, (_, position) => ({
-              gameId: game.id,
-              apiName: `E2E_ACH_${position}`,
-              displayName: `Logro ${position + 1}`,
-              description: `Descripcion del logro ${position + 1}`,
-              sortIndex: position,
-              // Los primeros, mas raros: asi la vitrina tiene con que ordenar
-              // y el filtro de "raros" (rareza < umbral) tiene material.
-              globalPercent: Math.min(99, 2 + position * 3),
-            })),
-          )
-          .returning({ id: achievementsTable.id });
+        const catalogSource = ACHIEVEMENT_SOURCE[source];
+        const origin: UnlockOrigin = source === 'emu' ? `emu@${deviceId}` : catalogSource;
+        const apiNames = Array.from({ length: total }, (_, position) => `E2E_ACH_${position}`);
+        seedCatalog(ctx, {
+          gameId,
+          source: catalogSource,
+          fetchedAt: CHECKED_AT,
+          items: apiNames.map((apiName, position) => ({
+            apiName,
+            displayName: `Logro ${position + 1}`,
+            description: `Descripcion del logro ${position + 1}`,
+            sortIndex: position,
+            // Los primeros, mas raros: asi la vitrina tiene con que ordenar
+            // y el filtro de "raros" (rareza < umbral) tiene material.
+            globalPercent: Math.min(99, 2 + position * 3),
+          })),
+        });
 
-        for (const [position, row] of rows.slice(0, unlocked).entries()) {
+        for (const [position, apiName] of apiNames.slice(0, unlocked).entries()) {
           // Los dos primeros se cuelgan de esa sesion (si el juego tiene): asi
           // la fila del historial ensena sus trofeos y se puede pulsar uno
           // para aterrizar en la seccion de logros. Solo dos, para que la fila
           // siga siendo una fila y no un desfile.
           const linked = position < 2 ? linkedSession : null;
-          await db.insert(achievementUnlocksTable).values({
-            achievementId: row.id,
+          seedUnlock(ctx, {
+            gameId,
+            apiName,
+            source: catalogSource,
+            origin,
             unlockedAt: new Date(CHECKED_AT.getTime() + position * 3_600_000),
-            source,
             sessionId: linked?.id ?? null,
-            iterationId: linked?.iterationId ?? null,
+            playthroughId: linked?.playthroughId ?? null,
           });
         }
       }
     }
   } finally {
-    client.close();
+    local.close();
   }
+  return gameIds;
 };
+
+// machine-saves.json (src/main/saves/machine.ts): de aquí saca la app su
+// `deviceId`. Lo mismo que escribiría ella en el primer arranque, con el id
+// del sembrado en vez de uno nuevo.
+const MACHINE_NAME = 'E2E-PC';
+const machineFileFor = (deviceId: string): string =>
+  `${JSON.stringify(
+    {
+      version: 1,
+      machineId: deviceId,
+      machineName: MACHINE_NAME,
+      home: homedir().replace(/\\/g, '/'),
+      identity: null,
+      saveLocationOverrides: {},
+    },
+    null,
+    2,
+  )}\n`;
 
 export type SandboxOptions = {
   games?: SeedGame[];
   credentials?: Partial<CredentialsValues>;
   saveStorageProvider?: SaveStorageProvider;
-  // SINCRONIZAR CON TURSO: apagado salvo que un test lo pida, y con motivo.
-  // Una remota compartida le mete al sandbox juegos que el test no sembró (o
-  // sea, tests que dejan de ser deterministas) y se lleva los de mentira
-  // puestos para siempre. Quien lo encienda, que apunte a una base
-  // DESECHABLE, no a la que usa a mano.
-  withRemote?: boolean;
 };
 
 export const createSandbox = async ({
   games = DEFAULT_SEED,
-  withRemote = false,
   credentials = {},
   saveStorageProvider,
 }: SandboxOptions = {}): Promise<Sandbox> => {
   const userDataDir = mkdtempSync(join(tmpdir(), 'afterplay-e2e-'));
-  const dbPath = join(userDataDir, 'Afterplay.db');
+  const dbPath = join(userDataDir, LOCAL_DATABASE_FILE);
+  const deviceId = randomUUID();
 
-  await seedDatabase(dbPath, games);
-  writeFileSync(join(userDataDir, 'credentials.json'), credentialsFileFor(withRemote, credentials));
+  const gameIds = seedDatabase(dbPath, deviceId, games);
+  writeFileSync(join(userDataDir, 'machine-saves.json'), machineFileFor(deviceId));
+  writeFileSync(join(userDataDir, 'credentials.json'), credentialsFileFor(credentials));
   if (saveStorageProvider) {
     writeFileSync(
       join(userDataDir, 'config.json'),
@@ -313,11 +386,11 @@ export const createSandbox = async ({
   return {
     userDataDir,
     dbPath,
-    withRemote,
+    gameIds,
     // BEST EFFORT DE VERDAD, no solo en el comentario. `force: true` ignora
     // que el fichero NO EXISTA, pero no que este OCUPADO: en Windows, cerrar
     // la app y borrar su carpeta en el mismo suspiro da EBUSY sobre
-    // Afterplay.db mas o menos una vez de cada veinte — el proceso ya murio
+    // Afterplay2.db mas o menos una vez de cada veinte — el proceso ya murio
     // pero el handle del driver nativo tarda un pelin mas en soltarse. Eso
     // tumbaba un test YA PASADO, que es la peor forma de rojo: el fallo no
     // esta donde apunta.

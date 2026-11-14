@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { achievementsTable, achievementUnlocksTable } from '../../db/schema';
+import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
 import {
-  cleanupDbs,
-  freshDb,
-  makeAchievement,
-  makeGame,
-  type TestDb,
-} from '../../db/__tests__/harness';
+  seedCatalog,
+  seedGame,
+  type QueryFixture,
+} from '../../db/v2/queries/common/__tests__/fixtures';
+import { achievementUnlocks } from '../../db/v2/schema';
 import type { RaRecentUnlock } from '../../ra/api';
 
 // EL SONDEO EN VIVO DE RETROACHIEVEMENTS y la regla que comparte con el
@@ -50,7 +49,7 @@ const RA_ACHIEVEMENT_ID = 777;
 // esperarlo: medio minuto por test sería medio minuto por test.
 const INTERVAL_MS = 30_000;
 
-let db: TestDb;
+let fx: QueryFixture;
 let livePoll: typeof import('../../ra/livePoll');
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,7 +66,7 @@ before(async () => {
   livePoll = await import('../../ra/livePoll');
 });
 beforeEach(async () => {
-  db = await freshDb();
+  fx = freshAppDb();
   recent = [];
   mock.timers.enable({ apis: ['setInterval'] });
 });
@@ -77,24 +76,26 @@ afterEach(() => {
   livePoll.stopRaLivePoll();
   mock.timers.reset();
 });
-after(() => cleanupDbs());
+after(() => closeAppDbFixture());
 
 // Una ficha de la biblioteca emparejada con el set de RA, con su catálogo — sin
 // fila de catálogo no hay dónde colgar un desbloqueo.
-const fichaEmparejada = async (title: string): Promise<number> => {
-  const gameId = await makeGame(db, { title, raGameId: RA_GAME_ID });
-  await makeAchievement(db, gameId, String(RA_ACHIEVEMENT_ID), { displayName: 'Warp Zone' });
+const fichaEmparejada = async (title: string): Promise<string> => {
+  const gameId = seedGame(fx.ctx, { title, raGameId: RA_GAME_ID });
+  seedCatalog(fx.ctx, {
+    gameId,
+    source: 'ra',
+    items: [{ apiName: String(RA_ACHIEVEMENT_ID), displayName: 'Warp Zone' }],
+  });
   return gameId;
 };
 
-const unlocksOf = async (gameId: number): Promise<number> => {
-  const rows = await db
-    .select({ id: achievementUnlocksTable.id })
-    .from(achievementUnlocksTable)
-    .innerJoin(achievementsTable, eq(achievementUnlocksTable.achievementId, achievementsTable.id))
-    .where(eq(achievementsTable.gameId, gameId));
-  return rows.length;
-};
+const unlocksOf = async (gameId: string): Promise<number> =>
+  fx.ctx.db
+    .select({ id: achievementUnlocks.id })
+    .from(achievementUnlocks)
+    .where(eq(achievementUnlocks.gameId, gameId))
+    .all().length;
 
 describe('sondeo en vivo de RA: el desbloqueo va a todas las fichas del set', () => {
   it('dos fichas emparejadas con el mismo juego de RA reciben las dos el logro', async () => {

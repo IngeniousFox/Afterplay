@@ -22,11 +22,6 @@ import type { GameId } from '../src/shared/entityIds';
 // cerca esté una credencial de producción de un proceso que va a pulsar
 // botones solo, mejor.
 //
-// AFTERPLAY_E2E_ALLOW_SYNC es la SEGUNDA cerradura de la puerta peligrosa: el
-// sync con una remota necesita credenciales (que solo entran si el test las
-// pide) Y esta bandera. Dos llaves para lo único que puede escribir fuera del
-// sandbox.
-//
 // El SPLASH obliga a buscar la ventana buena: la app abre primero una ventana
 // de splash (una data: URL) y la de verdad (file://…/index.html) nace oculta
 // y no se muestra hasta que hay contenido pintable — los tres relojes del
@@ -65,7 +60,6 @@ export const launchAfterplay = async (options: SandboxOptions = {}): Promise<Lau
     env: {
       ...process.env,
       AFTERPLAY_E2E_USER_DATA: sandbox.userDataDir,
-      ...(sandbox.withRemote ? { AFTERPLAY_E2E_ALLOW_SYNC: '1' } : {}),
       DATABASE_URL: '',
       DATABASE_AUTH_TOKEN: '',
     },
@@ -100,6 +94,8 @@ export type Route =
   | `/stats?game=${GameId}`
   | `/games/${GameId}`
   | `/plan/${GameId}`;
+
+export { gameIdOf } from './sandbox';
 
 export const goTo = async (page: Page, route: Route): Promise<void> => {
   await page.evaluate((target) => {

@@ -7,8 +7,8 @@ import {
   takeStartupKeysImport,
 } from '../config/credentials';
 import { getConfigValue, setConfigValue } from '../config/store';
-import { getDb, getLastSyncFailure, runSyncCycle, withDbAccess } from '../db';
-import { saveBackupsTable } from '../db/schema';
+import { appCtx } from '../db/v2/appDb';
+import { hasIndexedSaveBackups } from '../db/v2/queries/saves';
 import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
 import { isDevProfile } from '../lib/devProfileRules';
@@ -45,17 +45,9 @@ const applyCredentialsChange = (): void => {
   // Lo mismo con el cliente de R2: se construyó con las claves viejas y
   // seguiría firmando con ellas (PARTIDAS-GUARDADAS.md §9).
   resetR2Client();
-  // Si acaban de aparecer credenciales de Turso, esto enciende el sync ya
-  // mismo (attemptSyncUpgrade relee process.env) en vez de esperar al
-  // siguiente ciclo de 60s. Fire-and-forget: nunca lanza.
-  void runSyncCycle();
 };
 
-const hasIndexedBackups = async (): Promise<boolean> =>
-  withDbAccess(async () => {
-    const rows = await getDb().select({ id: saveBackupsTable.id }).from(saveBackupsTable).limit(1);
-    return rows.length > 0;
-  });
+const hasIndexedBackups = async (): Promise<boolean> => hasIndexedSaveBackups(appCtx());
 
 export const registerSettingsHandlers = (): void => {
   ipcMain.handle(
@@ -129,10 +121,10 @@ export const registerSettingsHandlers = (): void => {
     setConfigValue('backupCount', Math.max(0, Math.round(count)));
   });
 
-  // Estado del sync con Turso — para que un fallo persistente (sobre todo un
-  // desajuste de esquema, que NO se cura reintentando) se vea en Ajustes en
-  // vez de morir en la consola.
-  ipcMain.handle('settings:getSyncFailure', () => getLastSyncFailure());
+  // El escritorio 2.0 ya no sincroniza con Turso (AFTERPLAY-2.0.md, fase 2):
+  // no hay fallo de sync que enseñar. El canal se queda hasta que el sync
+  // nuevo (fase 3) tenga su propio estado.
+  ipcMain.handle('settings:getSyncFailure', () => null);
 
   // Credenciales de servicios externos (ver config/credentials.ts). Los
   // valores viajan al renderer para poder editarlos en Ajustes — app

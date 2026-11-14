@@ -1,4 +1,4 @@
-import { asDate, timestamp, type DateValue, type EventDatePrecision } from './dateTypes';
+import { asDate, timestamp, type DateValue, type StateEventDatePrecision } from './dateTypes';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -52,12 +52,18 @@ export const humanizeSpan = (days: number): string => {
 // más fina que la más gruesa de las dos precisiones, así que ahí se cuentan
 // años o meses de calendario, y si caen en el mismo se dice justo eso en vez
 // de inventar una duración.
+//
+// Con un extremo SIN fecha ('unknown': un alta o una promoción sin fecha) no
+// hay tramo que medir: se dice eso, no una duración contada desde el ancla.
+export const UNKNOWN_SPAN_LABEL = 'Length unknown';
+
 export const humanizeSpanByPrecision = (
   from: DateValue,
   to: DateValue,
-  fromPrecision: EventDatePrecision,
-  toPrecision: EventDatePrecision,
+  fromPrecision: StateEventDatePrecision,
+  toPrecision: StateEventDatePrecision,
 ): string => {
+  if (fromPrecision === 'unknown' || toPrecision === 'unknown') return UNKNOWN_SPAN_LABEL;
   const coarsest =
     fromPrecision === 'year' || toPrecision === 'year'
       ? 'year'

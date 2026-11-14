@@ -21,11 +21,10 @@ type PlannedPanelProps = {
 export const PlannedPanel = ({ game }: PlannedPanelProps): React.JSX.Element => {
   const { data: timeFormat = '24h' } = useTimeFormat();
 
-  // La fecha en la que entró al plan: su evento 'plan_to_play' si existe (es
-  // el que la ficha del Plan enseña en el historial), y si no la de alta en
-  // la app — que para un juego planeado son la misma al milisegundo.
-  const planEvent = game.stateHistory.find((event) => event.type === 'plan_to_play');
-  const plannedSince = planEvent?.occurredAt ?? game.addedAt;
+  // La fecha en la que entró al plan (planHistory, R-06: la misma "Added to
+  // Plan" del historial), y si no consta la de alta en la app — que para un
+  // juego planeado son la misma.
+  const plannedSince = game.planHistory?.plannedAt ?? game.addedAt;
   const waiting = humanizeSpan(daysBetween(plannedSince, new Date()));
 
   return (

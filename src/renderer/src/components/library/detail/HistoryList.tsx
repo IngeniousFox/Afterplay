@@ -1,6 +1,7 @@
 import { Check, DollarSign, Pencil, Trash2, X } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import type {
+  PlanHistory,
   SpendEvent,
   StateEvent,
   UpdateSpendEventPatch,
@@ -13,6 +14,7 @@ import { useUpdateSpendEvent } from '../../../hooks/spend';
 import { AMBER } from '../../../lib/colors';
 import { formatDateOnly, formatMoney } from '../../../lib/format';
 import { getGameStatusMeta } from '../../../lib/gameStatus';
+import { enteredViaPlan, planMilestones } from '../../../lib/planMilestones';
 import { StatCard } from '../../stats/StatCard';
 import { StatusIcon } from '../../StatusIcon';
 import { SectionLabel } from './SectionLabel';
@@ -30,12 +32,15 @@ import {
 type HistoryListProps = {
   stateHistory: StateEvent[];
   spendHistory: SpendEvent[];
-  // Cuándo entró el juego en Afterplay (gamesTable.addedAt) — pinta una
-  // entrada sintética "Added to Afterplay" al fondo de la línea temporal.
-  // Sintética de verdad: no existe como evento en la DB (ni editable ni
-  // borrable), solo se deriva aquí. PlanGameDetail no la pasa — su evento
-  // 'plan_to_play' ya cuenta lo mismo con la misma fecha.
+  // Cuándo entró el juego en Afterplay (games.addedAt) — pinta una entrada
+  // sintética "Added to Afterplay" al fondo de la línea temporal. Sintética
+  // de verdad: no existe como evento en la DB (ni editable ni borrable), solo
+  // se deriva aquí. PlanGameDetail no la pasa: un planeado entró por el Plan,
+  // y eso ya lo cuenta "Added to Plan".
   addedAt?: Date;
+  // El paso por el Plan (R-06): "Added to Plan" y "Left the Plan", también
+  // derivadas y de solo lectura (lib/planMilestones.ts).
+  planHistory?: PlanHistory | null;
 };
 
 const SPEND_COLOR = AMBER;
@@ -64,34 +69,51 @@ type Entry =
       event: SpendEvent;
     }
   | {
-      // "Added to Afterplay" — derivada de gamesTable.addedAt, no es un
-      // evento real de la DB: sin id propio, sin edición. La nota (si hay)
-      // la hereda del evento 'plan_to_play' que esta entrada oculta.
+      // "Added to Afterplay" — derivada de games.addedAt, no es un evento
+      // real de la DB: sin id propio, sin edición.
       key: string;
       kind: 'added';
       date: Date;
       datePrecision: StateEvent['datePrecision'];
       note: string | null;
+    }
+  | {
+      // "Added to Plan" / "Left the Plan" — derivadas de planHistory (R-06).
+      key: string;
+      kind: 'plan';
+      label: string;
+      date: Date;
+      datePrecision: StateEvent['datePrecision'];
+      note: string | null;
     };
 
-// El orden de la lista: lo más reciente arriba y, a igual fecha EXACTA, la
-// entrada "Added" siempre al fondo (un juego planeado comparte addedAt con su
-// 'plan_to_play' al milisegundo: primero "entró en Afterplay", luego todo lo
-// demás). Entre dos eventos reales, el id más alto primero. Ese último
+// Las entradas derivadas a igual fecha EXACTA, de abajo arriba: primero
+// "entró en Afterplay", luego "entró en el Plan", luego "salió del Plan"; los
+// eventos reales, encima de todas (promocionar como Beaten escribe el
+// 'completed' y la salida del Plan con el mismo instante, y se lee "salió del
+// Plan" y después "lo terminó").
+const DERIVED_RANK: Record<string, number> = { added: 0, 'plan-added': 1, 'plan-left': 2 };
+const derivedRank = (entry: Entry): number =>
+  entry.kind === 'added' || entry.kind === 'plan' ? DERIVED_RANK[entry.key] : 3;
+
+// El orden de la lista: lo más reciente arriba y, a igual fecha EXACTA, las
+// derivadas por debajo de los eventos reales (ver DERIVED_RANK). Entre dos
+// eventos reales, el id más alto primero. Ese último
 // desempate mezcla eventos de estado y gastos —dos tablas— y comparar sus ids
 // solo es un orden estable, no "el creado después" (AFTERPLAY-2.0.md §15.5).
 const newestFirst = (a: Entry, b: Entry): number => {
   const byDate = b.date.getTime() - a.date.getTime();
   if (byDate !== 0) return byDate;
-  if (a.kind === 'added') return b.kind === 'added' ? 0 : 1;
-  if (b.kind === 'added') return -1;
+  const byRank = derivedRank(b) - derivedRank(a);
+  if (byRank !== 0) return byRank;
+  if (a.kind === 'added' || a.kind === 'plan' || b.kind === 'added' || b.kind === 'plan') return 0;
   return compareEntityIds(b.id, a.id);
 };
 
 // El valor de picker de una entrada existente. 'datetime' (eventos creados
 // en vivo por la app, con hora real) cae a 'day' para el picker — pero solo
 // degrada la precisión guardada si el usuario TOCA la fecha (ver save()).
-const entryPickerValue = (entry: Entry): PrecisionDateValue =>
+const entryPickerValue = (entry: Entry): PrecisionDateValue | null =>
   toPickerValue(entry.date, entry.datePrecision);
 
 // SPEC 4.5/4.6 fusionado — un único "History" con estados y gastos
@@ -117,6 +139,7 @@ export const HistoryList = ({
   stateHistory,
   spendHistory,
   addedAt,
+  planHistory,
 }: HistoryListProps): React.JSX.Element | null => {
   const updateStateEvent = useUpdateStateEvent();
   const updateSpendEvent = useUpdateSpendEvent();
@@ -137,16 +160,8 @@ export const HistoryList = ({
   // funcione.
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Con la entrada "Added to Afterplay" en la línea temporal, el evento
-  // 'plan_to_play' es redundante (misma fecha, misma información: "entró en
-  // la app vía Plan") — se oculta SOLO del pintado; el evento sigue en la DB
-  // y en la ficha del Plan (que no pasa addedAt y lo enseña como siempre).
-  const visibleStateHistory = addedAt
-    ? stateHistory.filter((event) => event.type !== 'plan_to_play')
-    : stateHistory;
-
   const entries: Entry[] = [
-    ...visibleStateHistory.map((event): Entry => ({
+    ...stateHistory.map((event): Entry => ({
       key: `status-${event.id}`,
       kind: 'status',
       id: event.id,
@@ -164,17 +179,24 @@ export const HistoryList = ({
       note: event.note,
       event,
     })),
-    // En empate de fecha exacta va siempre al fondo (ver newestFirst). La
-    // nota del 'plan_to_play' oculto ("Recommended by Marta…") se hereda aquí
-    // para que no se pierda al ocultar el evento.
-    ...(addedAt
+    ...planMilestones(planHistory).map((milestone): Entry => ({
+      key: milestone.key,
+      kind: 'plan',
+      label: milestone.label,
+      date: milestone.date,
+      datePrecision: 'datetime',
+      note: milestone.note,
+    })),
+    // Sobra si el juego entró en la app por el Plan: "Added to Plan" ya lo
+    // cuenta, con su nota, el mismo día.
+    ...(addedAt && !enteredViaPlan(addedAt, planHistory)
       ? [
           {
             key: 'added',
             kind: 'added',
             date: addedAt,
             datePrecision: 'datetime',
-            note: stateHistory.find((event) => event.type === 'plan_to_play')?.note ?? null,
+            note: null,
           } satisfies Entry,
         ]
       : []),
@@ -195,9 +217,13 @@ export const HistoryList = ({
     // evento con precisión 'datetime' (hora real) que solo edita la nota no
     // pierde su hora por el simple hecho de pasar por el picker de días.
     const original = entryPickerValue(entry);
+    // Un evento sin fecha guardada ('unknown') no tiene original: cualquier
+    // fecha que se elija es un cambio.
     const dateChanged =
       draftDate !== null &&
-      (draftDate.isoDate !== original.isoDate || draftDate.precision !== original.precision);
+      (original === null ||
+        draftDate.isoDate !== original.isoDate ||
+        draftDate.precision !== original.precision);
     const datePatch = dateChanged
       ? {
           occurredAt: parseIsoDate(draftDate.isoDate),
@@ -242,13 +268,16 @@ export const HistoryList = ({
           const isLast = index === entries.length - 1;
           const isEditing = editingKey === entry.key;
           // 'added' comparte look con Unplayed (gris, círculo) — es el
-          // estado con el que todo juego entra a la app.
+          // estado con el que todo juego entra a la app; las del Plan, el de
+          // Plan to Play.
           const statusMeta =
             entry.kind === 'status'
               ? getGameStatusMeta(entry.event.type)
               : entry.kind === 'added'
                 ? getGameStatusMeta(null)
-                : null;
+                : entry.kind === 'plan'
+                  ? getGameStatusMeta('plan_to_play')
+                  : null;
           const color = statusMeta ? statusMeta.color : SPEND_COLOR;
           // Solo fecha, nunca hora: el historial es la línea temporal del
           // juego (a qué días pasó qué), y la hora exacta de un cambio de
@@ -318,7 +347,9 @@ export const HistoryList = ({
                           ? getGameStatusMeta(entry.event.type).label
                           : entry.kind === 'added'
                             ? 'Added to Afterplay'
-                            : formatMoney(entry.event.amount)}
+                            : entry.kind === 'plan'
+                              ? entry.label
+                              : formatMoney(entry.event.amount)}
                       </span>
                       {entry.kind === 'spend' && (
                         <span className="text-[11.5px] text-muted-foreground">
@@ -423,12 +454,12 @@ export const HistoryList = ({
                     </div>
                   )}
 
-                  {/* Hueco reservado siempre (incluso en 'added', que no tiene
-                    acciones): si apareciera solo al pasar el ratón, la fecha
-                    se desplazaría en cada hover. */}
+                  {/* Hueco reservado siempre (incluso en las derivadas, que no
+                    tienen acciones): si apareciera solo al pasar el ratón, la
+                    fecha se desplazaría en cada hover. */}
                   {!isEditing && (
                     <div className="flex w-12.5 flex-none items-start justify-end gap-0.5 opacity-0 group-hover/row:opacity-100">
-                      {entry.kind !== 'added' && (
+                      {(entry.kind === 'status' || entry.kind === 'spend') && (
                         <button
                           type="button"
                           onClick={() => startEditing(entry)}
@@ -438,7 +469,7 @@ export const HistoryList = ({
                           <Pencil size={13} />
                         </button>
                       )}
-                      {entry.kind !== 'added' && (
+                      {(entry.kind === 'status' || entry.kind === 'spend') && (
                         <button
                           type="button"
                           onClick={() =>

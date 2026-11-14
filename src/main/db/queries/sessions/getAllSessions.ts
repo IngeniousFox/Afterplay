@@ -7,7 +7,7 @@ import { gamesTable, iterationsTable, sessionsTable } from '../../schema';
 // vista de Sesiones, todas o filtradas por juego) — más reciente primero.
 // Modelo v2: TODA fila de sessions es tiempo jugado real, ya no existen los
 // marcadores de borde que antes había que filtrar aquí.
-export const getAllSessions = async (): Promise<SessionWithGame[]> => {
+export const getAllSessions = async (): Promise<SessionWithGame<number>[]> => {
   const db = getDb();
   return db
     .select({

@@ -7,21 +7,20 @@ import {
   momentsBySession,
   RETURN_GAP_DAYS,
 } from '../moments';
-import type { GameId } from '../../entityIds';
 
 // Fábrica de sesiones medidas: fechas legibles, duración en horas, y el fin
 // calculado del tirón — los tests hablan de jugadas, no de milisegundos.
 let nextId = 1;
 const session = (
-  gameId: GameId,
+  gameId: number,
   startedAt: string,
   hours: number,
   overrides: Partial<MemorySession> = {},
 ): MemorySession => {
   const start = new Date(startedAt);
   return {
-    id: nextId++,
-    gameId,
+    id: String(nextId++).padStart(4, '0'),
+    gameId: String(gameId),
     startedAt: start,
     endedAt: new Date(start.getTime() + hours * 3600 * 1000),
     durationSec: Math.round(hours * 3600),
@@ -41,7 +40,7 @@ describe('deriveMoments', () => {
     assert.equal(firsts.length, 2);
     assert.deepEqual(
       firsts.map((m) => m.gameId),
-      [1, 2],
+      ['1', '2'],
     );
     assert.equal(firsts[0].sessionId, sessions[0].id);
   });
@@ -90,7 +89,7 @@ describe('deriveMoments', () => {
 
   it('las horas manuales elevan la línea base: no se celebra lo ya jugado', () => {
     const short = session(1, '2026-01-10T18:00', 2); // 24 → 26h con base 24
-    const hits = deriveMoments([short], new Map([[1, 24]])).filter(
+    const hits = deriveMoments([short], new Map([['1', 24]])).filter(
       (m) => m.type === 'hours_milestone',
     );
     assert.equal(hits.length, 1);
@@ -124,7 +123,7 @@ describe('deriveMoments', () => {
     // Base manual de 24h: la primera sesión medida es a la vez
     // first_session y cruce de las 25h.
     const first = session(1, '2026-01-10T18:00', 2);
-    const map = momentsBySession(deriveMoments([first], new Map([[1, 24]])));
+    const map = momentsBySession(deriveMoments([first], new Map([['1', 24]])));
     assert.equal(map.get(first.id)?.length, 2);
   });
 });

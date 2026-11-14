@@ -10,7 +10,12 @@ import type {
   SessionId,
   StateEventId,
 } from './entityIds';
-export type { DatePrecision, EventDatePrecision, TimeFormat } from './dateTypes';
+export type {
+  DatePrecision,
+  EventDatePrecision,
+  StateEventDatePrecision,
+  TimeFormat,
+} from './dateTypes';
 
 // Las entidades y los inputs del IPC viven en dto.ts, declarados a mano: shared/
 // ya no importa del esquema de Drizzle (F-42). Se reexportan aquí para que los
@@ -46,6 +51,7 @@ export type {
   StateEvent,
   UpdateGamePatch,
   UpdateIterationPatch,
+  WritableStateEventType,
 } from './dto';
 
 // Partidas guardadas (PARTIDAS-GUARDADAS.md) — la fuente es

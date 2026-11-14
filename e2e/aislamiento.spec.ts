@@ -43,7 +43,7 @@ test.describe('aislamiento del entorno', () => {
     // (config.json no vale de testigo: se escribe perezoso, solo cuando
     // cambia un ajuste, así que en un arranque limpio no existe.)
     const entries = readdirSync(sandbox.userDataDir);
-    expect(entries).toContain('Afterplay.db');
+    expect(entries).toContain('Afterplay2.db');
     expect(entries).toContain('credentials.json');
     expect(entries.length).toBeGreaterThan(2);
   });
@@ -86,8 +86,8 @@ test.describe('aislamiento del entorno', () => {
     const parsed = JSON.parse(stored) as { values: Record<string, string> };
     const keys = Object.keys(parsed.values);
 
-    // LO QUE DE VERDAD PROTEGE: ni una credencial de base de datos. Este test
-    // corre sin `withRemote`, así que da igual lo que traiga .env.test (o el
+    // LO QUE DE VERDAD PROTEGE: ni una credencial de base de datos. El
+    // andamio las quita siempre, así que da igual lo que traiga .env.test (o el
     // .env del proyecto, o la terminal): aquí no puede haber con qué abrir la
     // biblioteca de nadie. Es la comprobación que impide repetir el susto del
     // 3-ago-2026 ahora que los tests SÍ llevan credenciales de verdad.

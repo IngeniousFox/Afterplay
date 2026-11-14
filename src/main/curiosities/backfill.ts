@@ -1,9 +1,6 @@
-import { withDbAccess } from '../db';
-import type { PendingCuriositiesGame } from '../db/queries/curiosities/getPendingCuriositiesGames';
-import {
-  getCuriositiesCounts,
-  getPendingCuriositiesGames,
-} from '../db/queries/curiosities/getPendingCuriositiesGames';
+import { appCtx } from '../db/v2/appDb';
+import type { PendingCuriositiesGame } from '../db/v2/queries/loop';
+import { getCuriositiesCounts, getPendingCuriositiesGames } from '../db/v2/queries/loop';
 import type { CuriositiesStatus } from '../../shared/types';
 import { enqueueCuriosities, isCuriositiesQueueRunning } from './queue';
 
@@ -12,7 +9,7 @@ import { enqueueCuriosities, isCuriositiesQueueRunning } from './queue';
 // juego no se pague dos veces y que las llamadas salgan de una en una.
 
 export const getCuriositiesStatus = async (): Promise<CuriositiesStatus> => {
-  const counts = await getCuriositiesCounts();
+  const counts = getCuriositiesCounts(appCtx());
   return { ...counts, running: isCuriositiesQueueRunning() };
 };
 
@@ -20,7 +17,7 @@ export const getCuriositiesStatus = async (): Promise<CuriositiesStatus> => {
 // devuelve en milisegundos aunque queden trescientos juegos por delante.
 export const runCuriositiesBackfill = async (): Promise<void> => {
   if (!process.env.ANTHROPIC_API_KEY) return;
-  const pending = await withDbAccess(() => getPendingCuriositiesGames());
+  const pending = getPendingCuriositiesGames(appCtx());
   enqueueCuriosities(pending);
 };
 

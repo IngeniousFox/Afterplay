@@ -1,11 +1,19 @@
 import { basename, join } from 'node:path';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { parse, stringify } from 'yaml';
-import type { SaveBackupRow } from '../db/schema';
-import type { SaveGame } from '../db/queries/saves/getSaveGames';
-import { createSaveBackup } from '../db/queries/saves/createSaveBackup';
-import { deleteSaveBackups } from '../db/queries/saves/deleteSaveBackups';
-import { getSaveBackups } from '../db/queries/saves/getSaveBackups';
+import { appCtx } from '../db/v2/appDb';
+import {
+  ensureSaveKey,
+  getSaveRestoreTarget,
+  getSaveRestoreTargets,
+  listSaveBackups,
+  parseSaveObjectKey,
+  reconcileOwnSaveBackups,
+  saveFolderPrefix,
+  type NewOwnSaveBackup,
+  type SaveGame,
+} from '../db/v2/queries/saves';
+import type { SaveBackupRow } from '../../shared/dto';
 import { isGameRunning } from '../watcher/runningGames';
 import { isLudusaviAvailable } from './binary';
 import type {
@@ -23,14 +31,7 @@ import {
   MAPPING_FILE,
   type BackupVersion,
 } from './mapping';
-import {
-  getMachineHome,
-  getMachineId,
-  getMachineName,
-  getPruneFloor,
-  getSaveLocationOverride,
-  setSaveLocationOverride,
-} from './machine';
+import { getMachineHome, getPruneFloor } from './machine';
 import { deriveLocations, expandPath, toSlashes } from './paths';
 import * as r2 from './r2';
 import {
@@ -59,12 +60,18 @@ import type { GameId } from '../../shared/entityIds';
 // Se registran como customGames en cada invocación. Las rutas viven
 // TOKENIZADAS en la BD (<winAppData>/...) y se expanden aquí, así que la
 // misma fila vale en un PC donde el usuario se llame distinto.
-export const buildCustomGames = (games: SaveGame[]): LudusaviCustomGame[] =>
-  games
+//
+// Los destinos de restauración de ESTE PC (local_save_state) se leen de una
+// vez para toda la biblioteca: esto corre en cada invocación de ludusavi.
+export const buildCustomGames = (games: SaveGame[]): LudusaviCustomGame[] => {
+  const targets = getSaveRestoreTargets(
+    appCtx(),
+    games.map((game) => game.id),
+  );
+  return games
     .filter(
       (game) =>
-        game.saveLudusaviName &&
-        ((game.saveCustomPaths?.length ?? 0) > 0 || getSaveLocationOverride(game.id) !== null),
+        game.saveLudusaviName && ((game.saveCustomPaths?.length ?? 0) > 0 || targets.has(game.id)),
     )
     .map((game) => ({
       name: game.saveLudusaviName as string,
@@ -75,7 +82,7 @@ export const buildCustomGames = (games: SaveGame[]): LudusaviCustomGame[] =>
       // subiría datos rancios de la ruta vieja.
       files: dedupePaths([
         ...(game.saveCustomPaths ?? []).map(expandPath),
-        ...(getSaveLocationOverride(game.id) ? [getSaveLocationOverride(game.id)!.target] : []),
+        ...(targets.has(game.id) ? [targets.get(game.id)!.target] : []),
       ]),
       // Aquí está la diferencia entre añadir y pisar. Un juego que SÍ está en
       // el manifest (detección automática) se EXTIENDE: nuestra carpeta se
@@ -89,6 +96,7 @@ export const buildCustomGames = (games: SaveGame[]): LudusaviCustomGame[] =>
       // con otro del manifest no arrastra rutas de un juego distinto.
       integration: game.saveDetectionSource === 'auto' ? 'extend' : 'override',
     }));
+};
 
 // Elegir dos veces la misma carpeta (o que el override coincida con una ya
 // añadida) no debe respaldarla dos veces.
@@ -102,25 +110,20 @@ const dedupePaths = (paths: string[]): string[] => {
   });
 };
 
-// La nube de partidas indexa por igdbId (saves/<igdbId>/<machineId>/), que es
-// lo que hace que la misma partida se reconozca desde otro PC. Un juego que
-// solo está en Steam todavía no tiene esa identidad portable.
-//
-// En la práctica no es un caso que se dé: por ahí entran juegos RECIÉN
-// ANUNCIADOS —muchos ni han salido— así que no hay partidas que respaldar. Y
-// en cuanto IGDB los mete (cualquiera de los tres refrescos lo detecta, ver
-// external/adoptIgdb.ts) ganan su id y la nube funciona sola.
-//
-// Así que esto no es una función que haya que evitar, es la red por si acaso:
-// un mensaje claro en vez de una clave de R2 con "null" dentro, que sería un
-// destino imposible de encontrar después.
-const requireIgdbId = (game: SaveGame): number => {
-  if (game.igdbId === null) {
+// La nube de partidas indexa por saveKey (saves/<saveKey>/<deviceId>/), que
+// es lo que hace que la misma partida se reconozca desde otro PC. Lo fija el
+// alta (el igdbId en decimal si existe, si no el id del juego) y NO cambia
+// nunca, aunque el juego gane igdbId después: sus copias siguen bajo el prefijo
+// de siempre (AFTERPLAY-2.0.md §12.7). ensureSaveKey es la red por si un juego
+// se saltó el alta; solo falla si el juego ya no existe.
+const requireSaveKey = (game: SaveGame): string => {
+  const saveKey = game.saveKey ?? ensureSaveKey(appCtx(), game.id);
+  if (saveKey === null) {
     throw new Error(
-      `"${game.title}" todavía no está en IGDB, así que aún no tiene un identificador que compartir entre PCs. En cuanto aparezca allí (lo comprueba cualquier refresco) sus partidas podrán ir a la nube.`,
+      `"${game.title}" ya no está en la biblioteca: no hay dónde guardar sus partidas.`,
     );
   }
-  return game.igdbId;
+  return saveKey;
 };
 
 // ── Espejo local -> R2 ────────────────────────────────────────────────────
@@ -139,8 +142,10 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
 
   // Solo se toca la carpeta de ESTA máquina. Lo que hayan subido otros PCs
   // vive en su propio prefijo y aquí no se lee, ni se sube, ni se borra.
-  const machineId = getMachineId();
-  const prefix = r2.gamePrefix(requireIgdbId(game), machineId);
+  // El dispositivo de la puerta (el machineId de machine-saves.json, fijo
+  // durante el proceso): es el que firma las filas del índice.
+  const saveKey = requireSaveKey(game);
+  const prefix = saveFolderPrefix(saveKey, appCtx().deviceId);
   const remote = await r2.listKeys(prefix);
 
   // Qué versiones caducaron. Se decide UNA vez y lo consultan tanto el
@@ -240,70 +245,50 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // Y el mismo suelo de poda que arriba: si el objeto sigue en el bucket por
   // ser anterior a esta instalación, borrar su fila lo dejaría invisible
   // —imposible de restaurar y de borrar— que es el otro modo de perderlo.
-  const ownRows = (await getSaveBackups(game.id)).filter((row) => row.machineId === machineId);
-  const staleRowIds = ownRows
-    .filter((row) => {
+  //
+  // Y no se indexa NADA si el mapping.yaml de allí arriba no describe estas
+  // versiones (la fusión imposible del paso 2): materializeBackup bajaría el
+  // mapping viejo y ludusavi no conocería ese --backup. Se cura sola en el
+  // primer backup que consiga fusionar.
+  //
+  // Una fila SOLO si su objeto está de verdad en el bucket (bytesInBucket),
+  // la misma regla que recoverIndexFromCloud: el paso 1 se salta los zips que
+  // no están en disco, y su fila sería una versión fantasma de "0 B". Esto solo
+  // impide CREARLAS; una fila antigua sin zip arriba no se limpia desde aquí a
+  // propósito (un listado vacío por apuntar a otro bucket borraría el índice
+  // entero de esta máquina).
+  //
+  // Todo en UNA transacción que relee las filas propias (queries/saves): dos
+  // copias del mismo juego a la vez no pueden duplicar una versión, porque el
+  // id sale de la clave.
+  const newVersions: NewOwnSaveBackup[] | null = mappingDescribesLocal
+    ? versions
+        .filter((version) => bytesInBucket.has(version.name))
+        .map((version) => ({
+          backupName: version.name,
+          createdAt: version.when ? new Date(version.when) : null,
+          // El tamaño del OBJETO, no el del fichero local: es lo que se está
+          // pagando, y una versión que ya solo existe arriba no tiene fichero.
+          sizeBytes: bytesInBucket.get(version.name) ?? 0,
+          ludusaviName,
+          differential: version.differential,
+          parentBackupName: version.differential ? version.chain[0] : null,
+          locations: deriveLocations(version.files),
+          hasRegistry: version.hasRegistry,
+        }))
+    : null;
+  const reconciled = reconcileOwnSaveBackups(appCtx(), {
+    gameId: game.id,
+    saveKey,
+    isStale: (row) => {
       if (localNames.has(row.backupName)) return false;
       if (!floor) return true;
       const when = backupTimestamp(row.backupName) ?? row.createdAt;
       return when.getTime() >= floor.getTime();
-    })
-    .map((row) => row.id);
-  await deleteSaveBackups(staleRowIds);
-
-  // Y no se indexa NADA si el mapping.yaml de allí arriba no describe estas
-  // versiones (la fusión imposible del paso 2). El zip nuevo SÍ está subido y
-  // cuenta en bytesInBucket, pero su nodo no: materializeBackup baja el
-  // mapping viejo, listLocalVersions no encuentra la versión —se cae a
-  // row.locations y a skipRegistryKeys vacío— y restoreGame acaba invocando a
-  // ludusavi con un --backup que su índice no conoce. Es la misma fila
-  // no-restaurable que impide el filtro de bytesInBucket de abajo, entrando
-  // por el otro lado. Se cura sola en el primer backup que consiga fusionar:
-  // ahí entran de golpe todas las versiones que sigan en la carpeta.
-  if (!mappingDescribesLocal) return [];
-
-  const knownNames = new Set(
-    ownRows.filter((row) => localNames.has(row.backupName)).map((row) => row.backupName),
-  );
-
-  const created: SaveBackupRow[] = [];
-  for (const version of versions) {
-    if (knownNames.has(version.name)) continue;
-    // Una fila SOLO si su objeto está de verdad en el bucket, la misma regla
-    // que recoverIndexFromCloud aplica al reconstruir el índice desde la nube:
-    // el paso 1 se salta los zips que no están en disco, y crear su fila
-    // igualmente dejaba en la ficha una versión fantasma de "0 B",
-    // indistinguible de las buenas, que solo daba un error crudo de R2 al
-    // intentar restaurarla.
-    //
-    // Ojo: esto solo impide CREARLAS. Una fila anterior a esta regla cuyo zip
-    // nunca llegó al bucket sigue viva —staleRowIds mira la carpeta local y el
-    // suelo de poda, no el bucket— y a día de hoy no se limpia desde aquí a
-    // propósito: un listado vacío por apuntar a otro bucket borraría el índice
-    // entero de esta máquina, y ese índice viaja por Turso al otro PC.
-    if (!bytesInBucket.has(version.name)) continue;
-    created.push(
-      await createSaveBackup({
-        gameId: game.id,
-        createdAt: version.when ? new Date(version.when) : new Date(),
-        backupName: version.name,
-        r2Key: `${prefix}${version.name}`,
-        // El tamaño del OBJETO, no el del fichero local: es lo que se está
-        // pagando, y una versión que ya solo existe arriba no tiene fichero
-        // que medir (statSync fallaba y la fila salía con 0 bytes).
-        sizeBytes: bytesInBucket.get(version.name) ?? 0,
-        ludusaviName,
-        differential: version.differential,
-        parentBackupName: version.differential ? version.chain[0] : null,
-        machineId,
-        machineName: getMachineName(),
-        machineHome: getMachineHome(),
-        locations: deriveLocations(version.files),
-        hasRegistry: version.hasRegistry,
-      }),
-    );
-  }
-  return created;
+    },
+    versions: newVersions,
+  });
+  return reconciled.created;
 };
 
 const parseMapping = (raw: string | null): BackupMapping | null => {
@@ -440,45 +425,6 @@ export const backupGameToCloud = async (
   });
 };
 
-// Todo lo que un juego tenga de partidas guardadas, fuera: los objetos de su
-// prefijo en R2 y su carpeta local de backups. Se llama al BORRAR el juego.
-//
-// El índice (save_backups) no hace falta tocarlo: cuelga de games con ON
-// DELETE CASCADE. Lo que no se limpiaba solo era justo lo de fuera de la base
-// de datos, que es lo que ocupa espacio de verdad.
-//
-// Nunca lanza: si la nube no responde, el juego se borra igual. Como mucho
-// quedan objetos huérfanos, que es exactamente lo que había antes.
-export const purgeGameSaves = async (gameId: GameId): Promise<void> => {
-  try {
-    const rows = await getSaveBackups(gameId);
-    if (rows.length === 0) return;
-
-    // Se borra el prefijo de CADA máquina que haya subido algo, no solo el de
-    // esta: el juego deja de existir para todas.
-    const prefixes = new Set(rows.map((row) => r2.gamePrefix(igdbIdOf(row), row.machineId)));
-    for (const prefix of prefixes) {
-      const objects = await r2.listKeys(prefix);
-      await r2.deleteKeys(objects.map((object) => object.key));
-    }
-
-    const localNames = new Set(rows.map((row) => row.ludusaviName));
-    for (const name of localNames) {
-      rmSync(findGameBackupDir(name), { recursive: true, force: true });
-    }
-
-    // Y el destino de restauración recordado en esta máquina: sin juego, un
-    // override apuntando a su carpeta es basura en machine-saves.json.
-    setSaveLocationOverride(gameId, null);
-  } catch (error) {
-    console.warn(`[saves] no se pudieron limpiar las partidas del juego ${gameId}:`, error);
-  }
-};
-
-// El igdbId no está en la fila del backup, pero sí dentro de su clave de R2
-// ("saves/<igdbId>/<machineId>/..."), que es justo lo que hay que reconstruir.
-const igdbIdOf = (row: SaveBackupRow): number => Number(row.r2Key.split('/')[1]);
-
 // ── Estado de la sección Saves de la ficha ────────────────────────────────
 // Se calcula al ABRIR la sección y de dos fuentes baratas: la nube sale del
 // índice ya sincronizado (cero red) y lo local de un --preview que no
@@ -487,8 +433,8 @@ export const getGameSavesState = async (
   game: SaveGame,
   allGames: SaveGame[],
 ): Promise<SavesGameState> => {
-  const cloud = await getSaveBackups(game.id);
-  const override = getSaveLocationOverride(game.id);
+  const cloud = listSaveBackups(appCtx(), game.id);
+  const override = getSaveRestoreTarget(appCtx(), game.id);
 
   let local: SavesGameState['local'] = null;
   if (game.saveLudusaviName && isLudusaviAvailable()) {
@@ -593,20 +539,17 @@ export const buildRedirects = (
 // completo del que cuelga si es diferencial, y el mapping.yaml. Nada de
 // descargar la biblioteca entera ni el histórico completo del juego.
 const materializeBackup = async (
-  igdbId: number,
+  // La carpeta del bucket de la máquina que HIZO el backup, que no tiene por
+  // qué ser esta: cada una tiene su propio prefijo con su propio mapping.yaml,
+  // y el de la nuestra no sabría nada de sus zips.
+  prefix: string,
   ludusaviName: string,
-  // La máquina que HIZO el backup, que no tiene por qué ser esta: cada una
-  // tiene su propio prefijo con su propio mapping.yaml, y el de la nuestra no
-  // sabría nada de sus zips.
-  machineId: string,
   version: { name: string; chain: string[] },
 ): Promise<string> => {
   const workspace = createRestoreWorkspace(ludusaviName);
   // Mismo saneado que la carpeta que creó el workspace: con ":" en el nombre
   // la join literal apuntaba a una ruta imposible en Windows.
   const gameDir = join(workspace, sanitizeLudusaviFolder(ludusaviName));
-  const prefix = r2.gamePrefix(igdbId, machineId);
-
   await r2.downloadFile(`${prefix}${MAPPING_FILE}`, join(gameDir, MAPPING_FILE));
   for (const name of version.chain) {
     await r2.downloadFile(`${prefix}${name}`, join(gameDir, name));
@@ -614,13 +557,21 @@ const materializeBackup = async (
   return workspace;
 };
 
+// La carpeta de una copia sale de SU clave, no del juego: así una copia
+// importada de la 1.x (saves/<igdbId>/...) o subida con otro saveKey se baja
+// de donde está de verdad.
+const backupFolderOf = (row: SaveBackupRow): string => {
+  const parts = parseSaveObjectKey(row.r2Key);
+  if (!parts) throw new Error(`la copia ${row.backupName} tiene una clave que no se entiende`);
+  return saveFolderPrefix(parts.saveKey, parts.deviceId);
+};
+
 export const runRestore = async (
-  game: SaveGame,
   row: SaveBackupRow,
   request: RestoreRequestInput,
 ): Promise<Omit<RestoreResult, 'warnings'>> => {
   const ludusaviName = row.ludusaviName;
-  const workspace = await materializeBackup(requireIgdbId(game), ludusaviName, row.machineId, {
+  const workspace = await materializeBackup(backupFolderOf(row), ludusaviName, {
     name: row.backupName,
     chain: row.parentBackupName ? [row.parentBackupName, row.backupName] : [row.backupName],
   });

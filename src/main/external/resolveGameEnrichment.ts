@@ -1,7 +1,7 @@
-import { getGameDetails, resolveAchievementsSteamAppId } from '../../../igdb/api';
-import { getHltbTimes } from '../../../hltb/api';
-import { sgdbSearch, sgdbSearchBySteamAppId } from '../../../sgdb/api';
-import { getSteamStoreDetails } from '../../../steam/store';
+import { getGameDetails, resolveAchievementsSteamAppId } from '../igdb/api';
+import { getHltbTimes } from '../hltb/api';
+import { sgdbSearch, sgdbSearchBySteamAppId } from '../sgdb/api';
+import { getSteamStoreDetails } from '../steam/store';
 
 // Enriquecimiento externo compartido por createGameWithDetails (alta normal)
 // y createPlannedGame (alta en Plan to Play): mismo detalle de IGDB, mismos

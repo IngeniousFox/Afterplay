@@ -1,19 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { after, before, beforeEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-// El andamio de la DB se importa ARRIBA a propósito: registra su mock.module
-// al cargarse, y tiene que estar puesto antes de que nadie importe la consulta
-// bajo prueba (por eso getMemoryFacts entra con un await import dentro de un
-// before, ver su cabecera). Los tests puros de este fichero no se enteran.
-import {
-  cleanupDbs,
-  freshDb,
-  makeGame,
-  makeIteration,
-  makeStateEvent,
-  type TestDb,
-} from '../../../main/db/__tests__/harness';
 import {
   closesOpenSession,
   endsPlaythrough,
@@ -23,7 +11,7 @@ import {
   manualHoursAnchor,
 } from '../../playthroughState';
 import type { StateEvent } from '../../types';
-import { isMeaningfulStateEvent, listClosedPeriodsWithActivity } from '../chapters';
+import { isMeaningfulStateEvent } from '../chapters';
 import type { IterationId, StateEventId } from '../../entityIds';
 
 type EventType = StateEvent['type'];
@@ -47,8 +35,8 @@ const logEvent = (
   occurredAt: string,
   overrides: Partial<LogEvent> = {},
 ): LogEvent => ({
-  id: nextId++,
-  iterationId: 1,
+  id: String(nextId++).padStart(4, '0'),
+  iterationId: '1',
   type,
   occurredAt: new Date(occurredAt),
   ...overrides,
@@ -182,8 +170,8 @@ describe('latestRealStateEvent — cuál es el estado de ahora', () => {
     // con el MISMO occurredAt (writeInitialPlaythrough usa la fecha de inicio
     // cuando no hay fecha de fin). El id es lo único que distingue "lo empecé"
     // de "me lo pasé"; sin el desempate la ficha diría Playing.
-    const empezado = logEvent('started', '2023-04-02T00:00', { id: 40 });
-    const terminado = logEvent('completed', '2023-04-02T00:00', { id: 41 });
+    const empezado = logEvent('started', '2023-04-02T00:00', { id: '40' });
+    const terminado = logEvent('completed', '2023-04-02T00:00', { id: '41' });
     assert.equal(latestRealStateEvent([empezado, terminado]), terminado);
     // Y da igual el orden del array: el id manda, no la posición.
     assert.equal(latestRealStateEvent([terminado, empezado]), terminado);
@@ -194,10 +182,10 @@ describe('latestRealStateEvent — cuál es el estado de ahora', () => {
     // Recorrer el array entero quedándose con la mejor candidata es lo que
     // permite que getGames agrupe por juego sin volver a ordenar nada.
     const log = [
-      logEvent('started', '2024-01-05T18:00', { id: 1 }),
-      logEvent('on_hold', '2024-03-20T18:00', { id: 2 }),
-      logEvent('started', '2024-06-01T18:00', { id: 3 }),
-      logEvent('completed', '2024-08-11T22:30', { id: 4 }),
+      logEvent('started', '2024-01-05T18:00', { id: '1' }),
+      logEvent('on_hold', '2024-03-20T18:00', { id: '2' }),
+      logEvent('started', '2024-06-01T18:00', { id: '3' }),
+      logEvent('completed', '2024-08-11T22:30', { id: '4' }),
     ];
     const esperado = log[3];
     const revuelto = [log[2], log[0], log[3], log[1]];
@@ -210,8 +198,8 @@ describe('latestRealStateEvent — cuál es el estado de ahora', () => {
     // El `if (!latest)` de dentro corre DESPUÉS del filtro, no antes. Si se
     // invirtieran, el plan quedaría como candidato inicial y un 'started'
     // anterior ya no podría desbancarlo por fecha.
-    const planeado = logEvent('plan_to_play', '2026-05-01T09:00', { id: 10 });
-    const empezado = logEvent('started', '2020-02-02T12:00', { id: 11 });
+    const planeado = logEvent('plan_to_play', '2026-05-01T09:00', { id: '10' });
+    const empezado = logEvent('started', '2020-02-02T12:00', { id: '11' });
     assert.equal(latestRealStateEvent([planeado, empezado]), empezado);
   });
 
@@ -220,8 +208,8 @@ describe('latestRealStateEvent — cuál es el estado de ahora', () => {
     // vuelta: getGames se lleva el iterationId de esta misma fila para
     // atribuir el año de las horas manuales. Un refactor que "normalizara" la
     // salida a {type, occurredAt, id} rompería eso en silencio.
-    const evento = logEvent('completed', '2025-12-24T23:00', { iterationId: 77 });
-    assert.equal(latestRealStateEvent([evento])?.iterationId, 77);
+    const evento = logEvent('completed', '2025-12-24T23:00', { iterationId: '77' });
+    assert.equal(latestRealStateEvent([evento])?.iterationId, '77');
   });
 });
 
@@ -437,7 +425,7 @@ describe('una sola regla del alta, y no cuatro copias del mismo número', () => 
     for (const offset of [0, 37, 4_999, 5_000, 60_000]) {
       const occurredAt = cercaDelAlta(offset);
       assert.equal(
-        isMeaningfulStateEvent({ gameId: 1, type: 'completed', occurredAt, addedAt: ALTA }),
+        isMeaningfulStateEvent({ gameId: '1', type: 'completed', occurredAt, addedAt: ALTA }),
         !isAddedAtArtifact(occurredAt, ALTA),
         `offset ${offset}`,
       );
@@ -449,9 +437,12 @@ describe('una sola regla del alta, y no cuatro copias del mismo número', () => 
     // qué comparar. Un juego cuyo addedAt no llegue no puede perder su
     // historia por el camino.
     const lejosDelAlta = cercaDelAlta(60_000);
-    assert.equal(isMeaningfulStateEvent({ gameId: 1, type: 'completed', occurredAt: ALTA }), true);
     assert.equal(
-      isMeaningfulStateEvent({ gameId: 1, type: 'plan_to_play', occurredAt: lejosDelAlta }),
+      isMeaningfulStateEvent({ gameId: '1', type: 'completed', occurredAt: ALTA }),
+      true,
+    );
+    assert.equal(
+      isMeaningfulStateEvent({ gameId: '1', type: 'plan_to_play', occurredAt: lejosDelAlta }),
       false,
     );
   });
@@ -506,90 +497,7 @@ describe('una sola regla del alta, y no cuatro copias del mismo número', () => 
   });
 });
 
-// La regla del alta estaba escrita y probada, pero al Loop le faltaba el DATO:
-// getMemoryFacts seleccionaba iteración, juego, tipo y fecha, nunca
-// games.addedAt, así que la mitad "alta" de isMeaningfulStateEvent no llegaba a
-// aplicarse NUNCA en la app por muy verde que estuviera su test unitario. Por
-// eso esto se prueba contra la base de datos de verdad y no con un doble: lo
-// que faltaba era el cableado, y un doble lo habría cableado por mí.
-describe('el Loop recibe de la DB la fecha de alta que su filtro necesita', () => {
-  let db: TestDb;
-  let getMemoryFacts: typeof import('../../../main/db/queries/memories/getMemoryFacts').getMemoryFacts;
-
-  // El await import va DENTRO del before para que el mock.module del andamio ya
-  // esté registrado cuando la consulta resuelva su getDb (ver harness.ts).
-  before(async () => {
-    ({ getMemoryFacts } = await import('../../../main/db/queries/memories/getMemoryFacts'));
-  });
-  beforeEach(async () => {
-    db = await freshDb();
-  });
-  after(cleanupDbs);
-
-  // Agosto, para que marzo y enero cuenten como periodos CERRADOS.
-  const AHORA = new Date('2026-08-13T12:00:00');
-  const ALTA_DE_MARZO = new Date('2026-03-05T10:00:00Z');
-
-  // Los meses que el Loop consideraría generables con esos hechos, como
-  // 'año-mes' (mes 0-11, como Date). Sin sesiones: aquí se mide qué abren los
-  // EVENTOS, que es lo que el papeleo del alta inflaba.
-  const mesesDe = (events: Awaited<ReturnType<typeof getMemoryFacts>>['events']): string[] =>
-    listClosedPeriodsWithActivity([], events, AHORA).months.map((scope) =>
-      scope.type === 'month' ? `${scope.year}-${scope.month}` : String(scope.year),
-    );
-
-  it('meter juegos viejos marcados Beaten ya no abre —ni cobra recap de— el mes del alta', async () => {
-    // El caso de la ficha: treinta juegos viejos dados de alta en marzo sin
-    // teclear fechas abrían marzo en el Loop ("you finished thirty games in
-    // March") mientras el Journey no pintaba ni una carátula ese mes, así que
-    // ese recap pagado no se podía leer en ninguna parte.
-    const viejo = await makeGame(db, { title: 'Juego viejo', addedAt: ALTA_DE_MARZO });
-    const iteracion = await makeIteration(db, viejo);
-    await makeStateEvent(
-      db,
-      iteracion,
-      'completed',
-      new Date(ALTA_DE_MARZO.getTime() + 37).toISOString(),
-    );
-
-    const facts = await getMemoryFacts();
-    assert.equal(facts.events.length, 1);
-    assert.deepEqual(facts.events[0].addedAt, ALTA_DE_MARZO);
-    assert.deepEqual(mesesDe(facts.events), []);
-  });
-
-  it('un final tecleado de verdad sí abre su mes, aunque el alta sea de otro', async () => {
-    // El borde contrario: lo que se filtra es el papeleo, no la historia. Un
-    // Beaten fechado a mano en enero abre enero por mucho que el juego se
-    // diera de alta en marzo — si esto cayera, el arreglo habría dejado ciego
-    // al Loop en vez de sincerarlo.
-    const juego = await makeGame(db, { title: 'Terminado en enero', addedAt: ALTA_DE_MARZO });
-    const iteracion = await makeIteration(db, juego);
-    await makeStateEvent(db, iteracion, 'completed', '2026-01-20T18:00:00');
-
-    assert.deepEqual(mesesDe((await getMemoryFacts()).events), ['2026-0']);
-  });
-
-  it('unas horas manuales que solo tienen el evento del alta no se cuelgan de ningún mes', async () => {
-    // La misma cadena un paso más allá: el ancla de esas horas. Sin esto, el
-    // capítulo del mes del alta se llevaba 200 horas de un juego que llevas
-    // años sin tocar, y encima las narraba.
-    const juego = await makeGame(db, {
-      title: 'Doscientas horas de antes',
-      addedAt: ALTA_DE_MARZO,
-    });
-    const iteracion = await makeIteration(db, juego, { manualTotalPlayed: 200 });
-    await makeStateEvent(
-      db,
-      iteracion,
-      'completed',
-      new Date(ALTA_DE_MARZO.getTime() + 12).toISOString(),
-    );
-
-    const facts = await getMemoryFacts();
-    assert.deepEqual(facts.manualBlocks, [{ gameId: juego, hours: 200, anchor: null }]);
-    // Y el total por juego NO se toca: esas horas siguen existiendo en All
-    // Time, lo único que no tienen es un mes al que pertenecer.
-    assert.equal(facts.manualHoursByGame.get(juego), 200);
-  });
-});
+// Que el Loop reciba de la base lo que su filtro necesita se prueba contra la
+// base 2.0 en main/db/v2/queries/loop/__tests__/memories.test.ts: allí el
+// papeleo del alta ya no se deduce de `addedAt` sino de la precisión
+// 'unknown' (R-07), y los eventos viajan con ella.

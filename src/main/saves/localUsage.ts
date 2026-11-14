@@ -1,11 +1,9 @@
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  getKnownLudusaviNames,
-  getOwnBackupEntries,
-} from '../db/queries/saves/getLocalBackupsIndex';
+import { appCtx } from '../db/v2/appDb';
+import { listKnownLudusaviNames, listOwnBackupEntries } from '../db/v2/queries/saves';
 import type { LocalBackupsUsage } from './contracts';
-import { getMachineId, setPruneFloor } from './machine';
+import { setPruneFloor } from './machine';
 import { MAPPING_FILE, readMapping } from './mapping';
 import { isR2Configured } from './r2';
 import { getBackupDir } from './run';
@@ -64,11 +62,11 @@ export const getLocalBackupsUsage = async (): Promise<LocalBackupsUsage> => {
   // dejando el disco igual — el número decía que sobraba algo que ninguna
   // acción de la app podía tocar.
   const r2Configured = isR2Configured();
-  const own = r2Configured ? await getOwnBackupEntries(getMachineId()) : [];
+  const own = r2Configured ? listOwnBackupEntries(appCtx()) : [];
   const reclaimablePaths = new Set(
     own.map((entry) => join(findGameBackupDir(entry.ludusaviName), entry.backupName)),
   );
-  const known = new Set(await getKnownLudusaviNames());
+  const known = new Set(listKnownLudusaviNames(appCtx()));
 
   const usage: LocalBackupsUsage = { ...EMPTY_USAGE };
 
@@ -155,7 +153,7 @@ export const cleanLocalBackups = async (): Promise<{
 
   // 1. QUÉ se va a borrar. Se decide entero antes de tocar el disco porque el
   // suelo de poda (paso 2) tiene que estar puesto antes del primer rmSync.
-  const own = await getOwnBackupEntries(getMachineId());
+  const own = listOwnBackupEntries(appCtx());
   const byGame = new Map<string, string[]>();
   for (const entry of own) {
     const filePath = join(findGameBackupDir(entry.ludusaviName), entry.backupName);
@@ -170,7 +168,7 @@ export const cleanLocalBackups = async (): Promise<{
   // duda, no borrar. Ningún juego con filas en el índice puede caer aquí:
   // getKnownLudusaviNames incluye los nombres de save_backups enteros, así
   // que las dos listas de este paso no se solapan nunca.
-  const known = new Set(await getKnownLudusaviNames());
+  const known = new Set(listKnownLudusaviNames(appCtx()));
   const orphanDirs: string[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;

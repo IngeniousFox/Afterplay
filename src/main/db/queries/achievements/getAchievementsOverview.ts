@@ -82,7 +82,7 @@ const ALMOST_THERE_MISSING = 5;
 //     anual — con año vienen vacíos y el bloque no los pinta.
 export const getAchievementsOverview = async (
   year: number | null,
-): Promise<AchievementsOverview> => {
+): Promise<AchievementsOverview<number>> => {
   const db = getDb();
 
   // ── EL FUNDIDO DE FUENTES, ESCRITO EN SQL ────────────────────────────────
