@@ -1619,7 +1619,7 @@ El informe de validación se guarda en el log. Si falla, se borra `Afterplay2.db
 1. Reclama el corte con una escritura condicional directa en Turso (`cutover = migrating`). Solo uno puede ganar. A partir de aquí las 1.8 y el Worker antiguo quedan en solo lectura.
 2. Comprueba `device_status`: todos los PCs conocidos sin cambios pendientes. Si alguno no ha informado, **la única pregunta posible**: "PC-B no ha sincronizado desde X. Enciéndelo, o continúa y lo suyo se recuperará después desde su copia local."
 3. Cierra en origen cualquier sesión abierta, en su último latido.
-4. Importa y valida (§19.5).
+4. Cierra su conexión 1.x, saca una copia consistente de `Afterplay.db` a `backups/`, e importa y valida desde esa copia (§19.5). El importador solo escribe en la carpeta de datos con la opción `cutover`, y solo `Afterplay2.db`.
 5. Se empareja con el hub y lo siembra (§19.7).
 6. Escribe `cutover = done` y los datos del hub en `app_meta`.
 7. Migración local (abajo).
@@ -1853,7 +1853,7 @@ La fase se hace en dos tandas. La primera es solo añadir: la app sigue funciona
 | P1 a P8 · Consultas por dominio   | Biblioteca y ficha; altas y Plan; playthroughs, estados y gasto; sesiones y watcher; logros; refresco externo; partidas; recaps, curiosidades y radar. En paralelo, cada uno en su carpeta          | Hecho e integrado, con una prueba que recorre todos los paquetes juntos                                                                                                                                          |
 | P9 · El cambio                    | El main abre la base 2.0, el IPC y los 39 ficheros pasan a las consultas nuevas y a la puerta, `EntityId` pasa a texto, desaparece el sync de Turso del escritorio, se rehace la semilla de los e2e | Sin empezar                                                                                                                                                                                                      |
 
-**Para retomar el trabajo otro día:** todo lo anterior a P9 está hecho y con commit. Lo siguiente es P9: el plan llamada por llamada está en los informes de cada paquete, resumidos en `CONSULTAS.md` §4 y §5.0 (qué cambia en `watcher.ts`, en los refrescos, en `saves/`, en el IPC). La revisión independiente de la puerta y el importador está hecha (abajo); la del motor de fusión queda para cuando exista, en la fase 3. La base del perfil `Afterplay-dev-v2` se creó con la migración anterior y hay que regenerarla con el importador antes de usarla. Las decisiones de la fase están en `CONSULTAS.md` §5.0 (R-01 a R-18, I-01 a I-19).
+**Para retomar el trabajo otro día:** todo lo anterior a P9 está hecho y con commit. Lo siguiente es P9: el plan llamada por llamada está en los informes de cada paquete, resumidos en `CONSULTAS.md` §4 y §5.0 (qué cambia en `watcher.ts`, en los refrescos, en `saves/`, en el IPC). La revisión independiente de la puerta y el importador está hecha (abajo); la del motor de fusión queda para cuando exista, en la fase 3. El perfil `Afterplay-dev-v2` todavía no tiene base 2.0 (solo la 1.x); la crea P9 con el importador. Las decisiones de la fase están en `CONSULTAS.md` §5.0 (R-01 a R-18, I-01 a I-19).
 
 **Revisión independiente (2026-11-14).** Una revisión hecha por quien no escribió el código, con el único encargo de buscar formas de perder o alterar datos en la puerta de escritura, la conexión, el reloj y el importador. Encontró siete fallos, cada uno reproducido con un test, y cinco sospechas. Todos están arreglados:
 
@@ -1866,7 +1866,7 @@ La fase se hace en dos tandas. La primera es solo añadir: la app sigue funciona
 - La puerta aceptaba `Set`, `Map` o `Date` en columnas JSON y los guardaba como `{}`: ahora los rechaza.
 - Sospechas resueltas: el importador lee el origen como una foto coherente, dentro de una transacción; el script copia la base con su `-wal`; solo se resellan las firmas de los recaps insertados en esa ejecución; un `Math.min(...)` que desbordaba con muchas filas se cambió por un bucle; la protección contra leer la base en uso está en la función, no solo en el script.
 
-Ensayo repetido con datos reales: 0 diferencias inesperadas, 119 recaps casando, idempotente y determinista, 0 sellos futuros y 0 textos con nulo. Queda para la fase 10 que esa protección bloqueará el corte real, porque la app tendrá que leer su propia base: hará falta una excepción explícita.
+Ensayo repetido con datos reales: 0 diferencias inesperadas, 119 recaps casando, idempotente y determinista, 0 sellos futuros y 0 textos con nulo. Esa protección tiene una sola excepción, para el corte de la fase 10: la opción `cutover` de `importLegacyDatabase` deja escribir exactamente `Afterplay2.db` de la carpeta de datos de la app, y ninguna otra ruta. El origen no tiene excepción: en el corte la app cierra su conexión 1.x, saca una copia consistente de `Afterplay.db` a `backups/` e importa desde esa copia.
 
 **Decisiones del usuario (2026-11-13):**
 

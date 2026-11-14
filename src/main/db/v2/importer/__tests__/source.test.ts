@@ -264,6 +264,101 @@ describe('importador: no toca los datos de la app instalada', () => {
   });
 });
 
+// Fase 10 (§19.6): la única excepción, explícita y estrecha.
+describe('importador: el corte escribe solo Afterplay2.db de la carpeta de datos', () => {
+  const countGames = (target: ReturnType<typeof openTestDb>): number =>
+    Number((target.db.$client.prepare('SELECT count(*) AS n FROM games').get() as { n: number }).n);
+
+  it('con cutover importa en <carpeta de datos>/Afterplay2.db desde una copia', () => {
+    const dir = newDir();
+    const userData = join(dir, 'Afterplay');
+    mkdirSync(join(userData, 'backups'), { recursive: true });
+    const copy = join(userData, 'backups', 'Afterplay-precutover.db');
+    const seed = new LegacyDb();
+    seed.game({ addedAt: NOW - DAY });
+    seed.client.exec(`VACUUM INTO '${copy.replace(/'/g, "''")}'`);
+    seed.close();
+    const target = track(openTestDb({ path: join(userData, 'Afterplay2.db'), wall: () => NOW }));
+    importLegacyDatabase({ source: copy, target, now: NOW, cutover: { userDataDir: userData } });
+    assert.equal(countGames(target), 1);
+  });
+
+  it('con cutover sigue sin aceptar la base en uso como origen', () => {
+    const dir = newDir();
+    const userData = join(dir, 'Afterplay');
+    mkdirSync(userData);
+    const target = track(openTestDb({ path: join(userData, 'Afterplay2.db'), wall: () => NOW }));
+    assert.throws(
+      () =>
+        importLegacyDatabase({
+          source: join(userData, 'Afterplay.db'),
+          target,
+          now: NOW,
+          cutover: { userDataDir: userData },
+        }),
+      /EN USO/,
+    );
+    assert.equal(existsSync(join(userData, 'Afterplay.db')), false, 'ni se ha creado');
+  });
+
+  it('con cutover rechaza cualquier otro destino', () => {
+    const dir = newDir();
+    const userData = join(dir, 'Afterplay');
+    const other = join(dir, 'Afterplay-dev-v2');
+    mkdirSync(join(userData, 'backups'), { recursive: true });
+    mkdirSync(other);
+    const legacy = track(new LegacyDb());
+    legacy.game({ addedAt: NOW - DAY });
+    const cases = [
+      join(userData, 'backups', 'Afterplay2.db'), // otra ruta dentro de la carpeta
+      join(userData, 'otra.db'),
+      join(other, 'Afterplay2.db'), // la base de OTRO perfil
+    ];
+    for (const path of cases) {
+      const target = track(openTestDb({ path, wall: () => NOW }));
+      assert.throws(
+        () =>
+          importLegacyDatabase({
+            source: legacy.client,
+            target,
+            now: NOW,
+            cutover: { userDataDir: userData },
+          }),
+        /ninguna otra/,
+      );
+      assert.equal(countGames(target), 0);
+    }
+    // En memoria tampoco: el corte escribe un fichero real.
+    const memory = track(openTestDb({ wall: () => NOW }));
+    assert.throws(
+      () =>
+        importLegacyDatabase({
+          source: legacy.client,
+          target: memory,
+          now: NOW,
+          cutover: { userDataDir: userData },
+        }),
+      /ninguna otra/,
+    );
+  });
+
+  it('cutover solo vale para una carpeta de datos de la app', () => {
+    const dir = newDir();
+    const target = track(openTestDb({ path: join(dir, 'Afterplay2.db'), wall: () => NOW }));
+    const legacy = track(new LegacyDb());
+    assert.throws(
+      () =>
+        importLegacyDatabase({
+          source: legacy.client,
+          target,
+          now: NOW,
+          cutover: { userDataDir: dir },
+        }),
+      /carpeta de datos de la app/,
+    );
+  });
+});
+
 // Revisión, sospecha sobre scripts/import-1x-to-v2.ts: copiaba solo el `.db`.
 describe('importador: copia consistente del origen', () => {
   it('lo confirmado que aún vive en el -wal llega a la copia', () => {

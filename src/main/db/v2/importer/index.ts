@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { LocalDatabase } from '../connection';
 import { DEFAULT_CURRENCY } from '../queries/common/currency';
-import { assertImportPathsAllowed, fileOf } from './appData';
+import { assertImportPathsAllowed, fileOf, type CutoverTarget } from './appData';
 import {
   buildImportPlan,
   ImportBlockedError,
@@ -87,6 +87,14 @@ export interface ImportLegacyOptions {
   readonly devIgnorePendingMailbox?: boolean;
   /** Para los tests de instalaciones: qué rutas "existen". */
   readonly pathExists?: (path: string) => boolean;
+  /**
+   * Solo el corte de la fase 10 (§19.6): permite que la base 2.0 de destino
+   * sea `Afterplay2.db` de esa carpeta de datos de la app, y ninguna otra
+   * ruta dentro de ella. Sin esto, el importador no escribe nunca en la
+   * carpeta de datos de la app ni de sus perfiles (appData.ts). El origen no
+   * tiene excepción: tiene que ser una copia, nunca la base en uso.
+   */
+  readonly cutover?: CutoverTarget;
 }
 
 export interface ImportReport {
@@ -139,6 +147,7 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
   assertImportPathsAllowed(
     typeof options.source === 'string' ? options.source : fileOf(options.source.location()),
     fileOf(target.db.$client.location()),
+    options.cutover,
   );
   // "Ahora" antes de leer: el techo de los relojes no puede pasar de aquí (hallazgo 1).
   const now = options.now ?? Date.now();
