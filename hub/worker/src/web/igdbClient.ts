@@ -66,8 +66,13 @@ export class IgdbClient {
 
   constructor(private readonly options: IgdbClientOptions) {}
 
+  /**
+   * El `fetch` inyectado o el global. El global se llama SUELTO: en Workers,
+   * `fetch` invocado como método de otro objeto (`this.fetchImpl(...)` con el
+   * global dentro) lanza "Illegal invocation", que aquí parecería "sin red".
+   */
   private get fetchImpl(): typeof fetch {
-    return this.options.fetch ?? fetch;
+    return this.options.fetch ?? ((input, init) => fetch(input, init));
   }
 
   /** `fetch` con tope de tiempo (la lectura del cuerpo cuenta dentro del plazo). */

@@ -319,6 +319,23 @@ describe('IgdbClient: tiempo máximo y errores de red', () => {
     );
   });
 
+  it('sin fetch inyectado llama al global suelto, sin otro this (Workers lo exige)', async () => {
+    const original = globalThis.fetch;
+    const fake = fakeIgdb(() => []);
+    let calledLoose: boolean | null = null;
+    globalThis.fetch = function (this: unknown, input: string | URL | Request, init?: RequestInit) {
+      calledLoose = this === undefined || this === globalThis;
+      return fake.fetch(input, init);
+    } as typeof fetch;
+    try {
+      const withGlobal = new IgdbClient({ loadCredentials: async () => KEYS, now: () => 0 });
+      assert.deepEqual(await withGlobal.search('zelda'), []);
+      assert.equal(calledLoose, true, 'fetch llamado como método');
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it('dos peticiones a la vez comparten UNA petición de token', async () => {
     const igdb = fakeIgdb(() => []);
     const shared = client(igdb.fetch, 1000);
