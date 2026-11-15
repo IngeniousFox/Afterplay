@@ -88,8 +88,12 @@ export class IgdbClient {
       const response = await this.fetchImpl(url, { ...init, signal: controller.signal });
       if (!response.ok) return { status: response.status, value: null };
       return { status: response.status, value: await read(response) };
-    } catch {
-      // Ni el mensaje ni la URL: el detalle podría llevar las claves.
+    } catch (error) {
+      // Al cliente, ni el mensaje ni la URL. Al log, solo el tipo de error y
+      // su mensaje: las claves van en el cuerpo, que un error de fetch no cita.
+      console.warn(
+        `igdb: ${what} falló: ${error instanceof Error ? `${error.name}: ${error.message}` : 'desconocido'}`,
+      );
       throw unavailable(controller.signal.aborted ? `${what}: tiempo agotado` : `${what}: sin red`);
     } finally {
       clearTimeout(timer);
