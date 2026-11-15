@@ -15,3 +15,13 @@ export {
   updateStateEvent,
 } from './stateEvents';
 export { addSpendEvent, deleteSpendEvent, getAllSpendEvents, updateSpendEvent } from './spend';
+export {
+  PlaythroughMergeError,
+  findConcurrentActivePlaythroughs,
+  isPlaythroughMergeError,
+  mergePlaythroughs,
+  type ActivePlaythrough,
+  type MergePlaythroughsInput,
+  type MergePlaythroughsResult,
+  type PlaythroughMergeErrorCode,
+} from './merge';

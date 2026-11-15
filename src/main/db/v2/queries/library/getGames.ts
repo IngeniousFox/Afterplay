@@ -53,12 +53,14 @@ export function getGames(ctx: QueryContext): GameListItem<string>[] {
   //
   // El orden por creación es también el orden en que deriveLibrary suma las
   // horas (en coma flotante el orden puede cambiar el último bit): así no
-  // tiene que reordenar.
+  // tiene que reordenar. Lleva `syncCreated` para que, si reordena, lo haga con
+  // el mismo criterio (F-09) y no por id.
   const iterations = ctx.db
     .select({
       id: playthroughs.id,
       gameId: playthroughs.gameId,
       manualTotalPlayed: playthroughs.manualHours,
+      syncCreated: playthroughs.syncCreated,
       ...playthroughSessionTotals,
     })
     .from(playthroughs)
@@ -80,6 +82,7 @@ export function getGames(ctx: QueryContext): GameListItem<string>[] {
       occurredAt: stateEvents.occurredAt,
       datePrecision: stateEvents.datePrecision,
       id: stateEvents.id,
+      syncCreated: stateEvents.syncCreated,
     })
     .from(stateEvents)
     .innerJoin(

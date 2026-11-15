@@ -14,7 +14,7 @@ import type {
   StateEventType,
   UnlockOrigin,
 } from '../../../schema';
-import type { CreateValues } from '../../../store';
+import type { CreateValues, ForeignWriteRule } from '../../../store';
 import { idForNewRow } from '../../../store/ids';
 import { LOCAL, OTHER, T0, fakeWall, openTestDb, type FakeWall } from '../../../__tests__/helpers';
 import { writeCheck } from '../checks';
@@ -73,13 +73,19 @@ export interface OpenQueryDbOptions {
    * `advance`/`set` no mueven nada.
    */
   readonly realClock?: boolean;
+  /** Excepciones a la regla del dueño registradas en la puerta (como hace `runtime.ts`). */
+  readonly foreignWriteRules?: readonly ForeignWriteRule[];
 }
 
 export function openQueryDb(options: OpenQueryDbOptions = {}): QueryFixture {
   const wall: FakeWall = options.realClock
     ? { wall: () => Date.now(), advance: () => {}, set: () => {} }
     : fakeWall(options.start ?? T0);
-  const local = openTestDb({ deviceId: options.deviceId ?? LOCAL, wall: wall.wall });
+  const local = openTestDb({
+    deviceId: options.deviceId ?? LOCAL,
+    wall: wall.wall,
+    foreignWriteRules: options.foreignWriteRules,
+  });
   const ctx = createQueryContext(local, { now: () => new Date(wall.wall()) });
   if (options.withThisDevice ?? true) {
     ensureThisDevice(ctx, {

@@ -87,6 +87,7 @@ export function getMemoryFacts(ctx: QueryContext): MemoryFacts {
   const sessionRows = ctx.db
     .select({
       id: sessions.id,
+      syncCreated: sessions.syncCreated,
       gameId: playthroughs.gameId,
       playthroughId: playthroughs.id,
       startedAt: sessions.startedAt,
@@ -133,6 +134,7 @@ export function getMemoryFacts(ctx: QueryContext): MemoryFacts {
 
   const memorySessions: MemorySession<string>[] = sessionRows.map((row) => ({
     id: row.id,
+    syncCreated: row.syncCreated,
     gameId: row.gameId,
     startedAt: row.startedAt,
     endedAt: row.endedAt,

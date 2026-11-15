@@ -3,9 +3,9 @@ import {
   latestRealStateEvent,
   type RealStateEventCandidate,
 } from '../playthroughState';
-import { compareByCreation } from '../entityIds';
 import type { EntityId, EntityIdLike, IterationId } from '../entityIds';
 import type { StateEvent } from '../types';
+import { compareRowsByCreation } from './creationOrder';
 
 // EL GASTO DE UN JUEGO Y SU REPARTO ENTRE PLAYTHROUGHS, escrito UNA vez
 // (AFTERPLAY-2.0.md §15.2, F-26).
@@ -53,17 +53,18 @@ export const playthroughClosedAt = <Id extends EntityIdLike>(
 // el DLC el mismo día que te pasas el juego empata exacto. Con el '<' estricto
 // ese dinero se le colgaba al playthrough siguiente, que ese día ni existía.
 //
-// `iterations` tiene que llegar en orden cronológico de creación, que en este
-// esquema es el orden de id; se ordena aquí por si acaso, para que la regla no
-// dependa del ORDER BY de quien llama. Sin playthroughs no hay a quién
-// atribuir nada y el mapa sale vacío (el total del juego sigue contando, ver
-// totalSpendOf).
+// `iterations` tiene que llegar en orden cronológico de creación, que en la
+// 2.0 es el de `syncCreated` (F-09: el id no dice cuál se creó después entre
+// dos PCs) y en la 1.x, sin `syncCreated`, el de id; se ordena aquí por si
+// acaso, para que la regla no dependa del ORDER BY de quien llama. Sin
+// playthroughs no hay a quién atribuir nada y el mapa sale vacío (el total del
+// juego sigue contando, ver totalSpendOf).
 export const splitSpendByPlaythrough = <Id extends EntityIdLike>(
-  iterations: readonly { id: IterationId<Id> }[],
+  iterations: readonly { id: IterationId<Id>; syncCreated?: string | null }[],
   eventsByIteration: ReadonlyMap<IterationId<Id>, readonly SpendStateEvent<Id>[]>,
   spends: readonly SpendRow[],
 ): Map<IterationId<Id>, number> => {
-  const ordered = [...iterations].sort((a, b) => compareByCreation(a.id, b.id));
+  const ordered = [...iterations].sort(compareRowsByCreation);
   const closedAt = ordered.map((iteration) =>
     playthroughClosedAt(eventsByIteration.get(iteration.id) ?? []),
   );

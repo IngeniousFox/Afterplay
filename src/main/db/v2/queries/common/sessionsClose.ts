@@ -13,7 +13,14 @@ import type { QueryContext } from './context';
 // Reglas:
 // - Solo el dueño cierra su sesión (§10.1, F-01 a F-03). La de otro PC no se
 //   toca: se devuelve `not_owner` sin lanzar, y la interfaz la sigue viendo
-//   "en vivo" hasta que su dueño la cierre (R-10, se tratará en la fase 4).
+//   "en vivo" hasta que su dueño la cierre (R-10). Única excepción: un
+//   cronómetro (`startedBy = 'timer'`, dueño el dispositivo `web`) lo puede
+//   parar CUALQUIER PC si quien cierra es una persona (`closedBy: 'user'`;
+//   §7.4, §13.3). Los cierres automáticos (`'owner'`, `'janitor'`) de un
+//   cronómetro ajeno siguen siendo `not_owner`: los rancios los cierra el hub.
+//   La puerta lo admite con `timerForeignWriteRule`, que hay que registrar al
+//   abrir la base (`runtime.ts`); sin ella, parar un cronómetro ajeno lanza
+//   `not_owner` desde la puerta.
 // - Idempotente: una sesión ya cerrada no se recalcula. Si no, el cierre real
 //   del proceso, horas después de un Stop, inflaría la duración (la cicatriz
 //   de closeSession.ts en la 1.x).
@@ -58,8 +65,12 @@ function readSession(ctx: QueryContext, sessionId: string): SessionRow | undefin
   return ctx.db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
 }
 
+/** ¿Puede esta llamada cerrar una sesión de otro dispositivo? Solo un cronómetro, parado por una persona. */
+const canStopForeignTimer = (row: SessionRow, input: CloseSessionInput): boolean =>
+  row.startedBy === 'timer' && input.closedBy === 'user';
+
 /**
- * Cierra una sesión propia si sigue abierta, con `endedAt`, `durationSec` y
+ * Cierra una sesión propia (o un cronómetro ajeno parado por una persona) si sigue abierta, con `endedAt`, `durationSec` y
  * `closedBy`, en una transacción (relee la fila dentro). Ver el contrato de
  * errores arriba.
  */
@@ -73,7 +84,9 @@ export function closeOwnSession(
     if (!row) return { status: 'not_found' };
     if (row.syncDeleted !== null) return { status: 'deleted' };
     if (row.endedAt !== null) return { status: 'already_closed', session: row };
-    if (row.deviceId !== ctx.deviceId) return { status: 'not_owner', session: row };
+    if (row.deviceId !== ctx.deviceId && !canStopForeignTimer(row, input)) {
+      return { status: 'not_owner', session: row };
+    }
     if (input.endedAt.getTime() < row.startedAt.getTime()) {
       return { status: 'ends_before_start', session: row };
     }

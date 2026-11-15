@@ -1,4 +1,3 @@
-import { compareByCreation } from '../entityIds';
 import type { EntityId, EntityIdLike, GameId, IterationId, StateEventId } from '../entityIds';
 import { lastPlayedAtFor } from '../lastPlayedAt';
 import type { StateEventDatePrecision } from '../dateTypes';
@@ -10,6 +9,7 @@ import {
 } from '../playthroughState';
 import type { StateEvent } from '../types';
 import { yearOf } from '../yearOf';
+import { compareRowsByCreation } from './creationOrder';
 import { resolveIterationHours } from './hours';
 
 // LA BIBLIOTECA: lo que cada juego enseña en la lista (horas, sesiones, estado,
@@ -58,8 +58,12 @@ export type LibraryGameRow<Id extends EntityIdLike = EntityId> = {
 //    si sigue abierta); null si no tiene sesiones.
 //  · firstSessionAt — el arranque más temprano: último recurso para fechar
 //    sus horas manuales.
+//
+// `syncCreated` (2.0, F-09): el orden de creación entre dispositivos. Opcional:
+// la 1.x y el Worker no lo tienen y suman por id (domain/creationOrder.ts).
 export type LibraryIterationRow<Id extends EntityIdLike = EntityId> = {
   id: IterationId<Id>;
+  syncCreated?: string | null;
   gameId: GameId<Id>;
   manualTotalPlayed: number | null;
   sessionCount: SqlInteger;
@@ -74,6 +78,8 @@ export type LibraryStateEventRow<Id extends EntityIdLike = EntityId> = {
   type: StateType;
   occurredAt: Date;
   id: StateEventId<Id>;
+  // Desempate de dos eventos en el mismo instante (ver LibraryIterationRow).
+  syncCreated?: string | null;
   // Imprescindible con `paperwork: 'datePrecision'` (las lecturas 2.0): es lo
   // único que distingue el papeleo del alta. Las filas 1.x pueden omitirla.
   datePrecision?: StateEventDatePrecision;
@@ -156,14 +162,15 @@ export const deriveLibrary = <Id extends EntityIdLike>(input: {
     pushTo(eventsByGame, event.gameId, event);
   }
 
-  // Las horas de un juego se suman iteración a iteración EN ORDEN DE ID: en
+  // Las horas de un juego se suman iteración a iteración EN ORDEN DE CREACIÓN
+  // (`syncCreated`, y el id si falta; la 1.x y el Worker, por id): en
   // coma flotante el orden de la suma puede cambiar el último bit, y los dos
   // lados tienen que dar el mismo número exacto. Se ordena aquí solo si hace
   // falta (las dos consultas ya lo piden) para no pagar un sort por nada.
   let iterations = input.iterations;
   for (let index = 1; index < iterations.length; index++) {
-    if (compareByCreation(iterations[index - 1].id, iterations[index].id) > 0) {
-      iterations = [...iterations].sort((a, b) => compareByCreation(a.id, b.id));
+    if (compareRowsByCreation(iterations[index - 1], iterations[index]) > 0) {
+      iterations = [...iterations].sort(compareRowsByCreation);
       break;
     }
   }

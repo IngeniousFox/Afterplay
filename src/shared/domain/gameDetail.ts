@@ -1,7 +1,7 @@
-import { compareByCreation } from '../entityIds';
 import type { EntityId, EntityIdLike, IterationId, StateEventId } from '../entityIds';
 import { latestRealStateEvent, leavesEndDate } from '../playthroughState';
 import type { StateEvent } from '../types';
+import { compareRowsByCreation } from './creationOrder';
 import { resolveIterationHours, trackedSecondsOf } from './hours';
 import { costPerHourOf, splitSpendByPlaythrough, totalSpendOf } from './spend';
 
@@ -26,8 +26,12 @@ type StateType = StateEvent['type'];
 // entityIds.ts): la ficha se deriva igual con los enteros del esquema 1.x que
 // con el texto del 2.0, porque todo lo que hace con un id es agrupar por él y
 // desempatar con compareByCreation.
+//
+// `syncCreated` (2.0, F-09) es el orden de creación entre dispositivos; opcional
+// porque la 1.x y el Worker ordenan por id (ver domain/creationOrder.ts).
 export type DetailIterationRow<Id extends EntityIdLike = EntityId> = {
   id: IterationId<Id>;
+  syncCreated?: string | null;
   manualTotalPlayed: number | null;
 };
 
@@ -41,6 +45,7 @@ export type DetailSessionRow<Id extends EntityIdLike = EntityId> = {
 
 export type DetailStateEventRow<Id extends EntityIdLike = EntityId> = {
   id: StateEventId<Id>;
+  syncCreated?: string | null;
   iterationId: IterationId<Id>;
   type: StateType;
   occurredAt: Date;
@@ -100,7 +105,7 @@ const edgeOf = <E extends DetailStateEventRow<EntityIdLike>>(event: E): Iteratio
     datePrecision: event.datePrecision,
   }) as IterationEdge<E>;
 
-// El 'started' más temprano por fecha y, a igual fecha, por id. Es lo que
+// El 'started' más temprano por fecha y, a igual fecha, por creación. Es lo que
 // devolvía el `find` sobre el log ordenado por (occurredAt, id) asc de los dos
 // SELECTs; escrito explícito para que la regla no dependa de su ORDER BY.
 const firstStartedEvent = <E extends DetailStateEventRow<EntityIdLike>>(
@@ -113,7 +118,7 @@ const firstStartedEvent = <E extends DetailStateEventRow<EntityIdLike>>(
       first === null ||
       event.occurredAt.getTime() < first.occurredAt.getTime() ||
       (event.occurredAt.getTime() === first.occurredAt.getTime() &&
-        compareByCreation(event.id, first.id) < 0)
+        compareRowsByCreation(event, first) < 0)
     ) {
       first = event;
     }
@@ -179,9 +184,10 @@ export const deriveGameDetail = <
   isRunning?: (session: S) => boolean;
 }): DerivedGameDetail<I, S, E> => {
   const { sessions, stateEvents, spendEvents } = input;
-  // En orden de creación (id): el reparto del gasto recorre los playthroughs
-  // en ese orden y la ficha los enseña igual. Los dos SELECTs ya lo piden.
-  const iterations = [...input.iterations].sort((a, b) => compareByCreation(a.id, b.id));
+  // En orden de creación (`syncCreated`, y el id de desempate o si falta): el
+  // reparto del gasto recorre los playthroughs en ese orden y la ficha los
+  // enseña igual. Los dos SELECTs ya lo piden.
+  const iterations = [...input.iterations].sort(compareRowsByCreation);
 
   const sessionsByIteration = groupBy(sessions, (session) => session.iterationId);
   const eventsByIteration = groupBy(stateEvents, (event) => event.iterationId);
@@ -239,7 +245,7 @@ export const deriveGameDetail = <
   let firstPlanEvent: E | null = null;
   for (const event of stateEvents) {
     if (event.type !== 'plan_to_play') continue;
-    if (firstPlanEvent === null || compareByCreation(event.id, firstPlanEvent.id) < 0)
+    if (firstPlanEvent === null || compareRowsByCreation(event, firstPlanEvent) < 0)
       firstPlanEvent = event;
   }
 

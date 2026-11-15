@@ -137,6 +137,7 @@ export function getSessionClosedInfo(
   const siblings = ctx.db
     .select({
       id: sessions.id,
+      syncCreated: sessions.syncCreated,
       iterationId: playthroughs.id,
       startedAt: sessions.startedAt,
       endedAt: sessions.endedAt,
@@ -170,6 +171,7 @@ export function getSessionClosedInfo(
 
   const memorySessions: MemorySession<string>[] = siblings.map((row) => ({
     id: row.id,
+    syncCreated: row.syncCreated,
     gameId: session.gameId,
     startedAt: row.startedAt,
     endedAt: row.endedAt,

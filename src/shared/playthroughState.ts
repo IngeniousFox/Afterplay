@@ -4,7 +4,7 @@
 // renderer al pintar el Journey y el historial — y tenerlas por duplicado ya
 // había dejado versiones que no coincidían.
 
-import { compareByCreation } from './entityIds';
+import { compareRowsByCreation } from './domain/creationOrder';
 import type { EntityId, EntityIdLike, StateEventId } from './entityIds';
 import type { StateEvent } from './types';
 
@@ -67,15 +67,23 @@ export const closesOpenSession = (type: StateEventType | null | undefined): bool
 // su propia forma de fila con estos tres campos pegados.
 //
 // Genérico en la representación del id (ver entityIds.ts): el desempate es
-// compareByCreation, que vale igual para enteros que para UUIDv7.
+// el orden de creación (compareRowsByCreation), que vale igual para enteros
+// que para UUIDv7.
+//
+// `syncCreated` (2.0, F-09) es el orden de creación de verdad entre
+// dispositivos: el id de un evento escrito en un PC con el reloj adelantado
+// gana al de otro PC que lo escribió después. Es opcional: la 1.x y el Worker
+// no lo tienen y desempatan por id, como siempre.
 export type RealStateEventCandidate<Id extends EntityIdLike = EntityId> = {
   type: string;
   occurredAt: Date;
   id: StateEventId<Id>;
+  syncCreated?: string | null;
 };
 
 // El "último estado real" de un juego/iteración: el evento con occurredAt más
-// reciente ignorando 'plan_to_play', con empate resuelto por id más alto.
+// reciente ignorando 'plan_to_play', con empate resuelto por el creado más
+// tarde (`syncCreated`, y el id si falta).
 // Funciona igual reciba las filas ordenadas o no — recorre todo el array y se
 // queda con la mejor candidata vista hasta el momento, así que no depende de
 // ningún ORDER BY previo.
@@ -95,7 +103,7 @@ export const latestRealStateEvent = <T extends RealStateEventCandidate<EntityIdL
     const isNewer = event.occurredAt.getTime() > latest.occurredAt.getTime();
     const isSameDateButHigherId =
       event.occurredAt.getTime() === latest.occurredAt.getTime() &&
-      compareByCreation(event.id, latest.id) > 0;
+      compareRowsByCreation(event, latest) > 0;
 
     if (isNewer || isSameDateButHigherId) {
       latest = event;

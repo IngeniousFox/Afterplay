@@ -170,6 +170,7 @@ function pauseActiveSiblings(ctx: QueryContext, input: PauseSiblingsInput): void
   const events = ctx.db
     .select({
       id: stateEvents.id,
+      syncCreated: stateEvents.syncCreated,
       playthroughId: stateEvents.playthroughId,
       type: stateEvents.type,
       occurredAt: stateEvents.occurredAt,

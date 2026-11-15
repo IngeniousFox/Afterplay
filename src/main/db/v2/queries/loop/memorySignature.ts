@@ -98,7 +98,10 @@ export function memoryChapterFor(
  *
  * Los ids de sesión de los momentos no salen en la firma: solo desempatan su
  * orden. Se sustituyen por su posición en orden de creación, que es el orden
- * de los ids 1.x (los UUIDv7 importados lo conservan, R-04).
+ * de los ids 1.x (los UUIDv7 importados lo conservan, R-04). Por eso aquí el
+ * rango se calcula con el id y NO con `syncCreated` (el orden de la 1.x es el
+ * del id), y los momentos pierden su `sessionSyncCreated`: si no, el hash
+ * volvería a desempatar por él y no por el rango.
  */
 export function toLegacyIds(
   chapter: Chapter<string>,
@@ -125,14 +128,15 @@ export function toLegacyIds(
     dominant: games[0] ?? null,
     completions: chapter.completions.map((entry) => ({ ...entry, gameId: game(entry.gameId) })),
     stateChanges: chapter.stateChanges.map((entry) => ({ ...entry, gameId: game(entry.gameId) })),
-    moments: chapter.moments.map(
-      (moment) =>
-        ({
-          ...moment,
-          gameId: game(moment.gameId),
-          sessionId: sessionRank.get(moment.sessionId) ?? 0,
-        }) as Moment<number>,
-    ),
+    moments: chapter.moments.map((moment) => {
+      const legacyMoment = {
+        ...moment,
+        gameId: game(moment.gameId),
+        sessionId: sessionRank.get(moment.sessionId) ?? 0,
+      } as Moment<number>;
+      delete legacyMoment.sessionSyncCreated;
+      return legacyMoment;
+    }),
     achievements: chapter.achievements && {
       ...chapter.achievements,
       highlights: chapter.achievements.highlights.map((entry) => ({

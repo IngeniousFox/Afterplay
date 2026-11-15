@@ -19,10 +19,10 @@
 // Los tipos de entrada son ESTRUCTURALES y mínimos: cada lado trae sus SELECTs
 // recortados, y lo único que importa es que lleven estos campos.
 
-import { compareByCreation } from '../entityIds';
 import type { EntityId, EntityIdLike, IterationId, StateEventId } from '../entityIds';
 import { endsPlaythrough, latestRealStateEvent } from '../playthroughState';
 import type { StateEvent } from '../types';
+import { compareRowsByCreation } from './creationOrder';
 import { nextPlaythroughLabel } from './nextPlaythroughLabel';
 
 type StateEventType = StateEvent['type'];
@@ -32,9 +32,15 @@ type StateEventType = StateEvent['type'];
 // Genéricas en la representación del id (ver entityIds.ts): la decisión solo
 // agrupa por id y desempata con compareByCreation, que vale igual para los
 // enteros del esquema 1.x que para los UUIDv7 del 2.0.
+//
+// `syncCreated` (el reloj de creación de la fila, texto comparable, §10.7 y
+// F-09) es el orden de creación en la 2.0: dos PCs offline pueden crear cada
+// uno un playthrough y su id no dice cuál es el vigente. OPCIONAL a propósito:
+// el esquema 1.x y el Worker no lo tienen y ordenan por id, como siempre.
 export type PlaythroughRow<Id extends EntityIdLike = EntityId> = {
   id: IterationId<Id>;
   label: string;
+  syncCreated?: string | null;
 };
 
 // Un evento de estado de cualquiera de esos playthroughs. El id desempata dos
@@ -42,6 +48,8 @@ export type PlaythroughRow<Id extends EntityIdLike = EntityId> = {
 // latestRealStateEvent) y además forma parte de la firma "cerrado al vuelo".
 export type PlaythroughStateEventRow<Id extends EntityIdLike = EntityId> = {
   id: StateEventId<Id>;
+  // Ver PlaythroughRow: opcional; sin él, el desempate es el id.
+  syncCreated?: string | null;
   iterationId: IterationId<Id>;
   type: StateEventType;
   occurredAt: Date;
@@ -58,8 +66,9 @@ export type PlaythroughGameRow = {
 };
 
 export type ResolvePlaythroughInput<Id extends EntityIdLike = EntityId> = {
-  // En cualquier orden: la decisión ordena por id (la "última" es la de id más
-  // alto, ver abajo) y no se fía de ningún ORDER BY del que llama.
+  // En cualquier orden: la decisión ordena por creación (la "última" es la de
+  // `syncCreated` más reciente; el id solo desempata o, sin `syncCreated`,
+  // decide; ver abajo) y no se fía de ningún ORDER BY del que llama.
   playthroughs: readonly PlaythroughRow<Id>[];
   // TODOS los eventos de esos playthroughs, también los posteriores a `at`:
   // hacen falta dos lecturas del mismo log (a fecha `at` y hoy). Los de
@@ -112,6 +121,14 @@ export type PlaythroughDecision<Id extends EntityIdLike = EntityId> =
 const startOfLocalDay = (date: Date): number =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
+// El último de la lista (el creado más tarde, si va ordenada) que cumple `test`.
+const findLast = <T>(list: readonly T[], test: (item: T) => boolean): T | undefined => {
+  for (let index = list.length - 1; index >= 0; index--) {
+    if (test(list[index])) return list[index];
+  }
+  return undefined;
+};
+
 const eventAt = (type: PlaythroughEventToWrite['type'], at: Date): PlaythroughEventToWrite => ({
   type,
   // Copia y no la misma referencia: el ejecutor podría mutarla y la decisión
@@ -161,10 +178,12 @@ export const resolvePlaythroughForPlay = <Id extends EntityIdLike>(
   const { at, now, game } = input;
   const atMs = at.getTime();
 
-  // La "última" es la de id más alto y no "la última que existía en `at`": una
-  // iteración recién creada por Add Game no tiene ni un evento del que sacar su
-  // fecha, y es justo el destino bueno cuando no hay nada activo.
-  const playthroughs = [...input.playthroughs].sort((a, b) => compareByCreation(a.id, b.id));
+  // La "última" es la creada más tarde (`syncCreated`, con el id de desempate)
+  // y no "la última que existía en `at`": una iteración recién creada por Add
+  // Game no tiene ni un evento del que sacar su fecha, y es justo el destino
+  // bueno cuando no hay nada activo. El id solo no vale en la 2.0: dos PCs
+  // offline crean un playthrough cada uno y gana el de reloj más reciente.
+  const playthroughs = [...input.playthroughs].sort(compareRowsByCreation);
   const knownIds = new Set(playthroughs.map((playthrough) => playthrough.id));
 
   // Ordenados por fecha y, a igualdad, por id: la firma "cerrado al vuelo" de
@@ -201,7 +220,7 @@ export const resolvePlaythroughForPlay = <Id extends EntityIdLike>(
 
   for (const [iterationId, unsorted] of eventsByIteration) {
     const iterationEvents = [...unsorted].sort(
-      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || compareByCreation(a.id, b.id),
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || compareRowsByCreation(a, b),
     );
 
     // "El más reciente" sale del helper compartido: ignora 'plan_to_play' —
@@ -236,7 +255,11 @@ export const resolvePlaythroughForPlay = <Id extends EntityIdLike>(
 
   // Estaba "Playing" en `at`: solo falta colgar la sesión. Y no se escribe
   // ningún 'started': ya lo había.
-  const activeAt = playthroughs.find(
+  //
+  // Si hay DOS activos (dos PCs offline, §10.7), el vigente es el creado más
+  // tarde: por eso se busca desde el final de la lista ordenada.
+  const activeAt = findLast(
+    playthroughs,
     (playthrough) => latestTypeAt.get(playthrough.id) === 'started',
   );
   if (activeAt) return { kind: 'use', iterationId: activeAt.id };
@@ -247,7 +270,8 @@ export const resolvePlaythroughForPlay = <Id extends EntityIdLike>(
   // reactivaría (ya está activo) y crear un playthrough al lado dejaría dos
   // activos a la vez. Las fechas se recolocan solas al leer (el inicio se
   // deriva como el mínimo entre la primera sesión y el primer 'started').
-  const activeNow = playthroughs.find(
+  const activeNow = findLast(
+    playthroughs,
     (playthrough) => latestTypeNow.get(playthrough.id) === 'started',
   );
   if (activeNow) return { kind: 'use', iterationId: activeNow.id };

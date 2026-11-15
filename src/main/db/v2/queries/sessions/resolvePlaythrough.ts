@@ -73,7 +73,11 @@ export function resolvePlaythroughForSession(
     if (!game) throw new Error(`No existe el juego ${gameId}`);
 
     const rows = ctx.db
-      .select({ id: playthroughs.id, customLabel: playthroughs.customLabel })
+      .select({
+        id: playthroughs.id,
+        customLabel: playthroughs.customLabel,
+        syncCreated: playthroughs.syncCreated,
+      })
       .from(playthroughs)
       .where(and(eq(playthroughs.gameId, gameId), livePlaythrough()))
       .orderBy(...playthroughCreationOrder)
@@ -81,6 +85,7 @@ export function resolvePlaythroughForSession(
     const positions = playthroughPositions(ctx, [gameId]);
     const candidates: PlaythroughRow<string>[] = rows.map((row) => ({
       id: row.id,
+      syncCreated: row.syncCreated,
       label: effectivePlaythroughLabel(row.customLabel, positions.get(row.id) ?? 0),
     }));
 
@@ -92,6 +97,7 @@ export function resolvePlaythroughForSession(
         : ctx.db
             .select({
               id: stateEvents.id,
+              syncCreated: stateEvents.syncCreated,
               iterationId: stateEvents.playthroughId,
               type: stateEvents.type,
               occurredAt: stateEvents.occurredAt,

@@ -10,7 +10,7 @@
 // formas estructurales mínimas y no los tipos de Drizzle. Genéricas también en la
 // representación del id (ver entityIds.ts): los ids solo agrupan y desempatan.
 
-import { compareByCreation } from '../entityIds';
+import { compareRowsByCreation } from '../domain/creationOrder';
 import type { EntityId, EntityIdLike, GameId, SessionId } from '../entityIds';
 
 export type MemorySession<Id extends EntityIdLike = EntityId> = {
@@ -20,9 +20,20 @@ export type MemorySession<Id extends EntityIdLike = EntityId> = {
   endedAt: Date | null;
   durationSec: number | null;
   isManual: boolean;
+  // El reloj de creación de la sesión (2.0, F-09): desempata sesiones con el
+  // mismo arranque mejor que el id (ver domain/creationOrder.ts). Opcional: la
+  // 1.x y el Worker no lo tienen y desempatan por id.
+  syncCreated?: string | null;
 };
 
-export type Moment<Id extends EntityIdLike = EntityId> =
+// `sessionSyncCreated` es el `syncCreated` de la sesión del momento, y solo
+// está si la sesión lo traía: quien ordena momentos con el mismo instante
+// (chapters.ts) desempata con el mismo orden de creación que ya usa aquí.
+export type Moment<Id extends EntityIdLike = EntityId> = MomentShape<Id> & {
+  sessionSyncCreated?: string | null;
+};
+
+type MomentShape<Id extends EntityIdLike> =
   | { type: 'first_session'; gameId: GameId<Id>; sessionId: SessionId<Id>; occurredAt: Date }
   | {
       type: 'return';
@@ -87,6 +98,9 @@ const isMeasured = (session: MemorySession<EntityIdLike>): boolean =>
 // before"), que actúan de línea base del contador de horas — si ya le dijiste
 // a la app que llevabas 30h, la sesión que te pone en 26h medidas no "cruza
 // las 25": las cruzaste antes de que existiera el tracking.
+const syncCreatedOf = (session: MemorySession<EntityIdLike>): { sessionSyncCreated?: string } =>
+  session.syncCreated ? { sessionSyncCreated: session.syncCreated } : {};
+
 export const deriveMoments = <Id extends EntityIdLike>(
   sessions: MemorySession<Id>[],
   manualHoursByGame?: ReadonlyMap<GameId<Id>, number>,
@@ -103,9 +117,7 @@ export const deriveMoments = <Id extends EntityIdLike>(
   for (const [gameId, gameSessions] of byGame) {
     const ordered = gameSessions
       .slice()
-      .sort(
-        (a, b) => a.startedAt.getTime() - b.startedAt.getTime() || compareByCreation(a.id, b.id),
-      );
+      .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime() || compareRowsByCreation(a, b));
 
     let totalHours = manualHoursByGame?.get(gameId) ?? 0;
     let measuredCount = 0;
@@ -126,6 +138,7 @@ export const deriveMoments = <Id extends EntityIdLike>(
             type: 'first_session',
             gameId,
             sessionId: session.id,
+            ...syncCreatedOf(session),
             occurredAt: session.startedAt,
           });
         } else if (lastTouch !== null) {
@@ -135,6 +148,7 @@ export const deriveMoments = <Id extends EntityIdLike>(
               type: 'return',
               gameId,
               sessionId: session.id,
+              ...syncCreatedOf(session),
               occurredAt: session.startedAt,
               awayDays: Math.round(gapDays),
             });
@@ -146,6 +160,7 @@ export const deriveMoments = <Id extends EntityIdLike>(
             type: 'longest_session',
             gameId,
             sessionId: session.id,
+            ...syncCreatedOf(session),
             occurredAt: session.startedAt,
             durationSec,
             previousBestSec: bestSec,
@@ -158,6 +173,7 @@ export const deriveMoments = <Id extends EntityIdLike>(
             type: 'sessions_milestone',
             gameId,
             sessionId: session.id,
+            ...syncCreatedOf(session),
             occurredAt: session.startedAt,
             count: measuredCount,
           });
@@ -180,6 +196,7 @@ export const deriveMoments = <Id extends EntityIdLike>(
             type: 'hours_milestone',
             gameId,
             sessionId: session.id,
+            ...syncCreatedOf(session),
             occurredAt: session.startedAt,
             hours: crossed,
           });

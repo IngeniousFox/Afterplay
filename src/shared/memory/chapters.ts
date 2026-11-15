@@ -17,9 +17,10 @@
 // la firma canónica y en qué orden no cambia con ids numéricos, que es lo que
 // mantiene casando los recaps ya sellados.
 
-import { compareByCreation, compareEntityIds } from '../entityIds';
+import { compareEntityIds } from '../entityIds';
 import type { EntityId, EntityIdLike, GameId } from '../entityIds';
 import type { StateEventDatePrecision } from '../dateTypes';
+import { compareRowsByCreation } from '../domain/creationOrder';
 import { isInitialPaperwork } from '../playthroughState';
 import type { MemorySession, Moment } from './moments';
 
@@ -588,7 +589,10 @@ export const canonicalChapterFacts = <Id extends EntityIdLike>(
       .sort(
         (a, b) =>
           a.occurredAt.getTime() - b.occurredAt.getTime() ||
-          compareByCreation(a.sessionId, b.sessionId),
+          compareRowsByCreation(
+            { id: a.sessionId, syncCreated: a.sessionSyncCreated },
+            { id: b.sessionId, syncCreated: b.sessionSyncCreated },
+          ),
       )
       .map((moment) => ({
         type: moment.type,

@@ -7,6 +7,7 @@ import { copySourceConsistently, removeDatabaseFiles } from './importer/sourceCo
 import { createQueryContext, type QueryContext } from './queries/common/context';
 import { ensureThisDevice, type ThisDeviceInfo } from './queries/common/device';
 import { saveMaintenanceForeignWriteRule } from './queries/saves/maintenanceRule';
+import { timerForeignWriteRule } from './queries/sessions/timerRule';
 
 // La base 2.0 de la app en marcha (AFTERPLAY-2.0.md §8.9, CONSULTAS.md P9).
 //
@@ -91,7 +92,7 @@ export function openAppDatabase(options: OpenAppDatabaseOptions): OpenedAppDatab
     path: target,
     deviceId: options.deviceId,
     migrationsFolder: options.migrationsFolder,
-    foreignWriteRules: [saveMaintenanceForeignWriteRule],
+    foreignWriteRules: [saveMaintenanceForeignWriteRule, timerForeignWriteRule],
   });
   const ctx = createQueryContext(local, { now });
   ensureThisDevice(ctx, { ...options.device, now: now() });

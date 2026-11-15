@@ -21,6 +21,7 @@ export {
   type GetAllSessionsOptions,
 } from './read';
 export { resolvePlaythroughForSession, type ResolvedPlaythrough } from './resolvePlaythrough';
+export { TIMER_CLOSE_COLUMNS, timerForeignWriteRule } from './timerRule';
 export {
   createEmulatorSession,
   isEmulatorAlive,

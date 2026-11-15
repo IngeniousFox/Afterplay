@@ -47,6 +47,14 @@ import { readPlanHistory } from './planHistory';
 //     `stateHistory` y en los bordes del playthrough: decidir cómo se pintan
 //     es del renderer.
 
+const withoutSyncCreated = <T extends { syncCreated?: string | null }>(
+  row: T,
+): Omit<T, 'syncCreated'> => {
+  const copy = { ...row };
+  delete copy.syncCreated;
+  return copy;
+};
+
 /** La ficha del juego, o null si no existe o tiene lápida. */
 export function getGameById(ctx: QueryContext, gameId: string): GameDetail<string> | null {
   const game = readGameRow(ctx, gameId);
@@ -66,6 +74,7 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetail<strin
       manualHours: playthroughs.manualHours,
       rating: playthroughs.rating,
       extraContent: playthroughs.extraContent,
+      syncCreated: playthroughs.syncCreated,
     })
     .from(playthroughs)
     .where(and(eq(playthroughs.gameId, gameId), alive(playthroughs)))
@@ -132,9 +141,12 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetail<strin
   }));
 
   // stateHistory viaja en este orden al renderer (el Journey).
-  const stateHistory: StateEvent<string>[] = ctx.db
+  // `syncCreated` no viaja al renderer: solo es el desempate de la derivación
+  // (F-09), así que se separa de la fila antes de devolverla.
+  const stateRows = ctx.db
     .select({
       id: stateEvents.id,
+      syncCreated: stateEvents.syncCreated,
       iterationId: stateEvents.playthroughId,
       type: stateEvents.type,
       occurredAt: stateEvents.occurredAt,
@@ -146,6 +158,7 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetail<strin
     .where(and(eq(playthroughs.gameId, gameId), liveStateEvent(stateEvents)))
     .orderBy(asc(stateEvents.occurredAt), asc(stateEvents.syncCreated), asc(stateEvents.id))
     .all();
+  const stateHistory: StateEvent<string>[] = stateRows.map(withoutSyncCreated);
 
   const spendHistory: SpendEvent<string>[] = ctx.db
     .select({
@@ -163,15 +176,20 @@ export function getGameById(ctx: QueryContext, gameId: string): GameDetail<strin
     .all();
 
   // Sin `isRunning`: en el escritorio toda sesión abierta está en marcha.
+  // Las derivaciones reciben `syncCreated` (F-09: el orden de creación entre
+  // dispositivos, no el id), que no forma parte de lo que se devuelve.
   const derived = deriveGameDetail({
-    iterations,
+    iterations: iterations.map((iteration, index) => ({
+      ...iteration,
+      syncCreated: ptRows[index].syncCreated,
+    })),
     sessions: sessionList,
-    stateEvents: stateHistory,
+    stateEvents: stateRows,
     spendEvents: spendHistory,
   });
 
   const iterationDetails: IterationDetail<string>[] = derived.iterations.map((entry) => ({
-    ...entry.iteration,
+    ...withoutSyncCreated(entry.iteration),
     hours: entry.hours,
     startedAt: entry.startedAt,
     endedAt: entry.endedAt,
