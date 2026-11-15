@@ -1979,6 +1979,8 @@ Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). La
 
 **Comprobado en el runtime real.** Enrutado y RPC entre Worker y los dos Durable Objects, `blockConcurrencyWhile` con la creación del esquema (`PRAGMA table_info`), `json_set`, `RETURNING` (revocar y cerrar concesión), fallo cerrado (401 sin token y en `/api/v2` sin credencial, 404 en rutas desconocidas).
 
+**Dos PCs reales (2026-11-15).** El PC principal subió su biblioteca entera (unas 13.600 filas). Un segundo PC, que arrancó con el perfil vacío, se emparejó y la bajó. Una nota editada en el segundo PC llegó al principal al abrir la app, sin pulsar "Sync now".
+
 **Sin comprobar.** La alarma de barrido horaria, Access y el límite de intentos de emparejado.
 
 ### §20.5 Fase 4 — Sesiones, watcher e instalaciones (L)
