@@ -6,7 +6,7 @@ import { HOST, makeWorld } from './helpers';
 
 // El reparto de la API de la PWA dentro del Durable Object (web/routes.ts).
 
-const noop = () => ({ ok: true as const, value: null });
+const noop = (): { ok: true; value: null } => ({ ok: true, value: null });
 const ROUTES: WebRoute[] = [
   { method: 'GET', pattern: '/games/:id', handler: noop },
   { method: 'GET', pattern: '/games/:id/achievements', handler: noop },
