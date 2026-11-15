@@ -521,16 +521,24 @@ export class TenantHub {
     // Primero solo las secuencias (índice parcial, sin leer filas): pedimos una
     // más que la página para saber si `more`. Cada tabla aporta como mucho
     // `pageSize + 1`, así que el coste no crece con el tamaño del inquilino.
-    const parts = this.tableList.map(
-      (table) =>
-        `SELECT syncSeq, '${table.name}' AS tbl FROM (SELECT "syncSeq" AS syncSeq FROM "${table.name}" WHERE "syncSeq" > ? ORDER BY "syncSeq" LIMIT ?)`,
-    );
-    const params: SqlValue[] = this.tableList.flatMap(() => [since, pageSize + 1]);
-    const seqs = this.storage.exec(
-      `SELECT syncSeq, tbl FROM (${parts.join(' UNION ALL ')}) ORDER BY syncSeq LIMIT ?`,
-      ...params,
-      pageSize + 1,
-    );
+    //
+    // UNA CONSULTA POR TABLA, no un `UNION ALL` de todas: el SQLite de los
+    // Durable Objects tiene un tope de términos en un SELECT compuesto muy
+    // por debajo del de Node ("too many terms in compound SELECT", visto en el
+    // hub de desarrollo el 2026-11-15), y con dos parámetros por tabla la
+    // sentencia única además se acercaba al límite de 100 parámetros.
+    const seqs: { syncSeq: number; tbl: string }[] = [];
+    for (const table of this.tableList) {
+      for (const row of this.storage.exec(
+        `SELECT "syncSeq" AS syncSeq FROM "${table.name}" WHERE "syncSeq" > ? ORDER BY "syncSeq" LIMIT ?`,
+        since,
+        pageSize + 1,
+      )) {
+        seqs.push({ syncSeq: num(row.syncSeq), tbl: table.name });
+      }
+    }
+    seqs.sort((a, b) => a.syncSeq - b.syncSeq);
+    seqs.length = Math.min(seqs.length, pageSize + 1);
     if (seqs.length === 0) {
       return { ...meta, rows: [], next: since, more: false };
     }

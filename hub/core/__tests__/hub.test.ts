@@ -461,6 +461,40 @@ describe('paginación del pull', () => {
     assert.equal(p4.more, false);
   });
 
+  it('pagina en orden de secuencia mezclando tablas', () => {
+    const { hub } = makeHub();
+    // games y playthroughs alternos: g1 p1 g2 p2 g3 p3 (seq 1..6).
+    for (let n = 1; n <= 3; n++) {
+      push(hub, wire({ id: `g${n}`, at: clockAt(n, A), fields: { title: `t${n}` } }));
+      push(
+        hub,
+        wire({
+          table: 'playthroughs',
+          id: `p${n}`,
+          at: clockAt(10 + n, A),
+          fields: { gameId: `g${n}` },
+        }),
+      );
+    }
+    const seen: string[] = [];
+    let cursor = 0;
+    for (;;) {
+      const page = hub.pull(cursor, 4, VERSION);
+      seen.push(...page.rows.map((r) => `${r.table}:${r.id}`));
+      cursor = page.next;
+      if (!page.more) break;
+    }
+    assert.deepEqual(seen, [
+      'games:g1',
+      'playthroughs:p1',
+      'games:g2',
+      'playthroughs:p2',
+      'games:g3',
+      'playthroughs:p3',
+    ]);
+    assert.equal(cursor, 6);
+  });
+
   it('una página exacta no anuncia `more`', () => {
     const { hub } = makeHub();
     for (let n = 1; n <= 4; n++)
@@ -653,15 +687,20 @@ describe('límites de sentencia del Durable Object', () => {
     assert.equal(pullAll(hub)[0].fields.title, 'g000!');
   });
 
-  it('el pull cabe en 100 parámetros con todas las tablas', () => {
+  it('el pull no usa SELECT compuestos y cabe en 100 parámetros', () => {
+    // El SQLite de los Durable Objects rechaza un UNION ALL de todas las
+    // tablas ("too many terms in compound SELECT"); Node no. Visto en el hub
+    // de desarrollo: el pull hace una consulta por tabla.
     const base = makeHub();
     const recorded = recordingStorage(base.storage);
     const hub = new TenantHub(recorded.storage, () => T0, { tenantId: 'tenant1' });
     recorded.statements.length = 0;
     hub.pull(0, 1000, VERSION);
-    for (const statement of recorded.statements) assert.ok(statement.params.length <= 100);
-    const seqQuery = recorded.statements.find((s) => /UNION ALL/.test(s.sql));
-    assert.ok(seqQuery);
+    assert.ok(recorded.statements.length > 0);
+    for (const statement of recorded.statements) {
+      assert.ok(statement.params.length <= 100);
+      assert.doesNotMatch(statement.sql, /\b(UNION|INTERSECT|EXCEPT)\b/i);
+    }
   });
 
   it('la misma fila dos veces en un lote se fusiona como en dos lotes', () => {

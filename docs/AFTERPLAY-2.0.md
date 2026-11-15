@@ -1930,7 +1930,7 @@ Fusión, protocolo, `hub-core`, adaptador de Durable Object, motor del cliente, 
 
 #### §20.4.1 Estado de la fase 3 (2026-11-15)
 
-Hecha en la rama `v2`, sin desplegar nada. Las piezas:
+Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). Las piezas:
 
 | Pieza                    | Dónde                                      | Qué hace                                                                                                                                                                                                                     |
 | ------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1959,12 +1959,27 @@ Hecha en la rama `v2`, sin desplegar nada. Las piezas:
 
 **Pendiente o sin comprobar:**
 
-- **Nada se ha probado en Cloudflare.** Quedan sin probar el Durable Object real (RPC, alarma, `blockConcurrencyWhile`, `PRAGMA table_info`, `json_set`, `RETURNING`) y el empaquetado con wrangler (`hub/worker` aún no tiene `package.json`). Es lo primero antes de usar el hub: un despliegue de desarrollo con permiso expreso.
+- **Cloudflare, en parte.** El hub de desarrollo (§20.4.2) ya prueba el empaquetado y el Durable Object real. Falta la alarma de barrido, Access y el hub de producción.
 - **E-14 se cubre al revés.** Un cliente real no puede tener dos esquemas a la vez, así que el "cliente nuevo" es un dispositivo de prueba que habla el protocolo y los clientes reales hacen de versión anterior.
 - **Barrido de sesiones abandonadas.** Queda como punto de extensión del núcleo: es de la fase 4 (E-08, E-09).
 - **Concesiones en el cliente.** Ningún trabajo de fondo las usa aún (§14.3, E-11, fase 5).
 - **Turso en Ajustes.** La pestaña Connections sigue enseñando los campos antiguos de Turso, que el escritorio ya no usa.
 - **Límite de intentos por IP.** No hay; solo por inquilino.
+
+#### §20.4.2 Hub de desarrollo (2026-11-15)
+
+`afterplay-dev-hub`, en `https://afterplay-dev-hub.afterplay-worker.workers.dev`. Se despliega **solo** con `wrangler deploy --env dev` desde `hub/worker/`. La configuración de arriba de `wrangler.jsonc` es la de producción (`afterplay-hub`) y no se despliega. Sus Durable Objects son propios y no comparte datos con el Worker de la 1.x (`afterplay-web`), que no se ha tocado.
+
+- **Sin Access.** `/api/v2/*` abre solo con la cabecera `x-afterplay-admin-token` (`hub/worker/src/adminToken.ts`). El token es un secret del Worker (`HUB_ADMIN_TOKEN`, de 32 caracteres como mínimo) y en local vive en `hub/worker/.dev.vars.admin-token`, que git ignora. La comparación es de tiempo constante. Sin la cabecera se sigue por Access, que sin configurar falla cerrado.
+- **Administración.** `npm run hub:dev -- code` da un código de emparejado de un solo uso, `devices` lista los dispositivos y `revoke <tokenId>` revoca uno. El token nunca se imprime.
+- **Emparejar el perfil de desarrollo.** Con `npm run dev:v2`, en Ajustes → Connections → Sync, se ponen la dirección del hub y el código. El perfil de desarrollo solo acepta hubs cuyo nombre empieza por `afterplay-dev`.
+- **Prueba de humo.** `npm run hub:dev:smoke` usa el transporte real del cliente. Empareja un dispositivo de prueba y comprueba que el código no se reutiliza. Luego prueba status y hora, subida, eco sin secuencia nueva, rechazo de reloj adelantado, bajada, concesión concedida, denegada y cerrada, y la lista de dispositivos. Al final lo revoca y comprueba que su token ya no entra. Pasa entera (13 de 13).
+
+**Lo que encontró.** La bajada fallaba en el Durable Object real con `too many terms in compound SELECT`. Juntaba en un solo `UNION ALL` la búsqueda de secuencias de todas las tablas, y el SQLite de Cloudflare tiene un tope de términos mucho más bajo que el de Node. Ahora es una consulta por tabla, mezclada en memoria. Un test exige que ninguna sentencia del pull use `UNION`, `INTERSECT` ni `EXCEPT`, y otro pagina mezclando tablas. Los tests de Node no podían verlo: cualquier sentencia nueva del hub que dependa de límites de SQLite hay que probarla también en el hub de desarrollo.
+
+**Comprobado en el runtime real.** Enrutado y RPC entre Worker y los dos Durable Objects, `blockConcurrencyWhile` con la creación del esquema (`PRAGMA table_info`), `json_set`, `RETURNING` (revocar y cerrar concesión), fallo cerrado (401 sin token y en `/api/v2` sin credencial, 404 en rutas desconocidas).
+
+**Sin comprobar.** La alarma de barrido horaria, Access y el límite de intentos de emparejado.
 
 ### §20.5 Fase 4 — Sesiones, watcher e instalaciones (L)
 

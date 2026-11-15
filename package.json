@@ -27,6 +27,8 @@
     "dev": "electron-vite dev",
     "dev:v2": "tsx scripts/dev-profile.ts v2",
     "dev:v2:seed": "tsx scripts/seed-dev-profile.ts v2",
+    "hub:dev": "tsx scripts/hub-dev.ts",
+    "hub:dev:smoke": "tsx scripts/hub-dev-smoke.ts",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "install-electron",
     "ludusavi:fetch": "tsx scripts/fetch-ludusavi.ts",

@@ -1,10 +1,11 @@
 {
   "$schema": "../../worker/node_modules/wrangler/config-schema.json",
-  // Hub de Afterplay 2.0 (§9). NO está desplegado todavía y NO se despliega
-  // desde aquí hasta la fase de puesta en marcha. Este Worker NUNCA debe
-  // llamarse `afterplay-web`: ese es el Worker de producción de la 1.x
-  // (worker/), que sigue sirviendo hasta la fase 10. Un `wrangler deploy` con
-  // el nombre equivocado machacaría el de producción.
+  // Hub de Afterplay 2.0 (§9). La configuración de arriba es la de PRODUCCIÓN
+  // (`afterplay-hub`) y NO se despliega hasta la puesta en marcha. Lo que hay
+  // desplegado es el hub de DESARROLLO, siempre con `--env dev` (ver abajo).
+  // Este Worker NUNCA debe llamarse `afterplay-web`: ese es el Worker de
+  // producción de la 1.x (worker/), que sigue sirviendo hasta la fase 10. Un
+  // `wrangler deploy` con el nombre equivocado machacaría el de producción.
   "name": "afterplay-hub",
   "main": "src/index.ts",
   // Mismo contrato de ejecución fijado que worker/wrangler.jsonc.
@@ -15,6 +16,7 @@
   // rutas /sync/v1/* NO van tras Access (los clientes no son navegadores,
   // §9.2); /api/v2/* sí, y esa aplicación de Access se crea al desplegar.
   "workers_dev": true,
+  "preview_urls": false,
 
   "durable_objects": {
     "bindings": [
@@ -27,15 +29,36 @@
   // SQLite en ambos (plan gratuito: solo se admiten clases con SQLite).
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantHubObject", "DirectoryObject"] }],
 
-  // Variables (ninguna con valor aquí: este fichero se commitea).
-  //  · ADMIN_EMAIL        correo del anfitrión; su primera entrada por la PWA
-  //                       crea su inquilino (§9.3). Sin él no hay anfitrión.
+  // Variables (ninguna con valor aquí: este fichero se commitea, y el repo es
+  // público). Todas van como secrets del despliegue (`wrangler secret put`):
+  //  · ADMIN_EMAIL        correo del anfitrión; su primera entrada crea su
+  //                       inquilino (§9.3). Sin él no hay anfitrión.
   //  · ACCESS_TEAM_DOMAIN dominio del equipo de Access (xxx.cloudflareaccess.com).
   //  · ACCESS_AUD         AUD de la aplicación de Access que protege /api/v2/*.
-  // Se dan como secrets/vars del despliegue (`wrangler secret put ...`); en
-  // local, en hub/worker/.dev.vars (que no se commitea), donde además pueden
+  //  · HUB_ADMIN_TOKEN    opcional: segunda puerta de /api/v2/* para el
+  //                       anfitrión, mientras no haya PWA (src/adminToken.ts).
+  // En local, en hub/worker/.dev.vars (que no se commitea), donde además pueden
   // ir ENVIRONMENT=development y DEV_EMAIL para saltarse Access SOLO en local.
-  // Sin ACCESS_* configurados, /api/v2/* falla cerrado (401).
+  // Sin ACCESS_* ni HUB_ADMIN_TOKEN, /api/v2/* falla cerrado (401).
 
   "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  "env": {
+    // Hub de DESARROLLO: `wrangler deploy --env dev`. Su nombre empieza por
+    // `afterplay-dev`, que es lo único que acepta el perfil de desarrollo de
+    // la app (src/main/lib/devProfileRules.ts). Sus Durable Objects son
+    // propios: no comparte datos con ningún otro despliegue. Sin Access: su
+    // /api/v2/* solo abre con HUB_ADMIN_TOKEN (scripts/hub-dev.ts).
+    "dev": {
+      "name": "afterplay-dev-hub",
+      "workers_dev": true,
+      "preview_urls": false,
+      "durable_objects": {
+        "bindings": [
+          { "name": "TENANT_HUB", "class_name": "TenantHubObject" },
+          { "name": "DIRECTORY", "class_name": "DirectoryObject" },
+        ],
+      },
+    },
+  },
 }

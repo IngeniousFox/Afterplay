@@ -1,8 +1,9 @@
 // Worker `afterplay-hub` (§9.1): punto de entrada. Construye el `Backend` real
 // (Durable Objects + Access) y delega en `router.ts`, que es lo que se prueba.
-// NO está desplegado (ver wrangler.jsonc).
+// Desplegado solo como hub de desarrollo (`--env dev`, ver wrangler.jsonc).
 
 import { authenticate } from './access';
+import { authenticateAdminToken } from './adminToken';
 import { DIRECTORY_OBJECT_NAME } from './do/directory';
 import { handleRequest, type Backend, type DirectoryApi } from './router';
 import { bindTenant, type TenantRpc } from './tenantBinding';
@@ -21,6 +22,8 @@ export interface Env {
   // Solo desarrollo (.dev.vars).
   ENVIRONMENT?: string;
   DEV_EMAIL?: string;
+  // Secret opcional: segunda puerta de /api/v2 para el anfitrión (adminToken.ts).
+  HUB_ADMIN_TOKEN?: string;
 }
 
 // Caché de inquilinos que ya se sabe que existen. Es estado de módulo A
@@ -47,7 +50,8 @@ function buildBackend(env: Env): Backend {
       if (exists && KNOWN_TENANTS.size < KNOWN_TENANTS_MAX) KNOWN_TENANTS.add(tenantId);
       return exists;
     },
-    authenticateAccess: (request) => authenticate(request, env, Date.now()),
+    authenticateAccess: async (request) =>
+      (await authenticateAdminToken(request, env)) ?? authenticate(request, env, Date.now()),
     adminEmail: env.ADMIN_EMAIL,
   };
 }
