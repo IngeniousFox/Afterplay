@@ -1,5 +1,6 @@
 import type { PendingCuriositiesGame } from '../db/v2/queries/loop';
 import { createClaimQueue } from '../lib/claimQueue';
+import { appJobClaims, runLeased } from '../sync/jobClaims';
 import { generateCuriositiesForGame } from './generate';
 import { notifyCuriositiesActivity } from './notify';
 
@@ -31,8 +32,20 @@ const queue = createClaimQueue<PendingCuriositiesGame>({
   // La clave puede borrarse desde Ajustes a mitad de racha: se suelta lo que
   // quede para que un "Generate" posterior lo vuelva a encolar limpio.
   canRun: () => Boolean(process.env.ANTHROPIC_API_KEY),
+  // Con hub, las curiosidades de pago exigen la concesión `curiosities:<juego>`
+  // (§14.3, F-32): si otro PC la tiene o ya las generó, o el hub no responde,
+  // este PC no paga y las recibirá por sync. Un fallo se cierra en la
+  // concesión con su motivo. Sin hub emparejado corre como siempre.
   process: async (game) => {
-    await generateCuriositiesForGame(game);
+    const run = await runLeased(appJobClaims(), { kind: 'curiosities', key: game.id }, () =>
+      generateCuriositiesForGame(game),
+    );
+    if (!run.ran) {
+      console.log(
+        `[curiosities] "${game.title}" no se genera en este PC (concesion: ${run.reason})`,
+      );
+      return;
+    }
     notifyCuriositiesActivity({ kind: 'generated', gameId: game.id });
   },
   onProgress: (progress) => {

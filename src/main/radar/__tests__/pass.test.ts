@@ -5,6 +5,14 @@ import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarnes
 import { seedGame, type QueryFixture } from '../../db/v2/queries/common/__tests__/fixtures';
 import { radarGames } from '../../db/v2/schema';
 import type { RadarActivityEvent } from '../../../shared/types';
+import type {
+  JobClaimRequest,
+  JobClaimResponse,
+  JobDoneRequest,
+} from '../../../shared/sync/protocol';
+import { isoWeekKey } from '../../sync/jobClaims';
+import { setSyncRuntime } from '../../sync/instance';
+import type { SyncRuntime } from '../../sync/runtime';
 
 // runRadarPass: "LA PRIMERA PASADA DE LA VIDA SIEMBRA EN SILENCIO" (§4.4).
 //
@@ -327,5 +335,132 @@ describe('runRadarPass — la primera pasada de la vida siembra en silencio', ()
       filas.map((f) => f.igdbId).sort((a, b) => a - b),
       [201, 202, 203],
     );
+  });
+});
+
+// ── Concesiones del hub (§14.3): una vez por persona, no por PC ────────────
+//
+// El hub se simula con un SyncRuntime de mentira que solo expone el
+// transporte de concesiones. Los tests van en secuencia (comparten el estado
+// de módulo de pass.ts, igual que los de arriba); el de la concesión
+// denegada va el ÚLTIMO porque deja a pass.ts sin volver a preguntar hasta
+// que caduque.
+
+describe('runRadarPass — concesiones del hub', () => {
+  const claimCalls: JobClaimRequest[] = [];
+  const doneCalls: JobDoneRequest[] = [];
+  let claimImpl: (request: JobClaimRequest) => JobClaimResponse = () => {
+    throw new Error('sin hub');
+  };
+
+  const week = (): string => isoWeekKey(Date.now());
+  const granted = (request: JobClaimRequest): JobClaimResponse => ({
+    granted: true,
+    leaseId: `lease-${request.kind}`,
+    expiresAt: Date.now() + request.ttlSec * 1000,
+  });
+
+  before(() => {
+    setSyncRuntime({
+      jobTransport: () => ({
+        claimJob: async (request: JobClaimRequest) => {
+          claimCalls.push(request);
+          return claimImpl(request);
+        },
+        doneJob: async (request: JobDoneRequest) => {
+          doneCalls.push(request);
+          return { closed: true };
+        },
+      }),
+    } as unknown as SyncRuntime);
+  });
+  after(() => setSyncRuntime(null));
+
+  beforeEach(() => {
+    claimCalls.length = 0;
+    doneCalls.length = 0;
+    startExternalRefreshCalls.length = 0;
+    notifyCalls.length = 0;
+    externalRefreshRunning = false;
+    config.radarLastRunAt = 0;
+    upcomingByCollection = [];
+    process.env.TWITCH_CLIENT_ID = 'test-client-id';
+    process.env.TWITCH_CLIENT_SECRET = 'test-client-secret';
+  });
+
+  it('con concesión: pide radar y refresh_all de la semana ISO, los cierra bien y sella', async () => {
+    claimImpl = granted;
+    const resultado = await runRadarPass();
+    assert.ok(resultado);
+    assert.deepEqual(
+      claimCalls.map(({ kind, key }) => ({ kind, key })),
+      [
+        { kind: 'radar', key: week() },
+        { kind: 'refresh_all', key: week() },
+      ],
+    );
+    assert.deepEqual(
+      doneCalls.map(({ leaseId, outcome }) => ({ leaseId, outcome })),
+      [
+        { leaseId: 'lease-radar', outcome: 'ok' },
+        { leaseId: 'lease-refresh_all', outcome: 'ok' },
+      ],
+    );
+    assert.deepEqual(startExternalRefreshCalls, ['all']);
+    assert.ok(config.radarLastRunAt > 0);
+  });
+
+  it('hub sin responder: el radar no es de pago y corre en local, sin cerrar nada', async () => {
+    claimImpl = () => {
+      throw new Error('red caida');
+    };
+    const resultado = await runRadarPass();
+    assert.ok(resultado);
+    assert.deepEqual(startExternalRefreshCalls, ['all']);
+    assert.deepEqual(doneCalls, []);
+    assert.ok(config.radarLastRunAt > 0);
+  });
+
+  it('con refresco ocupado y concesión, el reintento es solo de la segunda mitad', async () => {
+    claimImpl = granted;
+    externalRefreshRunning = true;
+    const primera = await runRadarPass();
+    assert.ok(primera);
+    // La primera mitad corrió bajo su concesión; el refresco ocupado ni se pidió.
+    assert.deepEqual(
+      claimCalls.map((c) => c.kind),
+      ['radar'],
+    );
+    assert.equal(config.radarLastRunAt, 0);
+
+    // El tic siguiente: ya libre. NO vuelve a pedir `radar` (el hub se lo
+    // negaría a este mismo PC): solo el refresco, y sella.
+    externalRefreshRunning = false;
+    claimCalls.length = 0;
+    const segunda = await runRadarPass();
+    assert.ok(segunda);
+    assert.deepEqual(
+      claimCalls.map((c) => c.kind),
+      ['refresh_all'],
+    );
+    assert.deepEqual(startExternalRefreshCalls, ['all']);
+    assert.ok(config.radarLastRunAt > 0);
+  });
+
+  it('concesión denegada: otro PC tiene la semana, no se hace nada ni se vuelve a preguntar', async () => {
+    claimImpl = () => ({
+      granted: false,
+      holderDeviceId: 'otro-pc',
+      expiresAt: Date.now() + 60 * 60 * 1000,
+    });
+    assert.equal(await runRadarPass(), null);
+    assert.deepEqual(startExternalRefreshCalls, []);
+    assert.deepEqual(doneCalls, []);
+    assert.equal(config.radarLastRunAt, 0);
+
+    // El tic de la hora siguiente no molesta al hub mientras dure su concesión.
+    claimCalls.length = 0;
+    assert.equal(await runRadarPass(), null);
+    assert.deepEqual(claimCalls, []);
   });
 });
