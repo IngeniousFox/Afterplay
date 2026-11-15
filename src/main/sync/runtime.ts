@@ -83,6 +83,7 @@ export const QUIT_FLUSH_MS = 5000;
 
 interface Active {
   readonly hubUrl: string;
+  readonly transport: SyncTransport;
   readonly engine: SyncEngine;
   readonly scheduler: SyncScheduler;
   readonly unsubscribe: () => void;
@@ -108,6 +109,14 @@ export class SyncRuntime {
     if (!credentials) return;
     if (!this.activate(credentials.hubUrl, credentials.token)) return;
     await this.current()?.scheduler.start(limitMs);
+  }
+
+  /**
+   * El transporte del hub activo para pedir y cerrar concesiones de trabajo
+   * (§14.3), o null sin hub emparejado (o en E2E). Lo usa `jobClaims.ts`.
+   */
+  jobTransport(): Pick<SyncTransport, 'claimJob' | 'doneJob'> | null {
+    return this.active?.transport ?? null;
   }
 
   /** ¿Hay un hub emparejado y funcionando? */
@@ -298,7 +307,7 @@ export class SyncRuntime {
     // subida en 2 s. Las escrituras del propio motor no pasan por la puerta,
     // así que bajar filas no dispara una subida.
     const unsubscribe = local.store.onChange(() => scheduler.notifyLocalChange());
-    this.active = { hubUrl, engine, scheduler, unsubscribe };
+    this.active = { hubUrl, transport, engine, scheduler, unsubscribe };
     return true;
   }
 

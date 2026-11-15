@@ -47,6 +47,7 @@ import { startRaLivePoll, stopRaLivePoll } from './ra/livePoll';
 import { setMemoriesNotifier } from './memories/notify';
 import { setRadarNotifier } from './radar/notify';
 import { runRadarTick } from './radar/pass';
+import { runEnrichPending } from './external/enrichPendingApp';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
 import { createAppSyncRuntime } from './sync/appRuntime';
@@ -732,7 +733,13 @@ app.whenReady().then(async () => {
   const sendSyncChanged = forwardToWindow('sync:changed');
   const sendSyncStatus = forwardToWindow('sync:status');
   syncRuntime = createAppSyncRuntime({
-    changed: (change) => sendSyncChanged({ tables: [...change.tables] }),
+    changed: (change) => {
+      sendSyncChanged({ tables: [...change.tables] });
+      // Juegos nuevos de otro dispositivo (los que añade el móvil llegan sin
+      // comprobaciones externas, §13.3): este PC pide su concesión `enrich` y
+      // los completa. Sin juegos nuevos en la bajada no hay nada que mirar.
+      if (change.tables.includes('games')) void runEnrichPending();
+    },
     status: () => sendSyncStatus(null),
   });
 
@@ -1013,6 +1020,11 @@ app.whenReady().then(async () => {
     // backfill de appids y no en paralelo: un juego cuyo appid acaba de
     // llegar entra en la misma pasada en vez de esperar al próximo arranque.
     await runSteamAppIdBackfill();
+    // Los juegos de otro dispositivo que quedaron sin completar de una sesión
+    // anterior, o que bajaron con un hub lento (§13.3). Tras el backfill de
+    // appids por la misma razón que el radar (IGDB no tiene cola propia); sin
+    // hub emparejado no hace nada.
+    const enrichTick = runEnrichPending();
     // El radar mira si toca (una vez por semana) y no hace nada el resto de
     // los arranques — la comprobacion es leer una fecha de config.json. TRAS
     // el backfill de appids y no antes (donde estaba): los dos preguntan a
@@ -1052,7 +1064,7 @@ app.whenReady().then(async () => {
     // la marca es LA medida de este bloque: cuándo terminó la última pasada y
     // la app se queda de verdad quieta. Con los void de antes no había forma
     // de saberlo sin recompilar.
-    await Promise.allSettled([memoriesTick, radarTick, emuSweep, raPass]);
+    await Promise.allSettled([memoriesTick, radarTick, enrichTick, emuSweep, raPass]);
     mark('pasadas de arranque terminadas');
   })();
   memoriesTimer = setInterval(() => {

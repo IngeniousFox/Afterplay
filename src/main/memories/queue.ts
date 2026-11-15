@@ -1,6 +1,7 @@
 import type { ChapterScope } from '../../shared/memory/chapters';
 import { scopeKeyOf } from '../../shared/memory/chapters';
 import { createClaimQueue } from '../lib/claimQueue';
+import { appJobClaims, memoryJobKey, runLeased } from '../sync/jobClaims';
 import { generateMemoryForChapter, scopeLabel } from './generate';
 import { notifyMemoriesActivity } from './notify';
 import type { FactsSnapshot } from './status';
@@ -42,18 +43,34 @@ const queue = createClaimQueue<QueuedScope>({
     // Sin capítulo ya no hay nada que narrar (la actividad se borró entre
     // encolar y generar): no es un fallo, simplemente no toca.
     if (chapter && !chapter.soFar) {
+      // Con hub, el recap de pago exige la concesión `memory:<periodo>` (§14.3,
+      // F-32): si otro PC la tiene (o ya la usó, con éxito o con un rechazo del
+      // modelo) o el hub no responde, este PC no paga. El recap llegará por
+      // sync. Sin hub emparejado corre como siempre.
+      //
       // Solo se anuncia lo que se guardó de verdad. Un rechazo del modelo sale
       // limpio y sin fila (generate.ts devuelve false), y avisar igual
       // levantaba el toast de aterrizaje "Your June story is ready" hacia un
-      // Journey donde no había ningún panel que leer.
+      // Journey donde no había ningún panel que leer. El mismo rechazo se
+      // cierra en la concesión como fallo, para que ningún PC lo repague a
+      // diario.
       //
       // El aviso es un booleano y TypeScript no obliga a nadie a mirarlo:
       // volver a escribir aquí `await generateMemoryForChapter(chapter)` como
       // sentencia suelta reintroduce el toast mentiroso sin que compile en
       // rojo. Lo único que lo canta es el test "memories: un rechazo del
       // modelo no anuncia 'generated'" de src/main/__tests__/queues.test.ts.
-      const written = await generateMemoryForChapter(chapter);
-      if (written) {
+      const run = await runLeased(
+        appJobClaims(),
+        { kind: 'memory', key: memoryJobKey(chapter.scopeType, chapter.scopeKey) },
+        () => generateMemoryForChapter(chapter),
+        (written) => (written ? null : 'el modelo rechazo generar el recap'),
+      );
+      if (!run.ran) {
+        console.log(
+          `[memories] "${scopeLabel(item.scope)}" no se genera en este PC (concesion: ${run.reason})`,
+        );
+      } else if (run.value) {
         notifyMemoriesActivity({
           kind: 'generated',
           scopeType: item.scope.type,

@@ -6,6 +6,7 @@ import { getGameExternalBatch, getUpcomingCollectionGames } from '../igdb/api';
 import { adoptIgdbForCandidates, findAdoptionCandidates } from '../external/adoptIgdb';
 import { fillMissingSgdbIds } from '../external/sgdbBackfill';
 import { isExternalRefreshRunning, startExternalRefresh } from '../external/refresh';
+import { appJobClaims, isoWeekKey, runLeased } from '../sync/jobClaims';
 import { notifyRadarActivity } from './notify';
 
 // EL RADAR DE SECUELAS (PLAN-TO-PLAY.md §4) — la única cosa de todo este
@@ -32,7 +33,32 @@ import { notifyRadarActivity } from './notify';
 // otro módulo y repetir la pasada entera cada hora sale caro (ver el final de
 // runRadarPass, que es donde está toda la historia).
 
+// CONCESIONES DEL HUB (AFTERPLAY-2.0.md §14.3). Con hub emparejado la pasada
+// semanal es una vez por PERSONA y no por PC: la primera mitad (pertenencia y
+// anuncios) corre bajo la concesión `radar:<semana ISO>` y el refresco externo
+// completo bajo `refresh_all:<semana ISO>`. Un PC al que se las deniegan no
+// hace nada: el otro ya lo hizo (o lo está haciendo) y sus descubrimientos
+// llegan por sync. Si el hub no responde, corre en local (no cuesta dinero y
+// es idempotente). Sin hub emparejado todo es exactamente como antes: manda
+// `radarLastRunAt`.
+//
+// `radarLastRunAt` se sigue escribiendo y leyendo en TODOS los casos: es el
+// freno local ("este PC no repite en siete días") y lo que distingue la
+// primera pasada de la vida. Lo que ya no decide en solitario, con hub, es
+// quién corre la semana. LÍMITE CONOCIDO: el hub concede como mucho 24 h
+// (MAX_LEASE_TTL_SEC), así que el "una vez por semana" entre PCs solo está
+// protegido ese día; el resto de la semana lo frena cada PC con su propia marca.
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Semana en la que la primera mitad ya corrió bajo concesión y solo falta
+// arrancar el refresco externo. Sin esto, el reintento volvería a pedir la
+// primera mitad y el hub se la negaría a este mismo PC (su concesión sigue
+// viva), y el refresco no llegaría a intentarse.
+let externalOnlyWeek: string | null = null;
+
+// Hasta cuándo el hub dijo que otro PC tiene la semana: no se le vuelve a
+// preguntar en cada tic horario mientras tanto.
+let deniedUntil = 0;
 
 // Pasadas seguidas que se aguantan SIN sellar esperando a que el refresco
 // externo esté libre, antes de sellar igualmente. Es la válvula del bucle
@@ -174,12 +200,26 @@ const findAnnounced = async (collectionIds: number[]): Promise<number> => {
 // lanzar nunca. Ese rechazo YA NO deja el candado ajeno tomado: refresh.ts lo
 // suelta en su propio catch antes de relanzar (ver la válvula del final de
 // runRadarPass, donde está la historia entera).
-const claimExternalRefresh = (): boolean => {
+const claimExternalRefresh = async (week: string): Promise<boolean> => {
   if (isExternalRefreshRunning()) return false;
-  void startExternalRefresh('all').catch((error: unknown) => {
-    console.warn('[radar] el refresco externo de la pasada semanal fallo:', error);
-  });
-  return true;
+  // `refresh_all:<semana>`: con hub, solo un PC por persona lanza el refresco
+  // completo. Denegada = otro PC lo lanzó esta semana: esa mitad está hecha.
+  // El candado se vuelve a mirar DENTRO del trabajo, pegado a la llamada y sin
+  // await en medio (la dependencia frágil de arriba): la petición de la
+  // concesión pasa por la red y el candado pudo tomarlo otro mientras tanto.
+  const run = await runLeased(
+    appJobClaims(),
+    { kind: 'refresh_all', key: week },
+    async (): Promise<boolean> => {
+      if (isExternalRefreshRunning()) return false;
+      void startExternalRefresh('all').catch((error: unknown) => {
+        console.warn('[radar] el refresco externo de la pasada semanal fallo:', error);
+      });
+      return true;
+    },
+    (started) => (started ? null : 'el refresco externo estaba ocupado en este PC'),
+  );
+  return run.ran ? run.value : true;
 };
 
 // La pasada entera. Nunca lanza: es trabajo de fondo, y un fallo de red no
@@ -195,32 +235,61 @@ export const runRadarPass = async (force = false): Promise<RadarPassResult | nul
   // entera funciona sin ellas (modo local).
   if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) return null;
 
+  const week = isoWeekKey(Date.now());
+  // Solo falta la segunda mitad de esta semana (ver externalOnlyWeek).
+  const externalOnly = !force && externalOnlyWeek === week;
+  if (!force && !externalOnly && Date.now() < deniedUntil) return null;
+
   running = true;
   const seeding = lastRun === 0 && !alreadySown;
   try {
-    const collections = await refreshMembership();
-    const discovered = await findAnnounced(collections);
+    let collectionCount = 0;
+    let discovered = 0;
+    // ¿Corrió la primera mitad bajo una concesión concedida a este PC?
+    let leased = false;
 
-    // Sembrado. Lo que venga después ya no es la primera pasada de la vida,
-    // se selle la semana ahí abajo o no — que es de lo que va alreadySown.
-    alreadySown = true;
+    if (!externalOnly) {
+      const firstHalf = async (): Promise<{ collections: number; discovered: number }> => {
+        const collections = await refreshMembership();
+        return { collections: collections.length, discovered: await findAnnounced(collections) };
+      };
+      // Un "forzar" es decisión del usuario y no pide permiso a nadie.
+      const run = force
+        ? null
+        : await runLeased(appJobClaims(), { kind: 'radar', key: week }, firstHalf);
+      if (run && !run.ran) {
+        // Otro PC de la persona tiene (o ya hizo) la semana: aquí no hay nada
+        // que hacer. Sus descubrimientos llegan por sync.
+        deniedUntil = run.claim.status === 'denied' ? run.claim.expiresAt : 0;
+        console.log('[radar] la pasada de esta semana la tiene otro PC (concesion denegada)');
+        return null;
+      }
+      const half = run ? run.value : await firstHalf();
+      leased = run?.claim.status === 'granted';
+      collectionCount = half.collections;
+      discovered = half.discovered;
 
-    // Solo ASCII en consola, misma convención que watcher/watcher.ts.
-    console.log(
-      `[radar] ${collections.length} colecciones miradas, ${discovered} entregas nuevas${seeding ? ' (primera pasada, en silencio)' : ''}`,
-    );
+      // Sembrado. Lo que venga después ya no es la primera pasada de la vida,
+      // se selle la semana ahí abajo o no — que es de lo que va alreadySown.
+      alreadySown = true;
 
-    // LA PRIMERA PASADA DE LA VIDA SIEMBRA EN SILENCIO (§4.4). Descubrirá
-    // docenas de golpe —todo lo anunciado de doscientas colecciones— y
-    // docenas de avisos el primer día no son noticias, son spam. El patrón ya
-    // establecido con los logros: backfill mudo, vivo con aviso.
-    if (!seeding && discovered > 0) {
-      notifyRadarActivity({ discovered });
+      // Solo ASCII en consola, misma convención que watcher/watcher.ts.
+      console.log(
+        `[radar] ${collectionCount} colecciones miradas, ${discovered} entregas nuevas${seeding ? ' (primera pasada, en silencio)' : ''}`,
+      );
+
+      // LA PRIMERA PASADA DE LA VIDA SIEMBRA EN SILENCIO (§4.4). Descubrirá
+      // docenas de golpe —todo lo anunciado de doscientas colecciones— y
+      // docenas de avisos el primer día no son noticias, son spam. El patrón
+      // ya establecido con los logros: backfill mudo, vivo con aviso.
+      if (!seeding && discovered > 0) {
+        notifyRadarActivity({ discovered });
+      }
     }
 
     // Y DE PASO, LOS DATOS EXTERNOS DE TODA LA BIBLIOTECA — la otra mitad de
     // la pasada, ver claimExternalRefresh aquí arriba.
-    const externalStarted = claimExternalRefresh();
+    const externalStarted = await claimExternalRefresh(week);
 
     // Y LA SEMANA SOLO SE SELLA SI ARRANCARON LAS DOS MITADES… CON VÁLVULA.
     //
@@ -275,21 +344,26 @@ export const runRadarPass = async (force = false): Promise<RadarPassResult | nul
     // ningún sitio.
     if (externalStarted) {
       unsealedPasses = 0;
+      externalOnlyWeek = null;
       setConfigValue('radarLastRunAt', Date.now());
     } else if (unsealedPasses < MAX_UNSEALED_PASSES) {
       unsealedPasses += 1;
+      // Con concesión, el reintento es solo de la segunda mitad (la primera ya
+      // está hecha y el hub no se la volvería a conceder a este PC).
+      externalOnlyWeek = leased || externalOnly ? week : null;
       console.log(
         `[radar] el refresco externo estaba ocupado (${unsealedPasses}/${MAX_UNSEALED_PASSES}): la semanal no se sella, se reintenta en el proximo tic`,
       );
     } else {
       unsealedPasses = 0;
+      externalOnlyWeek = null;
       setConfigValue('radarLastRunAt', Date.now());
       console.warn(
         `[radar] el refresco externo lleva ${MAX_UNSEALED_PASSES + 1} pasadas seguidas ocupado (candado encallado?): sello la semana igualmente para no repetir la pasada entera cada hora`,
       );
     }
 
-    return { collections: collections.length, discovered, seeding };
+    return { collections: collectionCount, discovered, seeding };
   } catch (error) {
     console.warn('[radar] la pasada semanal fallo (se reintentara):', error);
     return null;

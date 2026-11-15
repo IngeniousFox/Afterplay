@@ -95,3 +95,4 @@ export {
   selectRadarMembershipTargets,
   type RadarMembershipTarget,
 } from './radarMembership';
+export { selectGamesToEnrich } from './enrich';
