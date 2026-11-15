@@ -4,13 +4,17 @@ import {
   deleteDeviceSaveBackups,
   listIndexedSaveObjectKeys,
   listSaveGames,
+  listSaveKeyGames,
   parseSaveObjectKey,
+  purgeSaveFolderRows,
   recoverSaveBackups,
   saveFolderPrefix,
+  saveKeyFolder,
   type BucketDevice,
   type RecoveredSaveBackup,
   type SaveGame,
 } from '../db/v2/queries/saves';
+import { computeContentHash } from './contentHash';
 import type { CloudFolder, CloudInventory, RecoveryResult } from './contracts';
 import type { MachineManifest } from './identity';
 import { setPruneFloor } from './machine';
@@ -90,7 +94,9 @@ export const scanBucket = async (): Promise<CloudInventory> => {
   const folders = groupByFolder(objects);
   const manifests = await readManifests();
   const ctx = appCtx();
-  const gameBySaveKey = gamesBySaveKey(listSaveGames(ctx));
+  // Vivos y borrados: una carpeta de un juego borrado se nombra con su título
+  // y se puede limpiar a mano (§12.7).
+  const gameBySaveKey = listSaveKeyGames(ctx);
   const currentMachineId = ctx.deviceId;
 
   // Las claves que el índice ya conoce, de TODOS los juegos — es lo que
@@ -120,7 +126,8 @@ export const scanBucket = async (): Promise<CloudInventory> => {
       saveKey: folder.saveKey,
       machineId: folder.machineId,
       gameTitle: game?.title ?? null,
-      gameId: game?.id ?? null,
+      gameId: game?.alive ? game.gameId : null,
+      gameDeleted: game !== undefined && !game.alive,
       backupCount: zips.length,
       totalBytes: folderBytes,
       unknownCount: unknown.length,
@@ -215,6 +222,12 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
 
     const manifest = manifests.get(folder.machineId);
     const sizeByName = new Map(zips.map((object) => [object.file, object.size]));
+    // La huella (§12.2) solo con la carpeta de usuario que publicó el propio
+    // PC en su manifiesto. Deducida de las rutas podría no coincidir con la
+    // que calculó el dueño al subir, y esta fila puede encontrarse por sync
+    // con la del dueño: ante la duda, sin huella (la ficha lo trata como
+    // informativo) antes que una huella distinta.
+    const hashHome = manifest?.home ? manifest.home : null;
 
     for (const version of versions) {
       const key = `${prefix}${version.name}`;
@@ -243,6 +256,14 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
         parentBackupName: version.differential ? version.chain[0] : null,
         locations: deriveLocations(version.files),
         hasRegistry: version.hasRegistry,
+        contentHash:
+          hashHome === null
+            ? null
+            : computeContentHash({
+                files: version.entries,
+                registryHash: version.registryHash,
+                home: hashHome,
+              }),
       });
       knownKeys.add(key);
     }
@@ -287,5 +308,27 @@ export const deleteMachineFromCloud = async (machineId: string): Promise<number>
   // rutas de mantenimiento de R-13).
   deleteDeviceSaveBackups(appCtx(), machineId);
 
+  return doomed.length;
+};
+
+// Limpiar a mano la carpeta de un juego que ya no está en la biblioteca
+// (§12.7). Borrar un juego ya no borra sus copias —son irrecuperables, y
+// volver a añadirlo las recupera—, así que esta es la forma de dejar de pagar
+// por ellas. Borra `saves/<saveKey>/` de TODOS los PCs: el bucket primero y el
+// índice después, como el resto del módulo.
+export const purgeSaveFolder = async (saveKey: string): Promise<number> => {
+  const ctx = appCtx();
+  const owner = listSaveKeyGames(ctx).get(saveKey);
+  if (owner?.alive) {
+    throw new Error(
+      `"${owner.title}" is still in your library: delete its versions from its page instead.`,
+    );
+  }
+  const objects = await r2.listKeys(saveKeyFolder(saveKey));
+  // Solo claves con la forma de una copia de esa carpeta: nada de adivinar con
+  // objetos que no haya puesto Afterplay.
+  const doomed = objects.filter((object) => parseSaveObjectKey(object.key)?.saveKey === saveKey);
+  await r2.deleteKeys(doomed.map((object) => object.key));
+  purgeSaveFolderRows(ctx, saveKey);
   return doomed.length;
 };

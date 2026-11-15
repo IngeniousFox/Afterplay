@@ -62,7 +62,14 @@ export type BackupVersion = {
   // entera (§9.1).
   chain: string[];
   files: string[];
+  // Los mismos archivos con el hash que ludusavi guardó de cada uno (SHA-1 del
+  // contenido; null si el mapping.yaml no lo trae). Es la entrada de la huella
+  // de contenido (contentHash.ts, §12.2).
+  entries: { path: string; hash: string | null }[];
   hasRegistry: boolean;
+  // Hash del registro de esta versión, con la misma regla que hasRegistry: el
+  // del diferencial si lo trae, si no el de su completo.
+  registryHash: string | null;
   sizeBytes: number;
 };
 
@@ -79,7 +86,7 @@ const buildVersion = (node: MappingBackupNode, parent: MappingBackupNode | null)
   // —`Cannot read properties of null (reading 'size')`, caso real al
   // respaldar una partida empezada de cero— y, aunque no reventara, contarlo
   // sería mentir: esa versión NO lo contiene.
-  const merged: Record<string, { size?: number }> = {};
+  const merged: Record<string, { size?: number; hash?: string }> = {};
   // El padre también puede traer nulos (fue diferencial de otro), así que se
   // filtra en los dos lados en vez de asumir que solo el hijo los tiene.
   for (const [path, file] of Object.entries(parent ? nodeFiles(parent) : {})) {
@@ -91,7 +98,8 @@ const buildVersion = (node: MappingBackupNode, parent: MappingBackupNode | null)
   }
 
   const sizeBytes = Object.values(merged).reduce((total, file) => total + (file.size ?? 0), 0);
-  const hasRegistry = Boolean(node.registry?.hash ?? parent?.registry?.hash);
+  const registryHash = node.registry?.hash ?? parent?.registry?.hash ?? null;
+  const hasRegistry = Boolean(registryHash);
 
   return {
     name: node.name,
@@ -99,7 +107,12 @@ const buildVersion = (node: MappingBackupNode, parent: MappingBackupNode | null)
     differential: parent !== null,
     chain: parent ? [parent.name, node.name] : [node.name],
     files: Object.keys(merged).map(toSlashes),
+    entries: Object.entries(merged).map(([path, file]) => ({
+      path: toSlashes(path),
+      hash: typeof file.hash === 'string' ? file.hash : null,
+    })),
     hasRegistry,
+    registryHash: hasRegistry ? registryHash : null,
     sizeBytes,
   };
 };

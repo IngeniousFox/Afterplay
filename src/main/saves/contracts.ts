@@ -3,6 +3,9 @@
 // forma de las tablas por la puerta de atrás (F-42).
 import type { SaveBackupRow } from '../../shared/dto';
 import type { GameId, SaveBackupId } from '../../shared/entityIds';
+import type { SaveSyncState } from './syncState';
+
+export type { LocalSave, SaveSyncState, SaveSyncStatus, SaveTip } from './syncState';
 
 // Contrato del IPC de partidas guardadas. Vive aparte de orchestrator.ts a
 // propósito: shared/types.ts lo reexporta para el renderer, y así ese import
@@ -58,6 +61,9 @@ export type SavesGameState = {
   restoreTarget: string | null;
   // El juego está corriendo ahora mismo: restaurar queda bloqueado (§10bis.3).
   running: boolean;
+  // Lo que la ficha dice entre PCs (AFTERPLAY-2.0.md §12.4): al día, cambios
+  // sin copiar, por detrás, divergido, disponible o informativo.
+  sync: SaveSyncState;
 };
 
 // Los tres destinos posibles de una restauración (§10bis.5).
@@ -79,6 +85,11 @@ export type RestoreRequestInput = {
   // confirmación se construye con esto, que es lo que ludusavi haría de
   // verdad y no una predicción nuestra (§4.9-6).
   preview: boolean;
+  // Restauración exacta (AFTERPLAY-2.0.md §12.7, F-22): dejar la partida
+  // EXACTAMENTE como en la copia, borrando los archivos de partida que la
+  // copia no tiene. Solo en 'in-place'. Desmarcado por defecto (D-20): sin
+  // marcar, restaurar se comporta como siempre y no borra nada.
+  exact?: boolean;
 };
 
 export type RestorePlanFile = {
@@ -97,6 +108,9 @@ export type RestoreResult = {
   // la primera dejaría la partida a medias (§4.9-3).
   locations: string[];
   registrySkipped: boolean;
+  // Restauración exacta: en el preview, los archivos de partida que se
+  // borrarían; en la pasada real, los que se han borrado. Vacío si no se pidió.
+  removedFiles: string[];
   // Solo en preview: avisos que la UI tiene que enseñar antes de confirmar.
   warnings: string[];
 };
@@ -153,10 +167,14 @@ export type CloudFolder = {
   // para lo que venía de la 1.x).
   saveKey: string;
   machineId: string;
-  // Título de la biblioteca si el saveKey casa con un juego; null si no está
-  // (juego borrado, o biblioteca aún sin recuperar).
+  // Título de la biblioteca si el saveKey casa con un juego vivo, o el del
+  // juego borrado si casa con uno (gameDeleted); null si no casa con ninguno.
   gameTitle: string | null;
+  // Solo si el juego está vivo.
   gameId: GameId | null;
+  // El saveKey es de un juego BORRADO de la biblioteca: sus copias se quedan
+  // (§12.7) y se pueden limpiar a mano (saves:purgeFolder).
+  gameDeleted: boolean;
   backupCount: number;
   totalBytes: number;
   // Cuántas de esas versiones NO están en el índice local — o sea, lo que la
@@ -182,6 +200,18 @@ export type CloudInventory = {
     backupCount: number;
   }[];
 };
+
+// Id duplicado (AFTERPLAY-2.0.md §12.6, F-24): otra instalación usa el id de
+// este PC. Mientras dure, backups y poda están bloqueados.
+export type InstallIdentityStatus = {
+  duplicate: boolean;
+  detectedAt: string | null;
+  // Dónde se vio el valor de la otra instalación.
+  where: 'devices' | 'bucket' | null;
+};
+
+// Cómo lo resuelve el usuario: "este PC es el original" o "este PC es otro".
+export type DuplicateResolution = 'keep-this-pc' | 'new-identity';
 
 export type RecoveryResult = {
   // Filas de índice creadas a partir de lo que había en el bucket.

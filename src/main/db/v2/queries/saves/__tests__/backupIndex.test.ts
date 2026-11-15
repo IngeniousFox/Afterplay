@@ -33,10 +33,12 @@ beforeEach(() => {
 afterEach(() => fx.close());
 
 describe('listSaveBackups', () => {
-  it('copias de todos los PCs, la más reciente primero, con nombre y carpeta del dispositivo', () => {
+  it('copias de todos los PCs, la más reciente (por reloj de sync) primero, con nombre y carpeta del dispositivo', () => {
     const gameId = seedGame(fx.ctx, { title: 'Celeste' });
     const other = asOtherDevice(fx.ctx, { name: 'PC-B', home: 'C:/Users/bea' });
     const old = seedSaveBackup(fx.ctx, { gameId, backupName: 'a.zip', createdAt: at(1_000) });
+    // El orden es el del reloj de sync (§12.5): la copia de PC-B se registra después.
+    fx.wall.advance(1_000);
     const recent = other.seedSaveBackup({ gameId, backupName: 'b.zip', createdAt: at(2_000) });
 
     const rows = listSaveBackups(fx.ctx, gameId);

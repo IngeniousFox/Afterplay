@@ -32,6 +32,7 @@ const selection = {
   deviceHome: devices.home,
   locations: saveBackups.locations,
   hasRegistry: saveBackups.hasRegistry,
+  contentHash: saveBackups.contentHash,
 };
 
 /**
@@ -51,9 +52,10 @@ function selectBackups(ctx: QueryContext, where: SQL | undefined): SaveBackupRow
       // condición de vida en la unión.
       .leftJoin(devices, eq(devices.id, saveBackups.deviceId))
       .where(where)
-      // Fase 2: la hora de pared basta (CONSULTAS.md §2.2). §12.5 pide el reloj
-      // de sync; `syncCreated` ya desempata dos copias del mismo instante.
-      .orderBy(desc(saveBackups.createdAt), desc(saveBackups.syncCreated), desc(saveBackups.id))
+      // El orden entre versiones es el del reloj de sync, no la hora de pared
+      // de cada PC (§12.5): un PC con el reloj mal no adelanta sus copias. La
+      // hora del backup solo desempata dos del mismo reloj.
+      .orderBy(desc(saveBackups.syncCreated), desc(saveBackups.createdAt), desc(saveBackups.id))
       .all()
       .map(({ deviceName, deviceHome, ...row }) => ({
         ...row,
@@ -135,8 +137,9 @@ export interface OwnBackupEntry {
 /**
  * Las copias que subió ESTE PC, de todos los juegos (`getOwnBackupEntries`):
  * qué zips locales ya están en la nube y se pueden borrar del disco. Solo de
- * juegos vivos: al borrar un juego se borran sus objetos del bucket
- * (`purgeGameSaves`), así que su zip local ya no está "a salvo arriba".
+ * juegos vivos, a propósito: borrar un juego ya no borra sus copias del bucket
+ * (§12.7), pero se pueden limpiar a mano (`purgeSaveFolderRows`), y ante la
+ * duda la copia local de un juego borrado no se da por prescindible.
  */
 export function listOwnBackupEntries(ctx: QueryContext): OwnBackupEntry[] {
   return ctx.db
@@ -220,8 +223,71 @@ export function getLatestSaveBackup(ctx: QueryContext): LatestSaveBackup | null 
       })
       .from(saveBackups)
       .where(liveRow.save_backups())
-      .orderBy(desc(saveBackups.createdAt), desc(saveBackups.syncCreated), desc(saveBackups.id))
+      .orderBy(desc(saveBackups.syncCreated), desc(saveBackups.createdAt), desc(saveBackups.id))
       .limit(1)
       .get() ?? null
   );
+}
+
+/** Una fila del índice para el linaje (§12.3-12.4): viva o con lápida. */
+export interface SaveLineageRow {
+  readonly id: string;
+  readonly deviceId: string;
+  readonly deviceName: string;
+  readonly contentHash: string | null;
+  readonly parentContentHash: string | null;
+  readonly alive: boolean;
+  readonly createdAt: Date;
+  /** `syncCreated`: el orden entre versiones (§12.5). */
+  readonly order: string;
+}
+
+/**
+ * Todas las copias de un juego, de todos los dispositivos, TAMBIÉN las que
+ * tienen lápida: una versión podada o borrada sigue diciendo de quién
+ * descendía (§12.4, las lápidas no se purgan). Vacío si el juego no existe o
+ * está borrado (la ficha de un juego borrado no se enseña).
+ */
+export function listSaveLineage(ctx: QueryContext, gameId: string): SaveLineageRow[] {
+  return ctx.db
+    .select({
+      id: saveBackups.id,
+      deviceId: saveBackups.deviceId,
+      deviceName: devices.name,
+      contentHash: saveBackups.contentHash,
+      parentContentHash: saveBackups.parentContentHash,
+      deleted: saveBackups.syncDeleted,
+      createdAt: saveBackups.createdAt,
+      order: saveBackups.syncCreated,
+    })
+    .from(saveBackups)
+    .innerJoin(games, eq(games.id, saveBackups.gameId))
+    .leftJoin(devices, eq(devices.id, saveBackups.deviceId))
+    .where(and(eq(saveBackups.gameId, gameId), alive(games)))
+    .all()
+    .map(({ deleted, deviceName, ...row }) => ({
+      ...row,
+      deviceName: deviceName ?? UNKNOWN_DEVICE_NAME,
+      alive: deleted === null,
+    }));
+}
+
+/**
+ * Los nombres de las copias PROPIAS de un juego que tienen lápida (§12.5,
+ * F-23). El dueño las borra de su carpeta local (y del bucket, si alguien las
+ * volvió a subir) antes de su siguiente backup, para que no resuciten.
+ */
+export function listOwnDeletedBackupNames(ctx: QueryContext, gameId: string): string[] {
+  return ctx.db
+    .select({ backupName: saveBackups.backupName })
+    .from(saveBackups)
+    .where(
+      and(
+        eq(saveBackups.gameId, gameId),
+        eq(saveBackups.deviceId, ctx.deviceId),
+        isNotNull(saveBackups.syncDeleted),
+      ),
+    )
+    .all()
+    .map((row) => row.backupName);
 }

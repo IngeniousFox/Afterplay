@@ -1,4 +1,4 @@
-import { eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { localSaveState } from '../../schema';
 import type { QueryContext } from '../common';
 
@@ -114,4 +114,66 @@ function clearSaveRestoreTarget(ctx: QueryContext, gameId: string): void {
       .where(eq(localSaveState.gameId, gameId))
       .run();
   }
+}
+
+// ── Huella de la última partida subida o restaurada (§12.3) ─────────────────
+
+/** `lastSyncedHash` del juego en este PC (`S` en §12.4), o null si no hay. */
+export function getLastSyncedHash(ctx: QueryContext, gameId: string): string | null {
+  return (
+    ctx.db
+      .select({ hash: localSaveState.lastSyncedHash })
+      .from(localSaveState)
+      .where(eq(localSaveState.gameId, gameId))
+      .get()?.hash ?? null
+  );
+}
+
+/**
+ * Fija `lastSyncedHash` del juego en este PC. `null` lo vacía (no se sabe de
+ * qué estado parte el disco): el siguiente backup no podrá decir de quién
+ * desciende, que es lo honesto. No toca el destino de restauración. Va directo
+ * a la tabla (clase L, sin puerta), así que se puede llamar dentro de una
+ * transacción de la puerta y queda en la misma.
+ */
+export function setLastSyncedHash(ctx: QueryContext, gameId: string, hash: string | null): void {
+  if (hash === null) {
+    const row = ctx.db
+      .select({ target: localSaveState.restoreTarget })
+      .from(localSaveState)
+      .where(eq(localSaveState.gameId, gameId))
+      .get();
+    if (!row) return;
+    // Sin destino la fila ya no dice nada (misma regla que clearSaveRestoreTarget).
+    if (row.target === null) {
+      ctx.db.delete(localSaveState).where(eq(localSaveState.gameId, gameId)).run();
+    } else {
+      ctx.db
+        .update(localSaveState)
+        .set({ lastSyncedHash: null })
+        .where(eq(localSaveState.gameId, gameId))
+        .run();
+    }
+    return;
+  }
+  ctx.db
+    .insert(localSaveState)
+    .values({ gameId, lastSyncedHash: hash })
+    .onConflictDoUpdate({ target: localSaveState.gameId, set: { lastSyncedHash: hash } })
+    .run();
+}
+
+/**
+ * Olvida `lastSyncedHash` de todos los juegos. Lo usa el cambio de identidad
+ * de §12.6: una carpeta de datos copiada de otro PC trae las huellas de ESE PC,
+ * que aquí son falsas.
+ */
+export function clearAllLastSyncedHashes(ctx: QueryContext): void {
+  ctx.store.transaction(() => {
+    ctx.db
+      .delete(localSaveState)
+      .where(and(isNotNull(localSaveState.lastSyncedHash), isNull(localSaveState.restoreTarget)))
+      .run();
+    ctx.db.update(localSaveState).set({ lastSyncedHash: null }).run();
+  });
 }

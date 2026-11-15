@@ -4,7 +4,7 @@ import type { ForeignWrite, ForeignWriteRule } from '../../store';
 // R-13 de CONSULTAS.md §5.0; AFTERPLAY-2.0.md §12.5).
 //
 // `save_backups` es de clase O: cada fila es del dispositivo que subió el zip,
-// y la puerta rechaza crear o borrar filas de otro (`not_owner`). Pero hay tres
+// y la puerta rechaza crear o borrar filas de otro (`not_owner`). Pero hay cuatro
 // rutas de mantenimiento que, por su naturaleza, tocan filas ajenas:
 //
 // - recuperar el índice desde el bucket (`recoverIndexFromCloud`): crea las
@@ -13,11 +13,14 @@ import type { ForeignWrite, ForeignWriteRule } from '../../store';
 //   lápida a sus filas;
 // - borrar una versión ajena desde la ficha (`saves:deleteBackup`): pone
 //   lápida a su fila y a la de sus diferenciales (el borrado cruzado de §12.5:
-//   el PC dueño borrará su zip local al ver la lápida, fase 6).
+//   el PC dueño borra su zip local al ver la lápida, antes de su siguiente
+//   backup);
+// - limpiar a mano la carpeta de un juego borrado (`purgeSaveFolder`, §12.7):
+//   pone lápida a las copias de esa carpeta, de todos los PCs.
 //
 // La regla es MÍNIMA a propósito. No basta con "save_backups admite filas
 // ajenas": eso abriría la puerta a cualquier consulta. Así que solo admite una
-// escritura cuando está activo el ámbito de una de esas tres rutas, que solo
+// escritura cuando está activo el ámbito de una de esas rutas, que solo
 // abren las consultas de esta carpeta (`withSaveMaintenance`), y aun entonces:
 // - solo en `save_backups`;
 // - solo la operación de esa ruta (`create` al recuperar, `remove` al borrar);
@@ -31,13 +34,15 @@ import type { ForeignWrite, ForeignWriteRule } from '../../store';
 // abrir y cerrar el ámbito no se ejecuta otro código, y si la función devuelve
 // una promesa se rechaza (lo que hiciera tras el `await` quedaría fuera).
 
-/** Las tres rutas de mantenimiento del bucket. */
-export type SaveMaintenanceRoute = 'recover_index' | 'delete_machine' | 'delete_backup';
+/** Las rutas de mantenimiento del bucket. */
+export type SaveMaintenanceRoute =
+  'recover_index' | 'delete_machine' | 'delete_backup' | 'purge_folder';
 
 const KIND_OF_ROUTE: Readonly<Record<SaveMaintenanceRoute, 'create' | 'remove'>> = {
   recover_index: 'create',
   delete_machine: 'remove',
   delete_backup: 'remove',
+  purge_folder: 'remove',
 };
 
 interface MaintenanceScope {
@@ -50,7 +55,7 @@ let active: MaintenanceScope | null = null;
 /**
  * La `ForeignWriteRule` de R-13. Hay que registrarla al abrir la base
  * (`foreignWriteRules: [saveMaintenanceForeignWriteRule]`); eso lo hace el
- * cambio final (P9). Sin registrarla, las tres rutas de mantenimiento fallan
+ * cambio final (P9). Sin registrarla, las rutas de mantenimiento fallan
  * con `not_owner` sobre filas ajenas y todo lo demás sigue igual.
  */
 export const saveMaintenanceForeignWriteRule: ForeignWriteRule = (write: ForeignWrite) => {

@@ -17,13 +17,23 @@ import type { GameId } from '../../shared/entityIds';
 // cierre la pillaría a medias.
 const DELAY_MS = 8000;
 
-const pending = new Set<GameId>();
+// Los backups que esperan su margen de 8 s, con su temporizador: el cierre de
+// la app los adelanta (flushPendingSaveBackups) en vez de perderlos (F-20).
+const pending = new Map<GameId, ReturnType<typeof setTimeout>>();
+// Los que ya están corriendo, para que el cierre pueda esperarlos.
+const running = new Set<Promise<void>>();
+
+const launch = (gameId: GameId): Promise<void> => {
+  const task = runBackup(gameId);
+  running.add(task);
+  void task.finally(() => running.delete(task));
+  return task;
+};
 
 export const scheduleSaveBackup = (gameId: GameId): void => {
   // Dos cierres seguidos del mismo juego (relanzar rápido) no encolan dos
   // backups: el que ya está esperando cubre los dos.
   if (pending.has(gameId)) return;
-  pending.add(gameId);
 
   // El aviso sale YA, no cuando arranca la subida: durante esos segundos de
   // margen el juego ya se ha cerrado y la ficha tiene que poder decir que
@@ -32,10 +42,45 @@ export const scheduleSaveBackup = (gameId: GameId): void => {
     notifySavesActivity({ gameId, phase: 'scheduled' });
   }
 
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     pending.delete(gameId);
-    void runBackup(gameId);
-  }, DELAY_MS).unref?.();
+    void launch(gameId);
+  }, DELAY_MS);
+  timer.unref?.();
+  pending.set(gameId, timer);
+};
+
+/**
+ * Para el cierre ordenado de la app (§10.6; lo llama la fase 4 desde
+ * `before-quit`): lanza YA los backups que esperaban su margen, sin los 8 s, y
+ * espera a que terminen esos y los que ya corrían, como mucho `timeoutMs`. No
+ * lanza nunca: lo que no termine a tiempo se queda en la carpeta local de
+ * ludusavi (o sin hacer) y lo recoge el siguiente backup del juego.
+ *
+ * El margen existe porque hay juegos que escriben la partida al salir; al
+ * cerrar Afterplay el juego ya lleva cerrado lo que haya tardado el usuario,
+ * así que adelantarlo es seguro salvo en el caso límite de cerrar la app en el
+ * mismo segundo en que se cerró el juego.
+ */
+export const flushPendingSaveBackups = async (timeoutMs: number): Promise<void> => {
+  const due = [...pending.entries()];
+  pending.clear();
+  for (const [gameId, timer] of due) {
+    clearTimeout(timer);
+    void launch(gameId);
+  }
+  const all = [...running];
+  if (all.length === 0) return;
+  console.log(`[saves] cierre: esperando ${all.length} backup(s) pendiente(s)`);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = await Promise.race([
+    Promise.allSettled(all).then(() => false),
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(true), Math.max(0, timeoutMs));
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+  if (timedOut) console.warn('[saves] cierre: no todos los backups terminaron a tiempo');
 };
 
 const runBackup = async (gameId: GameId): Promise<void> => {

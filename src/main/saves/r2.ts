@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { createWriteStream } from 'node:fs';
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { Upload } from '@aws-sdk/lib-storage';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
@@ -171,31 +171,34 @@ export const MACHINES_PREFIX = 'machines/';
 
 export const machineKey = (machineId: string): string => `${MACHINES_PREFIX}${machineId}.json`;
 
+// Subida de un fichero SIN leerlo entero en memoria (§12.7). Antes, con R2,
+// el zip se cargaba completo en el heap (`readFile`) y se mandaba de una vez.
+// Ahora los dos proveedores van por `Upload` de lib-storage: lee el fichero en
+// trozos de `partSize` y, como mucho, tiene `queueSize` trozos a la vez en
+// memoria (32 MB). Un fichero menor que un trozo se sube con un único
+// PutObject; uno mayor, por partes (multipart, que R2 admite con partes de
+// 5 MB o más salvo la última). Cada trozo viaja como Buffer, no como stream,
+// así que el SDK calcula su checksum por adelantado igual que antes.
+const UPLOAD_PART_BYTES = 16 * 1024 * 1024;
+
 export const uploadFile = async (key: string, filePath: string): Promise<number> =>
   withActiveWrite(async () => {
-    const { client, bucket, target } = requireClient();
-    if (target.provider === 's3') {
-      const size = (await stat(filePath)).size;
-      await new Upload({
-        client,
-        params: {
-          Bucket: bucket,
-          Key: key,
-          Body: createReadStream(filePath),
-          ContentLength: size,
-          ContentType: contentType(key),
-        },
-        queueSize: 2,
-        partSize: 16 * 1024 * 1024,
-        leavePartsOnError: false,
-      }).done();
-      return size;
-    }
-    const body = await readFile(filePath);
-    await client.send(
-      new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType(key) }),
-    );
-    return body.byteLength;
+    const { client, bucket } = requireClient();
+    const size = (await stat(filePath)).size;
+    await new Upload({
+      client,
+      params: {
+        Bucket: bucket,
+        Key: key,
+        Body: createReadStream(filePath),
+        ContentLength: size,
+        ContentType: contentType(key),
+      },
+      queueSize: 2,
+      partSize: UPLOAD_PART_BYTES,
+      leavePartsOnError: false,
+    }).done();
+    return size;
   });
 
 // Subir un texto que solo existe en memoria. Lo pide el mapping.yaml del
@@ -237,6 +240,35 @@ export const readText = async (key: string): Promise<string | null> => {
     const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     return (await response.Body?.transformToString()) ?? null;
   } catch {
+    return null;
+  }
+};
+
+// Como readText, pero distinguiendo "no existe" (null) de "no se pudo leer"
+// (lanza). Hace falta donde un fallo de red no puede confundirse con un
+// objeto ausente: el manifiesto que dice qué instalación usa un id (§12.6) no
+// se reescribe porque una lectura haya fallado.
+export const readTextStrict = async (key: string): Promise<string | null> => {
+  const { client, bucket } = requireClient();
+  try {
+    const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    return (await response.Body?.transformToString()) ?? '';
+  } catch (error) {
+    const failure = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+    if (failure.name === 'NoSuchKey' || failure.$metadata?.httpStatusCode === 404) return null;
+    throw error;
+  }
+};
+
+// null si no existe o no es JSON; lanza si no se pudo leer. Un JSON ilegible
+// no dice nada de quién lo escribió, así que se trata como ausente.
+export const readJsonStrict = async <T>(key: string): Promise<T | null> => {
+  const text = await readTextStrict(key);
+  if (text === null) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    console.warn(`[saves] ${key} no es JSON valido: se trata como ausente`);
     return null;
   }
 };

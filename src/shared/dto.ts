@@ -233,6 +233,10 @@ export type SaveBackupRow<Id extends EntityIdLike = EntityId> = {
   machineHome: string;
   locations: string[] | null;
   hasRegistry: boolean;
+  // Huella del contenido de esa partida (AFTERPLAY-2.0.md §12.2); null en lo
+  // que no se pudo calcular (copias de la 1.x sin recalcular, hashes que
+  // faltan en el mapping.yaml).
+  contentHash: string | null;
 };
 
 // ── LO QUE EL RENDERER PUEDE MANDAR POR EL IPC ─────────────────────────────
