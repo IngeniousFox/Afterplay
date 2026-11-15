@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { SyncRequestError } from '../../../shared/sync/protocol';
-import { createHttpTransport, enroll, uploadIgdbCredentials } from '../httpTransport';
+import { createHttpTransport, enroll, exchangeCredentials } from '../httpTransport';
 
 // El transporte HTTP con un `fetch` falso: ni red ni credenciales reales.
 
@@ -225,23 +225,22 @@ describe('transporte HTTP', () => {
   });
 });
 
-describe('subida de las claves de IGDB', () => {
-  it('POST con el token del dispositivo y las claves en el cuerpo', async () => {
-    const { fetch, seen } = fakeFetch(() => json({ stored: true }));
+describe('intercambio de credenciales', () => {
+  const entries = { steamApiKey: { value: 'clave-de-prueba', updatedAt: 10 } };
 
-    const response = await uploadIgdbCredentials(
+  it('POST con el token del dispositivo y el paquete en el cuerpo', async () => {
+    const { fetch, seen } = fakeFetch(() => json({ entries }));
+
+    const response = await exchangeCredentials(
       { baseUrl: 'https://hub.example.test/', token: TOKEN, fetch },
-      { clientId: 'cliente-de-prueba', clientSecret: 'secreto-de-prueba' },
+      { entries },
     );
 
-    assert.deepEqual(response, { stored: true });
-    assert.equal(seen[0].url, 'https://hub.example.test/sync/v1/igdb-credentials');
+    assert.deepEqual(response, { entries });
+    assert.equal(seen[0].url, 'https://hub.example.test/sync/v1/credentials');
     assert.equal(seen[0].method, 'POST');
     assert.equal(seen[0].headers.Authorization, `Bearer ${TOKEN}`);
-    assert.deepEqual(JSON.parse(seen[0].body ?? ''), {
-      clientId: 'cliente-de-prueba',
-      clientSecret: 'secreto-de-prueba',
-    });
+    assert.deepEqual(JSON.parse(seen[0].body ?? ''), { entries });
   });
 
   it('un error del hub conserva su código y no repite las claves en el mensaje', async () => {
@@ -249,14 +248,11 @@ describe('subida de las claves de IGDB', () => {
       json({ error: 'internal', message: 'el hub no tiene configurado HUB_SECRETS_KEY' }, 500),
     );
     await assert.rejects(
-      uploadIgdbCredentials(
-        { baseUrl: 'https://h.test', token: TOKEN, fetch },
-        { clientId: 'cliente-de-prueba', clientSecret: 'secreto-de-prueba' },
-      ),
+      exchangeCredentials({ baseUrl: 'https://h.test', token: TOKEN, fetch }, { entries }),
       (error: unknown) =>
         error instanceof SyncRequestError &&
         error.code === 'internal' &&
-        !error.message.includes('secreto-de-prueba'),
+        !error.message.includes('clave-de-prueba'),
     );
   });
 });

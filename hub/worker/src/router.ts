@@ -17,6 +17,7 @@ import {
   type ClientVersion,
   type EnrollRequest,
   type EnrollResponse,
+  type CredentialsExchangeResponse,
   type IgdbCredentialsResponse,
   type JobClaimRequest,
   type JobClaimResponse,
@@ -53,6 +54,11 @@ export interface TenantApi {
   doneJob(token: string, request: JobDoneRequest): Promise<Outcome<JobDoneResponse>>;
   /** Las claves de IGDB del PC; el hub las guarda cifradas (F-29). */
   storeIgdbCredentials(token: string, request: unknown): Promise<Outcome<IgdbCredentialsResponse>>;
+  /** Sube las credenciales del PC y devuelve las fusionadas con las del hub. */
+  exchangeCredentials(
+    token: string,
+    request: unknown,
+  ): Promise<Outcome<CredentialsExchangeResponse>>;
   enroll(request: EnrollRequest): Promise<Outcome<EnrollResponse>>;
   createEnrollmentCode(ttlMinutes?: number): Promise<Outcome<{ code: string; expiresAt: number }>>;
   listTokens(): Promise<Outcome<DeviceTokenInfo[]>>;
@@ -83,6 +89,8 @@ export interface Backend {
 
 /** Tamaño máximo de los cuerpos que no son `push`. */
 export const SMALL_BODY_MAX_BYTES = 16 * 1024;
+/** El paquete de credenciales: ~20 claves de hasta 4096 caracteres, normalmente decenas. */
+export const CREDENTIALS_BODY_MAX_BYTES = 128 * 1024;
 
 class RequestError extends Error {
   constructor(readonly body: SyncErrorBody) {
@@ -196,6 +204,7 @@ const SYNC_METHODS: Record<string, string> = {
   [SYNC_ROUTES.jobsClaim]: 'POST',
   [SYNC_ROUTES.jobsDone]: 'POST',
   [SYNC_ROUTES.igdbCredentials]: 'POST',
+  [SYNC_ROUTES.credentials]: 'POST',
 };
 
 async function handleSync(request: Request, url: URL, backend: Backend): Promise<Response> {
@@ -237,6 +246,10 @@ async function handleSync(request: Request, url: URL, backend: Backend): Promise
     case SYNC_ROUTES.igdbCredentials: {
       const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
       return outcomeResponse(await tenant.storeIgdbCredentials(token, body));
+    }
+    case SYNC_ROUTES.credentials: {
+      const body = await readJsonObject(request, CREDENTIALS_BODY_MAX_BYTES);
+      return outcomeResponse(await tenant.exchangeCredentials(token, body));
     }
     default: {
       const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);

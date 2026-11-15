@@ -4,24 +4,24 @@ import {
   getCredentials,
   importCredentialsFromFile,
   setCredentials,
+  stampCredentialKeys,
   takeStartupKeysImport,
 } from '../config/credentials';
 import { getConfigValue, setConfigValue } from '../config/store';
+import { invalidateCredentialClients } from '../config/credentialsInvalidate';
 import { appCtx } from '../db/v2/appDb';
 import { hasIndexedSaveBackups } from '../db/v2/queries/saves';
-import { invalidateToken } from '../igdb/auth';
 import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
 import { isDevProfile } from '../lib/devProfileRules';
 import { isE2E } from '../lib/e2e';
 import { openPathResult } from '../lib/openPath';
 import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
-import { beginStorageMigration, resetR2Client } from '../saves/r2';
+import { beginStorageMigration } from '../saves/r2';
 import { migrateStorageObjects } from '../saves/migrateStorage';
 import { verifyMigratedRestore } from '../saves/verifyStorageRestore';
 import { storageTargetFrom, destinationChanged } from '../saves/storageConfig';
 import { markIdentityReconciled } from '../saves/machine';
 import { getSyncRuntime } from '../sync/instance';
-import { resetSgdbClient } from '../sgdb/client';
 import type { CredentialsValues, SaveStorageProvider, TimeFormat } from '../../shared/types';
 
 // SPEC 3E — "iniciar con Windows" como opción activable desde el modal de
@@ -37,18 +37,12 @@ import type { CredentialsValues, SaveStorageProvider, TimeFormat } from '../../s
 const loginItemQueryOptions =
   process.platform === 'win32' ? { args: [HIDDEN_LAUNCH_ARG] } : undefined;
 
-// Lo que hay que despertar cada vez que CAMBIAN las credenciales, vengan de
-// teclearlas o de importar un fichero: los clientes cacheados capturaron la
-// clave vieja al construirse y seguirían usándola hasta reiniciar la app.
+// Cada vez que CAMBIAN las credenciales por una acción de la persona (teclearlas
+// o importar un fichero): se despiertan los clientes cacheados y se sube el
+// cambio al hub para que lo reciban los demás PCs.
 const applyCredentialsChange = (): void => {
-  invalidateToken();
-  resetSgdbClient();
-  // Lo mismo con el cliente de R2: se construyó con las claves viejas y
-  // seguiría firmando con ellas (PARTIDAS-GUARDADAS.md §9).
-  resetR2Client();
-  // Y si las de IGDB cambiaron, el hub de la PWA debe tener las nuevas (F-29). El runtime
-  // compara la huella y no sube nada si no han cambiado.
-  void getSyncRuntime()?.syncIgdbKeys();
+  invalidateCredentialClients();
+  void getSyncRuntime()?.syncCredentials();
 };
 
 const hasIndexedBackups = async (): Promise<boolean> => hasIndexedSaveBackups(appCtx());
@@ -201,7 +195,11 @@ export const registerSettingsHandlers = (): void => {
         }
       }
       setCredentials(input);
-      if (provider !== currentProvider) setConfigValue('saveStorageProvider', provider);
+      if (provider !== currentProvider) {
+        setConfigValue('saveStorageProvider', provider);
+        // El destino también viaja al resto de PCs (y con él, qué claves usar).
+        stampCredentialKeys(['saveStorageProvider']);
+      }
       applyCredentialsChange();
       if (migrated && destination) markIdentityReconciled(destination.identity);
       return getCredentials();

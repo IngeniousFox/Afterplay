@@ -369,3 +369,79 @@ describe('emparejado con el hub del sync 2.0', () => {
     assert.equal(credenciales.readSyncCredentials(), null);
   });
 });
+
+describe('sellos para el sync de credenciales', () => {
+  it('guardar sella solo las claves sincronizadas que cambian de verdad', async () => {
+    const antes = Date.now();
+    credenciales.setCredentials(
+      conClaves({ twitchClientId: 'cliente-1', databaseUrl: 'libsql://mi-base.turso.io' }),
+    );
+    const primero = credenciales.getCredentialStamps();
+    assert.ok(primero.twitchClientId >= antes);
+    assert.equal(primero.databaseUrl, undefined, 'Turso nunca se sella: no viaja');
+
+    // Guardar otra vez lo mismo no cambia el sello (aunque pase el tiempo).
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    credenciales.setCredentials(
+      conClaves({ twitchClientId: ' cliente-1 ', steamApiKey: 'steam-abc' }),
+    );
+    const segundo = credenciales.getCredentialStamps();
+    assert.equal(segundo.twitchClientId, primero.twitchClientId);
+    assert.ok(segundo.steamApiKey > primero.twitchClientId);
+  });
+
+  it('borrar una clave también la sella (el borrado debe viajar)', async () => {
+    credenciales.setCredentials(conClaves({ raApiKey: 'ra-1' }));
+    const antes = credenciales.getCredentialStamps().raApiKey;
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+
+    credenciales.setCredentials(conClaves({}));
+
+    assert.ok(credenciales.getCredentialStamps().raApiKey > antes);
+  });
+
+  it('importar un fichero sella lo que trae', () => {
+    const fichero = join(carpetaNueva(), 'claves.json');
+    writeFileSync(fichero, JSON.stringify({ keys: { RA_USERNAME: 'usuario-importado' } }));
+    const antes = Date.now();
+
+    credenciales.importCredentialsFromFile(fichero);
+
+    assert.ok(credenciales.getCredentialStamps().raUsername >= antes);
+  });
+
+  it('applySyncedCredentials escribe sin sello nuevo y respeta Turso y el emparejado', () => {
+    const emparejado = { hubUrl: 'https://hub.example.test', token: 'ap1.inquilino.secreto' };
+    credenciales.setCredentials(
+      conClaves({
+        steamApiKey: 'steam-local',
+        databaseUrl: 'libsql://mi-base.turso.io',
+        databaseAuthToken: 'token-turso',
+      }),
+    );
+    credenciales.writeSyncCredentials(emparejado);
+
+    credenciales.applySyncedCredentials(
+      {
+        steamApiKey: null,
+        raApiKey: 'ra-del-hub',
+        // Aunque llegaran, estas no se aplican jamás.
+        databaseUrl: 'libsql://otra.turso.io',
+        databaseAuthToken: 'token-ajeno',
+      },
+      { steamApiKey: 111, raApiKey: 222 },
+    );
+
+    const valores = credenciales.getCredentials();
+    assert.equal(valores.steamApiKey, null);
+    assert.equal(valores.raApiKey, 'ra-del-hub');
+    assert.equal(valores.databaseUrl, 'libsql://mi-base.turso.io');
+    assert.equal(valores.databaseAuthToken, 'token-turso');
+    assert.deepEqual(credenciales.readSyncCredentials(), emparejado);
+    const sellos = credenciales.getCredentialStamps();
+    assert.equal(sellos.steamApiKey, 111);
+    assert.equal(sellos.raApiKey, 222);
+    assert.equal(process.env.RA_API_KEY, 'ra-del-hub');
+    assert.equal(process.env.STEAM_API_KEY, undefined);
+  });
+});

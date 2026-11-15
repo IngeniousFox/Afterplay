@@ -2052,6 +2052,20 @@ Hecha en la rama `v2`. Las piezas:
 | PWA                      | `web/`                                                                    | Cliente de `/api/v2` sin buzón, con tope de 15 s por petición y mensaje de sesión de Access caducada. El hub la sirve como assets                                               |
 | Acceso de desarrollo     | `npm run dev:pwa:hub` (`web/vite.config.ts`, modo `hub`)                  | Proxy de Vite al hub de desarrollo que añade el token de administración en el lado del servidor; el navegador no lo ve                                                          |
 
+#### §20.6.2 Credenciales entre PCs
+
+Las claves de Ajustes → Connections ya no son solo de cada PC: viajan por el hub a los demás PCs emparejados.
+
+- **Qué viaja.** Todas las claves de servicios (IGDB, SteamGridDB, R2, S3, Anthropic, Steam, RetroAchievements) y el destino de las partidas guardadas (`saveStorageProvider`).
+- **Qué no viaja jamás.** `databaseUrl` y `databaseAuthToken` (Turso es de la 1.x y decide con qué base habla cada PC) ni el token de emparejado del hub.
+- **Regla de fusión.** Clave a clave, gana la entrada más nueva (`updatedAt`). Un borrado es una entrada con `value: null` y también gana si es más nuevo. En un empate con distinto valor gana el hub, para que todos los PCs converjan.
+- **Sellos.** Cada PC guarda en `config.json` (`credentialStamps`) cuándo cambió una persona cada clave. Solo se sella lo que cambia de verdad; lo que llega del hub conserva el sello de origen. Una clave anterior a los sellos sube con `updatedAt` 0.
+- **Cifrado.** Una sola ruta, `POST /sync/v1/credentials`: sube y baja en la misma vuelta. El hub guarda el paquete entero cifrado (AES-GCM, clave derivada por inquilino de `HUB_SECRETS_KEY`, finalidad `credentials-bundle`) y solo se lo devuelve a un dispositivo autenticado. Sin `HUB_SECRETS_KEY` no guarda nada. No hay contraseña propia.
+- **Cuándo se sincroniza.** Al arrancar emparejado, al emparejar, al guardar o importar claves en Ajustes y, tras un ciclo de sync correcto, como mucho cada 10 minutos. Nunca en E2E ni con un hub bloqueado.
+- **Qué pasa al recibir.** Se escriben las claves, se actualiza `process.env` y se invalidan los clientes cacheados. Un cambio remoto del destino de las partidas **no** lanza la migración R2/S3: esa solo corre en el PC donde la persona cambió el destino.
+- **PWA.** El hub busca en IGDB con `twitchClientId` y `twitchClientSecret` del paquete; si faltan, cae al almacén antiguo (`/sync/v1/igdb-credentials`), que se mantiene para clientes viejos. El escritorio ya no lo llama.
+- **Coste.** El hub guarda todas las claves de la persona, cifradas con un único secret del Worker. Si se rota `HUB_SECRETS_KEY`, el paquete deja de abrirse y se lee como vacío. Como cada PC conserva sus sellos locales, el siguiente intercambio sube lo suyo y el hub se reconstruye solo; no hace falta volver a teclear nada.
+
 **Comprobado.** Pasan E-11 (`hub/convergence/__tests__/jobs.test.ts`), E-12 y E-13 (`hub/convergence/__tests__/webWrites.test.ts`). Ninguna respuesta de lectura lleva rutas de disco (F-31, `webReads.test.ts`). Lint, tipos, 2.975 tests, la build de la PWA y el bundle del hub.
 
 **Límites conocidos:**
@@ -2059,7 +2073,7 @@ Hecha en la rama `v2`. Las piezas:
 - **Radar entre PCs.** La concesión dura como mucho 24 h, así que la deduplicación del radar semanal solo cubre ese margen.
 - **Recap regenerado.** Pedir otra vez el recap queda bloqueado por la concesión hasta 24 h.
 - **Cronómetro y PC sin red.** Si un PC sin red empieza a jugar y, antes de sincronizar, el móvil arranca el cronómetro del mismo juego, ese rato cuenta doble (D-15). Se corrige editando la sesión.
-- **Rotar `HUB_SECRETS_KEY`.** Las claves guardadas dejan de abrirse y el PC no las resube solo: hay que cambiarlas en Ajustes o volver a emparejar.
+- **Rotar `HUB_SECRETS_KEY`.** El paquete de credenciales guardado deja de abrirse y el hub lo trata como vacío; el primer PC que sincronice lo vuelve a subir entero (ver §20.6.2). Las claves de IGDB del almacén antiguo (clientes viejos) sí se pierden hasta que ese cliente las resuba.
 - **Access.** La aplicación de Access tiene que cubrir todo el dominio del hub, no solo `/api/v2/*`: los assets de la PWA se sirven sin pasar por el Worker.
 
 **Pendiente o sin comprobar:**

@@ -18,6 +18,7 @@ import type {
   ClientVersion,
   EnrollRequest,
   EnrollResponse,
+  CredentialsExchangeResponse,
   IgdbCredentialsResponse,
   JobClaimRequest,
   JobClaimResponse,
@@ -29,8 +30,9 @@ import type {
   StatusResponse,
 } from '../../../src/shared/sync/protocol';
 import type { EnrollmentCode } from '../../core/hub';
+import { CredentialBundleStore } from './credentialBundle';
 import { IgdbCredentialStore } from './igdbCredentials';
-import { IgdbClient } from './web/igdbClient';
+import { IgdbClient, type IgdbKeys } from './web/igdbClient';
 import { ok, type Outcome } from './outcome';
 import { WEB_ROUTES, matchRoute } from './web/routes';
 import type { WebRequest } from './web/types';
@@ -170,6 +172,7 @@ export class TenantService {
   private readonly throttle: EnrollThrottle;
   private webQueries: HubQueries | null = null;
   private readonly igdbStore: IgdbCredentialStore;
+  private readonly credentialStore: CredentialBundleStore;
   private igdbClient: IgdbClient | null = null;
 
   /**
@@ -187,6 +190,12 @@ export class TenantService {
     this.hub = new TenantHub(storage, now, options);
     this.throttle = new EnrollThrottle(storage, now);
     this.igdbStore = new IgdbCredentialStore(storage, options.tenantId, extras.secretsKey, now);
+    this.credentialStore = new CredentialBundleStore(
+      storage,
+      options.tenantId,
+      extras.secretsKey,
+      now,
+    );
   }
 
   /**
@@ -195,12 +204,25 @@ export class TenantService {
    */
   igdb(): IgdbClient {
     this.igdbClient ??= new IgdbClient({
-      loadCredentials: () => this.igdbStore.load(),
+      loadCredentials: () => this.loadIgdbKeys(),
       now: this.now,
       fetch: this.extras.fetch,
       timeoutMs: this.extras.igdbTimeoutMs,
     });
     return this.igdbClient;
+  }
+
+  /**
+   * Las claves de IGDB para la PWA: primero las del paquete de credenciales
+   * (las que suben todos los PCs) y, si no están ambas, las del almacén antiguo
+   * que rellenan los clientes viejos.
+   */
+  private async loadIgdbKeys(): Promise<IgdbKeys | null> {
+    const bundle = await this.credentialStore.load();
+    const clientId = bundle.twitchClientId?.value;
+    const clientSecret = bundle.twitchClientSecret?.value;
+    if (clientId && clientSecret) return { clientId, clientSecret };
+    return this.igdbStore.load();
   }
 
   /** Las consultas del escritorio sobre este hub, en nombre del móvil. Una por instancia. */
@@ -277,6 +299,20 @@ export class TenantService {
       await this.hub.authenticateToken(token);
       await this.igdbStore.save(request);
       return { stored: true as const };
+    });
+  }
+
+  /**
+   * Un PC sube sus credenciales y recibe las fusionadas (una sola vuelta). El
+   * hub las guarda cifradas; solo las devuelve a dispositivos autenticados.
+   */
+  exchangeCredentials(
+    token: string,
+    request: unknown,
+  ): Promise<Outcome<CredentialsExchangeResponse>> {
+    return this.run(async () => {
+      await this.hub.authenticateToken(token);
+      return this.credentialStore.exchange(request);
     });
   }
 

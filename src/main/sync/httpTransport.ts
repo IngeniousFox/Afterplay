@@ -4,8 +4,8 @@ import {
   type ClientVersion,
   type EnrollRequest,
   type EnrollResponse,
-  type IgdbCredentialsRequest,
-  type IgdbCredentialsResponse,
+  type CredentialsExchangeRequest,
+  type CredentialsExchangeResponse,
   type JobClaimRequest,
   type JobClaimResponse,
   type JobDoneRequest,
@@ -203,19 +203,19 @@ export function enroll(
 }
 
 /**
- * Sube las claves de IGDB de este PC a su hub (F-29). Va con el token del
- * dispositivo. El cuerpo lleva secretos: ni se registra ni se devuelve, y un
- * error del hub solo cuenta su código.
+ * Sube las credenciales de este PC a su hub y recibe las fusionadas (una sola
+ * vuelta). Va con el token del dispositivo. El cuerpo y la respuesta llevan
+ * secretos: ni se registran ni se copian a un error, que solo cuenta su código.
  */
-export function uploadIgdbCredentials(
+export function exchangeCredentials(
   options: { baseUrl: string; token: string; timeoutMs?: number; fetch?: typeof fetch },
-  credentials: IgdbCredentialsRequest,
-): Promise<IgdbCredentialsResponse> {
-  return request<IgdbCredentialsResponse>({
+  body: CredentialsExchangeRequest,
+): Promise<CredentialsExchangeResponse> {
+  return request<CredentialsExchangeResponse>({
     method: 'POST',
-    url: joinUrl(options.baseUrl, SYNC_ROUTES.igdbCredentials),
+    url: joinUrl(options.baseUrl, SYNC_ROUTES.credentials),
     token: options.token,
-    body: credentials,
+    body,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     fetchImpl: options.fetch ?? fetch,
   });
