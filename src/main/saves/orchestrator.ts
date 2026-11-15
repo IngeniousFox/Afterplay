@@ -352,7 +352,7 @@ const sortByWhen = <T extends { when?: string }>(nodes: T[]): T[] =>
 // devuelve parseMapping): con null esta función devolvería `local` tal cual y
 // el llamante subiría un mapping que borra los nodos remotos — el bug que
 // existe para arreglar. Que lo impida el compilador y no la disciplina.
-const mergeRemoteMapping = (
+export const mergeRemoteMapping = (
   local: BackupMapping,
   remote: BackupMapping,
   survives: (backupName: string) => boolean,
