@@ -20,6 +20,11 @@ const TEST_TEMP_PREFIXES = [
   'afterplay-backups-', // dailyBackup.test.ts
   'afterplay-parsers-', // steam/__tests__/parsers.test.ts
   'afterplay-scancache-', // scan/__tests__/cache.test.ts
+  'afterplay-saves-hash-', // saves/__tests__/contentHash.test.ts
+  'afterplay-saves-exact-', // saves/__tests__/exactRestore.test.ts
+  'afterplay-saves-identity-', // saves/__tests__/identity.test.ts
+  'afterplay-saves-machine-', // saves/__tests__/machine.test.ts
+  'afterplay-saves-orch-', // saves/__tests__/orchestrator.test.ts
 ] as const;
 
 // Node's mkdtemp appends exactly six random alphanumeric characters. Full
