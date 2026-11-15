@@ -15,6 +15,7 @@
   "include": [
     "./**/*.ts",
     "../../src/shared/sync/*.ts",
+    "../../src/shared/timerFreshness.ts",
     "../../src/main/db/v2/schema.ts",
     "../../src/main/db/v2/registry.ts",
     "../../src/main/db/v2/schemaVersion.ts"

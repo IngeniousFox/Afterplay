@@ -14,11 +14,14 @@
 
 import {
   isClock,
+  maxClock,
   parseClock,
+  successor,
   BOTTOM,
   RESERVED_DEVICE_ID,
   MAX_AHEAD_MS,
 } from '../../src/shared/sync/clock';
+import { TIMER_STALE_MS } from '../../src/shared/timerFreshness';
 import {
   canonical,
   decodeStored,
@@ -146,9 +149,30 @@ export interface SweepResult {
   expiredLeases: number;
   deletedLeases: number;
   deletedEnrollmentCodes: number;
-  /** Fase 4 (§10.5): hoy siempre 0. */
+  /** Sesiones abandonadas cerradas por el barrido (§10.5). */
   abandonedSessions: number;
 }
+
+/**
+ * Cuánto puede pasar una sesión abierta sin señal de vida antes de que el hub
+ * la dé por abandonada (§10.5, D-21). Es la misma regla que la del cronómetro
+ * (`shared/timerFreshness.ts`), que también barre: si fueran distintas, el hub
+ * cerraría un cronómetro que la interfaz sigue pintando vivo, o al revés.
+ */
+export const ABANDONED_SESSION_MS = TIMER_STALE_MS;
+
+/**
+ * Columnas de `sessions` que puede escribir cualquier dispositivo (§7.4, igual
+ * que `SESSION_FIELDS_ANY_DEVICE` de la puerta del cliente) y la lápida. NO
+ * cuentan para el reloj base del barrido: una nota editada en otro PC después
+ * del barrido subiría el reloj del cierre del hub por encima del cierre real
+ * del dueño, que se perdería (E-09).
+ */
+const SWEEP_IGNORED_COLUMNS: ReadonlySet<string> = new Set([
+  'note',
+  'playthroughId',
+  DELETED_COLUMN,
+]);
 
 const num = (value: SqlValue | undefined): number => Number(value);
 
@@ -457,21 +481,26 @@ export class TenantHub {
       if (before && canonical(before, table.shape) === canonical(merged, table.shape)) continue;
 
       seq += 1;
-      const encoded = encodeStored(merged, table.shape);
-      const values = table.upsertColumns.map((column) =>
-        column === 'syncSeq' ? seq : (encoded[column] as SqlValue),
-      );
-      this.storage.exec(table.upsertSql, wire.id, ...values);
       // Lo que se guarda es lo que se leería: así dos filas del mismo lote sobre
       // el mismo id se fusionan igual que si hubieran llegado en lotes distintos
       // (una columna que falta vale su defecto con reloj BOTTOM, no "ausente").
-      rows.set(wire.id, decodeStored(encoded as unknown as SqlRow, table.shape));
+      rows.set(wire.id, this.writeRow(table, merged, seq));
     }
 
     if (seq !== startSeq) {
       this.storage.exec(`UPDATE tenant_meta SET v = ? WHERE k = 'seq'`, seq);
     }
     return { seq, accepted, rejected };
+  }
+
+  /** Escribe una fila ya fusionada con su secuencia y devuelve lo que se leería de vuelta. */
+  private writeRow(table: HubTable, merged: RowState, seq: number): RowState {
+    const encoded = encodeStored(merged, table.shape);
+    const values = table.upsertColumns.map((column) =>
+      column === 'syncSeq' ? seq : (encoded[column] as SqlValue),
+    );
+    this.storage.exec(table.upsertSql, merged.id, ...values);
+    return decodeStored(encoded as unknown as SqlRow, table.shape);
   }
 
   push(request: PushRequest): PushResponse {
@@ -886,14 +915,63 @@ export class TenantHub {
   }
 
   /**
-   * PUNTO DE EXTENSIÓN de la fase 4 (§10.5): cierre de las sesiones abiertas
-   * cuyo dueño lleva más de 24 h sin latido, escribiendo con el reloj
-   * `successor(ownerBase, RESERVED_DEVICE_ID)` (decisión D-6 del spike). No se
-   * implementa aquí. Devuelve cuántas cerró; hoy, ninguna. Se llama dentro de
-   * la transacción de `sweep`.
+   * Sesiones abandonadas (§10.5, E-08, E-09). Un PC que murió con una sesión
+   * abierta y no vuelve la dejaría abierta para siempre: el hub cierra las que
+   * llevan más de `ABANDONED_SESSION_MS` sin señal de vida (`lastSeenAt`, o
+   * `startedAt` si nunca la dio), en esa última señal y con
+   * `closedBy = 'janitor'`. Cubre también los cronómetros abandonados.
+   *
+   * EL RELOJ (H-3, D-6 del spike): NO la hora del hub, sino el sucesor
+   * inmediato del mayor reloj de las columnas del dueño, firmado con
+   * `RESERVED_DEVICE_ID`. Gana a lo que el hub tiene guardado (la sesión
+   * abierta), pero pierde ante cualquier escritura posterior del dueño: si
+   * estaba offline y no muerto, y cerró la sesión antes de que pasara el
+   * barrido, su cierre real gana al subir, y no se pierden horas jugadas. Con
+   * la hora del hub ese cierre perdía.
+   *
+   * Se llama dentro de la transacción de `sweep`. Cada fila cerrada recibe
+   * secuencia nueva, así que los clientes la bajan como cualquier cambio. Su eco
+   * (un cliente que la reenvía tal cual) se admite: `applyRows` acepta un reloj
+   * reservado si el hub ya lo tiene en esa celda.
    */
   protected sweepAbandonedSessions(now: number): number {
-    void now;
-    return 0;
+    const table = this.tables.get('sessions');
+    if (!table) return 0;
+    const candidates = this.storage.exec(
+      `SELECT * FROM "sessions" WHERE "endedAt" IS NULL AND "syncDeleted" IS NULL AND COALESCE("lastSeenAt", "startedAt") <= ?`,
+      now - ABANDONED_SESSION_MS,
+    );
+    if (candidates.length === 0) return 0;
+
+    const { seq: startSeq } = this.readMeta();
+    let seq = startSeq;
+    for (const raw of candidates) {
+      const row = decodeStored(raw, table.shape);
+      const startedAt = num(row.fields.startedAt);
+      const lastSeenAt = row.fields.lastSeenAt === null ? startedAt : num(row.fields.lastSeenAt);
+      // Una señal de vida anterior al inicio no tiene sentido: se cierra en el
+      // inicio, con duración 0, en vez de guardar una duración negativa.
+      const endedAt = Math.max(startedAt, lastSeenAt);
+
+      let base = row.created;
+      for (const [column, clock] of Object.entries(row.clocks)) {
+        if (!SWEEP_IGNORED_COLUMNS.has(column)) base = maxClock(base, clock);
+      }
+      const clock = successor(base, RESERVED_DEVICE_ID);
+      const close: RowState = {
+        id: row.id,
+        created: row.created,
+        fields: {
+          endedAt,
+          durationSec: Math.max(0, Math.round((endedAt - startedAt) / 1000)),
+          closedBy: 'janitor',
+        },
+        clocks: { endedAt: clock, durationSec: clock, closedBy: clock },
+      };
+      seq += 1;
+      this.writeRow(table, mergeRows(row, close), seq);
+    }
+    this.storage.exec(`UPDATE tenant_meta SET v = ? WHERE k = 'seq'`, seq);
+    return seq - startSeq;
   }
 }
