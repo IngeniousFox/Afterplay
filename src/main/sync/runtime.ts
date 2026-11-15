@@ -227,6 +227,24 @@ export class SyncRuntime {
     return this.status();
   }
 
+  /**
+   * Un ciclo de sync rápido antes de crear algo que otro PC podría crear a la
+   * vez (§10.7: un playthrough). Resuelve cuando el ciclo acaba o pasan
+   * `limitMs`. Sin hub emparejado y activo (o en E2E) resuelve al instante.
+   * NUNCA lanza: lo peor que pasa es decidir con lo que hay.
+   */
+  async syncOnceWithin(limitMs: number): Promise<void> {
+    const scheduler = this.active?.scheduler;
+    if (!scheduler) return;
+    try {
+      await scheduler.runOnceWithin(limitMs);
+    } catch (error) {
+      this.deps.logger.warn(
+        `el sync rapido antes de crear fallo: ${error instanceof Error ? error.message : 'error'}`,
+      );
+    }
+  }
+
   /** Subida final al cerrar la app, con tope de 5 s (§10.6). */
   async flushOnQuit(timeoutMs: number = QUIT_FLUSH_MS): Promise<FlushOutcome> {
     const active = this.active;

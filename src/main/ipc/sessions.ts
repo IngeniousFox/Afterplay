@@ -13,6 +13,8 @@ import {
 } from '../db/v2/queries/sessions';
 import { notifyOverlaySessionStarted } from '../overlay';
 import { scheduleSaveBackup } from '../saves/sessionHook';
+import { getSyncRuntime } from '../sync/instance';
+import { CREATE_SYNC_LIMIT_MS } from '../sync/scheduler';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import type { GameId, SessionId } from '../../shared/entityIds';
 
@@ -34,6 +36,15 @@ export const registerSessionsHandlers = (): void => {
   // abierta (no debería pasar — el botón está deshabilitado mientras hay una
   // live — pero no es un error, el juego ya se está trackeando igual).
   handleDb('sessions:startForGame', async (_event, gameId: GameId) => {
+    // Prevención de dos playthroughs activos (AFTERPLAY-2.0.md §10.7): abrir la
+    // sesión puede CREAR el playthrough, y otro PC puede haberlo creado ya sin
+    // que este lo sepa. Un ciclo de sync rápido, con tope de 3 s, trae lo que
+    // el otro haya subido; sin hub resuelve al instante y sin red se decide
+    // con lo que hay. Siempre, y no solo cuando el juego no tiene un
+    // playthrough activo: no hay una lectura de "¿tiene playthrough activo?"
+    // en la capa de consultas (la regla vive dentro de la transacción de
+    // startGameSession) y el coste de pagarlo de más es un ciclo por Play.
+    await getSyncRuntime()?.syncOnceWithin(CREATE_SYNC_LIMIT_MS);
     const session = startGameSession(appCtx(), gameId, 'play');
     // El overlay in-game se arma AQUÍ y no esperando al watcher (que sondea
     // cada 5s): pulsar Play y que su atajo no respondiera durante esos

@@ -16,6 +16,9 @@ import type { CycleResult, SyncLogger } from './engine';
 // solo (app vieja, token revocado, reinicio pendiente) PAUSA el planificador
 // hasta `resume()`.
 
+/** Tope del ciclo rápido antes de crear un playthrough (§10.7, prevención). */
+export const CREATE_SYNC_LIMIT_MS = 3000;
+
 export interface SchedulerTimers {
   setTimeout(callback: () => void, ms: number): unknown;
   clearTimeout(handle: unknown): void;
@@ -185,6 +188,34 @@ export class SyncScheduler {
     });
     try {
       return await Promise.race([work, limit]);
+    } finally {
+      this.timers.clearTimeout(handle);
+    }
+  }
+
+  /**
+   * Un ciclo "ahora", con tope (§10.7, prevención): lo usa quien está a punto
+   * de crear algo que dos PCs podrían crear a la vez (un playthrough) para
+   * traerse antes lo que el otro ya haya subido. Resuelve cuando el ciclo
+   * termina o pasan `limitMs`, lo que antes ocurra; el ciclo sigue en segundo
+   * plano. NUNCA lanza.
+   *
+   * Respeta la espera tras un fallo y la pausa (no es `force`): con la red
+   * caída cada apertura de juego no debe costar `limitMs`; "sin red se decide
+   * con lo que hay" y se sale en el acto. Parado (cierre de la app) tampoco
+   * hace nada. Si ya hay un ciclo en marcha, espera a ese y a uno más (el
+   * que estaba corriendo pudo empezar antes de la última subida del otro PC).
+   */
+  async runOnceWithin(limitMs: number): Promise<void> {
+    if (this.stopped || this.paused) return;
+    let handle: unknown = null;
+    const limit = new Promise<void>((resolve) => {
+      handle = this.timers.setTimeout(resolve, limitMs);
+    });
+    try {
+      await Promise.race([this.requestRun(false).catch(() => {}), limit]);
+    } catch {
+      // El tope y el ciclo no lanzan; la red de seguridad es por contrato.
     } finally {
       this.timers.clearTimeout(handle);
     }

@@ -54,6 +54,7 @@ import { watchNetworkBack, type NetworkWatch } from './sync/networkWatch';
 import type { SyncRuntime } from './sync/runtime';
 import { setSessionClosedNotifier } from './watcher/notifySession';
 import { setRunningGamesProbe } from './watcher/runningGames';
+import { runQuitSequence } from './watcher/quitSequence';
 import { ProcessWatcher } from './watcher/watcher';
 
 // ── Cronómetro del arranque ──────────────────────────────────────────────
@@ -106,11 +107,12 @@ let tray: Tray | null = null;
 // de día por mucho que la app viva en la bandeja.
 let memoriesTimer: ReturnType<typeof setInterval> | null = null;
 // El sync 2.0 (AFTERPLAY-2.0.md §8.5). Sin hub emparejado, o en un test E2E, no
-// hace nada. `syncFlushed` evita repetir la subida final cuando before-quit
-// vuelve a dispararse tras app.quit().
+// hace nada. `quitSequenceStarted` evita repetir el cierre ordenado (sesiones,
+// backups, subida final) cuando before-quit vuelve a dispararse tras
+// app.quit().
 let syncRuntime: SyncRuntime | null = null;
 let networkWatch: NetworkWatch | null = null;
-let syncFlushed = false;
+let quitSequenceStarted = false;
 const MEMORIES_TICK_MS = 60 * 60 * 1000;
 // SPEC 3E — el botón X de la ventana oculta, no cierra: solo "Quit" del tray
 // (o antes de la propia app.quit(), en before-quit) marca esto para dejar
@@ -800,6 +802,9 @@ app.whenReady().then(async () => {
       // inalcanzable: quien llama es el propio watcher.
       handleOverlayActiveGames(watcher?.getActiveGameIds().length ?? 0);
     },
+    // Sync rápido antes de crear un playthrough (§10.7). Por cierre perezoso:
+    // sin hub emparejado (o en E2E) resuelve al instante.
+    { syncBeforeCreate: (limitMs) => syncRuntime?.syncOnceWithin(limitMs) ?? Promise.resolve() },
   );
   watcher.start();
   // La guarda de "no restaurar una partida con el juego abierto"
@@ -1103,16 +1108,24 @@ app.on('window-all-closed', () => {
 // ninguna vía de cierre real se quede bloqueada por el interceptor de la X.
 app.on('before-quit', (event) => {
   isQuitting = true;
-  // Subida final (§10.6): se aplaza el cierre UNA vez, hasta 5 s, para que lo
-  // último que hiciste llegue al hub. La base sigue abierta (se cierra en
-  // will-quit) y el resto del cierre corre al volver a llamar a quit().
-  if (!syncFlushed && syncRuntime?.isActive) {
-    syncFlushed = true;
+  // Cierre ordenado (§10.6): se aplaza el cierre UNA vez, con tope global, para
+  // (1) cerrar las sesiones propias a la hora actual, (2) lanzar los backups de
+  // partidas pendientes y (3) subir lo último al hub (5 s). La base sigue
+  // abierta (se cierra en will-quit) y el resto del cierre corre al volver a
+  // llamar a quit(). En E2E no se aplaza nada: el sync no existe y los tests
+  // cierran y reabren la app esperando el estado de siempre.
+  if (!quitSequenceStarted && !isE2E() && (watcher || syncRuntime?.isActive)) {
+    quitSequenceStarted = true;
     event.preventDefault();
-    void syncRuntime
-      .flushOnQuit()
-      .catch((error: unknown) => console.warn('[sync] la subida final falló:', error))
-      .finally(() => app.quit());
+    void runQuitSequence({
+      closeSessions: () => {
+        watcher?.closeAllForQuit(new Date());
+      },
+      // flushSaveBackups: aquí va `flushPendingSaveBackups` (src/main/saves/)
+      // cuando exista: lanza ya los backups pendientes, sin el retardo de 8 s,
+      // y resuelve al acabar o al tope. Hoy no se pasa y el paso se salta.
+      flushSync: () => syncRuntime?.flushOnQuit() ?? Promise.resolve(),
+    }).finally(() => app.quit());
     return;
   }
   networkWatch?.stop();

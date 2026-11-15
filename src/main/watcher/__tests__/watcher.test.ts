@@ -11,6 +11,7 @@ import {
   seedPlaythrough,
   seedSession,
   seedStateEvent,
+  tombstoneOnly,
   type QueryFixture,
 } from '../../db/v2/queries/common/__tests__/fixtures';
 import { closeSession } from '../../db/v2/queries/sessions';
@@ -1146,5 +1147,361 @@ describe('el barrido de dos fases descarta lo que no es', () => {
     await cycle();
 
     assert.deepEqual(await sessions(), []);
+  });
+});
+
+// ══ Arranque: limpieza de latidos locales (§10.3) ═════════════════════════
+
+describe('el arranque limpia los latidos locales que ya no sirven', () => {
+  const beatRows = async (): Promise<string[]> =>
+    fx.ctx.db
+      .select({ sessionId: localSessionBeats.sessionId })
+      .from(localSessionBeats)
+      .orderBy(asc(localSessionBeats.sessionId))
+      .all()
+      .map((row) => row.sessionId);
+
+  const insertBeat = (sessionId: string, beatAt: Date): void => {
+    fx.ctx.db.insert(localSessionBeats).values({ sessionId, beatAt }).run();
+  };
+
+  it('la poda va DESPUES de reconciliar: el cierre aun usa el latido, y luego se borra', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    const crashed = await makeOpenSession(iterationId, '2026-01-10T18:00:00Z');
+    insertBeat(crashed, new Date('2026-01-10T20:30:00Z'));
+    // Un latido huérfano de una sesión que se cerró hace tiempo.
+    const old = seedSession(fx.ctx, {
+      playthroughId: iterationId,
+      startedAt: new Date('2026-01-09T18:00:00Z'),
+      endedAt: new Date('2026-01-09T19:00:00Z'),
+      startedBy: 'watcher',
+    });
+    insertBeat(old, new Date('2026-01-09T19:00:00Z'));
+
+    await cycle();
+
+    const closed = (await sessions()).find((session) => session.id === crashed);
+    // Si la poda hubiera ido antes, habría cerrado en `startedAt`.
+    assert.equal(closed?.endedAt?.toISOString(), '2026-01-10T20:30:00.000Z');
+    assert.deepEqual(await beatRows(), []);
+  });
+
+  it('no toca el latido de una sesion que sigue viva (adoptada)', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    const live = await makeOpenSession(iterationId, '2026-01-10T18:00:00Z');
+    insertBeat(live, new Date('2026-01-10T20:30:00Z'));
+    launch(4800, EXE_CELESTE);
+
+    await cycle();
+
+    assert.deepEqual(await beatRows(), [live]);
+    assert.equal(watcher.isGameRunning(gameId), true);
+  });
+
+  it('solo una vez, en el primer ciclo', async () => {
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    await cycle();
+    const gameId = await makeGame({ title: 'Hollow Knight', executablePath: EXE_HOLLOW });
+    const iterationId = await makeIteration(gameId);
+    const closed = seedSession(fx.ctx, {
+      playthroughId: iterationId,
+      startedAt: new Date('2026-01-09T18:00:00Z'),
+      endedAt: new Date('2026-01-09T19:00:00Z'),
+      startedBy: 'watcher',
+    });
+    insertBeat(closed, new Date('2026-01-09T19:00:00Z'));
+
+    await cycle();
+
+    assert.deepEqual(await beatRows(), [closed]);
+  });
+});
+
+// ══ Sesiones borradas por fuera mientras se siguen (F-11) ═════════════════
+
+describe('una sesion seguida que se borra en otro PC', () => {
+  it('se suelta, y si el proceso sigue vivo el ciclo siguiente abre una nueva', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4810, EXE_CELESTE);
+    await cycle();
+    const [first] = await sessions();
+    // Llega la lápida por sync: la sesión sigue sin `endedAt` pero ya no vive.
+    tombstoneOnly(fx.ctx, 'sessions', first.id);
+
+    await cycle();
+
+    const live = (await openSessions()).filter((session) => session.id !== first.id);
+    assert.equal(live.length, 1);
+    assert.equal(watcher.isGameRunning(gameId), true);
+    // Lo ajeno no se toca: la fila borrada no se cierra desde aquí.
+    assert.equal((await sessions()).find((s) => s.id === first.id)?.endedAt, null);
+  });
+
+  it('con el juego borrado tambien se suelta, sin cerrar nada ni lanzar backup', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4811, EXE_CELESTE);
+    await cycle();
+    const [first] = await sessions();
+    backupsScheduled.length = 0;
+    tombstoneOnly(fx.ctx, 'games', gameId);
+
+    await cycle();
+
+    assert.equal(watcher.isGameRunning(gameId), false);
+    assert.deepEqual(watcher.getActiveGameIds(), []);
+    const rows = await sessions();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].id, first.id);
+    assert.equal(rows[0].endedAt, null);
+    assert.deepEqual(backupsScheduled, []);
+    assert.deepEqual(trayUpdates.at(-1), []);
+  });
+
+  it('una sesion CERRADA por otro (Stop manual) no se suelta: no se reabre sola', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4812, EXE_CELESTE);
+    await cycle();
+    const [first] = await sessions();
+    closeByMilestone(first.id, new Date());
+
+    await cycle();
+    await cycle();
+
+    assert.equal((await sessions()).length, 1);
+    assert.equal(watcher.isGameRunning(gameId), true);
+  });
+});
+
+// ══ Cierre por bloqueo: también programa el backup de partidas ════════════
+
+describe('cerrar por bloqueo o suspension', () => {
+  it('programa el backup de partidas igual que el cierre normal', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4820, EXE_CELESTE);
+    await cycle();
+    assert.deepEqual(backupsScheduled, []);
+
+    screenLocked = true;
+    await pauseAndSettle();
+
+    assert.deepEqual(backupsScheduled, [gameId]);
+  });
+
+  it('un emulador sin juego asignado no programa nada', async () => {
+    await makeEmulator({ executablePath: EXE_RETROARCH });
+    launch(4821, EXE_RETROARCH);
+    await cycle();
+
+    screenLocked = true;
+    await pauseAndSettle();
+
+    assert.deepEqual(backupsScheduled, []);
+  });
+});
+
+// ══ Sync rápido antes de crear un playthrough (§10.7) ═════════════════════
+
+describe('el sync rapido antes de abrir la sesion de un juego', () => {
+  const withSync = (syncBeforeCreate: (limitMs: number) => Promise<void>): void => {
+    watcher = new ProcessWatcher(
+      () => fakeWindow as unknown as BrowserWindow,
+      (titles) => trayUpdates.push(titles),
+      { syncBeforeCreate },
+    );
+  };
+
+  it('se pide con tope de 3 s ANTES de abrir, y la sesion se abre al volver', async () => {
+    const events: string[] = [];
+    withSync(async (limitMs) => {
+      events.push(`sync:${limitMs}:sesiones=${(await sessions()).length}`);
+    });
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4830, EXE_CELESTE);
+
+    await cycle();
+
+    assert.deepEqual(events, ['sync:3000:sesiones=0']);
+    assert.equal((await sessions()).length, 1);
+  });
+
+  it('no se pide si la sesion ya existia (la abrio Play): se adopta sin esperar', async () => {
+    let calls = 0;
+    withSync(async () => {
+      calls += 1;
+    });
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    await makeOpenSession(iterationId, new Date().toISOString());
+    launch(4831, EXE_CELESTE);
+
+    await cycle();
+
+    assert.equal(calls, 0);
+    assert.equal(watcher.isGameRunning(gameId), true);
+  });
+
+  it('no se pide para un emulador (no crea playthrough)', async () => {
+    let calls = 0;
+    withSync(async () => {
+      calls += 1;
+    });
+    await makeEmulator({ executablePath: EXE_RETROARCH });
+    launch(4832, EXE_RETROARCH);
+
+    await cycle();
+
+    assert.equal(calls, 0);
+    assert.equal((await sessions()).length, 1);
+  });
+
+  it('con dos juegos arrancando a la vez se paga una sola vez por ciclo', async () => {
+    let calls = 0;
+    withSync(async () => {
+      calls += 1;
+    });
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    await makeGame({ title: 'Hollow Knight', executablePath: EXE_HOLLOW });
+    launch(4833, EXE_CELESTE);
+    launch(4834, EXE_HOLLOW);
+
+    await cycle();
+
+    assert.equal(calls, 1);
+    assert.equal((await sessions()).length, 2);
+  });
+
+  it('mientras espera, otro ciclo no abre la misma sesion dos veces', async () => {
+    let release: () => void = () => {};
+    let calls = 0;
+    withSync(
+      () =>
+        new Promise<void>((resolve) => {
+          calls += 1;
+          release = resolve;
+        }),
+    );
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4835, EXE_CELESTE);
+
+    const first = cycle();
+    await nextTick();
+    // Es el tick de 5 s volviendo a pasar mientras el primero sigue esperando.
+    await cycle();
+    await cycle();
+    assert.equal(calls, 1);
+    assert.equal((await sessions()).length, 0);
+
+    release();
+    await first;
+
+    assert.equal((await sessions()).length, 1);
+    await cycle();
+    assert.equal((await sessions()).length, 1);
+  });
+
+  it('si el PC se bloquea durante la espera, no se abre nada', async () => {
+    let release: () => void = () => {};
+    withSync(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4836, EXE_CELESTE);
+
+    const first = cycle();
+    await nextTick();
+    screenLocked = true;
+    watcher.pause();
+    release();
+    await first;
+
+    assert.deepEqual(await sessions(), []);
+  });
+
+  it('si el sync falla, la sesion se abre igualmente', async () => {
+    withSync(() => Promise.reject(new Error('sin red')));
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4837, EXE_CELESTE);
+
+    await cycle();
+
+    assert.equal((await sessions()).length, 1);
+  });
+});
+
+// ══ Cierre ordenado de la app (§10.6, paso 1) ═════════════════════════════
+
+describe('closeAllForQuit', () => {
+  const closedByOf = (sessionId: string): string | null =>
+    fx.ctx.db
+      .select({ closedBy: sessionsTable.closedBy })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId))
+      .get()?.closedBy ?? null;
+
+  it('cierra las seguidas Y las abiertas por Play que aun no se adoptaron, como owner', async () => {
+    const celeste = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const hollow = await makeGame({ title: 'Hollow Knight', executablePath: EXE_HOLLOW });
+    launch(4840, EXE_CELESTE);
+    await cycle();
+    // Play acaba de abrir esta y el watcher no ha tenido ciclo para adoptarla.
+    const hollowIteration = await makeIteration(hollow);
+    const fromPlay = await makeOpenSession(hollowIteration, '2026-01-10T18:00:00Z');
+    // Después del arranque real de la sesión del watcher (que usa el reloj de pared).
+    const at = new Date(Date.now() + 60_000);
+    backupsScheduled.length = 0;
+
+    const closed = watcher.closeAllForQuit(at);
+
+    assert.equal(closed, 2);
+    assert.equal((await openSessions()).length, 0);
+    for (const session of await sessions()) {
+      assert.equal(closedByOf(session.id), 'owner');
+    }
+    const play = (await sessions()).find((session) => session.id === fromPlay);
+    assert.equal(play?.endedAt?.toISOString(), at.toISOString());
+    assert.deepEqual([...backupsScheduled].sort(), [celeste, hollow].sort());
+    assert.deepEqual(watcher.getActiveGameIds(), []);
+  });
+
+  it('no toca ni los cronometros ni lo de otro dispositivo', async () => {
+    const gameId = await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    const iterationId = await makeIteration(gameId);
+    const timer = await makePhoneTimer(iterationId, new Date(), new Date());
+    const otherPc = asOtherDevice(fx.ctx, { name: 'Otro PC' }).seedSession({
+      playthroughId: iterationId,
+      startedAt: new Date(),
+      endedAt: null,
+      startedBy: 'watcher',
+    });
+
+    assert.equal(watcher.closeAllForQuit(new Date()), 0);
+
+    const open = (await openSessions()).map((session) => session.id);
+    assert.deepEqual(open.sort(), [timer, otherPc].sort());
+  });
+
+  it('para el sondeo: con el juego aun corriendo no se reabre nada durante la espera', async () => {
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4841, EXE_CELESTE);
+    await cycle();
+
+    watcher.closeAllForQuit(new Date());
+    await cycle();
+    await cycle();
+
+    assert.equal((await sessions()).length, 1);
+    assert.equal((await openSessions()).length, 0);
+  });
+
+  it('sin sesiones abiertas devuelve 0 y no programa backups', async () => {
+    await makeGame({ title: 'Celeste', executablePath: EXE_CELESTE });
+
+    assert.equal(watcher.closeAllForQuit(new Date()), 0);
+    assert.deepEqual(backupsScheduled, []);
   });
 });

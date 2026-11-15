@@ -309,4 +309,79 @@ describe('planificador', () => {
     assert.equal(calls, 2);
     assert.equal(scheduler.consecutiveFailures, 0);
   });
+
+  it('runOnceWithin lanza un ciclo y vuelve cuando termina, sin esperar al tope', async () => {
+    const r = rig();
+    r.queue.push(result());
+    let returned = false;
+    void r.scheduler.runOnceWithin(3000).then(() => {
+      returned = true;
+    });
+    await settle();
+    assert.equal(r.starts.length, 1);
+    assert.equal(returned, true);
+    assert.equal(r.clock.pending, 1, 'solo queda el periodico: el tope se canceló');
+  });
+
+  it('runOnceWithin vuelve al agotar el tope y el ciclo sigue en segundo plano', async () => {
+    const r = rig();
+    let returned = false;
+    void r.scheduler.runOnceWithin(3000).then(() => {
+      returned = true;
+    });
+    await settle();
+    assert.equal(returned, false);
+    await r.clock.advance(2999);
+    assert.equal(returned, false);
+    await r.clock.advance(1);
+    assert.equal(returned, true);
+    assert.equal(r.scheduler.isRunning, true);
+    r.pending[0](result());
+    await settle();
+  });
+
+  it('runOnceWithin respeta la espera tras un fallo: sin red no cuesta el tope', async () => {
+    const r = rig();
+    r.queue.push(failure());
+    await r.scheduler.start();
+    assert.equal(r.starts.length, 1);
+
+    await r.scheduler.runOnceWithin(3000);
+
+    assert.equal(r.starts.length, 1, 'no lanza otro intento durante la espera');
+  });
+
+  it('runOnceWithin no hace nada pausado ni parado', async () => {
+    const paused = rig();
+    paused.queue.push(result({ status: 'blocked', retry: false }));
+    await paused.scheduler.start();
+    await paused.scheduler.runOnceWithin(3000);
+    assert.equal(paused.starts.length, 1);
+
+    const stopped = rig();
+    stopped.scheduler.stop();
+    await stopped.scheduler.runOnceWithin(3000);
+    assert.equal(stopped.starts.length, 0);
+  });
+
+  it('runOnceWithin con un ciclo en marcha espera a ese y a uno más', async () => {
+    const r = rig();
+    void r.scheduler.start(10_000);
+    await settle();
+    assert.equal(r.starts.length, 1);
+
+    let returned = false;
+    void r.scheduler.runOnceWithin(3000).then(() => {
+      returned = true;
+    });
+    await settle();
+    r.pending[0](result());
+    await settle();
+    assert.equal(r.starts.length, 2, 'el que corría pudo empezar antes de lo que se quiere traer');
+    assert.equal(returned, false);
+    r.pending[1](result());
+    await settle();
+    assert.equal(returned, true);
+    assert.equal(r.concurrent.max, 1);
+  });
 });

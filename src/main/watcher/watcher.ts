@@ -10,6 +10,8 @@ import {
   getSessionClosedInfo,
   getWatchTargets,
   heartbeatSessions,
+  pruneSessionBeats,
+  readSessionRow,
   startGameSession,
   type OpenSession,
   type WatchTarget,
@@ -18,6 +20,7 @@ import type { Session } from '../../shared/dto';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { sendToOverlay } from '../overlay';
 import { notifySessionClosed } from './notifySession';
+import { CREATE_SYNC_LIMIT_MS } from '../sync/scheduler';
 // La regla de frescura del cronómetro (REMOTO.md §7.4) es la MISMA aquí y en
 // el Worker, así que se importa en vez de reescribirse: ver timerFreshness.ts.
 import { TIMER_STALE_MS, isTimerStale, timerLastBeat } from '../../shared/timerFreshness';
@@ -133,6 +136,17 @@ const ownerClose = (
   return null;
 };
 
+// A qué juego corresponde el backup de partidas de una sesión que se cierra.
+//
+// El dueño sale de `active` cuando la clave no lo dice: un juego emulado vive
+// bajo "emu:N" toda la partida y su gameId lo mantiene al día
+// refreshAssignedGames en cada vuelta. null = emulador sin asignar: no hay
+// partida guardada de la que hablar todavía.
+const gameIdToBackUp = (key: string, session: ActiveSession): GameId | null => {
+  const keyGameId = parseEntityId(key.slice('game:'.length));
+  return key.startsWith('game:') && keyGameId !== null ? keyGameId : session.gameId;
+};
+
 // Abrir la sesión de un objetivo recién visto: la ÚNICA bifurcación
 // juego/emulador del watcher (ver el bucle de arranques).
 const openSessionFor = (target: WatchTarget): Session<string> | null => {
@@ -202,13 +216,24 @@ export class ProcessWatcher {
   // está jugando sin abrir la ventana. Se llama con los títulos actualmente
   // en marcha cada vez que el conjunto puede haber cambiado.
   private readonly onActiveGamesChange?: (titles: string[]) => void;
+  // Un ciclo de sync rápido con tope (AFTERPLAY-2.0.md §10.7, prevención). Se
+  // inyecta —el watcher no importa el runtime del sync— y es opcional: sin él
+  // (tests, sin hub) se abre la sesión con lo que haya.
+  private readonly syncBeforeCreate?: (limitMs: number) => Promise<void>;
+  // Claves cuya sesión se está abriendo AHORA (a la espera del sync rápido).
+  // El ciclo ya está blindado contra solaparse consigo mismo (`polling`), pero
+  // la apertura es asíncrona y esto garantiza que, pase lo que pase con los
+  // ciclos, una misma clave no entra dos veces a la vez.
+  private readonly opening = new Set<string>();
 
   constructor(
     getWindow: () => BrowserWindow | null,
     onActiveGamesChange?: (titles: string[]) => void,
+    deps: { syncBeforeCreate?: (limitMs: number) => Promise<void> } = {},
   ) {
     this.getWindow = getWindow;
     this.onActiveGamesChange = onActiveGamesChange;
+    this.syncBeforeCreate = deps.syncBeforeCreate;
   }
 
   start(): void {
@@ -288,6 +313,43 @@ export class ProcessWatcher {
     void this.poll();
   }
 
+  // Cierre ordenado de la app (AFTERPLAY-2.0.md §10.6, paso 1): cierra a la
+  // hora `at` TODAS las sesiones propias abiertas, no solo las de `active`
+  // —también las que abrió el botón Play y este watcher todavía no adoptó—
+  // con `closedBy: 'owner'`. Los cronómetros no se tocan: no son del watcher.
+  //
+  // Para el sondeo ANTES de cerrar (stop): el cierre de la app espera unos
+  // segundos a los backups y a la subida final, y en ese tiempo el intervalo
+  // seguiría vivo y reabriría la sesión de un juego que sigue corriendo. Por
+  // eso tampoco pasa por pause(), que dejaría el watcher listo para reanudar.
+  //
+  // Es síncrono, nunca lanza y devuelve cuántas sesiones ha cerrado. Programa
+  // el backup de partidas de cada juego cerrado (el paso 2 del cierre lo lanza
+  // ya, sin el retardo de 8 s); no notifica a la ventana ni a la bandeja: la
+  // app se está yendo.
+  closeAllForQuit(at: Date): number {
+    this.stop();
+    let closedCount = 0;
+    try {
+      const ownDeviceId = appCtx().deviceId;
+      const gameIds = new Set<GameId>();
+      for (const session of getOpenSessions(appCtx())) {
+        if (session.deviceId !== ownDeviceId || session.startedBy === 'timer') continue;
+        const closed = ownerClose(session.sessionId, at, 'if-open');
+        if (!closed) continue;
+        closedCount += 1;
+        console.log(`[watcher] [quit] sesion ${session.sessionId} cerrada al salir de la app`);
+        if (session.gameId !== null) gameIds.add(session.gameId);
+      }
+      for (const gameId of gameIds) void scheduleSaveBackup(gameId);
+    } catch (error) {
+      console.error('[watcher] no se pudieron cerrar las sesiones al salir:', error);
+    }
+    // `active` ya no manda: el sondeo está parado y todo lo suyo está cerrado.
+    this.active.clear();
+    return closedCount;
+  }
+
   private async closeAllActive(reason: string): Promise<void> {
     if (this.active.size === 0) return;
 
@@ -305,6 +367,11 @@ export class ProcessWatcher {
             console.log(
               `[watcher] [${reason}] ${key} pausado -> sesion ${activeSession.sessionId} cerrada`,
             );
+            // La partida guardada también cambió al cerrar por bloqueo o
+            // suspensión: el mismo disparo que el cierre normal. El backup ya
+            // tiene su retardo y su deduplicación por juego.
+            const backupGameId = gameIdToBackUp(key, activeSession);
+            if (backupGameId !== null) void scheduleSaveBackup(backupGameId);
           } catch (error) {
             console.error(`[watcher] [${reason}] no se pudo cerrar ${key}:`, error);
           }
@@ -378,7 +445,7 @@ export class ProcessWatcher {
 
         // Quién es el dueño de lo que ya se está siguiendo: puede haber
         // cambiado por fuera del watcher desde el ciclo anterior.
-        this.refreshAssignedGames(openSessions);
+        if (this.refreshAssignedGames(openSessions)) changed = true;
 
         // Cronómetros abandonados (REMOTO.md §7.4): en CADA ciclo, no solo al
         // arrancar.
@@ -391,6 +458,10 @@ export class ProcessWatcher {
         if (!this.reconciled) {
           this.reconciled = true;
           changed = (await this.reconcileOpenSessions(openSessions, running)) || changed;
+          // Los latidos locales de lo que ya no está abierto sobran (§10.3). Va
+          // JUSTO después de reconciliar, que es quien los necesita para cerrar
+          // en el último instante conocido.
+          this.pruneBeats();
         } else {
           changed =
             (await this.sweepUnseenWatchedSessions(openSessions, running, targets)) || changed;
@@ -402,6 +473,10 @@ export class ProcessWatcher {
         // La foto de este ciclo para `timerHeldKeys` (ver el campo): sustituye
         // a la anterior al terminar el bucle.
         const timerHeldNow = new Set<string>();
+        // El sync rápido de antes de crear (§10.7) se paga como mucho UNA vez
+        // por ciclo: con dos juegos arrancando a la vez el segundo ya se
+        // beneficia del primero.
+        let syncedThisCycle = false;
         if (untrackedKeys.length > 0) {
           // Alguno de estos puede tener YA una sesión abierta que el watcher
           // no esté siguiendo todavía — ej. el botón Play, que lanza el .exe
@@ -497,7 +572,30 @@ export class ProcessWatcher {
             // él; un emulador crea una sesión sin juego asignado (bandeja
             // Pending, EMULADORES.md §4). Cierre, latido, adopción y
             // reconciliación son idénticos para los dos a partir de aquí.
-            const session = openSessionFor(info.target);
+            //
+            // Antes de abrir un JUEGO (puede crear su playthrough), un ciclo
+            // de sync rápido con tope (§10.7). Se hace siempre y no solo si el
+            // juego no tiene playthrough activo: la capa de consultas no
+            // ofrece esa lectura (la decide dentro de startGameSession).
+            if (this.opening.has(key)) continue;
+            this.opening.add(key);
+            let session: Session<string> | null = null;
+            try {
+              if (info.target.kind === 'game' && this.syncBeforeCreate && !syncedThisCycle) {
+                syncedThisCycle = true;
+                try {
+                  await this.syncBeforeCreate(CREATE_SYNC_LIMIT_MS);
+                } catch (error) {
+                  console.error('[watcher] el sync rapido antes de abrir fallo:', error);
+                }
+                // La espera es un hueco por el que cabe una pausa o el cierre
+                // de la app: lo que sigue ESCRIBE, y ya no vale.
+                if (this.isStale(generation)) break;
+              }
+              session = openSessionFor(info.target);
+            } finally {
+              this.opening.delete(key);
+            }
             if (session) {
               this.active.set(key, {
                 pid: info.pid,
@@ -558,9 +656,7 @@ export class ProcessWatcher {
           // El dueño sale de `active` cuando la clave no lo dice: un juego
           // emulado vive bajo "emu:N" toda la partida y su gameId lo mantiene
           // al día refreshAssignedGames en cada vuelta.
-          const keyGameId = parseEntityId(key.slice('game:'.length));
-          const backupGameId =
-            key.startsWith('game:') && keyGameId !== null ? keyGameId : activeSession.gameId;
+          const backupGameId = gameIdToBackUp(key, activeSession);
           if (backupGameId !== null) void scheduleSaveBackup(backupGameId);
         }
 
@@ -735,15 +831,54 @@ export class ProcessWatcher {
   // o se adopte más abajo ya nace con su gameId puesto, así que no hay hueco.
   // `undefined` (la sesión ya no está abierta) se deja como estaba: la cerró
   // otro y este mismo ciclo la sacará de `active`.
-  private refreshAssignedGames(openSessions: OpenSession[]): void {
-    if (this.active.size === 0) return;
+  //
+  // Y suelta de `active` la sesión que ha DEJADO DE ESTAR VIVA sin haberla
+  // cerrado nadie: su juego o su playthrough se borró en otro PC (la lápida
+  // llega por sync) y `getOpenSessions` ya no la devuelve aunque su fila siga
+  // sin `endedAt`. Soltarla es todo lo que hace falta: no se cierra nada (no es
+  // de este ciclo decidir sobre una fila borrada) y, si el proceso sigue vivo y
+  // el juego sigue siendo objetivo, la clave vuelve a quedar sin seguir y el
+  // arranque de este mismo ciclo abre una sesión nueva. Una sesión CERRADA por
+  // otro (el Stop manual, un hito terminal) NO se suelta: el juego sigue en
+  // marcha y no se reabre sola, igual que antes. Devuelve si soltó alguna.
+  private refreshAssignedGames(openSessions: OpenSession[]): boolean {
+    if (this.active.size === 0) return false;
 
     const gameBySessionId = new Map(
       openSessions.map((session) => [session.sessionId, session.gameId]),
     );
-    for (const activeSession of this.active.values()) {
+    let released = false;
+    for (const [key, activeSession] of this.active) {
       const gameId = gameBySessionId.get(activeSession.sessionId);
-      if (gameId !== undefined) activeSession.gameId = gameId;
+      if (gameId !== undefined) {
+        activeSession.gameId = gameId;
+        continue;
+      }
+      // Ausente de las abiertas: ¿cerrada por otro, o borrada? Solo la fila
+      // sin `endedAt` que no sale es una lápida (liveSession(), F-11).
+      let row: ReturnType<typeof readSessionRow>;
+      try {
+        row = readSessionRow(appCtx(), activeSession.sessionId);
+      } catch {
+        continue;
+      }
+      if (row !== undefined && row.endedAt !== null) continue;
+      this.active.delete(key);
+      released = true;
+      console.log(
+        `[watcher] [info] sesion ${activeSession.sessionId} (${key}) borrada por fuera - la suelto, si el proceso sigue se abrira otra`,
+      );
+    }
+    return released;
+  }
+
+  // Limpia los latidos locales que ya no sirven (queries/sessions/heartbeat.ts).
+  // Una limpieza que falle no debe tumbar el ciclo del arranque.
+  private pruneBeats(): void {
+    try {
+      pruneSessionBeats(appCtx());
+    } catch (error) {
+      console.error('[watcher] no se pudieron limpiar los latidos locales:', error);
     }
   }
 

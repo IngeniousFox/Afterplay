@@ -436,3 +436,42 @@ describe('estado y ciclos', () => {
     assert.equal(s.runtime.isActive, false);
   });
 });
+
+describe('sync rapido antes de crear (§10.7)', () => {
+  it('sin hub emparejado resuelve al instante y no toca la red', async () => {
+    const s = setup();
+    await s.runtime.start();
+
+    await s.runtime.syncOnceWithin(3000);
+
+    assert.equal(s.transports.length, 0);
+    assert.equal(statusCalls(s.hub), 0);
+  });
+
+  it('en modo E2E no hace nada', async () => {
+    const s = setup({ isE2E: true }, { paired: true });
+    await s.runtime.start();
+
+    await s.runtime.syncOnceWithin(3000);
+
+    assert.equal(statusCalls(s.hub), 0);
+  });
+
+  it('con hub activo lanza un ciclo y vuelve cuando termina', async () => {
+    const s = setup({}, { paired: true });
+    await s.runtime.start(2000);
+    const before = statusCalls(s.hub);
+
+    await s.runtime.syncOnceWithin(3000);
+
+    assert.ok(statusCalls(s.hub) > before, 'hubo un ciclo nuevo');
+  });
+
+  it('no lanza aunque el hub falle', async () => {
+    const s = setup({}, { paired: true });
+    await s.runtime.start(2000);
+    s.hub.calls.length = 0;
+
+    await assert.doesNotReject(s.runtime.syncOnceWithin(50));
+  });
+});
