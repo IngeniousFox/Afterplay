@@ -2015,9 +2015,11 @@ API v2 sobre el hub, PWA adaptada, concesiones, enriquecimiento.
 
 Sobre una **copia** completa de los datos reales: importar, validar, sembrar un hub de pruebas, emparejar un segundo perfil, usar la app unos días.
 
+**Antes de empezar el ensayo: todas las dependencias a su última versión.** Las del escritorio, la web móvil, el Worker antiguo mientras siga vivo y el hub (`package.json` de cada uno, Electron, Drizzle, wrangler y la `compatibility_date` del hub incluidos). Van antes del ensayo y no justo antes de publicar: así el ensayo prueba las versiones que se publican y no otras. Si una actualización mayor rompe algo, se arregla aquí; si no se puede, se apunta por qué se queda atrás. Después del ensayo solo entran parches de seguridad.
+
 **Antes de empezar el ensayo: una revisión independiente** de la puerta de escritura (`src/main/db/v2/store/`), del importador y del motor de fusión, hecha por alguien que no haya participado en escribirlos y con un único encargo: buscar formas de perder o alterar datos. Ese código se escribió deprisa y se ha comprobado con tests y con informes, no leyendo cada línea.
 
-**Salida:** validación limpia sobre datos reales; ningún escenario de §17.3 en rojo; lista de sorpresas vacía o resuelta; revisión independiente hecha y sus hallazgos resueltos.
+**Salida:** dependencias al día (o la excepción apuntada); validación limpia sobre datos reales; ningún escenario de §17.3 en rojo; lista de sorpresas vacía o resuelta; revisión independiente hecha y sus hallazgos resueltos.
 
 ### §20.11 Fase 10 — Corte (S)
 
