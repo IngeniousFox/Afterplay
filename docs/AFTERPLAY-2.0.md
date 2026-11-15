@@ -2035,6 +2035,50 @@ API v2 sobre el hub, PWA adaptada, concesiones, enriquecimiento.
 
 **Salida:** E-16 a E-20 pasan.
 
+#### §20.7.1 Estado de la fase 6 (2026-11-15)
+
+Hecha en su rama de trabajo (sin fusionar aún en `v2`), sin el esquema ni las migraciones tocados. Las piezas:
+
+| Pieza                          | Dónde                                                         | Qué hace                                                                                                                                                                                                                                                                                      |
+| ------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Huella del contenido           | `src/main/saves/contentHash.ts`                               | SHA-256 de las rutas tokenizadas (`<home>` de la máquina que hizo el backup, minúsculas, barras `/`) con el SHA-1 que ludusavi deja en `mapping.yaml`, más el hash del registro. Si falta un hash, no hay huella                                                                              |
+| Linaje                         | `queries/saves/backupWrites.ts`, `localState.ts`              | El indexado de copias propias encadena `parentContentHash` desde `lastSyncedHash` y lo actualiza en la misma transacción. La restauración lo fija a la huella restaurada                                                                                                                      |
+| Estado de la ficha             | `src/main/saves/syncState.ts`                                 | Función pura con la tabla de §12.4: puntas por el grafo (también a través de filas podadas), ciclos colapsados, divergencia solo si se demuestra un antepasado común, versiones superadas por el propio PC                                                                                    |
+| Orden y borrado cruzado        | `queries/saves/backupIndex.ts`, `backupWrites.ts`             | Versiones por reloj de sync. Una versión propia con lápida no resucita nunca: el siguiente backup quita su zip de la carpeta local antes de llamar a ludusavi, y si no puede, no hay backup                                                                                                   |
+| Identidad del PC               | `src/main/saves/machine.ts`, `identity.ts`, `installNonce.ts` | `machine-saves.json` atómico con `.bak`; dañado se recupera del `.bak` o del id guardado en la base, y si no, pregunta. Valor propio de la instalación (con la huella de `MachineGuid`) publicado en `devices` y en el manifiesto del bucket: si no es el nuestro, backups y poda se bloquean |
+| Juegos sin `igdbId` y limpieza | `recovery.ts`, Ajustes → inventario                           | Carpetas por `saveKey`; borrar un juego no borra sus copias; las de juegos borrados o desconocidos se limpian a mano, en todos los PCs                                                                                                                                                        |
+| Restauración exacta            | `src/main/saves/exactRestore.ts`, `ipc/saves.ts`              | Casilla desmarcada por defecto, solo "en su sitio". Borra solo archivos de la lista de ludusavi que la copia previa acaba de guardar; nunca carpetas                                                                                                                                          |
+| Subida por streaming           | `src/main/saves/r2.ts`                                        | `Upload` multiparte (16 MB, dos a la vez) para todos los proveedores: el zip no pasa entero por memoria                                                                                                                                                                                       |
+| Cierre                         | `src/main/saves/sessionHook.ts`                               | `flushPendingSaveBackups(timeoutMs)`: adelanta los backups que esperaban su margen y espera, con tope. `before-quit` no lo llama aún (fase 4)                                                                                                                                                 |
+| Interfaz                       | `SavesSection`, `RestoreSaveDialog`, Ajustes                  | Texto de §12.4 con nombre del PC y antigüedad, restaurar destacado en "por detrás" y "divergido", aviso de id duplicado con sus dos salidas, botón de limpieza de copias huérfanas                                                                                                            |
+
+**Comprobado.**
+
+- Pasan E-16, E-17, E-18, E-19 y E-20 (`hub/convergence/__tests__/saves.test.ts`), afirmados con las consultas reales y `computeSaveSyncState`. E-17 incluye el cierre de la divergencia en los dos sentidos.
+- F-25: tests de huella, estado (unos 60 casos de la tabla, ciclos, filas podadas, versiones superadas), restauración exacta, `mapping.yaml`, espejo a R2 y recuperación sobre un bucket en memoria, identidad (escritura atómica, `.bak`, fichero dañado, instalación copiada) y consultas.
+- `npm test` (2.611 tests), lint, tipos (todos los proyectos menos `hub/worker`, sin dependencias instaladas en la copia de trabajo), build y los e2e de partidas (`storage-provider`, `notes-loading`).
+
+**Decisiones de esta fase:**
+
+- **Solo `<home>` como token.** Cualquier otro dependería del entorno del proceso que recalcula. Una partida fuera de la carpeta de usuario solo coincide entre PCs si la ruta es la misma; si no, la ficha queda informativa.
+- **Partidas con registro.** `L` es "desconocido": no se puede leer el registro sin ludusavi. La ficha no mira el disco y lo dice.
+- **Divergencia que se cierra.** La partida de un PC es lineal en el tiempo: si un PC tiene una versión posterior que no desciende de otra suya, esa otra queda superada (sigue en el historial, ya no es punta). Así restaurar una punta y seguir jugando cierra la divergencia, como pide §12.4. Se compara por la hora del backup y solo dentro del mismo PC.
+- **Linaje solo hacia delante.** Solo se encadenan las versiones más nuevas que cualquier otra propia ya indexada. Una versión vieja que se sube tarde (tras un fallo de red) entra sin padre.
+- **Recuperación del índice.** Calcula la huella solo si el manifiesto de la máquina dice su `home`, y nunca pone `parentContentHash`: el padre real lo pone quien subió la copia.
+- **Mapping local ilegible.** El espejo falla cerrado: ni sube ni poda. Antes lo trataba como "no hay versiones" y habría borrado del bucket las copias de este PC.
+- **Id duplicado.** "Este PC es el original" vuelve a publicar su valor (la otra instalación se bloquea); "Este PC es otro" crea una identidad nueva, borra los `lastSyncedHash` y reinicia.
+- **Limpieza de huérfanas.** Por `saveKey` y en todos los PCs, con confirmación. Se niega si un juego vivo usa ese `saveKey`.
+
+**Pendiente o sin comprobar:**
+
+- **Recuperar la identidad al emparejar** (§12.6, reinstalar): fuera de esta fase. Tampoco se recupera la identidad desde la lista de dispositivos del hub; solo desde el `.bak` o la base local.
+- **Bucket real.** La subida multiparte, el manifiesto con el valor de instalación y la limpieza de huérfanas no se han probado contra un bucket de desarrollo.
+- **Partidas reales.** No se ha probado la ficha con partidas de verdad en dos PCs; ni la casilla de restauración exacta con un juego real.
+- **Discos clonados.** Dos PCs con el mismo `MachineGuid` (un disco clonado) no se distinguen si ninguno publicó antes su valor.
+- **Filas recuperadas.** Su reloj de sync es el de la recuperación, así que en la lista pueden salir antes que versiones más nuevas.
+- **`before-quit`.** Llamar a `flushPendingSaveBackups` al cerrar es de la fase 4.
+- **TV.** La ficha de TV sigue con su comparación local, sin el estado entre PCs.
+
 ### §20.8 Fase 7 — Main, IPC, renderer, estadísticas, logs (L)
 
 §15 y §16. Buena parte se hace al paso de las fases 2 a 6; aquí se cierra lo que quede.

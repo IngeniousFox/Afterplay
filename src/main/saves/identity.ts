@@ -1,11 +1,22 @@
-import type { CloudMachine, IdentityCheck } from './contracts';
+import { appCtx } from '../db/v2/appDb';
 import {
+  checkInstallNonce,
+  clearAllLastSyncedHashes,
+  forcePublishInstallNonce,
+} from '../db/v2/queries/saves';
+import type { CloudMachine, IdentityCheck, InstallIdentityStatus } from './contracts';
+import {
+  clearDuplicateIdentity,
+  getDuplicateIdentity,
+  getInstallNonce,
   getMachineHome,
   getMachineId,
   getMachineIdentity,
   getMachineName,
+  markDuplicateIdentity,
   markIdentityReconciled,
   setMachineId,
+  startNewIdentity,
 } from './machine';
 import * as r2 from './r2';
 import { getConfigValue } from '../config/store';
@@ -32,6 +43,9 @@ export type MachineManifest = {
   machineName: string;
   home: string;
   updatedAt: string;
+  // El valor propio de la instalación que publicó esto (§12.6). Ausente en los
+  // manifiestos de la 1.x.
+  installNonce?: string;
 };
 
 // Puerta BARATA: puro local, sin una sola llamada a R2. Es lo que permite
@@ -55,6 +69,7 @@ const describeSelf = (): MachineManifest => ({
   machineName: getMachineName(),
   home: getMachineHome(),
   updatedAt: new Date().toISOString(),
+  installNonce: getInstallNonce(),
 });
 
 // Deja constancia de esta máquina en el bucket. Un PUT diminuto (Clase A)
@@ -202,4 +217,105 @@ export const ensureIdentityBeforeUpload = async (): Promise<void> => {
     // el id actual, que es exactamente lo que se hacía antes de todo esto.
     console.warn('[saves] no se pudo reconciliar la identidad de la maquina:', error);
   }
+};
+
+// ── Id duplicado (§12.6, F-24) ────────────────────────────────────────────
+// Si la carpeta de datos de un PC se copia a otro, los dos tienen el mismo id
+// y escriben en el mismo prefijo del bucket: cada uno poda lo que el otro
+// sube. Cada instalación tiene un valor propio (machine.ts: getInstallNonce) y
+// lo publica en `devices` y en machines/<id>.json; quien encuentra publicado un
+// valor que no es el suyo es la copia, y se bloquea: ni backups ni poda hasta
+// que el usuario decida.
+
+export class DuplicateIdentityError extends Error {
+  constructor() {
+    super(
+      "Another Afterplay installation is using this PC's identity (its data folder was probably copied). " +
+        'Cloud backups and cleanup are paused on this PC until you resolve it in Settings.',
+    );
+    this.name = 'DuplicateIdentityError';
+  }
+}
+
+// El bucket se mira una vez por destino y proceso: es un GET pequeño, pero no
+// hace falta en cada backup. Una copia que arranca después lo verá al empezar.
+let bucketCheckedFor: string | null = null;
+
+/** Solo para tests. */
+export const resetIdentityChecksForTests = (): void => {
+  bucketCheckedFor = null;
+};
+
+/**
+ * Lo barato y local: el valor publicado en `devices`. Lo publica si no había
+ * ninguno. No toca la red. Devuelve el estado para Ajustes.
+ */
+export const checkLocalInstallIdentity = (): InstallIdentityStatus => {
+  if (!getDuplicateIdentity()) {
+    const check = checkInstallNonce(appCtx(), getInstallNonce());
+    if (check === 'conflict') {
+      console.warn(
+        '[saves] id duplicado: el valor publicado en devices no es el de esta instalación',
+      );
+      markDuplicateIdentity('devices');
+    }
+  }
+  const duplicate = getDuplicateIdentity();
+  return {
+    duplicate: duplicate !== null,
+    detectedAt: duplicate?.detectedAt ?? null,
+    where: duplicate?.where ?? null,
+  };
+};
+
+/**
+ * La puerta de toda escritura en el bucket (backups y poda): lanza
+ * `DuplicateIdentityError` si otra instalación usa este id. Mira `devices` y,
+ * con almacenamiento configurado, el manifiesto de esta máquina en el bucket.
+ * Un fallo de red al leer el manifiesto también corta: sin saber quién lo
+ * publicó no se escribe encima.
+ */
+export const assertInstallIdentity = async (): Promise<void> => {
+  if (checkLocalInstallIdentity().duplicate) throw new DuplicateIdentityError();
+  const destination = r2.getDestinationId();
+  if (!destination || bucketCheckedFor === destination) return;
+
+  const nonce = getInstallNonce();
+  const manifest = await r2.readJsonStrict<MachineManifest>(r2.machineKey(getMachineId()));
+  if (manifest?.installNonce && manifest.installNonce !== nonce) {
+    console.warn('[saves] id duplicado: el manifiesto del bucket es de otra instalación');
+    markDuplicateIdentity('bucket');
+    throw new DuplicateIdentityError();
+  }
+  // Sin manifiesto, o uno de antes de que existiera el valor: se publica el
+  // nuestro para que una copia futura se reconozca.
+  if (!manifest?.installNonce) await publishMachineManifest();
+  bucketCheckedFor = destination;
+};
+
+/**
+ * "Este PC es el original": publica su valor en `devices` y en el bucket,
+ * aunque hubiera otro. La otra instalación, al ver que ya no es el suyo, se
+ * bloqueará ella.
+ */
+export const resolveDuplicateKeepingThisPc = async (): Promise<void> => {
+  const nonce = getInstallNonce();
+  forcePublishInstallNonce(appCtx(), nonce);
+  if (r2.getDestinationId()) await publishMachineManifest();
+  clearDuplicateIdentity();
+  bucketCheckedFor = r2.getDestinationId();
+  console.log('[saves] id duplicado resuelto: esta instalación se queda con la identidad');
+};
+
+/**
+ * "Este PC es otro": identidad nueva, a propósito. Las huellas de partida que
+ * traía la carpeta copiada son de la otra instalación y se olvidan. La base se
+ * abre con el id nuevo al reiniciar; quien llama reinicia la app.
+ */
+export const resolveDuplicateWithNewIdentity = (): string => {
+  clearAllLastSyncedHashes(appCtx());
+  const machineId = startNewIdentity();
+  bucketCheckedFor = null;
+  console.log(`[saves] id duplicado resuelto: identidad nueva ${machineId.slice(0, 8)}…`);
+  return machineId;
 };

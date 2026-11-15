@@ -1,8 +1,10 @@
-import { app } from 'electron';
-import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { app, dialog } from 'electron';
+import { execFileSync } from 'node:child_process';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { toSlashes } from './paths';
 
 // Capa POR MÁQUINA de las partidas guardadas (PARTIDAS-GUARDADAS.md §7.2):
@@ -55,6 +57,13 @@ export type MachineIdentity = {
   pruneFloor?: string | null;
 };
 
+// Otra instalación usa el mismo id (§12.6, F-24): cuándo y dónde se vio.
+export type DuplicateIdentity = {
+  detectedAt: string;
+  // Dónde estaba publicado un valor que no es el de esta instalación.
+  where: 'devices' | 'bucket';
+};
+
 type MachineSavesFile = {
   version: 1;
   machineId: string;
@@ -63,9 +72,25 @@ type MachineSavesFile = {
   identity: MachineIdentity | null;
   // Clave: gameId como string (JSON no admite claves numéricas).
   saveLocationOverrides: Record<string, MachineSaveOverride>;
+  // Valor aleatorio PROPIO de esta instalación (§12.6). Se publica junto al id
+  // (en `devices.installNonce` y en machines/<id>.json): si el publicado no es
+  // el nuestro, otra instalación usa este mismo id. Ausente en ficheros de
+  // antes de la 2.0; se crea la primera vez que hace falta.
+  installNonce?: string;
+  // De qué Windows es el valor de arriba (MachineGuid). Es lo que distingue
+  // "esta instalación" de "una copia de su carpeta de datos en otro PC": la
+  // carpeta copiada trae el mismo fichero, pero el Windows es otro.
+  installFingerprint?: string | null;
+  // Detectado un id duplicado: poda y backups bloqueados hasta que el usuario
+  // lo resuelva (§12.6).
+  duplicate?: DuplicateIdentity | null;
 };
 
-const getFilePath = (): string => join(app.getPath('userData'), 'machine-saves.json');
+const FILE_NAME = 'machine-saves.json';
+const getFilePath = (): string => join(app.getPath('userData'), FILE_NAME);
+// Copia de la última versión buena, escrita también de forma atómica: si el
+// fichero principal no se deja leer, la identidad sale de aquí y no se inventa.
+const getBackupPath = (): string => `${getFilePath()}.bak`;
 
 const createDefaults = (): MachineSavesFile => ({
   version: 1,
@@ -85,28 +110,213 @@ const createDefaults = (): MachineSavesFile => ({
 
 let cached: MachineSavesFile | null = null;
 
+// Escritura atómica (§12.6): a un temporal y renombrar. Un corte a mitad deja
+// el fichero anterior entero, nunca uno a medias. Después, lo mismo con la
+// copia .bak.
+const writeAtomic = (path: string, content: string): void => {
+  const temp = `${path}.tmp`;
+  writeFileSync(temp, content);
+  renameSync(temp, path);
+};
+
 const write = (file: MachineSavesFile): void => {
   cached = file;
-  writeFileSync(getFilePath(), `${JSON.stringify(file, null, 2)}\n`);
+  const content = `${JSON.stringify(file, null, 2)}\n`;
+  writeAtomic(getFilePath(), content);
+  try {
+    writeAtomic(getBackupPath(), content);
+  } catch (error) {
+    // La copia es una red, no una condición: sin ella el principal sigue bien.
+    console.warn('[saves] no se pudo escribir la copia de machine-saves.json:', error);
+  }
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type ReadAttempt =
+  | { kind: 'ok'; file: MachineSavesFile }
+  | { kind: 'missing' }
+  | { kind: 'corrupt'; reason: string };
+
+// Un fichero vale si es JSON y trae un machineId con forma de UUID. Lo demás
+// (nombre, home, overrides) se puede rellenar; el id no se puede inventar.
+const tryRead = (path: string): ReadAttempt => {
+  if (!existsSync(path)) return { kind: 'missing' };
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<MachineSavesFile> | null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { kind: 'corrupt', reason: 'not a JSON object' };
+    }
+    if (typeof parsed.machineId !== 'string' || !UUID_RE.test(parsed.machineId)) {
+      return { kind: 'corrupt', reason: 'no valid machineId' };
+    }
+    const file = { ...createDefaults(), ...parsed } as MachineSavesFile;
+    if (!file.saveLocationOverrides || typeof file.saveLocationOverrides !== 'object') {
+      file.saveLocationOverrides = {};
+    }
+    return { kind: 'ok', file };
+  } catch (error) {
+    return { kind: 'corrupt', reason: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+// El id con el que se abrió por última vez la base 2.0 de esta carpeta de
+// datos (`local_sync_state.shortDeviceIdFor`). Si machine-saves.json se
+// pierde, es la identidad ANTERIOR de esta instalación: recuperarla no es
+// inventar nada. Solo lectura y sin tocar el esquema; cualquier fallo es "no
+// se sabe".
+export const readStoredDeviceId = (userDataDir: string): string | null => {
+  const path = join(userDataDir, 'Afterplay2.db');
+  if (!existsSync(path)) return null;
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(path, { readOnly: true });
+    const row = db
+      .prepare('SELECT "shortDeviceIdFor" AS id FROM "local_sync_state" WHERE "id" = 1')
+      .get() as { id?: unknown } | undefined;
+    return typeof row?.id === 'string' && UUID_RE.test(row.id) ? row.id : null;
+  } catch {
+    return null;
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // nada que hacer
+    }
+  }
+};
+
+export class MachineIdentityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MachineIdentityError';
+  }
+}
+
+// Qué hacer con un machine-saves.json dañado y sin copia buena. Se pregunta
+// SIEMPRE: generar un id nuevo en silencio dejaría huérfanas las copias del
+// bucket y las filas de este PC en la base (§12.6, F-24). Inyectable para los
+// tests; el de verdad es un diálogo nativo, síncrono, antes de abrir la base.
+export type CorruptIdentityChoice = 'use-stored' | 'create-new' | 'quit';
+export type CorruptIdentityPrompt = (options: {
+  storedDeviceId: string | null;
+  reason: string;
+}) => CorruptIdentityChoice;
+
+const KEEP_LABEL = "Keep this PC's identity (recommended)";
+const CREATE_LABEL = 'Create a new identity';
+const QUIT_LABEL = 'Quit';
+
+const nativeCorruptPrompt: CorruptIdentityPrompt = ({ storedDeviceId, reason }) => {
+  const buttons = storedDeviceId
+    ? [KEEP_LABEL, CREATE_LABEL, QUIT_LABEL]
+    : [CREATE_LABEL, QUIT_LABEL];
+  const choice = dialog.showMessageBoxSync({
+    type: 'warning',
+    title: 'Afterplay',
+    message: "This PC's cloud-save identity file is damaged.",
+    detail:
+      `machine-saves.json could not be read (${reason}). A copy of it was kept aside.\n\n` +
+      (storedDeviceId
+        ? "Afterplay found this PC's previous identity in its database and can keep using it. " +
+          'Creating a new identity makes this PC look like a different one: the cloud saves and ' +
+          'sessions it already made would belong to "another PC".'
+        : 'No previous identity was found. Creating a new identity makes this PC look like a ' +
+          'different one: the cloud saves it already made would belong to "another PC".'),
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1,
+    noLink: true,
+  });
+  const label = buttons[choice];
+  if (label === CREATE_LABEL) return 'create-new';
+  if (label === KEEP_LABEL) return 'use-stored';
+  return 'quit';
+};
+
+let corruptPrompt: CorruptIdentityPrompt = nativeCorruptPrompt;
+
+/** Solo para tests. */
+export const setCorruptIdentityPrompt = (prompt: CorruptIdentityPrompt | null): void => {
+  corruptPrompt = prompt ?? nativeCorruptPrompt;
+};
+
+/** Solo para tests: olvida lo leído para volver a leer del disco. */
+export const resetMachineCacheForTests = (): void => {
+  cached = null;
+  fingerprintChecked = false;
+};
+
+// Recuperar un id sin el resto del fichero pierde el suelo de poda y la marca
+// de reconciliación. Se pone el suelo AHORA (lo que ya hay en el bucket queda
+// protegido) y la reconciliación vuelve a pedirse: ante la duda, no podar.
+const recoveredFile = (machineId: string): MachineSavesFile => {
+  const now = new Date().toISOString();
+  return {
+    ...createDefaults(),
+    machineId,
+    identity: { reconciledBucket: '', reconciledAt: now, pruneFloor: now },
+  };
+};
+
+const keepAside = (path: string): void => {
+  try {
+    copyFileSync(path, `${path}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  } catch (error) {
+    console.warn('[saves] no se pudo apartar el machine-saves.json dañado:', error);
+  }
+};
+
+const resolveFile = (): MachineSavesFile => {
+  const main = tryRead(getFilePath());
+  if (main.kind === 'ok') return main.file;
+
+  const backup = tryRead(getBackupPath());
+  if (backup.kind === 'ok') {
+    console.warn(
+      `[saves] machine-saves.json ${main.kind === 'missing' ? 'no está' : `está dañado (${main.reason})`}: se recupera la identidad de la copia .bak`,
+    );
+    if (main.kind === 'corrupt') keepAside(getFilePath());
+    return backup.file;
+  }
+
+  const stored = readStoredDeviceId(app.getPath('userData'));
+  if (main.kind === 'missing') {
+    if (stored) {
+      // El fichero falta pero la base de esta carpeta sabe quién era este PC:
+      // se recupera esa identidad en vez de inventar otra.
+      console.warn(
+        `[saves] falta machine-saves.json: se recupera la identidad de la base (${stored.slice(0, 8)}…)`,
+      );
+      return recoveredFile(stored);
+    }
+    // Primer arranque de verdad: no hay nada que recuperar.
+    return createDefaults();
+  }
+
+  keepAside(getFilePath());
+  const choice = corruptPrompt({ storedDeviceId: stored, reason: main.reason });
+  if (choice === 'use-stored' && stored) {
+    console.warn('[saves] machine-saves.json dañado: se conserva la identidad de la base');
+    return recoveredFile(stored);
+  }
+  if (choice === 'create-new') {
+    console.warn('[saves] machine-saves.json dañado: el usuario crea una identidad nueva');
+    return createDefaults();
+  }
+  throw new MachineIdentityError(
+    'The file that identifies this PC for cloud saves (machine-saves.json) is damaged. ' +
+      'A copy was kept next to it so it can be repaired by hand.',
+  );
 };
 
 const read = (): MachineSavesFile => {
   if (cached) return cached;
-
-  let file: MachineSavesFile;
-  try {
-    const parsed = JSON.parse(readFileSync(getFilePath(), 'utf-8')) as Partial<MachineSavesFile>;
-    file = { ...createDefaults(), ...parsed };
-    // El home puede haber cambiado (cuenta de Windows renombrada, perfil
-    // movido) — manda siempre el del sistema, porque es el que se usa para
-    // generar los redirects de restauración.
-    file.home = toSlashes(homedir());
-  } catch {
-    // Primer arranque o fichero corrupto: se regenera. Perder los overrides
-    // solo significa que el usuario vuelve a elegir carpeta si hacía falta;
-    // ninguna partida se pierde por esto.
-    file = createDefaults();
-  }
+  const file = resolveFile();
+  // El home puede haber cambiado (cuenta de Windows renombrada, perfil
+  // movido) — manda siempre el del sistema, porque es el que se usa para
+  // generar los redirects de restauración.
+  file.home = toSlashes(homedir());
   write(file);
   return file;
 };
@@ -195,3 +405,94 @@ export const listLegacySaveLocationOverrides = (): [string, string][] =>
     gameId,
     override.target,
   ]);
+
+// ── Instalación (§12.6, F-24) ──────────────────────────────────────────────
+
+// MachineGuid de Windows: cambia al reinstalar Windows o en otro equipo, no al
+// renombrar el PC ni la cuenta. null si no se puede leer (otro sistema, la
+// consulta falla): entonces no se decide nada con él.
+const readMachineGuid = (): string | null => {
+  if (process.platform !== 'win32') return null;
+  try {
+    const output = execFileSync(
+      'reg',
+      ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'],
+      { encoding: 'utf-8', windowsHide: true, timeout: 5000 },
+    );
+    const match = /MachineGuid\s+REG_SZ\s+(\S+)/i.exec(output);
+    return match ? `guid:${match[1].toLowerCase()}` : null;
+  } catch {
+    return null;
+  }
+};
+
+let fingerprintReader: () => string | null = readMachineGuid;
+let fingerprintChecked = false;
+
+/** Solo para tests. */
+export const setFingerprintReader = (reader: (() => string | null) | null): void => {
+  fingerprintReader = reader ?? readMachineGuid;
+  fingerprintChecked = false;
+};
+
+const newNonce = (): string => randomBytes(16).toString('hex');
+
+/**
+ * El valor propio de esta instalación. Se crea la primera vez. Si el fichero
+ * viene de OTRO Windows (la carpeta de datos se copió), esta es otra
+ * instalación y recibe un valor nuevo: al compararlo con el publicado se
+ * descubre el id duplicado. Si el Windows no se puede leer, no se cambia nada.
+ */
+export const getInstallNonce = (): string => {
+  const file = read();
+  if (!fingerprintChecked) {
+    fingerprintChecked = true;
+    const current = fingerprintReader();
+    const stored = file.installFingerprint ?? null;
+    if (!file.installNonce) {
+      write({ ...file, installNonce: newNonce(), installFingerprint: current });
+    } else if (current && stored && current !== stored) {
+      console.warn(
+        '[saves] machine-saves.json viene de otro Windows: esta instalación recibe un valor propio',
+      );
+      write({ ...file, installNonce: newNonce(), installFingerprint: current });
+    } else if (current && !stored) {
+      write({ ...file, installFingerprint: current });
+    }
+  }
+  return read().installNonce as string;
+};
+
+/** El id duplicado detectado, si lo hay: poda y backups bloqueados (§12.6). */
+export const getDuplicateIdentity = (): DuplicateIdentity | null => read().duplicate ?? null;
+
+export const markDuplicateIdentity = (where: DuplicateIdentity['where']): void => {
+  const file = read();
+  if (file.duplicate) return;
+  write({ ...file, duplicate: { detectedAt: new Date().toISOString(), where } });
+};
+
+export const clearDuplicateIdentity = (): void => {
+  const file = read();
+  if (!file.duplicate) return;
+  write({ ...file, duplicate: null });
+};
+
+/**
+ * "Este PC es otro": una identidad NUEVA, a propósito (§12.6). Lo que ya hay
+ * con el id anterior sigue siendo de la otra instalación. La base se abre con
+ * el id nuevo en el siguiente arranque, así que quien llama reinicia la app.
+ */
+export const startNewIdentity = (): string => {
+  const file = read();
+  const machineId = randomUUID();
+  write({
+    ...file,
+    machineId,
+    identity: null,
+    installNonce: newNonce(),
+    installFingerprint: fingerprintReader(),
+    duplicate: null,
+  });
+  return machineId;
+};

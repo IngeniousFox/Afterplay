@@ -4,12 +4,16 @@ import { parse, stringify } from 'yaml';
 import { appCtx } from '../db/v2/appDb';
 import {
   ensureSaveKey,
+  getLastSyncedHash,
   getSaveRestoreTarget,
   getSaveRestoreTargets,
+  listOwnDeletedBackupNames,
   listSaveBackups,
+  listSaveLineage,
   parseSaveObjectKey,
   reconcileOwnSaveBackups,
   saveFolderPrefix,
+  setLastSyncedHash,
   type NewOwnSaveBackup,
   type SaveGame,
 } from '../db/v2/queries/saves';
@@ -23,7 +27,8 @@ import type {
   SavesBackupResult,
   SavesGameState,
 } from './contracts';
-import { ensureIdentityBeforeUpload } from './identity';
+import { computeContentHash, hashLocalSave } from './contentHash';
+import { assertInstallIdentity, ensureIdentityBeforeUpload } from './identity';
 import {
   backupTimestamp,
   listVersions,
@@ -38,12 +43,14 @@ import {
   backupGame,
   clearRestoreWorkspace,
   createRestoreWorkspace,
+  deleteLocalBackups,
   findGameBackupDir,
   listLocalVersions,
   sanitizeLudusaviFolder,
   previewGame,
   restoreGame,
 } from './service';
+import { computeSaveSyncState, type LocalSave } from './syncState';
 import type {
   BackupMapping,
   LudusaviCustomGame,
@@ -126,6 +133,23 @@ const requireSaveKey = (game: SaveGame): string => {
   return saveKey;
 };
 
+// El mapping.yaml de la carpeta local, o lanza si está pero no se deja leer.
+// readMapping devuelve null tanto si no existe como si revienta la lectura
+// (EBUSY del antivirus, archivo truncado a mitad de escritura de ludusavi), y
+// tratar lo segundo como "no hay versiones" es lo peor que puede pasar aquí:
+// el espejo daría por caducadas todas las copias de este PC y las borraría
+// del bucket, y subiría el archivo roto encima del bueno. Lo mismo que hace
+// deleteLocalBackups: ante un índice ilegible, no tocar nada y avisar.
+const readLocalMappingStrict = (dir: string, ludusaviName: string): BackupMapping | null => {
+  const mapping = readMapping(dir);
+  if (mapping === null && existsSync(join(dir, MAPPING_FILE))) {
+    throw new Error(
+      `The local backup index for "${ludusaviName}" couldn't be read, so nothing was uploaded or deleted. Close whatever is holding it (antivirus, ludusavi) and try again.`,
+    );
+  }
+  return mapping;
+};
+
 // ── Espejo local -> R2 ────────────────────────────────────────────────────
 // El bucket refleja la carpeta local del juego. Es idempotente por diseño:
 // si una subida falló a medias, la siguiente la completa sin duplicar nada,
@@ -136,7 +160,7 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // caracteres ilegales sustituidos por "_" (bug real con "Motor Town:
   // Behind The Wheel" — el zip se creaba y el espejo no lo encontraba).
   const dir = findGameBackupDir(ludusaviName);
-  const localMapping = readMapping(dir);
+  const localMapping = readLocalMappingStrict(dir, ludusaviName);
   const versions = listVersions(localMapping);
   const localNames = new Set(versions.map((version) => version.name));
 
@@ -162,8 +186,16 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // adopción existe para salvar. Un nombre que no sepamos fechar tampoco se
   // toca: ante la duda, no borrar.
   const floor = getPruneFloor();
+  // Versiones propias con lápida (§12.5, F-23): las borró el usuario, desde
+  // aquí o desde otro PC. backupGameToCloud ya quitó su zip de la carpeta
+  // local; aquí se tratan como caducadas pase lo que pase con el suelo de poda
+  // (si alguien la volvió a subir antes de ver la lápida, se borra del bucket)
+  // y nunca se suben ni se indexan.
+  const deletedNames = new Set(listOwnDeletedBackupNames(appCtx(), game.id));
   const isStale = (name: string): boolean => {
-    if (name === MAPPING_FILE || localNames.has(name)) return false;
+    if (name === MAPPING_FILE) return false;
+    if (deletedNames.has(name)) return true;
+    if (localNames.has(name)) return false;
     if (!floor) return true;
     const when = backupTimestamp(name);
     return when !== null && when.getTime() >= floor.getTime();
@@ -179,7 +211,7 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
     remote.map((object) => [basename(object.key), object.size]),
   );
   for (const version of versions) {
-    if (bytesInBucket.has(version.name)) continue;
+    if (bytesInBucket.has(version.name) || deletedNames.has(version.name)) continue;
     const filePath = join(dir, version.name);
     if (!existsSync(filePath)) continue;
     bytesInBucket.set(version.name, await r2.uploadFile(`${prefix}${version.name}`, filePath));
@@ -261,9 +293,12 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // Todo en UNA transacción que relee las filas propias (queries/saves): dos
   // copias del mismo juego a la vez no pueden duplicar una versión, porque el
   // id sale de la clave.
+  // La huella de cada versión (§12.2) se calcula con la carpeta de usuario de
+  // ESTE PC, que es donde viven las rutas de su mapping.yaml.
+  const home = getMachineHome();
   const newVersions: NewOwnSaveBackup[] | null = mappingDescribesLocal
     ? versions
-        .filter((version) => bytesInBucket.has(version.name))
+        .filter((version) => bytesInBucket.has(version.name) && !deletedNames.has(version.name))
         .map((version) => ({
           backupName: version.name,
           createdAt: version.when ? new Date(version.when) : null,
@@ -275,12 +310,18 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
           parentBackupName: version.differential ? version.chain[0] : null,
           locations: deriveLocations(version.files),
           hasRegistry: version.hasRegistry,
+          contentHash: computeContentHash({
+            files: version.entries,
+            registryHash: version.registryHash,
+            home,
+          }),
         }))
     : null;
   const reconciled = reconcileOwnSaveBackups(appCtx(), {
     gameId: game.id,
     saveKey,
     isStale: (row) => {
+      if (deletedNames.has(row.backupName)) return true;
       if (localNames.has(row.backupName)) return false;
       if (!floor) return true;
       const when = backupTimestamp(row.backupName) ?? row.createdAt;
@@ -328,7 +369,7 @@ const sortByWhen = <T extends { when?: string }>(nodes: T[]): T[] =>
 // devuelve parseMapping): con null esta función devolvería `local` tal cual y
 // el llamante subiría un mapping que borra los nodos remotos — el bug que
 // existe para arreglar. Que lo impida el compilador y no la disciplina.
-const mergeRemoteMapping = (
+export const mergeRemoteMapping = (
   local: BackupMapping,
   remote: BackupMapping,
   survives: (backupName: string) => boolean,
@@ -397,21 +438,53 @@ const serializeGameBackup = <T>(gameId: GameId, task: () => Promise<T>): Promise
   return result;
 };
 
-export const backupGameToCloud = async (
+// Lo que el usuario borró (desde aquí o desde otro PC, §12.5) sale de la
+// carpeta local ANTES del backup: si no, ludusavi podría colgar un diferencial
+// nuevo de un completo borrado y el espejo volvería a subirlo. Si no se puede
+// borrar (un antivirus con el zip agarrado), no hay backup: mejor reintentarlo
+// en el siguiente cierre que resucitar algo que el usuario quiso quitar.
+const removeDeletedLocalVersions = (gameId: GameId, ludusaviName: string): void => {
+  const deleted = new Set(listOwnDeletedBackupNames(appCtx(), gameId));
+  if (deleted.size === 0) return;
+  const local = listVersions(readLocalMappingStrict(findGameBackupDir(ludusaviName), ludusaviName))
+    .map((version) => version.name)
+    .filter((name) => deleted.has(name));
+  if (local.length === 0) return;
+  try {
+    deleteLocalBackups(ludusaviName, local);
+    console.log(
+      `[saves] ${local.length} version(es) borrada(s) desde la nube quitada(s) de la carpeta local de "${ludusaviName}"`,
+    );
+  } catch (error) {
+    throw new Error(
+      `Some versions of "${ludusaviName}" were deleted, but their local copies couldn't be removed, so no new backup was made (it would bring them back). ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+
+// Lo mismo que backupGameToCloud, más la lista de archivos que ludusavi vio:
+// la restauración exacta (§12.7) solo borra archivos de esa lista, que son los
+// que la copia previa acaba de guardar.
+export const backupGameToCloudDetailed = async (
   game: SaveGame,
   allGames: SaveGame[],
-): Promise<SavesBackupResult | null> => {
+): Promise<{ result: SavesBackupResult; files: string[] } | null> => {
   const ludusaviName = game.saveLudusaviName;
   if (!ludusaviName) return null;
 
   return serializeGameBackup(game.id, async () => {
-    const result = await backupGame(ludusaviName, buildCustomGames(allGames));
+    // Id duplicado (§12.6): ni backup ni poda hasta que el usuario lo resuelva.
+    // Va lo primero: un backup local bajo un id ajeno ya sería un problema.
+    await assertInstallIdentity();
+    removeDeletedLocalVersions(game.id, ludusaviName);
+
+    const scanned = await backupGame(ludusaviName, buildCustomGames(allGames));
     // Sin archivos no hay nada que subir. Pasa en dos situaciones MUY
     // distintas que hay que devolver distinguidas (ver foundFiles): un juego
     // detectado que todavía no ha generado partida, y una ruta que ya no
     // existe porque el juego se movió o se desinstaló.
-    if (!result || (result.files.length === 0 && result.registryKeys.length === 0)) {
-      return { uploaded: 0, ludusaviName, foundFiles: false };
+    if (!scanned || (scanned.files.length === 0 && scanned.registryKeys.length === 0)) {
+      return { result: { uploaded: 0, ludusaviName, foundFiles: false }, files: [] };
     }
 
     // ANTES de escribir nada en el bucket: si esta instalación nunca lo ha
@@ -421,9 +494,18 @@ export const backupGameToCloud = async (
     await ensureIdentityBeforeUpload();
 
     const created = await syncGameToR2(game, ludusaviName);
-    return { uploaded: created.length, ludusaviName, foundFiles: true };
+    return {
+      result: { uploaded: created.length, ludusaviName, foundFiles: true },
+      files: scanned.files.map((file) => file.path),
+    };
   });
 };
+
+export const backupGameToCloud = async (
+  game: SaveGame,
+  allGames: SaveGame[],
+): Promise<SavesBackupResult | null> =>
+  (await backupGameToCloudDetailed(game, allGames))?.result ?? null;
 
 // ── Estado de la sección Saves de la ficha ────────────────────────────────
 // Se calcula al ABRIR la sección y de dos fuentes baratas: la nube sale del
@@ -437,6 +519,9 @@ export const getGameSavesState = async (
   const override = getSaveRestoreTarget(appCtx(), game.id);
 
   let local: SavesGameState['local'] = null;
+  // La huella del disco (`L`, §12.4). Se calcula aquí, al abrir la sección, y
+  // no en cada pintado: exige que ludusavi mire el disco y leer los archivos.
+  let localSave: LocalSave = { kind: 'unknown' };
   if (game.saveLudusaviName && isLudusaviAvailable()) {
     try {
       const preview = await previewGame(game.saveLudusaviName, buildCustomGames(allGames));
@@ -449,6 +534,10 @@ export const getGameSavesState = async (
           steamIdInPath: preview.game.steamIdInPath,
           change: preview.change,
         };
+        localSave = await localSaveOf(preview.game);
+      } else {
+        // ludusavi miró donde guarda el juego y no hay nada.
+        localSave = { kind: 'empty' };
       }
     } catch (error) {
       // Que no se pueda leer el estado local no debe romper la sección: la
@@ -456,6 +545,13 @@ export const getGameSavesState = async (
       console.warn('[saves] no se pudo leer el estado local del juego:', error);
     }
   }
+
+  const sync = computeSaveSyncState({
+    rows: listSaveLineage(appCtx(), game.id),
+    local: localSave,
+    lastSynced: getLastSyncedHash(appCtx(), game.id),
+    selfDeviceId: appCtx().deviceId,
+  });
 
   return {
     ludusaviName: game.saveLudusaviName,
@@ -466,7 +562,24 @@ export const getGameSavesState = async (
     cloud,
     restoreTarget: override?.target ?? null,
     running: isGameRunning(game.id),
+    sync,
   };
+};
+
+// La huella de lo que ludusavi ve en el disco. Una partida que también vive en
+// el registro no se puede comparar: el hash del registro lo calcula ludusavi al
+// copiarlo y aquí no hay forma de reproducirlo sin hacer un backup.
+const localSaveOf = async (scanned: {
+  files: { path: string }[];
+  registryKeys: string[];
+}): Promise<LocalSave> => {
+  if (scanned.registryKeys.length > 0) return { kind: 'unknown' };
+  if (scanned.files.length === 0) return { kind: 'empty' };
+  const hash = await hashLocalSave(
+    scanned.files.map((file) => file.path),
+    getMachineHome(),
+  );
+  return hash === null ? { kind: 'unknown' } : { kind: 'hash', hash };
 };
 
 // ── Restauración ──────────────────────────────────────────────────────────
@@ -547,14 +660,21 @@ const materializeBackup = async (
   version: { name: string; chain: string[] },
 ): Promise<string> => {
   const workspace = createRestoreWorkspace(ludusaviName);
-  // Mismo saneado que la carpeta que creó el workspace: con ":" en el nombre
-  // la join literal apuntaba a una ruta imposible en Windows.
-  const gameDir = join(workspace, sanitizeLudusaviFolder(ludusaviName));
-  await r2.downloadFile(`${prefix}${MAPPING_FILE}`, join(gameDir, MAPPING_FILE));
-  for (const name of version.chain) {
-    await r2.downloadFile(`${prefix}${name}`, join(gameDir, name));
+  try {
+    // Mismo saneado que la carpeta que creó el workspace: con ":" en el nombre
+    // la join literal apuntaba a una ruta imposible en Windows.
+    const gameDir = join(workspace, sanitizeLudusaviFolder(ludusaviName));
+    await r2.downloadFile(`${prefix}${MAPPING_FILE}`, join(gameDir, MAPPING_FILE));
+    for (const name of version.chain) {
+      await r2.downloadFile(`${prefix}${name}`, join(gameDir, name));
+    }
+    return workspace;
+  } catch (error) {
+    // Una descarga fallida no deja el workspace a medias registrado como
+    // activo hasta el siguiente arranque.
+    clearRestoreWorkspace(workspace);
+    throw error;
   }
-  return workspace;
 };
 
 // La carpeta de una copia sale de SU clave, no del juego: así una copia
@@ -600,11 +720,20 @@ export const runRestore = async (
       preview: request.preview,
     });
 
+    // El disco de este PC parte ahora de ESTA partida (§12.3): el siguiente
+    // backup dirá que desciende de ella. Solo cuando la partida del juego
+    // queda donde el juego la lee (en su sitio, o en la carpeta que este PC
+    // usa para él); exportar es una copia suelta y no cambia nada.
+    if (!request.preview && request.mode !== 'export') {
+      setLastSyncedHash(appCtx(), row.gameId, row.contentHash);
+    }
+
     return {
       ...plan,
       mode: request.mode,
       locations,
       registrySkipped: skipRegistryKeys.length > 0,
+      removedFiles: [],
     };
   } finally {
     // Material de un solo uso: se limpia SU workspace pase lo que pase,

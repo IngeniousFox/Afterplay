@@ -45,6 +45,7 @@ const version = (backupName: string, extra: Partial<NewOwnSaveBackup> = {}): New
   parentBackupName: null,
   locations: ['<home>/Saves'],
   hasRegistry: false,
+  contentHash: null,
   ...extra,
 });
 
@@ -146,7 +147,7 @@ describe('reconcileOwnSaveBackups (syncGameToR2, paso 4)', () => {
     assert.deepEqual(listSaveBackups(fx.ctx, gameId), []);
   });
 
-  it('una versión borrada con el zip aún en la carpeta resucita (como hoy la reinsertaba)', () => {
+  it('una versión borrada con el zip aún en la carpeta NO resucita (§12.5, F-23)', () => {
     const gameId = seedGame(fx.ctx, { title: 'Celeste', igdbId: 26226 });
     const input = {
       gameId,
@@ -156,7 +157,10 @@ describe('reconcileOwnSaveBackups (syncGameToR2, paso 4)', () => {
     };
     const [row] = reconcileOwnSaveBackups(fx.ctx, input).created;
     fx.ctx.store.remove('save_backups', row.id);
-    assert.equal(reconcileOwnSaveBackups(fx.ctx, input).created[0]?.id, row.id);
+    const again = reconcileOwnSaveBackups(fx.ctx, input);
+    assert.deepEqual(again.created, []);
+    assert.deepEqual(again.skippedDeleted, ['b.zip']);
+    assert.deepEqual(listSaveBackups(fx.ctx, gameId), []);
   });
 
   it('juego borrado: no escribe nada (R-15)', () => {
@@ -168,7 +172,7 @@ describe('reconcileOwnSaveBackups (syncGameToR2, paso 4)', () => {
       isStale: () => true,
       versions: [version('b.zip')],
     });
-    assert.deepEqual(result, { gameAlive: false, removed: [], created: [] });
+    assert.deepEqual(result, { gameAlive: false, removed: [], created: [], skippedDeleted: [] });
     assert.equal(count(fx.local, 'save_backups'), 0);
   });
 

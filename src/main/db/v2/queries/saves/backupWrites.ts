@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { SaveBackupRow } from '../../../../../shared/dto';
 import { saveBackupId } from '../../../../../shared/sync/ids';
 import { devices, games, saveBackups } from '../../schema';
@@ -10,8 +10,9 @@ import {
   getSaveBackupsByIds,
   listSaveBackups,
 } from './backupIndex';
+import { getLastSyncedHash, setLastSyncedHash } from './localState';
 import { withSaveMaintenance } from './maintenanceRule';
-import { parseSaveObjectKey, saveObjectKey } from './objectKey';
+import { parseSaveObjectKey, saveFolderPrefix, saveObjectKey } from './objectKey';
 
 // Escrituras del índice de partidas (`save_backups`) sobre el esquema 2.0
 // (CONSULTAS.md §2.2 "saves", §2.4 y §3.4). Todo por la puerta.
@@ -30,8 +31,13 @@ import { parseSaveObjectKey, saveObjectKey } from './objectKey';
 // duplicar una copia aunque dos pasadas la registren a la vez (F-21). La cola
 // en memoria por juego (ludusavi + bucket) basta.
 //
-// `contentHash` y `parentContentHash` se omiten (H-2): la huella y el linaje
-// son de la fase 6 (§12.2-12.4).
+// Huella y linaje (§12.2-12.3). `contentHash` lo calcula quien llama (necesita
+// el mapping.yaml y la carpeta de usuario); `parentContentHash` y
+// `local_save_state.lastSyncedHash` se deciden AQUÍ, dentro de la misma
+// transacción que crea las filas: si una copia se registrara sin mover la
+// huella de partida (o al revés), el siguiente backup diría que desciende del
+// mismo estado que esta y la ficha vería una divergencia que no existe.
+// Lo que no consta se OMITE (H-2): indicar null le daría reloj a "no se sabe".
 
 /** Una versión que acaba de quedar en la carpeta de ESTE PC en el bucket. */
 export interface NewOwnSaveBackup {
@@ -45,6 +51,8 @@ export interface NewOwnSaveBackup {
   readonly parentBackupName: string | null;
   readonly locations: string[] | null;
   readonly hasRegistry: boolean;
+  /** Huella del contenido (§12.2); null si no se pudo calcular. */
+  readonly contentHash: string | null;
 }
 
 /** Lo que el espejo decide sobre una fila propia ya indexada. */
@@ -78,6 +86,11 @@ export interface ReconcileOwnSaveBackupsResult {
   readonly gameAlive: boolean;
   /** Ids de las filas propias que han recibido lápida. */
   readonly removed: string[];
+  /**
+   * Versiones que no se han registrado porque su fila propia tiene lápida
+   * (§12.5, F-23): alguien las borró y no resucitan.
+   */
+  readonly skippedDeleted: string[];
   /** Las filas creadas (o resucitadas), releídas. */
   readonly created: SaveBackupRow<string>[];
 }
@@ -91,10 +104,15 @@ export interface ReconcileOwnSaveBackupsResult {
  *   misma tabla y no se leen (sin ese filtro, el primer backup de un PC daría
  *   por caducadas las del otro).
  * - Registrar dos veces la misma versión no duplica: el id sale de la clave.
- * - Una versión cuya fila tenía lápida (borrada desde la ficha pero con el zip
- *   todavía en la carpeta local) RESUCITA, igual que hoy la volvía a insertar
- *   el siguiente backup. Que el dueño borre su zip al ver la lápida es de la
- *   fase 6 (§12.5).
+ * - Una versión cuya fila tiene lápida NO resucita (§12.5, F-23): la borró el
+ *   usuario, desde este PC o desde otro, y una versión borrada se queda
+ *   borrada. Quien llama la quita de su carpeta local y del bucket.
+ * - Linaje (§12.3). Las versiones nuevas MÁS RECIENTES que cualquier copia
+ *   propia ya indexada forman una cadena, de la más antigua a la más nueva: la
+ *   primera desciende de `lastSyncedHash` y cada una de la anterior. La huella
+ *   de la más nueva pasa a ser `lastSyncedHash`. Una versión nueva más antigua
+ *   que otra ya indexada (una subida que falló y se completa después) no dice
+ *   de quién viene: afirmarlo pondría un estado viejo por delante de uno nuevo.
  *
  * Lanza `StoreError('invalid_value')` si `saveKey` no es el del juego o una
  * versión no forma una clave válida. Propaga los errores de la puerta.
@@ -117,27 +135,28 @@ export function reconcileOwnSaveBackups(
       );
     }
 
-    // `alive()` a secas: el juego ya se ha comprobado vivo arriba.
+    // Todas las propias, también las que tienen lápida: esas no resucitan y
+    // cuentan para saber qué es "más reciente que lo ya indexado".
     const own = ctx.db
       .select({
         id: saveBackups.id,
         backupName: saveBackups.backupName,
         createdAt: saveBackups.createdAt,
+        deleted: saveBackups.syncDeleted,
       })
       .from(saveBackups)
-      .where(
-        and(
-          eq(saveBackups.gameId, input.gameId),
-          eq(saveBackups.deviceId, ctx.deviceId),
-          alive(saveBackups),
-        ),
-      )
+      .where(and(eq(saveBackups.gameId, input.gameId), eq(saveBackups.deviceId, ctx.deviceId)))
       .all();
 
     const removed: string[] = [];
     const known = new Set<string>();
+    const deleted = new Set<string>();
+    let newestIndexed = Number.NEGATIVE_INFINITY;
     for (const row of own) {
-      if (input.isStale(row)) {
+      newestIndexed = Math.max(newestIndexed, row.createdAt.getTime());
+      if (row.deleted !== null) {
+        deleted.add(row.backupName);
+      } else if (input.isStale(row)) {
         ctx.store.remove('save_backups', row.id);
         removed.push(row.id);
       } else {
@@ -145,10 +164,26 @@ export function reconcileOwnSaveBackups(
       }
     }
 
-    const created: string[] = [];
+    const skippedDeleted: string[] = [];
+    const fresh: (NewOwnSaveBackup & { createdAt: Date })[] = [];
     for (const version of input.versions ?? []) {
       if (known.has(version.backupName)) continue;
+      if (deleted.has(version.backupName)) {
+        if (!skippedDeleted.includes(version.backupName)) skippedDeleted.push(version.backupName);
+        continue;
+      }
       known.add(version.backupName);
+      fresh.push({ ...version, createdAt: version.createdAt ?? ctx.now() });
+    }
+    // De la más antigua a la más nueva: así el reloj de sync de cada fila sigue
+    // el orden real de las versiones (§12.5) y la cadena de linaje también.
+    fresh.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    let parent = getLastSyncedHash(ctx, input.gameId);
+    let lineageMoved = false;
+    const created: string[] = [];
+    for (const version of fresh) {
+      const chained = version.createdAt.getTime() > newestIndexed;
       const r2Key = keyOrThrow(() =>
         saveObjectKey({
           saveKey: input.saveKey,
@@ -161,22 +196,30 @@ export function reconcileOwnSaveBackups(
         deviceId: ctx.deviceId,
         r2Key,
         backupName: version.backupName,
-        createdAt: version.createdAt ?? ctx.now(),
+        createdAt: version.createdAt,
         sizeBytes: version.sizeBytes,
         ludusaviName: version.ludusaviName,
         differential: version.differential,
         parentBackupName: version.parentBackupName,
         locations: version.locations,
         hasRegistry: version.hasRegistry,
+        ...(version.contentHash !== null ? { contentHash: version.contentHash } : {}),
+        ...(chained && parent !== null ? { parentContentHash: parent } : {}),
       });
       created.push(id);
+      if (chained) {
+        parent = version.contentHash;
+        lineageMoved = true;
+      }
     }
-    return { removed, created };
+    if (lineageMoved) setLastSyncedHash(ctx, input.gameId, parent);
+    return { removed, created, skippedDeleted };
   });
-  if (!outcome) return { gameAlive: false, removed: [], created: [] };
+  if (!outcome) return { gameAlive: false, removed: [], created: [], skippedDeleted: [] };
   return {
     gameAlive: true,
     removed: outcome.removed,
+    skippedDeleted: outcome.skippedDeleted,
     created: getSaveBackupsByIds(ctx, outcome.created),
   };
 }
@@ -303,6 +346,12 @@ export interface RecoveredSaveBackup {
   readonly parentBackupName: string | null;
   readonly locations: string[] | null;
   readonly hasRegistry: boolean;
+  /**
+   * Huella calculada desde el mapping.yaml del bucket; null si no se puede
+   * calcular con garantías (sin manifiesto que diga la carpeta de usuario).
+   * El linaje (`parentContentHash`) nunca se recupera: el bucket no lo guarda.
+   */
+  readonly contentHash?: string | null;
 }
 
 export interface RecoverSaveBackupsInput {
@@ -401,6 +450,13 @@ export function recoverSaveBackups(
         }
       }
 
+      // De la más antigua a la más nueva, por lo mismo que en el espejo: el
+      // reloj de sync de las filas recuperadas sigue el orden real (§12.5).
+      pending.sort(
+        (a, b) =>
+          (a.backup.createdAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+          (b.backup.createdAt?.getTime() ?? Number.MAX_SAFE_INTEGER),
+      );
       for (const { backup, parts } of pending) {
         const deviceId = parts.deviceId;
         if (deviceId !== ctx.deviceId && !ensured.has(deviceId)) {
@@ -419,6 +475,7 @@ export function recoverSaveBackups(
           parentBackupName: backup.parentBackupName,
           locations: backup.locations,
           hasRegistry: backup.hasRegistry,
+          ...(backup.contentHash ? { contentHash: backup.contentHash } : {}),
         });
         recovered++;
       }
@@ -488,4 +545,84 @@ function keyOrThrow(build: () => string): string {
   } catch (error) {
     throw new StoreError('invalid_value', `save_backups: ${(error as Error).message}`);
   }
+}
+
+/**
+ * El paso de índice de la limpieza manual de una carpeta de juego del bucket
+ * (`saves/<saveKey>/`, de todos los dispositivos), después de borrar sus
+ * objetos: lápida a todas las copias vivas de esa carpeta. Es la forma de
+ * limpiar a mano las copias de un juego borrado (§12.7) y la cuarta ruta de
+ * mantenimiento de R-13.
+ *
+ * Lanza `StoreError('invalid_value')` si algún juego VIVO usa ese prefijo: sus
+ * copias no son de un juego borrado y no se tocan por aquí.
+ */
+export function purgeSaveFolderRows(ctx: QueryContext, saveKey: string): number {
+  const prefix = saveKeyFolder(saveKey);
+  const owner = ctx.db
+    .select({ id: games.id })
+    .from(games)
+    .where(and(eq(games.saveKey, saveKey), alive(games)))
+    .get();
+  if (owner) {
+    throw new StoreError(
+      'invalid_value',
+      `save_backups: el prefijo ${saveKey} es de un juego de la biblioteca (${owner.id})`,
+    );
+  }
+  const inFolder = and(
+    alive(saveBackups),
+    sql`substr(${saveBackups.r2Key}, 1, ${prefix.length}) = ${prefix}`,
+  );
+  const owners = new Set(
+    ctx.db
+      .select({ deviceId: saveBackups.deviceId })
+      .from(saveBackups)
+      .where(inFolder)
+      .all()
+      .map((row) => row.deviceId),
+  );
+  if (owners.size === 0) return 0;
+  return withSaveMaintenance('purge_folder', owners, () =>
+    ctx.store.transaction(() => {
+      // Se relee dentro de la transacción: lo que se borra es lo que hay ahora.
+      const ids = ctx.db
+        .select({ id: saveBackups.id })
+        .from(saveBackups)
+        .where(inFolder)
+        .all()
+        .map((row) => row.id);
+      return removeLive(ctx, ids, null);
+    }),
+  );
+}
+
+/** `saves/<saveKey>/`: la carpeta de un juego en el bucket, de todos los dispositivos. */
+export function saveKeyFolder(saveKey: string): string {
+  // saveFolderPrefix valida el trozo; el dispositivo de relleno se quita.
+  const folder = keyOrThrow(() => saveFolderPrefix(saveKey, 'x'));
+  return folder.slice(0, folder.length - 'x/'.length);
+}
+
+/** Los juegos (vivos o borrados) que usan cada `saveKey`, para nombrar carpetas del bucket. */
+export function listSaveKeyGames(
+  ctx: QueryContext,
+): Map<string, { readonly gameId: string; readonly title: string; readonly alive: boolean }> {
+  const byKey = new Map<string, { gameId: string; title: string; alive: boolean }>();
+  for (const row of ctx.db
+    .select({
+      id: games.id,
+      title: games.title,
+      saveKey: games.saveKey,
+      deleted: games.syncDeleted,
+    })
+    .from(games)
+    .where(isNotNull(games.saveKey))
+    .all()) {
+    const key = row.saveKey as string;
+    // Un juego vivo manda sobre uno borrado con el mismo prefijo.
+    if (byKey.get(key)?.alive) continue;
+    byKey.set(key, { gameId: row.id, title: row.title, alive: row.deleted === null });
+  }
+  return byKey;
 }

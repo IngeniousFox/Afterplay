@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type {
   CloudInventory,
+  DuplicateResolution,
   IdentityCheck,
+  InstallIdentityStatus,
   LocalBackupsUsage,
   RecoveryResult,
   RestoreRequestInput,
@@ -125,6 +127,35 @@ export const useAdoptMachine = (): UseMutationResult<void, Error, string, unknow
 
 export const useKeepIdentity = (): UseMutationResult<void, Error, void, unknown> =>
   useInvalidatingMutation(() => window.api.saves.keepIdentity(), [queryKeys.saves.all]);
+
+// ¿Otra instalación usa el id de este PC (F-24)? Comprobación local y barata.
+export const useInstallIdentity = (): UseQueryResult<InstallIdentityStatus, Error> =>
+  useQuery({
+    queryKey: queryKeys.saves.installIdentity,
+    queryFn: () => window.api.saves.getInstallIdentity(),
+    staleTime: 60_000,
+  });
+
+// 'new-identity' relanza la app; 'keep-this-pc' solo cambia qué instalación
+// queda pausada. En ambos casos el estado de partidas entero puede cambiar.
+export const useResolveDuplicate = (): UseMutationResult<
+  void,
+  Error,
+  DuplicateResolution,
+  unknown
+> =>
+  useInvalidatingMutation(
+    (resolution: DuplicateResolution) => window.api.saves.resolveDuplicate(resolution),
+    [queryKeys.saves.all],
+  );
+
+// Borra las copias de un juego que ya no está en la biblioteca, de TODOS los
+// PCs. Irreversible.
+export const usePurgeCloudFolder = (): UseMutationResult<number, Error, string, unknown> =>
+  useInvalidatingMutation(
+    (saveKey: string) => window.api.saves.purgeFolder(saveKey),
+    [queryKeys.saves.all],
+  );
 
 // Inventario REAL del bucket. Mutation y no query a propósito: va a la red y
 // solo debe salir de un clic — una query se refrescaría sola al invalidarse

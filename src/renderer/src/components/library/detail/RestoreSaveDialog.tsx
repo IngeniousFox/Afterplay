@@ -97,6 +97,9 @@ export const RestoreSaveDialog = ({
   // diálogo tiene dos pasos.
   const [result, setResult] = useState<RestoreResult | null>(null);
   const [done, setDone] = useState(false);
+  // Restauración exacta: solo en 'in-place', y SIEMPRE desmarcada al abrir (el
+  // diálogo se monta de cero cada vez). Borra lo que la copia no tiene.
+  const [exact, setExact] = useState(false);
 
   const needsTarget = mode !== 'in-place';
   const canRun = !needsTarget || Boolean(target);
@@ -111,6 +114,13 @@ export const RestoreSaveDialog = ({
     setMode(next);
     reset();
   };
+
+  const handleExact = (next: boolean): void => {
+    setExact(next);
+    reset();
+  };
+
+  const exactRequest = mode === 'in-place' && exact;
 
   const handlePickTarget = async (): Promise<void> => {
     const folder = await window.api.dialog.pickFolder();
@@ -132,6 +142,7 @@ export const RestoreSaveDialog = ({
         mode,
         target: target ?? undefined,
         preview: true,
+        exact: exactRequest,
       })
       .catch(() => null);
     if (result) setPlan(result);
@@ -145,6 +156,7 @@ export const RestoreSaveDialog = ({
         mode,
         target: target ?? undefined,
         preview: false,
+        exact: exactRequest,
       })
       .catch(() => null);
     if (!outcome) return;
@@ -289,6 +301,23 @@ export const RestoreSaveDialog = ({
               Choose…
             </button>
           </div>
+        )}
+
+        {mode === 'in-place' && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.5 text-[12px] leading-relaxed text-foreground">
+            <input
+              type="checkbox"
+              data-testid="restore-exact"
+              checked={exact}
+              onChange={(event) => handleExact(event.target.checked)}
+              disabled={done}
+              className="mt-0.5 flex-none accent-[#dc2626]"
+            />
+            <span>
+              Leave the save folder exactly as in this version (deletes save files it doesn&apos;t
+              have)
+            </span>
+          </label>
         )}
 
         {backup.locations && backup.locations.length > 1 && (
@@ -488,6 +517,38 @@ const PlanGroupRow = ({
   );
 };
 
+// Lo que la restauración exacta BORRARÍA: archivos de la carpeta de partidas que
+// la versión elegida no tiene. Mismo tope por lista que los grupos del plan.
+const RemovedFiles = ({ files }: { files: string[] }): React.JSX.Element => {
+  const visible = files.slice(0, MAX_FILES_PER_GROUP);
+  return (
+    <div
+      className="rounded-[10px] border px-3 py-2.5"
+      style={{ borderColor: `${RED}40`, background: `${RED}0d` }}
+    >
+      <div className="text-[9.5px] font-bold tracking-[.12em]" style={{ color: RED }}>
+        WILL BE DELETED · {pluralize(files.length, 'file')}
+      </div>
+      <div className="mt-1.5 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+        {visible.map((file) => (
+          <span
+            key={file}
+            className="truncate font-mono text-[10.5px] text-muted-foreground"
+            title={file}
+          >
+            {file}
+          </span>
+        ))}
+        {files.length > visible.length && (
+          <span className="text-[10px] text-muted-foreground/70">
+            and {files.length - visible.length} more
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // El plan real, tal cual lo devuelve ludusavi: cada archivo con su ruta
 // final y de dónde sale. Es lo que hace que confirmar sea una decisión
 // informada en vez de un acto de fe.
@@ -514,6 +575,8 @@ const Plan = ({ plan }: { plan: RestoreResult }): React.JSX.Element => {
           <span>{warning}</span>
         </div>
       ))}
+
+      {plan.removedFiles.length > 0 && <RemovedFiles files={plan.removedFiles} />}
 
       {plan.files.length === 0 ? (
         <div className="rounded-[9px] border border-border bg-white/[0.02] px-3 py-2.5 text-[12px] text-muted-foreground">

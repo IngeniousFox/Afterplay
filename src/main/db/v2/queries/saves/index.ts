@@ -23,7 +23,10 @@ export {
   listKnownLudusaviNames,
   listOwnBackupEntries,
   listSaveBackups,
+  listSaveLineage,
+  listOwnDeletedBackupNames,
   type LatestSaveBackup,
+  type SaveLineageRow,
   type OwnBackupEntry,
 } from './backupIndex';
 export {
@@ -31,6 +34,9 @@ export {
   deletePlannedSaveBackups,
   deleteSaveBackups,
   planSaveBackupDeletion,
+  purgeSaveFolderRows,
+  listSaveKeyGames,
+  saveKeyFolder,
   reconcileOwnSaveBackups,
   recoverSaveBackups,
   type BucketDevice,
@@ -58,8 +64,17 @@ export {
   type SaveSettingsPatch,
 } from './saveGames';
 export {
+  clearAllLastSyncedHashes,
+  getLastSyncedHash,
   getSaveRestoreTarget,
   getSaveRestoreTargets,
+  setLastSyncedHash,
   setSaveRestoreTarget,
   type SaveRestoreTarget,
 } from './localState';
+export {
+  checkInstallNonce,
+  forcePublishInstallNonce,
+  readPublishedInstallNonce,
+  type InstallNonceCheck,
+} from './installNonce';

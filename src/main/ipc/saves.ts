@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron';
+import { app, ipcMain, shell } from 'electron';
 import { handleDb } from './dbHandle';
 import { appCtx } from '../db/v2/appDb';
 import {
@@ -20,7 +20,9 @@ import {
 import { getLudusaviLegalFiles, isLudusaviAvailable } from '../saves/binary';
 import type {
   CloudInventory,
+  DuplicateResolution,
   IdentityCheck,
+  InstallIdentityStatus,
   RecoveryResult,
   RestoreRequestInput,
   RestoreResult,
@@ -31,19 +33,29 @@ import type {
   SavesStatus,
 } from '../saves/contracts';
 import { cleanLocalBackups, getLocalBackupsUsage } from '../saves/localUsage';
-import { deleteMachineFromCloud, recoverIndexFromCloud, scanBucket } from '../saves/recovery';
+import {
+  deleteMachineFromCloud,
+  purgeSaveFolder,
+  recoverIndexFromCloud,
+  scanBucket,
+} from '../saves/recovery';
 import {
   adoptMachine,
   checkIdentity,
+  checkLocalInstallIdentity,
   keepCurrentIdentity,
   needsIdentityCheck,
+  resolveDuplicateKeepingThisPc,
+  resolveDuplicateWithNewIdentity,
 } from '../saves/identity';
 import {
   backupGameToCloud,
+  backupGameToCloudDetailed,
   buildCustomGames,
   getGameSavesState,
   runRestore,
 } from '../saves/orchestrator';
+import { extraSaveFiles, removeSaveFiles } from '../saves/exactRestore';
 import {
   expandPath,
   forbiddenTargetReason,
@@ -58,6 +70,7 @@ import {
   deleteLocalBackups,
   findLudusaviName,
   isDirectoryNonEmpty,
+  previewGame,
   scanLibrary,
 } from '../saves/service';
 import { normalizeTitle } from '../lib/titleMatch';
@@ -112,6 +125,30 @@ export const registerSavesHandlers = (): void => {
     await keepCurrentIdentity();
   });
 
+  // ── Id duplicado (§12.6, F-24) ──
+  // Local y barato: compara el valor publicado en `devices` con el de esta
+  // instalación. Ajustes lo pide al abrirse para avisar del bloqueo.
+  handleDb('saves:getInstallIdentity', async (): Promise<InstallIdentityStatus> =>
+    checkLocalInstallIdentity(),
+  );
+
+  // Siempre desde un clic explícito: es el usuario quien sabe cuál de los dos
+  // PCs es el original. "new-identity" reinicia la app: la base se abre con el
+  // id nuevo en el siguiente arranque.
+  handleDb('saves:resolveDuplicate', async (_event, resolution: DuplicateResolution) => {
+    if (resolution === 'keep-this-pc') {
+      await resolveDuplicateKeepingThisPc();
+      return;
+    }
+    if (resolution === 'new-identity') {
+      resolveDuplicateWithNewIdentity();
+      app.relaunch();
+      app.quit();
+      return;
+    }
+    throw new Error('Unknown resolution.');
+  });
+
   // ── Inventario y recuperación (saves/recovery.ts) ──
   // Las tres van a la red y salen SIEMPRE de un clic explícito. Van por
   // handleDb porque cruzan el bucket con el índice y la biblioteca.
@@ -123,6 +160,15 @@ export const registerSavesHandlers = (): void => {
       `[saves] recuperacion desde la nube: ${result.recovered} versiones recuperadas, ${result.skippedNoGame} sin juego en la biblioteca, ${result.unreadableFolders} carpetas ilegibles`,
     );
     return result;
+  });
+
+  // Limpiar a mano la carpeta del bucket de un juego que ya no está en la
+  // biblioteca (§12.7): borrar un juego deja sus copias, y esta es la forma de
+  // quitarlas. Se niega si algún juego vivo usa ese prefijo.
+  handleDb('saves:purgeFolder', async (_event, saveKey: string): Promise<number> => {
+    const deleted = await purgeSaveFolder(saveKey);
+    console.log(`[saves] borrados ${deleted} objetos de la carpeta ${saveKey}`);
+    return deleted;
   });
 
   handleDb('saves:deleteMachine', async (_event, machineId: string): Promise<number> => {
@@ -339,6 +385,14 @@ export const registerSavesHandlers = (): void => {
       // warning de más abajo (calculado también en el preview, así que se ve
       // ANTES de confirmar) dice explícitamente que esta subida rompe por
       // esta vez el "nada sale de este PC" — nunca en silencio.
+      // Restauración exacta (§12.7, F-22): solo en su sitio, que es donde hay
+      // copia previa que la deshaga.
+      const exact = request.exact === true && request.mode === 'in-place';
+      // Los archivos de partida que ludusavi ve AHORA: en la pasada real, los
+      // que la copia previa acaba de guardar; en el preview, los del escaneo.
+      // La restauración exacta solo puede borrar archivos de esta lista.
+      let currentFiles: string[] = [];
+
       if (!request.preview && request.mode === 'in-place') {
         // El emparejamiento del JUEGO puede haber desaparecido desde que se
         // subió esta versión, y las versiones siguen ahí porque el índice
@@ -380,7 +434,9 @@ export const registerSavesHandlers = (): void => {
         const safetyGames = paired
           ? games
           : games.map((candidate) => (candidate.id === game.id ? safetySource : candidate));
-        const safety = await backupGameToCloud(safetySource, safetyGames);
+        const detailed = await backupGameToCloudDetailed(safetySource, safetyGames);
+        const safety = detailed?.result ?? null;
+        currentFiles = detailed?.files ?? [];
 
         // Y AQUÍ SE ABORTA SI NO HAY COPIA DE VERDAD. Mirar el null no sirve:
         // con el nombre del índice detrás ya no puede darse (ludusaviName es
@@ -413,7 +469,30 @@ export const registerSavesHandlers = (): void => {
         }
       }
 
-      const outcome = await runRestore(row, { ...request, target: target ?? undefined });
+      if (request.preview && exact) {
+        // Mismo juego reconstruido que usaría la copia previa (ver arriba), para
+        // que el preview enseñe lo que de verdad se borraría.
+        const name = game.saveLudusaviName ?? row.ludusaviName;
+        const previewSource: SaveGame = game.saveLudusaviName
+          ? game
+          : { ...game, saveLudusaviName: name, saveDetectionSource: 'auto' };
+        const previewGames = games.map((candidate) =>
+          candidate.id === game.id ? previewSource : candidate,
+        );
+        const scanned = await previewGame(name, buildCustomGames(previewGames));
+        currentFiles = scanned.game?.files.map((file) => file.path) ?? [];
+      }
+
+      const restored = await runRestore(row, { ...request, target: target ?? undefined });
+      const extras = exact
+        ? extraSaveFiles(
+            currentFiles,
+            restored.files.map((file) => file.target),
+          )
+        : [];
+      const removal =
+        exact && !request.preview ? removeSaveFiles(extras) : { removed: extras, failed: [] };
+      const outcome = { ...restored, removedFiles: removal.removed };
 
       // Los avisos se calculan aquí y no en la UI: son consecuencia de lo que
       // ludusavi va a hacer de verdad, que es justo lo que acaba de devolver.
@@ -428,6 +507,18 @@ export const registerSavesHandlers = (): void => {
       if (request.mode !== 'in-place' && target && isDirectoryNonEmpty(target)) {
         warnings.push(
           'The destination folder already has files in it. Anything with a matching name gets overwritten — everything else is left alone.',
+        );
+      }
+      if (exact) {
+        warnings.push(
+          outcome.removedFiles.length > 0
+            ? `${request.preview ? 'Will also delete' : 'Also deleted'} ${outcome.removedFiles.length} save file(s) that this version doesn't have. They are in the safety copy taken first.`
+            : "Exact restore: there are no extra save files to delete — the folder already matches this version's file list.",
+        );
+      }
+      if (removal.failed.length > 0) {
+        warnings.push(
+          `${removal.failed.length} extra save file(s) couldn't be deleted (in use or protected): ${removal.failed.join(', ')}`,
         );
       }
       if (outcome.files.some((file) => hasSteamIdPattern(file.target))) {

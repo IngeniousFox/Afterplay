@@ -7,8 +7,14 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useState } from 'react';
-import type { CloudInventory } from '../../../../shared/types';
-import { useDeleteCloudMachine, useRecoverFromCloud, useScanBucket } from '../../hooks/saves';
+import type { CloudFolder, CloudInventory } from '../../../../shared/types';
+import {
+  useDeleteCloudMachine,
+  usePurgeCloudFolder,
+  useRecoverFromCloud,
+  useScanBucket,
+} from '../../hooks/saves';
+import { CloudConfirmDialog } from './CloudConfirmDialog';
 import { formatBytes, pluralize } from '../../lib/format';
 import { expandClass } from '../../lib/styles';
 import { AMBER, BLUE } from '../../lib/colors';
@@ -27,10 +33,11 @@ export const CloudInventorySection = (): React.JSX.Element => {
   const scan = useScanBucket();
   const recover = useRecoverFromCloud();
   const deleteMachine = useDeleteCloudMachine();
+  const purge = usePurgeCloudFolder();
   const [inventory, setInventory] = useState<CloudInventory | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const busy = scan.isPending || recover.isPending || deleteMachine.isPending;
+  const busy = scan.isPending || recover.isPending || deleteMachine.isPending || purge.isPending;
 
   const refresh = async (): Promise<CloudInventory> => {
     const result = await scan.mutateAsync();
@@ -58,6 +65,14 @@ export const CloudInventorySection = (): React.JSX.Element => {
   const handleDelete = async (machineId: string): Promise<void> => {
     setFlash(null);
     const deleted = await deleteMachine.mutateAsync(machineId);
+    setFlash(`${pluralize(deleted, 'file')} deleted from the bucket.`);
+    await refresh();
+  };
+
+  // Borra las copias de un juego ya fuera de la biblioteca, en TODOS los PCs.
+  const handlePurge = async (saveKey: string): Promise<void> => {
+    setFlash(null);
+    const deleted = await purge.mutateAsync(saveKey);
     setFlash(`${pluralize(deleted, 'file')} deleted from the bucket.`);
     await refresh();
   };
@@ -93,9 +108,9 @@ export const CloudInventorySection = (): React.JSX.Element => {
         </button>
       </div>
 
-      {(scan.isError || recover.isError || deleteMachine.isError) && (
+      {(scan.isError || recover.isError || deleteMachine.isError || purge.isError) && (
         <div className="text-[11px] text-destructive">
-          {(scan.error ?? recover.error ?? deleteMachine.error)?.message}
+          {(scan.error ?? recover.error ?? deleteMachine.error ?? purge.error)?.message}
         </div>
       )}
       {flash && <div className="text-[11.5px] font-semibold text-primary">{flash}</div>}
@@ -107,6 +122,10 @@ export const CloudInventorySection = (): React.JSX.Element => {
           recovering={recover.isPending}
           onRecover={handleRecover}
           onDelete={handleDelete}
+          onPurge={handlePurge}
+          purging={purge.isPending}
+          purgeError={purge.isError ? purge.error.message : null}
+          onPurgeReset={purge.reset}
         />
       )}
     </div>
@@ -119,13 +138,23 @@ const Inventory = ({
   recovering,
   onRecover,
   onDelete,
+  onPurge,
+  purging,
+  purgeError,
+  onPurgeReset,
 }: {
   inventory: CloudInventory;
   busy: boolean;
   recovering: boolean;
   onRecover: () => void;
   onDelete: (machineId: string) => void;
+  onPurge: (saveKey: string) => Promise<void>;
+  purging: boolean;
+  purgeError: string | null;
+  onPurgeReset: () => void;
 }): React.JSX.Element => {
+  const [purgeTarget, setPurgeTarget] = useState<PurgeGroup | null>(null);
+  const groups = groupFolders(inventory.folders);
   const unknown = inventory.folders.reduce((sum, folder) => sum + folder.unknownCount, 0);
 
   if (inventory.objectCount === 0) {
@@ -231,25 +260,102 @@ const Inventory = ({
 
       <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">BY GAME</div>
       <div className="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
-        {inventory.folders.map((folder) => (
-          <div
-            key={`${folder.saveKey}-${folder.machineId}`}
-            className="flex items-center gap-2 px-1 py-1 text-[11.5px]"
-          >
-            <span className="min-w-0 flex-1 truncate text-foreground">
-              {folder.gameTitle ?? `Not in your library (save key ${folder.saveKey})`}
-            </span>
-            {folder.unknownCount > 0 && (
-              <span className="flex-none text-[10.5px] font-bold" style={{ color: AMBER }}>
-                {folder.unknownCount} unknown
-              </span>
+        {groups.map((group) => (
+          <div key={group.saveKey} className="flex flex-col">
+            {group.folders.map((folder) => (
+              <div
+                key={`${folder.saveKey}-${folder.machineId}`}
+                className="flex items-center gap-2 px-1 py-1 text-[11.5px]"
+              >
+                <span className="min-w-0 flex-1 truncate text-foreground">
+                  {folder.gameTitle
+                    ? `${folder.gameTitle}${folder.gameDeleted ? ' (deleted)' : ''}`
+                    : `Not in your library (save key ${folder.saveKey})`}
+                </span>
+                {folder.unknownCount > 0 && (
+                  <span className="flex-none text-[10.5px] font-bold" style={{ color: AMBER }}>
+                    {folder.unknownCount} unknown
+                  </span>
+                )}
+                <span className="flex-none text-muted-foreground">
+                  {formatBytes(folder.totalBytes)}
+                </span>
+              </div>
+            ))}
+            {group.purgeable && (
+              <button
+                type="button"
+                data-testid="cloud-purge"
+                onClick={() => setPurgeTarget(group)}
+                disabled={busy}
+                className="mb-1 ml-1 flex w-fit items-center gap-1.5 text-[11px] font-semibold text-muted-foreground transition-colors duration-150 enabled:hover:text-destructive disabled:opacity-50"
+              >
+                <Trash2 size={11} />
+                Delete these copies
+              </button>
             )}
-            <span className="flex-none text-muted-foreground">
-              {formatBytes(folder.totalBytes)}
-            </span>
           </div>
         ))}
       </div>
+      <CloudConfirmDialog
+        open={purgeTarget !== null}
+        title="Delete these copies"
+        message={
+          purgeTarget && (
+            <>
+              Deletes {pluralize(purgeTarget.backupCount, 'version')} of{' '}
+              <span className="font-bold text-foreground">{purgeTarget.title}</span> from every PC.
+              This can&apos;t be undone.
+            </>
+          )
+        }
+        confirmLabel="Delete them"
+        busy={purging}
+        error={purgeError}
+        onConfirm={() => {
+          if (!purgeTarget) return;
+          // Si falla, el diálogo se queda abierto con el motivo.
+          onPurge(purgeTarget.saveKey).then(
+            () => setPurgeTarget(null),
+            () => undefined,
+          );
+        }}
+        onCancel={() => {
+          onPurgeReset();
+          setPurgeTarget(null);
+        }}
+      />
     </div>
   );
+};
+
+type PurgeGroup = {
+  saveKey: string;
+  title: string;
+  folders: CloudFolder[];
+  backupCount: number;
+  // Solo se puede limpiar lo que no tiene un juego VIVO detrás: borrado de la
+  // biblioteca, o que nunca estuvo en ella.
+  purgeable: boolean;
+};
+
+// Las carpetas por saveKey: limpiar borra el saveKey en TODOS los PCs, así
+// que la acción es del grupo y no de una carpeta suelta.
+const groupFolders = (folders: CloudFolder[]): PurgeGroup[] => {
+  const groups = new Map<string, PurgeGroup>();
+  for (const folder of folders) {
+    const group = groups.get(folder.saveKey) ?? {
+      saveKey: folder.saveKey,
+      title: folder.gameTitle ?? folder.saveKey,
+      folders: [],
+      backupCount: 0,
+      purgeable: true,
+    };
+    group.folders.push(folder);
+    group.backupCount += folder.backupCount;
+    if (folder.gameId !== null) group.purgeable = false;
+    if (folder.gameTitle) group.title = folder.gameTitle;
+    groups.set(folder.saveKey, group);
+  }
+  return [...groups.values()];
 };
