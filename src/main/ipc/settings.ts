@@ -20,6 +20,7 @@ import { migrateStorageObjects } from '../saves/migrateStorage';
 import { verifyMigratedRestore } from '../saves/verifyStorageRestore';
 import { storageTargetFrom, destinationChanged } from '../saves/storageConfig';
 import { markIdentityReconciled } from '../saves/machine';
+import { getSyncRuntime } from '../sync/instance';
 import { resetSgdbClient } from '../sgdb/client';
 import type { CredentialsValues, SaveStorageProvider, TimeFormat } from '../../shared/types';
 
@@ -45,6 +46,9 @@ const applyCredentialsChange = (): void => {
   // Lo mismo con el cliente de R2: se construyó con las claves viejas y
   // seguiría firmando con ellas (PARTIDAS-GUARDADAS.md §9).
   resetR2Client();
+  // Y si las de IGDB cambiaron, el hub de la PWA debe tener las nuevas (F-29). El runtime
+  // compara la huella y no sube nada si no han cambiado.
+  void getSyncRuntime()?.syncIgdbKeys();
 };
 
 const hasIndexedBackups = async (): Promise<boolean> => hasIndexedSaveBackups(appCtx());

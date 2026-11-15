@@ -17,6 +17,8 @@ describe('error -> HTTP', () => {
       rate_limited: 429,
       forbidden: 403,
       conflict: 409,
+      igdb_not_configured: 409,
+      igdb_unavailable: 502,
       internal: 500,
     };
     for (const [code, status] of Object.entries(expected)) {

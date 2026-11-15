@@ -15,6 +15,8 @@ const STATUS: Record<SyncErrorCode, number> = {
   rate_limited: 429,
   forbidden: 403,
   conflict: 409,
+  igdb_not_configured: 409,
+  igdb_unavailable: 502,
   internal: 500,
 };
 

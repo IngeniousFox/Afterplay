@@ -24,6 +24,9 @@ export interface Env {
   DEV_EMAIL?: string;
   // Secret opcional: segunda puerta de /api/v2 para el anfitrión (adminToken.ts).
   HUB_ADMIN_TOKEN?: string;
+  // Secret del hub (`wrangler secret put HUB_SECRETS_KEY`): cifra las claves de IGDB que
+  // sube cada PC (F-29). Lo lee el Durable Object. Sin él, esa ruta responde un error claro.
+  HUB_SECRETS_KEY?: string;
 }
 
 // Caché de inquilinos que ya se sabe que existen. Es estado de módulo A

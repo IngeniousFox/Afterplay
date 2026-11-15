@@ -18,6 +18,7 @@ describe('bindTenant', () => {
       pull: record('pull'),
       claimJob: record('claimJob'),
       doneJob: record('doneJob'),
+      storeIgdbCredentials: record('storeIgdbCredentials'),
       enroll: record('enroll'),
       createEnrollmentCode: record('createEnrollmentCode'),
       listTokens: record('listTokens'),

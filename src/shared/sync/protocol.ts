@@ -20,6 +20,7 @@ export const SYNC_ROUTES = {
   pull: `${SYNC_BASE_PATH}/pull`,
   jobsClaim: `${SYNC_BASE_PATH}/jobs/claim`,
   jobsDone: `${SYNC_BASE_PATH}/jobs/done`,
+  igdbCredentials: `${SYNC_BASE_PATH}/igdb-credentials`,
 } as const;
 
 /** Máximos por defecto (§8.4). El hub anuncia los suyos en `/status`. */
@@ -81,6 +82,11 @@ export function formatDeviceToken(tenantId: string, secret: string): string {
  *   rutas de la PWA.
  * - `conflict`: la acción choca con lo que ya existe, p. ej. invitar a quien
  *   ya tiene espacio (409). Solo en las rutas de la PWA.
+ * - `igdb_not_configured`: la PWA pide algo de IGDB y ningún PC ha subido
+ *   todavía las claves de Twitch (F-29): hay que abrir Afterplay en el PC una
+ *   vez (409). Solo en las rutas de la PWA.
+ * - `igdb_unavailable`: Twitch o IGDB no contestaron a tiempo o rechazaron la
+ *   petición (502). Se reintenta más tarde. Solo en las rutas de la PWA.
  * - `internal`: fallo inesperado del hub, sin detalle (500). Se reintenta.
  */
 export type SyncErrorCode =
@@ -94,6 +100,8 @@ export type SyncErrorCode =
   | 'rate_limited'
   | 'forbidden'
   | 'conflict'
+  | 'igdb_not_configured'
+  | 'igdb_unavailable'
   | 'internal';
 
 export interface SyncErrorBody {
@@ -241,6 +249,25 @@ export interface JobDoneRequest {
 export interface JobDoneResponse {
   closed: boolean;
 }
+
+// ---------- POST /igdb-credentials (F-29) ----------
+
+/**
+ * Las claves de Twitch/IGDB de la persona, que el PC sube para que la PWA
+ * pueda buscar juegos. El hub las guarda CIFRADAS con `HUB_SECRETS_KEY` y no
+ * las devuelve jamás: la respuesta solo confirma que están guardadas.
+ */
+export interface IgdbCredentialsRequest {
+  clientId: string;
+  clientSecret: string;
+}
+
+export interface IgdbCredentialsResponse {
+  stored: true;
+}
+
+/** Tope de cada clave: las de Twitch miden 30 caracteres; esto solo corta basura. */
+export const IGDB_KEY_MAX_LENGTH = 200;
 
 // ---------- Transporte ----------
 

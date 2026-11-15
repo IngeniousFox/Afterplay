@@ -4,6 +4,8 @@ import {
   type ClientVersion,
   type EnrollRequest,
   type EnrollResponse,
+  type IgdbCredentialsRequest,
+  type IgdbCredentialsResponse,
   type JobClaimRequest,
   type JobClaimResponse,
   type JobDoneRequest,
@@ -48,6 +50,8 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<SyncErrorCode>([
   'rate_limited',
   'forbidden',
   'conflict',
+  'igdb_not_configured',
+  'igdb_unavailable',
   'internal',
 ]);
 
@@ -193,6 +197,25 @@ export function enroll(
     method: 'POST',
     url: joinUrl(baseUrl, SYNC_ROUTES.enroll),
     body: req,
+    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    fetchImpl: options.fetch ?? fetch,
+  });
+}
+
+/**
+ * Sube las claves de IGDB de este PC a su hub (F-29). Va con el token del
+ * dispositivo. El cuerpo lleva secretos: ni se registra ni se devuelve, y un
+ * error del hub solo cuenta su código.
+ */
+export function uploadIgdbCredentials(
+  options: { baseUrl: string; token: string; timeoutMs?: number; fetch?: typeof fetch },
+  credentials: IgdbCredentialsRequest,
+): Promise<IgdbCredentialsResponse> {
+  return request<IgdbCredentialsResponse>({
+    method: 'POST',
+    url: joinUrl(options.baseUrl, SYNC_ROUTES.igdbCredentials),
+    token: options.token,
+    body: credentials,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     fetchImpl: options.fetch ?? fetch,
   });

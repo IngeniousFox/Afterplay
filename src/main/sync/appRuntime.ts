@@ -1,8 +1,10 @@
 import {
   clearSyncCredentials,
+  getCredentials,
   readSyncCredentials,
   writeSyncCredentials,
 } from '../config/credentials';
+import { getConfigValue, setConfigValue } from '../config/store';
 import { appLocalDb } from '../db/v2/appDb';
 import { devProfileBlocksHub } from '../lib/devProfileRules';
 import { isE2E } from '../lib/e2e';
@@ -35,6 +37,16 @@ export function createAppSyncRuntime(notify: {
       read: readSyncCredentials,
       write: writeSyncCredentials,
       clear: clearSyncCredentials,
+    },
+    igdbKeys: {
+      read: () => {
+        const { twitchClientId, twitchClientSecret } = getCredentials();
+        return twitchClientId && twitchClientSecret
+          ? { clientId: twitchClientId, clientSecret: twitchClientSecret }
+          : null;
+      },
+      readFingerprint: () => getConfigValue('igdbKeysFingerprint'),
+      writeFingerprint: (fingerprint) => setConfigValue('igdbKeysFingerprint', fingerprint),
     },
     onChange: notify.changed,
     onStatus: notify.status,

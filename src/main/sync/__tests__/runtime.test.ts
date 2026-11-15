@@ -475,3 +475,148 @@ describe('sync rapido antes de crear (§10.7)', () => {
     await assert.doesNotReject(s.runtime.syncOnceWithin(50));
   });
 });
+
+describe('claves de IGDB hacia el hub (F-29)', () => {
+  // Valores inventados: ninguna clave real.
+  const KEYS = { clientId: 'cliente-de-prueba', clientSecret: 'secreto-de-prueba' };
+
+  class MemoryIgdbKeys {
+    keys: { clientId: string; clientSecret: string } | null = KEYS;
+    fingerprint: string | null = null;
+    read(): { clientId: string; clientSecret: string } | null {
+      return this.keys;
+    }
+    readFingerprint(): string | null {
+      return this.fingerprint;
+    }
+    writeFingerprint(fingerprint: string | null): void {
+      this.fingerprint = fingerprint;
+    }
+  }
+
+  const withIgdb = (
+    options: { paired?: boolean; fail?: boolean } = {},
+  ): Setup & {
+    igdb: MemoryIgdbKeys;
+    uploads: { baseUrl: string; token: string; body: unknown }[];
+  } => {
+    const igdb = new MemoryIgdbKeys();
+    const uploads: { baseUrl: string; token: string; body: unknown }[] = [];
+    const s = setup(
+      {
+        igdbKeys: igdb,
+        uploadIgdbCredentials: (target, body) => {
+          uploads.push({ baseUrl: target.baseUrl, token: target.token, body });
+          if (options.fail) {
+            return Promise.reject(new SyncRequestError('network', 'sin red'));
+          }
+          return Promise.resolve({ stored: true });
+        },
+      },
+      { paired: options.paired ?? true },
+    );
+    return { ...s, igdb, uploads };
+  };
+
+  it('al arrancar emparejado sube las claves una vez, con el token del dispositivo', async () => {
+    const s = withIgdb();
+
+    await s.runtime.start(2000);
+    await waitFor(() => s.uploads.length === 1);
+
+    assert.deepEqual(s.uploads[0], {
+      baseUrl: 'https://hub.example',
+      token: TOKEN,
+      body: KEYS,
+    });
+    assert.match(s.igdb.fingerprint ?? '', /^[0-9a-f]{64}$/);
+    assert.ok(!(s.igdb.fingerprint ?? '').includes(KEYS.clientSecret));
+  });
+
+  it('con la misma huella no vuelve a subir, ni en otro arranque ni a mano', async () => {
+    const s = withIgdb();
+    await s.runtime.start(2000);
+    await waitFor(() => s.uploads.length === 1);
+
+    assert.equal(await s.runtime.syncIgdbKeys(), 'unchanged');
+    s.runtime.stop();
+    await s.runtime.start(2000);
+    await pause(30);
+
+    assert.equal(s.uploads.length, 1);
+  });
+
+  it('si las claves cambian, sube las nuevas', async () => {
+    const s = withIgdb();
+    await s.runtime.start(2000);
+    await waitFor(() => s.uploads.length === 1);
+
+    s.igdb.keys = { clientId: 'cliente-nuevo', clientSecret: 'secreto-nuevo' };
+
+    assert.equal(await s.runtime.syncIgdbKeys(), 'uploaded');
+    assert.deepEqual(s.uploads[1].body, s.igdb.keys);
+  });
+
+  it('sin claves no sube nada', async () => {
+    const s = withIgdb();
+    s.igdb.keys = null;
+
+    await s.runtime.start(2000);
+
+    assert.equal(await s.runtime.syncIgdbKeys(), 'no-keys');
+    assert.equal(s.uploads.length, 0);
+  });
+
+  it('un fallo no guarda la huella: se reintenta en la siguiente ocasión', async () => {
+    const s = withIgdb({ fail: true });
+    await s.runtime.start(2000);
+    await waitFor(() => s.uploads.length === 1);
+    await pause(10);
+
+    assert.equal(s.igdb.fingerprint, null);
+    assert.equal(await s.runtime.syncIgdbKeys(), 'failed');
+    assert.equal(s.uploads.length, 2);
+  });
+
+  it('sin emparejar no sube; al emparejar sí, aunque la huella fuera la misma', async () => {
+    const s = withIgdb({ paired: false });
+    s.igdb.fingerprint = 'huella-de-otro-hub';
+
+    assert.equal(await s.runtime.syncIgdbKeys(), 'not-paired');
+    assert.equal(s.uploads.length, 0);
+
+    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
+    assert.equal(result.ok, true);
+    await waitFor(() => s.uploads.length === 1);
+    assert.deepEqual(s.uploads[0].body, KEYS);
+  });
+
+  it('desemparejar borra la huella', async () => {
+    const s = withIgdb();
+    await s.runtime.start(2000);
+    await waitFor(() => s.igdb.fingerprint !== null);
+
+    s.runtime.unpair();
+
+    assert.equal(s.igdb.fingerprint, null);
+  });
+
+  it('en modo E2E no sube nada', async () => {
+    const igdb = new MemoryIgdbKeys();
+    const uploads: unknown[] = [];
+    const s = setup(
+      {
+        isE2E: true,
+        igdbKeys: igdb,
+        uploadIgdbCredentials: (_target, body) => {
+          uploads.push(body);
+          return Promise.resolve({ stored: true });
+        },
+      },
+      { paired: true },
+    );
+
+    assert.equal(await s.runtime.syncIgdbKeys(), 'not-paired');
+    assert.equal(uploads.length, 0);
+  });
+});

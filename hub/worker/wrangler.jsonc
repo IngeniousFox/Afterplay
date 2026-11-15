@@ -37,6 +37,9 @@
   //  · ACCESS_AUD         AUD de la aplicación de Access que protege /api/v2/*.
   //  · HUB_ADMIN_TOKEN    opcional: segunda puerta de /api/v2/* para el
   //                       anfitrión, mientras no haya PWA (src/adminToken.ts).
+  //  · HUB_SECRETS_KEY    clave (32+ caracteres al azar) que cifra las claves de IGDB
+  //                       que sube cada PC (F-29, src/igdbCredentials.ts). Sin ella
+  //                       el hub rechaza esas claves y la PWA no busca juegos.
   // En local, en hub/worker/.dev.vars (que no se commitea), donde además pueden
   // ir ENVIRONMENT=development y DEV_EMAIL para saltarse Access SOLO en local.
   // Sin ACCESS_* ni HUB_ADMIN_TOKEN, /api/v2/* falla cerrado (401).
