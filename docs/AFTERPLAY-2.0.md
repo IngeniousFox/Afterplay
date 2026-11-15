@@ -1959,7 +1959,7 @@ Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). La
 
 **Pendiente o sin comprobar:**
 
-- **Cloudflare, en parte.** El hub de desarrollo (§20.4.2) ya prueba el empaquetado y el Durable Object real. Falta la alarma de barrido, Access y el hub de producción.
+- **Cloudflare, en parte.** El hub de desarrollo (§20.4.2) ya prueba el empaquetado, el Durable Object real y Access. Falta la alarma de barrido y el hub de producción.
 - **E-14 se cubre al revés.** Un cliente real no puede tener dos esquemas a la vez, así que el "cliente nuevo" es un dispositivo de prueba que habla el protocolo y los clientes reales hacen de versión anterior.
 - **Barrido de sesiones abandonadas.** Queda como punto de extensión del núcleo: es de la fase 4 (E-08, E-09).
 - **Concesiones en el cliente.** Ningún trabajo de fondo las usa aún (§14.3, E-11, fase 5).
@@ -1970,7 +1970,10 @@ Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). La
 
 `afterplay-dev-hub`, en `https://afterplay-dev-hub.afterplay-worker.workers.dev`. Se despliega **solo** con `wrangler deploy --env dev` desde `hub/worker/`. La configuración de arriba de `wrangler.jsonc` es la de producción (`afterplay-hub`) y no se despliega. Sus Durable Objects son propios y no comparte datos con el Worker de la 1.x (`afterplay-web`), que no se ha tocado.
 
-- **Sin Access.** `/api/v2/*` abre solo con la cabecera `x-afterplay-admin-token` (`hub/worker/src/adminToken.ts`). El token es un secret del Worker (`HUB_ADMIN_TOKEN`, de 32 caracteres como mínimo) y en local vive en `hub/worker/.dev.vars.admin-token`, que git ignora. La comparación es de tiempo constante. Sin la cabecera se sigue por Access, que sin configurar falla cerrado.
+- **Access delante (desde el 2026-11-15).** Dos aplicaciones de Access en la cuenta. «Afterplay hub (dev)» cubre todo el host, con sesión de un mes. Tiene dos políticas: «Accesos por email» (Allow) y «Scripts dev» (Service Auth, con el token de servicio «Afterplay dev scripts»). «Afterplay hub (dev) - sync de los PCs» cubre `/sync/*` con Bypass, porque los PCs no son navegadores; ahí el hub sigue exigiendo el token de dispositivo. El hub valida el JWT de Access él mismo (`ACCESS_AUD`, `ACCESS_TEAM_DOMAIN`).
+- **Anfitrión.** `ADMIN_EMAIL` es el correo real de la cuenta, así que el inquilino del anfitrión es el que abre la PWA. El inquilino anterior, atado a un correo de relleno, queda huérfano.
+- **Token de administración.** Además, `/api/v2/*` abre con la cabecera `x-afterplay-admin-token` (`hub/worker/src/adminToken.ts`), que actúa como `ADMIN_EMAIL` y se mira antes que Access. El token es un secret del Worker (`HUB_ADMIN_TOKEN`, de 32 caracteres como mínimo). La comparación es de tiempo constante.
+- **Credenciales de los scripts.** Viven en `hub/worker/.dev.vars.admin-token`, que git ignora: `HUB_ADMIN_TOKEN` y el token de servicio (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`). `scripts/devHubAuth.ts` las convierte en cabeceras para `hub:dev`, la prueba de humo y el proxy de `dev:pwa:hub`. Sin el token de servicio, Access redirige al login y los scripts lo dicen. Una política de Access creada desde la ficha de la aplicación no queda enlazada hasta que se guarda la aplicación.
 - **Administración.** `npm run hub:dev -- code` da un código de emparejado de un solo uso, `devices` lista los dispositivos y `revoke <tokenId>` revoca uno. El token nunca se imprime.
 - **Emparejar el perfil de desarrollo.** Con `npm run dev:v2`, en Ajustes → Connections → Sync, se ponen la dirección del hub y el código. El perfil de desarrollo solo acepta hubs cuyo nombre empieza por `afterplay-dev`.
 - **Prueba de humo.** `npm run hub:dev:smoke` usa el transporte real del cliente. Empareja un dispositivo de prueba y comprueba que el código no se reutiliza. Luego prueba status y hora, subida, eco sin secuencia nueva, rechazo de reloj adelantado, bajada, concesión concedida, denegada y cerrada, y la lista de dispositivos. Al final lo revoca y comprueba que su token ya no entra. Pasa entera (13 de 13).
@@ -1981,7 +1984,9 @@ Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). La
 
 **Dos PCs reales (2026-11-15).** El PC principal subió su biblioteca entera (unas 13.600 filas). Un segundo PC, que arrancó con el perfil vacío, se emparejó y la bajó. Una nota editada en el segundo PC llegó al principal al abrir la app, sin pulsar "Sync now".
 
-**Sin comprobar.** La alarma de barrido horaria, Access y el límite de intentos de emparejado.
+**Access (2026-11-15).** `/` y `/api/v2/*` sin sesión redirigen al login de Access; `/sync/v1/*` llega al Worker (401 sin token). La prueba de humo pasa entera a través de Access con el token de servicio. El PC principal se reemparejó con el inquilino del correo real y lo subió todo; la PWA, con sesión de Access, enseña la biblioteca.
+
+**Sin comprobar.** La alarma de barrido horaria y el límite de intentos de emparejado.
 
 ### §20.5 Fase 4 — Sesiones, watcher e instalaciones (L)
 
@@ -2059,7 +2064,7 @@ Hecha en la rama `v2`. Las piezas:
 
 **Pendiente o sin comprobar:**
 
-- La PWA no se ha probado aún contra el hub de desarrollo ni en un móvil real.
+- La PWA carga a través de Access en el hub de desarrollo (escritorio); falta probarla en un móvil real.
 - `src/shared/domain/planOrder.ts` conserva funciones del buzón que ya nadie usa en la PWA.
 
 ### §20.7 Fase 6 — Partidas guardadas (M)
