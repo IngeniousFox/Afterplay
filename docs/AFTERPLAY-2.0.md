@@ -1991,7 +1991,7 @@ Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). La
 
 #### §20.5.1 Estado de la fase 4 (2026-11-15)
 
-Hecha en la rama `v2`, salvo la parte de partidas de E-07, que depende de la fase 6. Las piezas:
+Hecha en la rama `v2`. Las piezas:
 
 | Pieza                         | Dónde                                                                      | Qué hace                                                                                                                                                                                        |
 | ----------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2006,7 +2006,7 @@ Hecha en la rama `v2`, salvo la parte de partidas de E-07, que depende de la fas
 
 **Comprobado.**
 
-- Pasan E-01, E-02, E-07 (sesiones, con la secuencia de cierre real), E-08, E-09 y E-10 en `hub/convergence/__tests__/phase4.test.ts`. El barrido tiene además sus propios tests en el núcleo, comprobados con mutaciones.
+- Pasan E-01, E-02, E-07 (sesión y backup de partidas, con la secuencia de cierre real), E-08, E-09 y E-10 en `hub/convergence/__tests__/phase4.test.ts`. El barrido tiene además sus propios tests en el núcleo, comprobados con mutaciones.
 - Lint, tipos, 2.506 tests, build y los 93 e2e.
 - El hub de desarrollo está desplegado con el barrido y la prueba de humo pasa.
 
@@ -2017,7 +2017,6 @@ Hecha en la rama `v2`, salvo la parte de partidas de E-07, que depende de la fas
 
 **Pendiente o sin comprobar:**
 
-- **E-07, partidas.** El backup al cerrar se cablea al unir la fase 6 (`flushPendingSaveBackups`).
 - **Sesiones offline huérfanas.** Si un PC fusiona o borra un playthrough mientras otro juega sin red bajo él, la sesión del segundo queda huérfana al llegar (como E-06). No se reasigna.
 - **Overlay y modo ambiente.** `OverlayHud` y el `LiveOverlay` de la columna central no distinguen aún las sesiones de otro dispositivo.
 - **Sin e2e ni revisión visual en la app** de la sesión remota, la fusión y el ejecutable perdido: los fixtures no tienen dos dispositivos.
@@ -2037,7 +2036,7 @@ API v2 sobre el hub, PWA adaptada, concesiones, enriquecimiento.
 
 #### §20.7.1 Estado de la fase 6 (2026-11-15)
 
-Hecha en su rama de trabajo (sin fusionar aún en `v2`), sin el esquema ni las migraciones tocados. Las piezas:
+Hecha y unida a `v2` el 2026-11-15, sin el esquema ni las migraciones tocados. Las piezas:
 
 | Pieza                          | Dónde                                                         | Qué hace                                                                                                                                                                                                                                                                                      |
 | ------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2049,7 +2048,7 @@ Hecha en su rama de trabajo (sin fusionar aún en `v2`), sin el esquema ni las m
 | Juegos sin `igdbId` y limpieza | `recovery.ts`, Ajustes → inventario                           | Carpetas por `saveKey`; borrar un juego no borra sus copias; las de juegos borrados o desconocidos se limpian a mano, en todos los PCs                                                                                                                                                        |
 | Restauración exacta            | `src/main/saves/exactRestore.ts`, `ipc/saves.ts`              | Casilla desmarcada por defecto, solo "en su sitio". Borra solo archivos de la lista de ludusavi que la copia previa acaba de guardar; nunca carpetas                                                                                                                                          |
 | Subida por streaming           | `src/main/saves/r2.ts`                                        | `Upload` multiparte (16 MB, dos a la vez) para todos los proveedores: el zip no pasa entero por memoria                                                                                                                                                                                       |
-| Cierre                         | `src/main/saves/sessionHook.ts`                               | `flushPendingSaveBackups(timeoutMs)`: adelanta los backups que esperaban su margen y espera, con tope. `before-quit` no lo llama aún (fase 4)                                                                                                                                                 |
+| Cierre                         | `src/main/saves/sessionHook.ts`                               | `flushPendingSaveBackups(timeoutMs)`: adelanta los backups que esperaban su margen y espera, con tope. `before-quit` lo llama tras cerrar las sesiones, con 4 s de tope                                                                                                                       |
 | Interfaz                       | `SavesSection`, `RestoreSaveDialog`, Ajustes                  | Texto de §12.4 con nombre del PC y antigüedad, restaurar destacado en "por detrás" y "divergido", aviso de id duplicado con sus dos salidas, botón de limpieza de copias huérfanas                                                                                                            |
 
 **Comprobado.**
@@ -2076,7 +2075,6 @@ Hecha en su rama de trabajo (sin fusionar aún en `v2`), sin el esquema ni las m
 - **Partidas reales.** No se ha probado la ficha con partidas de verdad en dos PCs; ni la casilla de restauración exacta con un juego real.
 - **Discos clonados.** Dos PCs con el mismo `MachineGuid` (un disco clonado) no se distinguen si ninguno publicó antes su valor.
 - **Filas recuperadas.** Su reloj de sync es el de la recuperación, así que en la lista pueden salir antes que versiones más nuevas.
-- **`before-quit`.** Llamar a `flushPendingSaveBackups` al cerrar es de la fase 4.
 - **TV.** La ficha de TV sigue con su comparación local, sin el estado entre PCs.
 
 ### §20.8 Fase 7 — Main, IPC, renderer, estadísticas, logs (L)

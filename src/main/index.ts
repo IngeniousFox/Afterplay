@@ -55,6 +55,7 @@ import type { SyncRuntime } from './sync/runtime';
 import { setSessionClosedNotifier } from './watcher/notifySession';
 import { setRunningGamesProbe } from './watcher/runningGames';
 import { runQuitSequence } from './watcher/quitSequence';
+import { flushPendingSaveBackups } from './saves/sessionHook';
 import { ProcessWatcher } from './watcher/watcher';
 
 // ── Cronómetro del arranque ──────────────────────────────────────────────
@@ -1121,9 +1122,9 @@ app.on('before-quit', (event) => {
       closeSessions: () => {
         watcher?.closeAllForQuit(new Date());
       },
-      // flushSaveBackups: aquí va `flushPendingSaveBackups` (src/main/saves/)
-      // cuando exista: lanza ya los backups pendientes, sin el retardo de 8 s,
-      // y resuelve al acabar o al tope. Hoy no se pasa y el paso se salta.
+      // Lanza ya los backups de partidas pendientes (también los que acaba de
+      // armar el cierre de sesiones), sin el margen de 8 s, y espera hasta 4 s.
+      flushSaveBackups: (timeoutMs) => flushPendingSaveBackups(timeoutMs),
       flushSync: () => syncRuntime?.flushOnQuit() ?? Promise.resolve(),
     }).finally(() => app.quit());
     return;

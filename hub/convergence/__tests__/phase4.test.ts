@@ -11,6 +11,7 @@ import { updateGame } from '../../../src/main/db/v2/queries/common/updateGame';
 import { runQuitSequence } from '../../../src/main/watcher/quitSequence';
 import { ABANDONED_SESSION_MS } from '../../core/hub';
 import { addGame, openSession } from '../actions';
+import { onDisk, stateOf, uploadVersions, version } from '../savesHarness';
 import { HOUR_MS, MINUTE_MS, World, convergenceProblems, type Client } from '../harness';
 
 // Escenarios de aceptación de §17.3 de la fase 4 (sesiones, watcher e
@@ -113,12 +114,13 @@ describe('escenarios de la fase 4 (§17.3)', () => {
     }
   });
 
-  it('E-07: A cierra Afterplay justo tras jugar y se apaga; B ve la sesión cerrada', async () => {
-    // El cierre ordenado real (`runQuitSequence`) con los pasos que cablea
-    // main/index.ts: cerrar las sesiones propias (lo que hace
+  it('E-07: A cierra Afterplay justo tras jugar y se apaga; B ve la sesión cerrada y el backup', async () => {
+    // El cierre ordenado real (`runQuitSequence`) con los tres pasos que
+    // cablea main/index.ts: cerrar las sesiones propias (lo que hace
     // `ProcessWatcher.closeAllForQuit`, que aquí no puede correr porque
-    // importa Electron) y la subida final. El backup de partidas (el otro
-    // medio de E-07) es de la fase 6 y se comprueba allí.
+    // importa Electron), el backup de partidas pendiente y la subida final.
+    // El backup no puede llamar a ludusavi aquí: se hace lo que hace el espejo
+    // al acabar (`reconcileOwnSaveBackups`), que es lo que viaja por sync.
     const w = start();
     const a = await w.addClient('a');
     const b = await w.addClient('b');
@@ -129,8 +131,11 @@ describe('escenarios de la fase 4 (§17.3)', () => {
     assert.ok(sessionId);
     w.advance(50 * MINUTE_MS);
 
+    const backupAt = new Date(a.ctx.now().getTime());
+    const steps: string[] = [];
     const outcome = await runQuitSequence({
       closeSessions: () => {
+        steps.push('sessions');
         for (const session of getOpenSessions(a.ctx)) {
           if (session.deviceId !== a.ctx.deviceId || session.startedBy === 'timer') continue;
           closeSessionIfOpen(a.ctx, session.sessionId, {
@@ -139,9 +144,18 @@ describe('escenarios de la fase 4 (§17.3)', () => {
           });
         }
       },
-      flushSync: () => a.syncOk(),
+      flushSaveBackups: async () => {
+        steps.push('saves');
+        uploadVersions(a, gameId, [version('backup-quit.zip', 'tras-jugar', backupAt)]);
+      },
+      flushSync: async () => {
+        steps.push('sync');
+        await a.syncOk();
+      },
     });
     assert.equal(outcome, 'done');
+    // El backup va antes de la subida final: si no, se quedaría en A.
+    assert.deepEqual(steps, ['sessions', 'saves', 'sync']);
     a.cut(); // Se apaga: no vuelve a sincronizar.
 
     w.advance(2 * HOUR_MS);
@@ -150,6 +164,12 @@ describe('escenarios de la fase 4 (§17.3)', () => {
     assert.equal(session.closedBy, 'owner');
     assert.equal(session.durationSec, 50 * 60);
     assert.equal(session.endedAt?.getTime(), session.startedAt.getTime() + 50 * MINUTE_MS);
+
+    // Y la partida que dejó A: B, que no ha jugado, la ve como la de A.
+    const save = stateOf(b, gameId, onDisk('antes'));
+    assert.equal(save.head?.deviceId, a.deviceId);
+    assert.equal(save.head?.isOwn, false);
+    assert.equal(save.tips.length, 1);
   });
 
   it('E-08: A muere con una sesión abierta; el hub la cierra a las 24 h en su última señal', async () => {
