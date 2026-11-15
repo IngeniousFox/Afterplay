@@ -2030,6 +2030,38 @@ API v2 sobre el hub, PWA adaptada, concesiones, enriquecimiento.
 
 **Salida:** E-11, E-12, E-13 pasan; no queda ninguna consulta de dominio reimplementada en el Worker.
 
+#### §20.6.1 Estado de la fase 5 (2026-11-15)
+
+Hecha en la rama `v2`. Las piezas:
+
+| Pieza                    | Dónde                                                                     | Qué hace                                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consultas del escritorio | `hub/core/queries.ts` (`HubQueries`)                                      | Ejecuta en el Durable Object las funciones de `src/main/db/v2/queries` con Drizzle sobre su almacén. Las lecturas que escriben fallan; las escrituras usan la puerta como `web` |
+| Puerta de escritura      | `WriteStore` con `transactionRunner`                                      | La misma del PC, con el ejecutor de transacciones del almacén (un Durable Object no admite BEGIN). Cada fila tocada recibe secuencia nueva en la misma transacción              |
+| Rutas                    | `hub/worker/src/web/{reads,writes,igdb}.ts`, tipos en `src/shared/api/v2` | Una sola llamada RPC `web` del Worker al Durable Object y el reparto por ruta dentro de él                                                                                      |
+| Caché de lecturas        | `hub/worker/src/web/readCache.ts`                                         | Cada respuesta vale mientras no cambie la secuencia del inquilino. 128 entradas y 4 MiB                                                                                         |
+| Cronómetro               | `queries/sessions/timer.ts`                                               | Uno vivo a la vez; no arranca si el juego tiene señal en otro dispositivo en los últimos 10 min                                                                                 |
+| Altas del móvil          | `createPlannedGame(…, {stampChecks:false})`, `external/enrichPending.ts`  | El juego existe al instante; un PC lo completa después bajo la concesión `enrich:<gameId>`                                                                                      |
+| Concesiones              | `src/main/sync/jobClaims.ts`                                              | Los trabajos de pago (recuerdos, curiosidades) exigen concesión si hay hub; los demás corren en local si el hub no responde                                                     |
+| Claves de IGDB           | `hub/core/secretBox.ts`, `hub/worker/src/igdbCredentials.ts`              | El PC las sube al cambiar; el hub las guarda cifradas (AES-GCM, clave derivada por inquilino de `HUB_SECRETS_KEY`) y las usa para buscar, saga y media                          |
+| PWA                      | `web/`                                                                    | Cliente de `/api/v2` sin buzón, con tope de 15 s por petición y mensaje de sesión de Access caducada. El hub la sirve como assets                                               |
+| Acceso de desarrollo     | `npm run dev:pwa:hub` (`web/vite.config.ts`, modo `hub`)                  | Proxy de Vite al hub de desarrollo que añade el token de administración en el lado del servidor; el navegador no lo ve                                                          |
+
+**Comprobado.** Pasan E-11 (`hub/convergence/__tests__/jobs.test.ts`), E-12 y E-13 (`hub/convergence/__tests__/webWrites.test.ts`). Ninguna respuesta de lectura lleva rutas de disco (F-31, `webReads.test.ts`). Lint, tipos, 2.975 tests, la build de la PWA y el bundle del hub.
+
+**Límites conocidos:**
+
+- **Radar entre PCs.** La concesión dura como mucho 24 h, así que la deduplicación del radar semanal solo cubre ese margen.
+- **Recap regenerado.** Pedir otra vez el recap queda bloqueado por la concesión hasta 24 h.
+- **Cronómetro y PC sin red.** Si un PC sin red empieza a jugar y, antes de sincronizar, el móvil arranca el cronómetro del mismo juego, ese rato cuenta doble (D-15). Se corrige editando la sesión.
+- **Rotar `HUB_SECRETS_KEY`.** Las claves guardadas dejan de abrirse y el PC no las resube solo: hay que cambiarlas en Ajustes o volver a emparejar.
+- **Access.** La aplicación de Access tiene que cubrir todo el dominio del hub, no solo `/api/v2/*`: los assets de la PWA se sirven sin pasar por el Worker.
+
+**Pendiente o sin comprobar:**
+
+- La PWA no se ha probado aún contra el hub de desarrollo ni en un móvil real.
+- `src/shared/domain/planOrder.ts` conserva funciones del buzón que ya nadie usa en la PWA.
+
 ### §20.7 Fase 6 — Partidas guardadas (M)
 
 §12.
