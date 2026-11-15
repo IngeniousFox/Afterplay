@@ -71,6 +71,7 @@ export const queryKeys = {
     // está escrito entero en useLocalBackupsUsage.
     localUsage: ['saves', 'localUsage'] as const,
     identityNeeded: ['saves', 'identityNeeded'] as const,
+    installIdentity: ['saves', 'installIdentity'] as const,
     game: (gameId: GameId) => ['saves', 'game', gameId] as const,
   },
   // El resultado del escaneo de "Game saves" en Ajustes — FUERA del árbol de

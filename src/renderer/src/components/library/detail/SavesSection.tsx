@@ -20,6 +20,8 @@ import type {
   SavesActivityEvent,
   SavesGameState,
   SavesStatus,
+  SaveSyncState,
+  SaveTip,
 } from '../../../../../shared/types';
 import { AMBER, BLUE, GRAY, GREEN, TEAL } from '../../../lib/colors';
 import {
@@ -37,6 +39,7 @@ import {
 } from '../../../hooks/saves';
 import { useTimeFormat } from '../../../hooks/settings';
 import { formatByPrecision, formatBytes, pluralize } from '../../../lib/format';
+import { describeAgo } from '../../../lib/syncText';
 import { DeleteSaveBackupDialog } from './DeleteSaveBackupDialog';
 import { RestoreSaveDialog } from './RestoreSaveDialog';
 import type { GameId } from '../../../../../shared/entityIds';
@@ -257,16 +260,18 @@ const CHANGE_META: Record<string, { label: string; color: string; icon: typeof C
 // partidas?" se contesta antes de leer nada.
 const SyncHero = ({
   change,
-  files,
-  bytes,
-  registryKeys,
+  stats,
+  sync,
 }: {
   change: string;
-  files: number;
-  bytes: number;
-  registryKeys: number;
+  // null = no hay nada en este PC que contar (solo se enseña el estado).
+  stats: { files: number; bytes: number; registryKeys: number } | null;
+  sync: SaveSyncState;
 }): React.JSX.Element => {
-  const meta = CHANGE_META[change] ?? CHANGE_META.none;
+  // Con estado entre PCs (§12.4) manda ese; si no hay copias en la nube
+  // (status 'none') sigue valiendo la comparación local de siempre.
+  const syncMeta = syncStatusMeta(sync);
+  const meta = syncMeta ?? CHANGE_META[change] ?? CHANGE_META.none;
   const Icon = meta.icon;
   return (
     <div
@@ -283,15 +288,167 @@ const SyncHero = ({
         <Icon size={17} style={{ color: meta.color }} />
       </div>
       <div className="min-w-0">
-        <div className="truncate text-[14px] font-extrabold" style={{ color: meta.color }}>
+        <div
+          data-testid={syncMeta ? 'saves-sync-status' : undefined}
+          className={
+            syncMeta
+              ? 'text-[12.5px] leading-snug font-bold'
+              : 'truncate text-[14px] font-extrabold'
+          }
+          style={{ color: meta.color }}
+        >
           {meta.label}
         </div>
-        <div className="mt-0.25 truncate text-[10.5px] text-muted-foreground">
-          {pluralize(files, 'file')} · {formatBytes(bytes)}
-          {registryKeys > 0 && ` · ${pluralize(registryKeys, 'registry key')}`}
-        </div>
+        {stats && (
+          <div className="mt-0.25 truncate text-[10.5px] text-muted-foreground">
+            {pluralize(stats.files, 'file')} · {formatBytes(stats.bytes)}
+            {stats.registryKeys > 0 && ` · ${pluralize(stats.registryKeys, 'registry key')}`}
+          </div>
+        )}
       </div>
     </div>
+  );
+};
+
+type SyncMeta = { label: string; color: string; icon: typeof CloudUpload };
+
+// "Este PC" si la partida es de aquí, el nombre del PC si no.
+const tipName = (tip: SaveTip): string => (tip.isOwn ? 'this PC' : tip.deviceName);
+
+const tipAgo = (tip: SaveTip): string => describeAgo(new Date(tip.createdAt).getTime(), Date.now());
+
+const joinNames = (names: string[]): string =>
+  names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+
+// El texto de §12.4 para cada situación. null = no hay nada que decir (sin
+// copias en la nube) y la card vuelve a su comparación local de siempre.
+// 'unlinked' es informativo y va en neutro: no es un aviso, es que falta un
+// eslabón del linaje y no se puede afirmar nada.
+const syncStatusMeta = (sync: SaveSyncState): SyncMeta | null => {
+  const head = sync.head;
+  switch (sync.status) {
+    case 'synced':
+      return { label: 'Up to date', color: GREEN, icon: Check };
+    case 'local-changes':
+      return {
+        label: "There are changes here that aren't backed up yet",
+        color: AMBER,
+        icon: CloudUpload,
+      };
+    case 'behind':
+      return head
+        ? {
+            label: `There's a newer save from ${tipName(head)} (${tipAgo(head)})`,
+            color: BLUE,
+            icon: HardDriveDownload,
+          }
+        : null;
+    case 'diverged':
+      if (sync.tips.length > 1) {
+        return {
+          label: `The saves from ${joinNames(sync.tips.map(tipName))} have gone different ways`,
+          color: AMBER,
+          icon: TriangleAlert,
+        };
+      }
+      return head
+        ? {
+            label: `You have changes here and there's a newer save from ${tipName(head)}`,
+            color: AMBER,
+            icon: TriangleAlert,
+          }
+        : null;
+    case 'available':
+      return head
+        ? { label: `There's a save from ${tipName(head)}`, color: BLUE, icon: HardDriveDownload }
+        : null;
+    case 'unlinked':
+      return head
+        ? {
+            label: `Latest backup: ${tipName(head)}, ${tipAgo(head)}. Afterplay can't tell yet whether it's newer than the save on this PC.`,
+            color: GRAY,
+            icon: CloudUpload,
+          }
+        : null;
+    case 'none':
+      return null;
+  }
+};
+
+// Acciones de la card según el estado. En 'behind' y 'diverged' la acción
+// destacada es restaurar ESA versión, por el mismo flujo manual de siempre
+// (diálogo con copia de seguridad previa): nada se restaura solo. En
+// 'available' es una acción más, sin destacar.
+const SyncActions = ({
+  sync,
+  versions,
+  blocked,
+  onRestore,
+}: {
+  sync: SaveSyncState;
+  versions: SaveBackupRow[];
+  blocked: boolean;
+  onRestore: (backup: SaveBackupRow) => void;
+}): React.JSX.Element | null => {
+  const primary = sync.status === 'behind' || sync.status === 'diverged';
+  // Con varias puntas, la de este PC ya es la que hay en el disco (o su
+  // última copia): se ofrecen las de los demás. Con una sola, se ofrece esa
+  // aunque sea de aquí (este PC pudo restaurar otra cosa después).
+  const candidates: SaveTip[] = primary
+    ? sync.tips.length > 1
+      ? sync.tips.filter((tip) => !tip.isOwn)
+      : sync.head
+        ? [sync.head]
+        : []
+    : sync.status === 'available' && sync.head
+      ? [sync.head]
+      : [];
+
+  const rows = candidates.flatMap((tip) => {
+    const backup = versions.find((version) => String(version.id) === tip.backupId);
+    return backup ? [{ tip, backup }] : [];
+  });
+  const showUnverified = !sync.localVerified && sync.status !== 'none';
+  if (rows.length === 0 && !showUnverified) return null;
+
+  return (
+    <>
+      {rows.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {rows.map(({ tip, backup }) =>
+            primary ? (
+              <button
+                key={tip.backupId}
+                type="button"
+                data-testid="saves-sync-restore"
+                onClick={() => onRestore(backup)}
+                disabled={blocked}
+                className="flex w-full items-center justify-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-bold text-white transition-colors duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ background: BLUE }}
+              >
+                <HardDriveDownload size={13} />
+                Restore the save from {tipName(tip)}…
+              </button>
+            ) : (
+              <SidebarButton
+                key={tip.backupId}
+                onClick={() => onRestore(backup)}
+                disabled={blocked}
+                icon={HardDriveDownload}
+              >
+                Restore the save from {tipName(tip)}…
+              </SidebarButton>
+            ),
+          )}
+        </div>
+      )}
+      {showUnverified && (
+        <div className="text-[10.5px] leading-relaxed text-muted-foreground">
+          The save on this disk couldn&apos;t be checked, so local changes aren&apos;t taken into
+          account.
+        </div>
+      )}
+    </>
   );
 };
 
@@ -384,16 +541,26 @@ const Detected = ({
           <div className="mt-2.5">
             <SyncHero
               change={state.local.change}
-              files={state.local.files}
-              bytes={state.local.bytes}
-              registryKeys={state.local.registryKeys.length}
+              stats={{
+                files: state.local.files,
+                bytes: state.local.bytes,
+                registryKeys: state.local.registryKeys.length,
+              }}
+              sync={state.sync}
             />
           </div>
         ) : (
-          <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-dashed border-border px-3 py-2.5 text-[11.5px] text-muted-foreground">
-            <CloudOff size={13} className="flex-none opacity-70" />
-            Nothing on this PC — the game may not be installed here.
-          </div>
+          <>
+            <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-dashed border-border px-3 py-2.5 text-[11.5px] text-muted-foreground">
+              <CloudOff size={13} className="flex-none opacity-70" />
+              Nothing on this PC — the game may not be installed here.
+            </div>
+            {state.sync.status !== 'none' && (
+              <div className="mt-2">
+                <SyncHero change="none" stats={null} sync={state.sync} />
+              </div>
+            )}
+          </>
         )}
 
         {state.local?.steamIdInPath && (
@@ -413,6 +580,13 @@ const Detected = ({
           onAddFile={onAddFile}
         />
       </div>
+
+      <SyncActions
+        sync={state.sync}
+        versions={state.cloud}
+        blocked={state.running}
+        onRestore={onRestore}
+      />
 
       {/* Opt-in explícito, juego a juego (§10.5): subir partidas a un bucket
           es mover datos personales a un servicio externo y eso no se hace por

@@ -1,7 +1,9 @@
 import { ipcRenderer } from 'electron';
 import type {
   CloudInventory,
+  DuplicateResolution,
   IdentityCheck,
+  InstallIdentityStatus,
   LocalBackupsUsage,
   RecoveryResult,
   RestoreRequestInput,
@@ -35,12 +37,20 @@ export const savesApi = {
   adoptMachine: (machineId: string): Promise<void> =>
     ipcRenderer.invoke('saves:adoptMachine', machineId),
   keepIdentity: (): Promise<void> => ipcRenderer.invoke('saves:keepIdentity'),
+  // Id duplicado (otra instalación usa el de este PC). getInstallIdentity es local.
+  getInstallIdentity: (): Promise<InstallIdentityStatus> =>
+    ipcRenderer.invoke('saves:getInstallIdentity'),
+  resolveDuplicate: (resolution: DuplicateResolution): Promise<void> =>
+    ipcRenderer.invoke('saves:resolveDuplicate', resolution),
 
   // Qué hay de verdad en el bucket, y cómo rescatar lo que el índice no sepa.
   scanBucket: (): Promise<CloudInventory> => ipcRenderer.invoke('saves:scanBucket'),
   recoverFromCloud: (): Promise<RecoveryResult> => ipcRenderer.invoke('saves:recoverFromCloud'),
   deleteMachine: (machineId: string): Promise<number> =>
     ipcRenderer.invoke('saves:deleteMachine', machineId),
+  // Borra saves/<saveKey>/ de TODOS los PCs. Irreversible.
+  purgeFolder: (saveKey: string): Promise<number> =>
+    ipcRenderer.invoke('saves:purgeFolder', saveKey),
 
   scanLibrary: (): Promise<SavesScanEntry[]> => ipcRenderer.invoke('saves:scanLibrary'),
   getGameState: (gameId: GameId): Promise<SavesGameState | null> =>

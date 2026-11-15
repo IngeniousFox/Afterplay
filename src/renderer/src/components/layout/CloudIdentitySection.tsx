@@ -1,12 +1,15 @@
 import { Check, Loader2, MonitorSmartphone, Search, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
-import type { CloudMachine, IdentityCheck } from '../../../../shared/types';
+import type { CloudMachine, DuplicateResolution, IdentityCheck } from '../../../../shared/types';
 import {
   useAdoptMachine,
   useCheckIdentity,
+  useInstallIdentity,
   useKeepIdentity,
   useNeedsIdentityCheck,
+  useResolveDuplicate,
 } from '../../hooks/saves';
+import { CloudConfirmDialog } from './CloudConfirmDialog';
 import { expandClass } from '../../lib/styles';
 import { AMBER, BLUE } from '../../lib/colors';
 
@@ -21,7 +24,112 @@ import { AMBER, BLUE } from '../../lib/colors';
 // La sección solo aparece cuando hay algo que decidir: la comprobación previa
 // es local (comparar el bucket configurado con el ya reconciliado) y no gasta
 // ni una operación de R2. Mirar la nube es siempre un clic explícito.
-export const CloudIdentitySection = (): React.JSX.Element | null => {
+export const CloudIdentitySection = (): React.JSX.Element => (
+  <>
+    <DuplicateIdentityCard />
+    <BucketIdentityCheck />
+  </>
+);
+
+const DUPLICATE_CONFIRM: Record<
+  DuplicateResolution,
+  { title: string; confirmLabel: string; message: string }
+> = {
+  'keep-this-pc': {
+    title: 'This PC is the original',
+    confirmLabel: 'Yes, this is the original',
+    message:
+      "This PC keeps its cloud-save identity and the other installation is paused instead: it will stop backing up and cleaning up until it's given a new identity.",
+  },
+  'new-identity': {
+    title: 'This PC is a different one',
+    confirmLabel: 'Restart with a new identity',
+    message:
+      "Afterplay will restart and this PC will start a fresh cloud-save identity. Its previous backups stay with the other installation, and this PC won't see them as its own.",
+  },
+};
+
+// Otra instalación usa el id de este PC (§12.6, F-24): normalmente porque la
+// carpeta de datos se copió de aquí o hacia aquí. Mientras dure, backups y
+// poda están pausados en este PC. Es local y barato, así que se mira siempre.
+const DuplicateIdentityCard = (): React.JSX.Element | null => {
+  const { data: identity } = useInstallIdentity();
+  const resolve = useResolveDuplicate();
+  const [pending, setPending] = useState<DuplicateResolution | null>(null);
+
+  if (!identity?.duplicate) return null;
+
+  const handleConfirm = async (): Promise<void> => {
+    if (!pending) return;
+    // 'new-identity' relanza la app: esta promesa puede no resolver nunca.
+    try {
+      await resolve.mutateAsync(pending);
+      setPending(null);
+    } catch {
+      // El motivo se enseña en el diálogo (resolve.error); sigue abierto.
+    }
+  };
+
+  const confirm = pending ? DUPLICATE_CONFIRM[pending] : null;
+
+  return (
+    <div
+      data-testid="duplicate-identity"
+      className="flex flex-col gap-2.5 rounded-[10px] border px-3.25 py-2.75"
+      style={{ borderColor: `${AMBER}3d`, background: `${AMBER}0d` }}
+    >
+      <div className="flex items-start gap-2">
+        <div
+          className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
+          style={{ background: `${AMBER}1f` }}
+        >
+          <TriangleAlert size={13} style={{ color: AMBER }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold text-foreground">
+            Another installation shares this PC&apos;s identity
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Another Afterplay installation is using this PC&apos;s identity — its data folder was
+            probably copied from here or to here. Cloud backups and cleanup are paused on this PC.
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setPending('keep-this-pc')}
+          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06]"
+        >
+          This PC is the original
+        </button>
+        <button
+          type="button"
+          onClick={() => setPending('new-identity')}
+          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06]"
+        >
+          This PC is a different one
+        </button>
+      </div>
+      <CloudConfirmDialog
+        open={pending !== null}
+        title={confirm?.title ?? ''}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel ?? 'Confirm'}
+        busy={resolve.isPending}
+        error={resolve.isError ? resolve.error.message : null}
+        destructive={pending === 'new-identity'}
+        onConfirm={handleConfirm}
+        onCancel={() => {
+          resolve.reset();
+          setPending(null);
+        }}
+      />
+    </div>
+  );
+};
+
+const BucketIdentityCheck = (): React.JSX.Element | null => {
   const { data: needed } = useNeedsIdentityCheck();
   const check = useCheckIdentity();
   const adopt = useAdoptMachine();
