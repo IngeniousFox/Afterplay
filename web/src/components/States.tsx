@@ -12,23 +12,20 @@ export const Loading = ({ label = 'Loading' }: { label?: string }): React.JSX.El
 // Cada error dice qué hacer, y hay tres que merecen su propio texto porque el
 // genérico ("revisa tu conexión") manda a mirar donde no es:
 //
-//   · 'schema_outdated' (§5.4): no es un fallo de la web — la base de esa
-//     persona todavía no ha visto la migración, y solo se la aplica su
-//     escritorio al abrirse. Enseñar "algo ha ido mal" ahí sería mandarla a
-//     revisar el móvil cuando lo que hay que abrir es el PC.
-//   · 'forbidden' / 'unauthenticated': la cuenta con la que has entrado no
+//   · 'session_expired' / 'unauthorized': la sesión de Access ha caducado.
+//     Reintentar repite la redirección; lo que cura es recargar la página, y
+//     el propio error lo dice.
+//   · 'forbidden': la cuenta con la que has entrado no
 //     tiene biblioteca. Ni reintentar ni navegar a otra pantalla lo cura.
 //   · 'not_found': el enlace apunta a un juego que no está. Antes caía al
 //     texto genérico de red, así que abrir un /game/99999 (o un enlace
 //     compartido a medias) decía "revisa tu conexión" — mandando a mirar la
 //     cobertura cuando el problema es el enlace.
 //
-// Del error se lee el `code` y NADA MÁS. El `message` no se pinta nunca, y
-// esto es una cicatriz: la rama de 'not_found' lo enseñaba, y los mensajes del
-// Worker son todos notas de desarrollo en español ('ese juego no existe',
-// 'ruta desconocida', 'esa orden no existe o todavía no se ha drenado'…). Un
-// /game/99999 de verdad no fabrica su error aquí, viene por la red, así que lo
-// que se leía era el título en inglés con un subtítulo en español debajo —
+// Del error se lee el `code` y, solo en 'session_expired', el `message`: ese
+// texto lo fija api.ts en inglés. Los mensajes que manda el hub son notas de
+// desarrollo en español ('ese juego no existe', 'ruta desconocida'…), y
+// pintarlos dejaba un título en inglés con un subtítulo en español debajo —
 // contra la regla de la casa de que la interfaz está en inglés sin i18n (ver
 // lib/format.ts, por eso formatDate fija 'en-US').
 //
@@ -45,16 +42,15 @@ type Described = {
 
 const describe = (error: unknown): Described => {
   if (error instanceof ApiFailure) {
-    if (error.code === 'schema_outdated') {
+    if (error.code === 'session_expired' || error.code === 'unauthorized') {
       return {
-        title: 'Your PC needs an update',
-        hint: 'Open Afterplay on your PC once so it can update its database, then come back.',
+        title: 'Session expired',
+        hint: error.message,
         Icon: RefreshCw,
-        // Aquí el botón sí sirve: es lo que se pulsa al volver del PC.
-        recover: 'retry',
+        recover: 'none',
       };
     }
-    if (error.code === 'forbidden' || error.code === 'unauthenticated') {
+    if (error.code === 'forbidden') {
       return {
         title: 'No library for this account',
         hint: 'This account is not linked to an Afterplay library.',

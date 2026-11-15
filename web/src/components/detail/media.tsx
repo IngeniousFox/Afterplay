@@ -170,7 +170,7 @@ export const SagaSection = ({
   currentGameId,
 }: {
   entries: SagaEntry[];
-  currentGameId: number;
+  currentGameId: string;
 }): React.JSX.Element | null => {
   // Un solo capítulo es este mismo juego: no es una saga, es un juego suelto.
   if (entries.length <= 1) return null;

@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Plus, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { MailboxGameSource } from '../../../../src/shared/planMailbox';
-import { ApiFailure, enqueuePlan, searchGames } from '../../api';
-import type { SearchResult } from '../../api';
+import { ApiFailure, addToPlan, searchGames } from '../../api';
+import type { IgdbSearchResult } from '../../api';
 import { Cover } from '../Cover';
-import { STEAM_BLUE } from '../../lib/ratings';
 import { BLUE } from '../../lib/status';
 
-// Panel de alta: buscar en IGDB y encolar.
+// Panel de alta: buscar en IGDB y añadir al Plan. El hub crea el juego al
+// instante con lo que da la búsqueda (§13.3); el resto lo completa un PC.
 //
 // Es una hoja a pantalla completa y no un modal centrado: en un móvil, un
 // buscador con teclado abierto necesita todo el alto que haya, y un modal
@@ -19,13 +18,6 @@ import { BLUE } from '../../lib/status';
 // interesan a nadie — y cada una es una petición del Worker contra una API
 // ajena con cuota.
 const DEBOUNCE_MS = 350;
-
-// Clave estable de un resultado, venga de donde venga. Los dos catálogos
-// numeran por su cuenta, así que un igdbId y un appid pueden coincidir sin
-// tener nada que ver — usar el número pelado como key de React mezclaría dos
-// juegos distintos.
-const sourceKey = (source: MailboxGameSource): string =>
-  'igdbId' in source ? `igdb:${source.igdbId}` : `steam:${source.steamAppId}`;
 
 const useDebounced = (value: string, ms: number): string => {
   const [debounced, setDebounced] = useState(value);
@@ -39,10 +31,10 @@ const useDebounced = (value: string, ms: number): string => {
 export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.Element => {
   const [query, setQuery] = useState('');
   const debounced = useDebounced(query.trim(), DEBOUNCE_MS);
-  // Los que ya has mandado en ESTA sesión del panel: el botón se queda en
-  // "hecho" en vez de volver a estar disponible, que invitaría a encolar el
-  // mismo juego tres veces sin enterarte.
-  const [queued, setQueued] = useState<Set<string>>(new Set());
+  // Los que ya has añadido en ESTA sesión del panel: el botón se queda en
+  // "hecho" en vez de volver a estar disponible. El hub rechazaría el duplicado
+  // igualmente, pero así ni se intenta.
+  const [added, setAdded] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -61,18 +53,11 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
   });
 
   const add = useMutation({
-    mutationFn: (game: SearchResult) =>
-      enqueuePlan({
-        type: 'add',
-        source: game.source,
-        title: game.title,
-        coverUrl: game.coverUrl,
-        note: null,
-      }),
+    mutationFn: (game: IgdbSearchResult) => addToPlan(game),
     onSuccess: (_data, game) => {
-      setQueued((previous) => new Set(previous).add(sourceKey(game.source)));
-      // Que el fantasma aparezca en el Plan al cerrar, sin recargar.
-      void queryClient.invalidateQueries({ queryKey: ['plan-pending'] });
+      setAdded((previous) => new Set(previous).add(game.igdbId));
+      // Que el juego aparezca en el Plan al cerrar, sin recargar.
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
     },
   });
 
@@ -117,7 +102,14 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
           </div>
         ) : results.isError ? (
           <p className="py-16 text-center text-[12.5px] text-muted-foreground">
-            Couldn&apos;t reach the game catalog.
+            {/* Los códigos de IGDB traen su frase ("abre Afterplay en tu PC una
+                vez", "IGDB no responde"); el resto, el genérico. */}
+            {results.error instanceof ApiFailure &&
+            ['igdb_not_configured', 'igdb_unavailable', 'session_expired', 'timeout'].includes(
+              results.error.code,
+            )
+              ? results.error.message
+              : "Couldn't reach the game catalog."}
           </p>
         ) : results.data.length === 0 ? (
           <p className="py-16 text-center text-[12.5px] text-muted-foreground">
@@ -126,90 +118,42 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
         ) : (
           <div className="flex flex-col gap-2">
             {results.data.map((game) => {
-              const key = sourceKey(game.source);
-              const done = queued.has(key);
-              const busy =
-                add.isPending && add.variables && sourceKey(add.variables.source) === key;
-              const fromSteam = 'steamAppId' in game.source;
+              const done = added.has(game.igdbId);
+              const busy = add.isPending && add.variables?.igdbId === game.igdbId;
               return (
                 <div
-                  key={key}
+                  key={game.igdbId}
                   className="flex items-center gap-3 rounded-xl border border-border bg-card p-2"
                 >
-                  <Cover
-                    url={game.coverUrl}
-                    title={game.title}
-                    className={`w-10 ${game.owned ? 'opacity-50' : ''}`}
-                  />
+                  <Cover url={game.coverUrl} title={game.title} className="w-10" />
                   <div className="min-w-0 flex-1">
-                    <div
-                      className={`truncate text-[13px] font-bold ${game.owned ? 'text-muted-foreground' : ''}`}
-                    >
-                      {game.title}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      {game.releaseYear !== null && (
-                        <span className="text-[10.5px] font-semibold text-muted-foreground tabular-nums">
-                          {game.releaseYear}
-                        </span>
-                      )}
-                      {/* Lo que ya tienes se dice AQUÍ y no al fallar: el
-                          UNIQUE de games.igdbId lo rechazaría igualmente, pero
-                          en la máquina del escritorio y sin nadie mirando. */}
-                      {/* Los que solo están en Steam se marcan: su ficha va a
-                          ser más pobre (sin tiempos de HowLongToBeat, sin
-                          notas de crítica) hasta que IGDB los catalogue, y
-                          entonces el escritorio adopta la de IGDB solo. */}
-                      {fromSteam && !game.owned && (
-                        <span
-                          className="text-[10px] font-bold tracking-wide"
-                          style={{ color: STEAM_BLUE }}
-                        >
-                          VIA STEAM
-                        </span>
-                      )}
-                      {game.owned && (
-                        <span
-                          className="text-[10px] font-bold tracking-wide"
-                          style={{
-                            color: game.owned === 'library' ? 'var(--muted-foreground)' : BLUE,
-                          }}
-                        >
-                          {game.owned === 'plan'
-                            ? 'ALREADY PLANNED'
-                            : game.owned === 'queued'
-                              ? 'ALREADY QUEUED'
-                              : 'IN YOUR LIBRARY'}
-                        </span>
-                      )}
-                    </div>
+                    <div className="truncate text-[13px] font-bold">{game.title}</div>
+                    {game.releaseYear !== null && (
+                      <div className="mt-0.5 text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+                        {game.releaseYear}
+                      </div>
+                    )}
                   </div>
-                  {game.owned ? (
-                    <span className="flex h-9 w-9 flex-none items-center justify-center text-muted-foreground/40">
+                  <button
+                    type="button"
+                    disabled={done || busy}
+                    onClick={() => add.mutate(game)}
+                    aria-label={done ? 'Added' : `Add ${game.title} to your plan`}
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-full border"
+                    style={
+                      done
+                        ? { borderColor: `${BLUE}4d`, background: `${BLUE}1f`, color: BLUE }
+                        : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.04)' }
+                    }
+                  >
+                    {busy ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : done ? (
                       <Check size={15} />
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={done || busy}
-                      onClick={() => add.mutate(game)}
-                      aria-label={done ? 'Queued' : `Add ${game.title} to your plan`}
-                      className="flex h-9 w-9 flex-none items-center justify-center rounded-full border"
-                      style={
-                        done
-                          ? { borderColor: `${BLUE}4d`, background: `${BLUE}1f`, color: BLUE }
-                          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.04)' }
-                      }
-                    >
-                      {busy ? (
-                        <Loader2 size={15} className="animate-spin" />
-                      ) : done ? (
-                        <Check size={15} />
-                      ) : (
-                        <Plus size={16} />
-                      )}
-                    </button>
-                  )}
+                    ) : (
+                      <Plus size={16} />
+                    )}
+                  </button>
                 </div>
               );
             })}
@@ -218,15 +162,15 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
 
         {add.isError && (
           <p className="mt-3 text-center text-[11.5px] text-destructive">
-            {add.error instanceof ApiFailure ? add.error.message : "Couldn't queue that one."}
+            {add.error instanceof ApiFailure ? add.error.message : "Couldn't add that one."}
           </p>
         )}
       </div>
 
       <div className="flex-none border-t border-border px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.85rem)]">
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Games you add are queued and completed the next time you open Afterplay on your PC —
-          that&apos;s where the covers, times and store data get resolved.
+          Games you add show up in your plan right away. Your PC fills in the times and store data
+          the next time it syncs.
         </p>
       </div>
     </div>

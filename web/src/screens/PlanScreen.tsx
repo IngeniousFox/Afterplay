@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronUp,
   Clock3,
-  CloudUpload,
   Pin,
   PinOff,
   Plus,
@@ -15,7 +14,6 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { PlanMailboxEntry } from '../api';
 import {
   computePlanDebt,
   filterQueue,
@@ -23,19 +21,20 @@ import {
   sortUpNext,
 } from '../../../src/shared/planShelves';
 import type { PlanShelfReaders } from '../../../src/shared/planShelves';
-import { ApiFailure, dismissPlanFailure, enqueuePlan, fetchPlan, fetchPlanPending } from '../api';
+import { ApiFailure, fetchPlan, pinGame, reorderPlan, unpinGame } from '../api';
 import type { PlannedGame } from '../api';
 import { Cover } from '../components/Cover';
 import { AddGameSheet } from '../components/plan/AddGameSheet';
 import { EmptyState, ErrorState, Loading } from '../components/States';
 import { formatHours, formatRelease, pluralize } from '../lib/format';
-import { applyPending } from '../lib/planPending';
-import type { GhostGame } from '../lib/planPending';
 import { bestRating } from '../lib/ratings';
 import { countdownLabel, isUnreleased, releaseCountdown, releaseSortKey } from '../lib/releaseDate';
 import { AMBER, BLUE, GREEN, TEAL } from '../lib/status';
 
 const PLAN = BLUE;
+
+type PlanChange =
+  { type: 'pin' | 'unpin'; gameId: string } | { type: 'reorder'; orderedIds: string[] };
 
 // Cómo se lee un PlannedGame de la API para repartirlo en estanterías. El
 // REPARTO lo decide src/shared/planShelves —la misma función que el escritorio—
@@ -49,31 +48,15 @@ const READ: PlanShelfReaders<PlannedGame> = {
   releaseSortKey: (game) => releaseSortKey(game),
 };
 
-// La marca de "esto todavía no ha llegado a tu PC". Discreta a propósito: el
-// cambio ya se ve aplicado, esto solo explica por qué aún no está en el
-// escritorio (§6.3).
-const PendingMark = ({ label }: { label: string }): React.JSX.Element => (
-  <span
-    className="flex flex-none items-center gap-1 rounded-md px-1.5 py-0.25 text-[9px] font-bold tracking-wide"
-    style={{ color: PLAN, background: `${PLAN}18` }}
-    title="Will be completed the next time you open Afterplay on your PC"
-  >
-    <CloudUpload size={9} />
-    {label}
-  </span>
-);
-
 const PlanRow = ({
   game,
   order,
-  pending,
   onPin,
   onUnpin,
   reorder,
 }: {
   game: PlannedGame;
   order: number;
-  pending: boolean;
   onPin: (game: PlannedGame) => void;
   onUnpin: (game: PlannedGame) => void;
   // En modo reordenar, el pin se cambia por las flechas: en un móvil, arrastrar
@@ -91,7 +74,6 @@ const PlanRow = ({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[13px] font-bold">{game.title}</span>
-          {pending && <PendingMark label="PENDING" />}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {release && (
@@ -190,23 +172,6 @@ const PlanRow = ({
   );
 };
 
-// Un alta encolada que todavía no es un juego: no tiene ficha a la que entrar
-// ni nada que pinear, así que se pinta apagada y sin controles.
-const GhostRow = ({ ghost }: { ghost: GhostGame }): React.JSX.Element => (
-  <div className="flex items-center gap-3 rounded-xl border border-dashed border-white/14 bg-white/[0.015] p-2">
-    <Cover url={ghost.coverUrl} title={ghost.title} className="w-11 opacity-60" />
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-1.5">
-        <span className="truncate text-[13px] font-bold text-muted-foreground">{ghost.title}</span>
-        <PendingMark label="ADDING" />
-      </div>
-      <div className="mt-1 text-[10.5px] font-semibold text-muted-foreground/70">
-        Completes when you open Afterplay on your PC
-      </div>
-    </div>
-  </div>
-);
-
 const Collapsible = ({
   label,
   color,
@@ -272,36 +237,26 @@ export const PlanScreen = (): React.JSX.Element => {
 
   const queryClient = useQueryClient();
   const plan = useQuery({ queryKey: ['plan'], queryFn: fetchPlan });
-  const pendingQuery = useQuery({ queryKey: ['plan-pending'], queryFn: fetchPlanPending });
 
-  const enqueue = useMutation({
-    mutationFn: (entry: PlanMailboxEntry) => enqueuePlan(entry),
-    // Al volver, la capa de pendientes se recalcula y el cambio se ve. No se
-    // toca ['plan']: esa lista sigue siendo lo que hay en la base de verdad, y
-    // mezclarlas escondería qué está aplicado y qué no.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['plan-pending'] }),
+  // Las escrituras son inmediatas (§13.3): cuando la petición vuelve, el cambio
+  // está hecho en el hub. No hay estado "pendiente" ni capa optimista; se vuelve
+  // a leer el plan y listo. La ficha del juego también cambia (su "Up next").
+  const change = useMutation({
+    mutationFn: async (op: PlanChange): Promise<void> => {
+      if (op.type === 'reorder') await reorderPlan(op.orderedIds);
+      else if (op.type === 'pin') await pinGame(op.gameId);
+      else await unpinGame(op.gameId);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
+      void queryClient.invalidateQueries({ queryKey: ['game'] });
+    },
   });
 
-  const dismiss = useMutation({
-    mutationFn: (id: number) => dismissPlanFailure(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['plan-pending'] }),
-  });
-
-  const { upNext, upNextAll, queue, horizon, debt, ghosts, touched } = useMemo(() => {
-    // El tercer argumento solo se usa si un pin pendiente trae una marca no
-    // creíble (el Worker ya las rechaza): el escritorio lo sellará con "ahora"
-    // al drenar (mailboxPinStamp en src/shared/domain/planOrder.ts). Se usa el
-    // instante en que se leyeron los pendientes y no Date.now(), que haría el
-    // render impuro y movería la previsión en cada repintado.
-    const overlay = applyPending(
-      plan.data ?? [],
-      pendingQuery.data?.pending ?? [],
-      pendingQuery.dataUpdatedAt,
-    );
+  const { upNext, upNextAll, queue, horizon, debt } = useMemo(() => {
+    const all = plan.data ?? [];
     const needle = query.trim().toLowerCase();
-    const games = needle
-      ? overlay.games.filter((game) => game.title.toLowerCase().includes(needle))
-      : overlay.games;
+    const games = needle ? all.filter((game) => game.title.toLowerCase().includes(needle)) : all;
 
     return {
       upNext: sortUpNext(games, READ),
@@ -309,20 +264,16 @@ export const PlanScreen = (): React.JSX.Element => {
       // este y no sobre lo que se ve: con una búsqueda activa, mover una fila
       // reescribía el orden de solo los visibles y mandaba a los ocultos a
       // donde nadie había pedido.
-      upNextAll: sortUpNext(overlay.games, READ),
+      upNextAll: sortUpNext(all, READ),
       horizon: sortHorizon(games, READ),
       // Sin ordenar después: la cola se queda con el alfabético que ya trae
-      // /api/plan. El escritorio le pasa aquí su lente, que la PWA no tiene.
+      // /plan. El escritorio le pasa aquí su lente, que la PWA no tiene.
       queue: filterQueue(games, READ),
-      ghosts: needle
-        ? overlay.ghosts.filter((ghost) => ghost.title.toLowerCase().includes(needle))
-        : overlay.ghosts,
-      touched: overlay.touched,
       // La deuda se mide sobre el plan ENTERO, no sobre lo que deja ver la
       // búsqueda: es cuánto debes, no cuánto estás mirando.
-      debt: computePlanDebt(overlay.games),
+      debt: computePlanDebt(all),
     };
-  }, [plan.data, pendingQuery.data, pendingQuery.dataUpdatedAt, query]);
+  }, [plan.data, query]);
 
   if (plan.isPending) return <Loading label="Reading your plan" />;
   if (plan.isError) return <ErrorState error={plan.error} onRetry={() => plan.refetch()} />;
@@ -343,19 +294,17 @@ export const PlanScreen = (): React.JSX.Element => {
   // que se traducen a la lista completa antes de tocar nada: si no, reordenar
   // con una búsqueda activa reescribía el orden de los tres visibles y dejaba
   // a los ocultos donde nadie los había puesto.
-  const move = (gameId: number, direction: -1 | 1): void => {
+  const move = (gameId: string, direction: -1 | 1): void => {
     const ids = upNextAll.map((game) => game.id);
     const from = ids.indexOf(gameId);
     const to = from + direction;
     if (from < 0 || to < 0 || to >= ids.length) return;
     const [moved] = ids.splice(from, 1);
     ids.splice(to, 0, moved);
-    // Todo el orden en UNA orden, no N pines sueltos: es un solo gesto, y
-    // partirlo permitiría drenar la mitad y dejar un orden que nadie pidió.
-    enqueue.mutate({ type: 'reorder', orderedIds: ids });
+    // Todo el orden en UNA petición, no N pines sueltos: es un solo gesto, y
+    // partirlo permitiría aplicar la mitad y dejar un orden que nadie pidió.
+    change.mutate({ type: 'reorder', orderedIds: ids });
   };
-
-  const failures = pendingQuery.data?.failures ?? [];
 
   return (
     <div className="px-4 pt-4">
@@ -389,29 +338,20 @@ export const PlanScreen = (): React.JSX.Element => {
         </button>
       </div>
 
-      {/* Un pin/unpin/reorden que no se pudo encolar.
-          Antes esto no existía y el fallo era TOTALMENTE mudo: como lo que se
-          ve sale de la lista de pendientes del servidor y no de estado local,
-          una orden rechazada no producía ningún cambio en pantalla — tocabas
-          el pin, no se movía, y no aparecía nada. Se tragaba desde el 409 hasta
-          el "actualiza tu PC". */}
-      {(enqueue.isError || dismiss.isError) && (
+      {/* Un pin/unpin/reorden que el hub no pudo aplicar. Sin esto el fallo
+          sería TOTALMENTE mudo: lo que se ve sale del servidor, así que una
+          petición rechazada no produce ningún cambio en pantalla. */}
+      {change.isError && (
         <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/[0.07] px-3.5 py-3">
           <AlertTriangle size={14} className="mt-0.5 flex-none text-destructive" />
           <span className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            {(() => {
-              const error = enqueue.error ?? dismiss.error;
-              return error instanceof ApiFailure
-                ? error.message
-                : "Couldn't save that change. Try again.";
-            })()}
+            {change.error instanceof ApiFailure
+              ? change.error.message
+              : "Couldn't save that change. Try again."}
           </span>
           <button
             type="button"
-            onClick={() => {
-              enqueue.reset();
-              dismiss.reset();
-            }}
+            onClick={() => change.reset()}
             aria-label="Dismiss"
             className="-mt-1 -mr-1 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground"
           >
@@ -419,36 +359,6 @@ export const PlanScreen = (): React.JSX.Element => {
           </button>
         </div>
       )}
-
-      {/* Una orden que reventó al drenarse desaparece de "pendiente" sin
-          haberse aplicado. Sin esto no quedaría ni rastro de que lo intentaste.
-          Y con la X porque un aviso que no se puede quitar deja de leerse: a la
-          tercera vez que lo ves ya es decoración. */}
-      {failures.map((failure) => (
-        <div
-          key={failure.id}
-          className="mb-2.5 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/[0.07] px-3.5 py-3"
-        >
-          <AlertTriangle size={14} className="mt-0.5 flex-none text-destructive" />
-          <div className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            {failure.entry.type === 'add'
-              ? `Couldn't add “${failure.entry.title}” on your PC.`
-              : "A change couldn't be applied on your PC."}
-            <span className="mt-1 block truncate text-[10.5px] text-muted-foreground/70">
-              {failure.error}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => dismiss.mutate(failure.id)}
-            disabled={dismiss.isPending}
-            aria-label="Dismiss"
-            className="-mt-1 -mr-1 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
 
       <div className="relative mb-4">
         <Search
@@ -476,7 +386,7 @@ export const PlanScreen = (): React.JSX.Element => {
         )}
       </div>
 
-      {total === 0 && ghosts.length === 0 ? (
+      {total === 0 ? (
         <EmptyState>{query ? `Nothing matches “${query}”.` : 'Nothing planned yet.'}</EmptyState>
       ) : (
         <div className="flex flex-col gap-4">
@@ -501,11 +411,8 @@ export const PlanScreen = (): React.JSX.Element => {
                     key={game.id}
                     game={game}
                     order={index}
-                    pending={touched.has(game.id)}
-                    onPin={(g) =>
-                      enqueue.mutate({ type: 'pin', gameId: g.id, pinnedAt: Date.now() })
-                    }
-                    onUnpin={(g) => enqueue.mutate({ type: 'unpin', gameId: g.id })}
+                    onPin={(g) => change.mutate({ type: 'pin', gameId: g.id })}
+                    onUnpin={(g) => change.mutate({ type: 'unpin', gameId: g.id })}
                   />
                 ))}
               </div>
@@ -538,11 +445,8 @@ export const PlanScreen = (): React.JSX.Element => {
                     key={game.id}
                     game={game}
                     order={index}
-                    pending={touched.has(game.id)}
-                    onPin={(g) =>
-                      enqueue.mutate({ type: 'pin', gameId: g.id, pinnedAt: Date.now() })
-                    }
-                    onUnpin={(g) => enqueue.mutate({ type: 'unpin', gameId: g.id })}
+                    onPin={(g) => change.mutate({ type: 'pin', gameId: g.id })}
+                    onUnpin={(g) => change.mutate({ type: 'unpin', gameId: g.id })}
                     reorder={
                       reordering
                         ? {
@@ -552,16 +456,16 @@ export const PlanScreen = (): React.JSX.Element => {
                             // un filtro puesto, el primero que ves puede no
                             // ser el primero de verdad.
                             //
-                            // Y las dos se apagan mientras hay una orden en
+                            // Y las dos se apagan mientras hay una petición en
                             // vuelo: nada de esto es optimista, así que la
                             // lista no se mueve hasta que vuelve el servidor
                             // — y un segundo toque calculaba desde la lista
-                            // VIEJA y encolaba una orden idéntica a la
-                            // primera. El usuario no veía moverse nada, que
-                            // es justo lo que invita a seguir tocando.
-                            isFirst: upNextAll[0]?.id === game.id || enqueue.isPending,
+                            // VIEJA y repetía la primera orden. El usuario no
+                            // veía moverse nada, que es justo lo que invita a
+                            // seguir tocando.
+                            isFirst: upNextAll[0]?.id === game.id || change.isPending,
                             isLast:
-                              upNextAll[upNextAll.length - 1]?.id === game.id || enqueue.isPending,
+                              upNextAll[upNextAll.length - 1]?.id === game.id || change.isPending,
                           }
                         : undefined
                     }
@@ -571,7 +475,7 @@ export const PlanScreen = (): React.JSX.Element => {
             </Collapsible>
           )}
 
-          {(queue.length > 0 || ghosts.length > 0) && (
+          {queue.length > 0 && (
             <section>
               <div className="mb-2.5 flex items-baseline justify-between">
                 <h2 className="text-[10px] font-bold tracking-[.13em] text-muted-foreground uppercase">
@@ -582,20 +486,13 @@ export const PlanScreen = (): React.JSX.Element => {
                 </span>
               </div>
               <div className="flex flex-col gap-2">
-                {/* Los recién encolados arriba: es lo último que has hecho. */}
-                {ghosts.map((ghost) => (
-                  <GhostRow key={ghost.mailboxId} ghost={ghost} />
-                ))}
                 {queue.map((game, index) => (
                   <PlanRow
                     key={game.id}
                     game={game}
                     order={index}
-                    pending={touched.has(game.id)}
-                    onPin={(g) =>
-                      enqueue.mutate({ type: 'pin', gameId: g.id, pinnedAt: Date.now() })
-                    }
-                    onUnpin={(g) => enqueue.mutate({ type: 'unpin', gameId: g.id })}
+                    onPin={(g) => change.mutate({ type: 'pin', gameId: g.id })}
+                    onUnpin={(g) => change.mutate({ type: 'unpin', gameId: g.id })}
                   />
                 ))}
               </div>

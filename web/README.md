@@ -90,3 +90,19 @@ curl http://localhost:8787/api/health
 
 Devuelve el **nombre** de la base conectada (nunca el token). Si ahí pone
 `afterplay-test-...`, estás donde tienes que estar.
+
+---
+
+## Contra el hub 2.0 (fase 5)
+
+La PWA habla con el hub en `/api/v2` (`hub/worker`), que en producción también la
+sirve (`assets` en `hub/worker/wrangler.jsonc`, construida con `npm run build`).
+
+- `npm run dev` (en `web/`): `/api` va al `wrangler dev` del hub de al lado
+  (`hub/worker`, puerto 8787, con `ENVIRONMENT=development` y `DEV_EMAIL` en su
+  `.dev.vars`).
+- `npm run dev:pwa:hub` (en la raíz): `/api` va al hub de DESARROLLO desplegado
+  (`afterplay-dev-hub`) como anfitrión, sin Access. Vite lee el token de
+  `hub/worker/.dev.vars.admin-token` (`HUB_ADMIN_TOKEN=...`, el mismo que usa
+  `npm run hub:dev`) y lo pone en la cabecera al reenviar; el navegador nunca lo
+  ve. Abre http://localhost:5173.

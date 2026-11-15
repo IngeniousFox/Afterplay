@@ -44,6 +44,23 @@
   // ir ENVIRONMENT=development y DEV_EMAIL para saltarse Access SOLO en local.
   // Sin ACCESS_* ni HUB_ADMIN_TOKEN, /api/v2/* falla cerrado (401).
 
+  // La PWA (fase 5, §13) se sirve desde ESTE MISMO Worker como assets estáticos,
+  // igual que hacía la 1.x: un solo origen (cero CORS, una sola aplicación de
+  // Access) y los assets no cuentan para la cuota de peticiones de Workers.
+  // Se construye antes con `npm run build` en web/.
+  //
+  // `run_worker_first` en /api/* y /sync/* es lo que hace que el fallback de SPA
+  // no se trague las rutas del hub devolviendo index.html con un 200: esas dos
+  // siempre pasan por el código del Worker; todo lo demás lo sirven los assets
+  // sin invocarlo, y las rutas desconocidas caen a index.html (la PWA enruta).
+  // El entorno `dev` lo hereda (wrangler hereda `assets`).
+  "assets": {
+    "directory": "../../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/sync/*"],
+  },
+
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 
   "env": {

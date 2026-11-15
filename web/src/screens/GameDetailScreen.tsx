@@ -96,14 +96,15 @@ const PlanBanner = ({ addedAt }: { addedAt: number }): React.JSX.Element => (
 );
 
 export const GameDetailScreen = (): React.JSX.Element => {
+  // El id es texto (§4): se pasa tal cual, sin convertirlo.
   const { id } = useParams<{ id: string }>();
-  const gameId = Number(id);
+  const gameId = id ?? '';
   const navigate = useNavigate();
 
   const game = useQuery({
     queryKey: ['game', gameId],
     queryFn: () => fetchGame(gameId),
-    enabled: Number.isFinite(gameId),
+    enabled: gameId !== '',
   });
 
   // Los sub-recursos van por su cuenta: son listas largas o dependen de IGDB.
@@ -112,22 +113,22 @@ export const GameDetailScreen = (): React.JSX.Element => {
   const achievements = useQuery({
     queryKey: ['achievements', gameId],
     queryFn: () => fetchAchievements(gameId),
-    enabled: Number.isFinite(gameId),
+    enabled: gameId !== '',
   });
   const curiosities = useQuery({
     queryKey: ['curiosities', gameId],
     queryFn: () => fetchCuriosities(gameId),
-    enabled: Number.isFinite(gameId),
+    enabled: gameId !== '',
   });
   const media = useQuery({
     queryKey: ['media', gameId],
     queryFn: () => fetchMedia(gameId),
-    enabled: Number.isFinite(gameId),
+    enabled: gameId !== '',
   });
   const saga = useQuery({
     queryKey: ['saga', gameId],
     queryFn: () => fetchSaga(gameId),
-    enabled: Number.isFinite(gameId),
+    enabled: gameId !== '',
   });
 
   // Qué playthrough está elegido. Vive aquí y no dentro del panel porque el
@@ -135,7 +136,7 @@ export const GameDetailScreen = (): React.JSX.Element => {
   // playthrough — igual que en el escritorio.
   const iterations = game.data?.iterations ?? [];
   const newestId = iterations.length > 0 ? iterations[iterations.length - 1].id : undefined;
-  const [selectedId, setSelectedId] = useState<number | undefined>(newestId);
+  const [selectedId, setSelectedId] = useState<string | undefined>(newestId);
   // Al entrar se muestra el más reciente, y si aparece uno nuevo la selección
   // salta a él. Ajuste de estado durante el render, sin useEffect. Elegir a
   // mano uno anterior se respeta: eso no cambia `newestId`.
@@ -145,19 +146,13 @@ export const GameDetailScreen = (): React.JSX.Element => {
     setSelectedId(newestId);
   }
 
-  // Un :id que no es un número deja las cinco queries desactivadas, y en
-  // react-query v5 una query desactivada se queda en `pending` PARA SIEMPRE:
-  // el `isPending` de abajo pintaba un spinner eterno, sin error ni salida.
-  // Pasa de verdad — el fallback de SPA sirve la app para cualquier /game/*,
-  // así que un enlace compartido a medias aterriza aquí.
-  //
-  // El texto lo escribe ErrorState a partir del `code`; este `message` no se
-  // pinta en ninguna pantalla y está en el idioma del resto de mensajes de
-  // desarrollo, para quien lo vea en una traza. La salida de esa pantalla es
-  // el enlace a la biblioteca, no un reintento: volver a montar esto con el
-  // mismo :id roto da exactamente lo mismo.
-  if (!Number.isFinite(gameId)) {
-    return <ErrorState error={new ApiFailure('not_found', 'el :id de la URL no es un numero')} />;
+  // Un :id vacío deja las cinco queries desactivadas, y en react-query v5 una
+  // query desactivada se queda en `pending` PARA SIEMPRE: el `isPending` de
+  // abajo pintaba un spinner eterno, sin error ni salida. El texto lo escribe
+  // ErrorState a partir del `code`; la salida de esa pantalla es el enlace a la
+  // biblioteca, no un reintento.
+  if (gameId === '') {
+    return <ErrorState error={new ApiFailure('not_found', 'falta el id en la URL')} />;
   }
   if (game.isPending) return <Loading />;
   // El reintento es para lo que se cura reintentando (red, 500). Un 404 —el
@@ -271,7 +266,7 @@ export const GameDetailScreen = (): React.JSX.Element => {
             deja preparado, sin fechas ni horas. Lo que sí importa de él es lo
             de más abajo — cuánto dura, qué opinan, de qué va. */}
         {detail.planned ? (
-          <PlanBanner addedAt={detail.firstPlannedAt ?? detail.addedAt} />
+          <PlanBanner addedAt={detail.planHistory?.plannedAt ?? detail.addedAt} />
         ) : (
           <>
             <MetricsRow game={detail} />

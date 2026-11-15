@@ -1,4 +1,4 @@
-import type { EventDatePrecision, DatePrecision } from '../../../src/shared/dateTypes';
+import type { DatePrecision, StateEventDatePrecision } from '../../../src/shared/dateTypes';
 import { DAY_MS, startOfDayMs } from '../../../src/shared/dateMath';
 import { pluralize } from '../../../src/shared/format';
 import {
@@ -26,10 +26,12 @@ export const formatDate = (ms: number): string =>
 // on that PC and is not synchronized to the PWA. Match its default here.
 export const formatTime = (ms: number): string => formatDateTime(new Date(ms), '24h');
 
-export const formatDateOnly = (ms: number, precision: DatePrecision): string =>
+export const formatDateOnly = (ms: number, precision: DatePrecision | 'unknown'): string =>
   formatDateOnlyValue(new Date(ms), precision);
 
-export const formatByPrecision = (ms: number, precision: EventDatePrecision): string =>
+// Los eventos de estado pueden venir sin fecha ('unknown'): el formateador
+// compartido lo pinta como el escritorio.
+export const formatByPrecision = (ms: number, precision: StateEventDatePrecision): string =>
   formatDateByPrecision(new Date(ms), precision, '24h');
 
 // Escala corta para "hace cuánto" en frases sueltas: redondear sin vergüenza,

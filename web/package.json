@@ -5,6 +5,7 @@
   "description": "PWA de Afterplay para el móvil (REMOTO.md)",
   "scripts": {
     "dev": "vite",
+    "dev:hub": "vite --mode hub",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

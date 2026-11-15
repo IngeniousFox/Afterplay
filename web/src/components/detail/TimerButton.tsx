@@ -16,7 +16,7 @@ export const TimerButton = ({
   gameId,
   gameTitle,
 }: {
-  gameId: number;
+  gameId: string;
   gameTitle: string;
 }): React.JSX.Element | null => {
   const queryClient = useQueryClient();
@@ -69,10 +69,10 @@ export const TimerButton = ({
         For consoles and anything Afterplay can&apos;t see running. Counts as a normal session.
       </p>
 
-      {/* Los choques llegan como 409 con su frase: ya hay una sesión abierta,
-          el playthrough está cerrado, el juego no tiene ninguno. Todos son
-          cosas que se pueden entender y resolver, así que se dicen tal cual en
-          vez de con un "algo ha ido mal". */}
+      {/* Los choques llegan como 409 con su frase ("ese juego se está jugando
+          en PC-A", "ya hay un cronómetro en marcha"). Son cosas que se pueden
+          entender y resolver, así que se dicen tal cual en vez de con un "algo
+          ha ido mal". */}
       {start.isError && (
         <div className="mt-2 flex items-start gap-2 rounded-[11px] border border-destructive/30 bg-destructive/[0.07] px-3 py-2.5">
           <AlertTriangle size={13} className="mt-0.5 flex-none text-destructive" />

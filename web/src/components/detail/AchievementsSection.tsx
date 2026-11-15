@@ -1,6 +1,7 @@
 import { ChevronDown, Lock, Sparkles, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import type { AchievementEntry, GameAchievements } from '../../api';
+import type { SourceCompletion } from '../../../../src/shared/api/v2';
 import { isRare, percentLabel, rarityAccent, sortAchievements } from '../../lib/achievements';
 import { formatDate } from '../../lib/format';
 import { SectionLabel } from './primitives';
@@ -134,6 +135,50 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
   );
 };
 
+// El completado de cada catálogo por su cuenta (R-11): un 100 % de Steam y uno
+// de RetroAchievements no se suman. El anillo de arriba cuenta todos los logros
+// juntos; con una sola fuente no se pinta esta línea, repetiría el anillo.
+const SOURCE_LABEL: Record<SourceCompletion['source'], string> = {
+  steam: 'Steam',
+  ra: 'RetroAchievements',
+};
+
+const SourceCompletionRow = ({
+  completion,
+}: {
+  completion: SourceCompletion[];
+}): React.JSX.Element => (
+  <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[11px] border border-border bg-card px-4 py-2.5">
+    {completion.map((source) => (
+      <span
+        key={source.source}
+        className="flex items-baseline gap-1.5 text-[11.5px] tabular-nums"
+        title={
+          source.complete && source.completedAt !== null
+            ? `100% since ${formatDate(source.completedAt)}`
+            : undefined
+        }
+      >
+        <span className="text-[10px] font-bold tracking-[.12em] text-muted-foreground uppercase">
+          {SOURCE_LABEL[source.source]}
+        </span>
+        {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
+            desbloqueos de esta fuente. */}
+        {!source.known ? (
+          <span className="text-muted-foreground/60">not synced yet</span>
+        ) : (
+          <span
+            className={source.complete ? 'font-extrabold' : 'font-extrabold text-foreground'}
+            style={source.complete ? { color: '#e3b24a' } : undefined}
+          >
+            {source.complete ? '100%' : `${source.unlocked} of ${source.total}`}
+          </span>
+        )}
+      </span>
+    ))}
+  </div>
+);
+
 // Cuántos se pintan antes de pedir "ver todos". Un juego puede tener 200
 // logros y montarlos todos de golpe en un móvil es medio segundo de scroll
 // trabado por una lista que casi nadie recorre entera.
@@ -183,6 +228,8 @@ export const AchievementsSection = ({
           )}
         </div>
       </div>
+
+      {data.completion.length > 1 && <SourceCompletionRow completion={data.completion} />}
 
       <div className="flex flex-col gap-1.5">
         {shown.map((entry) => (

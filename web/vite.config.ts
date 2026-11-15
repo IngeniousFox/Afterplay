@@ -1,26 +1,77 @@
+import { readFileSync } from 'node:fs';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import type { ProxyOptions } from 'vite';
 
-export default defineConfig({
+// El hub de DESARROLLO (`afterplay-dev-hub`, wrangler.jsonc env.dev). Es el único
+// destino remoto que acepta este modo, igual que scripts/hub-dev.ts.
+const DEV_HUB_URL = 'https://afterplay-dev-hub.afterplay-worker.workers.dev';
+// Cabecera del token de administración (hub/worker/src/adminToken.ts).
+const ADMIN_TOKEN_HEADER = 'x-afterplay-admin-token';
+const ADMIN_TOKEN_FILE = new URL('../hub/worker/.dev.vars.admin-token', import.meta.url);
+
+// El token se lee AQUÍ, en el proceso de Node de Vite, y solo viaja en la
+// cabecera de la petición que el proxy reenvía al hub. No pasa por `define`, ni
+// por `import.meta.env`, ni por ningún log: el navegador no lo ve nunca.
+const readAdminToken = (): string => {
+  let text: string;
+  try {
+    text = readFileSync(ADMIN_TOKEN_FILE, 'utf8');
+  } catch {
+    throw new Error(
+      'Falta hub/worker/.dev.vars.admin-token (el token del hub de desarrollo, HUB_ADMIN_TOKEN=...).',
+    );
+  }
+  const match = /^HUB_ADMIN_TOKEN=(.+)$/m.exec(text);
+  if (!match) throw new Error('hub/worker/.dev.vars.admin-token no tiene HUB_ADMIN_TOKEN=...');
+  return match[1].trim();
+};
+
+// `vite --mode hub`: /api va al hub de desarrollo desplegado, como el anfitrión
+// (token de administración), sin Access. Al hub le hace falta además un
+// `Origin` suyo en las escrituras (router.ts, sameOrigin): el del navegador
+// es `http://localhost:5173`, así que se reescribe.
+const hubProxy = (): Record<string, ProxyOptions> => {
+  const token = readAdminToken();
+  return {
+    '/api': {
+      target: DEV_HUB_URL,
+      changeOrigin: true,
+      secure: true,
+      configure: (proxy) => {
+        proxy.on('proxyReq', (proxyReq, req) => {
+          proxyReq.setHeader(ADMIN_TOKEN_HEADER, token);
+          if (req.headers.origin) proxyReq.setHeader('origin', DEV_HUB_URL);
+        });
+      },
+    },
+  };
+};
+
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    // En desarrollo, /api va al `wrangler dev` de al lado. Así el navegador ve
-    // UN SOLO origen igual que en producción (donde el mismo Worker sirve la
-    // PWA y la API, ver worker/wrangler.jsonc): sin esto habría que montar
-    // CORS con credenciales solo para el modo dev, o sea probar una cosa
-    // distinta de la que se despliega.
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8787',
-        changeOrigin: true,
-      },
-    },
+    // Por defecto, /api va al `wrangler dev` del hub de al lado (hub/worker,
+    // puerto 8787, con ENVIRONMENT=development y DEV_EMAIL en su .dev.vars). Así
+    // el navegador ve UN SOLO origen igual que en producción (donde el mismo
+    // Worker sirve la PWA y la API): sin esto habría que montar CORS con
+    // credenciales solo para el modo dev, o sea probar una cosa distinta de la
+    // que se despliega. Con `--mode hub`, al hub de desarrollo desplegado.
+    proxy:
+      mode === 'hub'
+        ? hubProxy()
+        : {
+            '/api': {
+              target: 'http://127.0.0.1:8787',
+              changeOrigin: true,
+            },
+          },
   },
   build: {
-    // Lo consume el Worker como assets estáticos (assets.directory apunta
-    // aquí). Un solo `dist` que se despliega con el propio Worker.
+    // Lo consume el hub como assets estáticos (hub/worker/wrangler.jsonc,
+    // assets.directory apunta aquí). Un solo `dist` que se despliega con él.
     outDir: 'dist',
     emptyOutDir: true,
 
@@ -77,4 +128,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

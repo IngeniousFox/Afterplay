@@ -50,11 +50,19 @@ const queryClient = new QueryClient({
     queries: {
       // Un móvil entra y sale de cobertura constantemente; reintentar tiene
       // sentido. Lo que NO tiene sentido es reintentar un 403 (esta cuenta no
-      // tiene biblioteca) o un esquema desfasado (§5.4): esos no se curan
-      // insistiendo, solo gastan batería y retrasan el mensaje de verdad.
+      // tiene biblioteca), una sesión de Access caducada o un 404: esos no se
+      // curan insistiendo, solo gastan batería y retrasan el mensaje de verdad.
       retry: (failureCount, error) => {
         if (error instanceof ApiFailure) {
-          if (['forbidden', 'unauthenticated', 'schema_outdated', 'not_found'].includes(error.code))
+          if (
+            [
+              'forbidden',
+              'unauthorized',
+              'session_expired',
+              'not_found',
+              'igdb_not_configured',
+            ].includes(error.code)
+          )
             return false;
         }
         return failureCount < 2;

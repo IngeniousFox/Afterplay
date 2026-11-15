@@ -158,7 +158,7 @@ export const EndlessBadge = (): React.JSX.Element => (
 type Props = {
   game: GameDetail;
   selected: IterationDetail;
-  onSelect: (id: number) => void;
+  onSelect: (id: string) => void;
 };
 
 // Card "Playthrough". Tres bloques con jerarquía: el tramo de tiempo (la

@@ -5,7 +5,9 @@ import { Link } from 'react-router-dom';
 import { beatTimer, beatTimerOnHide, fetchActiveTimer, stopTimer } from '../api';
 import { useLiveSeconds } from '../hooks/useLiveSeconds';
 import { formatElapsed } from '../lib/format';
-import { Cover } from './Cover';
+
+// El cronómetro del hub trae las fechas en ISO 8601 (api/v2/writes.ts).
+const startedAtMs = (iso: string): number => Date.parse(iso);
 
 // ~1 por minuto (REMOTO.md §7.4). Una sesión de tres horas son 180 peticiones,
 // nada frente a las 100.000 diarias del plan gratuito. El watcher del
@@ -110,7 +112,7 @@ export const TimerBar = (): React.JSX.Element | null => {
   }, [sessionId, queryClient]);
 
   const stop = useMutation({
-    mutationFn: (id: number) => stopTimer(id),
+    mutationFn: (id: string) => stopTimer(id),
     onSuccess: () => {
       // Todo lo que acaba de cambiar: la sesión ya cuenta horas.
       void queryClient.invalidateQueries({ queryKey: ['stats'] });
@@ -161,10 +163,9 @@ export const TimerBar = (): React.JSX.Element | null => {
           style={{ animation: 'afterplay-glow-card 2.6s ease-in-out infinite' }}
         >
           <Link to={`/game/${active.gameId}`} className="flex min-w-0 flex-1 items-center gap-3">
-            <Cover url={active.coverUrl} title={active.gameTitle} className="w-8" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] font-bold">{active.gameTitle}</div>
-              <ElapsedTime since={active.startedAt} />
+              <div className="truncate text-[12px] font-bold">{active.title}</div>
+              <ElapsedTime since={startedAtMs(active.startedAt)} />
             </div>
           </Link>
 

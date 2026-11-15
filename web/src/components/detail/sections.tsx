@@ -1,7 +1,6 @@
 import {
   BookOpen,
   ChevronDown,
-  Folder,
   HardDrive,
   Lightbulb,
   Newspaper,
@@ -13,7 +12,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { GameDetail } from '../../api';
-import { formatByPrecision, formatBytes, formatCount, formatRelease } from '../../lib/format';
+import { formatByPrecision, formatCount, formatRelease } from '../../lib/format';
 import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../lib/ratings';
 import { Cell, CardTitle, DetailCard, InfoChip, SectionLabel } from './primitives';
 
@@ -102,27 +101,19 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
         </div>
       )}
 
-      {game.installDirectory && (
+      {/* Dónde está instalado: el dispositivo, nunca su ruta (F-31). */}
+      {game.installedOn.length > 0 && (
         <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
-              INSTALLED AT
-            </span>
-            {game.installSizeBytes !== null && (
-              <span className="flex items-center gap-1.25 text-[11px] font-semibold text-muted-foreground tabular-nums">
-                <HardDrive size={11} />
-                {formatBytes(game.installSizeBytes)}
-              </span>
-            )}
+          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+            INSTALLED ON
           </div>
-          <div
-            className="flex items-center gap-2 rounded-[9px] border border-border bg-white/[0.02] px-2.5 py-2"
-            title={game.installDirectory}
-          >
-            <Folder size={13} className="flex-none text-muted-foreground" />
-            <span className="truncate font-mono text-[11px] text-foreground">
-              {game.installDirectory}
-            </span>
+          <div className="flex flex-wrap gap-1.5">
+            {game.installedOn.map((device) => (
+              <InfoChip key={device.deviceId}>
+                <HardDrive size={11} className="mr-1.5 inline-block align-[-1px]" />
+                {device.deviceName}
+              </InfoChip>
+            ))}
           </div>
         </div>
       )}
