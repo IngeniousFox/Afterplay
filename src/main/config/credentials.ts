@@ -4,12 +4,17 @@ import { existsSync, readFileSync, renameSync, unlinkSync } from 'fs';
 import { writeFileAtomicSync } from '../lib/atomicWrite';
 import { isDevProfile } from '../lib/devProfileRules';
 import { isE2E } from '../lib/e2e';
+import { getConfigValue, setConfigValue } from './store';
 import {
   CREDENTIAL_KEYS as SHARED_CREDENTIAL_KEYS,
   ENV_BY_CREDENTIAL_KEY,
   SYNC_CREDENTIAL_KEYS,
   type SyncCredentialKey,
 } from '../../shared/credentialKeys';
+import {
+  isSyncedCredentialKey,
+  type SyncedCredentialKey,
+} from '../../shared/sync/credentialsBundle';
 import { join } from 'path';
 import type {
   CredentialsImportResult,
@@ -101,6 +106,42 @@ const writeValues = (values: Partial<Record<keyof CredentialsValues, string>>): 
   writeAll({ ...values, ...getSyncCredentials() });
 };
 
+// ── SELLOS PARA EL SYNC DE CREDENCIALES ─────────────────────────────────────
+//
+// Cada clave sincronizada lleva el momento en que una PERSONA la cambió por
+// última vez (config.json → credentialStamps). Con eso el hub decide, clave a
+// clave, cuál es la más nueva entre los PCs (shared/sync/credentialsBundle.ts).
+// Solo se sella lo que cambia de verdad: guardar Ajustes sin tocar una clave no
+// le pone fecha nueva, o un PC con el formulario viejo pisaría a otro.
+
+const normalize = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+};
+
+export const getCredentialStamps = (): Record<string, number> => ({
+  ...getConfigValue('credentialStamps'),
+});
+
+/** Sella `keys` con la hora de ahora (también el destino de las partidas guardadas). */
+export const stampCredentialKeys = (keys: readonly SyncedCredentialKey[]): void => {
+  if (keys.length === 0) return;
+  const stamps = getCredentialStamps();
+  const now = Date.now();
+  for (const key of keys) stamps[key] = now;
+  setConfigValue('credentialStamps', stamps);
+};
+
+// Escribe las claves de servicios y sella las SINCRONIZADAS cuyo valor cambió.
+const writeStampedValues = (values: Partial<Record<keyof CredentialsValues, string>>): void => {
+  const before = getCredentials();
+  writeValues(values);
+  const changed = CREDENTIAL_KEYS.filter(
+    (key) => isSyncedCredentialKey(key) && normalize(before[key]) !== normalize(values[key]),
+  ) as SyncedCredentialKey[];
+  stampCredentialKeys(changed);
+};
+
 // Los valores en claro actuales (descifrados). null = sin configurar.
 export const getCredentials = (): CredentialsValues => {
   const file = readFile();
@@ -174,8 +215,37 @@ export const setCredentials = (input: CredentialsValues): void => {
     const value = normalized[key];
     if (value) toStore[key] = value;
   }
-  writeValues(toStore);
+  writeStampedValues(toStore);
   applyToEnv(normalized);
+};
+
+// Aplica lo que llegó del hub (main/sync/appRuntime.ts): escribe los valores
+// dados SIN poner sello nuevo —se queda el sello de origen que traen— y
+// actualiza process.env como `setCredentials`. `null` borra la clave. Solo
+// admite claves sincronizadas: Turso y el emparejado del hub se conservan tal
+// cual, venga lo que venga. El que llama invalida los clientes cacheados.
+export const applySyncedCredentials = (
+  values: Partial<Record<keyof CredentialsValues, string | null>>,
+  stamps: Partial<Record<string, number>>,
+): void => {
+  const current = getCredentials();
+  const next = { ...current };
+  for (const key of CREDENTIAL_KEYS) {
+    if (!isSyncedCredentialKey(key) || !(key in values)) continue;
+    next[key] = normalize(values[key]);
+  }
+  const toStore: Partial<Record<keyof CredentialsValues, string>> = {};
+  for (const key of CREDENTIAL_KEYS) {
+    const value = next[key];
+    if (value) toStore[key] = value;
+  }
+  writeValues(toStore);
+  const merged = getCredentialStamps();
+  for (const [key, stamp] of Object.entries(stamps)) {
+    if (typeof stamp === 'number') merged[key] = stamp;
+  }
+  setConfigValue('credentialStamps', merged);
+  applyToEnv(next);
 };
 
 // El HOST de una base remota, para el log. Los dos caminos que IMPORTAN
@@ -301,7 +371,7 @@ const importKeys = (raw: Record<string, string>): CredentialsImportResult => {
     throw new Error("That file doesn't have any Afterplay keys in it.");
   }
 
-  writeValues(merged);
+  writeStampedValues(merged);
   const values = getCredentials();
   applyToEnv(values);
   return { imported, values };
@@ -408,7 +478,7 @@ const importLegacyEnv = (): void => {
       }
       if (Object.keys(values).length === 0) continue;
 
-      writeValues(values);
+      writeStampedValues(values);
       // Se dice QUÉ base remota traen, no solo de dónde vienen: este es el
       // punto exacto donde un .env decide con qué base habla la app (ver
       // remoteLabel para el susto que lo trajo).

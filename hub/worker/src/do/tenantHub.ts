@@ -104,6 +104,12 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     return this.serviceFor(tenantId).storeIgdbCredentials(token, request);
   }
 
+  exchangeCredentials(
+    ...[tenantId, token, request]: Parameters<TenantRpc['exchangeCredentials']>
+  ): ReturnType<TenantRpc['exchangeCredentials']> {
+    return this.serviceFor(tenantId).exchangeCredentials(token, request);
+  }
+
   enroll(...[tenantId, request]: Parameters<TenantRpc['enroll']>): ReturnType<TenantRpc['enroll']> {
     return this.serviceFor(tenantId).enroll(request);
   }

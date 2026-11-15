@@ -59,10 +59,11 @@ type AppConfig = {
   // — las que ya hubiera de antes NO se borran solas, apagar esto no es
   // pedir que se destruya nada, es solo dejar de generar más.
   backupCount: number;
-  // Huella (SHA-256) de las claves de IGDB que este PC subió por última vez a su hub
-  // (sync/runtime.ts, F-29): sirve para no volver a subirlas en cada ciclo. Es de ESTE
-  // PC: otro PC emparejado al mismo hub lleva la suya.
-  igdbKeysFingerprint: string | null;
+  // Cuándo (ms desde epoch) cambió una persona por última vez cada credencial
+  // sincronizada (shared/sync/credentialsBundle.ts): es lo que decide, clave a
+  // clave, qué PC gana al fusionar con el hub. No es secreto: solo nombres y
+  // fechas. Las claves que se reciben del hub conservan el sello de origen.
+  credentialStamps: Record<string, number>;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -79,7 +80,7 @@ const DEFAULT_CONFIG: AppConfig = {
   // copia al día (24h), 5 en rotación.
   backupIntervalHours: 24,
   backupCount: 5,
-  igdbKeysFingerprint: null,
+  credentialStamps: {},
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

@@ -7,6 +7,7 @@
 // `Authorization: Bearer ap1.<inquilino>.<secreto>`, salvo `enroll`, que es
 // justo la que lo consigue.
 
+import type { CredentialsBundle } from './credentialsBundle';
 import type { WireRow } from './merge';
 
 /** Cambia solo si cambia la forma de hablar (§8.7). */
@@ -21,6 +22,7 @@ export const SYNC_ROUTES = {
   jobsClaim: `${SYNC_BASE_PATH}/jobs/claim`,
   jobsDone: `${SYNC_BASE_PATH}/jobs/done`,
   igdbCredentials: `${SYNC_BASE_PATH}/igdb-credentials`,
+  credentials: `${SYNC_BASE_PATH}/credentials`,
 } as const;
 
 /** Máximos por defecto (§8.4). El hub anuncia los suyos en `/status`. */
@@ -268,6 +270,21 @@ export interface IgdbCredentialsResponse {
 
 /** Tope de cada clave: las de Twitch miden 30 caracteres; esto solo corta basura. */
 export const IGDB_KEY_MAX_LENGTH = 200;
+
+// ---------- POST /credentials ----------
+
+/**
+ * Las credenciales de servicios de este PC. El hub las fusiona con las que ya
+ * tiene (clave a clave, gana la más nueva) y devuelve el resultado: una sola
+ * vuelta sube y baja. Se guardan CIFRADAS; ver `credentialsBundle.ts`.
+ */
+export interface CredentialsExchangeRequest {
+  entries: CredentialsBundle;
+}
+
+export interface CredentialsExchangeResponse {
+  entries: CredentialsBundle;
+}
 
 // ---------- Transporte ----------
 

@@ -1,5 +1,8 @@
-import { createHash } from 'node:crypto';
 import type { HybridClock } from '../../shared/sync/clock';
+import {
+  parseCredentialsBundle,
+  type CredentialsBundle,
+} from '../../shared/sync/credentialsBundle';
 import { checkHubUrl } from '../../shared/sync/hubUrl';
 import {
   PROTOCOL_VERSION,
@@ -25,7 +28,7 @@ import {
 import {
   enroll as httpEnroll,
   createHttpTransport,
-  uploadIgdbCredentials as httpUploadIgdb,
+  exchangeCredentials as httpExchangeCredentials,
 } from './httpTransport';
 import { SyncScheduler, type FlushOutcome, type SchedulerTimers } from './scheduler';
 import { applyEnrollment, readSyncState } from './state';
@@ -51,16 +54,21 @@ export interface SyncCredentialsStore {
 }
 
 /**
- * Las claves de IGDB de este PC y la huella de lo último que se subió al hub
- * (F-29). La huella no es un secreto en claro: es un SHA-256 de hub + claves.
+ * Las credenciales de servicios de ESTE PC, tal como las ve el sync: lo que se
+ * sube al hub y dónde se aplica lo que llega de él. El runtime no sabe de
+ * `credentials.json` ni de config.json; eso lo cablea `appRuntime.ts`.
  */
-export interface IgdbKeysSource {
-  read(): { clientId: string; clientSecret: string } | null;
-  readFingerprint(): string | null;
-  writeFingerprint(fingerprint: string | null): void;
+export interface CredentialsSource {
+  /** Entradas de las claves que tienen valor o sello (sin sello = `updatedAt` 0). */
+  readBundle(): CredentialsBundle;
+  /** Escribe lo que el hub tenía más nuevo, con los sellos de origen. */
+  apply(changes: CredentialsBundle): void;
 }
 
-export type IgdbUploadResult = 'uploaded' | 'unchanged' | 'no-keys' | 'not-paired' | 'failed';
+export type CredentialsSyncResult = 'synced' | 'applied' | 'not-paired' | 'failed' | 'busy';
+
+/** Cada cuánto, como mucho, un ciclo de sync correcto repite el intercambio de credenciales. */
+export const CREDENTIALS_SYNC_INTERVAL_MS = 10 * 60_000;
 
 export interface SyncRuntimeDeps {
   /** La base abierta: la lectura, la puerta de escritura y el reloj compartido. */
@@ -76,8 +84,8 @@ export interface SyncRuntimeDeps {
   /** ¿Prohíbe el perfil de desarrollo hablar con este hub? */
   readonly isHubBlocked: (hubUrl: string) => boolean;
   readonly credentials: SyncCredentialsStore;
-  /** Sin esto, el PC no sube claves de IGDB al hub. */
-  readonly igdbKeys?: IgdbKeysSource;
+  /** Sin esto, el PC no intercambia credenciales con el hub. */
+  readonly credentialsSource?: CredentialsSource;
   /** Lo que la descarga cambió: la ventana refresca sus consultas. */
   readonly onChange: (change: SyncChange) => void;
   /** El estado cambió (ciclo terminado, emparejado, desemparejado). */
@@ -86,7 +94,7 @@ export interface SyncRuntimeDeps {
   readonly now?: () => number;
   // Para los tests.
   readonly enroll?: typeof httpEnroll;
-  readonly uploadIgdbCredentials?: typeof httpUploadIgdb;
+  readonly exchangeCredentials?: typeof httpExchangeCredentials;
   readonly createTransport?: (options: { baseUrl: string; token: string }) => SyncTransport;
   readonly timers?: SchedulerTimers;
   readonly schedulerOptions?: { debounceMs?: number; intervalMs?: number };
@@ -113,7 +121,8 @@ export class SyncRuntime {
   private active: Active | null = null;
   private disabledReason: string | null = null;
   private pairing = false;
-  private uploadingIgdb = false;
+  private syncingCredentials = false;
+  private lastCredentialsSyncAt = 0;
   /** Para no repetir en el log el mismo fallo cada reintento. */
   private lastLogged = '';
 
@@ -129,7 +138,7 @@ export class SyncRuntime {
     const credentials = this.deps.credentials.read();
     if (!credentials) return;
     if (!this.activate(credentials.hubUrl, credentials.token)) return;
-    void this.syncIgdbKeys();
+    void this.syncCredentials();
     await this.current()?.scheduler.start(limitMs);
   }
 
@@ -235,11 +244,9 @@ export class SyncRuntime {
         return fail("Couldn't save the pairing on this PC. Create a new code and try again.");
       }
       this.disabledReason = null;
-      // Hub nuevo: aunque las claves no hayan cambiado, ese hub no las tiene.
-      this.deps.igdbKeys?.writeFingerprint(null);
       this.deps.logger.info(`emparejado con ${check.host} (id corto ${response.shortDeviceId})`);
       if (this.activate(check.url, response.token)) {
-        void this.syncIgdbKeys();
+        void this.syncCredentials();
         void this.current()?.scheduler.start(0);
       }
       this.deps.onStatus();
@@ -257,7 +264,7 @@ export class SyncRuntime {
     this.deactivate();
     this.disabledReason = null;
     this.deps.credentials.clear();
-    this.deps.igdbKeys?.writeFingerprint(null);
+    this.lastCredentialsSyncAt = 0;
     this.lastLogged = '';
     this.deps.logger.info('desemparejado de este PC');
     this.deps.onStatus();
@@ -283,42 +290,53 @@ export class SyncRuntime {
   }
 
   /**
-   * Sube al hub las claves de IGDB de este PC si el hub aún no tiene ESTAS
-   * (huella distinta de la última subida). Se llama al arrancar emparejado, al
-   * emparejar y al cambiar las claves en Ajustes; no en cada ciclo. Sin claves
-   * no sube nada. NUNCA lanza ni registra las claves: solo el resultado.
+   * Intercambia las credenciales con el hub en una sola vuelta: sube las de este
+   * PC y recibe las fusionadas. Donde el hub tiene algo MÁS NUEVO (o igual de
+   * nuevo pero distinto: los empates los gana el hub para que todos converjan)
+   * se aplica aquí; lo demás ya lo tiene el hub. Se llama al arrancar
+   * emparejado, al emparejar, al cambiar las claves en Ajustes y, como mucho
+   * cada 10 minutos, tras un ciclo correcto. NUNCA lanza ni registra valores:
+   * solo códigos y NÚMERO de claves.
    */
-  async syncIgdbKeys(): Promise<IgdbUploadResult> {
-    const source = this.deps.igdbKeys;
+  async syncCredentials(): Promise<CredentialsSyncResult> {
+    const source = this.deps.credentialsSource;
     const credentials = this.deps.credentials.read();
     if (!source || !credentials || this.deps.isE2E || this.deps.isHubBlocked(credentials.hubUrl)) {
       return 'not-paired';
     }
-    if (this.uploadingIgdb) return 'unchanged';
-    this.uploadingIgdb = true;
+    if (this.syncingCredentials) return 'busy';
+    this.syncingCredentials = true;
+    this.lastCredentialsSyncAt = (this.deps.now ?? Date.now)();
     try {
-      const keys = source.read();
-      if (!keys) return 'no-keys';
-      const fingerprint = createHash('sha256')
-        .update([credentials.hubUrl, keys.clientId, keys.clientSecret].join('\n'))
-        .digest('hex');
-      if (source.readFingerprint() === fingerprint) return 'unchanged';
+      let hubEntries: CredentialsBundle;
       try {
-        await (this.deps.uploadIgdbCredentials ?? httpUploadIgdb)(
+        const response = await (this.deps.exchangeCredentials ?? httpExchangeCredentials)(
           { baseUrl: credentials.hubUrl, token: credentials.token },
-          keys,
+          { entries: source.readBundle() },
         );
+        hubEntries = parseCredentialsBundle(response?.entries);
       } catch (error) {
         this.deps.logger.warn(
-          `no se pudieron subir las claves de IGDB al hub: ${error instanceof SyncRequestError ? error.code : 'error inesperado'}`,
+          `no se pudieron intercambiar las credenciales con el hub: ${error instanceof SyncRequestError ? error.code : 'error inesperado'}`,
         );
         return 'failed';
       }
-      source.writeFingerprint(fingerprint);
-      this.deps.logger.info('claves de IGDB subidas al hub');
-      return 'uploaded';
+      // Si se desemparejó mientras esperábamos, lo que llegó ya no es de este PC.
+      if (this.deps.credentials.read()?.token !== credentials.token) return 'not-paired';
+
+      // Se compara con lo de AHORA, no con lo que se subió: si la persona cambió
+      // una clave durante la espera, esa edición manda.
+      const changes = hubWins(source.readBundle(), hubEntries);
+      if (Object.keys(changes).length === 0) return 'synced';
+      try {
+        source.apply(changes);
+      } catch {
+        this.deps.logger.warn('no se pudieron aplicar las credenciales recibidas del hub');
+        return 'failed';
+      }
+      return 'applied';
     } finally {
-      this.uploadingIgdb = false;
+      this.syncingCredentials = false;
     }
   }
 
@@ -387,10 +405,18 @@ export class SyncRuntime {
     active.scheduler.stop();
   }
 
+  /** Tras un ciclo correcto: repite el intercambio, pero no más de una vez cada 10 minutos. */
+  private maybeSyncCredentials(): void {
+    const now = (this.deps.now ?? Date.now)();
+    if (now - this.lastCredentialsSyncAt < CREDENTIALS_SYNC_INTERVAL_MS) return;
+    void this.syncCredentials();
+  }
+
   private onResult(result: CycleResult): void {
     // Concisión: un ciclo sin nada que contar no se escribe (pasa cada minuto).
     if (result.status === 'ok') {
       this.lastLogged = '';
+      this.maybeSyncCredentials();
       if (result.pushed > 0 || result.applied > 0 || result.reset) {
         this.deps.logger.info(
           `ciclo ok: subidas ${result.pushed}, bajadas ${result.applied}` +
@@ -420,5 +446,28 @@ const EMPTY_STATUS: SyncStatus = {
   problem: null,
   disabledReason: null,
 };
+
+/**
+ * Las entradas del hub que deben ganar aquí: este PC no tiene la clave, o la del
+ * hub es más nueva, o es igual de nueva pero con otro valor (empate: el hub).
+ */
+function hubWins(local: CredentialsBundle, hub: CredentialsBundle): CredentialsBundle {
+  const out: CredentialsBundle = {};
+  for (const key of Object.keys(hub) as (keyof CredentialsBundle)[]) {
+    const theirs = hub[key];
+    if (!theirs) continue;
+    const mine = local[key];
+    if (!mine) {
+      // Un borrado de algo que aquí nunca existió no cambia nada.
+      if (theirs.value !== null) out[key] = theirs;
+    } else if (
+      theirs.updatedAt > mine.updatedAt ||
+      (theirs.updatedAt === mine.updatedAt && theirs.value !== mine.value)
+    ) {
+      out[key] = theirs;
+    }
+  }
+  return out;
+}
 
 const fail = (message: string): PairResult => ({ ok: false, message });

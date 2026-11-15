@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import type { EnrollRequest, EnrollResponse } from '../../../shared/sync/protocol';
+import {
+  mergeCredentialBundles,
+  type CredentialEntry,
+  type CredentialsBundle,
+} from '../../../shared/sync/credentialsBundle';
 import { SyncRequestError } from '../../../shared/sync/protocol';
 import { OTHER, T0 } from '../../db/v2/__tests__/helpers';
 import {
@@ -9,7 +14,13 @@ import {
   type QueryFixture,
 } from '../../db/v2/queries/common/__tests__/fixtures';
 import { createSyncEngine, type SyncChange, type SyncLogger } from '../engine';
-import { SyncRuntime, type SyncCredentialsStore, type SyncRuntimeDeps } from '../runtime';
+import {
+  CREDENTIALS_SYNC_INTERVAL_MS,
+  SyncRuntime,
+  type CredentialsSource,
+  type SyncCredentialsStore,
+  type SyncRuntimeDeps,
+} from '../runtime';
 import { readSyncState } from '../state';
 import { FakeHub } from './fakeHub';
 
@@ -476,50 +487,55 @@ describe('sync rapido antes de crear (§10.7)', () => {
   });
 });
 
-describe('claves de IGDB hacia el hub (F-29)', () => {
+describe('credenciales con el hub', () => {
   // Valores inventados: ninguna clave real.
-  const KEYS = { clientId: 'cliente-de-prueba', clientSecret: 'secreto-de-prueba' };
+  const entry = (value: string | null, updatedAt: number): CredentialEntry => ({
+    value,
+    updatedAt,
+  });
 
-  class MemoryIgdbKeys {
-    keys: { clientId: string; clientSecret: string } | null = KEYS;
-    fingerprint: string | null = null;
-    read(): { clientId: string; clientSecret: string } | null {
-      return this.keys;
+  /** Las credenciales de este PC en memoria. */
+  class MemorySource implements CredentialsSource {
+    bundle: CredentialsBundle = {};
+    applied: CredentialsBundle[] = [];
+    readBundle(): CredentialsBundle {
+      return { ...this.bundle };
     }
-    readFingerprint(): string | null {
-      return this.fingerprint;
-    }
-    writeFingerprint(fingerprint: string | null): void {
-      this.fingerprint = fingerprint;
+    apply(changes: CredentialsBundle): void {
+      this.applied.push(changes);
+      this.bundle = { ...this.bundle, ...changes };
     }
   }
 
-  const withIgdb = (
-    options: { paired?: boolean; fail?: boolean } = {},
+  /** Un hub que fusiona como el real y apunta lo que le suben. */
+  const withCredentials = (
+    options: { paired?: boolean; fail?: boolean; hubHas?: CredentialsBundle } = {},
   ): Setup & {
-    igdb: MemoryIgdbKeys;
+    source: MemorySource;
     uploads: { baseUrl: string; token: string; body: unknown }[];
+    hubBundle: { current: CredentialsBundle };
   } => {
-    const igdb = new MemoryIgdbKeys();
+    const source = new MemorySource();
+    const hubBundle = { current: options.hubHas ?? {} };
     const uploads: { baseUrl: string; token: string; body: unknown }[] = [];
     const s = setup(
       {
-        igdbKeys: igdb,
-        uploadIgdbCredentials: (target, body) => {
+        credentialsSource: source,
+        exchangeCredentials: (target, body) => {
           uploads.push({ baseUrl: target.baseUrl, token: target.token, body });
-          if (options.fail) {
-            return Promise.reject(new SyncRequestError('network', 'sin red'));
-          }
-          return Promise.resolve({ stored: true });
+          if (options.fail) return Promise.reject(new SyncRequestError('network', 'sin red'));
+          hubBundle.current = mergeCredentialBundles(hubBundle.current, body.entries);
+          return Promise.resolve({ entries: hubBundle.current });
         },
       },
       { paired: options.paired ?? true },
     );
-    return { ...s, igdb, uploads };
+    return { ...s, source, uploads, hubBundle };
   };
 
-  it('al arrancar emparejado sube las claves una vez, con el token del dispositivo', async () => {
-    const s = withIgdb();
+  it('al arrancar emparejado intercambia una vez, con el token del dispositivo', async () => {
+    const s = withCredentials();
+    s.source.bundle = { steamApiKey: entry('clave-steam', 10) };
 
     await s.runtime.start(2000);
     await waitFor(() => s.uploads.length === 1);
@@ -527,96 +543,170 @@ describe('claves de IGDB hacia el hub (F-29)', () => {
     assert.deepEqual(s.uploads[0], {
       baseUrl: 'https://hub.example',
       token: TOKEN,
-      body: KEYS,
+      body: { entries: { steamApiKey: entry('clave-steam', 10) } },
     });
-    assert.match(s.igdb.fingerprint ?? '', /^[0-9a-f]{64}$/);
-    assert.ok(!(s.igdb.fingerprint ?? '').includes(KEYS.clientSecret));
+    assert.deepEqual(s.hubBundle.current, { steamApiKey: entry('clave-steam', 10) });
+    assert.deepEqual(s.source.applied, [], 'lo propio no se vuelve a aplicar');
   });
 
-  it('con la misma huella no vuelve a subir, ni en otro arranque ni a mano', async () => {
-    const s = withIgdb();
-    await s.runtime.start(2000);
-    await waitFor(() => s.uploads.length === 1);
+  it('lo que el hub tiene más nuevo se aplica, y lo que es más nuevo aquí no', async () => {
+    const s = withCredentials({
+      hubHas: {
+        steamApiKey: entry('steam-del-hub', 20),
+        raApiKey: entry('ra-vieja-del-hub', 5),
+        s3Bucket: entry(null, 30),
+      },
+    });
+    s.source.bundle = {
+      steamApiKey: entry('steam-local', 10),
+      raApiKey: entry('ra-nueva-local', 15),
+      s3Bucket: entry('bucket-local', 12),
+    };
 
-    assert.equal(await s.runtime.syncIgdbKeys(), 'unchanged');
-    s.runtime.stop();
-    await s.runtime.start(2000);
-    await pause(30);
+    assert.equal(await s.runtime.syncCredentials(), 'applied');
 
-    assert.equal(s.uploads.length, 1);
+    assert.deepEqual(s.source.applied, [
+      { steamApiKey: entry('steam-del-hub', 20), s3Bucket: entry(null, 30) },
+    ]);
+    // Y el hub se quedó con la local más nueva.
+    assert.deepEqual(s.hubBundle.current.raApiKey, entry('ra-nueva-local', 15));
   });
 
-  it('si las claves cambian, sube las nuevas', async () => {
-    const s = withIgdb();
-    await s.runtime.start(2000);
-    await waitFor(() => s.uploads.length === 1);
+  it('una clave que este PC no tiene se baja', async () => {
+    const s = withCredentials({ hubHas: { anthropicApiKey: entry('clave-anthropic', 7) } });
 
-    s.igdb.keys = { clientId: 'cliente-nuevo', clientSecret: 'secreto-nuevo' };
+    assert.equal(await s.runtime.syncCredentials(), 'applied');
 
-    assert.equal(await s.runtime.syncIgdbKeys(), 'uploaded');
-    assert.deepEqual(s.uploads[1].body, s.igdb.keys);
+    assert.deepEqual(s.source.applied, [{ anthropicApiKey: entry('clave-anthropic', 7) }]);
   });
 
-  it('sin claves no sube nada', async () => {
-    const s = withIgdb();
-    s.igdb.keys = null;
+  it('un borrado del hub de algo que aquí nunca existió no se aplica', async () => {
+    const s = withCredentials({ hubHas: { raApiKey: entry(null, 7) } });
 
-    await s.runtime.start(2000);
+    assert.equal(await s.runtime.syncCredentials(), 'synced');
 
-    assert.equal(await s.runtime.syncIgdbKeys(), 'no-keys');
-    assert.equal(s.uploads.length, 0);
+    assert.deepEqual(s.source.applied, []);
   });
 
-  it('un fallo no guarda la huella: se reintenta en la siguiente ocasión', async () => {
-    const s = withIgdb({ fail: true });
-    await s.runtime.start(2000);
-    await waitFor(() => s.uploads.length === 1);
-    await pause(10);
+  it('con el mismo sello y otro valor gana el hub; con el mismo valor no se aplica nada', async () => {
+    const s = withCredentials({
+      hubHas: { steamApiKey: entry('valor-del-hub', 10), raApiKey: entry('igual', 10) },
+    });
+    s.source.bundle = { steamApiKey: entry('valor-local', 10), raApiKey: entry('igual', 10) };
 
-    assert.equal(s.igdb.fingerprint, null);
-    assert.equal(await s.runtime.syncIgdbKeys(), 'failed');
+    assert.equal(await s.runtime.syncCredentials(), 'applied');
+    assert.deepEqual(s.source.applied, [{ steamApiKey: entry('valor-del-hub', 10) }]);
+
+    assert.equal(await s.runtime.syncCredentials(), 'synced');
+    assert.equal(s.source.applied.length, 1);
+  });
+
+  it('un fallo del hub no aplica nada y se puede reintentar', async () => {
+    const s = withCredentials({ fail: true });
+    s.source.bundle = { steamApiKey: entry('clave', 1) };
+
+    assert.equal(await s.runtime.syncCredentials(), 'failed');
+    assert.equal(await s.runtime.syncCredentials(), 'failed');
+
     assert.equal(s.uploads.length, 2);
+    assert.deepEqual(s.source.applied, []);
   });
 
-  it('sin emparejar no sube; al emparejar sí, aunque la huella fuera la misma', async () => {
-    const s = withIgdb({ paired: false });
-    s.igdb.fingerprint = 'huella-de-otro-hub';
-
-    assert.equal(await s.runtime.syncIgdbKeys(), 'not-paired');
-    assert.equal(s.uploads.length, 0);
-
-    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
-    assert.equal(result.ok, true);
-    await waitFor(() => s.uploads.length === 1);
-    assert.deepEqual(s.uploads[0].body, KEYS);
-  });
-
-  it('desemparejar borra la huella', async () => {
-    const s = withIgdb();
-    await s.runtime.start(2000);
-    await waitFor(() => s.igdb.fingerprint !== null);
-
-    s.runtime.unpair();
-
-    assert.equal(s.igdb.fingerprint, null);
-  });
-
-  it('en modo E2E no sube nada', async () => {
-    const igdb = new MemoryIgdbKeys();
-    const uploads: unknown[] = [];
+  it('una respuesta con claves desconocidas (o de Turso) se descarta entera', async () => {
+    const source = new MemorySource();
     const s = setup(
       {
-        isE2E: true,
-        igdbKeys: igdb,
-        uploadIgdbCredentials: (_target, body) => {
-          uploads.push(body);
-          return Promise.resolve({ stored: true });
+        credentialsSource: source,
+        exchangeCredentials: () =>
+          Promise.resolve({
+            entries: { databaseUrl: entry('libsql://otra', 99) } as unknown as CredentialsBundle,
+          }),
+      },
+      { paired: true },
+    );
+
+    assert.equal(await s.runtime.syncCredentials(), 'failed');
+    assert.deepEqual(source.applied, []);
+  });
+
+  it('no hace dos intercambios a la vez', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const source = new MemorySource();
+    const s = setup(
+      {
+        credentialsSource: source,
+        exchangeCredentials: async () => {
+          await gate;
+          return { entries: {} };
         },
       },
       { paired: true },
     );
 
-    assert.equal(await s.runtime.syncIgdbKeys(), 'not-paired');
-    assert.equal(uploads.length, 0);
+    const first = s.runtime.syncCredentials();
+    assert.equal(await s.runtime.syncCredentials(), 'busy');
+    release();
+    assert.equal(await first, 'synced');
+  });
+
+  it('sin emparejar no pide nada; al emparejar sí', async () => {
+    const s = withCredentials({ paired: false });
+    s.source.bundle = { steamApiKey: entry('clave', 1) };
+
+    assert.equal(await s.runtime.syncCredentials(), 'not-paired');
+    assert.equal(s.uploads.length, 0);
+
+    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
+    assert.equal(result.ok, true);
+    await waitFor(() => s.uploads.length === 1);
+  });
+
+  it('en modo E2E o con un hub bloqueado no pide nada', async () => {
+    for (const overrides of [{ isE2E: true }, { isHubBlocked: () => true }]) {
+      const uploads: unknown[] = [];
+      const s = setup(
+        {
+          ...overrides,
+          credentialsSource: new MemorySource(),
+          exchangeCredentials: (_target, body) => {
+            uploads.push(body);
+            return Promise.resolve({ entries: {} });
+          },
+        },
+        { paired: true },
+      );
+
+      assert.equal(await s.runtime.syncCredentials(), 'not-paired');
+      assert.equal(uploads.length, 0);
+    }
+  });
+
+  it('tras un ciclo correcto repite el intercambio, pero no más de una vez cada 10 minutos', async () => {
+    const s = withCredentials();
+    await s.runtime.start(2000);
+    await waitFor(() => s.uploads.length === 1);
+
+    // Un ciclo poco después del arranque: no.
+    s.runtime.syncNow();
+    await waitFor(() => statusCalls(s.hub) >= 2);
+    await pause(30);
+    assert.equal(s.uploads.length, 1);
+
+    // Pasados los 10 minutos, el siguiente ciclo correcto sí.
+    s.fx.wall.advance(CREDENTIALS_SYNC_INTERVAL_MS + 1);
+    const before = statusCalls(s.hub);
+    s.runtime.syncNow();
+    await waitFor(() => statusCalls(s.hub) > before);
+    await waitFor(() => s.uploads.length === 2);
+
+    // Y otra vez enseguida: no.
+    const again = statusCalls(s.hub);
+    s.runtime.syncNow();
+    await waitFor(() => statusCalls(s.hub) > again);
+    await pause(30);
+    assert.equal(s.uploads.length, 2);
   });
 });
