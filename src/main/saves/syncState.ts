@@ -183,7 +183,34 @@ export function computeSaveSyncState(input: SaveSyncInput): SaveSyncState {
   }
 
   const reach = descendantsOf(rows);
-  const hashes = [...newestByHash.keys()];
+
+  // Superadas (§12.4: "la divergencia se cierra cuando el usuario restaura una
+  // de las puntas y sigue jugando desde ella; las demás quedan en el
+  // historial"). La partida de UN PC es lineal en el tiempo: si ese mismo PC
+  // tiene después otra versión que no desciende de esta, es que la reemplazó en
+  // su disco (restauró otra, o la cambió a mano) y dejó de ser su línea. Se
+  // compara por la hora de pared del backup y solo entre filas del mismo PC
+  // (mismo reloj; el reloj de sync de una fila recuperada es el de la
+  // recuperación, no el del backup). Cuentan también las filas podadas: una
+  // versión posterior podada sigue diciendo que el PC siguió por otro lado.
+  // Una huella está superada solo si TODAS sus filas vivas lo están: si otro
+  // PC la tiene como su última, sigue siendo su línea.
+  const hashedRows = rows.filter((row) => row.contentHash !== null);
+  const rowSuperseded = (row: LineageRow): boolean =>
+    hashedRows.some(
+      (later) =>
+        later.deviceId === row.deviceId &&
+        later.contentHash !== row.contentHash &&
+        later.createdAt.getTime() > row.createdAt.getTime() &&
+        !reach(row.contentHash as string).has(later.contentHash as string),
+    );
+  const superseded = (hash: string): boolean =>
+    alive.filter((row) => row.contentHash === hash).every(rowSuperseded);
+  const allHashes = [...newestByHash.keys()];
+  const current = allHashes.filter((hash) => !superseded(hash));
+  // Si todo quedara superado (no debería: la última versión de cada PC no lo
+  // está nunca), no se descarta nada antes que quedarse sin cabeza.
+  const hashes = current.length > 0 ? current : allHashes;
   const strictlyAfter = (from: string, to: string): boolean =>
     reach(from).has(to) && !reach(to).has(from);
 

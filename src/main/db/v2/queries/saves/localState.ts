@@ -11,8 +11,10 @@ import type { QueryContext } from '../common';
 // escribe directamente, sin la puerta. Tampoco tiene clave foránea: una fila de
 // un juego que ya no existe no molesta, y `purgeGameSaves` la limpia.
 //
-// `lastSyncedHash` (§12.3) es de la fase 6: aquí no se escribe nunca, pero se
-// respeta (borrar el destino no borra la fila si guarda una huella).
+// `lastSyncedHash` (§12.3): la última huella que este PC subió o restauró. La
+// escriben el indexado de copias propias (en la misma transacción que las
+// filas), la restauración y el cambio de identidad (que la borra entera).
+// Borrar el destino no borra la fila si guarda una huella.
 
 /** La ubicación elegida para restaurar un juego en este PC (`MachineSaveOverride`). */
 export interface SaveRestoreTarget {

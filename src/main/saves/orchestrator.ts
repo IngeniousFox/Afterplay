@@ -133,6 +133,23 @@ const requireSaveKey = (game: SaveGame): string => {
   return saveKey;
 };
 
+// El mapping.yaml de la carpeta local, o lanza si está pero no se deja leer.
+// readMapping devuelve null tanto si no existe como si revienta la lectura
+// (EBUSY del antivirus, archivo truncado a mitad de escritura de ludusavi), y
+// tratar lo segundo como "no hay versiones" es lo peor que puede pasar aquí:
+// el espejo daría por caducadas todas las copias de este PC y las borraría
+// del bucket, y subiría el archivo roto encima del bueno. Lo mismo que hace
+// deleteLocalBackups: ante un índice ilegible, no tocar nada y avisar.
+const readLocalMappingStrict = (dir: string, ludusaviName: string): BackupMapping | null => {
+  const mapping = readMapping(dir);
+  if (mapping === null && existsSync(join(dir, MAPPING_FILE))) {
+    throw new Error(
+      `The local backup index for "${ludusaviName}" couldn't be read, so nothing was uploaded or deleted. Close whatever is holding it (antivirus, ludusavi) and try again.`,
+    );
+  }
+  return mapping;
+};
+
 // ── Espejo local -> R2 ────────────────────────────────────────────────────
 // El bucket refleja la carpeta local del juego. Es idempotente por diseño:
 // si una subida falló a medias, la siguiente la completa sin duplicar nada,
@@ -143,7 +160,7 @@ const syncGameToR2 = async (game: SaveGame, ludusaviName: string): Promise<SaveB
   // caracteres ilegales sustituidos por "_" (bug real con "Motor Town:
   // Behind The Wheel" — el zip se creaba y el espejo no lo encontraba).
   const dir = findGameBackupDir(ludusaviName);
-  const localMapping = readMapping(dir);
+  const localMapping = readLocalMappingStrict(dir, ludusaviName);
   const versions = listVersions(localMapping);
   const localNames = new Set(versions.map((version) => version.name));
 
@@ -429,7 +446,7 @@ const serializeGameBackup = <T>(gameId: GameId, task: () => Promise<T>): Promise
 const removeDeletedLocalVersions = (gameId: GameId, ludusaviName: string): void => {
   const deleted = new Set(listOwnDeletedBackupNames(appCtx(), gameId));
   if (deleted.size === 0) return;
-  const local = listVersions(readMapping(findGameBackupDir(ludusaviName)))
+  const local = listVersions(readLocalMappingStrict(findGameBackupDir(ludusaviName), ludusaviName))
     .map((version) => version.name)
     .filter((name) => deleted.has(name));
   if (local.length === 0) return;
@@ -643,14 +660,21 @@ const materializeBackup = async (
   version: { name: string; chain: string[] },
 ): Promise<string> => {
   const workspace = createRestoreWorkspace(ludusaviName);
-  // Mismo saneado que la carpeta que creó el workspace: con ":" en el nombre
-  // la join literal apuntaba a una ruta imposible en Windows.
-  const gameDir = join(workspace, sanitizeLudusaviFolder(ludusaviName));
-  await r2.downloadFile(`${prefix}${MAPPING_FILE}`, join(gameDir, MAPPING_FILE));
-  for (const name of version.chain) {
-    await r2.downloadFile(`${prefix}${name}`, join(gameDir, name));
+  try {
+    // Mismo saneado que la carpeta que creó el workspace: con ":" en el nombre
+    // la join literal apuntaba a una ruta imposible en Windows.
+    const gameDir = join(workspace, sanitizeLudusaviFolder(ludusaviName));
+    await r2.downloadFile(`${prefix}${MAPPING_FILE}`, join(gameDir, MAPPING_FILE));
+    for (const name of version.chain) {
+      await r2.downloadFile(`${prefix}${name}`, join(gameDir, name));
+    }
+    return workspace;
+  } catch (error) {
+    // Una descarga fallida no deja el workspace a medias registrado como
+    // activo hasta el siguiente arranque.
+    clearRestoreWorkspace(workspace);
+    throw error;
   }
-  return workspace;
 };
 
 // La carpeta de una copia sale de SU clave, no del juego: así una copia
