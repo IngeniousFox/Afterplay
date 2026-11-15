@@ -28,6 +28,7 @@ export {
 } from './memorySignature';
 export {
   getAllCuriosities,
+  getGameCuriosities,
   getCuriositiesCounts,
   getPendingCuriositiesGames,
   storeCuriosities,

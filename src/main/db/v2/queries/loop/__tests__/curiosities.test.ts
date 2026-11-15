@@ -14,6 +14,7 @@ import {
 import {
   getAllCuriosities,
   getCuriositiesCounts,
+  getGameCuriosities,
   getPendingCuriositiesGames,
   storeCuriosities,
 } from '../curiosities';
@@ -151,5 +152,20 @@ describe('getAllCuriosities', () => {
       { gameId: a, text: 'A2' },
       { gameId: b, text: 'B1' },
     ]);
+  });
+});
+
+describe('getGameCuriosities', () => {
+  it('devuelve las de un juego vivo en su orden, y nada de uno borrado o sin ellas', () => {
+    const a = seedGame(fx.ctx, { title: 'A' });
+    const b = seedGame(fx.ctx, { title: 'B' });
+    const sin = seedGame(fx.ctx, { title: 'Sin' });
+    seedCuriosities(fx.ctx, { gameId: a, items: ['uno', 'dos'] });
+    seedCuriosities(fx.ctx, { gameId: b, items: ['otro'] });
+    assert.deepEqual(getGameCuriosities(fx.ctx, a), ['uno', 'dos']);
+    assert.deepEqual(getGameCuriosities(fx.ctx, sin), []);
+    tombstoneOnly(fx.ctx, 'games', b);
+    assert.deepEqual(getGameCuriosities(fx.ctx, b), []);
+    assert.deepEqual(getGameCuriosities(fx.ctx, 'no-existe'), []);
   });
 });

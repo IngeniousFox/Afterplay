@@ -12,4 +12,5 @@ export { getInstalledOn, getLocalInstall, type LocalInstall } from './installs';
 export { getOwnedGames } from './getOwnedGames';
 export { getPlannedGameExtras, getPlannedGames } from './getPlannedGames';
 export { readPlanHistory } from './planHistory';
+export { getStatsSummary, type StatsSummaryOptions } from './statsSummary';
 export { playthroughSessionTotals } from './playthroughTotals';

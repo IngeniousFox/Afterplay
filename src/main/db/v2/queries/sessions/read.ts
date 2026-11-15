@@ -24,6 +24,25 @@ import { liveEmulator, livePlaythrough, liveSession, type QueryContext } from '.
 export interface GetAllSessionsOptions {
   /** Solo las de este juego (el historial de la ficha). Sin él, todas. */
   readonly gameId?: string;
+  /** Una página: cuántas. Sin él, todas. El orden es el de siempre, así que las páginas encajan. */
+  readonly limit?: number;
+  /** Cuántas saltarse (solo con `limit`). */
+  readonly offset?: number;
+}
+
+/**
+ * Cuántas sesiones devolvería `getAllSessions` sin paginar (las asignadas y
+ * vivas). Es el total de "Page 2 of 7": una sola fila de resultado.
+ */
+export function countAllSessions(ctx: QueryContext): number {
+  const row = ctx.db
+    .select({ total: sql<number>`count(*)` })
+    .from(sessions)
+    .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))
+    .innerJoin(games, eq(games.id, playthroughs.gameId))
+    .where(liveSession())
+    .get();
+  return Number(row?.total ?? 0);
 }
 
 /**
@@ -37,7 +56,7 @@ export function getAllSessions(
   ctx: QueryContext,
   options: GetAllSessionsOptions = {},
 ): SessionWithGame<string>[] {
-  const rows = ctx.db
+  const query = ctx.db
     .select({
       id: sessions.id,
       iterationId: playthroughs.id,
@@ -67,7 +86,14 @@ export function getAllSessions(
       ),
     )
     .orderBy(desc(sessions.startedAt), desc(sessions.syncCreated), desc(sessions.id))
-    .all();
+    .$dynamic();
+  const rows =
+    options.limit === undefined
+      ? query.all()
+      : query
+          .limit(options.limit)
+          .offset(options.offset ?? 0)
+          .all();
 
   return rows.map(({ source, lastSeenAt, ...row }) => ({
     ...row,
