@@ -10,12 +10,21 @@
 
 import type { GameListItem } from '../../types';
 
-/** Un resultado del buscador de juegos. */
-export interface IgdbSearchResult {
+/** Un juego tal como lo da IGDB (búsqueda y capítulos de una saga). */
+export interface IgdbSearchHit {
   igdbId: number;
   title: string;
   coverUrl: string | null;
   releaseYear: number | null;
+}
+
+/**
+ * Un resultado del buscador de juegos, con si ya es tuyo: `library` si está en
+ * tu biblioteca, `plan` si espera en tu Plan. Así el buscador lo dice antes de
+ * que el alta choque con el duplicado.
+ */
+export interface IgdbSearchResult extends IgdbSearchHit {
+  owned: 'library' | 'plan' | null;
 }
 
 /**

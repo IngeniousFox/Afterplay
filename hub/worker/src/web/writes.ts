@@ -126,7 +126,7 @@ const pinRoute =
     if (!id.ok) return id.error;
     const { result } = service.queries().write((ctx) => setPlanPinned(ctx, id.value, pinned));
     // false = sin entrada viva en el Plan: no existe, está borrado o ya salió.
-    if (!result) return fail('not_found', 'ese juego no está en el Plan');
+    if (!result) return fail('not_found', "That game isn't in your Plan.");
     return ok<PlanPinResponse>({ gameId: id.value, pinned });
   };
 
@@ -164,6 +164,7 @@ const timerDto = (timer: ActiveTimer): ActiveTimerDto => ({
   sessionId: timer.sessionId,
   gameId: timer.gameId,
   title: timer.title,
+  coverUrl: timer.coverUrl,
   startedAt: timer.startedAt.toISOString(),
   lastSeenAt: (timer.lastSeenAt ?? timer.startedAt).toISOString(),
 });
@@ -209,7 +210,8 @@ export const WRITES_ROUTES: readonly WebRoute[] = [
         );
         return ok<PlanAddResponse>({ gameId: result.id });
       } catch (error) {
-        if (isGameWriteError(error, 'already_exists')) return fail('conflict', error.message);
+        if (isGameWriteError(error, 'already_exists'))
+          return fail('conflict', 'That game is already in your library.');
         if (isGameWriteError(error) || isStoreError(error)) {
           return fail('invalid_request', error.message);
         }
@@ -236,16 +238,16 @@ export const WRITES_ROUTES: readonly WebRoute[] = [
         case 'started':
           return ok<ActiveTimerDto>(timerDto(result.timer));
         case 'game_not_found':
-          return fail('not_found', 'ese juego no existe');
+          return fail('not_found', "That game doesn't exist.");
         case 'timer_running':
           return fail(
             'conflict',
             result.timer.gameId === id.value
-              ? 'ya hay un cronómetro en marcha para este juego'
-              : `ya hay un cronómetro en marcha (${result.timer.title})`,
+              ? 'A timer is already running for this game.'
+              : `A timer is already running (${result.timer.title}).`,
           );
         case 'live_elsewhere':
-          return fail('conflict', `ese juego se está jugando en ${result.deviceName}`);
+          return fail('conflict', `That game is being played on ${result.deviceName}.`);
       }
     },
   },
@@ -258,9 +260,9 @@ export const WRITES_ROUTES: readonly WebRoute[] = [
       const { result } = service.queries().write((ctx) => stopTimer(ctx, id.value));
       switch (result.status) {
         case 'not_found':
-          return fail('not_found', 'ese cronómetro no existe');
+          return fail('not_found', "That timer doesn't exist.");
         case 'not_a_timer':
-          return fail('invalid_request', 'esa sesión no es un cronómetro');
+          return fail('invalid_request', "That session isn't a timer.");
         default:
           return ok<TimerStopResponse>({
             sessionId: result.timer.sessionId,

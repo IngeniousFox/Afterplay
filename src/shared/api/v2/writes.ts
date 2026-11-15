@@ -51,6 +51,7 @@ export interface ActiveTimerDto {
   readonly sessionId: string;
   readonly gameId: string;
   readonly title: string;
+  readonly coverUrl: string | null;
   readonly startedAt: string;
   /** Última señal de vida; si no ha latido aún, `startedAt`. */
   readonly lastSeenAt: string;

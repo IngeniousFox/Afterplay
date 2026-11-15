@@ -199,6 +199,7 @@ describe('GET /api/v2/search', () => {
       title: 'Zelda',
       coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co1.webp',
       releaseYear: 2001,
+      owned: null,
     });
     const igdbCalls = igdb.calls.filter((call) => call.url.startsWith('https://api.igdb.com/'));
     assert.equal(igdbCalls.length, 2);
@@ -350,6 +351,27 @@ describe('rutas de la ficha: saga y media', () => {
     })).result;
     return { world, ids, calls: igdb.calls };
   }
+
+  it('search: marca lo que ya está en tu biblioteca o en tu Plan', async () => {
+    const { world } = await withGames(() => [
+      { id: 101, name: 'Capítulo 2', total_rating_count: 30 },
+      { id: 102, name: 'Capítulo 3', total_rating_count: 20 },
+      { id: 103, name: 'Capítulo 4', total_rating_count: 10 },
+    ]);
+
+    const response = await get(world, '/search?q=capitulo');
+
+    assert.equal(response.status, 200);
+    const results = (await response.json()) as IgdbSearchResult[];
+    assert.deepEqual(
+      results.map((r) => [r.igdbId, r.owned]),
+      [
+        [101, 'library'],
+        [102, 'plan'],
+        [103, null],
+      ],
+    );
+  });
 
   it('saga: capítulos de IGDB cruzados con tu biblioteca y tu Plan', async () => {
     const { world, ids } = await withGames(() => [

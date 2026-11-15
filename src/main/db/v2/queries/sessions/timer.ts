@@ -1,6 +1,13 @@
-import { and, desc, eq, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { isTimerStale, timerLastBeat } from '../../../../../shared/timerFreshness';
-import { devices, games, playthroughs, sessions, type SessionRow } from '../../schema';
+import {
+  devices,
+  gameMetadata,
+  games,
+  playthroughs,
+  sessions,
+  type SessionRow,
+} from '../../schema';
 import { alive } from '../../store';
 import { liveSession, type QueryContext } from '../common';
 import { closeOwnSession, computeDurationSec } from '../common/sessionsClose';
@@ -47,6 +54,8 @@ export interface ActiveTimer {
   readonly sessionId: string;
   readonly gameId: string;
   readonly title: string;
+  /** La carátula efectiva (la del usuario o la de IGDB). */
+  readonly coverUrl: string | null;
   readonly startedAt: Date;
   /** La última señal de vida (null = aún no ha latido, cuenta `startedAt`). */
   readonly lastSeenAt: Date | null;
@@ -59,12 +68,14 @@ function openTimers(ctx: QueryContext): ActiveTimer[] {
       sessionId: sessions.id,
       gameId: playthroughs.gameId,
       title: games.title,
+      coverUrl: sql<string | null>`coalesce(${games.coverOverride}, ${gameMetadata.coverUrl})`,
       startedAt: sessions.startedAt,
       lastSeenAt: sessions.lastSeenAt,
     })
     .from(sessions)
     .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))
     .innerJoin(games, eq(games.id, playthroughs.gameId))
+    .leftJoin(gameMetadata, and(eq(gameMetadata.gameId, games.id), alive(gameMetadata)))
     .where(and(eq(sessions.startedBy, 'timer'), isNull(sessions.endedAt), liveSession()))
     .orderBy(desc(sessions.startedAt), desc(sessions.id))
     .all();

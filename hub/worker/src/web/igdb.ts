@@ -37,8 +37,21 @@ export const IGDB_ROUTES: readonly WebRoute[] = [
     method: 'GET',
     pattern: '/search',
     async handler(service, request) {
-      const results: IgdbSearchResult[] = await service.igdb().search(request.query.q ?? '');
-      return ok(results);
+      const hits = await service.igdb().search(request.query.q ?? '');
+      if (hits.length === 0) return ok<IgdbSearchResult[]>([]);
+      // Lo que ya es tuyo se dice en el resultado: el alta lo rechazaría igual
+      // (`conflict`), pero así se ve antes de pulsar. Se cruza por igdbId.
+      const owned = service.queries().read(
+        (ctx) =>
+          new Map(
+            getOwnedGames(ctx)
+              .filter((game) => game.igdbId !== null)
+              .map((game) => [game.igdbId as number, game.planned ? 'plan' : 'library'] as const),
+          ),
+      );
+      return ok<IgdbSearchResult[]>(
+        hits.map((hit) => ({ ...hit, owned: owned.get(hit.igdbId) ?? null })),
+      );
     },
   },
   {

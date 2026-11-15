@@ -125,35 +125,61 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
                   key={game.igdbId}
                   className="flex items-center gap-3 rounded-xl border border-border bg-card p-2"
                 >
-                  <Cover url={game.coverUrl} title={game.title} className="w-10" />
+                  <Cover
+                    url={game.coverUrl}
+                    title={game.title}
+                    className={`w-10 ${game.owned ? 'opacity-50' : ''}`}
+                  />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-bold">{game.title}</div>
-                    {game.releaseYear !== null && (
-                      <div className="mt-0.5 text-[10.5px] font-semibold text-muted-foreground tabular-nums">
-                        {game.releaseYear}
-                      </div>
-                    )}
+                    <div
+                      className={`truncate text-[13px] font-bold ${game.owned ? 'text-muted-foreground' : ''}`}
+                    >
+                      {game.title}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      {game.releaseYear !== null && (
+                        <span className="text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+                          {game.releaseYear}
+                        </span>
+                      )}
+                      {game.owned && (
+                        <span
+                          className="text-[10px] font-bold tracking-wide"
+                          style={{
+                            color: game.owned === 'library' ? 'var(--muted-foreground)' : BLUE,
+                          }}
+                        >
+                          {game.owned === 'plan' ? 'ALREADY PLANNED' : 'IN YOUR LIBRARY'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={done || busy}
-                    onClick={() => add.mutate(game)}
-                    aria-label={done ? 'Added' : `Add ${game.title} to your plan`}
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-full border"
-                    style={
-                      done
-                        ? { borderColor: `${BLUE}4d`, background: `${BLUE}1f`, color: BLUE }
-                        : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.04)' }
-                    }
-                  >
-                    {busy ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : done ? (
+                  {game.owned ? (
+                    <span className="flex h-9 w-9 flex-none items-center justify-center text-muted-foreground/40">
                       <Check size={15} />
-                    ) : (
-                      <Plus size={16} />
-                    )}
-                  </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={done || busy}
+                      onClick={() => add.mutate(game)}
+                      aria-label={done ? 'Added' : `Add ${game.title} to your plan`}
+                      className="flex h-9 w-9 flex-none items-center justify-center rounded-full border"
+                      style={
+                        done
+                          ? { borderColor: `${BLUE}4d`, background: `${BLUE}1f`, color: BLUE }
+                          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.04)' }
+                      }
+                    >
+                      {busy ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : done ? (
+                        <Check size={15} />
+                      ) : (
+                        <Plus size={16} />
+                      )}
+                    </button>
+                  )}
                 </div>
               );
             })}

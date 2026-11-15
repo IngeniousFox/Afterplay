@@ -6,6 +6,7 @@
   GameDetail,
   GameMedia,
   GameSession,
+  IgdbSearchHit,
   IgdbSearchResult,
   IterationDetail,
   LibraryGame,
@@ -239,7 +240,7 @@ export const unpinGame = (gameId: string): Promise<PlanPinResponse> =>
 export const reorderPlan = (orderedIds: readonly string[]): Promise<PlanReorderResponse> =>
   post<PlanReorderResponse>('/plan/reorder', { orderedIds });
 
-export const addToPlan = (game: IgdbSearchResult): Promise<PlanAddResponse> =>
+export const addToPlan = (game: IgdbSearchHit): Promise<PlanAddResponse> =>
   post<PlanAddResponse>('/plan/add', {
     igdbId: game.igdbId,
     title: game.title,

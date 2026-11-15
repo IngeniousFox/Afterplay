@@ -15,7 +15,7 @@
 //     rechaza: `igdb_unavailable`.
 
 import { HubError } from '../../../core/hub';
-import type { GameMedia, IgdbSearchResult } from '../../../../src/shared/api/v2/igdb';
+import type { GameMedia, IgdbSearchHit } from '../../../../src/shared/api/v2/igdb';
 
 export interface IgdbKeys {
   readonly clientId: string;
@@ -180,7 +180,7 @@ export class IgdbClient {
   static readonly MAX_QUERY_LENGTH = 150;
   static readonly SEARCH_LIMIT = 25;
 
-  async search(text: string): Promise<IgdbSearchResult[]> {
+  async search(text: string): Promise<IgdbSearchHit[]> {
     // El texto va entre comillas en el cuerpo APICalypse: una comilla suelta
     // rompería (o alteraría) la consulta entera.
     const escaped = text
@@ -217,7 +217,7 @@ export class IgdbClient {
   // ── Saga ──────────────────────────────────────────────────────────────────
 
   /** Los capítulos de las colecciones de IGDB dadas, por año (hasta 25). */
-  async collectionGames(collectionIds: readonly number[]): Promise<IgdbSearchResult[]> {
+  async collectionGames(collectionIds: readonly number[]): Promise<IgdbSearchHit[]> {
     // Los ids van dentro del cuerpo de la consulta: se comprueba que son
     // enteros de verdad (la API de IGDB no tiene parámetros preparados).
     if (collectionIds.length === 0 || collectionIds.some((id) => !Number.isSafeInteger(id))) {
@@ -292,7 +292,7 @@ interface SearchRow {
   total_rating_count?: number;
 }
 
-const toResult = (row: SearchRow): IgdbSearchResult => ({
+const toResult = (row: SearchRow): IgdbSearchHit => ({
   igdbId: row.id,
   title: row.name,
   coverUrl: row.cover ? igdbImageUrl(row.cover.image_id, 'cover_big') : null,
