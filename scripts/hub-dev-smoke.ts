@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { devHubHeaders } from './devHubAuth';
 import { formatClock } from '../src/shared/sync/clock';
 import { PROTOCOL_VERSION } from '../src/shared/sync/protocol';
 import { createHttpTransport, enroll } from '../src/main/sync/httpTransport';
@@ -18,14 +17,13 @@ import { APP_SCHEMA_VERSION } from '../src/main/db/v2/schemaVersion';
 
 const HUB_URL =
   process.env.AFTERPLAY_DEV_HUB_URL ?? 'https://afterplay-dev-hub.afterplay-worker.workers.dev';
-const ADMIN_TOKEN = /^HUB_ADMIN_TOKEN=(.+)$/m
-  .exec(readFileSync(join(process.cwd(), 'hub', 'worker', '.dev.vars.admin-token'), 'utf8'))?.[1]
-  ?.trim();
+const ADMIN_HEADERS = devHubHeaders();
 
 const admin = async (method: 'GET' | 'POST', path: string): Promise<unknown> => {
   const response = await fetch(`${HUB_URL}/api/v2${path}`, {
     method,
-    headers: { 'x-afterplay-admin-token': ADMIN_TOKEN ?? '' },
+    headers: ADMIN_HEADERS,
+    redirect: 'manual',
   });
   if (!response.ok) throw new Error(`admin ${path}: ${response.status}`);
   return response.json();
@@ -37,7 +35,6 @@ const check = (label: string, ok: boolean, detail = ''): void => {
 };
 
 const main = async (): Promise<void> => {
-  if (!ADMIN_TOKEN) throw new Error('falta HUB_ADMIN_TOKEN');
   const version = { protocolVersion: PROTOCOL_VERSION, schemaVersion: APP_SCHEMA_VERSION };
   const deviceId = `smoke-${Date.now()}`;
 

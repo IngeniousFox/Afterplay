@@ -14,7 +14,7 @@ const ADMIN_TOKEN_FILE = new URL('../hub/worker/.dev.vars.admin-token', import.m
 // El token se lee AQUÍ, en el proceso de Node de Vite, y solo viaja en la
 // cabecera de la petición que el proxy reenvía al hub. No pasa por `define`, ni
 // por `import.meta.env`, ni por ningún log: el navegador no lo ve nunca.
-const readAdminToken = (): string => {
+const readHubHeaders = (): Record<string, string> => {
   let text: string;
   try {
     text = readFileSync(ADMIN_TOKEN_FILE, 'utf8');
@@ -23,9 +23,19 @@ const readAdminToken = (): string => {
       'Falta hub/worker/.dev.vars.admin-token (el token del hub de desarrollo, HUB_ADMIN_TOKEN=...).',
     );
   }
-  const match = /^HUB_ADMIN_TOKEN=(.+)$/m.exec(text);
-  if (!match) throw new Error('hub/worker/.dev.vars.admin-token no tiene HUB_ADMIN_TOKEN=...');
-  return match[1].trim();
+  const valueOf = (key: string): string | undefined =>
+    new RegExp(`^${key}=(.+)$`, 'm').exec(text)?.[1]?.trim() || undefined;
+  const token = valueOf('HUB_ADMIN_TOKEN');
+  if (!token) throw new Error('hub/worker/.dev.vars.admin-token no tiene HUB_ADMIN_TOKEN=...');
+  const headers: Record<string, string> = { [ADMIN_TOKEN_HEADER]: token };
+  // Con Access delante del hub, su token de servicio (scripts/devHubAuth.ts).
+  const clientId = valueOf('CF_ACCESS_CLIENT_ID');
+  const clientSecret = valueOf('CF_ACCESS_CLIENT_SECRET');
+  if (clientId && clientSecret) {
+    headers['CF-Access-Client-Id'] = clientId;
+    headers['CF-Access-Client-Secret'] = clientSecret;
+  }
+  return headers;
 };
 
 // `vite --mode hub`: /api va al hub de desarrollo desplegado, como el anfitrión
@@ -33,7 +43,7 @@ const readAdminToken = (): string => {
 // `Origin` suyo en las escrituras (router.ts, sameOrigin): el del navegador
 // es `http://localhost:5173`, así que se reescribe.
 const hubProxy = (): Record<string, ProxyOptions> => {
-  const token = readAdminToken();
+  const hubHeaders = readHubHeaders();
   return {
     '/api': {
       target: DEV_HUB_URL,
@@ -41,7 +51,7 @@ const hubProxy = (): Record<string, ProxyOptions> => {
       secure: true,
       configure: (proxy) => {
         proxy.on('proxyReq', (proxyReq, req) => {
-          proxyReq.setHeader(ADMIN_TOKEN_HEADER, token);
+          for (const [name, value] of Object.entries(hubHeaders)) proxyReq.setHeader(name, value);
           if (req.headers.origin) proxyReq.setHeader('origin', DEV_HUB_URL);
         });
       },

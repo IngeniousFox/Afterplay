@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { devHubHeaders } from './devHubAuth';
 
 // Administra el HUB DE DESARROLLO (`afterplay-dev-hub`) sin PWA, con el token
 // de administración (hub/worker/src/adminToken.ts):
@@ -17,29 +16,31 @@ import { join } from 'node:path';
 
 const HUB_URL =
   process.env.AFTERPLAY_DEV_HUB_URL ?? 'https://afterplay-dev-hub.afterplay-worker.workers.dev';
-const TOKEN_FILE = join(process.cwd(), 'hub', 'worker', '.dev.vars.admin-token');
-
 const fail = (message: string): never => {
   console.error(`[hub:dev] ${message}`);
   process.exit(1);
 };
 
-const readToken = (): string => {
-  let text: string;
+const headers = (): Record<string, string> => {
   try {
-    text = readFileSync(TOKEN_FILE, 'utf8');
-  } catch {
-    return fail(`no encuentro ${TOKEN_FILE}: es el token del hub de desarrollo`);
+    return devHubHeaders();
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
   }
-  const match = /^HUB_ADMIN_TOKEN=(.+)$/m.exec(text);
-  return match ? match[1].trim() : fail(`${TOKEN_FILE} no tiene HUB_ADMIN_TOKEN=...`);
 };
 
 const call = async (method: 'GET' | 'POST', path: string): Promise<unknown> => {
   const response = await fetch(`${HUB_URL}/api/v2${path}`, {
     method,
-    headers: { 'x-afterplay-admin-token': readToken() },
+    headers: headers(),
+    // Sin token de servicio, Access contesta con una redirección a su login.
+    redirect: 'manual',
   });
+  if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+    fail(
+      'Access ha pedido iniciar sesión: añade CF_ACCESS_CLIENT_ID y CF_ACCESS_CLIENT_SECRET al fichero del token',
+    );
+  }
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const message =
