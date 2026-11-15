@@ -2010,6 +2010,8 @@ Hecha en la rama `v2`. Las piezas:
 - Lint, tipos, 2.506 tests, build y los 93 e2e.
 - El hub de desarrollo está desplegado con el barrido y la prueba de humo pasa.
 
+**Dos PCs reales (2026-11-15).** Con el PC principal jugando, el segundo enseñó "Playing on" con su nombre y sin Stop, e "Installed on" en la ficha. Al cerrar el juego vio la sesión cerrada con su duración. Al salir de Afterplay justo después de jugar, la sesión llegó cerrada al segundo PC con la hora correcta.
+
 **Decisiones de esta fase:**
 
 - **Sesiones huérfanas.** Una sesión propia abierta bajo un playthrough borrado no cuenta como abierta, ni en la consulta ni en la puerta de escritura. Antes bloqueaba el juego para siempre.
@@ -2019,7 +2021,7 @@ Hecha en la rama `v2`. Las piezas:
 
 - **Sesiones offline huérfanas.** Si un PC fusiona o borra un playthrough mientras otro juega sin red bajo él, la sesión del segundo queda huérfana al llegar (como E-06). No se reasigna.
 - **Overlay y modo ambiente.** `OverlayHud` y el `LiveOverlay` de la columna central no distinguen aún las sesiones de otro dispositivo.
-- **Sin e2e ni revisión visual en la app** de la sesión remota, la fusión y el ejecutable perdido: los fixtures no tienen dos dispositivos.
+- **Sin e2e** de la sesión remota, la fusión y el ejecutable perdido: los fixtures no tienen dos dispositivos. La fusión y el ejecutable perdido tampoco se han visto en la app.
 - **Alarma de barrido en Cloudflare.** Desplegada, pero no se ha visto cerrar una sesión de verdad (hacen falta 24 h).
 
 ### §20.6 Fase 5 — Móvil (M)
