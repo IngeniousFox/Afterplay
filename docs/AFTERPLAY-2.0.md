@@ -1989,6 +1989,40 @@ Hecha en la rama `v2`. Solo está desplegado el hub de desarrollo (§20.4.2). La
 
 **Salida:** E-01, E-02, E-07 a E-10 pasan.
 
+#### §20.5.1 Estado de la fase 4 (2026-11-15)
+
+Hecha en la rama `v2`, salvo la parte de partidas de E-07, que depende de la fase 6. Las piezas:
+
+| Pieza                         | Dónde                                                                      | Qué hace                                                                                                                                                                                        |
+| ----------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Barrido de sesiones           | `hub/core/hub.ts` (`sweepAbandonedSessions`)                               | Cierra a las 24 h sin señal, en la última señal de vida, con `closedBy = 'janitor'` y un reloj `000000` justo encima de la última escritura del dueño. Un cierre real del dueño siempre le gana |
+| Cierre ordenado               | `src/main/watcher/quitSequence.ts`, `before-quit`                          | Cierra las sesiones propias, hace el backup pendiente (hueco para la fase 6) y la subida final, con un tope total de 10 s                                                                       |
+| Sync antes de crear           | `SyncScheduler.runOnceWithin`                                              | Antes de abrir un playthrough nuevo, un sync rápido (3 s como mucho) para no duplicar el de otro PC                                                                                             |
+| Regla del dueño               | `queries/sessions/timerRule.ts`                                            | Solo el dueño cierra su sesión; un cronómetro lo puede parar cualquier PC                                                                                                                       |
+| Orden por creación            | `src/shared/domain/creationOrder.ts`                                       | Con dos playthroughs activos, manda el creado más tarde (`syncCreated`), en todos los PCs igual                                                                                                 |
+| Fusión de playthroughs        | `queries/playthroughs/merge.ts`, `ConcurrentPlaythroughsNotice.tsx`        | La ficha avisa de "Two playthroughs are in progress" y los junta en el vigente                                                                                                                  |
+| Sesiones de otro dispositivo  | `src/shared/liveSession.ts`, `RemoteLive.tsx`                              | "Playing on PC-A", sin Stop salvo cronómetros, y "No signal for X" a los 3 minutos                                                                                                              |
+| Instalaciones por dispositivo | `queries/library/installs.ts`, `InstallNotice.tsx`, `scan/linkInstalls.ts` | "Installed on", aviso de ejecutable que ya no está, lanzar por juego y vincular por escaneo solo con identidad fiable                                                                           |
+
+**Comprobado.**
+
+- Pasan E-01, E-02, E-07 (sesiones, con la secuencia de cierre real), E-08, E-09 y E-10 en `hub/convergence/__tests__/phase4.test.ts`. El barrido tiene además sus propios tests en el núcleo, comprobados con mutaciones.
+- Lint, tipos, 2.506 tests, build y los 93 e2e.
+- El hub de desarrollo está desplegado con el barrido y la prueba de humo pasa.
+
+**Decisiones de esta fase:**
+
+- **Sesiones huérfanas.** Una sesión propia abierta bajo un playthrough borrado no cuenta como abierta, ni en la consulta ni en la puerta de escritura. Antes bloqueaba el juego para siempre.
+- **Vinculación por escaneo.** Con varios juegos del mismo título y ninguno instalado aquí, solo se vincula si la ficha de IGDB señala a uno. Una ruta en el juego equivocado se sincronizaría.
+
+**Pendiente o sin comprobar:**
+
+- **E-07, partidas.** El backup al cerrar se cablea al unir la fase 6 (`flushPendingSaveBackups`).
+- **Sesiones offline huérfanas.** Si un PC fusiona o borra un playthrough mientras otro juega sin red bajo él, la sesión del segundo queda huérfana al llegar (como E-06). No se reasigna.
+- **Overlay y modo ambiente.** `OverlayHud` y el `LiveOverlay` de la columna central no distinguen aún las sesiones de otro dispositivo.
+- **Sin e2e ni revisión visual en la app** de la sesión remota, la fusión y el ejecutable perdido: los fixtures no tienen dos dispositivos.
+- **Alarma de barrido en Cloudflare.** Desplegada, pero no se ha visto cerrar una sesión de verdad (hacen falta 24 h).
+
 ### §20.6 Fase 5 — Móvil (M)
 
 API v2 sobre el hub, PWA adaptada, concesiones, enriquecimiento.
