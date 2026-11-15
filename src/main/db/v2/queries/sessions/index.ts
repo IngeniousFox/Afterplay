@@ -23,6 +23,17 @@ export {
 export { resolvePlaythroughForSession, type ResolvedPlaythrough } from './resolvePlaythrough';
 export { TIMER_CLOSE_COLUMNS, timerForeignWriteRule } from './timerRule';
 export {
+  LIVE_ELSEWHERE_MS,
+  beatTimer,
+  getActiveTimer,
+  startTimer,
+  stopTimer,
+  type ActiveTimer,
+  type StartTimerResult,
+  type StopTimerResult,
+  type StoppedTimer,
+} from './timer';
+export {
   createEmulatorSession,
   isEmulatorAlive,
   isGameAlive,

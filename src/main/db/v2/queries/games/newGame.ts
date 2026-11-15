@@ -132,6 +132,12 @@ export interface WriteNewGameInput {
   /** Solo el alta normal los pregunta; el Plan no (se quedan como estuvieran). */
   readonly endless?: boolean;
   readonly isEmulated?: boolean;
+  /**
+   * Si el alta sella `external_checks` (por defecto sí). El alta del móvil lo
+   * desactiva: sus datos son los mínimos de la búsqueda y un sello `ok` haría
+   * que ningún PC completara la ficha (§13.3, §14.3).
+   */
+  readonly stampChecks?: boolean;
 }
 
 export interface WrittenGame {
@@ -208,7 +214,7 @@ export function writeNewGame(ctx: QueryContext, input: WriteNewGameInput): Writt
   const { outcome } = ctx.store.create('games', values);
 
   writeMetadata(ctx, id, enrichment);
-  writeChecks(ctx, id, enrichment, choices);
+  if (input.stampChecks !== false) writeChecks(ctx, id, enrichment, choices);
 
   return { gameId: id, addedAt, resurrected: outcome === 'resurrected' };
 }
