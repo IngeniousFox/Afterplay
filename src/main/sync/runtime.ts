@@ -300,11 +300,7 @@ export class SyncRuntime {
       const keys = source.read();
       if (!keys) return 'no-keys';
       const fingerprint = createHash('sha256')
-        .update(
-          `${credentials.hubUrl}
-${keys.clientId}
-${keys.clientSecret}`,
-        )
+        .update([credentials.hubUrl, keys.clientId, keys.clientSecret].join('\n'))
         .digest('hex');
       if (source.readFingerprint() === fingerprint) return 'unchanged';
       try {
