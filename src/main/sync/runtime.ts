@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { HybridClock } from '../../shared/sync/clock';
 import { checkHubUrl } from '../../shared/sync/hubUrl';
 import {
@@ -21,7 +22,11 @@ import {
   type SyncEngine,
   type SyncLogger,
 } from './engine';
-import { enroll as httpEnroll, createHttpTransport } from './httpTransport';
+import {
+  enroll as httpEnroll,
+  createHttpTransport,
+  uploadIgdbCredentials as httpUploadIgdb,
+} from './httpTransport';
 import { SyncScheduler, type FlushOutcome, type SchedulerTimers } from './scheduler';
 import { applyEnrollment, readSyncState } from './state';
 
@@ -45,6 +50,18 @@ export interface SyncCredentialsStore {
   clear(): void;
 }
 
+/**
+ * Las claves de IGDB de este PC y la huella de lo último que se subió al hub
+ * (F-29). La huella no es un secreto en claro: es un SHA-256 de hub + claves.
+ */
+export interface IgdbKeysSource {
+  read(): { clientId: string; clientSecret: string } | null;
+  readFingerprint(): string | null;
+  writeFingerprint(fingerprint: string | null): void;
+}
+
+export type IgdbUploadResult = 'uploaded' | 'unchanged' | 'no-keys' | 'not-paired' | 'failed';
+
 export interface SyncRuntimeDeps {
   /** La base abierta: la lectura, la puerta de escritura y el reloj compartido. */
   readonly local: {
@@ -59,6 +76,8 @@ export interface SyncRuntimeDeps {
   /** ¿Prohíbe el perfil de desarrollo hablar con este hub? */
   readonly isHubBlocked: (hubUrl: string) => boolean;
   readonly credentials: SyncCredentialsStore;
+  /** Sin esto, el PC no sube claves de IGDB al hub. */
+  readonly igdbKeys?: IgdbKeysSource;
   /** Lo que la descarga cambió: la ventana refresca sus consultas. */
   readonly onChange: (change: SyncChange) => void;
   /** El estado cambió (ciclo terminado, emparejado, desemparejado). */
@@ -67,6 +86,7 @@ export interface SyncRuntimeDeps {
   readonly now?: () => number;
   // Para los tests.
   readonly enroll?: typeof httpEnroll;
+  readonly uploadIgdbCredentials?: typeof httpUploadIgdb;
   readonly createTransport?: (options: { baseUrl: string; token: string }) => SyncTransport;
   readonly timers?: SchedulerTimers;
   readonly schedulerOptions?: { debounceMs?: number; intervalMs?: number };
@@ -92,6 +112,7 @@ export class SyncRuntime {
   private active: Active | null = null;
   private disabledReason: string | null = null;
   private pairing = false;
+  private uploadingIgdb = false;
   /** Para no repetir en el log el mismo fallo cada reintento. */
   private lastLogged = '';
 
@@ -107,6 +128,7 @@ export class SyncRuntime {
     const credentials = this.deps.credentials.read();
     if (!credentials) return;
     if (!this.activate(credentials.hubUrl, credentials.token)) return;
+    void this.syncIgdbKeys();
     await this.current()?.scheduler.start(limitMs);
   }
 
@@ -204,8 +226,13 @@ export class SyncRuntime {
         return fail("Couldn't save the pairing on this PC. Create a new code and try again.");
       }
       this.disabledReason = null;
+      // Hub nuevo: aunque las claves no hayan cambiado, ese hub no las tiene.
+      this.deps.igdbKeys?.writeFingerprint(null);
       this.deps.logger.info(`emparejado con ${check.host} (id corto ${response.shortDeviceId})`);
-      if (this.activate(check.url, response.token)) void this.current()?.scheduler.start(0);
+      if (this.activate(check.url, response.token)) {
+        void this.syncIgdbKeys();
+        void this.current()?.scheduler.start(0);
+      }
       this.deps.onStatus();
       return { ok: true, status: this.status() };
     } finally {
@@ -221,6 +248,7 @@ export class SyncRuntime {
     this.deactivate();
     this.disabledReason = null;
     this.deps.credentials.clear();
+    this.deps.igdbKeys?.writeFingerprint(null);
     this.lastLogged = '';
     this.deps.logger.info('desemparejado de este PC');
     this.deps.onStatus();
@@ -242,6 +270,50 @@ export class SyncRuntime {
       this.deps.logger.warn(
         `el sync rapido antes de crear fallo: ${error instanceof Error ? error.message : 'error'}`,
       );
+    }
+  }
+
+  /**
+   * Sube al hub las claves de IGDB de este PC si el hub aún no tiene ESTAS
+   * (huella distinta de la última subida). Se llama al arrancar emparejado, al
+   * emparejar y al cambiar las claves en Ajustes; no en cada ciclo. Sin claves
+   * no sube nada. NUNCA lanza ni registra las claves: solo el resultado.
+   */
+  async syncIgdbKeys(): Promise<IgdbUploadResult> {
+    const source = this.deps.igdbKeys;
+    const credentials = this.deps.credentials.read();
+    if (!source || !credentials || this.deps.isE2E || this.deps.isHubBlocked(credentials.hubUrl)) {
+      return 'not-paired';
+    }
+    if (this.uploadingIgdb) return 'unchanged';
+    this.uploadingIgdb = true;
+    try {
+      const keys = source.read();
+      if (!keys) return 'no-keys';
+      const fingerprint = createHash('sha256')
+        .update(
+          `${credentials.hubUrl}
+${keys.clientId}
+${keys.clientSecret}`,
+        )
+        .digest('hex');
+      if (source.readFingerprint() === fingerprint) return 'unchanged';
+      try {
+        await (this.deps.uploadIgdbCredentials ?? httpUploadIgdb)(
+          { baseUrl: credentials.hubUrl, token: credentials.token },
+          keys,
+        );
+      } catch (error) {
+        this.deps.logger.warn(
+          `no se pudieron subir las claves de IGDB al hub: ${error instanceof SyncRequestError ? error.code : 'error inesperado'}`,
+        );
+        return 'failed';
+      }
+      source.writeFingerprint(fingerprint);
+      this.deps.logger.info('claves de IGDB subidas al hub');
+      return 'uploaded';
+    } finally {
+      this.uploadingIgdb = false;
     }
   }
 

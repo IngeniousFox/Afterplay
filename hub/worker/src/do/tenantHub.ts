@@ -22,8 +22,13 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
   private service: TenantService | null = null;
   private readonly storage: DoSqlStorage;
 
+  /** El secret `HUB_SECRETS_KEY` (F-29): con él se cifran las claves de IGDB. */
+  private readonly secretsKey: string | undefined;
+
   constructor(ctx: DurableObjectState, env: unknown) {
     super(ctx, env as never);
+    const key = (env as { HUB_SECRETS_KEY?: unknown } | null)?.HUB_SECRETS_KEY;
+    this.secretsKey = typeof key === 'string' && key !== '' ? key : undefined;
     this.storage = new DoSqlStorage(ctx.storage);
     // Si el objeto ya tenía dueño (se despertó por la alarma o por una
     // evicción), se reconstruye el servicio antes de atender nada.
@@ -37,7 +42,9 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     // Las consultas del móvil (§13.2) usan Drizzle sobre el mismo almacenamiento.
     // Se tipa como la base del cliente: ver `HubQueries`.
     const queryDb = (): LocalDb => drizzle(this.ctx.storage) as unknown as LocalDb;
-    return new TenantService(this.storage, () => Date.now(), { tenantId }, queryDb);
+    return new TenantService(this.storage, () => Date.now(), { tenantId }, queryDb, {
+      secretsKey: this.secretsKey,
+    });
   }
 
   /** Fija o comprueba el inquilino y devuelve el servicio. Síncrono: sin awaits no hay carreras. */
@@ -89,6 +96,12 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     ...[tenantId, token, request]: Parameters<TenantRpc['doneJob']>
   ): ReturnType<TenantRpc['doneJob']> {
     return this.serviceFor(tenantId).doneJob(token, request);
+  }
+
+  storeIgdbCredentials(
+    ...[tenantId, token, request]: Parameters<TenantRpc['storeIgdbCredentials']>
+  ): ReturnType<TenantRpc['storeIgdbCredentials']> {
+    return this.serviceFor(tenantId).storeIgdbCredentials(token, request);
   }
 
   enroll(...[tenantId, request]: Parameters<TenantRpc['enroll']>): ReturnType<TenantRpc['enroll']> {

@@ -9,7 +9,7 @@ import { NodeSqlStorage } from '../../core/node/nodeStorage';
 import { AccessError } from '../src/access';
 import { DirectoryStore } from '../src/directoryStore';
 import { handleRequest, type Backend, type DirectoryApi, type TenantApi } from '../src/router';
-import { TenantService } from '../src/tenantService';
+import { TenantService, type TenantServiceExtras } from '../src/tenantService';
 import { drizzle } from 'drizzle-orm/node-sqlite';
 import type { LocalDb } from '../../../src/main/db/v2/store';
 
@@ -18,7 +18,10 @@ export const BASE = 'https://hub.test';
 export const T0 = Date.UTC(2026, 0, 1);
 export const VERSION = { protocolVersion: PROTOCOL_VERSION, schemaVersion: APP_SCHEMA_VERSION };
 
-export function makeWorld(adminEmail: string | null = HOST): World {
+export function makeWorld(
+  adminEmail: string | null = HOST,
+  extras: TenantServiceExtras = {},
+): World {
   const time = { now: T0 };
   const directoryStore = new DirectoryStore(new NodeSqlStorage(), () => time.now);
   const services = new Map<string, TenantService>();
@@ -32,7 +35,7 @@ export function makeWorld(adminEmail: string | null = HOST): World {
         // Las consultas del móvil, como en el DO pero con Drizzle sobre node:sqlite.
         const storage = new NodeSqlStorage();
         const queryDb = (): LocalDb => drizzle({ client: storage.db }) as unknown as LocalDb;
-        service = new TenantService(storage, () => time.now, { tenantId }, queryDb);
+        service = new TenantService(storage, () => time.now, { tenantId }, queryDb, extras);
         services.set(tenantId, service);
       }
       return service as unknown as TenantApi;

@@ -59,6 +59,10 @@ type AppConfig = {
   // — las que ya hubiera de antes NO se borran solas, apagar esto no es
   // pedir que se destruya nada, es solo dejar de generar más.
   backupCount: number;
+  // Huella (SHA-256) de las claves de IGDB que este PC subió por última vez a su hub
+  // (sync/runtime.ts, F-29): sirve para no volver a subirlas en cada ciclo. Es de ESTE
+  // PC: otro PC emparejado al mismo hub lleva la suya.
+  igdbKeysFingerprint: string | null;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -75,6 +79,7 @@ const DEFAULT_CONFIG: AppConfig = {
   // copia al día (24h), 5 en rotación.
   backupIntervalHours: 24,
   backupCount: 5,
+  igdbKeysFingerprint: null,
 };
 
 // Lazy por el mismo motivo que getDbPath() en db/index.ts: app.getPath

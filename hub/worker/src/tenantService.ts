@@ -18,6 +18,7 @@ import type {
   ClientVersion,
   EnrollRequest,
   EnrollResponse,
+  IgdbCredentialsResponse,
   JobClaimRequest,
   JobClaimResponse,
   JobDoneRequest,
@@ -28,6 +29,8 @@ import type {
   StatusResponse,
 } from '../../../src/shared/sync/protocol';
 import type { EnrollmentCode } from '../../core/hub';
+import { IgdbCredentialStore } from './igdbCredentials';
+import { IgdbClient } from './web/igdbClient';
 import { ok, type Outcome } from './outcome';
 import { WEB_ROUTES, matchRoute } from './web/routes';
 import type { WebRequest } from './web/types';
@@ -152,10 +155,22 @@ export function readTenantIdentity(storage: SqlStorage): string | null {
 
 export const ENROLL_CODE_TTL_MINUTES = 10;
 
+/** Lo que el Worker le pasa al servicio y no es del núcleo (secrets, red). */
+export interface TenantServiceExtras {
+  /** El secret `HUB_SECRETS_KEY`. Sin él no se guardan secretos (F-29). */
+  readonly secretsKey?: string;
+  /** `fetch` para Twitch/IGDB; por defecto el global. Los tests inyectan uno falso. */
+  readonly fetch?: typeof fetch;
+  /** Tiempo máximo de cada petición a Twitch/IGDB. */
+  readonly igdbTimeoutMs?: number;
+}
+
 export class TenantService {
   readonly hub: TenantHub;
   private readonly throttle: EnrollThrottle;
   private webQueries: HubQueries | null = null;
+  private readonly igdbStore: IgdbCredentialStore;
+  private igdbClient: IgdbClient | null = null;
 
   /**
    * @param queryDb Crea la base Drizzle sobre el MISMO almacenamiento para las
@@ -167,9 +182,25 @@ export class TenantService {
     private readonly now: () => number,
     options: HubOptions,
     private readonly queryDb?: () => LocalDb,
+    private readonly extras: TenantServiceExtras = {},
   ) {
     this.hub = new TenantHub(storage, now, options);
     this.throttle = new EnrollThrottle(storage, now);
+    this.igdbStore = new IgdbCredentialStore(storage, options.tenantId, extras.secretsKey, now);
+  }
+
+  /**
+   * El cliente de IGDB de esta persona (F-29). Uno por instancia: así el token
+   * de Twitch vive en memoria del Durable Object mientras este siga despierto.
+   */
+  igdb(): IgdbClient {
+    this.igdbClient ??= new IgdbClient({
+      loadCredentials: () => this.igdbStore.load(),
+      now: this.now,
+      fetch: this.extras.fetch,
+      timeoutMs: this.extras.igdbTimeoutMs,
+    });
+    return this.igdbClient;
   }
 
   /** Las consultas del escritorio sobre este hub, en nombre del móvil. Una por instancia. */
@@ -238,6 +269,15 @@ export class TenantService {
 
   doneJob(token: string, request: JobDoneRequest): Promise<Outcome<JobDoneResponse>> {
     return this.authed(token, (device) => this.hub.doneJob(device, request));
+  }
+
+  /** El PC sube las claves de IGDB de su dueño. Se guardan cifradas; no se devuelven. */
+  storeIgdbCredentials(token: string, request: unknown): Promise<Outcome<IgdbCredentialsResponse>> {
+    return this.run(async () => {
+      await this.hub.authenticateToken(token);
+      await this.igdbStore.save(request);
+      return { stored: true as const };
+    });
   }
 
   /** Canje de un código (sin token). Con bloqueo por intentos fallidos. */

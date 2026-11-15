@@ -17,6 +17,7 @@ import {
   type ClientVersion,
   type EnrollRequest,
   type EnrollResponse,
+  type IgdbCredentialsResponse,
   type JobClaimRequest,
   type JobClaimResponse,
   type JobDoneRequest,
@@ -50,6 +51,8 @@ export interface TenantApi {
   ): Promise<Outcome<PullResponse>>;
   claimJob(token: string, request: JobClaimRequest): Promise<Outcome<JobClaimResponse>>;
   doneJob(token: string, request: JobDoneRequest): Promise<Outcome<JobDoneResponse>>;
+  /** Las claves de IGDB del PC; el hub las guarda cifradas (F-29). */
+  storeIgdbCredentials(token: string, request: unknown): Promise<Outcome<IgdbCredentialsResponse>>;
   enroll(request: EnrollRequest): Promise<Outcome<EnrollResponse>>;
   createEnrollmentCode(ttlMinutes?: number): Promise<Outcome<{ code: string; expiresAt: number }>>;
   listTokens(): Promise<Outcome<DeviceTokenInfo[]>>;
@@ -192,6 +195,7 @@ const SYNC_METHODS: Record<string, string> = {
   [SYNC_ROUTES.pull]: 'GET',
   [SYNC_ROUTES.jobsClaim]: 'POST',
   [SYNC_ROUTES.jobsDone]: 'POST',
+  [SYNC_ROUTES.igdbCredentials]: 'POST',
 };
 
 async function handleSync(request: Request, url: URL, backend: Backend): Promise<Response> {
@@ -229,6 +233,10 @@ async function handleSync(request: Request, url: URL, backend: Backend): Promise
     case SYNC_ROUTES.jobsClaim: {
       const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
       return outcomeResponse(await tenant.claimJob(token, body as unknown as JobClaimRequest));
+    }
+    case SYNC_ROUTES.igdbCredentials: {
+      const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
+      return outcomeResponse(await tenant.storeIgdbCredentials(token, body));
     }
     default: {
       const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
