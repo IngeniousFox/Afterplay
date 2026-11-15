@@ -8,6 +8,7 @@ import { heartbeatSessions } from '../../../src/main/db/v2/queries/sessions/hear
 import { getWatchTargets } from '../../../src/main/db/v2/queries/sessions/watchTargets';
 import { deleteIteration } from '../../../src/main/db/v2/queries/playthroughs/playthroughs';
 import { updateGame } from '../../../src/main/db/v2/queries/common/updateGame';
+import { runQuitSequence } from '../../../src/main/watcher/quitSequence';
 import { ABANDONED_SESSION_MS } from '../../core/hub';
 import { addGame, openSession } from '../actions';
 import { HOUR_MS, MINUTE_MS, World, convergenceProblems, type Client } from '../harness';
@@ -17,7 +18,7 @@ import { HOUR_MS, MINUTE_MS, World, convergenceProblems, type Client } from '../
 // importa Electron): se ejercitan las MISMAS consultas que usa en cada ciclo
 // (`getOpenSessions`, `heartbeatSessions`, `closeSessionIfOpen`,
 // `getWatchTargets`) contra clientes reales que sincronizan con un hub real.
-// E-07 (cierre ordenado al salir) se prueba con el watcher, no aquí.
+// E-07 usa la secuencia de cierre real (`quitSequence.ts`), sin el watcher.
 
 let world: World | null = null;
 
@@ -110,6 +111,45 @@ describe('escenarios de la fase 4 (§17.3)', () => {
       assert.equal(sessionIn(client, fromA).deviceId, a.ctx.deviceId);
       assert.equal(sessionIn(client, fromB).deviceId, b.ctx.deviceId);
     }
+  });
+
+  it('E-07: A cierra Afterplay justo tras jugar y se apaga; B ve la sesión cerrada', async () => {
+    // El cierre ordenado real (`runQuitSequence`) con los pasos que cablea
+    // main/index.ts: cerrar las sesiones propias (lo que hace
+    // `ProcessWatcher.closeAllForQuit`, que aquí no puede correr porque
+    // importa Electron) y la subida final. El backup de partidas (el otro
+    // medio de E-07) es de la fase 6 y se comprueba allí.
+    const w = start();
+    const a = await w.addClient('a');
+    const b = await w.addClient('b');
+    const gameId = addGame(a, 40007, { title: 'Apagar y irse' });
+    await settle(w);
+
+    const sessionId = openSession(a, gameId);
+    assert.ok(sessionId);
+    w.advance(50 * MINUTE_MS);
+
+    const outcome = await runQuitSequence({
+      closeSessions: () => {
+        for (const session of getOpenSessions(a.ctx)) {
+          if (session.deviceId !== a.ctx.deviceId || session.startedBy === 'timer') continue;
+          closeSessionIfOpen(a.ctx, session.sessionId, {
+            endedAt: a.ctx.now(),
+            closedBy: 'owner',
+          });
+        }
+      },
+      flushSync: () => a.syncOk(),
+    });
+    assert.equal(outcome, 'done');
+    a.cut(); // Se apaga: no vuelve a sincronizar.
+
+    w.advance(2 * HOUR_MS);
+    await settle(w, [b]);
+    const session = sessionIn(b, sessionId);
+    assert.equal(session.closedBy, 'owner');
+    assert.equal(session.durationSec, 50 * 60);
+    assert.equal(session.endedAt?.getTime(), session.startedAt.getTime() + 50 * MINUTE_MS);
   });
 
   it('E-08: A muere con una sesión abierta; el hub la cierra a las 24 h en su última señal', async () => {
