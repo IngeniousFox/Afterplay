@@ -113,6 +113,10 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     return this.serviceFor(tenantId).revokeToken(tokenId);
   }
 
+  web(...[tenantId, request]: Parameters<TenantRpc['web']>): ReturnType<TenantRpc['web']> {
+    return this.serviceFor(tenantId).web(request);
+  }
+
   /** Barrido periódico. Se vuelve a armar SIEMPRE, aunque el barrido falle. */
   async alarm(): Promise<void> {
     try {

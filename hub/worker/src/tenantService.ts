@@ -29,6 +29,8 @@ import type {
 } from '../../../src/shared/sync/protocol';
 import type { EnrollmentCode } from '../../core/hub';
 import { ok, type Outcome } from './outcome';
+import { WEB_ROUTES, matchRoute } from './web/routes';
+import type { WebRequest } from './web/types';
 
 // ---------- Fuerza bruta sobre el emparejado ----------
 
@@ -175,6 +177,23 @@ export class TenantService {
     if (!this.queryDb) throw new Error('TenantService: sin base para las consultas del móvil');
     this.webQueries ??= new HubQueries(this.hub, this.queryDb());
     return this.webQueries;
+  }
+
+  /**
+   * La API de la PWA (§13): busca la ruta y la ejecuta. Un `HubError` vuelve
+   * como valor, igual que en el resto de llamadas; cualquier otro error se
+   * relanza y el Worker lo convierte en un 500 sin detalles.
+   */
+  async web(request: WebRequest): Promise<Outcome<unknown>> {
+    const match = matchRoute(WEB_ROUTES, request.method, request.path);
+    if (match.kind === 'none') {
+      return { ok: false, error: { error: 'not_found', message: 'ruta desconocida' } };
+    }
+    if (match.kind === 'method') {
+      return { ok: false, error: { error: 'not_found', message: 'método no permitido' } };
+    }
+    const outcome = await this.run(() => match.route.handler(this, request, match.params));
+    return outcome.ok ? outcome.value : outcome;
   }
 
   /** Ejecuta `fn` y convierte los errores del protocolo en valor. El resto se relanza. */

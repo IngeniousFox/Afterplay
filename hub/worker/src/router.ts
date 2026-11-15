@@ -34,6 +34,7 @@ import { normalizeEmail } from './emailIdentity';
 import { formatEnrollCode, splitEnrollCode } from './enrollCode';
 import { apiError, classifyUnexpected, errorResponse, jsonResponse } from './errors';
 import type { Outcome } from './outcome';
+import type { WebRequest } from './web/types';
 
 // ---------- Lo que el router necesita del exterior ----------
 
@@ -53,6 +54,8 @@ export interface TenantApi {
   createEnrollmentCode(ttlMinutes?: number): Promise<Outcome<{ code: string; expiresAt: number }>>;
   listTokens(): Promise<Outcome<DeviceTokenInfo[]>>;
   revokeToken(tokenId: string): Promise<Outcome<{ revoked: boolean }>>;
+  /** La API de la PWA (§13), ya autenticada: se reparte dentro del DO (web/routes.ts). */
+  web(request: WebRequest): Promise<Outcome<unknown>>;
 }
 
 export interface DirectoryApi {
@@ -334,7 +337,22 @@ async function handleApi(request: Request, url: URL, backend: Backend): Promise<
       : errorResponse(apiError('conflict', 'esa persona ya tiene su propio espacio'));
   }
 
-  return errorResponse(apiError('not_found', 'ruta desconocida'));
+  // El resto es la API de la PWA, que vive en el Durable Object (web/routes.ts).
+  if (request.method !== 'GET' && request.method !== 'POST') return methodNotAllowed('GET, POST');
+  let body: unknown = null;
+  if (request.method === 'POST') {
+    const text = await readLimitedText(request, SMALL_BODY_MAX_BYTES);
+    if (text.trim() !== '') {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        throw invalid('el cuerpo no es JSON válido');
+      }
+    }
+  }
+  const query: Record<string, string> = {};
+  for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value;
+  return outcomeResponse(await tenant.web({ method: request.method, path: route, query, body }));
 }
 
 // ---------- Entrada ----------

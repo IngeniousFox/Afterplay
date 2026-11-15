@@ -10,6 +10,8 @@ import { AccessError } from '../src/access';
 import { DirectoryStore } from '../src/directoryStore';
 import { handleRequest, type Backend, type DirectoryApi, type TenantApi } from '../src/router';
 import { TenantService } from '../src/tenantService';
+import { drizzle } from 'drizzle-orm/node-sqlite';
+import type { LocalDb } from '../../../src/main/db/v2/store';
 
 export const HOST = 'host@example.com';
 export const BASE = 'https://hub.test';
@@ -27,7 +29,10 @@ export function makeWorld(adminEmail: string | null = HOST): World {
       let service = services.get(tenantId);
       if (!service) {
         touched.push(tenantId);
-        service = new TenantService(new NodeSqlStorage(), () => time.now, { tenantId });
+        // Las consultas del móvil, como en el DO pero con Drizzle sobre node:sqlite.
+        const storage = new NodeSqlStorage();
+        const queryDb = (): LocalDb => drizzle({ client: storage.db }) as unknown as LocalDb;
+        service = new TenantService(storage, () => time.now, { tenantId }, queryDb);
         services.set(tenantId, service);
       }
       return service as unknown as TenantApi;

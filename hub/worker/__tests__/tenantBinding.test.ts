@@ -22,17 +22,20 @@ describe('bindTenant', () => {
       createEnrollmentCode: record('createEnrollmentCode'),
       listTokens: record('listTokens'),
       revokeToken: record('revokeToken'),
+      web: record('web'),
     };
     const api = bindTenant(rpc, 'abc123');
     await api.status('tok', VERSION);
     await api.pull('tok', 5, 10, VERSION);
     await api.listTokens();
     await api.revokeToken('id-1');
+    await api.web({ method: 'GET', path: '/plan', query: {}, body: null });
     assert.deepEqual(calls, [
       ['status', 'abc123', 'tok', VERSION],
       ['pull', 'abc123', 'tok', 5, 10, VERSION],
       ['listTokens', 'abc123'],
       ['revokeToken', 'abc123', 'id-1'],
+      ['web', 'abc123', { method: 'GET', path: '/plan', query: {}, body: null }],
     ]);
   });
 });
