@@ -7,6 +7,8 @@ import { isE2E } from '../lib/e2e';
 import {
   CREDENTIAL_KEYS as SHARED_CREDENTIAL_KEYS,
   ENV_BY_CREDENTIAL_KEY,
+  SYNC_CREDENTIAL_KEYS,
+  type SyncCredentialKey,
 } from '../../shared/credentialKeys';
 import { join } from 'path';
 import type {
@@ -35,12 +37,14 @@ const ENV_BY_KEY = ENV_BY_CREDENTIAL_KEY;
 
 const CREDENTIAL_KEYS = SHARED_CREDENTIAL_KEYS;
 
+type StoredKey = keyof CredentialsValues | SyncCredentialKey;
+
 type CredentialsFile = {
   version: 1;
   // false solo si safeStorage no estaba disponible al guardar (raro en
   // Windows) — los valores van entonces en claro, como iba el .env de antes.
   encrypted: boolean;
-  values: Partial<Record<keyof CredentialsValues, string>>;
+  values: Partial<Record<StoredKey, string>>;
 };
 
 const getFilePath = (): string => join(app.getPath('userData'), 'credentials.json');
@@ -70,10 +74,12 @@ const readFile = (): CredentialsFile | null => {
   }
 };
 
-const writeValues = (values: Partial<Record<keyof CredentialsValues, string>>): void => {
+const STORED_KEYS: readonly StoredKey[] = [...CREDENTIAL_KEYS, ...SYNC_CREDENTIAL_KEYS];
+
+const writeAll = (values: Partial<Record<StoredKey, string>>): void => {
   let anyPlaintext = false;
   const stored: CredentialsFile['values'] = {};
-  for (const key of CREDENTIAL_KEYS) {
+  for (const key of STORED_KEYS) {
     const value = values[key];
     if (!value) continue;
     const { stored: encoded, encrypted } = encryptValue(value);
@@ -88,6 +94,13 @@ const writeValues = (values: Partial<Record<keyof CredentialsValues, string>>): 
   writeFileAtomicSync(getFilePath(), JSON.stringify(file, null, 2));
 };
 
+// Las claves de servicios (IGDB, R2…). Las del sync se CONSERVAN tal como
+// estaban: ninguna ruta que reescribe estas (guardar desde Ajustes, importar un
+// fichero de claves, el .env legado) debe poder borrar el emparejado del hub.
+const writeValues = (values: Partial<Record<keyof CredentialsValues, string>>): void => {
+  writeAll({ ...values, ...getSyncCredentials() });
+};
+
 // Los valores en claro actuales (descifrados). null = sin configurar.
 export const getCredentials = (): CredentialsValues => {
   const file = readFile();
@@ -97,6 +110,45 @@ export const getCredentials = (): CredentialsValues => {
     result[key] = stored ? decryptValue(stored, file?.encrypted ?? false) : null;
   }
   return result;
+};
+
+// El emparejado con el hub del sync 2.0 (main/sync/runtime.ts). Nunca pasa por
+// `CredentialsValues` ni por process.env: ver SYNC_CREDENTIAL_KEYS.
+export type SyncCredentials = { hubUrl: string; token: string };
+
+const getSyncCredentials = (): Partial<Record<SyncCredentialKey, string>> => {
+  const file = readFile();
+  const out: Partial<Record<SyncCredentialKey, string>> = {};
+  for (const key of SYNC_CREDENTIAL_KEYS) {
+    const stored = file?.values[key];
+    const value = stored ? decryptValue(stored, file?.encrypted ?? false) : null;
+    if (value) out[key] = value;
+  }
+  return out;
+};
+
+/** null si este PC no está emparejado (o falta una de las dos, o no se pudo descifrar). */
+export const readSyncCredentials = (): SyncCredentials | null => {
+  const { syncHubUrl, syncHubToken } = getSyncCredentials();
+  return syncHubUrl && syncHubToken ? { hubUrl: syncHubUrl, token: syncHubToken } : null;
+};
+
+const serviceValues = (): Partial<Record<keyof CredentialsValues, string>> => {
+  const all = getCredentials();
+  const out: Partial<Record<keyof CredentialsValues, string>> = {};
+  for (const key of CREDENTIAL_KEYS) {
+    const value = all[key];
+    if (value) out[key] = value;
+  }
+  return out;
+};
+
+export const writeSyncCredentials = (credentials: SyncCredentials): void => {
+  writeAll({ ...serviceValues(), syncHubUrl: credentials.hubUrl, syncHubToken: credentials.token });
+};
+
+export const clearSyncCredentials = (): void => {
+  writeAll(serviceValues());
 };
 
 const applyToEnv = (values: CredentialsValues): void => {

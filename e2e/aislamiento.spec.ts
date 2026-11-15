@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CREDENTIAL_KEYS } from '../src/shared/credentialKeys';
+import { CREDENTIAL_KEYS, SYNC_CREDENTIAL_KEYS } from '../src/shared/credentialKeys';
 import { expect, test } from './fixtures';
 
 // EL TEST QUE PROTEGE AL DUEÑO.
@@ -93,6 +93,8 @@ test.describe('aislamiento del entorno', () => {
     // 3-ago-2026 ahora que los tests SÍ llevan credenciales de verdad.
     expect(keys).not.toContain('databaseUrl');
     expect(keys).not.toContain('databaseAuthToken');
+    // Ni el token ni la dirección del hub del sync 2.0: abren la biblioteca igual.
+    for (const key of SYNC_CREDENTIAL_KEYS) expect(keys).not.toContain(key);
 
     // Y lo que hay es del catálogo permitido: nada que el andamio no haya
     // puesto a partir de .env.test (o el relleno de IGDB si no existe).

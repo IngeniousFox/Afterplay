@@ -297,3 +297,75 @@ describe('el fichero soltado en la carpeta de datos', () => {
     assert.equal(credenciales.takeStartupKeysImport(), null);
   });
 });
+
+describe('emparejado con el hub del sync 2.0', () => {
+  const emparejado = { hubUrl: 'https://hub.ejemplo.test', token: 'ap1.inquilino.secreto-largo' };
+
+  it('guarda el token CIFRADO y lo devuelve descifrado', () => {
+    credenciales.writeSyncCredentials(emparejado);
+
+    const guardado = readFileSync(join(userDataDir, 'credentials.json'), 'utf-8');
+    assert.ok(!guardado.includes('secreto-largo'), 'el token no queda legible en reposo');
+    assert.ok(!guardado.includes('hub.ejemplo.test'), 'ni la dirección');
+    assert.deepEqual(credenciales.readSyncCredentials(), emparejado);
+  });
+
+  it('no viaja al renderer, ni a process.env, ni al fichero de claves exportado', () => {
+    credenciales.setCredentials(conClaves({ twitchClientId: 'cliente-1' }));
+    credenciales.writeSyncCredentials(emparejado);
+
+    // getCredentials es lo que recibe la pestaña Connections.
+    assert.ok(!JSON.stringify(credenciales.getCredentials()).includes('secreto-largo'));
+    const exportado = credenciales.exportCredentialsTo(carpetaNueva());
+    assert.ok(!readFileSync(exportado, 'utf-8').includes('secreto-largo'));
+    assert.ok(!readFileSync(exportado, 'utf-8').includes('hub.ejemplo.test'));
+    assert.ok(!Object.values(process.env).some((value) => value?.includes('secreto-largo')));
+  });
+
+  it('un fichero de claves no puede traerlo (el emparejado va por su propia vía)', () => {
+    credenciales.writeSyncCredentials(emparejado);
+
+    const fichero = join(carpetaNueva(), 'claves.json');
+    writeFileSync(
+      fichero,
+      JSON.stringify({ keys: { TWITCH_CLIENT_ID: 'x', SYNC_HUB_TOKEN: 'ap1.otro.token' } }),
+    );
+    credenciales.importCredentialsFromFile(fichero);
+
+    assert.deepEqual(credenciales.readSyncCredentials(), emparejado);
+  });
+
+  it('guardar claves de servicios desde Ajustes NO borra el emparejado', () => {
+    credenciales.writeSyncCredentials(emparejado);
+
+    // El borrador de Connections no conoce las claves del sync: nunca las manda.
+    credenciales.setCredentials(conClaves({ steamApiKey: 'steam-abc' }));
+    assert.deepEqual(credenciales.readSyncCredentials(), emparejado);
+
+    const fichero = join(carpetaNueva(), 'claves.json');
+    writeFileSync(fichero, JSON.stringify({ keys: { STEAM_API_KEY: 'otra' } }));
+    credenciales.importCredentialsFromFile(fichero);
+    assert.deepEqual(credenciales.readSyncCredentials(), emparejado);
+    assert.equal(credenciales.getCredentials().steamApiKey, 'otra');
+  });
+
+  it('desemparejar borra solo el emparejado y deja las claves de servicios', () => {
+    credenciales.setCredentials(conClaves({ twitchClientId: 'cliente-1' }));
+    credenciales.writeSyncCredentials(emparejado);
+
+    credenciales.clearSyncCredentials();
+
+    assert.equal(credenciales.readSyncCredentials(), null);
+    assert.equal(credenciales.getCredentials().twitchClientId, 'cliente-1');
+    assert.ok(!readFileSync(join(userDataDir, 'credentials.json'), 'utf-8').includes('syncHub'));
+  });
+
+  it('sin emparejar (o con solo una de las dos) no hay emparejado', () => {
+    assert.equal(credenciales.readSyncCredentials(), null);
+    writeFileSync(
+      join(userDataDir, 'credentials.json'),
+      JSON.stringify({ version: 1, encrypted: false, values: { syncHubUrl: 'https://x.test' } }),
+    );
+    assert.equal(credenciales.readSyncCredentials(), null);
+  });
+});

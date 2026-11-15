@@ -90,6 +90,34 @@ describe('formato del reloj', () => {
 });
 
 describe('HybridClock', () => {
+  it('setDev cambia el id corto en caliente y los relojes siguientes siguen creciendo', () => {
+    const clock = new HybridClock('zzzzzz', () => 5000);
+    const before = clock.now();
+    clock.observe(formatClock(9000, 3, 'yyyyyy'));
+    const seen = clock.peek();
+    clock.setDev('aaaaaa');
+    assert.equal(clock.dev, 'aaaaaa');
+    const after = clock.now();
+    assert.ok(after > before && after > seen, `${after} > ${before}, ${seen}`);
+    assert.equal(parseClock(after).dev, 'aaaaaa');
+    // Mismo ms y contador con un id menor: aun así no retrocede.
+    let prev = after;
+    for (let i = 0; i < 50; i++) {
+      clock.setDev(i % 2 === 0 ? 'bbbbbb' : 'aaaaaa');
+      const next = clock.now();
+      assert.ok(next > prev);
+      prev = next;
+    }
+  });
+
+  it('setDev rechaza ids inválidos o reservados y no cambia nada', () => {
+    const clock = new HybridClock('aaaaaa', () => 5000);
+    for (const bad of ['000000', 'legacy', 'ABC123', 'corto', '']) {
+      assert.throws(() => clock.setDev(bad), RangeError);
+    }
+    assert.equal(clock.dev, 'aaaaaa');
+  });
+
   it('es estrictamente creciente aunque el reloj de pared retroceda o se pare', () => {
     const r = rng(3);
     let wall = 1_700_000_000_000;

@@ -5,6 +5,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  net,
   Notification,
   powerMonitor,
   shell,
@@ -48,6 +49,9 @@ import { setRadarNotifier } from './radar/notify';
 import { runRadarTick } from './radar/pass';
 import { setSavesNotifier } from './saves/notify';
 import { ScanWatcher, setScanWatcher } from './scan/watcher';
+import { createAppSyncRuntime } from './sync/appRuntime';
+import { watchNetworkBack, type NetworkWatch } from './sync/networkWatch';
+import type { SyncRuntime } from './sync/runtime';
 import { setSessionClosedNotifier } from './watcher/notifySession';
 import { setRunningGamesProbe } from './watcher/runningGames';
 import { ProcessWatcher } from './watcher/watcher';
@@ -101,6 +105,12 @@ let tray: Tray | null = null;
 // memories/detect.ts) — el intervalo corto es solo para no perder el cambio
 // de día por mucho que la app viva en la bandeja.
 let memoriesTimer: ReturnType<typeof setInterval> | null = null;
+// El sync 2.0 (AFTERPLAY-2.0.md §8.5). Sin hub emparejado, o en un test E2E, no
+// hace nada. `syncFlushed` evita repetir la subida final cuando before-quit
+// vuelve a dispararse tras app.quit().
+let syncRuntime: SyncRuntime | null = null;
+let networkWatch: NetworkWatch | null = null;
+let syncFlushed = false;
 const MEMORIES_TICK_MS = 60 * 60 * 1000;
 // SPEC 3E — el botón X de la ventana oculta, no cierra: solo "Quit" del tray
 // (o antes de la propia app.quit(), en before-quit) marca esto para dejar
@@ -714,6 +724,15 @@ app.whenReady().then(async () => {
   }
   mark('base 2.0 abierta');
 
+  // El sync se CREA aquí (con la base ya abierta) pero no arranca todavía: el
+  // primer ciclo va delante de las pasadas de fondo (ver más abajo).
+  const sendSyncChanged = forwardToWindow('sync:changed');
+  const sendSyncStatus = forwardToWindow('sync:status');
+  syncRuntime = createAppSyncRuntime({
+    changed: (change) => sendSyncChanged({ tables: [...change.tables] }),
+    status: () => sendSyncStatus(null),
+  });
+
   // El otro reloj de la ventana (ver revealWhenReady en createWindow): si el
   // renderer ya terminó esto
   // la enseña en el acto; si no, la enseñará su propio 'ready-to-show'.
@@ -927,6 +946,17 @@ app.whenReady().then(async () => {
   powerMonitor.on('lock-screen', () => watcher?.pause());
   powerMonitor.on('resume', () => watcher?.resume());
   powerMonitor.on('unlock-screen', () => watcher?.resume());
+  // Y el sync (§8.5): volver de la suspensión o desbloquear es el momento de
+  // ponerse al día con lo que hicieron los otros PCs, y la red de vuelta tras
+  // un corte, el de subir lo pendiente. En un E2E no existe nada de esto.
+  if (!isE2E()) {
+    powerMonitor.on('resume', () => syncRuntime?.wake());
+    powerMonitor.on('unlock-screen', () => syncRuntime?.wake());
+    networkWatch = watchNetworkBack({
+      isOnline: () => net.isOnline(),
+      onBack: () => syncRuntime?.wake(),
+    });
+  }
 
   // Las pasadas de fondo del arranque. El escritorio 2.0 ya no sincroniza
   // con Turso (el sync nuevo es la fase 3), así que no esperan a ningún pull:
@@ -957,6 +987,16 @@ app.whenReady().then(async () => {
       mark('pasadas de arranque OMITIDAS (modo E2E)');
       return;
     }
+    // El PRIMER ciclo de sync va por delante de todas las pasadas de fondo, con
+    // un tope de 10 s: así lo que cambió en otros PCs ya está cuando las pasadas
+    // miran la biblioteca, y una red lenta no las retrasa más que eso. Nunca
+    // lanza (el motor devuelve sus fallos), pero el try blinda el arranque.
+    try {
+      await syncRuntime?.start();
+    } catch (error) {
+      console.warn('[sync] el arranque del sync falló (sigo sin él):', error);
+    }
+    mark('sync inicial hecho o con tope');
     // De aquí para abajo el orden ya no es una fila: cada pasada corre en
     // paralelo con las que no comparten NI api NI filas, y en fila con las
     // que sí. Las promesas se recogen en const (antes eran void) solo para
@@ -1061,8 +1101,21 @@ app.on('window-all-closed', () => {
 // macOS, apagado del sistema...) antes de que las ventanas reciban su propio
 // evento 'close' — marcarlo aquí, y no solo en el click del tray, asegura que
 // ninguna vía de cierre real se quede bloqueada por el interceptor de la X.
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   isQuitting = true;
+  // Subida final (§10.6): se aplaza el cierre UNA vez, hasta 5 s, para que lo
+  // último que hiciste llegue al hub. La base sigue abierta (se cierra en
+  // will-quit) y el resto del cierre corre al volver a llamar a quit().
+  if (!syncFlushed && syncRuntime?.isActive) {
+    syncFlushed = true;
+    event.preventDefault();
+    void syncRuntime
+      .flushOnQuit()
+      .catch((error: unknown) => console.warn('[sync] la subida final falló:', error))
+      .finally(() => app.quit());
+    return;
+  }
+  networkWatch?.stop();
   watcher?.stop();
   scanWatcher?.stop();
   // La ventana del aviso de logros vive fuera del ciclo de la principal: sin

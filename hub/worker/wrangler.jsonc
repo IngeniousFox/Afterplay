@@ -1,0 +1,41 @@
+{
+  "$schema": "../../worker/node_modules/wrangler/config-schema.json",
+  // Hub de Afterplay 2.0 (§9). NO está desplegado todavía y NO se despliega
+  // desde aquí hasta la fase de puesta en marcha. Este Worker NUNCA debe
+  // llamarse `afterplay-web`: ese es el Worker de producción de la 1.x
+  // (worker/), que sigue sirviendo hasta la fase 10. Un `wrangler deploy` con
+  // el nombre equivocado machacaría el de producción.
+  "name": "afterplay-hub",
+  "main": "src/index.ts",
+  // Mismo contrato de ejecución fijado que worker/wrangler.jsonc.
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Sin "routes" ni dominios propios: de momento solo *.workers.dev. Las
+  // rutas /sync/v1/* NO van tras Access (los clientes no son navegadores,
+  // §9.2); /api/v2/* sí, y esa aplicación de Access se crea al desplegar.
+  "workers_dev": true,
+
+  "durable_objects": {
+    "bindings": [
+      // Uno por persona (§9.1). Se direcciona con idFromName(<inquilino>).
+      { "name": "TENANT_HUB", "class_name": "TenantHubObject" },
+      // Uno para todo el despliegue: inquilinos, invitaciones, correo -> inquilino.
+      { "name": "DIRECTORY", "class_name": "DirectoryObject" },
+    ],
+  },
+  // SQLite en ambos (plan gratuito: solo se admiten clases con SQLite).
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantHubObject", "DirectoryObject"] }],
+
+  // Variables (ninguna con valor aquí: este fichero se commitea).
+  //  · ADMIN_EMAIL        correo del anfitrión; su primera entrada por la PWA
+  //                       crea su inquilino (§9.3). Sin él no hay anfitrión.
+  //  · ACCESS_TEAM_DOMAIN dominio del equipo de Access (xxx.cloudflareaccess.com).
+  //  · ACCESS_AUD         AUD de la aplicación de Access que protege /api/v2/*.
+  // Se dan como secrets/vars del despliegue (`wrangler secret put ...`); en
+  // local, en hub/worker/.dev.vars (que no se commitea), donde además pueden
+  // ir ENVIRONMENT=development y DEV_EMAIL para saltarse Access SOLO en local.
+  // Sin ACCESS_* configurados, /api/v2/* falla cerrado (401).
+
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

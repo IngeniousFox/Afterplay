@@ -1928,6 +1928,44 @@ Fusión, protocolo, `hub-core`, adaptador de Durable Object, motor del cliente, 
 
 **Salida:** E-03 a E-06, E-14, E-15, E-23 y E-24 pasan; los tests de propiedades pasan de forma sostenida.
 
+#### §20.4.1 Estado de la fase 3 (2026-11-15)
+
+Hecha en la rama `v2`, sin desplegar nada. Las piezas:
+
+| Pieza                    | Dónde                                      | Qué hace                                                                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fusión                   | `src/shared/sync/merge.ts`                 | La del spike, sobre valores de SQL crudos: por columna, desempate por valor, forma compacta normalizada, forma en tránsito. Propiedades comprobadas con 20.000 casos                                                         |
+| Protocolo                | `src/shared/sync/protocol.ts`              | Rutas, peticiones y respuestas, códigos de error, token `ap1.<inquilino>.<secreto>`, límites e interfaz de transporte. En los GET las versiones van en la query                                                              |
+| Núcleo del hub           | `hub/core/`                                | Esquema derivado de las mismas tablas del cliente (sin claves foráneas, con `syncSeq`), subida y bajada con secuencia, versiones, emparejado con código, tokens guardados como huella, concesiones, barridos. Sin Cloudflare |
+| Worker y Durable Objects | `hub/worker/`                              | `afterplay-hub`: enrutado, autenticación de dispositivos, `TenantHub` (uno por persona, alarma de barrido cada hora), `Directory` (inquilinos e invitaciones), API mínima de la PWA tras Access, límite de intentos          |
+| Motor del cliente        | `src/main/sync/`                           | Ciclo subir, bajar y avisar; hub nuevo o de otra época; esquema demasiado viejo; reloj adelantado y su recuperación; transporte HTTP; planificador de disparadores                                                           |
+| Integración en la app    | `src/main/sync/runtime.ts`, Ajustes → Sync | Emparejar con dirección y código, token cifrado fuera de las claves exportables, estado y "Sync now", desemparejar, avisos al renderer, subida final al cerrar (tope de 5 s). Sin hub emparejado no hace nada                |
+| Arnés de convergencia    | `hub/convergence/`                         | Hub real y varios clientes reales en un proceso, con relojes controlables y transporte con ida y vuelta JSON                                                                                                                 |
+
+**Comprobado.**
+
+- Pasan los escenarios E-03, E-04, E-05, E-06, E-14, E-15, E-23 y E-24, afirmados con las consultas reales de lectura.
+- Las propiedades de convergencia (3 clientes y un hub, escrituras reales al azar, cortes de red, relojes desviados y cambios de época) pasan con la semilla por defecto en cada `npm test`. También pasan en ejecuciones largas: 600 de 200 pasos y 200 de 200 pasos con otra semilla.
+- Lint y tipos de todos los proyectos (también los tres de `hub/`), 2.320 tests, build y la suite de Playwright.
+
+**Decisiones de esta fase:**
+
+- **Migración única.** Las columnas nuevas de `local_sync_state` (hub, época, versión de esquema sincronizada, bloqueo, código de error) entran en la migración inicial, que se regeneró, como dice la regla de "una sola migración hasta publicar". Una base 2.0 de desarrollo creada antes se rehace con `npm run dev:v2:seed -- --force`.
+- **Id corto en caliente.** Al emparejar, el id corto que asigna el hub se aplica sin reiniciar (`HybridClock.setDev`).
+- **Relojes del barrido.** Un reloj firmado con `000000` solo se acepta en una subida si el hub ya lo tiene guardado en esa misma celda. Así un PC puede reenviar sin bloquearse una fila que tocó el barrido de sesiones (fase 4), y nadie puede inventar uno.
+- **Concesiones.** Una concesión terminada, con éxito o con fallo, sigue ocupando su trabajo hasta que caduca. Así otro PC que aún no ha bajado el resultado no vuelve a pagarlo. El cliente debe pedir un plazo largo (horas) para `memory` y `curiosities`.
+- **Código de emparejado.** Lleva delante el id del inquilino (`7k2m9p-K7M2P-9XQ4T`), así que no hace falta un índice de códigos. Cinco fallos en diez minutos bloquean el emparejado de ese inquilino quince minutos.
+- **Credenciales del hub.** Van cifradas en `credentials.json`, pero fuera de las claves que viajan al renderer o se exportan. Los e2e las quitan siempre y el perfil de desarrollo solo acepta hubs locales o de desarrollo.
+
+**Pendiente o sin comprobar:**
+
+- **Nada se ha probado en Cloudflare.** Quedan sin probar el Durable Object real (RPC, alarma, `blockConcurrencyWhile`, `PRAGMA table_info`, `json_set`, `RETURNING`) y el empaquetado con wrangler (`hub/worker` aún no tiene `package.json`). Es lo primero antes de usar el hub: un despliegue de desarrollo con permiso expreso.
+- **E-14 se cubre al revés.** Un cliente real no puede tener dos esquemas a la vez, así que el "cliente nuevo" es un dispositivo de prueba que habla el protocolo y los clientes reales hacen de versión anterior.
+- **Barrido de sesiones abandonadas.** Queda como punto de extensión del núcleo: es de la fase 4 (E-08, E-09).
+- **Concesiones en el cliente.** Ningún trabajo de fondo las usa aún (§14.3, E-11, fase 5).
+- **Turso en Ajustes.** La pestaña Connections sigue enseñando los campos antiguos de Turso, que el escritorio ya no usa.
+- **Límite de intentos por IP.** No hay; solo por inquilino.
+
 ### §20.5 Fase 4 — Sesiones, watcher e instalaciones (L)
 
 §10 y §11.

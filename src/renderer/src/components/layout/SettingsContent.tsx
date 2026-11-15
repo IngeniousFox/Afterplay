@@ -22,6 +22,7 @@ import { OverlaySection } from './OverlaySection';
 import { ExternalDataSection } from './ExternalDataSection';
 import { SavesScanSection } from './SavesScanSection';
 import { SettingsCard } from './SettingsCard';
+import { SyncSection } from './SyncSection';
 import { TimeFormatSlider } from './TimeFormatSlider';
 import { TriviaSection } from './TriviaSection';
 
@@ -88,6 +89,9 @@ export const SettingsContent = ({
             </div>
           )}
           <div className={revealClass} style={revealStyle(credentialsSpotlight ? 2 : 1)}>
+            <SyncSection />
+          </div>
+          <div className={revealClass} style={revealStyle(credentialsSpotlight ? 3 : 2)}>
             <CredentialsSection spotlight={credentialsSpotlight} />
           </div>
         </>

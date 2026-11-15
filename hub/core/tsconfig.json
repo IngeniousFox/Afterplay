@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": false,
+    "allowImportingTsExtensions": false
+  },
+  "include": [
+    "./**/*.ts",
+    "../../src/shared/sync/*.ts",
+    "../../src/main/db/v2/schema.ts",
+    "../../src/main/db/v2/registry.ts",
+    "../../src/main/db/v2/schemaVersion.ts"
+  ],
+  "exclude": ["../../src/shared/sync/__tests__"]
+}

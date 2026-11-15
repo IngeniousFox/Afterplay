@@ -3,6 +3,7 @@ import { afterEach, describe, it } from 'node:test';
 import {
   activateDevProfile,
   devProfileBlocksBucket,
+  devProfileBlocksHub,
   devProfileBlocksRemote,
   isDevProfile,
   isDevResourceName,
@@ -94,5 +95,27 @@ describe('con un perfil activo', () => {
     activateDevProfile('v2');
     assert.doesNotThrow(() => activateDevProfile('v2'));
     assert.throws(() => activateDevProfile('otro'));
+  });
+});
+
+describe('devProfileBlocksHub', () => {
+  it('fuera de un perfil de desarrollo no bloquea ningún hub', () => {
+    assert.equal(devProfileBlocksHub('https://hub-real.ejemplo.workers.dev'), false);
+  });
+
+  it('en un perfil solo deja pasar un hub de esta máquina o de desarrollo', () => {
+    activateDevProfile('v2');
+
+    assert.equal(devProfileBlocksHub('http://localhost:8787'), false);
+    assert.equal(devProfileBlocksHub('http://127.0.0.1:8787'), false);
+    assert.equal(devProfileBlocksHub('https://afterplay-dev-hub.ejemplo.workers.dev'), false);
+    assert.equal(devProfileBlocksHub('https://afterplay2-test.ejemplo.workers.dev'), false);
+
+    assert.equal(devProfileBlocksHub('https://afterplay-hub.ejemplo.workers.dev'), true);
+    assert.equal(devProfileBlocksHub('https://hub.ejemplo.com'), true);
+    // El nombre de desarrollo tiene que estar en el PRIMER segmento del host.
+    assert.equal(devProfileBlocksHub('https://hub.afterplay-dev.ejemplo.com'), true);
+    // Y lo que no es una dirección válida tampoco pasa.
+    assert.equal(devProfileBlocksHub('no es una url'), true);
   });
 });

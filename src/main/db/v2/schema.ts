@@ -728,6 +728,22 @@ export const localSyncState = localTable(
     // de distinguirlos. Si quien abre la base no es este dispositivo, se
     // sortea otro.
     shortDeviceIdFor: text(),
+    // Identidad del hub con el que se sincronizó por última vez (§8.4). Si el
+    // hub anuncia otra (hub nuevo o restaurado), el motor resube todo y baja
+    // desde cero. Null = nunca se ha sincronizado con ninguno.
+    hubId: text(),
+    hubEpoch: int(),
+    // Versión del esquema (§8.7) con la que este PC puso por última vez su
+    // cursor a un valor válido. Si la app se actualiza y gana tablas o
+    // columnas, el motor pone el cursor a cero y vuelve a bajar todo.
+    lastSyncedSchemaVersion: int(),
+    // §8.7: el hub exige un esquema más nuevo que el de esta app. Mientras
+    // sea mayor que la versión de la app, el motor no sincroniza (sigue la
+    // app en local). Null = no bloqueado.
+    blockedMinSchema: int(),
+    // Código del último error (`network`, `clock_ahead`, `unauthorized`…): la
+    // interfaz decide con él qué mensaje enseñar; `lastError` es el texto.
+    lastErrorCode: text(),
   },
   () => [check('local_sync_state_single_row', sql`"id" = 1`)],
 );

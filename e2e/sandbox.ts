@@ -16,6 +16,7 @@ import {
   seedUnlock,
 } from '../src/main/db/v2/queries/common/__tests__/fixtures';
 import type { AchievementSource, UnlockOrigin } from '../src/main/db/v2/schema';
+import { SYNC_CREDENTIAL_KEYS } from '../src/shared/credentialKeys';
 import type { CredentialsValues, SaveStorageProvider } from '../src/shared/types';
 import { credentialsForSandbox } from './credentials';
 import { DEFAULT_SEED } from './seed';
@@ -156,6 +157,11 @@ const credentialsFileFor = (overrides: Partial<CredentialsValues> = {}): string 
   // cerca de un proceso que pulsa botones solo.
   if (overrides.databaseUrl || overrides.databaseAuthToken) {
     throw new Error('An E2E sandbox cannot receive remote database credentials.');
+  }
+  // Ni el emparejado con un hub de sync: el token abre una biblioteca entera.
+  const loose = overrides as Record<string, unknown>;
+  if (SYNC_CREDENTIAL_KEYS.some((key) => loose[key])) {
+    throw new Error('An E2E sandbox cannot receive sync hub credentials.');
   }
   const fromEnvTest = credentialsForSandbox();
   const values = {

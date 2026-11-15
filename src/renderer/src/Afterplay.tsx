@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAchievementsActivitySync } from './hooks/achievements';
+import { useSyncChangesSync } from './hooks/syncChanges';
 import { useCuriositiesActivitySync } from './hooks/curiosities';
 import { useExternalRefreshActivity } from './hooks/external';
 import { useRadarActivity } from './hooks/radar';
@@ -76,6 +77,10 @@ const Afterplay = (): React.JSX.Element => {
   // estés, y sus queries son staleTime Infinity — sin este aviso, una ficha
   // abierta antes de que llegara su catálogo se quedaba vacía hasta reiniciar.
   useAchievementsActivitySync();
+  // Y lo que baja del sync entre PCs (§15.4): el motor cambia filas en el main
+  // sin que ninguna mutation del renderer pase por ahí, así que sin este aviso
+  // las pantallas enseñarían los datos de antes hasta reiniciar.
+  useSyncChangesSync();
   // Y el refresco de datos externos (PLAN-TO-PLAY.md 5): su parte de
   // el barrido dura minutos, mucho mas de lo que nadie deja Ajustes abierto.
   // La suscripcion vive AQUI para que la pasada se siga viendo desde

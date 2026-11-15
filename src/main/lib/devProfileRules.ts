@@ -15,6 +15,8 @@
 // Vive aparte de devProfile.ts porque la usan módulos puros (y sus tests) que
 // no pueden importar electron.
 
+import { checkHubUrl } from '../../shared/sync/hubUrl';
+
 // El nombre de la base (primer segmento del host de Turso, lo que devuelve
 // remoteLabel) o del bucket tiene que EMPEZAR por uno de estos.
 export const DEV_RESOURCE_PREFIXES = [
@@ -92,6 +94,24 @@ export const devProfileBlocksBucket = (bucket: string): boolean => {
   warnOnce(
     `bucket:${bucket}`,
     `[dev-profile] el bucket [${bucket}] NO es de desarrollo (su nombre tiene que empezar por ${DEV_RESOURCE_PREFIXES.join(' / ')}) - este perfil no hace copias en la nube`,
+  );
+  return true;
+};
+
+// El hub del sync 2.0 (§9). Un perfil de desarrollo trabaja sobre una COPIA de
+// los datos reales: emparejarla con el hub de producción la convertiría en un
+// segundo PC que sube y baja de verdad. Se acepta un hub en esta máquina
+// (`wrangler dev`) o uno cuyo nombre —el primer segmento del host— dice que es
+// de desarrollo, igual que las bases y los buckets. Fuera de un perfil no
+// bloquea nada.
+export const devProfileBlocksHub = (hubUrl: string): boolean => {
+  if (!isDevProfile()) return false;
+  const check = checkHubUrl(hubUrl);
+  if (check.ok && (check.local || isDevResourceName(check.host.split('.')[0]))) return false;
+  const label = check.ok ? check.host.split('.')[0] : 'desconocido';
+  warnOnce(
+    `hub:${label}`,
+    `[dev-profile] el hub [${label}] NO es de desarrollo (su nombre tiene que empezar por ${DEV_RESOURCE_PREFIXES.join(' / ')}, o ser localhost) - este perfil no sincroniza con él`,
   );
   return true;
 };

@@ -19,6 +19,7 @@ import { settingsApi } from './settings';
 import { sgdbApi } from './sgdb';
 import { spendApi } from './spend';
 import { stateEventsApi } from './stateEvents';
+import { syncApi } from './sync';
 import { watcherApi } from './watcher';
 import { windowApi } from './window';
 
@@ -46,6 +47,7 @@ export const api = {
   achievements: achievementsApi,
   radar: radarApi,
   overlay: overlayApi,
+  sync: syncApi,
 };
 
 export type Api = typeof api;

@@ -41,3 +41,20 @@ export const CREDENTIAL_KEYS = Object.keys(ENV_BY_CREDENTIAL_KEY) as (keyof Cred
 // entran en el sandbox salvo que un test pida sync a propósito) y por eso
 // necesita poder señalarlas sin escribir los nombres a mano.
 export const DATABASE_CREDENTIAL_KEYS = ['databaseUrl', 'databaseAuthToken'] as const;
+
+// LAS DEL SYNC 2.0: la dirección del hub y el token de este PC (`ap1.…`, §9.2).
+// Son "de base de datos" a todos los efectos —el token abre la biblioteca
+// entera—, pero se tratan APARTE de las de arriba por una razón concreta: no
+// son un campo de `CredentialsValues`, así que no viajan al renderer con
+// `settings:getCredentials`, no entran en el fichero de claves exportado, no
+// se vuelcan a `process.env` ni las adopta el .env legado, y el borrador de la
+// pestaña Connections no puede borrarlas al guardar. Se emparejan y se
+// desemparejan solo por su propia vía (main/sync/runtime.ts). Viven en el
+// mismo credentials.json, cifradas igual.
+//
+// El andamio E2E las quita como a las otras dos (e2e/credentials.ts), y un
+// perfil de desarrollo solo acepta un hub cuyo nombre diga que es de
+// desarrollo (devProfileBlocksHub).
+export const SYNC_CREDENTIAL_KEYS = ['syncHubUrl', 'syncHubToken'] as const;
+
+export type SyncCredentialKey = (typeof SYNC_CREDENTIAL_KEYS)[number];

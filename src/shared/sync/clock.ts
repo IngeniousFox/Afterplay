@@ -155,7 +155,7 @@ export function successor(clock: Clock, dev: string): Clock {
  * instancia, aunque el reloj de pared retroceda.
  */
 export class HybridClock {
-  readonly dev: string;
+  private device: string;
   private readonly wall: () => number;
   private ms = 0;
   private counter = 0;
@@ -172,9 +172,29 @@ export class HybridClock {
     if (isReservedDeviceShortId(dev)) {
       throw new RangeError(`el id corto ${dev} está reservado (hub o importador de la 1.x)`);
     }
-    this.dev = dev;
+    this.device = dev;
     this.wall = wall;
     if (initial) this.observe(initial);
+  }
+
+  /** Id corto con el que firma ahora el reloj. */
+  get dev(): string {
+    return this.device;
+  }
+
+  /**
+   * Cambia el id corto en caliente: el hub asigna el definitivo al emparejar
+   * (§8.2) y el reloj ya está en marcha, compartido con la puerta de escritura.
+   * Ms y contador no se tocan, así que el siguiente reloj sigue siendo mayor que
+   * todo lo emitido u observado (con el mismo ms y contador solo cambia el
+   * desempate, y `now()` siempre avanza uno de los dos antes de emitir).
+   */
+  setDev(dev: string): void {
+    if (!isDeviceShortId(dev)) throw new RangeError(`id corto de dispositivo inválido: ${dev}`);
+    if (isReservedDeviceShortId(dev)) {
+      throw new RangeError(`el id corto ${dev} está reservado (hub o importador de la 1.x)`);
+    }
+    this.device = dev;
   }
 
   /** Reloj para una escritura local: `max(pared, último visto)`, +1 en el contador si coincide. */
@@ -193,7 +213,7 @@ export class HybridClock {
     } else {
       this.counter += 1;
     }
-    return formatClock(this.ms, this.counter, this.dev);
+    return formatClock(this.ms, this.counter, this.device);
   }
 
   /** Al recibir una fila: adelantarse hasta el mayor reloj visto (§8.2). */
@@ -221,6 +241,6 @@ export class HybridClock {
 
   /** El último reloj emitido u observado, sin avanzar. */
   peek(): Clock {
-    return formatClock(this.ms, this.counter, this.dev);
+    return formatClock(this.ms, this.counter, this.device);
   }
 }

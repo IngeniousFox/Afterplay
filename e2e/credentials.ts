@@ -5,6 +5,7 @@ import {
   CREDENTIAL_KEYS,
   DATABASE_CREDENTIAL_KEYS,
   ENV_BY_CREDENTIAL_KEY,
+  SYNC_CREDENTIAL_KEYS,
 } from '../src/shared/credentialKeys';
 import type { CredentialsValues } from '../src/shared/types';
 
@@ -33,7 +34,9 @@ import type { CredentialsValues } from '../src/shared/types';
 // catálogo público, pero DATABASE_URL abre una biblioteca. La app 2.0 ya no
 // se conecta a Turso (R-14), así que en el sandbox no tienen nada que hacer,
 // y una credencial de producción no debe estar cerca de un proceso que pulsa
-// botones solo.
+// botones solo. Lo mismo vale, con más razón, para el token del hub del sync
+// (SYNC_CREDENTIAL_KEYS): ni .env.test puede traerlo, y el sandbox lo quita
+// aunque alguien lo colara.
 
 const ENV_TEST_PATH = join(process.cwd(), '.env.test');
 
@@ -74,6 +77,8 @@ export const testCredentials = readEnvTest();
 export const credentialsForSandbox = (): Partial<CredentialsValues> => {
   const values = { ...testCredentials.values };
   for (const key of DATABASE_CREDENTIAL_KEYS) delete values[key];
+  const loose = values as Record<string, unknown>;
+  for (const key of SYNC_CREDENTIAL_KEYS) delete loose[key];
   return values;
 };
 

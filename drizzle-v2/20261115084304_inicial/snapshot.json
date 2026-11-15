@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "18c19232-2a15-467c-b2f2-694aac19a099",
+  "id": "6864bb6e-a826-476a-b1ff-fbe80efbfc0f",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -1949,6 +1949,56 @@
       "default": null,
       "generated": null,
       "name": "shortDeviceIdFor",
+      "entityType": "columns",
+      "table": "local_sync_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "hubId",
+      "entityType": "columns",
+      "table": "local_sync_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "hubEpoch",
+      "entityType": "columns",
+      "table": "local_sync_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lastSyncedSchemaVersion",
+      "entityType": "columns",
+      "table": "local_sync_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "blockedMinSchema",
+      "entityType": "columns",
+      "table": "local_sync_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lastErrorCode",
       "entityType": "columns",
       "table": "local_sync_state"
     },

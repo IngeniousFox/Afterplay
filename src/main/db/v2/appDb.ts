@@ -16,8 +16,9 @@ import { openAppDatabase } from './runtime';
 // (`initAppDb`, desde index.ts, antes de registrar el IPC) y todo lo demás la
 // pide con `appCtx()`. Sin red ni candado: el driver es síncrono.
 
-/** Versión del esquema 2.0 que escribe este build (la fila `devices`). */
-export const APP_SCHEMA_VERSION = 1;
+import { APP_SCHEMA_VERSION } from './schemaVersion';
+
+export { APP_SCHEMA_VERSION };
 
 // `out/main/index.js` → raíz del proyecto (sin empaquetar) o del asar.
 const MIGRATIONS_FOLDER = join(__dirname, '../../drizzle-v2');

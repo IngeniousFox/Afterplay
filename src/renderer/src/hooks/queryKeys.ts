@@ -148,6 +148,11 @@ export const queryKeys = {
     overview: (year: number | 'all') => ['achievements', 'overview', year] as const,
     sessionUnlocks: ['achievements', 'sessionUnlocks'] as const,
   },
+  // El sync 2.0 de este PC (Ajustes → Connections → Sync): el estado del
+  // emparejado y del último ciclo.
+  sync: {
+    status: ['sync', 'status'] as const,
+  },
   // Caché local de imágenes (Ajustes → Images). Solo el peso en disco: las
   // imágenes en sí no pasan por TanStack Query, las resuelve useImageSrc.
   images: {
