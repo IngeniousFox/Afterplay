@@ -15,6 +15,7 @@ export {
 } from './heartbeat';
 export { getOpenSessions, type OpenSession } from './open';
 export {
+  countAllSessions,
   getAllSessions,
   getPendingSessions,
   getSessionClosedInfo,

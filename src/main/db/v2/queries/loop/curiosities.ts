@@ -49,6 +49,17 @@ export function getAllCuriosities(ctx: QueryContext): CuriositySummary<string>[]
   return rows.flatMap((row) => row.items.map((text) => ({ gameId: row.gameId, text })));
 }
 
+/** Las curiosidades de UN juego vivo, en el orden de su lista. Vacía si no tiene o no existe. */
+export function getGameCuriosities(ctx: QueryContext, gameId: string): string[] {
+  const rows = ctx.db
+    .select({ items: gameCuriosities.items })
+    .from(gameCuriosities)
+    .where(and(eq(gameCuriosities.gameId, gameId), ofLiveGame(gameCuriosities)))
+    .orderBy(asc(gameCuriosities.syncCreated), asc(gameCuriosities.id))
+    .all();
+  return rows.flatMap((row) => row.items);
+}
+
 /**
  * Juegos vivos que aún no han pasado por la generación: sin `game_curiosities`
  * viva y sin plan vivo (los planeados se encolan al promocionarlos, como hoy).
