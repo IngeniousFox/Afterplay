@@ -53,6 +53,7 @@ export function getAllSessions(
       coverUrl: sql<string | null>`coalesce(${games.coverOverride}, ${gameMetadata.coverUrl})`,
       deviceId: sessions.deviceId,
       closedBy: sessions.closedBy,
+      startedBy: sessions.startedBy,
     })
     .from(sessions)
     .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))

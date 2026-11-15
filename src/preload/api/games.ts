@@ -11,6 +11,7 @@ import type {
   PromotePlannedGameInput,
   UpdateGamePatch,
 } from '../../shared/types';
+import type { GameInstallInfo } from '../../shared/devices';
 import type { GameId } from '../../shared/entityIds';
 
 export const gamesApi = {
@@ -45,8 +46,12 @@ export const gamesApi = {
   delete: (id: GameId): Promise<boolean> => ipcRenderer.invoke('games:delete', id),
   resetEndlessState: (id: GameId): Promise<boolean> =>
     ipcRenderer.invoke('games:resetEndlessState', id),
-  launchExecutable: (executablePath: string): Promise<LaunchExecutableResult> =>
-    ipcRenderer.invoke('games:launchExecutable', executablePath),
-  openInstallDirectory: (installDirectory: string): Promise<LaunchExecutableResult> =>
-    ipcRenderer.invoke('games:openInstallDirectory', installDirectory),
+  // Por gameId, no por ruta (§11.4): el main resuelve la de ESTE PC.
+  launchExecutable: (gameId: GameId): Promise<LaunchExecutableResult> =>
+    ipcRenderer.invoke('games:launchExecutable', gameId),
+  openInstallDirectory: (gameId: GameId): Promise<LaunchExecutableResult> =>
+    ipcRenderer.invoke('games:openInstallDirectory', gameId),
+  // En qué dispositivos está instalado (sin rutas) y si el exe de este PC existe.
+  getInstallInfo: (gameId: GameId): Promise<GameInstallInfo> =>
+    ipcRenderer.invoke('games:getInstallInfo', gameId),
 };

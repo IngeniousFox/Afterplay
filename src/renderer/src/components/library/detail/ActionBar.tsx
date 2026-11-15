@@ -10,7 +10,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
-import type { GameDetail } from '../../../../../shared/types';
+import type { GameDetail, Session } from '../../../../../shared/types';
+import { useDeviceContext } from '../../../hooks/devices';
 import { useRefreshGame } from '../../../hooks/useRefreshGame';
 import { useLaunchExecutable, useOpenInstallDirectory } from '../../../hooks/games';
 import { useCloseSession, useStartGameSession } from '../../../hooks/sessions';
@@ -20,12 +21,20 @@ import {
   heroCtaButtonClass,
   squareIconButtonClass,
 } from '../../../lib/styles';
+import { canStopLiveSession } from '../../../../../shared/liveSession';
+import { PlayingOnNotice } from '../../sessions/RemoteLive';
 import { AddSpendPopover } from './AddSpendPopover';
+import { InstallNotice } from './InstallNotice';
 import type { SessionId } from '../../../../../shared/entityIds';
 
 type ActionBarProps = {
   game: GameDetail;
-  liveSessionId: SessionId | null;
+  // La sesión abierta de ESTE PC: la que Stop cierra y la que apaga Play.
+  ownLiveSessionId: SessionId | null;
+  // Una sesión abierta de OTRO dispositivo (§10.8): "Playing on PC-A", sin
+  // Stop (solo su dueño la cierra) salvo que sea un cronómetro. No impide
+  // Play: dos PCs pueden jugar el mismo juego, una sesión por PC (§10.4).
+  remoteLiveSession: Session | null;
   onEdit: () => void;
   onChangeCover: () => void;
   onDelete: () => void;
@@ -52,7 +61,8 @@ const editButtonClass =
 // no existían todavía cuando se hizo el prototipo.
 export const ActionBar = ({
   game,
-  liveSessionId,
+  ownLiveSessionId,
+  remoteLiveSession,
   onEdit,
   onChangeCover,
   onDelete,
@@ -66,35 +76,42 @@ export const ActionBar = ({
   const { refresh: handleRefreshEverything, refreshing } = useRefreshGame(game.id, game.title);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [dirError, setDirError] = useState<string | null>(null);
-  const isLive = liveSessionId !== null;
+  const { thisDeviceId, nameOf } = useDeviceContext();
+  const isLive = ownLiveSessionId !== null;
   const isBusy = closeSession.isPending || startGameSession.isPending || launchExecutable.isPending;
+  // "Play" solo con instalación en ESTE dispositivo (§11.4): game.executablePath
+  // es el de la instalación local, sin ella es null.
   const canPlay = isLive || game.executablePath !== null;
+  const remoteStop =
+    remoteLiveSession !== null && canStopLiveSession(remoteLiveSession, thisDeviceId);
 
   const handleOpenInstallDirectory = async (): Promise<void> => {
     if (!game.installDirectory) return;
     setDirError(null);
-    const result = await openInstallDirectory.mutateAsync(game.installDirectory);
+    const result = await openInstallDirectory.mutateAsync(game.id);
     if (!result.ok) {
       setDirError(
         result.reason === 'missing'
           ? 'Couldn’t find the install folder — it may have been moved or deleted. Check the path in Edit.'
-          : `Couldn't open the folder — ${result.message}`,
+          : result.reason === 'not_installed'
+            ? 'This game isn’t installed on this PC.'
+            : `Couldn't open the folder — ${result.message}`,
       );
     }
   };
 
   const handleTogglePlay = async (): Promise<void> => {
-    if (isLive && liveSessionId !== null) {
-      await closeSession.mutateAsync({ id: liveSessionId, endedAt: new Date() });
+    if (isLive && ownLiveSessionId !== null) {
+      await closeSession.mutateAsync({ id: ownLiveSessionId, endedAt: new Date() });
       return;
     }
 
-    // El botón ya está deshabilitado sin executablePath (ver canPlay) — esto
-    // es cinturón y tirantes por si acaso.
+    // El botón ya está deshabilitado sin instalación local (ver canPlay) — esto
+    // es cinturón y tirantes por si acaso. El main resuelve la ruta por gameId.
     if (!game.executablePath) return;
 
     setLaunchError(null);
-    const result = await launchExecutable.mutateAsync(game.executablePath);
+    const result = await launchExecutable.mutateAsync(game.id);
     if (!result.ok) {
       // Si el .exe no arranca no hay nada que trackear — abortar ANTES de
       // abrir sesión, o quedaría una sesión "Playing" abierta para un juego
@@ -102,7 +119,9 @@ export const ActionBar = ({
       setLaunchError(
         result.reason === 'missing'
           ? 'Couldn’t find the executable — it may have been moved or uninstalled. Check the path in Edit.'
-          : `Couldn't launch the game — ${result.message}`,
+          : result.reason === 'not_installed'
+            ? 'Not installed on this PC.'
+            : `Couldn't launch the game — ${result.message}`,
       );
       return;
     }
@@ -123,7 +142,13 @@ export const ActionBar = ({
           type="button"
           onClick={handleTogglePlay}
           disabled={isBusy || !canPlay}
-          title={canPlay ? undefined : 'Set an executable path (Edit) to launch this game'}
+          title={
+            canPlay
+              ? undefined
+              : game.isEmulated
+                ? 'Emulated games start from their emulator'
+                : 'Not installed on this PC'
+          }
           className={`${heroCtaButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
           style={
             isLive
@@ -205,6 +230,27 @@ export const ActionBar = ({
           <Trash2 size={17} className="text-destructive" />
         </button>
       </div>
+
+      {remoteLiveSession !== null && (
+        <PlayingOnNotice
+          deviceName={nameOf(remoteLiveSession.deviceId)}
+          session={remoteLiveSession}
+          // Solo un cronómetro se para desde otro PC; sessions:close cierra con
+          // closedBy 'user', que es lo que la regla de la puerta admite.
+          onStop={
+            remoteStop
+              ? () =>
+                  void closeSession.mutateAsync({
+                    id: remoteLiveSession.id,
+                    endedAt: new Date(),
+                  })
+              : undefined
+          }
+          stopping={closeSession.isPending}
+        />
+      )}
+
+      <InstallNotice gameId={game.id} />
 
       {launchError && (
         <div className="flex items-center gap-2 text-[12.5px] text-destructive">

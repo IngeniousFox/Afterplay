@@ -3,11 +3,14 @@ import { handleDb } from './dbHandle';
 import { getConfigValue, setConfigValue } from '../config/store';
 import { appCtx } from '../db/v2/appDb';
 import { getOwnedGames } from '../db/v2/queries/library';
+import { queueAchievementsRefreshForGame } from '../steam/backfill';
 
 import { getCachedEntries, getLastScanAt } from '../scan/cache';
 import type { ScannedFolder, ScanReport } from '../scan/contracts';
+import type { GameId } from '../../shared/entityIds';
 import { byFolderName } from '../scan/folders';
 import { findInLibrary } from '../scan/folderTitle';
+import { decideLink, linkInstall } from '../scan/linkInstalls';
 import { getScanWatcher } from '../scan/watcher';
 
 // Modo "Scan your folders" de Add Game: se leen las carpetas que el usuario
@@ -30,10 +33,12 @@ const buildReport = async (): Promise<ScanReport> => {
   // escaneo (getOwnedGames, ver su porqué allí). Los títulos van tal cual:
   // findInLibrary se encarga de normalizarlos y limpiarlos.
   const owned = getOwnedGames(appCtx());
-  const libraryTitles = owned.filter((game) => !game.planned).map((game) => game.title);
+  const library = owned.filter((game) => !game.planned);
+  const libraryTitles = library.map((game) => game.title);
   const planned = owned.filter((game) => game.planned);
   const plannedTitles = planned.map((game) => game.title);
 
+  const linkedGameIds: GameId[] = [];
   const candidates = entries
     .map((entry) => {
       // "Ya lo tienes" se comprueba con el juego propuesto Y con el nombre
@@ -58,16 +63,38 @@ const buildReport = async (): Promise<ScanReport> => {
         planned.find((game) => game.igdbId === proposed?.igdbId) ??
         (plannedTitle !== null ? planned.find((game) => game.title === plannedTitle) : undefined);
 
+      // Vinculación (§11.2): un juego que YA está en la biblioteca pero sin
+      // instalación en este PC se vincula a esta carpeta. Se decide aquí, en
+      // el main, y no en el renderer: el renderer solo enseña el resultado.
+      // Los que ya tienen instalación aquí no se tocan.
+      let linkedOnThisPc = false;
+      if (inLibrary !== null) {
+        const decision = decideLink(entry.folder, titles, proposed?.igdbId ?? null, library);
+        if (decision.action === 'linked') {
+          linkedOnThisPc = true;
+        } else if (decision.action === 'link' && !linkedGameIds.includes(decision.game.id)) {
+          // Una sola carpeta por juego y pasada: si dos carpetas casan con el
+          // mismo juego, gana la primera y la segunda no la pisa.
+          linkedOnThisPc = linkInstall(appCtx(), decision.game, entry.folder);
+          if (linkedOnThisPc) linkedGameIds.push(decision.game.id);
+        }
+      }
+
       return {
         ...entry.folder,
         matches: entry.matches,
         alreadyInLibrary: inLibrary !== null,
+        linkedOnThisPc,
         plannedGameId: plannedGame?.id ?? null,
       };
     })
     .sort(byFolderName);
 
-  return { candidates, scannedAt: getLastScanAt(roots) };
+  // Los logros de emuladores de Steam leen la carpeta de la instalación local
+  // (§11.4): como al editar la ruta, se piden de nuevo fuera del paso.
+  for (const gameId of linkedGameIds) void queueAchievementsRefreshForGame(gameId);
+
+  return { candidates, scannedAt: getLastScanAt(roots), linkedGameIds };
 };
 
 export const registerScanHandlers = (): void => {

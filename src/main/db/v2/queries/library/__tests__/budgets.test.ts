@@ -82,15 +82,17 @@ describe('presupuestos: la lista de la biblioteca', () => {
     const ptId = seedPlaythrough(fx.ctx, { gameId, manualHours: 12.5 });
     event(fx.ctx, ptId, 'started', '2024-01-01T12:00:00Z');
     syncedSession(fx.ctx, ptId, '2024-01-01T12:00:00Z', 1, 'legacy_manual');
+    // Con una sesión abierta hay una consulta más, constante (el dispositivo de la
+    // sesión en vivo, §10.8): se mide ya con ella abierta para comparar lo mismo.
+    openSession(fx.ctx, ptId, '2025-01-01T12:00:00Z');
     const [, inicial] = work.measure(() => getGames(fx.ctx));
     for (let index = 0; index < 500; index++) {
       syncedSession(fx.ctx, ptId, new Date(1704110400000 + index * 3_600_000).toISOString(), 0.5);
     }
-    openSession(fx.ctx, ptId, '2025-01-01T12:00:00Z');
     const [[game], crecido] = work.measure(() => getGames(fx.ctx));
     const detail = getGameById(fx.ctx, gameId);
     assert.deepEqual(crecido, inicial);
-    assert.deepEqual(crecido, { queries: 3, rows: 3 });
+    assert.deepEqual(crecido, { queries: 4, rows: 4 });
     assert.equal(game.sessionCount, 502);
     assert.equal(game.totalHours, 263.5);
     assert.equal(game.totalHours, detail?.totalHours);

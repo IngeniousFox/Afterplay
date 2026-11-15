@@ -33,6 +33,9 @@ const HeroGlassButton = ({
 type HeroBannerProps = {
   game: GameDetail;
   liveSince: Date | null;
+  // El dispositivo, si la sesión en vivo es de OTRO PC (§10.8): el badge dice
+  // "PLAYING ON PC-A" en vez de "PLAYING".
+  liveOn?: string | null;
   onBack: () => void;
   // La ficha de Plan to Play vuelve a /plan, no a la biblioteca.
   backLabel?: string;
@@ -53,6 +56,7 @@ type HeroBannerProps = {
 export const HeroBanner = ({
   game,
   liveSince,
+  liveOn = null,
   onBack,
   backLabel = 'Back to library',
   onAddGame,
@@ -133,8 +137,8 @@ export const HeroBanner = ({
                   animationPlayState: badgePlayState,
                 }}
               />
-              <span className="text-[10px] font-extrabold tracking-[.1em] text-primary">
-                PLAYING
+              <span className="text-[10px] font-extrabold tracking-[.1em] text-primary [overflow-wrap:anywhere]">
+                {liveOn === null ? 'PLAYING' : `PLAYING ON ${liveOn.toUpperCase()}`}
               </span>
               <span className="border-l border-primary/30 pl-2.25 text-[12.5px] font-bold text-primary tabular-nums">
                 {formatElapsed(elapsedSeconds)}

@@ -2,6 +2,9 @@ import { Folder } from 'lucide-react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { fieldLabelClass } from './styles';
 
+// La ruta es la de la instalación de ESTE PC (§11.4): cada dispositivo tiene la
+// suya, y por eso la etiqueta lo dice.
+//
 // Compartido por Add Game y Edit Game (mismo campo, dos formularios): el
 // tipado solo pide el subconjunto de campos que de verdad toca, así sirve
 // para AddGameFormValues y EditGameFormValues sin castear nada.
@@ -21,7 +24,8 @@ export const ExecutablePathField = (): React.JSX.Element => {
   return (
     <div>
       <div className={fieldLabelClass}>
-        EXECUTABLE PATH <span className="font-medium tracking-normal normal-case">· optional</span>
+        EXECUTABLE (THIS PC){' '}
+        <span className="font-medium tracking-normal normal-case">· optional</span>
       </div>
       <div className="flex gap-2">
         <Controller

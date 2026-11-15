@@ -1,6 +1,7 @@
 import { Clock3, Flame, ScrollText, Timer, Trophy } from 'lucide-react';
 import { useMemo } from 'react';
 import type { AchievementEntry, GameDetail, Session, TimeFormat } from '../../../../shared/types';
+import { useSessionDevice } from '../../hooks/sessionDevice';
 import { useGameAchievements } from '../../hooks/achievements';
 import { rarityAccent } from '../../lib/achievements';
 import { useTimeFormat } from '../../hooks/settings';
@@ -33,16 +34,17 @@ import type { SessionId } from '../../../../shared/entityIds';
 const DetailSessionRow = ({
   session,
   index,
-  liveSeconds,
+  nowMs,
   maxDurationSec,
   timeFormat,
   achievements,
 }: {
   session: Session;
   index: number;
-  // Contador de la única sesión viva posible — el hook vive en el padre
-  // (una sola llamada, regla de hooks) y aquí solo llega el número.
-  liveSeconds: number;
+  // La hora del contador en vivo — el hook vive en el padre (una sola
+  // llamada, regla de hooks) y cada fila abierta resta su propio inicio: con
+  // dos PCs jugando el mismo juego hay dos abiertas (§10.4).
+  nowMs: number;
   maxDurationSec: number;
   timeFormat: TimeFormat;
   // Los logros que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1).
@@ -50,6 +52,10 @@ const DetailSessionRow = ({
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({});
   const live = session.endedAt === null;
+  const liveSeconds = Math.max(0, (nowMs - session.startedAt.getTime()) / 1000);
+  // §10.8: abierta en otro PC = "Playing on PC-A"; y con más de un dispositivo
+  // conocido cada fila dice dónde se jugó.
+  const device = useSessionDevice(session);
   const durationSec = session.durationSec ?? 0;
   // La llama solo corona una sesión CERRADA que de verdad tocó el techo —
   // con todo a cero no hay récord que celebrar (el clamp a 1 lo garantiza).
@@ -126,7 +132,17 @@ const DetailSessionRow = ({
         className="relative mt-[0.1em] text-[0.55em] font-semibold"
         style={{ color: live ? '#2fdc7e' : 'var(--muted-foreground)' }}
       >
-        {live ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
+        {live
+          ? device.remote
+            ? `Playing on ${device.deviceName}`
+            : 'Live now'
+          : session.isManual
+            ? 'Manual'
+            : 'Tracked'}
+        {!live && device.deviceTag !== null && ` · ${device.deviceTag}`}
+        {device.noSignal !== null && (
+          <span className="ml-[0.6em] text-[#e3b24a]">{device.noSignal}</span>
+        )}
       </div>
       {/* Los logros de la noche, con el color del más raro de la tanda. */}
       {achievements.length > 0 && (
@@ -195,14 +211,18 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
   // biblioteca de duraciones a cero.
   const maxDurationSec = Math.max(1, longestSec);
 
-  // Como mucho hay UNA sesión abierta (el watcher solo vigila un proceso a
-  // la vez), así que el hook del contador se llama una única vez aquí y las
-  // filas reciben el número — jamás un hook dentro del map.
-  const liveStartedAt = useMemo(
-    () => sessions.find((session) => session.endedAt === null)?.startedAt ?? null,
-    [sessions],
-  );
+  // Como mucho hay UNA abierta por dispositivo (§10.4), así que el hook del
+  // contador se llama una única vez aquí, anclado a la abierta más antigua, y
+  // las filas reciben la hora y restan su propio inicio — jamás un hook de
+  // contador dentro del map.
+  const liveStartedAt = useMemo(() => {
+    const open = sessions.filter((session) => session.endedAt === null);
+    return open.length === 0
+      ? null
+      : new Date(Math.min(...open.map((session) => session.startedAt.getTime())));
+  }, [sessions]);
   const liveSeconds = useLiveTimer(liveStartedAt);
+  const nowMs = liveStartedAt === null ? 0 : liveStartedAt.getTime() + liveSeconds * 1000;
 
   if (sessions.length === 0) {
     return (
@@ -265,7 +285,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
               key={session.id}
               session={session}
               index={index}
-              liveSeconds={liveSeconds}
+              nowMs={nowMs}
               maxDurationSec={maxDurationSec}
               timeFormat={timeFormat}
               achievements={achievementsBySession.get(session.id) ?? []}

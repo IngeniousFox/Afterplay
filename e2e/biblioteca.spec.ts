@@ -119,10 +119,7 @@ test.describe('biblioteca', () => {
 
     const playButton = page.getByRole('button', { name: 'Play' });
     await expect(playButton).toBeDisabled();
-    await expect(playButton).toHaveAttribute(
-      'title',
-      'Set an executable path (Edit) to launch this game',
-    );
+    await expect(playButton).toHaveAttribute('title', 'Not installed on this PC');
   });
 
   test('borrar exige teclear el nombre exacto (sin distinguir mayúsculas) y el juego desaparece', async ({

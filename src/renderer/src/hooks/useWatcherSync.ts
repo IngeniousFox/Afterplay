@@ -41,6 +41,9 @@ export const useWatcherSync = (): void => {
       // biblioteca pero el History de la ficha y el desglose de Stats seguían
       // enseñando lo de antes hasta recargar.
       queryClient.invalidateQueries({ queryKey: queryKeys.stateEvents.all });
+      // Y los dispositivos: el mismo aviso trae lo que llega por sync, y un PC
+      // nuevo (o renombrado) es lo que da nombre a "Playing on PC-A".
+      queryClient.invalidateQueries({ queryKey: queryKeys.devices.all });
     });
   }, [queryClient]);
 };

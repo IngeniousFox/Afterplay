@@ -44,7 +44,7 @@ export const InstallDirectoryField = ({
   return (
     <div>
       <div className={fieldLabelClass}>
-        INSTALL DIRECTORY
+        INSTALL DIRECTORY (THIS PC)
         {showOptionalHint && (
           <>
             {' '}

@@ -23,6 +23,12 @@ export const closedSessions = <S extends SessionLike>(game: GameLike<S>): S[] =>
   allSessions(game).filter((session) => session.endedAt !== null);
 
 // La sesión ABIERTA ahora mismo (el watcher tiene el juego en marcha), o null.
-// Como mucho hay una por juego (SPEC 4.5), así que el orden da igual.
+// Como mucho hay una por juego Y DISPOSITIVO (§10.4), así que con dos PCs
+// jugando el mismo juego puede haber dos: para distinguirlas, `openSessions`.
 export const liveSession = <S extends SessionLike>(game: GameLike<S>): S | null =>
   flatten(game).find((session) => session.endedAt === null) ?? null;
+
+// Todas las abiertas, de nueva a vieja. Las de otros dispositivos también: la
+// interfaz separa la propia (la que se puede parar) de las ajenas (§10.8).
+export const openSessions = <S extends SessionLike>(game: GameLike<S>): S[] =>
+  allSessions(game).filter((session) => session.endedAt === null);

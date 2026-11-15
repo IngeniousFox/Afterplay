@@ -159,3 +159,18 @@ export const findInLibrary = (
   }
   return null;
 };
+
+// ¿Alguno de los candidatos ES este título, y no solo se le parece? Igualdad
+// exacta tras limpiar edición y ruido, sin la tolerancia de Dice de arriba.
+//
+// Lo usa la vinculación por escaneo (§11.2), que ESCRIBE una instalación: el
+// 0,82 de `findInLibrary` basta para decir "ya lo tienes" en la lista, pero
+// vincular "Portal 2" al "Portal" de la biblioteca porque se parecen mucho
+// sería escribir una ruta equivocada que además se sincroniza.
+export const isExactLibraryTitle = (candidateTitles: string[], libraryTitle: string): boolean => {
+  const target = stripEdition(normalizeTitle(libraryTitle));
+  if (!target) return false;
+  return candidateTitles.some(
+    (candidate) => stripEdition(humanizeFolderName(stripNoise(candidate))) === target,
+  );
+};

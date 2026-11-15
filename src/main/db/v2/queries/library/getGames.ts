@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, not } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, not } from 'drizzle-orm';
 import { deriveLibrary, type LibraryLiveSession } from '../../../../../shared/domain/library';
 import type { GameListItem } from '../../../../../shared/types';
 import { games, playthroughs, sessions, stateEvents } from '../../schema';
@@ -96,9 +96,49 @@ export function getGames(ctx: QueryContext): GameListItem<string>[] {
   // En vivo: toda sesión abierta, de cualquier dispositivo (como hoy en el
   // escritorio). El arranque más reciente por playthrough ya viene agregado;
   // deriveLibrary elige entre los del juego.
+  //
+  // Para saber DE QUÉ DISPOSITIVO es (§10.8, "Playing on PC-A") hace falta la
+  // fila de la sesión, que el agregado no lleva. Solo se pide si alguna está
+  // abierta, así que sin nada en marcha la lista sigue costando tres consultas.
+  // Con una propia abierta gana la propia (es la que se puede parar desde
+  // aquí); si no, la ajena más reciente. `liveSince` sale de esa misma sesión.
+  const liveDeviceByGame = new Map<string, string>();
   const liveSessions: LibraryLiveSession<string>[] = [];
-  for (const row of iterations) {
-    if (row.liveSince !== null) liveSessions.push({ gameId: row.gameId, startedAt: row.liveSince });
+  const livePlaythroughIds = iterations
+    .filter((row) => row.liveSince !== null)
+    .map((row) => row.id);
+  if (livePlaythroughIds.length > 0) {
+    const open = ctx.db
+      .select({
+        gameId: playthroughs.gameId,
+        deviceId: sessions.deviceId,
+        startedAt: sessions.startedAt,
+      })
+      .from(sessions)
+      .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))
+      .where(
+        and(
+          isNull(sessions.endedAt),
+          inArray(sessions.playthroughId, livePlaythroughIds),
+          alive(sessions),
+        ),
+      )
+      .all();
+    const chosen = new Map<string, (typeof open)[number]>();
+    for (const session of open) {
+      const known = chosen.get(session.gameId);
+      const own = session.deviceId === ctx.deviceId;
+      const knownOwn = known?.deviceId === ctx.deviceId;
+      const wins =
+        known === undefined ||
+        (own && !knownOwn) ||
+        (own === knownOwn && session.startedAt.getTime() > known.startedAt.getTime());
+      if (wins) chosen.set(session.gameId, session);
+    }
+    for (const [gameId, session] of chosen) {
+      liveSessions.push({ gameId, startedAt: session.startedAt });
+      liveDeviceByGame.set(gameId, session.deviceId);
+    }
   }
 
   const summaries = deriveLibrary({
@@ -138,6 +178,7 @@ export function getGames(ctx: QueryContext): GameListItem<string>[] {
         isLive: summary.isLive,
         liveSince: summary.liveSince,
         sessionCount: summary.sessionCount,
+        liveDeviceId: liveDeviceByGame.get(game.id) ?? null,
       };
     })
     .sort((a, b) => compareTitlesNocase(a.title, b.title));

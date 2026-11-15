@@ -1,6 +1,7 @@
 import { achievementsApi } from './achievements';
 import { backupApi } from './backup';
 import { curiositiesApi } from './curiosities';
+import { devicesApi } from './devices';
 import { dialogApi } from './dialog';
 import { emulatorsApi } from './emulators';
 import { externalApi } from './external';
@@ -26,6 +27,7 @@ import { windowApi } from './window';
 export const api = {
   window: windowApi,
   dialog: dialogApi,
+  devices: devicesApi,
   backup: backupApi,
   games: gamesApi,
   emulators: emulatorsApi,

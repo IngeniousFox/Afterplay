@@ -42,6 +42,7 @@ export const baseSession = (overrides: Partial<SessionWithGame> = {}): SessionWi
   coverUrl: null,
   deviceId: 'device-a',
   closedBy: null,
+  startedBy: 'watcher',
   ...overrides,
 });
 

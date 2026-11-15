@@ -14,6 +14,7 @@ import {
 } from '../../lib/format';
 import { GameCover } from '../GameCover';
 import { SessionAchievements, type SessionAchievementEntry } from './SessionAchievements';
+import { useSessionDevice } from '../../hooks/sessionDevice';
 import { SessionNote } from './SessionNote';
 import type { AchievementId } from '../../../../shared/entityIds';
 
@@ -77,6 +78,9 @@ export const SessionRow = ({
 }: SessionRowProps): React.JSX.Element => {
   const isLive = session.endedAt === null;
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
+  // §10.8: una abierta en otro PC es "Playing on PC-A", y con más de un
+  // dispositivo conocido cada fila dice en cuál se jugó.
+  const device = useSessionDevice(session);
   const { data: timeFormat = '24h' } = useTimeFormat();
   const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
 
@@ -120,7 +124,14 @@ export const SessionRow = ({
               MANUAL
             </span>
           )}
+          {device.deviceTag !== null && <span>· {device.deviceTag}</span>}
         </div>
+        {device.remote && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-[12.5px] font-semibold">
+            <span className="text-primary">Playing on {device.deviceName}</span>
+            {device.noSignal !== null && <span className="text-[#e3b24a]">{device.noSignal}</span>}
+          </div>
+        )}
         {endTime && (
           <div className="mt-0.25 text-[12.5px] text-muted-foreground/70">→ {endTime}</div>
         )}

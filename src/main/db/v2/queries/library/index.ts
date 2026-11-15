@@ -8,6 +8,7 @@
 
 export { getGameById } from './getGameById';
 export { getGames } from './getGames';
+export { getInstalledOn, getLocalInstall, type LocalInstall } from './installs';
 export { getOwnedGames } from './getOwnedGames';
 export { getPlannedGameExtras, getPlannedGames } from './getPlannedGames';
 export { readPlanHistory } from './planHistory';

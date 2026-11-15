@@ -1,7 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { isLiveElsewhere } from '../../../shared/liveSession';
 import type { SessionClosedEvent } from '../../../shared/types';
+import { useDeviceContext } from '../hooks/devices';
 import { useGames } from '../hooks/games';
 import { queryKeys } from '../hooks/queryKeys';
 import { consumeAmbientWake } from '../lib/ambientWake';
@@ -459,7 +461,9 @@ const TvShell = (): React.JSX.Element => {
   // Sin datos aún (arranque frío directo al modo TV) no se decide nada: el
   // primer commit con caché vacía diría "no hay juego" y desharía la
   // atenuación que sound.ts recuerda justo para ese caso.
-  const gameRunning = games.some((game) => game.isLive);
+  // Solo el que corre en ESTE PC: uno que se juega en otro no suena aquí.
+  const { thisDeviceId } = useDeviceContext();
+  const gameRunning = games.some((game) => game.isLive && !isLiveElsewhere(game, thisDeviceId));
   useEffect(() => {
     if (gamesFetched) tvSound.duckAmbience(gameRunning);
   }, [gamesFetched, gameRunning]);

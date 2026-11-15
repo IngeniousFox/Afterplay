@@ -209,9 +209,30 @@ describe('getOwnedGames · la colección del escaneo', () => {
 
     const owned = getOwnedGames(fx.ctx).sort((a, b) => a.title.localeCompare(b.title));
     assert.deepEqual(owned, [
-      { id: lib, igdbId: 1, title: 'Biblioteca', planned: false },
-      { id: plan, igdbId: null, title: 'Plan', planned: true },
-      { id: promoted, igdbId: null, title: 'Promocionado', planned: false },
+      {
+        id: lib,
+        igdbId: 1,
+        title: 'Biblioteca',
+        planned: false,
+        hasLocalInstall: false,
+        localInstallDirectory: null,
+      },
+      {
+        id: plan,
+        igdbId: null,
+        title: 'Plan',
+        planned: true,
+        hasLocalInstall: false,
+        localInstallDirectory: null,
+      },
+      {
+        id: promoted,
+        igdbId: null,
+        title: 'Promocionado',
+        planned: false,
+        hasLocalInstall: false,
+        localInstallDirectory: null,
+      },
     ]);
   });
 });

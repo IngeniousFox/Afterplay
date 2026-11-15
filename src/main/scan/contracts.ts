@@ -33,6 +33,11 @@ export type ScanCandidate = ScannedFolder & {
   // añadir, pero se sigue enseñando para que no parezca que el escaneo se lo
   // ha dejado.
   alreadyInLibrary: boolean;
+  // Este PC ya tiene ESTA carpeta como instalación del juego (§11.2): o la
+  // acaba de crear este mismo escaneo (el juego estaba en la biblioteca,
+  // añadido desde otro PC, y no tenía instalación aquí) o la creó uno
+  // anterior. La pantalla dice "Linked on this PC".
+  linkedOnThisPc: boolean;
   // Id del juego de Plan to Play que es ESTA carpeta, o null. Distinto de
   // alreadyInLibrary a propósito, porque el final es otro: un planeado que
   // acabas de instalar no es un juego "ya añadido" que estorbe, es justo el
@@ -46,6 +51,9 @@ export type ScanCandidate = ScannedFolder & {
 // hace falta decir DE CUÁNDO es lo que se está enseñando.
 export type ScanReport = {
   candidates: ScanCandidate[];
+  // Los juegos a los que ESTE escaneo acaba de crear la instalación de este PC
+  // (§11.2). La interfaz refresca la biblioteca cuando no viene vacío.
+  linkedGameIds: GameId[];
   // ISO del escaneo más reciente de estas carpetas, o null si no hay nada
   // guardado todavía (primer arranque, o no se ha señalado ninguna carpeta).
   scannedAt: string | null;

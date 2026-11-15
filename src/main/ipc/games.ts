@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { access } from 'node:fs/promises';
 import { handleDb } from './dbHandle';
 import { pickUpdateGamePatch } from './gamePatch';
 import type {
@@ -28,6 +28,8 @@ import {
 import {
   getGameById,
   getGames,
+  getInstalledOn,
+  getLocalInstall,
   getPlannedGameExtras,
   getPlannedGames,
 } from '../db/v2/queries/library';
@@ -35,7 +37,9 @@ import { openPathResult } from '../lib/openPath';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import { notifyAchievementsActivity } from '../steam/notify';
 import { warmImageCache, warmSteamData } from '../external/warmNewGame';
+import type { ExecutableStatus, GameInstallInfo } from '../../shared/devices';
 import type { GameId } from '../../shared/entityIds';
+import type { LaunchExecutableResult } from '../../shared/types';
 
 // warmImageCache y warmSteamData viven en external/warmNewGame.ts desde que
 // el alta desde el MÓVIL (que entra por el buzón del Plan, no por aquí) se
@@ -226,17 +230,47 @@ export const registerGamesHandlers = (): void => {
     return resetEndlessState(appCtx(), id);
   });
 
-  // Botón Play y botón "abrir carpeta" — ni uno ni otro es acceso a datos
-  // (ipcMain.handle directo, no handleDb). openPathResult comprueba que
-  // exista ANTES de shell.openPath, así el mensaje ("no se encontró...") es
-  // nuestro en español en vez del texto crudo del sistema operativo — y
-  // sirve igual para un .exe que para un directorio (abrir carpetas en el
-  // explorador es lo mismo para openPath que "ejecutar" un archivo).
-  ipcMain.handle('games:launchExecutable', (_event, executablePath: string) =>
-    openPathResult(executablePath),
+  // Botón Play y botón "abrir carpeta". Reciben el `gameId` y NO una ruta
+  // (§11.4): el main busca la de la instalación de ESTE PC, así que la ruta
+  // cruda ya no cruza el IPC y un renderer con datos viejos no puede lanzar
+  // la ruta de otro PC. Sin instalación aquí no hay nada que abrir:
+  // 'not_installed'. openPathResult comprueba que exista ANTES de
+  // shell.openPath, así el mensaje ("no se encontró...") es nuestro en vez
+  // del texto crudo del sistema operativo — y sirve igual para un .exe que
+  // para un directorio (abrir carpetas en el explorador es lo mismo para
+  // openPath que "ejecutar" un archivo).
+  handleDb('games:launchExecutable', (_event, gameId: GameId): Promise<LaunchExecutableResult> =>
+    openLocalPath(getLocalInstall(appCtx(), gameId)?.executablePath ?? null),
   );
 
-  ipcMain.handle('games:openInstallDirectory', (_event, installDirectory: string) =>
-    openPathResult(installDirectory),
+  handleDb(
+    'games:openInstallDirectory',
+    (_event, gameId: GameId): Promise<LaunchExecutableResult> =>
+      openLocalPath(getLocalInstall(appCtx(), gameId)?.installDirectory ?? null),
   );
+
+  // La ficha: en qué dispositivos está instalado el juego (sin rutas) y si el
+  // ejecutable de ESTE PC sigue donde se guardó (§11.3). Comprobar es LEER el
+  // disco: no escribe nada en la base (no queremos tráfico de sync por
+  // comprobaciones) y no borra la instalación.
+  handleDb('games:getInstallInfo', async (_event, gameId: GameId): Promise<GameInstallInfo> => {
+    const ctx = appCtx();
+    return {
+      installedOn: getInstalledOn(ctx, gameId),
+      executable: await executableStatus(getLocalInstall(ctx, gameId)?.executablePath ?? null),
+    };
+  });
+};
+
+const openLocalPath = async (path: string | null): Promise<LaunchExecutableResult> =>
+  path === null ? { ok: false, reason: 'not_installed' } : openPathResult(path);
+
+const executableStatus = async (path: string | null): Promise<ExecutableStatus> => {
+  if (path === null) return 'none';
+  try {
+    await access(path);
+    return 'present';
+  } catch {
+    return 'missing';
+  }
 };

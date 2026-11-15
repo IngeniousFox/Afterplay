@@ -39,11 +39,21 @@ export const useScanResults = (): UseQueryResult<ScanReport, Error> & {
 } => {
   const queryClient = useQueryClient();
   const [isRescanning, setIsRescanning] = useState(false);
+
+  // Si el escaneo acaba de vincular juegos a este PC (§11.2) el main ha
+  // escrito instalaciones: la biblioteca y las fichas (Play, "Installed on")
+  // tienen que releerse. Es el único caso en que un escaneo cambia datos.
+  const refreshIfLinked = (report: ScanReport): ScanReport => {
+    if (report.linkedGameIds.length > 0) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
+    }
+    return report;
+  };
   const [rescanError, setRescanError] = useState<Error | null>(null);
 
   const query = useQuery({
     queryKey: queryKeys.scan.results,
-    queryFn: () => window.api.scan.cached(),
+    queryFn: () => window.api.scan.cached().then(refreshIfLinked),
     // Releer SIEMPRE al montar, aunque haya datos: la suscripción de abajo
     // solo existe con el paso abierto, así que lo que el vigilante encuentre
     // con el modal cerrado —el caso normal: instalas y LUEGO abres Add
@@ -73,7 +83,7 @@ export const useScanResults = (): UseQueryResult<ScanReport, Error> & {
     setRescanError(null);
     void window.api.scan
       .run()
-      .then((report) => queryClient.setQueryData(queryKeys.scan.results, report))
+      .then((report) => queryClient.setQueryData(queryKeys.scan.results, refreshIfLinked(report)))
       .catch((error: unknown) => {
         // No tragarse el fallo en silencio: un disco desenchufado o un permiso
         // retirado dejaba el spinner parado con la foto vieja, indistinguible

@@ -1,8 +1,14 @@
-import type { UseMutationResult } from '@tanstack/react-query';
+import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import type {
+  ConcurrentPlaythrough,
+  MergePlaythroughsOutcome,
+  MergePlaythroughsRequest,
+} from '../../../shared/playthroughMerge';
 import type { CreateIterationInput, Iteration, UpdateIterationPatch } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import { useInvalidatingMutation } from './useInvalidatingMutation';
-import type { IterationId } from '../../../shared/entityIds';
+import type { GameId, IterationId } from '../../../shared/entityIds';
 
 // No hay useIterations(gameId) — games:getById ya trae las iteraciones
 // enriquecidas (horas, fechas derivadas, estado) dentro de GameDetail, así
@@ -40,4 +46,39 @@ export const useDeleteIteration = (): UseMutationResult<boolean, Error, Iteratio
   useInvalidatingMutation(
     (id: IterationId) => window.api.iterations.delete(id),
     [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
+  );
+
+// §10.7 — los playthroughs activos del juego cuando hay MÁS DE UNO (dos PCs
+// sin red crearon cada uno el suyo). Lista vacía = nada que reparar. Su key
+// cuelga de ['games'], así que se relee con cada aviso de cambios.
+export const useConcurrentPlaythroughs = (
+  gameId: GameId | null,
+): UseQueryResult<ConcurrentPlaythrough[], Error> =>
+  useQuery({
+    queryKey: queryKeys.playthroughs.concurrent(gameId),
+    queryFn: () => window.api.iterations.concurrent(gameId as GameId),
+    enabled: gameId !== null,
+    staleTime: Infinity,
+  });
+
+// Fusionar mueve sesiones, eventos de estado, gastos y logros de un playthrough
+// al otro y borra el sobrante: cambia casi todo lo derivado del juego (horas,
+// estado, gasto) y las listas de sesiones y eventos. Invalida lo mismo que
+// borrar un playthrough, más los logros (sus desbloqueos cambian de playthrough)
+// y el gasto.
+export const useMergePlaythroughs = (): UseMutationResult<
+  MergePlaythroughsOutcome,
+  Error,
+  MergePlaythroughsRequest,
+  unknown
+> =>
+  useInvalidatingMutation(
+    (request: MergePlaythroughsRequest) => window.api.iterations.merge(request),
+    [
+      queryKeys.games.all,
+      queryKeys.sessions.all,
+      queryKeys.stateEvents.all,
+      queryKeys.spend.all,
+      queryKeys.achievements.all,
+    ],
   );

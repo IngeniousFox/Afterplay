@@ -39,7 +39,10 @@ import {
   STATUS_TO_STATE_TYPE,
 } from '../lib/gameStatus';
 import { isTerminal, lastIteration, startedIteration } from '../lib/iterations';
-import { closedSessions, liveSession } from '../lib/sessions';
+import { closedSessions, openSessions } from '../lib/sessions';
+import { useDeviceContext } from '../hooks/devices';
+import { isOwnLiveSession } from '../../../shared/liveSession';
+import { useNoSignalText } from '../hooks/sessionDevice';
 import { useTvBackdrop } from './backdropContext';
 import { TV_MODAL_SWALLOW, useTvButtons, useTvLegend } from './tvInput';
 import { TvFocusLayer } from './focus';
@@ -476,11 +479,21 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const sessions = useMemo(() => closedSessions(game), [game]);
   // La sesión ABIERTA (si el watcher tiene al juego en marcha): su inicio
   // alimenta el contador en vivo del botón de estado.
-  const liveSince = useMemo(() => {
-    if (!game?.isLive) return null;
-    return liveSession(game)?.startedAt ?? null;
-  }, [game]);
+  //
+  // §10.8: la abierta de ESTE PC es "Playing"; la de otro, "Playing on PC-A"
+  // (y Play sigue disponible: una sesión por PC, §10.4). Aquí no hay Stop en
+  // ningún caso, ni siquiera para un cronómetro ajeno: es la pantalla del sofá.
+  const { thisDeviceId, nameOf } = useDeviceContext();
+  const { ownLive, remoteLive } = useMemo(() => {
+    const open = game?.isLive ? openSessions(game) : [];
+    return {
+      ownLive: open.find((session) => isOwnLiveSession(session, thisDeviceId)) ?? null,
+      remoteLive: open.find((session) => !isOwnLiveSession(session, thisDeviceId)) ?? null,
+    };
+  }, [game, thisDeviceId]);
+  const liveSince = ownLive?.startedAt ?? null;
   const liveSeconds = useLiveTimer(liveSince);
+  const remoteNoSignal = useNoSignalText(remoteLive);
   const lastNote = useMemo(
     () => sessions.find((session) => (session.note?.trim().length ?? 0) > 0)?.note?.trim() ?? null,
     [sessions],
@@ -621,12 +634,14 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const launch = async (): Promise<void> => {
     if (!game.executablePath || launching) return;
     setLaunching(true);
-    const result = await window.api.games.launchExecutable(game.executablePath);
+    const result = await window.api.games.launchExecutable(game.id);
     if (!result.ok) {
       toast.error(
         result.reason === 'missing'
           ? 'That executable is gone — set it again from your desk.'
-          : 'Could not launch the game.',
+          : result.reason === 'not_installed'
+            ? 'Not installed on this PC.'
+            : 'Could not launch the game.',
       );
       // Al fallo, YA — mismo motivo que TvHome: el toast dice que no arrancó
       // en el acto, y el botón no puede seguir "Launching…" 2.5s más
@@ -763,7 +778,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             className={`flex items-center gap-[0.8em] ${tvRevealClass}`}
             style={tvRevealStyle(3)}
           >
-            {game.isLive ? (
+            {ownLive !== null ? (
               // El juego ESTÁ corriendo: el botón de lanzar se convierte en
               // el estado en vivo — píldora sólida con el punto latiendo y
               // el contador de la sesión subiendo. (No hay "Stop" honesto:
@@ -798,9 +813,31 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 />
               )
             )}
+            {/* Jugándose en OTRO PC (§10.8): el aviso, sin Stop y sin quitar
+                Play. Con "No signal for X" si lleva más de 3 minutos callada. */}
+            {remoteLive !== null && (
+              <div
+                className="flex items-center gap-[0.5em] rounded-full px-[1.1em] py-[0.5em] text-[0.8em] font-bold text-white/80"
+                style={{ boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.18)' }}
+              >
+                <span
+                  className="h-[0.55em] w-[0.55em] flex-none rounded-full"
+                  style={{ background: remoteNoSignal === null ? '#2fdc7e' : '#e3b24a' }}
+                />
+                Playing on {nameOf(remoteLive.deviceId)}
+                {remoteNoSignal !== null && (
+                  <span className="text-[0.9em] text-[#e3b24a]">· {remoteNoSignal}</span>
+                )}
+              </div>
+            )}
+            {ownLive === null && !game.executablePath && !game.isEmulated && (
+              <span className="text-[0.8em] font-semibold text-white/55">
+                Not installed on this PC
+              </span>
+            )}
             <ActionButton
               label="Set status"
-              autoFocus={!game.executablePath || game.isLive}
+              autoFocus={!game.executablePath || ownLive !== null}
               // La apertura del picker ya suena por pushLayer.
               silent
               onSelect={() => setStatusOpen(true)}

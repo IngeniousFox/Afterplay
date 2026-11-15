@@ -2,8 +2,10 @@ import { BookOpen, CalendarRange, ChevronRight, Clock3, Gamepad2, Play } from 'l
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { isLiveElsewhere } from '../../../shared/liveSession';
 import type { GameListItem, GeneratedMemorySummary } from '../../../shared/types';
 import { GameCover } from '../components/GameCover';
+import { useDeviceContext } from '../hooks/devices';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
 import { useSessions } from '../hooks/sessions';
@@ -437,6 +439,12 @@ export const TvHome = (): React.JSX.Element => {
     return withNote?.note?.trim() ?? null;
   }, [sessions, hero]);
 
+  // §10.8: el protagonista puede estar en vivo en OTRO PC. Entonces el pill dice
+  // dónde, y Play sigue ahí (una sesión por PC, §10.4): solo se esconde cuando
+  // el juego corre en ESTE.
+  const { thisDeviceId, nameOf } = useDeviceContext();
+  const heroElsewhere = hero ? isLiveElsewhere(hero, thisDeviceId) : false;
+  const heroOwnLive = hero !== undefined && hero.isLive && !heroElsewhere;
   const heroImage = useImageSrc(hero?.heroUrl ?? null, 'heroes');
   const heroCoverBackdrop = useImageSrc(hero?.coverUrl ?? null, 'covers');
 
@@ -594,12 +602,14 @@ export const TvHome = (): React.JSX.Element => {
   const launchHero = async (): Promise<void> => {
     if (!hero?.executablePath || launching) return;
     setLaunching(true);
-    const result = await window.api.games.launchExecutable(hero.executablePath);
+    const result = await window.api.games.launchExecutable(hero.id);
     if (!result.ok) {
       toast.error(
         result.reason === 'missing'
           ? 'That executable is gone — set it again from your desk.'
-          : 'Could not launch the game.',
+          : result.reason === 'not_installed'
+            ? 'Not installed on this PC.'
+            : 'Could not launch the game.',
       );
       // Al fallo, YA: el toast dice que no arrancó en el mismo instante, y
       // antes el botón seguía "Launching…" 2.5s más — una contradicción
@@ -802,7 +812,9 @@ export const TvHome = (): React.JSX.Element => {
                     />
                     <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.7em_#2fdc7e]" />
                   </span>
-                  PLAYING NOW
+                  {heroElsewhere && hero.liveDeviceId
+                    ? `PLAYING ON ${nameOf(hero.liveDeviceId).toUpperCase()}`
+                    : 'PLAYING NOW'}
                   <span aria-hidden className="h-[0.9em] w-px bg-[#2fdc7e]/30" />
                   <HeroLiveClock since={hero.liveSince ?? null} />
                 </div>
@@ -880,7 +892,7 @@ export const TvHome = (): React.JSX.Element => {
                 {/* Con el juego CORRIENDO no hay botón de lanzar (el pill de
                     PLAYING NOW de arriba ya cuenta la sesión en vivo): Play
                     sobre un juego abierto lo relanzaría. */}
-                {hero.executablePath && !hero.isLive && (
+                {hero.executablePath && !heroOwnLive && (
                   <HeroButton
                     label={launching ? 'Launching…' : 'Play'}
                     icon={<Play className="h-[1em] w-[1em]" fill="currentColor" />}
@@ -892,7 +904,7 @@ export const TvHome = (): React.JSX.Element => {
                 )}
                 <HeroButton
                   label="Details"
-                  autoFocus={(!hero.executablePath || hero.isLive) && !hasRestoredTile}
+                  autoFocus={(!hero.executablePath || heroOwnLive) && !hasRestoredTile}
                   // Saliste DEL HERO: al volver, el foco es de estos botones
                   // (HomeSnapshot.focusGameId = null), no de la carátula del
                   // hero repetida en las baldas de abajo.

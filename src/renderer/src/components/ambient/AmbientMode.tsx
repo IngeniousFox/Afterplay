@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
 import { useCuriosities } from '../../hooks/curiosities';
+import { useDeviceContext } from '../../hooks/devices';
 import { useGames } from '../../hooks/games';
 import { useSessions } from '../../hooks/sessions';
 import { useAmbientIdleMinutes } from '../../hooks/settings';
@@ -14,6 +15,7 @@ import { useWindowVisible } from '../../hooks/useWindowVisible';
 import { useAchievementsOverview } from '../../hooks/achievements';
 import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
 import { GREEN } from '../../lib/colors';
+import { isLiveElsewhere } from '../../../../shared/liveSession';
 import type { GameId } from '../../../../shared/entityIds';
 
 // El modo ambiente: cuando dejas de tocar la app, la biblioteca se pone a
@@ -97,7 +99,10 @@ export const AmbientMode = (): React.JSX.Element | null => {
   // composición Y de donde sale el color del panel. Sin ella quedaría texto
   // flotando en una tarjeta gris.
   const candidates = games.filter((game) => game.coverUrl !== null);
-  const anyLive = games.some((game) => game.isLive);
+  // Solo cuenta lo que corre en ESTE PC (§10.8): el modo ambiente es lo que
+  // enseña el PC cuando nadie lo usa, y que otro PC esté jugando no cambia eso.
+  const { thisDeviceId } = useDeviceContext();
+  const anyLive = games.some((game) => game.isLive && !isLiveElsewhere(game, thisDeviceId));
   const windowVisible = useWindowVisible();
   // La señal de pintado de Chromium, además del canal del main: cubre la
   // ventana TOTALMENTE TAPADA por otras (oclusión nativa de Windows), que
@@ -523,6 +528,11 @@ const AmbientSlide = ({
   lineSeed: number;
 }): React.JSX.Element => {
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
+  const { thisDeviceId, nameOf } = useDeviceContext();
+  const playingLabel =
+    isLiveElsewhere(game, thisDeviceId) && game.liveDeviceId
+      ? `PLAYING ON ${nameOf(game.liveDeviceId).toUpperCase()}`
+      : 'PLAYING RIGHT NOW';
   // El reloj se lee al montar CADA diapositiva (cada una se remonta por su
   // key), no una vez al entrar en el modo: esto puede quedarse horas abierto
   // y las frases de aniversario dependen de la fecha de hoy.
@@ -654,7 +664,7 @@ const AmbientSlide = ({
                       className="text-[11px] font-extrabold tracking-[.16em]"
                       style={{ color: GREEN }}
                     >
-                      PLAYING RIGHT NOW
+                      {playingLabel}
                     </span>
                   </div>
                 )}

@@ -1,6 +1,7 @@
 import type { QueryClient, UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import type { GameInstallInfo } from '../../../shared/devices';
 import { planPinOrder } from '../../../shared/planPinOrder';
 import type {
   CreateGameWithDetailsInput,
@@ -384,14 +385,17 @@ export const useResetEndlessState = (): UseMutationResult<boolean, Error, GameId
 // Sin invalidación: lanzar el .exe no cambia ningún dato — la sesión (si el
 // lanzamiento sale bien) la abre ActionBar por separado, con su propia
 // mutation de siempre.
+//
+// Recibe el id del juego y no una ruta (§11.4): el main resuelve el ejecutable
+// de la instalación de ESTE PC.
 export const useLaunchExecutable = (): UseMutationResult<
   LaunchExecutableResult,
   Error,
-  string,
+  GameId,
   unknown
 > =>
   useMutation({
-    mutationFn: (executablePath: string) => window.api.games.launchExecutable(executablePath),
+    mutationFn: (gameId: GameId) => window.api.games.launchExecutable(gameId),
   });
 
 // Botón "abrir carpeta" del detalle — sin invalidación, mismo motivo que
@@ -399,10 +403,22 @@ export const useLaunchExecutable = (): UseMutationResult<
 export const useOpenInstallDirectory = (): UseMutationResult<
   LaunchExecutableResult,
   Error,
-  string,
+  GameId,
   unknown
 > =>
   useMutation({
-    mutationFn: (installDirectory: string) =>
-      window.api.games.openInstallDirectory(installDirectory),
+    mutationFn: (gameId: GameId) => window.api.games.openInstallDirectory(gameId),
+  });
+
+// Las instalaciones del juego para la ficha (§11.3, §11.4): en qué dispositivos
+// está (sin rutas) y si el ejecutable de este PC existe. Comprobar es leer el
+// disco, así que NO se queda cacheado para siempre: staleTime 0 y se relee al
+// montar y al volver a la ventana — mover el juego fuera de Afterplay y volver
+// es justo cuando hace falta enterarse.
+export const useGameInstallInfo = (id: GameId | null): UseQueryResult<GameInstallInfo, Error> =>
+  useQuery({
+    queryKey: queryKeys.games.installInfo(id),
+    queryFn: () => window.api.games.getInstallInfo(id as GameId),
+    enabled: id !== null,
+    staleTime: 0,
   });

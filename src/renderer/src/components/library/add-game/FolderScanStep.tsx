@@ -754,6 +754,7 @@ const MatchCardGrid = ({
 // trabajo — abiertos solo estorbaban entre el usuario y lo añadible.
 const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Element => {
   const [open, setOpen] = useState(false);
+  const linkedCount = entries.filter((entry) => entry.linkedOnThisPc).length;
 
   return (
     <div className="mt-3">
@@ -770,6 +771,11 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
         <Check size={13} className="flex-none" style={{ color: GREEN }} />
         <span className="flex-1 text-[11.5px] font-semibold text-muted-foreground">
           Already in your library
+          {linkedCount > 0 && (
+            <span className="ml-2 font-medium" style={{ color: GREEN }}>
+              {linkedCount} linked on this PC
+            </span>
+          )}
         </span>
         <span
           className="flex-none rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
@@ -790,6 +796,14 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
               <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
                 {entry.folderName}
               </span>
+              {entry.linkedOnThisPc && (
+                <span
+                  className="flex-none rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  style={{ background: `${GREEN}1f`, color: GREEN }}
+                >
+                  Linked on this PC
+                </span>
+              )}
               <span className="flex-none text-[10.5px] text-muted-foreground/60 tabular-nums">
                 {formatBytes(entry.sizeBytes)}
               </span>

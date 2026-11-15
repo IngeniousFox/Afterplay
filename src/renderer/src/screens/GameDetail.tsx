@@ -4,6 +4,7 @@ import { AchievementsSection } from '../components/library/detail/AchievementsSe
 import { AddGameModal } from '../components/library/AddGameModal';
 import { ActionBar } from '../components/library/detail/ActionBar';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
+import { ConcurrentPlaythroughsNotice } from '../components/library/detail/ConcurrentPlaythroughsNotice';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
 import { AboutCard } from '../components/library/detail/AboutCard';
 import { SagaSection } from '../components/library/detail/SagaSection';
@@ -23,9 +24,11 @@ import { SessionHistoryList } from '../components/library/detail/SessionHistoryL
 import { StatusCard } from '../components/library/detail/StatusCard';
 import { EditGameModal } from '../components/library/EditGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
+import { useDeviceContext } from '../hooks/devices';
 import { useGame, useMoveToPlan } from '../hooks/games';
 import { lastIteration } from '../lib/iterations';
 import { revealClass, revealStyle } from '../lib/styles';
+import { isOwnLiveSession } from '../../../shared/liveSession';
 import type { GameId, IterationId } from '../../../shared/entityIds';
 
 type GameDetailProps = {
@@ -41,6 +44,7 @@ export const GameDetail = ({
 }: GameDetailProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
   const moveToPlan = useMoveToPlan();
+  const { thisDeviceId, nameOf } = useDeviceContext();
   const [editOpen, setEditOpen] = useState(false);
   const [changeCoverOpen, setChangeCoverOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -81,7 +85,13 @@ export const GameDetail = ({
   const allSessions = game.iterations
     .flatMap((iteration) => iteration.sessions)
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
-  const liveSession = allSessions.find((session) => session.endedAt === null);
+  // Sesiones abiertas (§10.8): la de ESTE PC es la que se puede parar y la que
+  // deshabilita Play; la de otro PC se pinta "Playing on PC-A". Puede haber una
+  // de cada (§10.4: una por dispositivo), y entonces mandan las dos.
+  const openSessions = allSessions.filter((session) => session.endedAt === null);
+  const ownLiveSession = openSessions.find((s) => isOwnLiveSession(s, thisDeviceId)) ?? null;
+  const remoteLiveSession = openSessions.find((s) => !isOwnLiveSession(s, thisDeviceId)) ?? null;
+  const liveSession = ownLiveSession ?? remoteLiveSession;
   const selectedIteration =
     game.iterations.find((it) => it.id === selectedIterationId) ?? lastIteration(game.iterations);
 
@@ -90,6 +100,9 @@ export const GameDetail = ({
       <HeroBanner
         game={game}
         liveSince={liveSession?.startedAt ?? null}
+        liveOn={
+          ownLiveSession === null && remoteLiveSession ? nameOf(remoteLiveSession.deviceId) : null
+        }
         onBack={onBack}
         onAddGame={() => setAddGameOpen(true)}
       />
@@ -104,7 +117,8 @@ export const GameDetail = ({
             <div className={revealClass} style={revealStyle(0)}>
               <ActionBar
                 game={game}
-                liveSessionId={liveSession?.id ?? null}
+                ownLiveSessionId={ownLiveSession?.id ?? null}
+                remoteLiveSession={remoteLiveSession}
                 onEdit={() => setEditOpen(true)}
                 onChangeCover={() => setChangeCoverOpen(true)}
                 onDelete={() => setDeleteOpen(true)}
@@ -119,6 +133,11 @@ export const GameDetail = ({
                     .catch(() => toast.error("Couldn't move this game to Plan to Play."));
                 }}
               />
+            </div>
+
+            {/* §10.7 — solo existe cuando dos PCs abrieron cada uno su playthrough. */}
+            <div className="mt-4 empty:hidden">
+              <ConcurrentPlaythroughsNotice gameId={game.id} />
             </div>
 
             <div className={`mt-6 ${revealClass}`} style={revealStyle(1)}>

@@ -1,6 +1,8 @@
 import { CalendarRange, Clock3, Gamepad2, Play } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { GameListItem } from '../../../../shared/types';
+import { isLiveElsewhere } from '../../../../shared/liveSession';
+import { useDeviceContext } from '../../hooks/devices';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useNearViewport } from '../../hooks/useNearViewport';
@@ -246,6 +248,13 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
   // vive en el overlay condicional), así que las otras 330 no pagan nada.
   const { observe: observeLive, playState: livePlayState } = useOffscreenAnimation();
   const elapsedSeconds = useLiveTimer(game.isLive ? game.liveSince : null);
+  // §10.8: en vivo en OTRO PC la etiqueta dice dónde, no un "LIVE" que parece
+  // de este PC.
+  const { thisDeviceId, nameOf } = useDeviceContext();
+  const liveLabel =
+    isLiveElsewhere(game, thisDeviceId) && game.liveDeviceId
+      ? `ON ${nameOf(game.liveDeviceId).toUpperCase()}`
+      : 'LIVE';
   const [flipped, setFlipped] = useState(false);
   // La trasera se monta en el PRIMER hover y se suelta cuando el giro de
   // vuelta ha TERMINADO. Los dos extremos estaban descartados por su motivo:
@@ -329,7 +338,7 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
                 }}
               />
               <div
-                className="absolute top-2.75 right-2.75 flex items-center gap-1.25 rounded-[7px] border px-2 py-0.75"
+                className="absolute top-2.75 right-2.75 flex max-w-[85%] items-center gap-1.25 rounded-[7px] border px-2 py-0.75"
                 style={{
                   background: 'rgba(8,20,13,.78)',
                   borderColor: 'rgba(47,220,126,.55)',
@@ -344,8 +353,8 @@ export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element =
                     animationPlayState: livePlayState,
                   }}
                 />
-                <span className="text-[9.5px] font-extrabold tracking-widest text-primary">
-                  LIVE
+                <span className="text-[9.5px] font-extrabold tracking-widest text-primary [overflow-wrap:anywhere]">
+                  {liveLabel}
                 </span>
               </div>
               <div

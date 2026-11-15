@@ -31,6 +31,7 @@ import type {
   SchemaFields,
   Session,
   SessionOwnership,
+  SessionStartedBy,
   SpendEvent,
   StateEvent,
   StateEventPrecision,
@@ -237,12 +238,17 @@ export type PromotePlannedGameInput<Id extends EntityIdLike = EntityId> = Omit<
 // tamaño ya viene calculado desde el main, no hace falta un segundo viaje.
 export type DirectoryPickResult = { path: string; sizeBytes: number };
 
-// Botón Play — lanzar el .exe configurado (games:launchExecutable). 'missing'
+// Botón Play — lanzar el .exe de este PC (games:launchExecutable, por gameId). 'missing'
 // cuando la ruta guardada ya no existe (se movió/desinstaló el juego desde
 // que se guardó); 'error' para cualquier otro fallo al abrirlo (shell.openPath
 // devuelve un mensaje descriptivo, ej. permisos).
 export type LaunchExecutableResult =
-  { ok: true } | { ok: false; reason: 'missing' } | { ok: false; reason: 'error'; message: string };
+  | { ok: true }
+  | { ok: false; reason: 'missing' }
+  // El juego no tiene instalación en ESTE PC (§11.4): el main resuelve la ruta
+  // por `gameId` y no hay ninguna que abrir.
+  | { ok: false; reason: 'not_installed' }
+  | { ok: false; reason: 'error'; message: string };
 
 export type {
   CollectionGame,
@@ -370,7 +376,16 @@ export type GameListItem<Id extends EntityIdLike = EntityId> = {
   // (SPEC 10.7) — null si isLive es false.
   liveSince: Date | null;
   sessionCount: number;
-};
+} & SchemaFields<
+  Id,
+  {
+    // El dispositivo de la sesión en vivo (§10.8): el de ESTE PC si hay una
+    // propia abierta, y si no el de la abierta de otro. Null sin sesión en
+    // vivo. Con `liveSince` es siempre la misma sesión.
+    // Opcional: los canales sin sesiones en vivo (el Plan) no lo llevan.
+    liveDeviceId?: string | null;
+  }
+>;
 
 // ── La lista del Plan viaja en DOS canales ─────────────────────────────────
 //
@@ -902,7 +917,10 @@ export type SessionWithGame<Id extends EntityIdLike = EntityId> = {
   gameId: GameId<Id>;
   gameTitle: string;
   coverUrl: string | null;
-} & SessionOwnership<Id>;
+} & SessionOwnership<Id> &
+  // Quién la abrió: la interfaz lo necesita para saber si una sesión abierta de
+  // OTRO dispositivo es un cronómetro (que cualquier PC puede parar, §10.8).
+  SchemaFields<Id, { startedBy: SessionStartedBy<Id> }>;
 
 // Un juego se acaba de cerrar y el watcher ha cerrado su sesión. Viaja del
 // main al renderer para levantar el aviso con la duración y el atajo de
@@ -1027,7 +1045,16 @@ export type OwnedGameRef<Id extends EntityIdLike = EntityId> = {
   igdbId: number | null;
   title: string;
   planned: boolean;
-};
+} & SchemaFields<
+  Id,
+  {
+    // La instalación de ESTE PC (§11.2): la vinculación por escaneo crea la
+    // fila solo si el juego no tiene ninguna aquí, y reconoce "ya vinculado"
+    // por la carpeta.
+    hasLocalInstall: boolean;
+    localInstallDirectory: string | null;
+  }
+>;
 
 // ── Partidas guardadas: lo que el módulo necesita de un juego ────────────────
 

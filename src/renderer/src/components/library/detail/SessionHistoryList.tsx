@@ -19,6 +19,7 @@ import { requestAchievementFlash } from '../../../lib/achievementFlash';
 import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
+import { useSessionDevice } from '../../../hooks/sessionDevice';
 import { SessionNote } from '../../sessions/SessionNote';
 import { SectionLabel } from './SectionLabel';
 import type { AchievementId, GameId, SessionId } from '../../../../../shared/entityIds';
@@ -65,6 +66,9 @@ const SessionRow = ({
   const isLive = session.endedAt === null;
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
   const durationSec = isLive ? liveSeconds : (session.durationSec ?? 0);
+  // §10.8: una abierta en otro PC es "Playing on PC-A"; y con más de un
+  // dispositivo conocido, cada fila dice en cuál se jugó.
+  const device = useSessionDevice(session);
   const { data: timeFormat = '24h' } = useTimeFormat();
   const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
   // Modelo v2: toda sesión es tiempo jugado real — los marcadores de borde
@@ -114,7 +118,17 @@ const SessionRow = ({
           className="mt-0.5 text-xs"
           style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
         >
-          {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
+          {isLive
+            ? device.remote
+              ? `Playing on ${device.deviceName}`
+              : 'Live now'
+            : session.isManual
+              ? 'Manual'
+              : 'Tracked'}
+          {!isLive && device.deviceTag !== null && ` · ${device.deviceTag}`}
+          {device.noSignal !== null && (
+            <span className="ml-2 font-semibold text-[#e3b24a]">{device.noSignal}</span>
+          )}
         </div>
 
         {/* Los trofeos de la noche (LOGROS-IDEAS.md §2.1): la misma pieza

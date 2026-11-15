@@ -42,6 +42,11 @@ export const queryKeys = {
     // esta key lleva otro segmento en esa posición — no entra, que es lo correcto
     // (una nota de sesión no toca nada de lo que viaja en los extras).
     plannedExtras: ['games', 'plannedExtras'] as const,
+    // En qué dispositivos está instalado el juego y si el ejecutable de este
+    // PC sigue en su sitio (§11.3, §11.4). Bajo ['games'] para que se relea
+    // con cada aviso de cambios (un sync que trae una instalación, una ruta
+    // editada); y como comprueba el DISCO, también al volver a la ventana.
+    installInfo: (id: GameId | null) => ['games', 'installInfo', id] as const,
   },
   sessions: {
     all: ['sessions'] as const,
@@ -51,6 +56,18 @@ export const queryKeys = {
   },
   emulators: {
     all: ['emulators'] as const,
+  },
+  // Los dispositivos que conoce la base (§10.8, §11.4): "Playing on PC-A",
+  // "Installed on". Cambian por sync (un PC nuevo, un renombrado), así que los
+  // invalida el mismo aviso que refresca los juegos (useWatcherSync).
+  devices: {
+    all: ['devices'] as const,
+  },
+  // Las dos preguntas de la ficha sobre los playthroughs en curso (§10.7).
+  // Cuelgan de ['games'] a propósito: cualquier cambio de juegos (una fusión,
+  // un playthrough que llega por sync) las refresca también.
+  playthroughs: {
+    concurrent: (gameId: GameId | null) => ['games', 'concurrent', gameId] as const,
   },
   spend: {
     all: ['spend'] as const,
