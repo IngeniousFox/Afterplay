@@ -34,6 +34,9 @@ import { applyEnrollment, readSyncState } from '../../src/main/sync/state';
 import { syncTables } from '../../src/main/sync/tables';
 import { TenantHub, type HubOptions } from '../core/hub';
 import { NodeSqlStorage } from '../core/node/nodeStorage';
+import { HubQueries } from '../core/queries';
+import { drizzle } from 'drizzle-orm/node-sqlite';
+import type { LocalDb } from '../../src/main/db/v2/store';
 import {
   createInProcessTransport,
   enrollInProcess,
@@ -100,6 +103,16 @@ export class World {
   advance(ms: number): void {
     this.hubTime.now += ms;
     for (const client of this.clients) client.wall.advance(ms);
+  }
+
+  /**
+   * El móvil (§13): las consultas del escritorio ejecutadas en el hub, como lo
+   * hace el Durable Object pero con Drizzle sobre node:sqlite. Uno nuevo por
+   * llamada, siempre sobre el hub actual.
+   */
+  web(): HubQueries {
+    const db = drizzle({ client: this.storage.db }) as unknown as LocalDb;
+    return new HubQueries(this.hub, db);
   }
 
   async addClient(name: string, options: ClientOptions = {}): Promise<Client> {

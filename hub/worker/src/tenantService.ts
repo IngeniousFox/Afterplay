@@ -12,6 +12,8 @@ import {
   type SweepResult,
 } from '../../core/hub';
 import type { SqlStorage } from '../../core/storage';
+import { HubQueries } from '../../core/queries';
+import type { LocalDb } from '../../../src/main/db/v2/store';
 import type {
   ClientVersion,
   EnrollRequest,
@@ -151,14 +153,28 @@ export const ENROLL_CODE_TTL_MINUTES = 10;
 export class TenantService {
   readonly hub: TenantHub;
   private readonly throttle: EnrollThrottle;
+  private webQueries: HubQueries | null = null;
 
+  /**
+   * @param queryDb Crea la base Drizzle sobre el MISMO almacenamiento para las
+   *   consultas del móvil (§13.2, `core/queries.ts`): `durable-sqlite` en el
+   *   Durable Object, `node-sqlite` en los tests. Sin él, `queries()` lanza.
+   */
   constructor(
     storage: SqlStorage,
     private readonly now: () => number,
     options: HubOptions,
+    private readonly queryDb?: () => LocalDb,
   ) {
     this.hub = new TenantHub(storage, now, options);
     this.throttle = new EnrollThrottle(storage, now);
+  }
+
+  /** Las consultas del escritorio sobre este hub, en nombre del móvil. Una por instancia. */
+  queries(): HubQueries {
+    if (!this.queryDb) throw new Error('TenantService: sin base para las consultas del móvil');
+    this.webQueries ??= new HubQueries(this.hub, this.queryDb());
+    return this.webQueries;
   }
 
   /** Ejecuta `fn` y convierte los errores del protocolo en valor. El resto se relanza. */

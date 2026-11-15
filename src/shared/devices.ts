@@ -12,6 +12,12 @@ export type DeviceInfo = {
   readonly isThisDevice: boolean;
 };
 
+/**
+ * El pseudo-dispositivo del móvil (§13.1, D-03): todas las escrituras de la
+ * PWA, que el hub hace en su nombre, y el dueño de los cronómetros (§7.4).
+ */
+export const WEB_DEVICE_ID = 'web';
+
 /** Cómo se nombra un dispositivo que esta base aún no conoce (sync a medias). */
 export const UNKNOWN_DEVICE_NAME = 'another PC';
 

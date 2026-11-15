@@ -634,6 +634,65 @@ export class TenantHub {
     return { code: `${raw.slice(0, 5)}-${raw.slice(5)}`, expiresAt };
   }
 
+  // ---------- Escrituras del móvil (§13.3; las usa `queries.ts`) ----------
+  //
+  // El móvil escribe con la MISMA puerta de escritura que los PCs
+  // (`WriteStore`), directamente sobre las tablas del hub y dentro de una
+  // transacción suya. Lo que el hub añade es lo que hace con cualquier fila que
+  // cambia: darle secuencia nueva para que los PCs la bajen.
+
+  /** Transacción anidable del almacén del hub. */
+  transaction<T>(fn: () => T): T {
+    return this.storage.transactionSync(fn);
+  }
+
+  /** La hora del hub, en ms. */
+  hubNow(): number {
+    return this.now();
+  }
+
+  /** Id corto de reloj de un dispositivo sin token, como el `web` del móvil. */
+  shortIdForDevice(deviceId: string): string {
+    return this.storage.transactionSync(() => this.shortIdFor(deviceId));
+  }
+
+  /** La secuencia actual del inquilino. */
+  currentSeq(): number {
+    return this.readMeta().seq;
+  }
+
+  /**
+   * Da secuencia nueva a filas ya escritas en la transacción en curso (por la
+   * puerta de escritura, no por `applyRows`). Una por fila, como `applyRows`.
+   * Devuelve la secuencia final.
+   */
+  stampWritten(rows: readonly { table: string; ids: readonly string[] }[]): number {
+    let seq = this.readMeta().seq;
+    const start = seq;
+    for (const { table, ids } of rows) {
+      if (!this.tables.has(table)) throw new Error(`stampWritten: tabla desconocida ${table}`);
+      for (const id of new Set(ids)) {
+        seq += 1;
+        this.storage.exec(`UPDATE "${table}" SET "syncSeq" = ? WHERE id = ?`, seq, id);
+      }
+    }
+    if (seq !== start) this.storage.exec(`UPDATE tenant_meta SET v = ? WHERE k = 'seq'`, seq);
+    return seq;
+  }
+
+  /** Un valor de `tenant_meta` que no es de los de siempre (p. ej. el reloj del móvil). */
+  metaValue(key: string): SqlValue | undefined {
+    return this.storage.exec(`SELECT v FROM tenant_meta WHERE k = ?`, key)[0]?.v;
+  }
+
+  setMetaValue(key: string, value: SqlValue): void {
+    this.storage.exec(
+      `INSERT INTO tenant_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`,
+      key,
+      value,
+    );
+  }
+
   /**
    * Id corto de reloj de un dispositivo (§8.2), único en el inquilino. Si el
    * dispositivo ya tenía uno (se vuelve a emparejar) se conserva: sus relojes

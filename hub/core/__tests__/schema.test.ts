@@ -18,7 +18,7 @@ const A = 'aaaaaa';
 const B = 'bbbbbb';
 
 describe('el esquema del hub no se desvía del cliente', () => {
-  it('tiene exactamente las tablas sincronizadas y ninguna local', () => {
+  it('tiene las tablas sincronizadas, las propias y las locales vacías', () => {
     const storage = new NodeSqlStorage();
     makeHub({}, storage);
     const tables = storage
@@ -26,7 +26,13 @@ describe('el esquema del hub no se desvía del cliente', () => {
       .map((row) => String(row.name));
     const synced = syncedEntries.map((entry) => entry.name);
     for (const name of synced) assert.ok(tables.includes(name), `falta ${name}`);
-    for (const entry of localEntries) assert.ok(!tables.includes(entry.name), entry.name);
+    // Las locales existen solo para que las consultas del escritorio corran en
+    // el hub (§13.3): vacías, y con las columnas del cliente.
+    for (const entry of localEntries) {
+      assert.equal(storage.exec(`SELECT count(*) AS n FROM "${entry.name}"`)[0].n, 0, entry.name);
+      const client = getTableConfig(entry.table).columns.map((column) => column.name);
+      assert.deepEqual(columnsOf(storage, entry.name), [...client].sort(), entry.name);
+    }
     const own = [
       'tenant_meta',
       'device_tokens',
@@ -34,15 +40,16 @@ describe('el esquema del hub no se desvía del cliente', () => {
       'enrollment_codes',
       'job_leases',
     ];
-    assert.deepEqual([...tables].sort(), [...synced, ...own].sort());
+    const locals = localEntries.map((entry) => entry.name);
+    assert.deepEqual([...tables].sort(), [...synced, ...own, ...locals].sort());
   });
 
-  it('cada tabla tiene las columnas del cliente, menos syncDirty y más syncSeq', () => {
+  it('cada tabla tiene las columnas del cliente y además syncSeq', () => {
     const storage = new NodeSqlStorage();
     makeHub({}, storage);
     for (const entry of syncedEntries) {
       const client = getTableConfig(entry.table).columns.map((column) => column.name);
-      const expected = [...client.filter((name) => name !== 'syncDirty'), 'syncSeq'].sort();
+      const expected = [...client, 'syncSeq'].sort();
       assert.deepEqual(columnsOf(storage, entry.name), expected, entry.name);
     }
   });

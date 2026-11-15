@@ -18,8 +18,14 @@
 // Diferencias con el cliente, todas deliberadas:
 // - Sin claves foráneas (§7.7): una rota al confirmar reinicia el Durable
 //   Object, y el hub tiene que poder guardar un hijo cuyo padre no ha llegado.
-// - Sin `syncDirty` (solo local) y con `syncSeq INTEGER` indexado (§7.3, §8.4).
-//   El índice es parcial: solo entran las filas que han cambiado alguna vez.
+// - Con `syncSeq INTEGER` indexado (§7.3, §8.4). El índice es parcial: solo
+//   entran las filas que han cambiado alguna vez.
+// - `syncDirty` existe pero no significa nada: no viaja ni se lee. Está para
+//   que la puerta de escritura del cliente (`WriteStore`), que lo marca en
+//   cada escritura, funcione tal cual sobre las tablas del hub cuando escribe
+//   el móvil (§13.3). Por la misma razón están, vacías y sin restricciones,
+//   las tablas locales (clase L): las consultas del escritorio las leen o las
+//   cruzan, y el móvil no tiene nada local.
 // - Sin restricciones CHECK ni índices propios del cliente: el hub guarda y
 //   fusiona, no valida el dominio. Una restricción que fallase en mitad de un
 //   lote desharía el lote entero. Los índices del cliente sirven a consultas
@@ -31,7 +37,12 @@
 //   La integridad la impone la puerta de escritura del cliente.
 
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
-import { syncedEntries, type SyncedTableEntry } from '../../src/main/db/v2/registry';
+import {
+  localEntries,
+  syncedEntries,
+  type LocalTableEntry,
+  type SyncedTableEntry,
+} from '../../src/main/db/v2/registry';
 import { BOTTOM } from '../../src/shared/sync/clock';
 import type { SqlValue, TableShape } from '../../src/shared/sync/merge';
 import { sha1 } from '../../src/shared/sync/sha1';
@@ -83,6 +94,9 @@ export interface HubTable {
 
 const quote = (name: string): string => `"${name}"`;
 
+/** Ver la cabecera: sin significado en el hub, solo para la puerta del cliente. */
+const SYNC_DIRTY_DDL = `${quote('syncDirty')} INTEGER NOT NULL DEFAULT 0`;
+
 function sqlLiteral(value: SqlValue): string {
   if (value === null) return 'NULL';
   if (typeof value === 'number') return String(value);
@@ -119,6 +133,7 @@ function buildTable(entry: SyncedTableEntry): HubTable {
     `${quote('syncFields')} TEXT NOT NULL DEFAULT '{}'`,
     `${quote('syncDeleted')} TEXT`,
     `${quote('syncSeq')} INTEGER`,
+    SYNC_DIRTY_DDL,
     ...dataColumns.map(
       (c) =>
         `${quote(c.name)} ${c.type.toUpperCase()}${c.defaultSql ? ` DEFAULT ${c.defaultSql}` : ''}`,
@@ -149,6 +164,36 @@ function buildTable(entry: SyncedTableEntry): HubTable {
       `ON CONFLICT("id") DO UPDATE SET ${upsertColumns.map((c) => `${quote(c)} = excluded.${quote(c)}`).join(', ')}`,
     upsertColumns,
   };
+}
+
+/** Una tabla local (clase L) del cliente, vacía en el hub (ver la cabecera). */
+export interface HubLocalTable {
+  name: string;
+  columns: HubTableColumn[];
+  createSql: string;
+}
+
+function buildLocalTable(entry: LocalTableEntry): HubLocalTable {
+  const config = getTableConfig(entry.table);
+  // Sin claves, sin NOT NULL ni defectos: nadie escribe en ellas en el hub.
+  const columns = config.columns.map((column) => ({
+    name: column.name,
+    type: column.getSQLType(),
+    defaultSql: null,
+  }));
+  const body = columns.map((c) => `${quote(c.name)} ${c.type.toUpperCase()}`).join(',\n  ');
+  return {
+    name: entry.name,
+    columns,
+    createSql: `CREATE TABLE IF NOT EXISTS ${quote(entry.name)} (\n  ${body}\n);`,
+  };
+}
+
+/** Las tablas locales del cliente, en el orden del registro. */
+export function buildHubLocalTables(
+  entries: readonly LocalTableEntry[] = localEntries,
+): HubLocalTable[] {
+  return entries.map(buildLocalTable);
 }
 
 /** Las tablas sincronizadas del hub, en el orden del registro. */
@@ -218,12 +263,16 @@ function hex(bytes: Uint8Array): string {
 }
 
 /** Huella del DDL completo: si no cambia, no hay nada que aplicar. */
-export function schemaFingerprint(tables: readonly HubTable[]): string {
+export function schemaFingerprint(
+  tables: readonly HubTable[],
+  locals: readonly HubLocalTable[] = buildHubLocalTables(),
+): string {
   const text = [
     TENANT_META_SQL,
     ...HUB_OWN_SQL,
     ...HUB_OWN_ADDED_COLUMNS.map((c) => `${c.table}.${c.column} ${c.ddl}`),
     ...tables.flatMap((t) => [t.createSql, t.indexSql]),
+    ...locals.map((t) => t.createSql),
   ].join('\n');
   return hex(sha1(new TextEncoder().encode(text)));
 }
@@ -244,16 +293,37 @@ function existingColumns(storage: SqlStorage, table: string): Set<string> {
  * Eso son las filas de `syncFields`; no se sube la secuencia (los clientes que
  * ganan columnas ponen su cursor a cero, §8.7).
  */
-export function ensureSchema(storage: SqlStorage, tables: readonly HubTable[]): void {
+export function ensureSchema(
+  storage: SqlStorage,
+  tables: readonly HubTable[],
+  locals: readonly HubLocalTable[] = buildHubLocalTables(),
+): void {
   storage.execScript(TENANT_META_SQL);
-  const fingerprint = schemaFingerprint(tables);
+  const fingerprint = schemaFingerprint(tables, locals);
   const stamp = storage.exec(`SELECT v FROM tenant_meta WHERE k = 'schemaStamp'`)[0]?.v;
   if (stamp === fingerprint) return;
 
   storage.transactionSync(() => {
-    storage.execScript([...HUB_OWN_SQL, ...tables.map((t) => t.createSql)].join('\n'));
+    storage.execScript(
+      [...HUB_OWN_SQL, ...tables.map((t) => t.createSql), ...locals.map((t) => t.createSql)].join(
+        '\n',
+      ),
+    );
+    for (const local of locals) {
+      const present = existingColumns(storage, local.name);
+      for (const column of local.columns) {
+        if (present.has(column.name)) continue;
+        storage.exec(
+          `ALTER TABLE ${quote(local.name)} ADD COLUMN ${quote(column.name)} ${column.type.toUpperCase()}`,
+        );
+      }
+    }
     for (const table of tables) {
       const present = existingColumns(storage, table.name);
+      // Hubs creados antes de que existiera (§13.3): se añade sin tocar relojes.
+      if (!present.has('syncDirty')) {
+        storage.exec(`ALTER TABLE ${quote(table.name)} ADD COLUMN ${SYNC_DIRTY_DDL}`);
+      }
       for (const column of table.dataColumns) {
         if (present.has(column.name)) continue;
         storage.exec(

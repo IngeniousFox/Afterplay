@@ -64,6 +64,15 @@ export interface WriteStoreOptions {
   readonly foreignWriteRules?: readonly ForeignWriteRule[];
   /** Qué hacer si un oyente de cambios lanza. Por defecto, `console.error`. */
   readonly onListenerError?: (error: unknown) => void;
+  /**
+   * Para anfitriones donde la base no admite `BEGIN` ni `SAVEPOINT` en SQL,
+   * como el SQLite de un Durable Object (el hub, AFTERPLAY-2.0.md §13.3):
+   * ejecuta `fn` en una transacción ANIDABLE y la deshace entera si lanza
+   * (`ctx.storage.transactionSync`). Con él, la puerta no toca `$client`
+   * y no comprueba transacciones ajenas: puede trabajar dentro de la del
+   * anfitrión, que es quien confirma. Sin él, la de siempre sobre node:sqlite.
+   */
+  readonly transactionRunner?: <T>(fn: () => T) => T;
 }
 
 type StoredRow = Record<string, unknown> & {
@@ -102,6 +111,7 @@ export class WriteStore {
   private readonly wall: () => number;
   private readonly rules: readonly ForeignWriteRule[];
   private readonly onListenerError: (error: unknown) => void;
+  private readonly transactionRunner: (<T>(fn: () => T) => T) | undefined;
   private readonly listeners = new Set<StoreChangeListener>();
   private readonly immutableCache = new Map<string, ReadonlySet<string>>();
   private readonly readById = new Map<string, { get(values: { id: string }): unknown }>();
@@ -132,6 +142,7 @@ export class WriteStore {
     this.deviceId = options.deviceId;
     this.wall = options.wall ?? Date.now;
     this.rules = options.foreignWriteRules ?? [];
+    this.transactionRunner = options.transactionRunner;
     this.onListenerError =
       options.onListenerError ??
       ((error) => console.error('[store] un oyente de cambios ha fallado', error));
@@ -421,6 +432,7 @@ export class WriteStore {
         'store.transaction necesita una función síncrona, no async (el driver es síncrono, §8.9)',
       );
     }
+    if (this.transactionRunner) return this.runnerTransaction(this.transactionRunner, fn);
     const client = this.db.$client;
     if (this.depth === 0) {
       if (client.isTransaction) {
@@ -483,6 +495,41 @@ export class WriteStore {
   }
 
   /**
+   * `transaction` con el ejecutor del anfitrión (`transactionRunner`). Las
+   * mismas reglas que la de node:sqlite (síncrona, avisos al confirmar la
+   * exterior, lo de una anidada que falla no cuenta), pero deshacer es cosa
+   * del ejecutor: si `fn` lanza, él deshace su nivel.
+   */
+  private runnerTransaction<T>(run: <R>(fn: () => R) => R, fn: () => T): T {
+    if (this.depth === 0) {
+      this.depth = 1;
+      this.pending = new Map();
+      let result: T;
+      try {
+        result = run(() => this.assertSync(fn()));
+      } catch (error) {
+        this.pending = new Map();
+        throw error;
+      } finally {
+        this.depth = 0;
+      }
+      const change = this.takePending();
+      if (change) this.emit(change);
+      return result;
+    }
+    const snapshot = clonePending(this.pending);
+    this.depth += 1;
+    try {
+      return run(() => this.assertSync(fn()));
+    } catch (error) {
+      this.pending = snapshot;
+      throw error;
+    } finally {
+      this.depth -= 1;
+    }
+  }
+
+  /**
    * Falla si `fn` devolvió una promesa, y bloquea la puerta hasta la próxima
    * vuelta del bucle de eventos (hallazgo 3; ver `transaction`).
    */
@@ -493,7 +540,9 @@ export class WriteStore {
     (result as unknown as Promise<unknown>).then(undefined, () => undefined);
     if (!this.poisoned) {
       this.poisoned = true;
-      setImmediate(() => {
+      // En un Worker puede no haber `setImmediate`: entonces, `setTimeout`.
+      const nextTurn = globalThis.setImmediate ?? ((fn: () => void) => setTimeout(fn, 0));
+      nextTurn(() => {
         this.poisoned = false;
       });
     }

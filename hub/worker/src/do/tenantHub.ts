@@ -12,6 +12,8 @@ import { DurableObject } from 'cloudflare:workers';
 import { claimTenantIdentity, readTenantIdentity, TenantService } from '../tenantService';
 import type { TenantRpc } from '../tenantBinding';
 import { DoSqlStorage } from './sqlStorage';
+import { drizzle } from 'drizzle-orm/durable-sqlite';
+import type { LocalDb } from '../../../../src/main/db/v2/store';
 
 /** Cada cuánto despierta la alarma (§9.5). Una hora: caducar concesiones no corre prisa. */
 export const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
@@ -32,7 +34,10 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
   }
 
   private build(tenantId: string): TenantService {
-    return new TenantService(this.storage, () => Date.now(), { tenantId });
+    // Las consultas del móvil (§13.2) usan Drizzle sobre el mismo almacenamiento.
+    // Se tipa como la base del cliente: ver `HubQueries`.
+    const queryDb = (): LocalDb => drizzle(this.ctx.storage) as unknown as LocalDb;
+    return new TenantService(this.storage, () => Date.now(), { tenantId }, queryDb);
   }
 
   /** Fija o comprueba el inquilino y devuelve el servicio. Síncrono: sin awaits no hay carreras. */
