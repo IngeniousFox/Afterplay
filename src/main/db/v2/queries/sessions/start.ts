@@ -35,7 +35,7 @@ export type SessionOpener = 'watcher' | 'play';
 function ownOpenSessionForGame(ctx: QueryContext, gameId: string): boolean {
   // La misma condición que la red de seguridad de la puerta
   // (`assertSingleOpenSession`): sesión propia, abierta y sin lápida, de
-  // cualquier playthrough del juego (con lápida o sin ella). Si fueran
+  // cualquier playthrough VIVO del juego. Si fueran
   // distintas, la puerta podría rechazar lo que esta consulta deja pasar.
   const row = ctx.db
     .select({ id: sessions.id })
@@ -47,6 +47,11 @@ function ownOpenSessionForGame(ctx: QueryContext, gameId: string): boolean {
         eq(sessions.deviceId, ctx.deviceId),
         isNull(sessions.endedAt),
         alive(sessions),
+        // Una sesión propia que sigue abierta pero cuelga de un playthrough con
+        // lápida (borrado o fusionado en otro PC mientras se jugaba aquí) ya no
+        // existe para nadie: getOpenSessions no la devuelve, así que el watcher
+        // nunca la cerraría. Si contara, ese juego no volvería a medirse.
+        alive(playthroughs),
       ),
     )
     .get();

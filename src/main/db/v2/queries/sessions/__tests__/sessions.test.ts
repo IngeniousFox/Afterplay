@@ -288,10 +288,13 @@ describe('startGameSession: como mucho una sesión abierta por juego en este PC'
     assert.ok(startGameSession(fx.ctx, gameId, 'watcher'));
   });
 
-  it('cuenta también una propia abierta llegada por sync bajo un playthrough borrado, como la puerta', () => {
-    // La comprobación previa es la misma que la red de seguridad de la
-    // puerta: si fueran distintas, la puerta lanzaría `open_session` donde la
-    // consulta esperaba poder abrir.
+  it('NO cuenta una propia abierta bajo un playthrough borrado, y la puerta tampoco', () => {
+    // La sesión huérfana (su playthrough se borró o se fusionó en otro PC
+    // mientras se jugaba aquí) ya no existe para nadie: getOpenSessions no la
+    // devuelve y el watcher nunca la cerraría. Si contara, el juego no
+    // volvería a medirse en este PC (fase 4). La comprobación previa y la red
+    // de seguridad de la puerta tienen que coincidir: si la puerta siguiera
+    // contándola, lanzaría `open_session` aquí.
     const gameId = seedGame(fx.ctx, { title: 'Carrera' });
     const dead = seedPlaythrough(fx.ctx, { gameId });
     insertSynced(fx.ctx, 'sessions', {
@@ -304,7 +307,9 @@ describe('startGameSession: como mucho una sesión abierta por juego en este PC'
     });
     tombstoneOnly(fx.ctx, 'playthroughs', dead);
 
-    assert.equal(startGameSession(fx.ctx, gameId, 'watcher'), null);
+    const fresh = startGameSession(fx.ctx, gameId, 'watcher');
+    assert.ok(fresh);
+    assert.notEqual(fresh.iterationId, dead);
   });
 });
 

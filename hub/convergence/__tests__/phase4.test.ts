@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { parseClock, RESERVED_DEVICE_ID } from '../../../src/shared/sync/clock';
-import type { Session } from '../../../src/shared/dto';
 import { getAllSessions } from '../../../src/main/db/v2/queries/sessions/read';
 import { getOpenSessions } from '../../../src/main/db/v2/queries/sessions/open';
 import { closeSession, closeSessionIfOpen } from '../../../src/main/db/v2/queries/sessions/close';
 import { heartbeatSessions } from '../../../src/main/db/v2/queries/sessions/heartbeat';
 import { getWatchTargets } from '../../../src/main/db/v2/queries/sessions/watchTargets';
+import { deleteIteration } from '../../../src/main/db/v2/queries/playthroughs/playthroughs';
 import { updateGame } from '../../../src/main/db/v2/queries/common/updateGame';
 import { ABANDONED_SESSION_MS } from '../../core/hub';
 import { addGame, openSession } from '../actions';
@@ -36,7 +36,7 @@ async function settle(w: World, clients?: readonly Client[]): Promise<void> {
   assert.deepEqual(convergenceProblems(w, clients), []);
 }
 
-const sessionIn = (client: Client, id: string): Session<string> => {
+const sessionIn = (client: Client, id: string): ReturnType<typeof getAllSessions>[number] => {
   const session = getAllSessions(client.ctx).find((s) => s.id === id);
   assert.ok(session, `${client.name} no ve la sesión ${id}`);
   return session;
@@ -171,6 +171,34 @@ describe('escenarios de la fase 4 (§17.3)', () => {
       assert.equal(session.closedBy, 'owner');
       assert.equal(session.durationSec, 2 * 3600);
     }
+  });
+
+  it('una sesión propia colgada de un playthrough borrado en otro PC no bloquea el juego', async () => {
+    const w = start();
+    const a = await w.addClient('a');
+    const b = await w.addClient('b');
+    const gameId = addGame(a, 40012, { title: 'Playthrough borrado' });
+    await settle(w);
+
+    // B juega sin red; mientras, A borra ese playthrough (no sabe de la sesión de B).
+    b.cut();
+    const orphan = openSession(b, gameId);
+    assert.ok(orphan);
+    const playthroughId = String(b.raw('sessions', orphan)?.playthroughId);
+    assert.ok(deleteIteration(a.ctx, playthroughId));
+    await a.syncOk();
+    b.restore();
+    await settle(w);
+
+    // La sesión huérfana ya no es "abierta" para nadie...
+    assert.ok(!getOpenSessions(b.ctx).some((s) => s.sessionId === orphan));
+    // ...y B puede volver a medir el juego (antes, `startGameSession` devolvía
+    // null para siempre porque la huérfana contaba como "ya abierta").
+    w.advance(5 * MINUTE_MS);
+    const fresh = openSession(b, gameId);
+    assert.ok(fresh, 'B no pudo abrir una sesión nueva del juego');
+    assert.notEqual(fresh, orphan);
+    await settle(w);
   });
 
   it('E-10: cada PC vigila su ruta; cambiar la de B no afecta a A', async () => {

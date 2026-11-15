@@ -696,7 +696,11 @@ export class WriteStore {
       const sameGame = this.db
         .select({ id: playthroughs.id })
         .from(playthroughs)
-        .where(eq(playthroughs.gameId, playthrough.gameId));
+        // Solo los playthroughs vivos: una sesión abierta colgada de uno con
+        // lápida no cuenta (la misma condición que `ownOpenSessionForGame` de
+        // queries/sessions/start.ts; si fueran distintas, la puerta rechazaría
+        // lo que la consulta deja pasar).
+        .where(and(eq(playthroughs.gameId, playthrough.gameId), isNull(playthroughs.syncDeleted)));
       target = inArray(sessions.playthroughId, sameGame);
       what = `el juego ${playthrough.gameId}`;
     } else if (typeof next.emulatorId === 'string') {
