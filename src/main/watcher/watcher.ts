@@ -18,7 +18,7 @@ import {
 } from '../db/v2/queries/sessions';
 import type { Session } from '../../shared/dto';
 import { scheduleSaveBackup } from '../saves/sessionHook';
-import { sendToOverlay } from '../overlay';
+import { sendToOverlay } from '../windows/overlay';
 import { notifySessionClosed } from './notifySession';
 import { CREATE_SYNC_LIMIT_MS } from '../sync/scheduler';
 // La regla de frescura del cronómetro (REMOTO.md §7.4) es la MISMA aquí y en

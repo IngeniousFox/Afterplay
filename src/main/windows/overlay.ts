@@ -1,9 +1,9 @@
 import { BrowserWindow, globalShortcut, ipcMain, screen } from 'electron';
 import { is } from '@electron-toolkit/utils';
 import { join } from 'path';
-import type { OverlayShortcutStatus } from '../shared/types';
-import { getConfigValue } from './config/store';
-import { startGuideWatcher, stopGuideWatcher } from './gamepad';
+import type { OverlayShortcutStatus } from '../../shared/types';
+import { getConfigValue } from '../config/store';
+import { startGuideWatcher, stopGuideWatcher } from '../gamepad';
 
 // Overlay in-game (OVERLAY.md) — la capa que se abre SOBRE el juego con la
 // sesión en vivo, sus logros y la nota rápida.

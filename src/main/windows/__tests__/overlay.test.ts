@@ -119,7 +119,7 @@ mock.module('electron', {
   },
 });
 
-mock.module('../config/store', {
+mock.module('../../config/store', {
   namedExports: {
     getConfigValue: (key: string): unknown => {
       if (key === 'overlayEnabled') return overlayEnabled;
@@ -129,7 +129,7 @@ mock.module('../config/store', {
   },
 });
 
-mock.module('../gamepad', {
+mock.module('../../gamepad', {
   namedExports: {
     startGuideWatcher: async (): Promise<void> => {},
     stopGuideWatcher: (): void => {},
