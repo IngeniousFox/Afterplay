@@ -153,7 +153,10 @@ describe('emit', () => {
     const sent: unknown[][] = [];
     const target = { send: (...args: unknown[]): void => void sent.push(args) };
     helpers.emit(target, 'window:maximized-change', true);
-    helpers.emit(target, 'games:changed');
-    assert.deepEqual(sent, [['window:maximized-change', true], ['games:changed']]);
+    helpers.emit(target, 'data:changed', { domains: ['games'], origin: 'local' });
+    assert.deepEqual(sent, [
+      ['window:maximized-change', true],
+      ['data:changed', { domains: ['games'], origin: 'local' }],
+    ]);
   });
 });

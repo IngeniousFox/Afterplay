@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { GameCover } from '../components/GameCover';
@@ -29,6 +29,7 @@ import { useGames } from '../hooks/games';
 import { useSessions, useSetSessionNote } from '../hooks/sessions';
 import { useOverlayShortcut, useTimeFormat } from '../hooks/settings';
 import { queryKeys } from '../hooks/queryKeys';
+import { useDataChangedSync } from '../hooks/useDataChangedSync';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useLiveTimer } from '../hooks/useLiveTimer';
 import {
@@ -914,17 +915,18 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // Así que oculto solo se MARCA el caché como viejo (refetchType 'none') y
   // el barrido lo hace la apertura del telón, más abajo — que es cuando
   // alguien va a mirar los datos.
+  //
+  // El oyente es el MISMO que el de la ventana principal (useDataChangedSync,
+  // el único aviso 'data:changed' de §15.4); lo único propio del overlay es el
+  // telón, que viaja como knob. Se lee por REF y la suscripción no depende de
+  // él: volver a suscribirse en cada apertura no aportaría nada.
   const curtainDown = phase === 'hidden';
-  useEffect(
-    () =>
-      window.api.watcher.onGamesChanged(() => {
-        const refetchType = curtainDown ? 'none' : 'active';
-        void queryClient.invalidateQueries({ queryKey: queryKeys.games.all, refetchType });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all, refetchType });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.achievements.all, refetchType });
-      }),
-    [queryClient, curtainDown],
-  );
+  const curtainDownRef = useRef(curtainDown);
+  useEffect(() => {
+    curtainDownRef.current = curtainDown;
+  }, [curtainDown]);
+  const shouldRefetch = useCallback(() => !curtainDownRef.current, []);
+  useDataChangedSync(shouldRefetch);
 
   // Y el aviso de LOGROS, que es el que de verdad importa aquí: los
   // desbloqueos caen MIENTRAS juegas, y el de arriba solo se emite al abrir o
@@ -948,14 +950,10 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // lleva la base y con el jugador delante.
   //
   // Lo único propio del overlay es el telón, y viaja como knob: bajado se marca
-  // y no se pide (igual que el aviso de arriba). Se lee por REF y el efecto no
-  // depende de él a propósito — volver a suscribirse en cada apertura recrearía
-  // el invalidador y perdería el `passRunning` de su cierre, que es justo lo
-  // que distingue una pasada de un desbloqueo suelto.
-  const curtainDownRef = useRef(curtainDown);
-  useEffect(() => {
-    curtainDownRef.current = curtainDown;
-  }, [curtainDown]);
+  // y no se pide (igual que el aviso de arriba). El efecto no depende de él a
+  // propósito — volver a suscribirse en cada apertura recrearía el invalidador
+  // y perdería el `passRunning` de su cierre, que es justo lo que distingue una
+  // pasada de un desbloqueo suelto.
   useEffect(
     () =>
       window.api.achievements.onActivity(

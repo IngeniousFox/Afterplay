@@ -1,4 +1,4 @@
-import type { QueryClient, UseMutationResult, UseQueryResult } from '@tanstack/react-query';
+import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { GameInstallInfo } from '../../../shared/devices';
@@ -16,39 +16,28 @@ import type {
   UpdateGamePatch,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
-import { useInvalidatingMutation } from './useInvalidatingMutation';
 import type { GameId } from '../../../shared/entityIds';
 
-// Infinity y no un número arbitrario: la regla de la casa es que TODO EL QUE
-// ESCRIBE AVISA, así que detrás de cada cambio hay siempre una invalidación
-// explícita de queryKeys.games.all y no un "después de X minutos podría estar
-// desactualizado".
+// Infinity y no un número arbitrario: la regla de la casa es que NADIE
+// invalida a mano. Todo lo que cambia la tabla `games` (y las que cuelgan de
+// ella) pasa por la puerta de escritura del main, y esa avisa con UN solo
+// evento, 'data:changed', cuando la transacción se confirma: las mutaciones de
+// este archivo, el watcher al abrir o cerrar una sesión, y cada página que
+// baja del sync desde otro PC (con su origen: 'local', 'watcher' o 'sync').
+// Un oyente por ventana (useDataChangedSync) lo traduce a invalidaciones con la
+// tabla dominio -> consultas de domainQueryKeys.ts, y por eso el staleTime
+// aguanta sin que este archivo conozca a ninguno de ellos.
 //
-// A la tabla `games` le escriben MUCHOS más sitios que las mutations de este
-// archivo, y la lista no para de crecer: el watcher (Bloque 3) mete sesiones
-// directo desde el main, el pull de Turso mete filas que bajan de otro PC
-// tuyo (notifyPulledChanges, main/db/index.ts) y el drenado del buzón del
-// Plan crea planeados venidos del móvil (main/plan/drainMailbox.ts, cableado
-// en main/index.ts sobre onSyncCompleted). Ninguno pasa por aquí y todos
-// AVISAN con el evento IPC 'games:changed', al que useWatcherSync() se
-// suscribe para invalidar esta misma key — por eso el staleTime aguanta sin
-// que este archivo tenga que conocerlos.
+// Por eso las mutaciones de aquí no invalidan nada: el aviso sale de la propia
+// escritura y llega ANTES que la respuesta del IPC. Lo que SÍ se queda aquí son
+// las actualizaciones optimistas (el pin del Plan), que existen por la
+// sensación al soltar y no por la frescura.
 //
-// Y por eso este comentario ya no intenta enumerarlos: el que había aquí lo
-// intentó, se quedó corto (juraba que solo existían las mutations y el
-// watcher), y una lista falsamente completa es lo que hizo que el bug de
-// abajo tardara tanto en verse. La regla se comprueba en el emisor, no en un
-// censo escrito en el consumidor.
-//
-// LO QUE HOY NO CUMPLE LA REGLA — no como censo, sino porque este es el que
-// nos mordió: el "calentado" del alta (warmSteamData, main/external/warmNewGame.ts).
-// Es fire-and-forget: escribe etiquetas y reseñas de Steam en la fila cuando
-// la tienda contesta, o sea DESPUÉS del refetch que dispara la mutation del
-// alta, y no emite nada. Mientras siga así, un juego recién añadido se queda
-// sin sus chips de etiquetas en el Plan hasta que cualquier otra cosa invalide
-// ['games'] (arrancar un juego, otra mutation, un pull, reiniciar). El arreglo
-// es suyo y no de aquí: un temporizador en el renderer contra un viaje de red
-// ajeno sería peor que el bug.
+// LO QUE HOY NO CUMPLE LA REGLA: el "calentado" del alta (warmSteamData,
+// main/external/warmNewGame.ts) es fire-and-forget y escribe etiquetas y
+// reseñas de Steam cuando la tienda contesta; si esa escritura no pasa por la
+// puerta, no avisa, y el juego recién añadido se queda sin sus chips hasta que
+// otra cosa invalide ['games']. El arreglo es suyo, no de aquí.
 export const useGames = (): UseQueryResult<GameListItem[], Error> =>
   useQuery({
     queryKey: queryKeys.games.all,
@@ -78,7 +67,7 @@ export const useGame = (id: GameId | null): UseQueryResult<GameDetail | null, Er
 // games.all la refrescan también.
 //
 // Devuelve el canal ESCUETO (PlannedGameListItem, 354 KB de 661 filas): es
-// lo que pagan TODOS sus consumidores en cada 'games:changed' — la columna
+// lo que pagan TODOS sus consumidores en cada 'data:changed' — la columna
 // de navegación, el Backlog flow de Stats, el "ya lo tienes" del buscador y
 // la SagaSection de cualquier ficha abierta. La pantalla del Plan, que sí
 // necesita sinopsis/notas/etiquetas, usa usePlannedGamesWithExtras (abajo).
@@ -103,7 +92,7 @@ export type PlannedGamesWithExtras = {
 // La vista COMPLETA del Plan: la lista escueta + el canal de extras, unidos
 // por id. Solo la usa la pantalla del Plan — mientras no está montada, la
 // query de extras queda inactiva y sus 591 KB ni se piden ni se clonan en
-// los 'games:changed' (TanStack solo refetchea queries con suscriptores).
+// los 'data:changed' (TanStack solo refetchea queries con suscriptores).
 //
 // La unión rellena con null los extras de un id que aún no ha llegado. Solo
 // puede pasar en la ventana entre los dos refetches de una invalidación
@@ -158,35 +147,6 @@ export const usePlannedGamesWithExtras = (): PlannedGamesWithExtras => {
   };
 };
 
-// Fijar y reordenar escriben UNA columna, planPinnedAt, y solo dos consultas
-// la leen: getPlannedGames (la lista del Plan) y getGameById (el botón del pin
-// en la ficha de un planeado, que la trae en su proyección). Ni getGames ni
-// nada más la miran — está fuera de GameListItem a propósito.
-//
-// Por eso esto NO invalida queryKeys.games.all, que era lo que hacían las dos
-// mutations de abajo y es la invalidación más ancha del archivo: el prefijo
-// ['games'] arrastra la lista de la biblioteca, que la tarjeta de Now playing
-// tiene montada en TODAS las pantallas (MiddleColumn), así que cada pin y cada
-// suelta de un arrastre pagaba un getGames entero —8,8 ms en el main y 186 KB
-// de las 333 filas cruzando el IPC, medido sobre la biblioteca real— para
-// recibir exactamente la misma lista, y encima con identidad de array nueva:
-// repintado de la columna de navegación, de Now playing y del modo ambiente
-// para nada. El arrastre tampoco es un gesto de una vez: recolocas tres o
-// cuatro filas seguidas y esto se pagaba en cada una.
-//
-// Y tampoco invalida games.plannedExtras: planPinnedAt viaja en la lista
-// escueta, así que un pin no puede cambiar nada de lo que va en los extras —
-// refetchearlos aquí serían 591 KB por gesto para recibir lo mismo.
-const invalidatePlanPinned = (queryClient: QueryClient, ids: readonly GameId[]): void => {
-  queryClient.invalidateQueries({ queryKey: queryKeys.games.planned });
-  // La ficha de cada juego movido: PlanGameDetail pinta el estado del pin
-  // desde useGame(id), no desde la lista, así que sin esto el botón se
-  // quedaría al revés al entrar (o al volver) a la ficha.
-  for (const id of ids) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.games.detail(id) });
-  }
-};
-
 // "Up next" (PLAN-TO-PLAY.md 2.2) — fijar o soltar un planeado como
 // prioridad de verdad.
 //
@@ -227,9 +187,6 @@ export const useSetPlanPinned = (): UseMutationResult<
     onError: (_error, _input, context) => {
       const previous = (context as { previous?: PlannedGameListItem[] } | undefined)?.previous;
       if (previous) queryClient.setQueryData(queryKeys.games.planned, previous);
-    },
-    onSettled: (_data, _error, { id }) => {
-      invalidatePlanPinned(queryClient, [id]);
     },
   });
 };
@@ -284,9 +241,6 @@ export const useReorderUpNext = (): UseMutationResult<boolean, Error, GameId[], 
       const previous = (context as { previous?: PlannedGameListItem[] } | undefined)?.previous;
       if (previous) queryClient.setQueryData(queryKeys.games.planned, previous);
     },
-    onSettled: (_data, _error, orderedIds) => {
-      invalidatePlanPinned(queryClient, orderedIds);
-    },
   });
 };
 
@@ -296,10 +250,9 @@ export const useCreatePlannedGame = (): UseMutationResult<
   CreatePlannedGameInput,
   unknown
 > =>
-  useInvalidatingMutation(
-    (input: CreatePlannedGameInput) => window.api.games.createPlanned(input),
-    [queryKeys.games.all],
-  );
+  useMutation({
+    mutationFn: (input: CreatePlannedGameInput) => window.api.games.createPlanned(input),
+  });
 
 // El juego cambia de lista (planned -> library) y puede traer gasto y
 // eventos nuevos — games.all cascada a planned/detail por prefijo, pero
@@ -310,16 +263,10 @@ export const usePromotePlannedGame = (): UseMutationResult<
   PromotePlannedGameInput,
   unknown
 > =>
-  useInvalidatingMutation(
-    (input: PromotePlannedGameInput) => window.api.games.promote(input),
-    [queryKeys.games.all, queryKeys.spend.all, queryKeys.stateEvents.all],
-  );
+  useMutation({ mutationFn: (input: PromotePlannedGameInput) => window.api.games.promote(input) });
 
 export const useMoveToPlan = (): UseMutationResult<GameRow, Error, GameId, unknown> =>
-  useInvalidatingMutation(
-    (gameId: GameId) => window.api.games.moveToPlan(gameId),
-    [queryKeys.games.all, queryKeys.stateEvents.all],
-  );
+  useMutation({ mutationFn: (gameId: GameId) => window.api.games.moveToPlan(gameId) });
 
 export const useCreateGameWithDetails = (): UseMutationResult<
   GameRow,
@@ -327,10 +274,9 @@ export const useCreateGameWithDetails = (): UseMutationResult<
   CreateGameWithDetailsInput,
   unknown
 > =>
-  useInvalidatingMutation(
-    (input: CreateGameWithDetailsInput) => window.api.games.createWithDetails(input),
-    [queryKeys.games.all],
-  );
+  useMutation({
+    mutationFn: (input: CreateGameWithDetailsInput) => window.api.games.createWithDetails(input),
+  });
 
 // Invalidar games.all (['games']) ya cascada por prefijo a ['games', 'detail', id] —
 // no hace falta invalidar las dos keys a mano.
@@ -340,47 +286,23 @@ export const useUpdateGame = (): UseMutationResult<
   { id: GameId; patch: UpdateGamePatch },
   unknown
 > =>
-  useInvalidatingMutation(
-    ({ id, patch }: { id: GameId; patch: UpdateGamePatch }) => window.api.games.update(id, patch),
-    [queryKeys.games.all],
-  );
+  useMutation({
+    mutationFn: ({ id, patch }: { id: GameId; patch: UpdateGamePatch }) =>
+      window.api.games.update(id, patch),
+  });
 
-// Borrar un juego arrastra en cascada (ON DELETE CASCADE, ver deleteGame.ts)
-// sus iterations, sessions, state_events y spend_events. Las tres listas
-// aparte de games.all tienen que invalidarse también — sin esto, las
-// sesiones/gastos/historial del juego borrado seguían apareciendo en
-// Sesiones y Stats hasta reiniciar la app (bug real, encontrado en auditoría).
+// Borrar un juego arrastra en cascada (ON DELETE CASCADE) sus playthroughs,
+// sesiones, eventos de estado, gastos, logros, curiosidades y partidas. La
+// puerta de escritura avisa de cada tabla que recibe lápida, así que 'data:changed'
+// trae todos esos dominios y no hay que listarlos aquí.
 export const useDeleteGame = (): UseMutationResult<boolean, Error, GameId, unknown> =>
-  useInvalidatingMutation(
-    (id: GameId) => window.api.games.delete(id),
-    // saves.all incluida porque save_backups cuelga de games con ON DELETE
-    // CASCADE: sin esto quedaría en caché el índice de partidas de un juego
-    // que ya no existe — el mismo bug que ya pasó con sessions/spend.
-    //
-    // achievements y curiosities cuelgan IGUAL de games por cascada, pero son
-    // staleTime:Infinity y solo se refrescan cuando el main emite su evento —
-    // que un borrado desde el renderer nunca dispara. Sin invalidarlas, Stats
-    // seguía contando los trofeos del juego borrado y la tarjeta de curiosidad
-    // lo seguía enseñando hasta reiniciar (mismo bug, dos tablas que faltaban).
-    [
-      queryKeys.games.all,
-      queryKeys.sessions.all,
-      queryKeys.spend.all,
-      queryKeys.stateEvents.all,
-      queryKeys.saves.all,
-      queryKeys.achievements.all,
-      queryKeys.curiosities.all,
-    ],
-  );
+  useMutation({ mutationFn: (id: GameId) => window.api.games.delete(id) });
 
 // Conversión a endless (EditGameModal): limpia desenlaces/marcadores del
 // juego conservando sesiones y horas — toca juegos, sesiones (borra
 // marcadores) e historial de estados a la vez, de ahí las tres claves.
 export const useResetEndlessState = (): UseMutationResult<boolean, Error, GameId, unknown> =>
-  useInvalidatingMutation(
-    (id: GameId) => window.api.games.resetEndlessState(id),
-    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
-  );
+  useMutation({ mutationFn: (id: GameId) => window.api.games.resetEndlessState(id) });
 
 // Sin invalidación: lanzar el .exe no cambia ningún dato — la sesión (si el
 // lanzamiento sale bien) la abre ActionBar por separado, con su propia

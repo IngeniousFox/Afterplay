@@ -1,9 +1,7 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SessionClosedToast } from '../components/SessionClosedToast';
-import { queryKeys } from './queryKeys';
 import type { SessionId } from '../../../shared/entityIds';
 
 // Cuánto vive el aviso. Generoso a propósito: el toast trae un campo de texto
@@ -64,7 +62,6 @@ const TOAST_ID = 'session-closed';
 
 export const useSessionClosedToast = (): void => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     return window.api.sessions.onSessionClosed((event) => {
@@ -77,11 +74,8 @@ export const useSessionClosedToast = (): void => {
         return;
       }
 
-      // La sesión acaba de escribirse en la DB desde el main: sin esto, la
-      // ficha que ya tuvieras abierta no la vería.
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
-
+      // La sesión se escribió en la DB desde el main y 'data:changed' ya puso
+      // al día lo que hubiera abierto: este aviso solo trae el toast.
       toast.custom(
         (id) => (
           <SessionClosedToast
@@ -98,5 +92,5 @@ export const useSessionClosedToast = (): void => {
         { id: TOAST_ID, duration: TOAST_DURATION_MS },
       );
     });
-  }, [navigate, queryClient]);
+  }, [navigate]);
 };

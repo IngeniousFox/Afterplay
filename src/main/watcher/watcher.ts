@@ -1,5 +1,4 @@
-import { emit } from '../ipc/contractHandlers';
-import { powerMonitor, type BrowserWindow } from 'electron';
+import { powerMonitor } from 'electron';
 import { closeSync, openSync } from 'node:fs';
 import { appCtx } from '../db/v2/appDb';
 import {
@@ -19,7 +18,7 @@ import {
 } from '../db/v2/queries/sessions';
 import type { Session } from '../../shared/dto';
 import { scheduleSaveBackup } from '../saves/sessionHook';
-import { sendToOverlay } from '../windows/overlay';
+import { withChangeOrigin } from '../lib/changeOrigin';
 import { notifySessionClosed } from './notifySession';
 import { CREATE_SYNC_LIMIT_MS } from '../sync/scheduler';
 // La regla de frescura del cronómetro (REMOTO.md §7.4) es la MISMA aquí y en
@@ -128,9 +127,11 @@ const ownerClose = (
 ): Session<string> | null => {
   const input = { endedAt, closedBy: 'owner' } as const;
   const result = captureStoreError(() =>
-    mode === 'if-open'
-      ? closeSessionIfOpen(appCtx(), sessionId, input)
-      : closeSession(appCtx(), sessionId, input),
+    withChangeOrigin('watcher', () =>
+      mode === 'if-open'
+        ? closeSessionIfOpen(appCtx(), sessionId, input)
+        : closeSession(appCtx(), sessionId, input),
+    ),
   );
   if (result.ok) return result.value;
   console.error(`[watcher] la base rechazo cerrar la sesion ${sessionId}:`, result.error);
@@ -152,9 +153,11 @@ const gameIdToBackUp = (key: string, session: ActiveSession): GameId | null => {
 // juego/emulador del watcher (ver el bucle de arranques).
 const openSessionFor = (target: WatchTarget): Session<string> | null => {
   const result = captureStoreError(() =>
-    target.kind === 'game'
-      ? startGameSession(appCtx(), target.refId, 'watcher')
-      : createEmulatorSession(appCtx(), target.refId),
+    withChangeOrigin('watcher', () =>
+      target.kind === 'game'
+        ? startGameSession(appCtx(), target.refId, 'watcher')
+        : createEmulatorSession(appCtx(), target.refId),
+    ),
   );
   if (result.ok) return result.value;
   console.error(`[watcher] la base rechazo abrir sesion para ${target.key}:`, result.error);
@@ -212,7 +215,6 @@ export class ProcessWatcher {
   // abortado a medias lo deje como estaba es lo que se quiere: al volver de
   // una pausa no hay que volver a contar lo mismo).
   private timerHeldKeys = new Set<string>();
-  private readonly getWindow: () => BrowserWindow | null;
   // Bandeja del sistema (SPEC 6, opcional): deja ver de un vistazo qué se
   // está jugando sin abrir la ventana. Se llama con los títulos actualmente
   // en marcha cada vez que el conjunto puede haber cambiado.
@@ -228,11 +230,9 @@ export class ProcessWatcher {
   private readonly opening = new Set<string>();
 
   constructor(
-    getWindow: () => BrowserWindow | null,
     onActiveGamesChange?: (titles: string[]) => void,
     deps: { syncBeforeCreate?: (limitMs: number) => Promise<void> } = {},
   ) {
-    this.getWindow = getWindow;
     this.onActiveGamesChange = onActiveGamesChange;
     this.syncBeforeCreate = deps.syncBeforeCreate;
   }
@@ -382,7 +382,6 @@ export class ProcessWatcher {
       }
     }
 
-    this.notifyRenderer();
     this.onActiveGamesChange?.(this.getActiveTitles());
   }
 
@@ -428,7 +427,7 @@ export class ProcessWatcher {
       // Por generación y no por el booleano: ver isStale.
       if (this.isStale(generation)) return;
 
-      const changed = await (async (): Promise<boolean> => {
+      await (async (): Promise<boolean> => {
         let changed = false;
 
         // Foto única de las sesiones abiertas para todo el ciclo: la comparten
@@ -669,10 +668,12 @@ export class ProcessWatcher {
         // pausa por medio es justo lo que no hay que escribir: sería sellar
         // como jugado el instante en que se bloqueó la pantalla.
         if (this.isStale(generation)) return changed;
-        const beat = heartbeatSessions(
-          appCtx(),
-          Array.from(this.active.values(), (session) => session.sessionId),
-          new Date(),
+        const beat = withChangeOrigin('watcher', () =>
+          heartbeatSessions(
+            appCtx(),
+            Array.from(this.active.values(), (session) => session.sessionId),
+            new Date(),
+          ),
         );
         for (const failure of beat.failed) {
           console.error(
@@ -697,9 +698,8 @@ export class ProcessWatcher {
         return;
       }
 
-      if (changed) this.notifyRenderer();
       // Barato — solo lee el Map en memoria — así que se llama siempre, no
-      // solo cuando `changed`: la reconciliación al arrancar puede adoptar un
+      // solo cuando el ciclo cambió algo: la reconciliación al arrancar puede adoptar un
       // juego que ya estaba en marcha sin que eso cuente como "cambio" (ver
       // reconcileOpenSessions), y el tooltip debe reflejarlo igual.
       this.onActiveGamesChange?.(this.getActiveTitles());
@@ -1070,17 +1070,5 @@ export class ProcessWatcher {
 
   private getActiveTitles(): string[] {
     return Array.from(this.active.values(), (session) => session.title);
-  }
-
-  private notifyRenderer(): void {
-    const window = this.getWindow();
-    if (window && !window.isDestroyed()) {
-      emit(window.webContents, 'games:changed');
-    }
-    // Y al HUD, que es otra ventana con otro caché (ver sendToOverlay en
-    // overlay.ts). Su OverlayHud lleva desde el principio suscrito a este
-    // aviso, pero el aviso solo salía hacia mainWindow — así que aquella
-    // suscripción no llegó a dispararse nunca.
-    sendToOverlay('games:changed');
   }
 }

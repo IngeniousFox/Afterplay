@@ -24,6 +24,8 @@ export const queryKeys = {
     // número — algo que deja de ser cierto con los ids de texto de la 2.0
     // (AFTERPLAY-2.0.md §15.5). Sigue colgando del prefijo ['games'].
     detail: (id: GameId | null) => ['games', 'detail', id] as const,
+    // El prefijo de TODAS las fichas (para marcar las cacheadas sin saber el id).
+    detailAll: ['games', 'detail'] as const,
     // Bajo el prefijo ['games'] a propósito: cualquier mutation que ya
     // invalide games.all refresca también la lista del Plan sin tocarla.
     planned: ['games', 'planned'] as const,
@@ -51,7 +53,7 @@ export const queryKeys = {
   sessions: {
     all: ['sessions'] as const,
     // Bajo el prefijo ['sessions'] a propósito — cualquier invalidación de
-    // sessions.all (mutations, useWatcherSync) refresca también la bandeja.
+    // sessions.all (el aviso 'data:changed') refresca también la bandeja.
     pending: ['sessions', 'pending'] as const,
   },
   emulators: {
@@ -59,7 +61,7 @@ export const queryKeys = {
   },
   // Los dispositivos que conoce la base (§10.8, §11.4): "Playing on PC-A",
   // "Installed on". Cambian por sync (un PC nuevo, un renombrado), así que los
-  // invalida el mismo aviso que refresca los juegos (useWatcherSync).
+  // invalida el dominio 'devices' del aviso 'data:changed'.
   devices: {
     all: ['devices'] as const,
   },

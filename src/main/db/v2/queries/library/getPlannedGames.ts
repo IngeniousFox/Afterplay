@@ -14,7 +14,7 @@ import { compareTitlesNocase } from './shared';
 //
 // Mantiene los DOS CANALES de la 1.x (el porqué y las cifras están en
 // shared/types.ts): `getPlannedGames` es el escueto que paga toda la app en
-// cada 'games:changed', `getPlannedGameExtras` el que solo mira la pantalla
+// cada 'data:changed', `getPlannedGameExtras` el que solo mira la pantalla
 // del Plan. El renderer los junta por id.
 //
 // Lo que cambia con el 2.0:

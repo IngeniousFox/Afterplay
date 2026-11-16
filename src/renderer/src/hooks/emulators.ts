@@ -1,8 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { CreateEmulatorInput, Emulator } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
-import { useInvalidatingMutation } from './useInvalidatingMutation';
 import type { EmulatorId } from '../../../shared/entityIds';
 
 // EMULADORES.md — emuladores registrados (Ajustes). staleTime Infinity como
@@ -20,15 +19,9 @@ export const useCreateEmulator = (): UseMutationResult<
   CreateEmulatorInput,
   unknown
 > =>
-  useInvalidatingMutation(
-    (input: CreateEmulatorInput) => window.api.emulators.create(input),
-    [queryKeys.emulators.all],
-  );
+  useMutation({ mutationFn: (input: CreateEmulatorInput) => window.api.emulators.create(input) });
 
 // Borrar un emulador se lleva sus sesiones pendientes (ver deleteEmulator) —
 // la bandeja debe refrescarse también.
 export const useDeleteEmulator = (): UseMutationResult<boolean, Error, EmulatorId, unknown> =>
-  useInvalidatingMutation(
-    (id: EmulatorId) => window.api.emulators.delete(id),
-    [queryKeys.emulators.all, queryKeys.sessions.all],
-  );
+  useMutation({ mutationFn: (id: EmulatorId) => window.api.emulators.delete(id) });

@@ -66,7 +66,7 @@ export const useStartupContentSignal = (): void => {
     }
 
     // Se dispara con la PRIMERA resolución de la query y nunca más: los
-    // 'games:changed' posteriores re-ejecutan el efecto con datos nuevos,
+    // 'data:changed' posteriores re-ejecutan el efecto con datos nuevos,
     // pero el arranque solo ocurre una vez.
     if (sent.current || games === undefined) return;
     sent.current = true;

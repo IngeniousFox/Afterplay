@@ -1,6 +1,7 @@
 import { achievementsApi } from './achievements';
 import { backupApi } from './backup';
 import { curiositiesApi } from './curiosities';
+import { dataChangedApi } from './dataChanged';
 import { devicesApi } from './devices';
 import { dialogApi } from './dialog';
 import { emulatorsApi } from './emulators';
@@ -21,7 +22,6 @@ import { sgdbApi } from './sgdb';
 import { spendApi } from './spend';
 import { stateEventsApi } from './stateEvents';
 import { syncApi } from './sync';
-import { watcherApi } from './watcher';
 import { windowApi } from './window';
 
 export const api = {
@@ -42,7 +42,7 @@ export const api = {
   images: imagesApi,
   saves: savesApi,
   scan: scanApi,
-  watcher: watcherApi,
+  dataChanged: dataChangedApi,
   settings: settingsApi,
   curiosities: curiositiesApi,
   memories: memoriesApi,

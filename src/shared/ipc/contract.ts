@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { DeviceInfo, GameInstallInfo } from '../devices';
 import type { ConcurrentPlaythrough, MergePlaythroughsOutcome } from '../playthroughMerge';
 import type { SyncStatus } from '../sync/status';
+import type { DataChanged } from './dataChanged';
 import type {
   AchievementActivityEvent,
   AchievementsOverview,
@@ -151,8 +152,9 @@ export const contract = {
   ),
   'sync:unpair': invoke(none, type<SyncStatus>()),
   'sync:syncNow': invoke(none, type<void>()),
-  'sync:changed': event(type<{ tables: string[] }>()),
   'sync:status': event(type<void>()),
+  // El único aviso de cambio de datos (§15.4): ver shared/ipc/dataChanged.ts.
+  'data:changed': event(type<DataChanged>()),
 
   // ── backup ───────────────────────────────────────────────────────────────
   'backup:createManual': invoke(z.tuple([text]), type<string>()),
@@ -175,7 +177,6 @@ export const contract = {
   'games:launchExecutable': invoke(z.tuple([id]), type<LaunchExecutableResult>()),
   'games:openInstallDirectory': invoke(z.tuple([id]), type<LaunchExecutableResult>()),
   'games:getInstallInfo': invoke(z.tuple([id]), type<GameInstallInfo>()),
-  'games:changed': event(type<void>()),
 
   // ── emulators ────────────────────────────────────────────────────────────
   'emulators:getAll': invoke(none, type<Emulator[]>()),

@@ -3,7 +3,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { app, dialog, Menu } from 'electron';
 import { initCredentials } from '../config/credentials';
 import { runDailyBackup } from '../db/dailyBackup';
-import { initAppDb } from '../db/v2/appDb';
+import { appLocalDb, initAppDb } from '../db/v2/appDb';
 import { runEnrichPending } from '../external/enrichPendingApp';
 import { registerImageProtocolHandler } from '../images/protocol';
 import { registerIpcHandlers } from '../ipc';
@@ -21,6 +21,7 @@ import { createAppTray, setTrayActiveGames } from '../tray/tray';
 import { setRunningGamesProbe } from '../watcher/runningGames';
 import { ProcessWatcher } from '../watcher/watcher';
 import { isBigPictureMode } from '../windows/bigPicture';
+import { announceStoreChanges, announceSyncChange } from '../windows/dataChanged';
 import { forwardToWindow } from '../windows/forward';
 import {
   createWindow,
@@ -141,11 +142,14 @@ function openLocalDb(): boolean {
 // Depende de: la base abierta. El sync se CREA aquí pero no arranca todavía: el
 // primer ciclo va delante de las pasadas de fondo (ver backgroundJobs.ts).
 function createSyncRuntime(): void {
-  const sendSyncChanged = forwardToWindow('sync:changed');
+  // El aviso único de cambio de datos (§15.4): las transacciones locales y las
+  // del watcher salen de la puerta de escritura, las de una bajada del sync
+  // salen del motor (más abajo).
+  announceStoreChanges(appLocalDb().store);
   const sendSyncStatus = forwardToWindow('sync:status');
   appState.syncRuntime = createAppSyncRuntime({
     changed: (change) => {
-      sendSyncChanged({ tables: [...change.tables] });
+      announceSyncChange(change);
       // Juegos nuevos de otro dispositivo (los que añade el móvil llegan sin
       // comprobaciones externas, §13.3): este PC pide su concesión `enrich` y
       // los completa. Sin juegos nuevos en la bajada no hay nada que mirar.
@@ -200,7 +204,6 @@ function startWatchers(): void {
   // parámetro (opcional, SPEC 3E) mantiene el tooltip del tray al día con lo
   // que esté en marcha ahora mismo, sin tener que abrir la ventana.
   const watcher = new ProcessWatcher(
-    () => getMainWindow(),
     (titles) => {
       if (appState.tray) setTrayActiveGames(appState.tray, titles);
       // El overlay in-game vive y muere con los JUEGOS en marcha (OVERLAY.md

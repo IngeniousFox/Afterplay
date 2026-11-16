@@ -396,7 +396,7 @@ export type GameListItem<Id extends EntityIdLike = EntityId> = {
 // ── La lista del Plan viaja en DOS canales ─────────────────────────────────
 //
 // games:getPlanned era EL payload más gordo de la app: 661 planeados × 928 KB
-// por cada 'games:changed', y el 63% eran campos que SOLO mira la pantalla
+// por cada 'data:changed', y el 63% eran campos que SOLO mira la pantalla
 // del Plan (summary 220 KB, steamTags 171 KB, las seis notas 85 KB, heroUrl
 // 47 KB, releaseDate 43 KB). Sus otros tres consumidores (la columna de
 // navegación, el Backlog flow de Stats y el "esto ya lo tienes" del buscador)
@@ -425,7 +425,7 @@ export type PlannedGameListItem<Id extends EntityIdLike = EntityId> = GameListIt
 
 // Los campos que SOLO mira la pantalla del Plan (PLAN-TO-PLAY.md §2.3) — el
 // 63% del peso de la lista vieja, ahora en su propio canal para que los
-// consumidores escuetos no lo paguen en cada 'games:changed'.
+// consumidores escuetos no lo paguen en cada 'data:changed'.
 export type PlannedGameExtras<Id extends EntityIdLike = EntityId> = {
   id: GameId<Id>;
   // El heroUrl real del planeado (ver el aviso sobre el canal escueto).
