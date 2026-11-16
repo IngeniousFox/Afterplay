@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import { resolveIterationHours } from '../../../../../shared/domain/hours';
 import { deriveMoments, type MemorySession } from '../../../../../shared/memory/moments';
 import type {
@@ -24,25 +24,74 @@ import { liveEmulator, livePlaythrough, liveSession, type QueryContext } from '.
 export interface GetAllSessionsOptions {
   /** Solo las de este juego (el historial de la ficha). Sin él, todas. */
   readonly gameId?: string;
+  /** Solo las abiertas (sin `endedAt`), de cualquier dispositivo. */
+  readonly open?: boolean;
+  /** Solo las que ARRANCARON en `[from, to)`. */
+  readonly startedBetween?: { readonly from: Date; readonly to: Date };
   /** Una página: cuántas. Sin él, todas. El orden es el de siempre, así que las páginas encajan. */
   readonly limit?: number;
   /** Cuántas saltarse (solo con `limit`). */
   readonly offset?: number;
 }
 
+type SessionFilters = Pick<GetAllSessionsOptions, 'gameId' | 'open' | 'startedBetween'>;
+
+/** Las condiciones de las opciones que filtran (no las de paginar). */
+function sessionFilters(options: SessionFilters): (SQL | undefined)[] {
+  return [
+    options.gameId === undefined ? undefined : eq(playthroughs.gameId, options.gameId),
+    options.open ? isNull(sessions.endedAt) : undefined,
+    options.startedBetween
+      ? and(
+          gte(sessions.startedAt, options.startedBetween.from),
+          lt(sessions.startedAt, options.startedBetween.to),
+        )
+      : undefined,
+  ];
+}
+
 /**
  * Cuántas sesiones devolvería `getAllSessions` sin paginar (las asignadas y
- * vivas). Es el total de "Page 2 of 7": una sola fila de resultado.
+ * vivas), con los mismos filtros. Es el total de "Page 2 of 7": una sola fila
+ * de resultado.
  */
-export function countAllSessions(ctx: QueryContext): number {
+export function countAllSessions(ctx: QueryContext, options: SessionFilters = {}): number {
   const row = ctx.db
     .select({ total: sql<number>`count(*)` })
     .from(sessions)
     .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))
     .innerJoin(games, eq(games.id, playthroughs.gameId))
-    .where(liveSession())
+    .where(and(liveSession(), ...sessionFilters(options)))
     .get();
   return Number(row?.total ?? 0);
+}
+
+/**
+ * La más larga y la media de duración de las sesiones CERRADAS (una abierta no
+ * tiene duración final), con el filtro de juego. Las dos cifras de cabecera de
+ * la vista de Sesiones: lo que antes calculaba el renderer sobre la lista
+ * entera (`sessionDurationStats`). Calculado en SQL: es una suma y un máximo.
+ */
+export function getSessionDurationSummary(
+  ctx: QueryContext,
+  options: Pick<SessionFilters, 'gameId'> = {},
+): { longestSec: number; avgSec: number } {
+  const row = ctx.db
+    .select({
+      longest: sql<number | null>`max(coalesce(${sessions.durationSec}, 0))`,
+      total: sql<number | null>`sum(coalesce(${sessions.durationSec}, 0))`,
+      closed: sql<number>`count(*)`,
+    })
+    .from(sessions)
+    .innerJoin(playthroughs, eq(playthroughs.id, sessions.playthroughId))
+    .innerJoin(games, eq(games.id, playthroughs.gameId))
+    .where(and(liveSession(), isNotNull(sessions.endedAt), ...sessionFilters(options)))
+    .get();
+  const closed = Number(row?.closed ?? 0);
+  return {
+    longestSec: Number(row?.longest ?? 0),
+    avgSec: closed > 0 ? Number(row?.total ?? 0) / closed : 0,
+  };
 }
 
 /**
@@ -79,12 +128,7 @@ export function getAllSessions(
     .innerJoin(games, eq(games.id, playthroughs.gameId))
     // La caché de un juego que `liveSession()` ya exige vivo: `alive` a secas.
     .leftJoin(gameMetadata, and(eq(gameMetadata.gameId, games.id), alive(gameMetadata)))
-    .where(
-      and(
-        liveSession(),
-        options.gameId === undefined ? undefined : eq(playthroughs.gameId, options.gameId),
-      ),
-    )
+    .where(and(liveSession(), ...sessionFilters(options)))
     .orderBy(desc(sessions.startedAt), desc(sessions.syncCreated), desc(sessions.id))
     .$dynamic();
   const rows =

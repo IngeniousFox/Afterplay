@@ -10,6 +10,7 @@ import type {
   SessionId,
   StateEventId,
 } from './entityIds';
+import type { Moment } from './memory/moments';
 export type {
   DatePrecision,
   EventDatePrecision,
@@ -927,6 +928,31 @@ export type SessionWithGame<Id extends EntityIdLike = EntityId> = {
   // Quién la abrió: la interfaz lo necesita para saber si una sesión abierta de
   // OTRO dispositivo es un cronómetro (que cualquier PC puede parar, §10.8).
   SchemaFields<Id, { startedBy: SessionStartedBy<Id> }>;
+
+// Una página de la vista de Sesiones (F-41): lo que antes salía de recorrer la
+// lista entera en el renderer. `total`, `longestSec` y `avgSec` son del filtro
+// completo (todo el historial o un juego), no de la página; `moments` son los
+// momentos señalados de las sesiones DE ESTA PÁGINA, derivados sobre la
+// historia completa (un récord no se puede saber mirando solo la página).
+export type SessionsPageRequest<Id extends EntityIdLike = EntityId> = {
+  gameId: GameId<Id> | null;
+  /** Desde 1. */
+  page: number;
+  pageSize: number;
+};
+export type SessionsPage<Id extends EntityIdLike = EntityId> = {
+  /** La página que responde (la pedida, desde 1): la pantalla se ata a ella, no a la que pidió. */
+  page: number;
+  items: SessionWithGame<Id>[];
+  total: number;
+  longestSec: number;
+  avgSec: number;
+  moments: Moment<Id>[];
+};
+
+// Las sesiones que ARRANCARON en `[from, to)` — el heatmap de actividad de un
+// año o el mes en curso del salón del modo TV.
+export type SessionsRangeRequest = { from: Date; to: Date };
 
 // Un juego se acaba de cerrar y el watcher ha cerrado su sesión. Viaja del
 // main al renderer para levantar el aviso con la duración y el atajo de

@@ -4,11 +4,20 @@ import type {
   Session,
   SessionClosedEvent,
   SessionWithGame,
+  SessionsPage,
+  SessionsPageRequest,
+  SessionsRangeRequest,
 } from '../../shared/types';
 import type { GameId, SessionId } from '../../shared/entityIds';
 
 export const sessionsApi = {
-  getAll: (): Promise<SessionWithGame[]> => invoke('sessions:getAll'),
+  // Lecturas acotadas (F-41): no hay un `getAll`; cada pantalla pide lo que pinta.
+  getOpen: (): Promise<SessionWithGame[]> => invoke('sessions:getOpen'),
+  getForGame: (gameId: GameId): Promise<SessionWithGame[]> => invoke('sessions:getForGame', gameId),
+  getRange: (range: SessionsRangeRequest): Promise<SessionWithGame[]> =>
+    invoke('sessions:getRange', range),
+  getPage: (request: SessionsPageRequest): Promise<SessionsPage> =>
+    invoke('sessions:getPage', request),
   close: (id: SessionId, endedAt: Date): Promise<Session | null> =>
     invoke('sessions:close', id, endedAt),
   delete: (id: SessionId): Promise<boolean> => invoke('sessions:delete', id),

@@ -2,31 +2,28 @@ import { cn } from '../../lib/utils';
 import { TimerReset } from 'lucide-react';
 import { type CSSProperties, useMemo, useState } from 'react';
 import { formatHours, pluralize } from '../../lib/format';
-import { hasMeasuredDuration } from '../../lib/sessionStats';
+import { lengthSummaryFor, type SessionStats } from '../../../../shared/domain/sessionStats';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
 
-type HistogramSession = {
-  startedAt: Date;
-  endedAt: Date | null;
-  durationSec: number | null;
-  isManual: boolean;
-};
-
 type SessionLengthHistogramProps = {
-  sessions: HistogramSession[];
+  // El resumen de duraciones (shared/domain/sessionStats): el de la biblioteca
+  // viene del main (F-41) y el de un juego se arma con las sesiones de ese juego.
+  stats: Pick<SessionStats, 'lengthAll' | 'lengthByYear'>;
   year: Year;
   variant?: 'compact' | 'overview';
 };
 
-// Límite superior de cada tramo en segundos (el último es abierto).
-const BUCKETS: { label: string; maxSec: number }[] = [
-  { label: '<30m', maxSec: 30 * 60 },
-  { label: '30m–1h', maxSec: 60 * 60 },
-  { label: '1–2h', maxSec: 2 * 3600 },
-  { label: '2–4h', maxSec: 4 * 3600 },
-  { label: '4h+', maxSec: Infinity },
+// Los tramos: sus límites (en segundos, el último es abierto) son
+// SESSION_LENGTH_LIMITS_SEC de shared/domain/sessionStats, que es quien reparte
+// las sesiones en ellos.
+const BUCKETS: { label: string }[] = [
+  { label: '<30m' },
+  { label: '30m–1h' },
+  { label: '1–2h' },
+  { label: '2–4h' },
+  { label: '4h+' },
 ];
 
 const PROFILE_LABELS = [
@@ -46,42 +43,30 @@ const PROFILE_LABELS = [
 // resto de gráficos de sesiones: solo medidas y cerradas.
 // "All Time" = histórico completo (es un perfil, no actividad reciente).
 export const SessionLengthHistogram = ({
-  sessions,
+  stats,
   year,
   variant = 'compact',
 }: SessionLengthHistogramProps): React.JSX.Element => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const { counts, durations, total, peakIndex } = useMemo(() => {
-    const counts = BUCKETS.map(() => 0);
-    const durations: number[] = [];
-    for (const session of sessions) {
-      if (!hasMeasuredDuration(session)) continue;
-      if (year !== 'all' && session.startedAt.getFullYear() !== year) continue;
-      const seconds = session.durationSec ?? 0;
-      durations.push(seconds);
-      const bucketIndex = BUCKETS.findIndex((bucket) => seconds < bucket.maxSec);
-      counts[bucketIndex >= 0 ? bucketIndex : BUCKETS.length - 1] += 1;
-    }
-    durations.sort((a, b) => a - b);
-    const total = counts.reduce((sum, count) => sum + count, 0);
+  const { counts, total, peakIndex, medianSeconds, longestSeconds, underHour } = useMemo(() => {
+    const { counts, total, medianSec, longestSec, underHour } = lengthSummaryFor(stats, year);
     const maxCount = Math.max(0, ...counts);
     const peakIndex = maxCount > 0 ? counts.findIndex((count) => count === maxCount) : -1;
-    return { counts, durations, total, peakIndex };
-  }, [sessions, year]);
+    return {
+      counts,
+      total,
+      peakIndex,
+      medianSeconds: medianSec,
+      longestSeconds: longestSec,
+      underHour,
+    };
+  }, [stats, year]);
 
   const maxCount = Math.max(1, ...counts);
   const activeIndex = hoveredIndex ?? peakIndex;
   const activeCount = activeIndex >= 0 ? counts[activeIndex] : 0;
   const activeShare = total > 0 ? Math.round((activeCount / total) * 100) : 0;
-  const middle = Math.floor(durations.length / 2);
-  const medianSeconds = durations.length
-    ? durations.length % 2 === 0
-      ? (durations[middle - 1] + durations[middle]) / 2
-      : durations[middle]
-    : 0;
-  const longestSeconds = durations.at(-1) ?? 0;
-  const underHour = durations.filter((seconds) => seconds < 3600).length;
   const underHourShare = total > 0 ? Math.round((underHour / total) * 100) : 0;
   const profile = PROFILE_LABELS[Math.max(0, peakIndex)];
 

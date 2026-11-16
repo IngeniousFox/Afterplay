@@ -2,7 +2,7 @@ import { cn } from '../../lib/utils';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours, formatTime, pluralize } from '../../lib/format';
-import { isMeasuredSession } from '../../lib/sessionStats';
+import { isMeasuredSession } from '../../../../shared/domain/sessionMeasure';
 import { floatingPanelClass } from '../../lib/styles';
 import { useTimeFormat } from '../../hooks/settings';
 import { StatCard } from './StatCard';

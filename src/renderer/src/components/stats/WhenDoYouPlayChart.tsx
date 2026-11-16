@@ -2,19 +2,14 @@ import { CalendarDays } from 'lucide-react';
 import { useMemo } from 'react';
 import { GREEN } from '../../lib/colors';
 import { formatHours } from '../../lib/format';
-import { hasMeasuredDuration } from '../../lib/sessionStats';
+import { secondsByWeekdayOf, type SessionStats } from '../../../../shared/domain/sessionStats';
 import { CategoryBarChart } from './CategoryBarChart';
 import type { Year } from './YearPicker';
 
-type ChartSession = {
-  startedAt: Date;
-  endedAt: Date | null;
-  durationSec: number | null;
-  isManual: boolean;
-};
-
 type WhenDoYouPlayChartProps = {
-  sessions: ChartSession[];
+  // El resumen de sesiones (shared/domain/sessionStats): el de la biblioteca
+  // viene del main (F-41) y el de un juego se arma con las sesiones de ese juego.
+  stats: Pick<SessionStats, 'days'>;
   year: Year;
   // GameStats reusa esta card para UN juego ("When do you play it?") — el
   // título por defecto es el de la página global.
@@ -31,21 +26,15 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // histórico completo (es un perfil de costumbres, no una ventana de
 // actividad reciente); un año concreto, solo ese año.
 export const WhenDoYouPlayChart = ({
-  sessions,
+  stats,
   year,
   title = 'When do you play?',
 }: WhenDoYouPlayChartProps): React.JSX.Element => {
   const bars = useMemo(() => {
-    const secondsByDay = Array.from({ length: 7 }, () => 0);
-    for (const session of sessions) {
-      if (!hasMeasuredDuration(session)) continue;
-      if (year !== 'all' && session.startedAt.getFullYear() !== year) continue;
-      const dayIndex = (session.startedAt.getDay() + 6) % 7;
-      secondsByDay[dayIndex] += session.durationSec ?? 0;
-    }
+    const secondsByDay = secondsByWeekdayOf(stats, year);
 
     return DAY_LABELS.map((label, index) => ({ label, value: secondsByDay[index] }));
-  }, [sessions, year]);
+  }, [stats, year]);
 
   return (
     <CategoryBarChart

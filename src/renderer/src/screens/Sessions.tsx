@@ -1,7 +1,7 @@
 import { Activity, ArrowRight, Calendar, Clock, Flame, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { deriveMoments, momentsBySession } from '../../../shared/memory/moments';
+import { momentsBySession } from '../../../shared/memory/moments';
 import type { SessionUnlock, SessionWithGame } from '../../../shared/types';
 import { MetricCard } from '../components/library/detail/MetricsRow';
 import { DeleteSessionDialog } from '../components/sessions/DeleteSessionDialog';
@@ -12,16 +12,16 @@ import { SessionRow } from '../components/sessions/SessionRow';
 import { useSessionUnlocks } from '../hooks/achievements';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
-import { useSessions } from '../hooks/sessions';
+import { useSessionsPage } from '../hooks/sessions';
 import { useCountUp } from '../hooks/useCountUp';
 import { requestAchievementFlash } from '../lib/achievementFlash';
 import { formatHours, pluralize } from '../lib/format';
 import { groupPageByDate } from '../lib/sessionGroups';
-import { sessionDurationStats } from '../lib/sessionStats';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
 import { parseEntityId, type SessionId } from '../../../shared/entityIds';
 
 const PAGE_SIZE = 20;
+const NO_SESSIONS: SessionWithGame[] = [];
 
 // Bloque 5A — todas las sesiones, o filtradas a un juego vía el ?game= que
 // pone SessionsNavColumn (MiddleColumn.tsx) al hacer clic en la columna de
@@ -33,7 +33,10 @@ export const Sessions = (): React.JSX.Element => {
   const gameParam = searchParams.get('game');
   const gameId = gameParam ? parseEntityId(gameParam) : null;
 
-  const { data: sessions = [], isLoading, isError, refetch } = useSessions();
+  // Una página de las sesiones, con el filtro, el total y las cifras de cabecera
+  // calculados en el main (F-41): la pantalla no recorre la historia entera.
+  const [page, setPage] = useState(1);
+  const { data: pageData, isLoading, isError, refetch } = useSessionsPage(gameId, page, PAGE_SIZE);
   const { data: games = [] } = useGames();
   // Recaps de mes para las tarjetas del diario (§5), indexados por scopeKey.
   const { data: memories = [] } = useMemories();
@@ -47,21 +50,15 @@ export const Sessions = (): React.JSX.Element => {
     [memories],
   );
 
-  // Los momentos señalados (§2.1), derivados sobre la historia COMPLETA — un
-  // récord no se puede saber mirando la página visible — e indexados por
-  // sesión para vestir cada fila. Con la lista global aunque haya filtro de
-  // juego: "tu sesión más larga de Hollow Knight" es la misma verdad se mire
-  // desde donde se mire. Las horas manuales de los playthroughs elevan la
-  // línea base de los hitos de horas, igual que en el main.
-  const momentsIndex = useMemo(() => {
-    const manualHoursByGame = new Map(
-      games.map((game) => [
-        game.id,
-        game.manualIterations.reduce((sum, manual) => sum + manual.hours, 0),
-      ]),
-    );
-    return momentsBySession(deriveMoments(sessions, manualHoursByGame));
-  }, [sessions, games]);
+  // Los momentos señalados (§2.1): el main los deriva sobre la historia
+  // COMPLETA —un récord no se puede saber mirando la página visible, y con
+  // filtro de juego también: "tu sesión más larga de Hollow Knight" es la misma
+  // verdad se mire desde donde se mire— y manda solo los de las sesiones de la
+  // página, que aquí se indexan por sesión para vestir cada fila.
+  const momentsIndex = useMemo(
+    () => momentsBySession(pageData?.moments ?? []),
+    [pageData?.moments],
+  );
 
   // Los trofeos de cada sesión (LOGROS-IDEAS.md §2.1), de UNA consulta
   // global — indexados aquí por sesión para vestir las filas, igual que los
@@ -77,7 +74,6 @@ export const Sessions = (): React.JSX.Element => {
     return map;
   }, [sessionUnlocks]);
 
-  const [page, setPage] = useState(1);
   // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
   const [pendingDelete, setPendingDelete] = useState<SessionWithGame | null>(null);
   // Cambiar de filtro (elegir otro juego, o volver a "All games") vuelve a
@@ -90,16 +86,14 @@ export const Sessions = (): React.JSX.Element => {
   }
 
   const selectedGame = gameId === null ? null : (games.find((g) => g.id === gameId) ?? null);
-  const filtered = useMemo(
-    () => (gameId === null ? sessions : sessions.filter((s) => s.gameId === gameId)),
-    [sessions, gameId],
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  // Por si la página quedó fuera de rango (p.ej. el total bajó tras cerrar
-  // el filtro anterior con más páginas) — nunca una página en blanco.
+  const total = pageData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Por si la página quedó fuera de rango (p.ej. el total bajó tras borrar la
+  // última sesión de la última página) — nunca una página en blanco: se
+  // vuelve a pedir la última que existe.
   const safePage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  if (pageData && page > totalPages) setPage(totalPages);
+  const pageItems = pageData?.items ?? NO_SESSIONS;
   const groups = useMemo(() => groupPageByDate(pageItems, new Date()), [pageItems]);
 
   // Cambiar de página con el scroll a mitad de la lista dejaría la vista
@@ -115,20 +109,15 @@ export const Sessions = (): React.JSX.Element => {
     ? selectedGame.totalHours
     : games.reduce((sum, game) => sum + game.totalHours, 0);
 
-  // Memoizado: los 4 contadores de abajo (useCountUp) reprintan el
-  // componente en cada frame de su animación (~700ms, ~40 veces) mientras
-  // suben — sin esto, cada uno de esos frames recorría `filtered` entero
-  // (puede ser toda la historia de sesiones) para recalcular exactamente lo
-  // mismo que el frame anterior.
-  const { longestSec: longestSessionSec, avgSec: avgSessionSec } = useMemo(
-    () => sessionDurationStats(filtered),
-    [filtered],
-  );
+  // La más larga y la media de las cerradas del filtro (sessionDurationStats
+  // de antes), que ya vienen del main junto con la página.
+  const longestSessionSec = pageData?.longestSec ?? 0;
+  const avgSessionSec = pageData?.avgSec ?? 0;
 
   // Contadores animados de las 4 métricas — mismo count-up que Stats; al
   // cambiar de filtro los targets cambian y vuelven a subir solos.
   const animatedHours = useCountUp(totalHours);
-  const animatedCount = useCountUp(filtered.length);
+  const animatedCount = useCountUp(total);
   const animatedLongestSec = useCountUp(longestSessionSec);
   const animatedAvgSec = useCountUp(avgSessionSec);
 
@@ -155,11 +144,11 @@ export const Sessions = (): React.JSX.Element => {
               {/* Mismo patrón que el conteo de juegos en GameListScreen —
                   contextual: cuenta lo que se está viendo ahora mismo
                   (filtered), no siempre el total de la biblioteca entera. */}
-              {!isLoading && !isError && filtered.length > 0 && (
+              {!isLoading && !isError && total > 0 && (
                 <span className="flex-none rounded-full border border-input bg-white/[0.03] px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
-                  {filtered.length}
+                  {total}
                   <span className="ml-1 font-semibold text-muted-foreground">
-                    {filtered.length === 1 ? 'session' : 'sessions'}
+                    {total === 1 ? 'session' : 'sessions'}
                   </span>
                 </span>
               )}
@@ -209,7 +198,7 @@ export const Sessions = (): React.JSX.Element => {
               <span>Try again</span>
             </button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-24 text-center">
             <p className="text-sm font-semibold text-foreground">No sessions yet</p>
             <p className="text-xs text-muted-foreground">
@@ -252,7 +241,10 @@ export const Sessions = (): React.JSX.Element => {
 
             {/* key por filtro+página: cambiar cualquiera de los dos relanza
                 la cascada de los grupos con los datos nuevos. */}
-            <div key={`${gameId ?? 'all'}-${safePage}`} className="flex flex-col gap-5.5">
+            <div
+              key={`${gameId ?? 'all'}-${pageData?.page ?? safePage}`}
+              className="flex flex-col gap-5.5"
+            >
               {groups.map((group, index) => {
                 const groupSeconds = group.sessions.reduce(
                   (sum, session) =>

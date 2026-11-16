@@ -10,7 +10,7 @@ import {
   tombstoneOnly,
   type QueryFixture,
 } from '../../common/__tests__/fixtures';
-import { countAllSessions, getAllSessions } from '../read';
+import { countAllSessions, getAllSessions, getSessionDurationSummary } from '../read';
 
 // Las sesiones por páginas (la lista de la PWA): las páginas encajan con la
 // lista entera y el total cuenta lo mismo que ella.
@@ -53,5 +53,48 @@ describe('getAllSessions paginada', () => {
     tombstoneOnly(fx.ctx, 'games', gone);
     assert.equal(countAllSessions(fx.ctx), 1);
     assert.equal(getAllSessions(fx.ctx).length, 1);
+  });
+});
+
+describe('las lecturas acotadas de sesiones (F-41)', () => {
+  it('open devuelve solo las abiertas; gameId, las de un juego; startedBetween, la ventana [from, to)', () => {
+    const celeste = seedGame(fx.ctx, { title: 'Celeste' });
+    const hades = seedGame(fx.ctx, { title: 'Hades' });
+    const p1 = seedPlaythrough(fx.ctx, { gameId: celeste });
+    const p2 = seedPlaythrough(fx.ctx, { gameId: hades });
+    const a = seedSession(fx.ctx, { playthroughId: p1, startedAt: at(hours(0)) });
+    const b = seedSession(fx.ctx, { playthroughId: p1, startedAt: at(hours(5)), endedAt: null });
+    seedSession(fx.ctx, { playthroughId: p2, startedAt: at(hours(10)) });
+    const ids = (rows: { id: string }[]): string[] => rows.map((row) => row.id).sort();
+
+    assert.deepEqual(ids(getAllSessions(fx.ctx, { open: true })), [b]);
+    assert.deepEqual(ids(getAllSessions(fx.ctx, { gameId: celeste })), [a, b].sort());
+    assert.deepEqual(
+      ids(getAllSessions(fx.ctx, { startedBetween: { from: at(hours(5)), to: at(hours(10)) } })),
+      [b],
+    );
+    assert.equal(countAllSessions(fx.ctx, { gameId: hades }), 1);
+    assert.equal(countAllSessions(fx.ctx, { open: true }), 1);
+    assert.equal(getAllSessions(fx.ctx).length, 3);
+  });
+
+  it('la más larga y la media se calculan en SQL solo sobre las cerradas', () => {
+    const gameId = seedGame(fx.ctx, { title: 'Celeste' });
+    const playthroughId = seedPlaythrough(fx.ctx, { gameId });
+    const session = (start: number, length: number | null): void => {
+      seedSession(fx.ctx, {
+        playthroughId,
+        startedAt: at(hours(start)),
+        endedAt: length === null ? null : at(hours(start + length)),
+      });
+    };
+    assert.deepEqual(getSessionDurationSummary(fx.ctx), { longestSec: 0, avgSec: 0 });
+    session(0, 1);
+    session(3, 3);
+    session(10, null);
+    assert.deepEqual(getSessionDurationSummary(fx.ctx, { gameId }), {
+      longestSec: 3 * 3600,
+      avgSec: 2 * 3600,
+    });
   });
 });

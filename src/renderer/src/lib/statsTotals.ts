@@ -1,5 +1,6 @@
-import { hoursByGameInYear } from '../../../shared/domain/hours';
-import type { GameListItem, SessionWithGame, SpendEventSummary } from '../../../shared/types';
+import { hoursByGameFromTrackedSeconds } from '../../../shared/domain/hours';
+import { trackedSecondsByGameInYear, type SessionStats } from '../../../shared/domain/sessionStats';
+import type { GameListItem, SpendEventSummary } from '../../../shared/types';
 import type { Year } from '../components/stats/YearPicker';
 import type { GameId } from '../../../shared/entityIds';
 
@@ -26,7 +27,7 @@ import type { GameId } from '../../../shared/entityIds';
 // manuales al que además le cuelgan sesiones aporta ambas.
 export const yearTotals = (
   games: GameListItem[],
-  sessions: SessionWithGame[],
+  sessions: Pick<SessionStats, 'gameYearSeconds'>,
   spendEvents: SpendEventSummary[],
   year: Year,
 ): {
@@ -36,16 +37,18 @@ export const yearTotals = (
   totalSpent: number;
   costPerHour: number | null;
 } => {
-  // Las horas de un año salen de la regla compartida (hoursByGameInYear), la
-  // misma que usa la portada del móvil en el Worker: aquí había una copia a
-  // mano. Sin zona horaria a propósito: el escritorio ya corre en el reloj del
+  // Las horas de un año salen de la regla compartida (hoursByGameInYear, que
+  // hoursByGameFromTrackedSeconds comparte con ella), la misma que usa la
+  // portada del móvil en el Worker: aquí había una copia a mano. Los segundos
+  // medidos de cada juego en el año los calcula el main (F-41) en vez de
+  // sumarse aquí sobre todas las sesiones. Sin zona horaria a propósito: el escritorio ya corre en el reloj del
   // que mira, y yearOf sin zona es exactamente el getFullYear() local de antes.
   const hoursByGame =
     year === 'all'
       ? new Map(games.map((game) => [game.id, game.totalHours]))
-      : hoursByGameInYear(
+      : hoursByGameFromTrackedSeconds(
           games.map((game) => game.id),
-          sessions,
+          trackedSecondsByGameInYear(sessions, year),
           new Map(games.map((game) => [game.id, game.manualIterations])),
           year,
         );

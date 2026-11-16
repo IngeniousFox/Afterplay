@@ -1,4 +1,4 @@
-import { monthKey, startOfDayMs } from './dateMath';
+import { monthKey, startOfDayMs } from '../dateMath';
 
 type ActivitySession = {
   startedAt: Date;

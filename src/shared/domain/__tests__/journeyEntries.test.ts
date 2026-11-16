@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { baseGame, baseSession, baseEvent, syntheticJourney } from './journeyFixtures';
 import { buildEntries, groupEntriesByYearMonth, type JourneyEntry } from '../journeyEntries';
-import type { GameId } from '../../../../shared/entityIds';
+import type { GameId } from '../../entityIds';
 
 // Una entrada del viaje con lo minimo: la agrupacion solo mira lastAt, el
 // resto viaja de paquete.
@@ -29,6 +29,8 @@ const entry = (key: string, lastAt: Date): JourneyEntry => ({
   lastPrecision: 'day',
   hours: 3,
   sessions: [],
+  iterationId: null,
+  month: null,
   note: null,
   state: null,
 });

@@ -19,6 +19,7 @@ export {
   getAllSessions,
   getPendingSessions,
   getSessionClosedInfo,
+  getSessionDurationSummary,
   type GetAllSessionsOptions,
 } from './read';
 export { resolvePlaythroughForSession, type ResolvedPlaythrough } from './resolvePlaythrough';

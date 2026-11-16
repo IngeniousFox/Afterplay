@@ -21,6 +21,7 @@ import { settingsApi } from './settings';
 import { sgdbApi } from './sgdb';
 import { spendApi } from './spend';
 import { stateEventsApi } from './stateEvents';
+import { statsApi } from './stats';
 import { syncApi } from './sync';
 import { windowApi } from './window';
 
@@ -34,6 +35,7 @@ export const api = {
   iterations: iterationsApi,
   sessions: sessionsApi,
   stateEvents: stateEventsApi,
+  stats: statsApi,
   spend: spendApi,
   igdb: igdbApi,
   external: externalApi,

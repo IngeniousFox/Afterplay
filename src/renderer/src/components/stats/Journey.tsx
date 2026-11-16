@@ -2,15 +2,11 @@ import { BookOpen, CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import type {
-  EventDatePrecision,
-  GameListItem,
-  GeneratedMemorySummary,
-  SessionWithGame,
-  StateEventSummary,
-} from '../../../../shared/types';
-import type { JourneyEntry } from '../../lib/journeyEntries';
-import { buildEntries, groupEntriesByYearMonth } from '../../lib/journeyEntries';
+import type { EventDatePrecision, GeneratedMemorySummary } from '../../../../shared/types';
+import type { JourneyEntrySummary } from '../../../../shared/domain/journeyEntries';
+import { groupEntriesByYearMonth, trailSessions } from '../../../../shared/domain/journeyEntries';
+import { useGameSessions } from '../../hooks/sessions';
+import { useJourneyEntries } from '../../hooks/stats';
 import { navigateJourney } from '../../lib/journeyNavigation';
 import { useMemories } from '../../hooks/memories';
 import { useImageSrc } from '../../hooks/useImageSrc';
@@ -182,9 +178,6 @@ const YearStory = ({
 );
 
 type JourneyProps = {
-  games: GameListItem[];
-  sessions: SessionWithGame[];
-  stateEvents: StateEventSummary[];
   onOpenGame: (gameId: GameId) => void;
 };
 
@@ -202,7 +195,7 @@ const shortDate = (date: Date, precision: EventDatePrecision): string => {
 // sí, es la primera vez que se dice), y colapsado a una sola fecha cuando los
 // dos extremos caen igual — un playthrough de una tarde no debe leerse como
 // "3 de marzo - 3 de marzo".
-const dateRange = (entry: JourneyEntry): string => {
+const dateRange = (entry: JourneyEntrySummary): string => {
   const formatJourneyDate = (date: Date, precision: EventDatePrecision): string => {
     if (precision === 'year') return String(date.getFullYear());
     if (precision === 'month') {
@@ -253,8 +246,14 @@ const iterationBadge = (label: string): string | null => {
 // El rastro de puntitos del panel: una bolita por sesión sobre una línea, con
 // su fecha y duración en el title. Cuenta de un vistazo si el playthrough fue
 // una sentada larga o goteo de meses.
-const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => {
-  if (entry.sessions.length === 0) {
+const SessionTrail = ({ entry }: { entry: JourneyEntrySummary }): React.JSX.Element => {
+  // Las sesiones sueltas no viajan con la entrada: se piden las de su juego al
+  // abrirse el panel (y quedan en caché para el siguiente). Entretanto sale la
+  // línea con sus fechas, y los puntitos aparecen al llegar.
+  const { data: gameSessions } = useGameSessions(entry.sessionCount > 0 ? entry.gameId : null);
+  const trail = useMemo(() => trailSessions(entry, gameSessions ?? []), [entry, gameSessions]);
+
+  if (entry.sessionCount === 0) {
     return (
       <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
         <span className="h-px flex-1 bg-white/[0.08]" />
@@ -264,8 +263,8 @@ const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => 
     );
   }
 
-  const first = entry.sessions[0].startedAt.getTime();
-  const last = entry.sessions.at(-1)?.startedAt.getTime() ?? first;
+  const first = trail[0]?.startedAt.getTime() ?? entry.firstAt.getTime();
+  const last = trail.at(-1)?.startedAt.getTime() ?? first;
   const span = Math.max(1, last - first);
   // Las bolitas van en su sitio REAL del tramo (dos tardes seguidas salen
   // pegadas, un regreso seis meses después sale al otro extremo). Pero si
@@ -278,10 +277,9 @@ const SessionTrail = ({ entry }: { entry: JourneyEntry }): React.JSX.Element => 
     <div className="mt-3">
       <div className="relative h-3">
         <div className="absolute top-1.25 right-0 left-0 h-px bg-white/[0.1]" />
-        {entry.sessions.map((session, index) => {
+        {trail.map((session, index) => {
           const temporalPosition = ((session.startedAt.getTime() - first) / span) * 100;
-          const evenPosition =
-            entry.sessions.length === 1 ? 50 : (index / (entry.sessions.length - 1)) * 100;
+          const evenPosition = trail.length === 1 ? 50 : (index / (trail.length - 1)) * 100;
           const left = first === last ? evenPosition : temporalPosition;
           return (
             <span
@@ -313,7 +311,7 @@ const HoverPanel = ({
   entry,
   anchor,
 }: {
-  entry: JourneyEntry;
+  entry: JourneyEntrySummary;
   anchor: DOMRect;
 }): React.JSX.Element => {
   const heroSrc = useImageSrc(entry.heroUrl, 'heroes');
@@ -394,7 +392,7 @@ const HoverPanel = ({
 
           <div className="flex gap-1.5">
             <JourneyStatTile color={GREEN} label="PLAYED" value={formatHours(entry.hours)} />
-            <JourneyStatTile color={BLUE} label="SESSIONS" value={String(entry.sessions.length)} />
+            <JourneyStatTile color={BLUE} label="SESSIONS" value={String(entry.sessionCount)} />
           </div>
 
           <SessionTrail entry={entry} />
@@ -418,7 +416,7 @@ const JourneyCover = ({
   entry,
   onOpen,
 }: {
-  entry: JourneyEntry;
+  entry: JourneyEntrySummary;
   onOpen: () => void;
 }): React.JSX.Element => {
   const coverSrc = useImageSrc(entry.coverUrl, 'covers');
@@ -516,7 +514,7 @@ const FeaturedEntry = ({
   entry,
   onOpen,
 }: {
-  entry: JourneyEntry;
+  entry: JourneyEntrySummary;
   onOpen: () => void;
 }): React.JSX.Element => {
   const heroSrc = useImageSrc(entry.heroUrl, 'heroes');
@@ -590,10 +588,10 @@ const FeaturedEntry = ({
               <Clock3 size={12.5} style={{ color: GREEN }} />
               {formatHours(entry.hours)}
             </span>
-            {entry.sessions.length > 0 && (
+            {entry.sessionCount > 0 && (
               <span className="flex items-center gap-1.5 text-[12px] font-semibold text-white/70 tabular-nums">
                 <CalendarRange size={12.5} style={{ color: BLUE }} />
-                {entry.sessions.length} {entry.sessions.length === 1 ? 'session' : 'sessions'}
+                {entry.sessionCount} {entry.sessionCount === 1 ? 'session' : 'sessions'}
               </span>
             )}
             {status && (
@@ -623,12 +621,10 @@ const FeaturedEntry = ({
 // La pantalla: línea temporal a la izquierda, índice de años y meses pegado a
 // la derecha. El índice se sincroniza con el scroll en los dos sentidos —
 // bajando se ilumina solo, y pulsando un año salta hasta él.
-export const Journey = ({
-  games,
-  sessions,
-  stateEvents,
+const JourneyLoaded = ({
+  entries,
   onOpenGame,
-}: JourneyProps): React.JSX.Element => {
+}: JourneyProps & { entries: JourneyEntrySummary[] }): React.JSX.Element => {
   // Los nodos del DOM de cada año y cada mes, para poder hacerles scroll y
   // para observarlos. En refs y no en estado: cambiarlos no repinta nada.
   const yearRefs = useRef(new Map<number, HTMLElement>());
@@ -648,10 +644,6 @@ export const Journey = ({
   );
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
-  const entries = useMemo(
-    () => buildEntries(games, sessions, stateEvents),
-    [games, sessions, stateEvents],
-  );
   // Los recaps del Loop (§4): el último por periodo, indexado por scope para
   // colgar cada uno de su mes/año sin recorrer la lista en cada bloque.
   const { data: memories = [] } = useMemories();
@@ -863,7 +855,7 @@ export const Journey = ({
     months.flatMap(([, monthEntries]) => monthEntries),
   );
   const totalHours = visibleEntries.reduce((sum, entry) => sum + entry.hours, 0);
-  const totalSessions = visibleEntries.reduce((sum, entry) => sum + entry.sessions.length, 0);
+  const totalSessions = visibleEntries.reduce((sum, entry) => sum + entry.sessionCount, 0);
   const gamesTouched = new Set(visibleEntries.map((entry) => entry.gameId)).size;
 
   if (visibleEntries.length === 0) {
@@ -1140,4 +1132,13 @@ export const Journey = ({
       </div>
     </div>
   );
+};
+
+// Las carátulas llegan ya cocinadas del main (F-41), sin las sesiones sueltas.
+// La pantalla solo se monta cuando han llegado: así arranca con todos sus meses
+// (como cuando las calculaba el renderer) y la navegación por scroll no se
+// encuentra con un archivo que crece a mitad de viaje.
+export const Journey = ({ onOpenGame }: JourneyProps): React.JSX.Element | null => {
+  const { data: entries } = useJourneyEntries();
+  return entries ? <JourneyLoaded entries={entries} onOpenGame={onOpenGame} /> : null;
 };

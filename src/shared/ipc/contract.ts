@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { DeviceInfo, GameInstallInfo } from '../devices';
+import type { JourneyEntrySummary } from '../domain/journeyEntries';
+import type { SessionStats } from '../domain/sessionStats';
 import type { ConcurrentPlaythrough, MergePlaythroughsOutcome } from '../playthroughMerge';
 import type { SyncStatus } from '../sync/status';
 import type { DataChanged } from './dataChanged';
@@ -44,6 +46,7 @@ import type {
   SessionClosedEvent,
   SessionUnlock,
   SessionWithGame,
+  SessionsPage,
   SgdbImages,
   SpendEvent,
   SpendEventSummary,
@@ -89,6 +92,8 @@ import {
   promotePlannedGameInput,
   restoreRequestInput,
   saveStorageProvider,
+  sessionsPageInput,
+  sessionsRangeInput,
   timeFormat,
   updateGamePatch,
   updateIterationPatch,
@@ -191,7 +196,11 @@ export const contract = {
   'iterations:merge': invoke(z.tuple([mergePlaythroughsRequest]), type<MergePlaythroughsOutcome>()),
 
   // ── sessions ─────────────────────────────────────────────────────────────
-  'sessions:getAll': invoke(none, type<SessionWithGame[]>()),
+  // Lecturas de sesiones acotadas (F-41): ninguna pantalla pide la lista entera.
+  'sessions:getOpen': invoke(none, type<SessionWithGame[]>()),
+  'sessions:getForGame': invoke(z.tuple([id]), type<SessionWithGame[]>()),
+  'sessions:getRange': invoke(z.tuple([sessionsRangeInput]), type<SessionWithGame[]>()),
+  'sessions:getPage': invoke(z.tuple([sessionsPageInput]), type<SessionsPage>()),
   'sessions:close': invoke(z.tuple([id, z.date()]), type<Session | null>()),
   'sessions:delete': invoke(z.tuple([id]), type<boolean>()),
   'sessions:startForGame': invoke(z.tuple([id]), type<Session | null>()),
@@ -200,6 +209,10 @@ export const contract = {
   'sessions:deletePending': invoke(z.tuple([id]), type<boolean>()),
   'sessions:setNote': invoke(z.tuple([id, text]), type<Session | null>()),
   'sessions:closed': event(type<SessionClosedEvent>()),
+
+  // ── estadísticas (§15.6): agregados calculados en el main ──────────────────
+  'stats:getSessionStats': invoke(none, type<SessionStats>()),
+  'stats:getJourney': invoke(none, type<JourneyEntrySummary[]>()),
 
   // ── stateEvents / spend ──────────────────────────────────────────────────
   'stateEvents:add': invoke(z.tuple([addStateEventInput]), type<StateEvent>()),

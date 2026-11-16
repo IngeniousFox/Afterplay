@@ -1,21 +1,94 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import type { PendingSession, Session, SessionWithGame } from '../../../shared/types';
+import type {
+  PendingSession,
+  Session,
+  SessionsPage,
+  SessionsRangeRequest,
+  SessionWithGame,
+} from '../../../shared/types';
 import { queryKeys } from './queryKeys';
 import type { GameId, SessionId } from '../../../shared/entityIds';
 
-// Bloque 5A — todas las sesiones de la biblioteca (para la vista de
-// Sesiones). Misma historia que useGames(): staleTime Infinity porque lo único
-// que la pone al día es el aviso 'data:changed' del main (mutaciones, watcher y
-// bajadas del sync; ver useDataChangedSync).
-export const sessionsQueryOptions = {
-  queryKey: queryKeys.sessions.all,
-  queryFn: () => window.api.sessions.getAll(),
+// Ninguna pantalla pide todas las sesiones de la biblioteca (F-41, §15.6): cada
+// una lee lo que pinta. Misma historia que useGames(): staleTime Infinity porque
+// lo único que las pone al día es el aviso 'data:changed' del main (mutaciones,
+// watcher y bajadas del sync; ver useDataChangedSync y domainQueryKeys).
+
+// Las sesiones abiertas ahora mismo, de todos los dispositivos (la tarjeta de
+// "Now playing"). Quien necesite separar la propia de las ajenas lo hace con el
+// dispositivo de cada sesión (§10.8).
+export const openSessionsQueryOptions = {
+  queryKey: queryKeys.sessions.open,
+  queryFn: () => window.api.sessions.getOpen(),
   staleTime: Infinity,
 };
 
-export const useSessions = (): UseQueryResult<SessionWithGame[], Error> =>
-  useQuery(sessionsQueryOptions);
+export const useOpenSessions = (): UseQueryResult<SessionWithGame[], Error> =>
+  useQuery(openSessionsQueryOptions);
+
+// Todas las sesiones de UN juego (más reciente primero, la abierta incluida):
+// el historial del overlay, las notas de la TV, las frases del modo ambiente.
+// Sin juego (`null`) no pide nada.
+export const useGameSessions = (gameId: GameId | null): UseQueryResult<SessionWithGame[], Error> =>
+  useQuery({
+    queryKey: queryKeys.sessions.game(gameId),
+    queryFn: () => window.api.sessions.getForGame(gameId as GameId),
+    enabled: gameId !== null,
+    staleTime: Infinity,
+  });
+
+// Las sesiones que ARRANCARON en `[from, to)`: lo que pintan un heatmap de un
+// año o el mes en curso. Sin rango (`null`) no pide nada. Los extremos van a la
+// clave en ms, así que dos Date iguales comparten consulta.
+export const useSessionsInRange = (
+  range: SessionsRangeRequest | null,
+): UseQueryResult<SessionWithGame[], Error> =>
+  useQuery({
+    queryKey: range
+      ? queryKeys.sessions.range(range.from, range.to)
+      : ([...queryKeys.sessions.all, 'range', 'none'] as const),
+    queryFn: () => window.api.sessions.getRange(range as SessionsRangeRequest),
+    enabled: range !== null,
+    staleTime: Infinity,
+  });
+
+// Las sesiones que necesita un heatmap de actividad (global o de la TV) para un
+// año o para "las últimas 52 semanas" ('all'): solo las de la ventana que pinta,
+// no toda la historia (F-41). El rango es un superconjunto de lo PINTADO a
+// propósito: el propio heatmap recorta por día (isPainted), así que aquí basta
+// con que no se quede corto.
+const EMPTY_SESSIONS: SessionWithGame[] = [];
+
+export const heatmapRange = (
+  year: 'all' | number,
+  today: Date = new Date(),
+): SessionsRangeRequest => {
+  if (year !== 'all') return { from: new Date(year, 0, 1), to: new Date(year + 1, 0, 1) };
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 52 * 7);
+  return { from: start, to: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1) };
+};
+
+export const useHeatmapSessions = (year: 'all' | number): SessionWithGame[] =>
+  useSessionsInRange(heatmapRange(year)).data ?? EMPTY_SESSIONS;
+
+// Una página de la vista de Sesiones, con el filtro de juego aplicado en el
+// main. La página anterior se conserva mientras llega la nueva (mismo filtro):
+// cambiar de página no vacía la lista.
+export const useSessionsPage = (
+  gameId: GameId | null,
+  page: number,
+  pageSize: number,
+): UseQueryResult<SessionsPage, Error> =>
+  useQuery({
+    queryKey: queryKeys.sessions.page(gameId, page, pageSize),
+    queryFn: () => window.api.sessions.getPage({ gameId, page, pageSize }),
+    staleTime: Infinity,
+    // Solo entre páginas del MISMO filtro: al cambiar de juego, la lista del
+    // anterior no se queda de relleno bajo un título que ya es otro.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === gameId ? previous : undefined,
+  });
 
 // EMULADORES.md §6 — la bandeja "Pending": sesiones de emulador sin asignar.
 // Su key vive bajo ['sessions'], así que el dominio 'sessions' de 'data:changed'

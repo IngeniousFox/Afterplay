@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { sessionActivity } from '../sessionActivity';
-import { hasMeasuredDuration } from '../sessionStats';
+import { hasMeasuredDuration } from '../sessionMeasure';
 import { baseSession } from './journeyFixtures';
 
 describe('sessionActivity', () => {

@@ -11,7 +11,7 @@ import type { SpendEventId } from '../../../shared/entityIds';
 
 // Bloque 5B — todos los gastos de la biblioteca (para Total Spent / Avg
 // Cost per Hour, con o sin filtro de año). Misma historia que useGames()/
-// useSessions(): staleTime Infinity, invalidada por las mutations de aquí.
+// useSessionStats(): staleTime Infinity, invalidada por las mutations de aquí.
 export const spendQueryOptions = {
   queryKey: queryKeys.spend.all,
   queryFn: () => window.api.spend.getAll(),

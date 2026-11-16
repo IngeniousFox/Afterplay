@@ -3,14 +3,13 @@ import { Flame } from 'lucide-react';
 import { type CSSProperties, useMemo } from 'react';
 import { AMBER } from '../../lib/colors';
 import { pluralize } from '../../lib/format';
-import { currentStreak, longestStreak, playedDayKeys } from '../../lib/streaks';
+import { playedDayKeysOf, type SessionStats } from '../../../../shared/domain/sessionStats';
+import { currentStreak, longestStreak } from '../../../../shared/domain/streaks';
 import { StatCard } from './StatCard';
 import type { Year } from './YearPicker';
 
-type StreakSession = { startedAt: Date; isManual: boolean };
-
 type StreakCardProps = {
-  sessions: StreakSession[];
+  stats: Pick<SessionStats, 'days'>;
   year: Year;
 };
 
@@ -18,8 +17,8 @@ type StreakCardProps = {
 // número grande es la racha ACTUAL (lo que está en juego ahora mismo) y,
 // filtrando por un año, la mejor racha de ese año. El aro no convierte la
 // racha en una meta: solo da escala comparándola con el récord personal.
-export const StreakCard = ({ sessions, year }: StreakCardProps): React.JSX.Element => {
-  const dayKeys = useMemo(() => playedDayKeys(sessions), [sessions]);
+export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element => {
+  const dayKeys = useMemo(() => playedDayKeysOf(stats), [stats]);
   const isAllTime = year === 'all';
   const mainValue = isAllTime ? currentStreak(dayKeys) : longestStreak(dayKeys, year);
   const longestEver = longestStreak(dayKeys);

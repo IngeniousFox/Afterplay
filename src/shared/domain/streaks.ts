@@ -5,8 +5,8 @@
 // concreto jugado. Hoy ya no se crea ninguna, pero las filas viejas siguen
 // ahí (ver isManual en schema.ts).
 
-import { addDays, DAY_MS, startOfDay } from './dateMath';
-import { isMeasuredSession } from './sessionStats';
+import { addDays, DAY_MS, startOfDay } from '../dateMath';
+import { isMeasuredSession } from './sessionMeasure';
 
 type StreakSession = { startedAt: Date; isManual: boolean };
 

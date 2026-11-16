@@ -75,7 +75,18 @@ export const hoursByGameInYear = <Id extends EntityIdLike>(
       (trackedSecondsByGame.get(session.gameId) ?? 0) + (session.durationSec ?? 0),
     );
   }
+  return hoursByGameFromTrackedSeconds(gameIds, trackedSecondsByGame, manualByGame, year);
+};
 
+// La segunda mitad de la regla, para quien ya tiene los segundos medidos del
+// año por juego (el resumen de sesiones que arma el main, sessionStats.ts):
+// la misma suma de horas medidas y manuales, sin pasar por las sesiones.
+export const hoursByGameFromTrackedSeconds = <Id extends EntityIdLike>(
+  gameIds: readonly GameId<Id>[],
+  trackedSecondsByGame: ReadonlyMap<GameId<Id>, number>,
+  manualByGame: ReadonlyMap<GameId<Id>, readonly YearManualHours[]>,
+  year: number,
+): Map<GameId<Id>, number> => {
   const hoursByGame = new Map<GameId<Id>, number>();
   for (const gameId of gameIds) {
     let manualHours = 0;

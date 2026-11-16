@@ -3,6 +3,7 @@ import { before, afterEach, beforeEach, describe, it } from 'node:test';
 import { count, markClean, rawRow } from '../../../__tests__/helpers';
 import { isStoreError } from '../../../store';
 import type { SpendEventSummary } from '../../../../../../shared/types';
+import { EMPTY_SESSION_STATS } from '../../../../../../shared/domain/sessionStats';
 import {
   T0,
   openQueryDb,
@@ -34,7 +35,7 @@ const UNKNOWN_ID = '0194c2f0-0000-7000-8000-000000000000';
 // programa de tsconfig.node.json.
 type YearTotals = (
   games: [],
-  sessions: [],
+  sessions: typeof EMPTY_SESSION_STATS,
   spendEvents: SpendEventSummary<string>[],
   year: number | 'all',
 ) => { totalSpent: number; costPerHour: number | null };
@@ -223,8 +224,8 @@ describe('getAllSpendEvents', () => {
       datePrecision: 'day',
     });
     const gastos = getAllSpendEvents(fx.ctx);
-    assert.equal(yearTotals([], [], gastos, 2026).totalSpent, 0);
-    assert.equal(yearTotals([], [], gastos, 2025).totalSpent, 20);
+    assert.equal(yearTotals([], EMPTY_SESSION_STATS, gastos, 2026).totalSpent, 0);
+    assert.equal(yearTotals([], EMPTY_SESSION_STATS, gastos, 2025).totalSpent, 20);
   });
 
   it('(yearTotals) un año con gasto y sin horas no tiene coste por hora: null', () => {
@@ -236,7 +237,7 @@ describe('getAllSpendEvents', () => {
       occurredAt: new Date('2025-11-20T12:00:00Z'),
       datePrecision: 'day',
     });
-    const cifras = yearTotals([], [], getAllSpendEvents(fx.ctx), 2025);
+    const cifras = yearTotals([], EMPTY_SESSION_STATS, getAllSpendEvents(fx.ctx), 2025);
     assert.equal(cifras.totalSpent, 60);
     assert.equal(cifras.costPerHour, null);
   });

@@ -1,4 +1,4 @@
-import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
+import type { GameListItem, SessionWithGame, StateEventSummary } from '../../types';
 
 export const baseGame = (overrides: Partial<GameListItem> = {}): GameListItem => ({
   id: '1',

@@ -26,7 +26,7 @@ import { SessionAchievements } from '../components/sessions/SessionAchievements'
 import type { SessionAchievementEntry } from '../components/sessions/SessionAchievements';
 import { SessionNote } from '../components/sessions/SessionNote';
 import { useGames } from '../hooks/games';
-import { useSessions, useSetSessionNote } from '../hooks/sessions';
+import { useGameSessions, useSetSessionNote } from '../hooks/sessions';
 import { useOverlayShortcut, useTimeFormat } from '../hooks/settings';
 import { queryKeys } from '../hooks/queryKeys';
 import { useDataChangedSync } from '../hooks/useDataChangedSync';
@@ -862,7 +862,6 @@ SessionRow.displayName = 'SessionRow';
 export const OverlayHud = (): React.JSX.Element | null => {
   const queryClient = useQueryClient();
   const { data: games = [] } = useGames();
-  const { data: sessions = [] } = useSessions();
   const { data: sessionUnlocks = [] } = useSessionUnlocks();
   const { data: shortcut = '' } = useOverlayShortcut();
   const { data: timeFormat = '24h' } = useTimeFormat();
@@ -893,6 +892,8 @@ export const OverlayHud = (): React.JSX.Element | null => {
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
   const live = games.find((game) => game.isLive) ?? null;
+  // Solo las sesiones del juego en marcha (F-41): el HUD no necesita las demás.
+  const { data: sessions = [] } = useGameSessions(live?.id ?? null);
   // null con nada en vivo: no se pide nada (catálogo vacío inofensivo), y el
   // orden de hooks queda estable (no se puede llamar condicionalmente).
   const { data: achievements } = useGameAchievements(live?.id ?? null);

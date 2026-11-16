@@ -11,7 +11,7 @@
 // tests calculan sus fechas relativas a esa misma hora real.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { addDays, startOfDay } from '../dateMath';
+import { addDays, startOfDay } from '../../dateMath';
 import { currentStreak, longestStreak, playedDayKeys } from '../streaks';
 
 describe('playedDayKeys', () => {

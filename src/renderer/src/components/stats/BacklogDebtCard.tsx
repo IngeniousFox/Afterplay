@@ -1,6 +1,7 @@
 import { cn } from '../../lib/utils';
 import { Hourglass, Info, TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { PACE_WINDOW_DAYS, type SessionStats } from '../../../../shared/domain/sessionStats';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { BLUE, GRAY, GREEN, VIOLET } from '../../lib/colors';
 import { DAY_MS } from '../../lib/dateMath';
@@ -8,8 +9,6 @@ import { formatHours, pluralize } from '../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { StatCard } from './StatCard';
 import type { GameId } from '../../../../shared/entityIds';
-
-type BacklogSession = { startedAt: Date; durationSec: number | null };
 
 // Dos preguntas distintas según el filtro de año, igual que StatusBreakdown:
 // "All Time" es un BALANCE (cuánto debes ahora mismo y cuánto tardarías), y
@@ -22,7 +21,8 @@ type BacklogDebtCardProps =
       mode: 'all-time';
       games: GameListItem[];
       plannedGames: GameListItem[];
-      sessions: BacklogSession[];
+      // El ritmo reciente, ya calculado por el main (F-41).
+      pace: SessionStats['pace'];
     }
   | {
       mode: 'year';
@@ -34,8 +34,8 @@ type BacklogDebtCardProps =
 
 // Ventana para calcular el ritmo. El histórico completo miente cuando tu vida
 // cambia: si llevas un año jugando la mitad, "a tu ritmo" tiene que ser el
-// ritmo de AHORA, no el de cuando tenías más tiempo libre.
-const PACE_WINDOW_DAYS = 90;
+// ritmo de AHORA, no el de cuando tenías más tiempo libre. La ventana
+// (PACE_WINDOW_DAYS) es la que usa el main para sumar los segundos recientes.
 
 // Pero la ventana se RECORTA a cuándo empezaste a trackear de verdad. Sin
 // esto, quien lleva 9 días con la app dividía sus horas entre 90 días y le
@@ -75,7 +75,7 @@ type BacklogStats = {
 const computeBacklog = (
   games: GameListItem[],
   plannedGames: GameListItem[],
-  sessions: BacklogSession[],
+  pace: SessionStats['pace'],
   now: number,
 ): BacklogStats => {
   // Unplayed = en la biblioteca y sin ningún estado real todavía
@@ -100,22 +100,13 @@ const computeBacklog = (
   // tramo de esa ventana que de verdad está cubierto por el tracking (desde
   // la primera sesión registrada, si es posterior).
   const windowStart = now - PACE_WINDOW_DAYS * DAY_MS;
-  const firstSessionAt = sessions.reduce<number | null>(
-    (earliest, session) =>
-      earliest === null || session.startedAt.getTime() < earliest
-        ? session.startedAt.getTime()
-        : earliest,
-    null,
-  );
+  const firstSessionAt = pace.firstSessionAt;
   const paceStart = firstSessionAt === null ? null : Math.max(windowStart, firstSessionAt);
   const trackedDays = paceStart === null ? 0 : (now - paceStart) / DAY_MS;
 
-  const recentSeconds =
-    paceStart === null
-      ? 0
-      : sessions
-          .filter((session) => session.startedAt.getTime() >= paceStart)
-          .reduce((sum, session) => sum + (session.durationSec ?? 0), 0);
+  // Las sesiones que arrancaron desde el inicio de la ventana: si la primera
+  // es posterior, son todas, y si no, son las de los últimos 90 días.
+  const recentSeconds = paceStart === null ? 0 : pace.recentSeconds;
   // Con menos de una semana medida, cualquier cifra por semana es ruido: un
   // fin de semana intenso daría "40 h/semana" y un plazo de fantasía.
   const hoursPerWeek =
@@ -460,10 +451,10 @@ const MovementSide = ({
 const BalanceCard = ({
   games,
   plannedGames,
-  sessions,
+  pace,
   now,
 }: Extract<BacklogDebtCardProps, { mode: 'all-time' }> & { now: number }): React.JSX.Element => {
-  const stats = computeBacklog(games, plannedGames, sessions, now);
+  const stats = computeBacklog(games, plannedGames, pace, now);
   const halfwayDate = stats.weeks !== null ? new Date(now + (stats.weeks / 2) * 7 * DAY_MS) : null;
 
   return (

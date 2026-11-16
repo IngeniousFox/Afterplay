@@ -224,8 +224,19 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     const { window: page } = afterplay;
     const FIRST_LIGHT = idOf(afterplay, 'FIRST_LIGHT');
 
-    const sessionsBefore = await page.evaluate(() => globalThis.api.sessions.getAll());
-    const ownSessionsBefore = sessionsBefore.filter((session) => session.gameId === FIRST_LIGHT);
+    // No existe "todas las sesiones" (F-41): el total de la biblioteca sale de
+    // la página, y las de un juego de su propia lectura.
+    const totalSessions = async (): Promise<number> =>
+      (
+        await page.evaluate(() =>
+          globalThis.api.sessions.getPage({ gameId: null, page: 1, pageSize: 1 }),
+        )
+      ).total;
+    const sessionsBefore = await totalSessions();
+    const ownSessionsBefore = await page.evaluate(
+      (id) => globalThis.api.sessions.getForGame(id),
+      FIRST_LIGHT,
+    );
     // 007 First Light trae 6 sesiones medidas en el sembrado — si esto diera
     // 0 el test estaria comprobando que "nada" se borra, que no prueba nada.
     expect(ownSessionsBefore.length).toBeGreaterThan(0);
@@ -239,9 +250,12 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     // Ni una sesion del juego borrado sigue viva — y las de los DEMAS juegos
     // del sandbox tampoco desaparecieron por el camino: la lapida del juego
     // arrastra solo lo suyo (deleteGame en la 2.0), no un borrado a lo bruto.
-    const sessionsAfter = await page.evaluate(() => globalThis.api.sessions.getAll());
-    expect(sessionsAfter.some((session) => session.gameId === FIRST_LIGHT)).toBe(false);
-    expect(sessionsAfter).toHaveLength(sessionsBefore.length - ownSessionsBefore.length);
+    const ownSessionsAfter = await page.evaluate(
+      (id) => globalThis.api.sessions.getForGame(id),
+      FIRST_LIGHT,
+    );
+    expect(ownSessionsAfter).toHaveLength(0);
+    expect(await totalSessions()).toBe(sessionsBefore - ownSessionsBefore.length);
 
     const eventsAfter = await page.evaluate(() => globalThis.api.stateEvents.getAll());
     expect(eventsAfter.some((event) => event.gameId === FIRST_LIGHT)).toBe(false);
@@ -287,11 +301,11 @@ test.describe('logica de negocio (e2e, driver de produccion)', () => {
     const { window: page } = afterplay;
     const FIRST_LIGHT = idOf(afterplay, 'FIRST_LIGHT');
 
-    const sessions = await page.evaluate(() => globalThis.api.sessions.getAll());
-    const target = mustFind(
-      sessions.find((session) => session.gameId === FIRST_LIGHT),
-      '007 First Light deberia tener sesiones sembradas',
+    const sessions = await page.evaluate(
+      (id) => globalThis.api.sessions.getForGame(id),
+      FIRST_LIGHT,
     );
+    const target = mustFind(sessions[0], '007 First Light deberia tener sesiones sembradas');
 
     const withNote = await page.evaluate(
       ({ id, note }) => globalThis.api.sessions.setNote(id, note),

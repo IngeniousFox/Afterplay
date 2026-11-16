@@ -38,7 +38,8 @@ import type { Year } from '../components/stats/YearPicker';
 import { YearPicker } from '../components/stats/YearPicker';
 import { GameCover } from '../components/GameCover';
 import { useGames, usePlannedGames } from '../hooks/games';
-import { useSessions } from '../hooks/sessions';
+import { useHeatmapSessions } from '../hooks/sessions';
+import { useSessionStats } from '../hooks/stats';
 import { useSpendEvents } from '../hooks/spend';
 import { useStateEvents } from '../hooks/stateEvents';
 import { useCountUp } from '../hooks/useCountUp';
@@ -47,8 +48,7 @@ import { AMBER, BLUE, GREEN, VIOLET } from '../lib/colors';
 import { yearsDesc } from '../lib/dateMath';
 import { formatHours, formatMoney } from '../lib/format';
 import { mapGenreToAxis } from '../lib/genreAxes';
-import { hasMeasuredDuration } from '../lib/sessionStats';
-import { sessionActivity } from '../lib/sessionActivity';
+import { EMPTY_SESSION_STATS, recordsFor } from '../../../shared/domain/sessionStats';
 import { yearTotals } from '../lib/statsTotals';
 import { revealClass, revealStyle } from '../lib/styles';
 import { GameStats } from './GameStats';
@@ -581,7 +581,10 @@ export const Stats = (): React.JSX.Element => {
   // Solo para la línea "Plan to play" del Backlog flow — el resto de Stats
   // sigue siendo territorio exclusivo de la biblioteca real.
   const { data: plannedGames = [] } = usePlannedGames();
-  const { data: sessions = [] } = useSessions();
+  // Ninguna sesión suelta (F-41): los agregados los calcula el main, y el
+  // heatmap pide solo las de su ventana.
+  const { data: sessionStats = EMPTY_SESSION_STATS } = useSessionStats();
+  const heatmapSessions = useHeatmapSessions(selectedYear);
   const { data: spendEvents = [] } = useSpendEvents();
   const { data: stateEvents = [] } = useStateEvents();
 
@@ -592,7 +595,7 @@ export const Stats = (): React.JSX.Element => {
   const years = useMemo(
     () =>
       yearsDesc([
-        ...sessions.map((session) => session.startedAt),
+        ...sessionStats.years.map((year) => new Date(year, 6, 1)),
         ...spendEvents.map((event) => event.occurredAt),
         ...stateEvents.map((event) => event.occurredAt),
         ...games.flatMap((game) =>
@@ -601,7 +604,7 @@ export const Stats = (): React.JSX.Element => {
           ),
         ),
       ]),
-    [sessions, spendEvents, stateEvents, games],
+    [sessionStats, spendEvents, stateEvents, games],
   );
   // Las 4 métricas de cabecera + su base de horas por juego, para el año
   // elegido. Las mismas cifras se calculan otra vez para el año ANTERIOR
@@ -609,8 +612,8 @@ export const Stats = (): React.JSX.Element => {
   // gemelos evita lo de siempre: arreglar la regla de horas en uno y dejar el
   // otro con la vieja.
   const stats = useMemo(
-    () => yearTotals(games, sessions, spendEvents, selectedYear),
-    [games, sessions, spendEvents, selectedYear],
+    () => yearTotals(games, sessionStats, spendEvents, selectedYear),
+    [games, sessionStats, spendEvents, selectedYear],
   );
   const { hoursByGame, totalGames, totalHours, totalSpent, costPerHour } = stats;
 
@@ -621,8 +624,9 @@ export const Stats = (): React.JSX.Element => {
   // filtrado: "All Time" no tiene un "año pasado" contra el que compararse.
   const previousYear = selectedYear === 'all' ? null : selectedYear - 1;
   const previousYearStats = useMemo(
-    () => (previousYear === null ? null : yearTotals(games, sessions, spendEvents, previousYear)),
-    [previousYear, games, sessions, spendEvents],
+    () =>
+      previousYear === null ? null : yearTotals(games, sessionStats, spendEvents, previousYear),
+    [previousYear, games, sessionStats, spendEvents],
   );
 
   // Solo se enseña si ese año anterior tiene ALGUNA actividad registrada —
@@ -663,12 +667,7 @@ export const Stats = (): React.JSX.Element => {
   }, [games, playedEntries]);
 
   const archiveRecords = useMemo<StatsRecord[]>(() => {
-    const measured = sessions.filter(
-      (session) =>
-        hasMeasuredDuration(session) &&
-        (selectedYear === 'all' || session.startedAt.getFullYear() === selectedYear),
-    );
-    const { longest, biggestDay, busiestMonth } = sessionActivity(measured);
+    const { longest, biggestDay, busiestMonth } = recordsFor(sessionStats, selectedYear);
     const peakDay = biggestDay ? [biggestDay.dayMs, biggestDay.seconds] : null;
     const peakMonth = busiestMonth ? [busiestMonth.monthKey, busiestMonth.seconds] : null;
     const peakMonthDate = peakMonth
@@ -729,7 +728,7 @@ export const Stats = (): React.JSX.Element => {
         accent: VIOLET,
       },
     ];
-  }, [selectedYear, sessions, stateEvents]);
+  }, [selectedYear, sessionStats, stateEvents]);
 
   // Donut de edad de juegos — misma base year-aware (hoursByGame) que
   // Most/Top Played y Genre Radar.
@@ -865,12 +864,7 @@ export const Stats = (): React.JSX.Element => {
         </header>
 
         {view === 'journey' ? (
-          <Journey
-            games={games}
-            sessions={sessions}
-            stateEvents={stateEvents}
-            onOpenGame={(gameId) => navigate(`/games/${gameId}`)}
-          />
+          <Journey onOpenGame={(gameId) => navigate(`/games/${gameId}`)} />
         ) : (
           <>
             <div className={revealClass} style={revealStyle(0)}>
@@ -904,15 +898,15 @@ export const Stats = (): React.JSX.Element => {
               description="Days, months and habits — the rhythm underneath the totals."
             />
             <div className={revealClass} style={revealStyle(2)}>
-              <ActivityHeatmap sessions={sessions} year={selectedYear} />
+              <ActivityHeatmap sessions={heatmapSessions} year={selectedYear} />
             </div>
 
             <div
               className={`afterplay-stats-split mt-4.5 grid grid-cols-[1.3fr_1fr] gap-4.5 [@media(max-width:_1040px)]:grid-cols-1 ${revealClass}`}
               style={revealStyle(3)}
             >
-              <HoursByMonthChart sessions={sessions} year={selectedYear} />
-              <StreakCard sessions={sessions} year={selectedYear} />
+              <HoursByMonthChart stats={sessionStats} year={selectedYear} />
+              <StreakCard stats={sessionStats} year={selectedYear} />
             </div>
 
             <div
@@ -920,7 +914,7 @@ export const Stats = (): React.JSX.Element => {
               style={revealStyle(4)}
             >
               <SpendByMonthChart spendEvents={spendEvents} year={selectedYear} />
-              <WhenDoYouPlayChart sessions={sessions} year={selectedYear} />
+              <WhenDoYouPlayChart stats={sessionStats} year={selectedYear} />
             </div>
 
             <StatsChapterHeading
@@ -986,11 +980,11 @@ export const Stats = (): React.JSX.Element => {
               <HltbCompareList
                 games={games}
                 stateEvents={stateEvents}
-                sessions={sessions}
+                stats={sessionStats}
                 year={selectedYear}
                 onOpenGame={(gameId) => navigate(`/games/${gameId}`)}
               />
-              <SessionLengthHistogram sessions={sessions} year={selectedYear} variant="overview" />
+              <SessionLengthHistogram stats={sessionStats} year={selectedYear} variant="overview" />
             </div>
 
             <StatsChapterHeading
@@ -1015,7 +1009,7 @@ export const Stats = (): React.JSX.Element => {
                   mode="all-time"
                   games={games}
                   plannedGames={plannedGames}
-                  sessions={sessions}
+                  pace={sessionStats.pace}
                 />
               ) : (
                 <BacklogDebtCard

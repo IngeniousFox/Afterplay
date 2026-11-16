@@ -3,7 +3,7 @@ import { Moon, Sun, Sunrise, Sunset } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { type CSSProperties, useState } from 'react';
 import { formatHours } from '../../lib/format';
-import { hasMeasuredDuration } from '../../lib/sessionStats';
+import { hasMeasuredDuration } from '../../../../shared/domain/sessionMeasure';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 

@@ -8,13 +8,9 @@ import type {
   GameListItem,
   SessionWithGame,
   StateEventSummary,
-} from '../../../shared/types';
-import {
-  isAddedAtArtifact,
-  latestRealStateEvent,
-  manualHoursAnchor,
-} from '../../../shared/playthroughState';
-import type { GameId, IterationId } from '../../../shared/entityIds';
+} from '../types';
+import { isAddedAtArtifact, latestRealStateEvent, manualHoursAnchor } from '../playthroughState';
+import type { GameId, IterationId } from '../entityIds';
 
 export type JourneySession = Pick<
   SessionWithGame,
@@ -47,6 +43,11 @@ export type JourneyEntry = {
   lastPrecision: EventDatePrecision;
   hours: number;
   sessions: JourneySession[];
+  // A qué se refiere la entrada, para pedir sus sesiones aparte (ver
+  // JourneyEntrySummary): el playthrough de una entrada normal, o el mes
+  // (año y mes de 0 a 11) de uno de los tramos de un endless.
+  iterationId: IterationId | null;
+  month: { year: number; month: number } | null;
   // La última nota de sesión con texto — "dónde lo dejé", la frase que
   // convierte una carátula en un recuerdo.
   note: string | null;
@@ -99,17 +100,17 @@ const meaningfulEvents = (events: StateEventSummary[], game: GameListItem): Stat
 // porque estaba escrito dos veces y solo una de las dos cortaba los AÑOS: el
 // Journey de escritorio abría la línea temporal con un capítulo "2027" entero
 // que en el modo TV no existía. Quien pinta ordena y decide el resto.
-export const groupEntriesByYearMonth = (
-  entries: JourneyEntry[],
+export const groupEntriesByYearMonth = <T extends { lastAt: Date }>(
+  entries: T[],
   now: Date = new Date(),
-): Map<number, Map<number, JourneyEntry[]>> => {
-  const grouped = new Map<number, Map<number, JourneyEntry[]>>();
+): Map<number, Map<number, T[]>> => {
+  const grouped = new Map<number, Map<number, T[]>>();
   for (const entry of entries) {
     const year = entry.lastAt.getFullYear();
     const month = entry.lastAt.getMonth();
     if (year > now.getFullYear()) continue;
     if (year === now.getFullYear() && month > now.getMonth()) continue;
-    const months = grouped.get(year) ?? new Map<number, JourneyEntry[]>();
+    const months = grouped.get(year) ?? new Map<number, T[]>();
     const monthEntries = months.get(month) ?? [];
     monthEntries.push(entry);
     months.set(month, monthEntries);
@@ -192,6 +193,8 @@ export const buildEntries = (
     totalHours,
     fallbackAt,
     state,
+    iterationId,
+    month,
   }: {
     key: string;
     game: GameListItem;
@@ -202,6 +205,8 @@ export const buildEntries = (
     totalHours?: number;
     fallbackAt?: Date | null;
     state: StateEventSummary['type'] | null;
+    iterationId: IterationId | null;
+    month: { year: number; month: number } | null;
   }): JourneyEntry | null => {
     const relevantEvents = meaningfulEvents(allEvents, game);
     if (
@@ -261,7 +266,15 @@ export const buildEntries = (
     // La nota MÁS RECIENTE con texto, no la primera: "dónde lo dejé" es por
     // definición lo último que escribiste, y las sesiones sin nota se saltan
     // en vez de dejar la entrada muda.
-    const note = sortedSessions.findLast((session) => session.note?.trim())?.note?.trim();
+    // (Recorrido hacia atrás a mano: `findLast` es ES2023 y esta lib también la
+    // compila el Worker, que no la tiene.)
+    let note: string | undefined;
+    for (let index = sortedSessions.length - 1; index >= 0; index--) {
+      if (sortedSessions[index].note?.trim()) {
+        note = sortedSessions[index].note?.trim();
+        break;
+      }
+    }
     const trackedSeconds = allSessions.reduce(
       (sum, session) => sum + (session.durationSec ?? 0),
       0,
@@ -281,6 +294,8 @@ export const buildEntries = (
       lastPrecision: last.precision,
       hours: totalHours ?? manualHours + trackedSeconds / 3600,
       sessions: sortedSessions,
+      iterationId,
+      month,
       note: note ?? null,
       state,
     };
@@ -365,6 +380,8 @@ export const buildEntries = (
         manualHours: bucket.manualHours + (bucket === sortedBuckets[0]?.[1] ? unallocatedHours : 0),
         fallbackAt: bucket.at,
         state: game.currentState,
+        iterationId: null,
+        month: { year: bucket.at.getFullYear(), month: bucket.at.getMonth() },
       });
       if (entry) entries.push(entry);
     }
@@ -397,6 +414,8 @@ export const buildEntries = (
       manualHours: manual?.hours ?? 0,
       fallbackAt: manual?.year ? new Date(manual.year, 6, 1) : game.lastPlayedAt,
       state: latestRealStateEvent(allEvents)?.type ?? null,
+      iterationId,
+      month: null,
     });
     if (entry) entries.push(entry);
   }
@@ -405,3 +424,32 @@ export const buildEntries = (
   // estás ahora y bajando hacia atrás.
   return entries.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
 };
+
+// La entrada SIN sus sesiones, que es lo que viaja del main a las pantallas
+// (F-41): el Journey pinta carátulas, fechas, horas y la última nota, y solo
+// el rastro de puntitos del panel flotante necesita las sesiones sueltas, que
+// se piden por juego al pasar el ratón (trailSessions). `sessionCount` es lo
+// único que de ellas se lee siempre (el contador y "Manually logged").
+export type JourneyEntrySummary = Omit<JourneyEntry, 'sessions'> & { sessionCount: number };
+
+export const summarizeEntry = ({ sessions, ...entry }: JourneyEntry): JourneyEntrySummary => ({
+  ...entry,
+  sessionCount: sessions.length,
+});
+
+// Las sesiones del rastro de una entrada, de vieja a nueva, a partir de las de
+// su juego (en el orden de siempre, de nueva a vieja). Es el mismo reparto que
+// hace buildEntries: un playthrough se queda con las suyas y un tramo de
+// endless con las que arrancaron ese mes.
+export const trailSessions = <T extends JourneySession & { iterationId: IterationId }>(
+  entry: Pick<JourneyEntrySummary, 'iterationId' | 'month'>,
+  gameSessions: readonly T[],
+): T[] =>
+  gameSessions
+    .filter((session) =>
+      entry.month
+        ? session.startedAt.getFullYear() === entry.month.year &&
+          session.startedAt.getMonth() === entry.month.month
+        : session.iterationId === entry.iterationId,
+    )
+    .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
