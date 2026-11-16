@@ -1,20 +1,20 @@
-import { ipcMain } from 'electron';
+import { handle } from './contractHandlers';
 import { getCollectionGames, getGameDetails, searchGames } from '../igdb/api';
 import { searchSteamStore } from '../steam/store';
 
 export const registerIgdbHandlers = (): void => {
-  ipcMain.handle('igdb:search', async (_event, query: string) => {
+  handle('igdb:search', async (_event, query: string) => {
     return searchGames(query);
   });
 
-  ipcMain.handle('igdb:getById', async (_event, igdbId: number) => {
+  handle('igdb:getById', async (_event, igdbId: number) => {
     return getGameDetails(igdbId);
   });
 
   // Los juegos de una saga (PLAN-TO-PLAY.md §3.5) — bajo demanda al abrir la
   // ficha, con caché TTL en memoria y SIN tabla: es dato decorativo y volátil.
   // Sin conexión, esto falla y la sección simplemente no se pinta.
-  ipcMain.handle('igdb:collectionGames', async (_event, collectionIds: number[]) => {
+  handle('igdb:collectionGames', async (_event, collectionIds: number[]) => {
     return getCollectionGames(collectionIds);
   });
 
@@ -22,7 +22,7 @@ export const registerIgdbHandlers = (): void => {
   // todavía no tiene (ver steam/store.ts). Vive en este mismo registro y no
   // en uno de Steam porque para el renderer es LA MISMA pregunta —"¿qué
   // juegos se llaman así?"— solo que a otro catálogo.
-  ipcMain.handle('igdb:searchSteam', async (_event, query: string) => {
+  handle('igdb:searchSteam', async (_event, query: string) => {
     return searchSteamStore(query);
   });
 

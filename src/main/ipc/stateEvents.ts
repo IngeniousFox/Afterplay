@@ -1,4 +1,4 @@
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import type { AddStateEventInput, UpdateStateEventPatch } from '../../shared/types';
 import { appCtx } from '../db/v2/appDb';
 import {
@@ -10,19 +10,19 @@ import {
 import type { StateEventId } from '../../shared/entityIds';
 
 export const registerStateEventsHandlers = (): void => {
-  handleDb('stateEvents:add', async (_event, input: AddStateEventInput) => {
+  handle('stateEvents:add', async (_event, input: AddStateEventInput) => {
     return addStateEvent(appCtx(), input);
   });
 
-  handleDb('stateEvents:getAll', async () => {
+  handle('stateEvents:getAll', async () => {
     return getAllStateEvents(appCtx());
   });
 
-  handleDb('stateEvents:update', async (_event, id: StateEventId, patch: UpdateStateEventPatch) => {
+  handle('stateEvents:update', async (_event, id: StateEventId, patch: UpdateStateEventPatch) => {
     return updateStateEvent(appCtx(), id, patch);
   });
 
-  handleDb('stateEvents:delete', async (_event, id: StateEventId) => {
+  handle('stateEvents:delete', async (_event, id: StateEventId) => {
     return deleteStateEvent(appCtx(), id);
   });
 };

@@ -1,4 +1,4 @@
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import type { AddSpendEventInput, UpdateSpendEventPatch } from '../../shared/types';
 import { appCtx } from '../db/v2/appDb';
 import {
@@ -10,19 +10,19 @@ import {
 import type { SpendEventId } from '../../shared/entityIds';
 
 export const registerSpendHandlers = (): void => {
-  handleDb('spend:add', async (_event, input: AddSpendEventInput) => {
+  handle('spend:add', async (_event, input: AddSpendEventInput) => {
     return addSpendEvent(appCtx(), input);
   });
 
-  handleDb('spend:getAll', async () => {
+  handle('spend:getAll', async () => {
     return getAllSpendEvents(appCtx());
   });
 
-  handleDb('spend:delete', async (_event, id: SpendEventId) => {
+  handle('spend:delete', async (_event, id: SpendEventId) => {
     return deleteSpendEvent(appCtx(), id);
   });
 
-  handleDb('spend:update', async (_event, id: SpendEventId, patch: UpdateSpendEventPatch) => {
+  handle('spend:update', async (_event, id: SpendEventId, patch: UpdateSpendEventPatch) => {
     return updateSpendEvent(appCtx(), id, patch);
   });
 };

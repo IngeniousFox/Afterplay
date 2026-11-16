@@ -1,3 +1,4 @@
+import { emit } from '../ipc/contractHandlers';
 import { is } from '@electron-toolkit/utils';
 import { BrowserWindow, shell } from 'electron';
 import { join } from 'path';
@@ -256,11 +257,11 @@ export function createWindow(): void {
   });
 
   window.on('maximize', () => {
-    window.webContents.send('window:maximized-change', true);
+    emit(window.webContents, 'window:maximized-change', true);
   });
 
   window.on('unmaximize', () => {
-    window.webContents.send('window:maximized-change', false);
+    emit(window.webContents, 'window:maximized-change', false);
   });
 
   // F11 (o el menú por defecto de Electron, que ya lo trae aunque no se
@@ -269,11 +270,11 @@ export function createWindow(): void {
   // chrome del sistema, así que sin este aviso se quedaba flotando encima de
   // un fullscreen que se suponía sin nada alrededor.
   window.on('enter-full-screen', () => {
-    window.webContents.send('window:fullscreen-change', true);
+    emit(window.webContents, 'window:fullscreen-change', true);
   });
 
   window.on('leave-full-screen', () => {
-    window.webContents.send('window:fullscreen-change', false);
+    emit(window.webContents, 'window:fullscreen-change', false);
   });
 
   // El modo ambiente no debe encenderse si no hay nadie delante de la
@@ -294,7 +295,7 @@ export function createWindow(): void {
   // el modo ambiente encendiéndose de fondo con la app minimizada. Del eje
   // que NO cambia en el evento sí se puede preguntar: ese no está en vuelo.
   const sendVisibility = (visible: boolean): void => {
-    window.webContents.send('window:visible-change', visible);
+    emit(window.webContents, 'window:visible-change', visible);
   };
   window.on('minimize', () => sendVisibility(false));
   window.on('hide', () => sendVisibility(false));

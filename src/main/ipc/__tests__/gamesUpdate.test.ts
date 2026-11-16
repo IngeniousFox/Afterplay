@@ -37,9 +37,9 @@ mock.module('electron', {
   },
 });
 
-mock.module('../dbHandle', {
+mock.module('../contractHandlers', {
   namedExports: {
-    handleDb: (channel: string, handler: Handler): void => {
+    handle: (channel: string, handler: Handler): void => {
       handlers.set(channel, handler);
     },
   },

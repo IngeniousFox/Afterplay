@@ -32,9 +32,9 @@ mock.module('electron', {
     shell: { openPath: async (): Promise<string> => '' },
   },
 });
-mock.module('../dbHandle', {
+mock.module('../contractHandlers', {
   namedExports: {
-    handleDb: (channel: string, handler: Handler): void => {
+    handle: (channel: string, handler: Handler): void => {
       handlers.set(channel, handler);
     },
   },

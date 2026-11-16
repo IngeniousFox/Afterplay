@@ -1,4 +1,5 @@
-import { app, ipcMain } from 'electron';
+import { app } from 'electron';
+import { emit, handle } from './contractHandlers';
 import {
   exportCredentialsTo,
   getCredentials,
@@ -48,12 +49,12 @@ const applyCredentialsChange = (): void => {
 const hasIndexedBackups = async (): Promise<boolean> => hasIndexedSaveBackups(appCtx());
 
 export const registerSettingsHandlers = (): void => {
-  ipcMain.handle(
+  handle(
     'settings:getOpenAtLogin',
     () => app.getLoginItemSettings(loginItemQueryOptions).openAtLogin,
   );
 
-  ipcMain.handle('settings:setOpenAtLogin', (_event, enabled: boolean) => {
+  handle('settings:setOpenAtLogin', (_event, enabled: boolean) => {
     // Lo ÚNICO de la app que escribe fuera de la carpeta de datos (el
     // registro de Windows), así que es lo único que el sandbox de e2e.ts no
     // puede aislar por sí solo: aquí se corta. Un test puede pulsar el
@@ -71,16 +72,16 @@ export const registerSettingsHandlers = (): void => {
 
   // Formato de hora (12h/24h) — preferencia de la app, no del sistema
   // operativo: se persiste en config/store.ts, no en el registro.
-  ipcMain.handle('settings:getTimeFormat', () => getConfigValue('timeFormat'));
+  handle('settings:getTimeFormat', () => getConfigValue('timeFormat'));
 
-  ipcMain.handle('settings:setTimeFormat', (_event, format: TimeFormat) => {
+  handle('settings:setTimeFormat', (_event, format: TimeFormat) => {
     setConfigValue('timeFormat', format);
   });
 
   // Modo ambiente: minutos sin tocar la app antes de que entre, 0 = apagado.
-  ipcMain.handle('settings:getAmbientIdleMinutes', () => getConfigValue('ambientIdleMinutes'));
+  handle('settings:getAmbientIdleMinutes', () => getConfigValue('ambientIdleMinutes'));
 
-  ipcMain.handle('settings:setAmbientIdleMinutes', (_event, minutes: number) => {
+  handle('settings:setAmbientIdleMinutes', (_event, minutes: number) => {
     setConfigValue('ambientIdleMinutes', minutes);
   });
 
@@ -88,51 +89,51 @@ export const registerSettingsHandlers = (): void => {
   // avisan al módulo del overlay para que registre/suelte el atajo EN
   // CALIENTE — con un juego corriendo, cambiar el ajuste debe notarse ya,
   // no en la próxima sesión.
-  ipcMain.handle('settings:getOverlayEnabled', () => getConfigValue('overlayEnabled'));
+  handle('settings:getOverlayEnabled', () => getConfigValue('overlayEnabled'));
 
-  ipcMain.handle('settings:setOverlayEnabled', (_event, enabled: boolean) => {
+  handle('settings:setOverlayEnabled', (_event, enabled: boolean) => {
     setConfigValue('overlayEnabled', enabled);
     refreshOverlaySettings();
   });
 
-  ipcMain.handle('settings:getOverlayShortcut', () => getConfigValue('overlayShortcut'));
+  handle('settings:getOverlayShortcut', () => getConfigValue('overlayShortcut'));
 
-  ipcMain.handle('settings:setOverlayShortcut', (_event, accelerator: string) => {
+  handle('settings:setOverlayShortcut', (_event, accelerator: string) => {
     if (accelerator.trim() !== '') setConfigValue('overlayShortcut', accelerator.trim());
     refreshOverlaySettings();
   });
 
-  ipcMain.handle('settings:getOverlayShortcutStatus', () => getOverlayShortcutStatus());
+  handle('settings:getOverlayShortcutStatus', () => getOverlayShortcutStatus());
 
   // Cadencia y retención de la copia local automática (db/dailyBackup.ts).
   // Sin efecto en caliente que avisar: la próxima comprobación es en el
   // próximo arranque, no hay temporizador de fondo que despertar aquí.
-  ipcMain.handle('settings:getBackupIntervalHours', () => getConfigValue('backupIntervalHours'));
+  handle('settings:getBackupIntervalHours', () => getConfigValue('backupIntervalHours'));
 
-  ipcMain.handle('settings:setBackupIntervalHours', (_event, hours: number) => {
+  handle('settings:setBackupIntervalHours', (_event, hours: number) => {
     setConfigValue('backupIntervalHours', Math.max(1, Math.round(hours)));
   });
 
-  ipcMain.handle('settings:getBackupCount', () => getConfigValue('backupCount'));
+  handle('settings:getBackupCount', () => getConfigValue('backupCount'));
 
-  ipcMain.handle('settings:setBackupCount', (_event, count: number) => {
+  handle('settings:setBackupCount', (_event, count: number) => {
     setConfigValue('backupCount', Math.max(0, Math.round(count)));
   });
 
   // El escritorio 2.0 ya no sincroniza con Turso (AFTERPLAY-2.0.md, fase 2):
   // no hay fallo de sync que enseñar. El canal se queda hasta que el sync
   // nuevo (fase 3) tenga su propio estado.
-  ipcMain.handle('settings:getSyncFailure', () => null);
+  handle('settings:getSyncFailure', () => null);
 
   // Credenciales de servicios externos (ver config/credentials.ts). Los
   // valores viajan al renderer para poder editarlos en Ajustes — app
   // personal, preload propio, sin contenido remoto: mismo perímetro de
   // confianza que el .env que sustituyen.
-  ipcMain.handle('settings:getCredentials', () => getCredentials());
+  handle('settings:getCredentials', () => getCredentials());
 
-  ipcMain.handle('settings:getSaveStorageProvider', () => getConfigValue('saveStorageProvider'));
+  handle('settings:getSaveStorageProvider', () => getConfigValue('saveStorageProvider'));
 
-  ipcMain.handle(
+  handle(
     'settings:setCredentials',
     async (event, input: CredentialsValues, requestedProvider?: SaveStorageProvider) => {
       const currentProvider = getConfigValue('saveStorageProvider');
@@ -178,7 +179,7 @@ export const registerSettingsHandlers = (): void => {
           const result = await migrateStorageObjects(source, destination, (progress) => {
             try {
               if (!event.sender.isDestroyed())
-                event.sender.send('settings:storageMigrationProgress', progress);
+                emit(event.sender, 'settings:storageMigrationProgress', progress);
             } catch {
               // Cerrar Ajustes no interrumpe la copia ni cambia el destino.
             }
@@ -210,11 +211,11 @@ export const registerSettingsHandlers = (): void => {
   // destino y el fichero de origen los pide el renderer con los MISMOS
   // diálogos que ya usan Backups y Game saves (dialog:pickFolder y
   // dialog:pickFile), así que aquí no hay diálogo propio que mantener.
-  ipcMain.handle('settings:exportCredentials', (_event, directory: string) =>
+  handle('settings:exportCredentials', (_event, directory: string) =>
     exportCredentialsTo(directory),
   );
 
-  ipcMain.handle('settings:importCredentials', (_event, filePath: string) => {
+  handle('settings:importCredentials', (_event, filePath: string) => {
     const result = importCredentialsFromFile(filePath);
     applyCredentialsChange();
     return result;
@@ -223,11 +224,11 @@ export const registerSettingsHandlers = (): void => {
   // El fichero soltado en la carpeta de datos se importa en el arranque,
   // cuando todavía no hay ventana: el renderer pregunta al montarse si pasó
   // algo que contar. Se entrega una vez y se olvida.
-  ipcMain.handle('settings:getStartupKeysImport', () => takeStartupKeysImport());
+  handle('settings:getStartupKeysImport', () => takeStartupKeysImport());
 
   // Para el camino automático hay que saber DÓNDE se suelta el fichero, y la
   // ruta de userData no se la sabe nadie de memoria — este botón la abre.
-  ipcMain.handle('settings:openDataFolder', async (): Promise<void> => {
+  handle('settings:openDataFolder', async (): Promise<void> => {
     const result = await openPathResult(app.getPath('userData'));
     if (!result.ok) {
       console.warn('[settings] no se pudo abrir la carpeta de datos:', result);

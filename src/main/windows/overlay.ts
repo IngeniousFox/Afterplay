@@ -1,9 +1,12 @@
-import { BrowserWindow, globalShortcut, ipcMain, screen } from 'electron';
+import { BrowserWindow, globalShortcut, screen } from 'electron';
 import { is } from '@electron-toolkit/utils';
 import { join } from 'path';
 import type { OverlayShortcutStatus } from '../../shared/types';
 import { getConfigValue } from '../config/store';
 import { startGuideWatcher, stopGuideWatcher } from '../gamepad';
+import { emit, handle, on } from '../ipc/contractHandlers';
+import type { Contract } from '../../shared/ipc/contract';
+import type { EventArgs, EventChannelOf } from '../../shared/ipc/define';
 
 // Overlay in-game (OVERLAY.md) — la capa que se abre SOBRE el juego con la
 // sesión en vivo, sus logros y la nota rápida.
@@ -116,7 +119,7 @@ const overhangBounds = (display: Electron.Display): Electron.Rectangle => ({
 
 const sendState = (): void => {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.webContents.send('overlay:state', overlayVisible);
+    emit(overlayWindow.webContents, 'overlay:state', overlayVisible);
   }
 };
 
@@ -132,18 +135,21 @@ const sendState = (): void => {
 //
 // Sin cola ni reintento a propósito: si la ventana aún no existe, todavía no
 // hay caché que refrescar — nacerá pidiendo los datos ya frescos.
-export const sendToOverlay = (channel: string, ...args: unknown[]): void => {
+export const sendToOverlay = <C extends EventChannelOf<Contract>>(
+  channel: C,
+  ...args: EventArgs<Contract[C]>
+): void => {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.webContents.send(channel, ...args);
+    emit(overlayWindow.webContents, channel, ...args);
   }
 };
 
 // El renderer, al montar, dice que está listo y puede preguntar en qué
 // estado debería estar — así una ventana que se monta tarde no se pierde el
 // aviso que ya pasó (patrón get()+onChange de la casa).
-ipcMain.on('overlay:ready', () => markRendererReady?.());
-ipcMain.handle('overlay:getState', () => overlayVisible);
-ipcMain.on('overlay:dismiss', () => hideOverlay());
+on('overlay:ready', () => markRendererReady?.());
+handle('overlay:getState', () => overlayVisible);
+on('overlay:dismiss', () => hideOverlay());
 
 const createOverlayWindow = async (): Promise<BrowserWindow> => {
   // Nace ya con los bounds definitivos (§5.5) — nunca maximize(), la ruina

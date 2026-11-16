@@ -1,15 +1,14 @@
-import { ipcMain } from 'electron';
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import { getCuriositiesStatus, runCuriositiesBackfill } from '../curiosities/backfill';
 import { appCtx } from '../db/v2/appDb';
 import { getAllCuriosities } from '../db/v2/queries/loop';
 
 export const registerCuriositiesHandlers = (): void => {
-  handleDb('curiosities:getAll', async () => {
+  handle('curiosities:getAll', async () => {
     return getAllCuriosities(appCtx());
   });
 
-  handleDb('curiosities:getStatus', async () => {
+  handle('curiosities:getStatus', async () => {
     return getCuriositiesStatus();
   });
 
@@ -19,5 +18,5 @@ export const registerCuriositiesHandlers = (): void => {
   // tarda muchos minutos y ningún invoke debe quedarse colgado tanto tiempo.
   // Se devuelve la promesa igualmente porque lo que SÍ hace aquí (leer la
   // lista de pendientes) puede fallar, y ese error debe llegar al renderer.
-  ipcMain.handle('curiosities:runBackfill', () => runCuriositiesBackfill());
+  handle('curiosities:runBackfill', () => runCuriositiesBackfill());
 };

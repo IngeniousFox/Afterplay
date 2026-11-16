@@ -1,3 +1,4 @@
+import { emit } from '../ipc/contractHandlers';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { app, dialog, Menu } from 'electron';
 import { initCredentials } from '../config/credentials';
@@ -150,7 +151,7 @@ function createSyncRuntime(): void {
       // los completa. Sin juegos nuevos en la bajada no hay nada que mirar.
       if (change.tables.includes('games')) void runEnrichPending();
     },
-    status: () => sendSyncStatus(null),
+    status: () => sendSyncStatus(),
   });
 }
 
@@ -250,7 +251,7 @@ function startWatchers(): void {
   const scanWatcher = new ScanWatcher(() => {
     const mainWindow = getMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('scan:changed');
+      emit(mainWindow.webContents, 'scan:changed');
     }
   });
   appState.scanWatcher = scanWatcher;

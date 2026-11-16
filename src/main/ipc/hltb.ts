@@ -1,11 +1,11 @@
-import { ipcMain } from 'electron';
+import { handle } from './contractHandlers';
 import { appCtx } from '../db/v2/appDb';
 import { applyHltbRefreshResult, readHltbRefreshTarget } from '../db/v2/queries/external';
 import { getHltbTimes } from '../hltb/api';
 import type { GameId } from '../../shared/entityIds';
 
 export const registerHltbHandlers = (): void => {
-  ipcMain.handle('hltb:getTimes', async (_event, title: string, releaseYear: number | null) => {
+  handle('hltb:getTimes', async (_event, title: string, releaseYear: number | null) => {
     return getHltbTimes(title, releaseYear);
   });
 
@@ -29,7 +29,7 @@ export const registerHltbHandlers = (): void => {
   // tardar segundos y retener el candado ahí bloquearía un swap de conexión
   // en caliente (ver attemptSyncUpgrade en db/index.ts) por una espera que no
   // tiene nada que ver con la base de datos.
-  ipcMain.handle('hltb:refreshGame', async (_event, gameId: GameId) => {
+  handle('hltb:refreshGame', async (_event, gameId: GameId) => {
     // La red fuera de cualquier transacción; la escritura relee el juego
     // (queries/external/hltbRefresh.ts) y respeta lo elegido a mano.
     const game = readHltbRefreshTarget(appCtx(), gameId);
