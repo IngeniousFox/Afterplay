@@ -1,4 +1,3 @@
-import type { PlanMailboxEntry } from '../planMailbox';
 import type { EntityId, EntityIdLike, GameId } from '../entityIds';
 
 // EL ORDEN DEL PLAN ("Up next"), escrito UNA vez (AFTERPLAY-2.0.md §15.2, F-26).
@@ -19,8 +18,7 @@ import type { EntityId, EntityIdLike, GameId } from '../entityIds';
 // marca de fijado (null = no está en Up next).
 //
 // Genérico en la representación del id (ver entityIds.ts): el reparto solo usa
-// el id como clave. Lo del buzón de más abajo NO lo es: el buzón desaparece en
-// la 2.0 y se queda con los ids de la app.
+// el id como clave.
 export type PinnedPlanRow<Id extends EntityIdLike = EntityId> = {
   id: GameId<Id>;
   pinnedAt: number | null;
@@ -65,115 +63,16 @@ export const redistributePinStamps = <Id extends EntityIdLike>(
 // ── LA MARCA DE UN PIN QUE VIENE DEL MÓVIL ─────────────────────────────────
 
 // ¿Es `value` un instante con el que se puede sellar un pin? Lo usan los TRES
-// lados con el mismo criterio: el Worker para rechazar la orden al encolarla,
-// el drenado para decidir si sella con la marca del teléfono o cae a "ahora", y
-// la vista previa de la PWA para prever lo mismo que hará el drenado.
+// lados con el mismo criterio: el Worker 1.x para rechazar la orden al
+// encolarla y el drenado del buzón para decidir si sella con la marca del
+// teléfono o cae a "ahora". La vista previa del buzón en la PWA desapareció con
+// la API v2, que escribe directamente.
 //
 // El futuro NO se recorta a propósito: un teléfono con el reloj adelantado deja
 // su juego al final de Up next, que es raro pero es SU orden, y reordenar desde
 // cualquiera de los dos lados lo arregla repartiendo las marcas existentes.
 export const isCrediblePinStamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
-
-// La marca con la que el escritorio sella un pin del buzón: la del GESTO si es
-// creíble, y si no, `now` (lo que haría setPlanPinned sin marca). Sellar
-// siempre con "ahora" perdía el orden en que se fijó en el teléfono: una pasada
-// aplica de golpe pines de hace minutos y quedaban empatados al milisegundo.
-export const mailboxPinStamp = (pinnedAt: unknown, now: number): number =>
-  isCrediblePinStamp(pinnedAt) ? pinnedAt : now;
-
-// ── VISTA PREVIA DEL BUZÓN ─────────────────────────────────────────────────
-
-// Un alta encolada que todavía no es un juego: no tiene id de biblioteca, así
-// que su clave es la de su fila del buzón.
-export type PendingPlanGhost = {
-  mailboxId: number;
-  title: string;
-  coverUrl: string | null;
-};
-
-export type PendingPlanEntry<Id extends EntityIdLike = EntityId> = {
-  id: number;
-  entry: PlanMailboxEntry<Id>;
-};
-
-export type PendingPlanPreview<G, Id extends EntityIdLike = EntityId> = {
-  games: G[];
-  // Altas encoladas que aún no son juegos: se pintan aparte porque no tienen
-  // ficha a la que entrar ni nada que se pueda fijar todavía.
-  ghosts: PendingPlanGhost[];
-  // Qué juegos tienen un cambio sin drenar, para marcarlos como pendientes.
-  touched: Set<GameId<Id>>;
-};
-
-// Los pendientes del buzón aplicados ENCIMA del plan leído, tal y como los va a
-// aplicar el drenado del escritorio (drainMailbox.ts). Su único deber es
-// enseñar el plan como QUEDARÁ: si previera otra cosa, la fila saltaría al
-// drenarse, que es peor que no previsualizar nada (REMOTO.md §6.3).
-//
-// Mismo orden que el drenado: por id de buzón ascendente (el orden en que se
-// encolaron), así que la última orden sobre el mismo juego manda, y cada
-// reorden ve las marcas que dejaron las órdenes anteriores.
-//
-// `now` es el instante con el que el escritorio sellaría un pin cuya marca no
-// es creíble (mailboxPinStamp). El Worker ya rechaza esas órdenes, así que en
-// la práctica no se usa; se pide como parámetro para que la función siga siendo
-// pura y prevea EXACTAMENTE lo mismo que el drenado.
-export const applyPendingPlanEntries = <Id extends EntityIdLike, G extends PinnedPlanRow<Id>>(
-  games: readonly G[],
-  pending: readonly PendingPlanEntry<Id>[],
-  now: number,
-): PendingPlanPreview<G, Id> => {
-  // Estado de trabajo: la marca actual de cada juego, que las órdenes van
-  // modificando en cadena.
-  const pinnedAt = new Map<GameId<Id>, number | null>(
-    games.map((game) => [game.id, game.pinnedAt]),
-  );
-  const ghosts: PendingPlanGhost[] = [];
-  const touched = new Set<GameId<Id>>();
-
-  for (const { id, entry } of pending) {
-    if (entry.type === 'add') {
-      ghosts.push({ mailboxId: id, title: entry.title, coverUrl: entry.coverUrl });
-      continue;
-    }
-    if (entry.type === 'pin') {
-      // La marca del GESTO, no la del render: previsualizar con Date.now()
-      // prometía un orden distinto del que deja el drenado, y con varios pines
-      // en el mismo render todos empataban al milisegundo.
-      pinnedAt.set(entry.gameId, mailboxPinStamp(entry.pinnedAt, now));
-      touched.add(entry.gameId);
-      continue;
-    }
-    if (entry.type === 'unpin') {
-      pinnedAt.set(entry.gameId, null);
-      touched.add(entry.gameId);
-      continue;
-    }
-    if (entry.type === 'reorder') {
-      const rows = [...pinnedAt].map(([gameId, stamp]) => ({ id: gameId, pinnedAt: stamp }));
-      for (const [gameId, stamp] of redistributePinStamps(rows, entry.orderedIds)) {
-        pinnedAt.set(gameId, stamp);
-        touched.add(gameId);
-      }
-      continue;
-    }
-
-    // Un tipo que este bundle no conoce se IGNORA, no revienta. Antes era un
-    // `else` implícito: un tipo nuevo caía en el reorden, hacía
-    // `undefined.filter` dentro de un useMemo y dejaba la pantalla de la PWA en
-    // blanco. El escritorio, por su parte, lo deja pendiente sin aplicarlo, así
-    // que ignorarlo es prever lo mismo que hará.
-  }
-
-  return {
-    games: games.map((game) =>
-      touched.has(game.id) ? { ...game, pinnedAt: pinnedAt.get(game.id) ?? null } : game,
-    ),
-    ghosts,
-    touched,
-  };
-};
 
 // ── DESDE CUÁNDO ESPERA UN PLANEADO ────────────────────────────────────────
 
