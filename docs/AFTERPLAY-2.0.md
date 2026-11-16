@@ -2173,6 +2173,17 @@ Sobre una **copia** completa de los datos reales: importar, validar, sembrar un 
 7. Segunda persona, cuando quiera.
 8. A los 60 días: retirar el Worker antiguo y archivar la base de Turso.
 
+#### §20.11.1 Limpieza del código 1.x
+
+El borrado no es una fase aparte: va por tandas, cada una con su condición (Apéndice C).
+
+- **L0, durante la fase 7:** lo que ya no usa nadie, y el test que impide que la 2.0 vuelva a importar código 1.x.
+- **L1, al cerrar la fase 8:** `worker/` sale de la rama `v2` (el hub pasa a tener sus propias dependencias), y con él los ids genéricos y el buzón de `shared`.
+- **L2, paso 8 de esta fase:** el Worker antiguo desplegado, Turso y la rama de la 1.x.
+- **L3, en la 2.1:** el importador, el esquema y las lecturas 1.x, `drizzle/` y los paquetes de Turso.
+
+**Salida de cada tanda:** lint, tipos, tests y e2e en verde, y su fila del Apéndice C movida a "Lo que ya desapareció".
+
 ### §20.12 Dependencias entre fases
 
 ```
@@ -2367,21 +2378,115 @@ B14 simplifica la derivación real (que ignora artefactos de alta); sirve como i
 
 ---
 
-## Apéndice C. Qué desaparece del código
+## Apéndice C. Qué desaparece del código, y cuándo
 
-| Pieza                                                                                                        | Por qué                                    |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `@tursodatabase/sync`, la captura de cambios, los ficheros satélite, `localConnection.ts`                    | D-08                                       |
-| `migrationSync.ts`, `pushMigrationsToRemote`, `migrateWithoutCapture`, `scripts/push-migrations-to-turso.ts` | El esquema no viaja (D-10)                 |
-| `withDbAccess` como candado, el cambio de conexión en caliente                                               | Una sola conexión local (§8.9)             |
-| `plan_mailbox`, `drainMailbox.ts`, `worker/src/queries/mailbox.ts`                                           | El móvil escribe en el hub (§13)           |
-| `worker/src/queries/*` como reimplementación, y los tests de paridad                                         | Dominio compartido (D-12)                  |
-| `worker/src/tenants.ts` y el secreto `TENANTS`                                                               | Emparejado (§9.3)                          |
-| `remoteFreshness.ts` como parche del cronómetro                                                              | Generalizado en §5.8 y §10                 |
-| `isAddedAtArtifact` en las lecturas                                                                          | `datePrecision = unknown` (§7.5)           |
-| `games.planned`, el evento `plan_to_play`, las iteraciones vacías                                            | `plan_entries`                             |
-| `sessions.isManual`, `sessions.lastHeartbeatAt`                                                              | `source`, y latido local más señal de vida |
-| Las columnas `…CheckedAt` y `…SyncedAt` de `games`                                                           | `external_checks`                          |
+Inventario hecho el 2026-11-16 sobre la rama `v2`, mirando quién importa cada pieza. Es una **lista viva**: cada fase que deje algo sin uso, o que descubra otra pieza de la 1.x, añade su fila aquí (§C.6).
+
+### C.1 Cómo conviven hoy las dos versiones
+
+- **La 1.x está congelada.** En `v2` no se mantiene: nadie la edita salvo para borrarla. La 1.7.x y la versión puente 1.8 (§19.3) salen de `main`.
+- **La app 2.0 no usa código 1.x.** Comprobado: ni el proceso principal, ni el preload, ni el renderer, ni el hub, ni la PWA importan nada de `src/main/db/queries/`, `src/main/db/schema.ts` o `worker/`. La única excepción es el **importador** (`src/main/db/v2/importer/`), que tiene que leer la base 1.x y comprobar que la 2.0 enseña lo mismo.
+- **Por qué sigue ahí.** Lo que queda de la 1.x en `v2` está por tres motivos, y cada uno caduca en un momento distinto:
+  1. Lo necesita el importador (hasta que se retire el importador).
+  2. Le presta herramientas al hub (`worker/node_modules`), por comodidad, no por necesidad.
+  3. Nadie lo ha borrado todavía.
+- **El riesgo no es mantener dos versiones, sino el código muerto.** Piezas sin uso que siguen pasando por lint, tipos y tests, y comentarios que hablan de módulos que ya no existen. Eso es lo que ataca la tanda L0.
+
+### C.2 Cuándo se borra cada cosa
+
+| Tanda  | Cuándo                                                        | Condición para empezar                                                                                         |
+| ------ | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **L0** | Ya, durante la fase 7                                         | Ninguna: no lo usa nadie                                                                                       |
+| **L1** | Al cerrar la fase 8 (importador y 1.8 hechos)                 | El importador ya no cambia; el hub tiene sus propias dependencias                                              |
+| **L2** | Fase 10, paso 8: a los 60 días del corte de la última persona | Nadie usa ya la 1.x ni su web móvil; el Worker antiguo está retirado y Turso archivado                         |
+| **L3** | Una versión después de L2 (2.1)                               | Todos los PCs migraron, pasó el plazo de vuelta atrás (§19.7) y nadie conserva una `Afterplay.db` por importar |
+
+L2 y L3 son los únicos borrados sin vuelta atrás práctica: después de L3, una base 1.x solo se puede migrar instalando antes una 2.0 antigua.
+
+### C.3 Inventario
+
+Los tamaños son líneas de TypeScript, sin `node_modules`.
+
+#### L0: sin uso hoy
+
+| Pieza                                                                                                 | Tamaño           | Por qué sobra                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main/db/migrationSync.ts`, su test y `scripts/push-migrations-to-turso.ts` (`db:push:remote`)    | ~190 más el test | Subían migraciones a Turso. El esquema ya no viaja (D-10). Solo los citan su test y `scripts/lib/testTempDirectories.ts`                                                                                                                                                      |
+| `scripts/benchmark-db.ts` (`benchmark:db`)                                                            | 1 script         | Mide lecturas 1.x (`getGames`, `getGameById`) sobre el esquema 1.x. Si hace falta, se reescribe contra la 2.0                                                                                                                                                                 |
+| `spikes/` (`hub-do`, `local-driver`, `sync-core`, `turso-collision`)                                  | 44 ficheros      | Pruebas de la fase 0. Sus conclusiones ya están en §20.1                                                                                                                                                                                                                      |
+| Vista previa del buzón en `shared/domain/planOrder.ts`                                                | ~110             | **Hecho el 2026-11-16**                                                                                                                                                                                                                                                       |
+| Comentarios que citan módulos borrados (`drainMailbox.ts`, `main/db/index.ts`, `runPlanMailboxDrain`) | ~10 sitios       | Están en `renderer/hooks/games.ts`, `hooks/sessions.ts`, `external/resolveGameEnrichment.ts`, `steam/store.ts` y `web/components/`                                                                                                                                            |
+| Comentarios que citan documentos que no están en el repositorio                                       | ~450 citas       | `PLAN-TO-PLAY.md`, `PARTIDAS-GUARDADAS.md`, `EMULADORES.md`, `BIG-PICTURE.md`, `LOGROS.md`, `AFTERPLAY-LOOP.md`, `REMOTO.md`, `LOGROS-IDEAS.md`, `OVERLAY.md`, `RETROACHIEVEMENTS.md` y otros. Se cambian por la sección de este documento cuando la haya, o se quita la cita |
+
+#### L1: al cerrar la fase 8
+
+| Pieza                                                                                                            | Tamaño                            | Qué lo retiene hoy                                                                                                                                                                        | Qué hay que hacer antes                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `worker/` entero: la web móvil 1.x, sus consultas reimplementadas, el buzón, `tenants.ts` y los tests de paridad | ~5.800 (2.500 de tests)           | `hub/worker/tsconfig.json` toma los tipos de Workers de `worker/node_modules` y el despliegue usa su `wrangler`. El CI instala `worker/`. `lint`, `typecheck:worker` y `test` lo recorren | Darle a `hub/worker` su propio `package.json` con `wrangler` y `@cloudflare/workers-types`; quitar `worker/` de los scripts de `package.json` y de `ci.yml`. El Worker desplegado (`afterplay-web`) **no se toca**: sigue sirviendo a la 1.x desde `main` hasta L2 |
+| `src/shared/planMailbox.ts` y la tabla `plan_mailbox` del esquema 1.x                                            | ~60                               | `worker/src/api-types.ts` y `db/schema.ts` (1.x)                                                                                                                                          | Se va con `worker/`. Comprobar antes que el importador no lee el buzón (§13.3: se drena antes del corte)                                                                                                                                                           |
+| `db/queries/games/iterationHours.ts` y `sessions/sessionDuration.ts`                                             | ~80                               | Solo `worker/src`                                                                                                                                                                         | Se van con `worker/`                                                                                                                                                                                                                                               |
+| Ids genéricos en `shared` (`EntityIdLike`, `GameId<Id>`, `PlanMailboxEntry<number>`)                             | 20 ficheros, 35 usos con `number` | Existen para que el Worker 1.x use ids numéricos con las mismas funciones                                                                                                                 | Con `worker/` fuera, los ids son siempre texto: se quita el parámetro de tipo, y con él `shared/__tests__/idRepresentations.test.ts`. Comprobar antes que el importador usa tipos propios para los ids numéricos                                                   |
+| `isCrediblePinStamp` en `planOrder.ts`                                                                           | ~10                               | `worker/src/queries/mailbox.ts`                                                                                                                                                           | Se va con `worker/`                                                                                                                                                                                                                                                |
+| `src/shared/planPinOrder.ts`                                                                                     | pequeño                           | Nació para compartir el orden con el Worker; hoy lo usa el renderer                                                                                                                       | Fundirlo con `domain/planOrder` si queda como alias                                                                                                                                                                                                                |
+| `POST /sync/v1/igdb-credentials` y `hub/worker/src/igdbCredentials.ts`                                           | ~150                              | "Clientes viejos" de la 2.0 en desarrollo. El escritorio ya usa el paquete de credenciales (§20.6.2)                                                                                      | La 2.0 no se ha publicado, así que no hay clientes viejos reales: se puede quitar antes del ensayo (fase 9). Las claves guardadas ahí se pierden y el paquete nuevo las repone                                                                                     |
+
+#### L2: a los 60 días del corte
+
+Nada de esto vive en la rama `v2`: es infraestructura y `main`.
+
+| Pieza                                                          | Qué lo retiene hasta entonces                                     |
+| -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| El Worker desplegado `afterplay-web` y su secreto `TENANTS`    | El móvil de quien siga en la 1.8                                  |
+| La base de Turso de cada persona (se **archiva**, no se borra) | Es la copia de la 1.x y la fuente del importador de los rezagados |
+| La rama de la 1.x en `main`, que pasa a ser una etiqueta       | Parches de la 1.8                                                 |
+| El canal de actualización de la 1.x                            | Los PCs que no hayan aceptado la 2.0                              |
+
+#### L3: con la retirada del importador (2.1)
+
+| Pieza                                                                                          | Tamaño                    | Qué lo retiene                                                           |
+| ---------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
+| `src/main/db/v2/importer/`, `scripts/import-1x-to-v2.ts` y `scripts/audit-1x-data.ts`          | ~6.500 más 2.100 de tests | Es la migración. Mientras exista una `Afterplay.db` sin migrar, se queda |
+| `src/main/db/schema.ts` (esquema 1.x), `db/index.ts` (`getDb` que lanza) y `db/projections.ts` | ~850                      | Lo leen el importador y sus lecturas de comprobación                     |
+| Lo que queda de `src/main/db/queries/` (20 lecturas 1.x)                                       | ~1.850                    | `importer/legacyQueries.ts` las ejecuta para comparar la 1.x con la 2.0  |
+| `drizzle/` (migraciones 1.x) y `drizzle.config.ts`                                             | carpeta                   | Los tests del importador montan una base 1.x con ellas                   |
+| `src/main/db/__tests__/harness.ts`                                                             | 1 fichero                 | Andamio de tests 1.x que usa el importador                               |
+| `@libsql/client`, `@tursodatabase/sync` (ya en `devDependencies`) y `drizzle-orm/libsql`       | 2 paquetes                | `importer/source.ts`, `legacyQueryHost.ts` y `scripts/gen-e2e-seed.ts`   |
+| `src/main/__tests__/noTursoInMain.test.ts`                                                     | 1 test                    | Deja de tener sentido cuando los paquetes ya no están instalados         |
+| El aviso de la 1.8 y la pantalla de migración de la 2.0 (§15.7)                                | por escribir (fase 8)     | Nacen ya con fecha de retirada: L3                                       |
+
+**Lo que parece 1.x y no se borra nunca**, porque son datos y no código:
+
+- El dispositivo `legacy` (`DEVICE_KINDS`, `LEGACY_DEVICE_SHORT_ID`) y los ids `legacy:<tabla>:<id>`: las filas migradas los llevan para siempre.
+- La rama `ids: 'legacy'` de `queries/loop/memorySignature.ts`: firma los recuerdos generados en la 1.x, y se queda mientras existan.
+- `datePrecision = 'unknown'` y los textos "Date unknown" y "Length unknown".
+
+### C.4 Lo que ya desapareció
+
+| Pieza                                                                                                                                                        | Cuándo                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| El sync con Turso en el escritorio: captura de cambios, ficheros satélite, `localConnection.ts`, cambio de conexión en caliente, `withDbAccess` como candado | Fase 2 (P9)                                                                        |
+| Las consultas 1.x con sustituta en la 2.0, y sus tests                                                                                                       | Fase 2 (P9)                                                                        |
+| `drainMailbox.ts` y el buzón en el escritorio                                                                                                                | Fases 2 a 5                                                                        |
+| `remoteFreshness.ts` y el barrido de cronómetros                                                                                                             | Fase 4                                                                             |
+| `games.planned`, `plan_to_play`, `sessions.isManual`, `sessions.lastHeartbeatAt`, las columnas `…CheckedAt` y `…SyncedAt`, `isAddedAtArtifact`               | Fase 2: no están en el esquema 2.0. Siguen en el esquema 1.x que lee el importador |
+| El buzón y el estado "pendiente" en la PWA                                                                                                                   | Fase 5                                                                             |
+| La vista previa del buzón en `planOrder.ts`                                                                                                                  | 2026-11-16                                                                         |
+| `handleDb` y las ~130 cadenas de canal duplicadas                                                                                                            | Fase 7, en curso                                                                   |
+
+### C.5 Barreras para que no vuelva
+
+- **Ya existe:** `noTursoInMain.test.ts` recorre el grafo de imports del main y falla si aparece Turso.
+- **Falta (L0):** un test igual para el código 1.x. Nada fuera de `src/main/db/v2/importer/` puede importar `src/main/db/schema.ts`, `src/main/db/queries/`, `src/main/db/index.ts` ni `worker/`. Hoy se cumple; el test lo mantiene mientras el importador siga vivo.
+- **Falta (L1):** que `lint`, `typecheck` y `test` dejen de recorrer `worker/`.
+
+### C.6 Cómo se mantiene esta lista
+
+- Al cerrar cada fase se revisa qué ha dejado de usarse, qué código puente se ha añadido y con qué tanda se va.
+- **El código puente nace con fecha.** Todo lo que se escriba solo para convivir con la 1.x (sobre todo en la fase 8) lleva un comentario `PUENTE 1.x → Lx` y una fila aquí.
+- Pendiente de clasificar según avance el trabajo:
+  - **Fase 7 (en curso):** `useWatcherSync` y la invalidación a mano en cada mutación, que sustituye el evento único de §15.4; `useSessions` (todas las sesiones) cuando las pantallas pasen a agregados (§15.6); los tipos del esquema que cruzan el IPC (F-42).
+  - **Fase 8:** qué parte del importador sirve también para "restaurar copia" y cuál es solo migración.
+  - **Fase 9:** dependencias que solo usaba la 1.x y que la actualización general permita quitar.
 
 ---
 
