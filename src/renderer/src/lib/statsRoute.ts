@@ -1,6 +1,6 @@
 import { plannedGamesQueryOptions } from '../hooks/games';
-import { sessionsQueryOptions } from '../hooks/sessions';
 import { spendQueryOptions } from '../hooks/spend';
+import { journeyQueryOptions, sessionStatsQueryOptions } from '../hooks/stats';
 import { stateEventsQueryOptions } from '../hooks/stateEvents';
 import { queryClient } from './queryClient';
 
@@ -23,7 +23,8 @@ export const loadStatsRoute = (): Promise<StatsRoute> => {
 export const preloadStatsRoute = (): void => {
   void loadStatsRoute().catch(() => {});
   void queryClient.prefetchQuery(plannedGamesQueryOptions);
-  void queryClient.prefetchQuery(sessionsQueryOptions);
+  void queryClient.prefetchQuery(sessionStatsQueryOptions);
+  void queryClient.prefetchQuery(journeyQueryOptions);
   void queryClient.prefetchQuery(spendQueryOptions);
   void queryClient.prefetchQuery(stateEventsQueryOptions);
 };

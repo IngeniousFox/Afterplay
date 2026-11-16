@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { hasMeasuredDuration } from '../../lib/sessionStats';
+import { hasMeasuredDuration } from '../../../../shared/domain/sessionMeasure';
 import { floatingPanelClass } from '../../lib/styles';
 import { StatCard } from './StatCard';
 

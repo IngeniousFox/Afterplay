@@ -11,12 +11,14 @@ import {
   startGameSession,
   updateSessionNote,
 } from '../db/v2/queries/sessions';
+import { getSessionsPage } from '../db/v2/queries/stats';
 import { notifyOverlaySessionStarted } from '../windows/overlay';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { getSyncRuntime } from '../sync/instance';
 import { CREATE_SYNC_LIMIT_MS } from '../sync/scheduler';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
 import type { GameId, SessionId } from '../../shared/entityIds';
+import type { SessionsPageRequest, SessionsRangeRequest } from '../../shared/types';
 
 // ¿Se juega con emulador? Lo pregunta el Play antes de armar el overlay —
 // ver el porqué en su handler. Corre dentro del withDbAccess de handleDb,
@@ -67,8 +69,23 @@ export const registerSessionsHandlers = (): void => {
     return session;
   });
 
-  handle('sessions:getAll', async () => {
-    return getAllSessions(appCtx());
+  // Lecturas acotadas (F-41): ninguna pantalla pide ya todas las sesiones de la
+  // biblioteca. Las abiertas ahora mismo (de todos los PCs), las de un juego, las
+  // que arrancaron en un rango y una página de la vista de Sesiones.
+  handle('sessions:getOpen', async () => {
+    return getAllSessions(appCtx(), { open: true });
+  });
+
+  handle('sessions:getForGame', async (_event, gameId: GameId) => {
+    return getAllSessions(appCtx(), { gameId });
+  });
+
+  handle('sessions:getRange', async (_event, range: SessionsRangeRequest) => {
+    return getAllSessions(appCtx(), { startedBetween: range });
+  });
+
+  handle('sessions:getPage', async (_event, request: SessionsPageRequest) => {
+    return getSessionsPage(appCtx(), request);
   });
 
   handle('sessions:close', async (_event, id: SessionId, endedAt: Date) => {

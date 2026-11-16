@@ -8,13 +8,13 @@ import { GameCover } from '../components/GameCover';
 import { useDeviceContext } from '../hooks/devices';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
-import { useSessions } from '../hooks/sessions';
+import { useGameSessions, useSessionsInRange } from '../hooks/sessions';
 import { useStateEvents } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useLiveTimer } from '../hooks/useLiveTimer';
 import { formatElapsed, formatHours } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
-import { hasMeasuredDuration } from '../lib/sessionStats';
+import { hasMeasuredDuration } from '../../../shared/domain/sessionMeasure';
 import { useTvBackdrop } from './backdropContext';
 import { useTvFocusable } from './focusContext';
 import { forgetHome, recallHome, rememberHome } from './screenMemory';
@@ -403,7 +403,6 @@ const RecapDoor = ({
 export const TvHome = (): React.JSX.Element => {
   const navigate = useNavigate();
   const { data: games = [] } = useGames();
-  const { data: sessions = [] } = useSessions();
   const [launching, setLaunching] = useState(false);
   // La vuelta de una ficha aterriza donde estabas (screenMemory): scroll
   // restaurado antes del primer paint y el foco en la carátula que abriste
@@ -430,14 +429,16 @@ export const TvHome = (): React.JSX.Element => {
       .sort((a, b) => (b.lastPlayedAt?.getTime() ?? 0) - (a.lastPlayedAt?.getTime() ?? 0))[0];
   }, [games]);
 
-  // La última nota de sesión del hero — "dónde lo dejé", dicho por ti.
+  // La última nota de sesión del hero — "dónde lo dejé", dicho por ti. Solo
+  // hacen falta las sesiones de ESE juego (F-41).
+  const { data: heroSessions = [] } = useGameSessions(hero?.id ?? null);
   const heroNote = useMemo(() => {
     if (!hero) return null;
-    const withNote = sessions
+    const withNote = heroSessions
       .filter((session) => session.gameId === hero.id && (session.note?.trim().length ?? 0) > 0)
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
     return withNote?.note?.trim() ?? null;
-  }, [sessions, hero]);
+  }, [heroSessions, hero]);
 
   // §10.8: el protagonista puede estar en vivo en OTRO PC. Entonces el pill dice
   // dónde, y Play sigue ahí (una sesión por PC, §10.4): solo se esconde cuando
@@ -515,9 +516,19 @@ export const TvHome = (): React.JSX.Element => {
   // "AUGUST SO FAR: 60h" mientras la barra de agosto de Hours per month, en
   // Stats, seguía a cero — dos pantallas de la misma app dando cifras
   // distintas del mismo mes.
+  //
+  // Solo las del mes en curso (F-41): el rango se fija al montar el salón.
+  const [monthRange] = useState(() => {
+    const today = new Date();
+    return {
+      from: new Date(today.getFullYear(), today.getMonth(), 1),
+      to: new Date(today.getFullYear(), today.getMonth() + 1, 1),
+    };
+  });
+  const { data: monthSessions = [] } = useSessionsInRange(monthRange);
   const monthStats = useMemo(() => {
     const now = new Date();
-    const rows = sessions.filter(
+    const rows = monthSessions.filter(
       (session) =>
         hasMeasuredDuration(session) &&
         session.startedAt.getMonth() === now.getMonth() &&
@@ -530,7 +541,7 @@ export const TvHome = (): React.JSX.Element => {
       games: new Set(rows.map((session) => session.gameId)).size,
       label: now.toLocaleDateString('en-US', { month: 'long' }).toUpperCase(),
     };
-  }, [sessions]);
+  }, [monthSessions]);
 
   // El último recap del Loop como puerta al Journey: la historia que la IA
   // ya escribió, asomando en el salón.

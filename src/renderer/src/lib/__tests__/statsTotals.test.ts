@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { GameListItem, SessionWithGame, SpendEventSummary } from '../../../../shared/types';
+import type { GameListItem, SpendEventSummary } from '../../../../shared/types';
+import { buildSessionStats, type StatsSessionRow } from '../../../../shared/domain/sessionStats';
 import { yearTotals } from '../statsTotals';
 
 // yearTotals ya no tiene su propia regla de "horas de un año": la pide a
-// hoursByGameInYear (src/shared/domain/hours.ts), la misma que usa el Worker.
+// hoursByGameInYear (src/shared/domain/hours.ts), la misma que usa el Worker,
+// sobre los segundos por juego y año que arma el main (buildSessionStats, F-41).
 // Estos casos fijan lo que daba la copia que había aquí, para que el cambio no
 // mueva ni una cifra de Stats ni del modo TV. Todas las fechas son LOCALES (sin
 // 'Z'): el escritorio lee el año con el reloj del que mira.
@@ -20,8 +22,20 @@ const juego = (
     manualIterations: manual.map((m, i) => ({ iterationId: String(id * 100 + i), ...m })),
   }) as unknown as GameListItem;
 
-const sesion = (gameId: number, startedAt: Date, durationSec: number | null): SessionWithGame =>
-  ({ gameId: String(gameId), startedAt, durationSec }) as unknown as SessionWithGame;
+const sesion = (
+  gameId: number,
+  startedAt: Date,
+  durationSec: number | null,
+): StatsSessionRow<string> => ({
+  id: `s${gameId}-${startedAt.getTime()}`,
+  gameId: String(gameId),
+  iterationId: String(gameId * 100),
+  gameTitle: `Juego ${gameId}`,
+  startedAt,
+  endedAt: durationSec === null ? null : startedAt,
+  durationSec,
+  isManual: false,
+});
 
 const gasto = (amount: number, occurredAt: Date): SpendEventSummary =>
   ({ amount, occurredAt }) as unknown as SpendEventSummary;
@@ -35,7 +49,7 @@ const juegos = [
   juego(3, 1),
 ];
 
-const sesiones = [
+const filas = [
   sesion(1, new Date(2025, 5, 1, 12), 7200),
   // Las 23:30 del 31 de diciembre en hora local siguen siendo 2025.
   sesion(1, new Date(2025, 11, 31, 23, 30), 1800),
@@ -45,6 +59,8 @@ const sesiones = [
   // Un juego fuera de la población no suma.
   sesion(9, new Date(2025, 2, 1, 12), 3600),
 ];
+
+const sesiones = buildSessionStats(filas, new Date(2026, 5, 1));
 
 const gastos = [gasto(20, new Date(2025, 3, 1, 12)), gasto(30, new Date(2019, 3, 1, 12))];
 

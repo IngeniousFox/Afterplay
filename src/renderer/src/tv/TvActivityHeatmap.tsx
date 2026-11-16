@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import type { SessionWithGame } from '../../../shared/types';
 import type { Year } from '../components/stats/YearPicker';
+import { useHeatmapSessions } from '../hooks/sessions';
 import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../lib/dateMath';
 import { formatHours } from '../lib/format';
-import { isMeasuredSession } from '../lib/sessionStats';
+import { isMeasuredSession } from '../../../shared/domain/sessionMeasure';
 
 // EL MAPA DE ACTIVIDAD, portado tal cual del escritorio (ActivityHeatmap):
 // una columna por semana, siete filas por día, y cinco niveles de verde
@@ -39,13 +39,9 @@ const mondayOf = (date: Date): Date => {
   return addDays(day, -((day.getDay() + 6) % 7));
 };
 
-export const TvActivityHeatmap = ({
-  sessions,
-  year,
-}: {
-  sessions: SessionWithGame[];
-  year: Year;
-}): React.JSX.Element => {
+export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element => {
+  // Solo las sesiones de la ventana que pinta (F-41), no toda la historia.
+  const sessions = useHeatmapSessions(year);
   const { cells, monthLabels, weeks, activeDays, bestHours } = useMemo(() => {
     const today = startOfDay(new Date());
     let rangeStart: Date;

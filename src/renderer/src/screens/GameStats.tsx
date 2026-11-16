@@ -28,17 +28,22 @@ import { StatusIcon } from '../components/StatusIcon';
 import { GameBadges } from '../components/stats/GameBadges';
 import { TimeOfDayCard } from '../components/stats/TimeOfDayCard';
 import { useGame, useGames } from '../hooks/games';
-import { useSessions } from '../hooks/sessions';
+import { useSessionStats } from '../hooks/stats';
 import { useCountUp } from '../hooks/useCountUp';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { AMBER, BLUE, GREEN, VIOLET } from '../lib/colors';
 import { yearsDesc } from '../lib/dateMath';
 import { formatDateOnly, formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
-import { hasMeasuredDuration, sessionDurationStats } from '../lib/sessionStats';
-import { sessionActivity } from '../lib/sessionActivity';
+import { hasMeasuredDuration, sessionDurationStats } from '../../../shared/domain/sessionMeasure';
+import {
+  buildSessionStats,
+  EMPTY_SESSION_STATS,
+  topWeekdayIndexOf,
+} from '../../../shared/domain/sessionStats';
+import { sessionActivity } from '../../../shared/domain/sessionActivity';
 import { outlineButtonClass, revealClass, revealStyle } from '../lib/styles';
-import { longestStreak, playedDayKeys } from '../lib/streaks';
+import { longestStreak, playedDayKeys } from '../../../shared/domain/streaks';
 import type { GameId } from '../../../shared/entityIds';
 
 const GameDataCard = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
@@ -78,26 +83,6 @@ const DAY_NAMES = [
   'Saturdays',
   'Sundays',
 ];
-
-type WeekdaySession = {
-  startedAt: Date;
-  endedAt: Date | null;
-  durationSec: number | null;
-  isManual: boolean;
-};
-
-// Día de la semana con más horas de un conjunto de sesiones (índice de
-// DAY_NAMES), o null sin sesiones cerradas — mismas reglas de datos que
-// WhenDoYouPlayChart.
-const topWeekdayIndex = (sessions: WeekdaySession[]): number | null => {
-  const seconds = Array.from({ length: 7 }, () => 0);
-  for (const session of sessions) {
-    if (!hasMeasuredDuration(session)) continue;
-    seconds[(session.startedAt.getDay() + 6) % 7] += session.durationSec ?? 0;
-  }
-  const max = Math.max(...seconds);
-  return max > 0 ? seconds.indexOf(max) : null;
-};
 
 type GameMetricProps = {
   Icon: LucideIcon;
@@ -310,15 +295,33 @@ export const GameStats = ({
   const { data: game, isLoading, isError } = useGame(gameId);
   const { data: allGames = [] } = useGames();
   // Para las comparativas "vs tu biblioteca" (duración de sesión, día
-  // favorito, share de sesiones).
-  const { data: librarySessions = [] } = useSessions();
+  // favorito, share de sesiones): el resumen que calcula el main, no la lista
+  // entera de sesiones (F-41).
+  const { data: libraryStats = EMPTY_SESSION_STATS } = useSessionStats();
   const heroSrc = useImageSrc(game?.heroUrl ?? null, 'heroes');
 
-  // useSessions() ya trae todo esto, pero game.iterations (useGame) es la
-  // misma info sin un segundo viaje — el detalle de un juego ya la trae
-  // completa, no hace falta pedirla dos veces. Modelo v2: toda sesión es
-  // tiempo jugado real, ya no hay marcadores que filtrar.
+  // game.iterations (useGame) trae las sesiones del juego completas, sin un
+  // segundo viaje. Modelo v2: toda sesión es tiempo jugado real, ya no hay
+  // marcadores que filtrar.
   const realSessions = useMemo(() => game?.iterations.flatMap((it) => it.sessions) ?? [], [game]);
+  // El mismo resumen que Stats pide al main para la biblioteca, armado aquí con
+  // las sesiones de ESTE juego: las gráficas de abajo comparten componente y
+  // regla con las globales.
+  const gameStats = useMemo(
+    () =>
+      buildSessionStats(
+        realSessions.map((session) => ({
+          ...session,
+          // Las de un juego siempre cuelgan de un playthrough (las de emulador sin
+          // asignar no tienen y no están en game.iterations).
+          iterationId: session.iterationId ?? '',
+          gameId,
+          gameTitle: game?.title ?? '',
+        })),
+        new Date(0),
+      ),
+    [realSessions, gameId, game?.title],
+  );
   // Solo sesiones MEDIDAS: el heatmap descarta las manuales (tiempo tecleado
   // sin dia real que pintar), asi que un año que solo tenga manuales no puede
   // ofrecerse en el desplegable — salia elegido por defecto con la card vacia.
@@ -397,7 +400,10 @@ export const GameStats = ({
   const compareLines = useMemo(() => {
     const lines: { key: string; text: React.ReactNode }[] = [];
 
-    const libAvgSec = sessionDurationStats(librarySessions).avgSec;
+    const libAvgSec =
+      libraryStats.library.closedCount > 0
+        ? libraryStats.library.closedSeconds / libraryStats.library.closedCount
+        : 0;
     if (avgSessionSec > 0 && libAvgSec > 0) {
       const diffMin = Math.round((avgSessionSec - libAvgSec) / 60);
       lines.push({
@@ -417,8 +423,8 @@ export const GameStats = ({
       });
     }
 
-    const gameDay = topWeekdayIndex(realSessions);
-    const libDay = topWeekdayIndex(librarySessions);
+    const gameDay = topWeekdayIndexOf(gameStats);
+    const libDay = topWeekdayIndexOf(libraryStats);
     if (gameDay !== null && libDay !== null) {
       lines.push({
         key: 'weekday',
@@ -437,8 +443,8 @@ export const GameStats = ({
       });
     }
 
-    if (realSessions.length > 0 && librarySessions.length > realSessions.length) {
-      const ratio = Math.round(librarySessions.length / realSessions.length);
+    if (realSessions.length > 0 && libraryStats.library.sessionCount > realSessions.length) {
+      const ratio = Math.round(libraryStats.library.sessionCount / realSessions.length);
       lines.push({
         key: 'share',
         text:
@@ -454,7 +460,7 @@ export const GameStats = ({
     }
 
     return lines;
-  }, [librarySessions, realSessions, avgSessionSec]);
+  }, [libraryStats, gameStats, realSessions, avgSessionSec]);
 
   if (isLoading || isError || !game) {
     return (
@@ -1011,10 +1017,10 @@ export const GameStats = ({
           style={revealStyle(7)}
         >
           <GameDataCard>
-            <WhenDoYouPlayChart sessions={realSessions} year="all" title="When do you play it?" />
+            <WhenDoYouPlayChart stats={gameStats} year="all" title="When do you play it?" />
           </GameDataCard>
           <GameDataCard>
-            <SessionLengthHistogram sessions={realSessions} year="all" />
+            <SessionLengthHistogram stats={gameStats} year="all" />
           </GameDataCard>
         </div>
       </div>

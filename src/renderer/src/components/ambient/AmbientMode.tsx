@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { GameListItem, SessionWithGame, StateEventSummary } from '../../../../shared/types';
+import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { useCuriosities } from '../../hooks/curiosities';
 import { useDeviceContext } from '../../hooks/devices';
 import { useGames } from '../../hooks/games';
-import { useSessions } from '../../hooks/sessions';
+import { useGameSessions } from '../../hooks/sessions';
+import { useSessionStats } from '../../hooks/stats';
 import { useAmbientIdleMinutes } from '../../hooks/settings';
 import { useSpendEvents } from '../../hooks/spend';
 import { useStateEvents } from '../../hooks/stateEvents';
@@ -255,7 +256,9 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
   // recuento equivocado, "donde empezó todo" equivocado, ranking equivocado.
   // La diapositiva se elige de `games`; los índices se construyen sobre todos.
   const { data: allGames = [] } = useGames();
-  const { data: sessions = [] } = useSessions();
+  // Lo único que el modo ambiente saca de TODAS las sesiones es qué jugabas
+  // antes de estrenar cada juego, y eso ya viene calculado del main (F-41).
+  const { data: sessionStats } = useSessionStats();
   const { data: stateEvents = [] } = useStateEvents();
   const { data: spendEvents = [] } = useSpendEvents();
   const { data: curiosityRows = [] } = useCuriosities();
@@ -277,13 +280,6 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
   // no por diapositiva: con 300 juegos y miles de sesiones, recorrerlo todo
   // cada 26 segundos sería tirar trabajo a la basura.
   const indexes = useMemo(() => {
-    const sessionsByGame = new Map<GameId, SessionWithGame[]>();
-    for (const session of sessions) {
-      const list = sessionsByGame.get(session.gameId) ?? [];
-      list.push(session);
-      sessionsByGame.set(session.gameId, list);
-    }
-
     const eventsByGame = new Map<GameId, StateEventSummary[]>();
     for (const event of stateEvents) {
       const list = eventsByGame.get(event.gameId) ?? [];
@@ -402,29 +398,13 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       completedPerYear.set(year, (completedPerYear.get(year) ?? 0) + 1);
     }
 
-    // Qué jugabas justo antes de estrenar cada juego. Se recorre la línea
-    // temporal completa UNA vez y se anota, en lugar de buscarlo por juego.
-    const chronological = sessions
-      .filter((session) => !session.isManual)
-      .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
-    const previousTitleByGame = new Map<GameId, string>();
-    const seen = new Set<GameId>();
-    for (let position = 0; position < chronological.length; position++) {
-      const session = chronological[position];
-      if (seen.has(session.gameId)) continue;
-      seen.add(session.gameId);
-      // Hacia atrás hasta encontrar una sesión de OTRO juego: la anterior
-      // suya propia no cuenta como "lo que estabas jugando antes".
-      for (let back = position - 1; back >= 0; back--) {
-        if (chronological[back].gameId !== session.gameId) {
-          previousTitleByGame.set(session.gameId, chronological[back].gameTitle);
-          break;
-        }
-      }
-    }
+    // Qué jugabas justo antes de estrenar cada juego: lo calcula el main
+    // recorriendo la línea temporal una vez (buildSessionStats).
+    const previousTitleByGame = new Map<GameId, string>(
+      (sessionStats?.playedJustBefore ?? []).map((entry) => [entry.gameId, entry.title]),
+    );
 
     return {
-      sessionsByGame,
       eventsByGame,
       spendByGame,
       curiositiesByGame,
@@ -443,10 +423,15 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       firstCompletionGameId,
       latestCompletionGameId,
     };
-  }, [allGames, sessions, stateEvents, spendEvents, curiosityRows]);
+  }, [allGames, sessionStats, stateEvents, spendEvents, curiosityRows]);
 
   const queue = shuffled(games, seed);
   const game = queue[index % queue.length];
+  // Las sesiones de ESTE juego, que son las únicas que cuentan las frases. Las
+  // del siguiente se piden ya (la consulta se queda en caché) para que la
+  // diapositiva no espere a la lectura al montarse.
+  const { isPending: sessionsPending, data: gameSessions = [] } = useGameSessions(game.id);
+  useGameSessions(queue[(index + 1) % queue.length].id);
 
   const gameEvents = indexes.eventsByGame.get(game.id) ?? [];
   // Los "otros" que acabaste ese mismo año: el total del año menos este.
@@ -461,7 +446,7 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
 
   const primaryGenre = game.genres?.[0];
   const context: AmbientContext = {
-    sessions: indexes.sessionsByGame.get(game.id) ?? [],
+    sessions: gameSessions,
     events: gameEvents,
     rank: indexes.rankByGame.get(game.id) ?? null,
     libraryHours: indexes.libraryHours,
@@ -504,6 +489,11 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
       };
     })(),
   };
+
+  // Las frases se sortean sobre la lista que haya al montar: sin esperar a las
+  // sesiones, una que llegara después cambiaría el número de frases y, con él,
+  // la elegida, a media diapositiva.
+  if (sessionsPending) return <></>;
 
   return (
     <AmbientSlide

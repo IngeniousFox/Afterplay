@@ -1,6 +1,7 @@
 import { cn } from '../../lib/utils';
 import { ArrowDownRight, ArrowUpRight, Gauge, Info, Minus } from 'lucide-react';
 import { type CSSProperties, useMemo } from 'react';
+import type { SessionStats } from '../../../../shared/domain/sessionStats';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { formatHours } from '../../lib/format';
 import { GameCover } from '../GameCover';
@@ -12,17 +13,12 @@ import { usePagedYear } from './usePagedYear';
 import type { Year } from './YearPicker';
 import { compareByCreation, type GameId, type IterationId } from '../../../../shared/entityIds';
 
-type CompareSession = {
-  iterationId: IterationId;
-  durationSec: number | null;
-};
-
 type HltbCompareListProps = {
   games: GameListItem[];
   stateEvents: StateEventSummary[];
-  // Para sumar las horas trackeadas del playthrough completado — las
-  // sesiones ya vienen sin marcadores de borde (getAllSessions).
-  sessions: CompareSession[];
+  // Para sumar las horas trackeadas del playthrough completado: los segundos
+  // medidos de cada playthrough, que calcula el main (F-41).
+  stats: Pick<SessionStats, 'iterationSeconds'>;
   year: Year;
   onOpenGame: (gameId: GameId) => void;
 };
@@ -37,7 +33,7 @@ const SAVOR_COLOR = '#e3b24a';
 export const HltbCompareList = ({
   games,
   stateEvents,
-  sessions,
+  stats,
   year,
   onOpenGame,
 }: HltbCompareListProps): React.JSX.Element | null => {
@@ -62,10 +58,10 @@ export const HltbCompareList = ({
     }
 
     const trackedSecondsByIteration = new Map<IterationId, number>();
-    for (const session of sessions) {
+    for (const entry of stats.iterationSeconds) {
       trackedSecondsByIteration.set(
-        session.iterationId,
-        (trackedSecondsByIteration.get(session.iterationId) ?? 0) + (session.durationSec ?? 0),
+        entry.iterationId,
+        (trackedSecondsByIteration.get(entry.iterationId) ?? 0) + entry.seconds,
       );
     }
 
@@ -95,7 +91,7 @@ export const HltbCompareList = ({
         ];
       })
       .sort((a, b) => b.ratio - a.ratio);
-  }, [games, stateEvents, sessions, year]);
+  }, [games, stateEvents, stats, year]);
 
   const totalPages = Math.max(1, Math.ceil(entries.length / MAX_ENTRIES));
   const currentPage = Math.min(page, totalPages - 1);

@@ -16,14 +16,20 @@ import { queryKeys } from './queryKeys';
 // Los dominios que cambian algo DERIVADO lo traen escrito aquí: la lista de
 // juegos lleva las horas, el estado, el gasto y la última vez jugada, así que
 // sesiones, eventos de estado, gasto y playthroughs refrescan también
-// `games.all`. Por eso las Estadísticas (que leen juegos, sesiones, gasto y
-// eventos de estado) se actualizan con cualquiera de los cinco.
+// `games.all`. Por eso las Estadísticas (que leen juegos, gasto y eventos de
+// estado, más los agregados de sesiones de `stats.all`) se actualizan con
+// cualquiera de los cinco.
+//
+// Las sesiones ya no se piden enteras (F-41): lo que sale de ellas —las de un
+// juego, las abiertas, un rango, una página, los agregados de `stats`— cuelga
+// de `sessions.all` / `stats.all`, y todo lo que cambia qué sesiones están
+// vivas (juegos, playthroughs) las refresca también.
 export const DOMAIN_QUERY_KEYS: Readonly<Record<Domain, readonly QueryKey[]>> = {
-  games: [queryKeys.games.all],
-  sessions: [queryKeys.sessions.all, queryKeys.games.all],
-  playthroughs: [queryKeys.games.all],
-  stateEvents: [queryKeys.stateEvents.all, queryKeys.games.all],
-  spend: [queryKeys.spend.all, queryKeys.games.all],
+  games: [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stats.all],
+  sessions: [queryKeys.sessions.all, queryKeys.games.all, queryKeys.stats.all],
+  playthroughs: [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stats.all],
+  stateEvents: [queryKeys.stateEvents.all, queryKeys.games.all, queryKeys.stats.all],
+  spend: [queryKeys.spend.all, queryKeys.games.all, queryKeys.stats.all],
   // El Plan vive en `plan_entries`: entrar o salir del Plan cambia también qué
   // juegos salen en la biblioteca, así que cuelga de la misma raíz.
   plan: [queryKeys.games.all],

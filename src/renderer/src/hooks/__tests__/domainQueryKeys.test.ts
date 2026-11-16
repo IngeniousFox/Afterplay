@@ -6,7 +6,7 @@ import { DOMAIN_QUERY_KEYS, queryKeysForChange, queryKeysForDomains } from '../d
 import { createDataChangedInvalidator } from '../useDataChangedSync';
 import { queryKeys } from '../queryKeys';
 import { spendQueryOptions } from '../spend';
-import { sessionsQueryOptions } from '../sessions';
+import { sessionStatsQueryOptions, journeyQueryOptions } from '../stats';
 import { stateEventsQueryOptions } from '../stateEvents';
 
 // Del aviso 'data:changed' del main a las claves de consulta (§15.4, E-22). Sin
@@ -17,13 +17,28 @@ import { stateEventsQueryOptions } from '../stateEvents';
 const covers = (keys: readonly (readonly unknown[])[], queryKey: readonly unknown[]): boolean =>
   keys.some((prefix) => prefix.every((part, index) => queryKey[index] === part));
 
-// Las consultas que lee la pantalla de Estadísticas (screens/Stats.tsx).
+// Las consultas que lee la pantalla de Estadísticas (screens/Stats.tsx). Ya no
+// pide las sesiones enteras (F-41): lee los agregados del main, las
+// carátulas del Journey y las sesiones de la ventana de su heatmap.
 const STATS_QUERIES = {
   games: queryKeys.games.all,
   plannedGames: queryKeys.games.planned,
-  sessions: sessionsQueryOptions.queryKey,
+  sessionStats: sessionStatsQueryOptions.queryKey,
+  journey: journeyQueryOptions.queryKey,
+  heatmap: queryKeys.sessions.range(new Date(2026, 0, 1), new Date(2027, 0, 1)),
   spend: spendQueryOptions.queryKey,
   stateEvents: stateEventsQueryOptions.queryKey,
+} as const;
+
+// Las lecturas acotadas de sesiones que hay en las pantallas (F-41): todas
+// cuelgan de las mismas raíces, y cada una tiene que alcanzarse desde la tabla.
+const SESSION_READS = {
+  open: queryKeys.sessions.open,
+  game: queryKeys.sessions.game('g1'),
+  range: queryKeys.sessions.range(new Date(2026, 0, 1), new Date(2026, 1, 1)),
+  page: queryKeys.sessions.page(null, 2, 20),
+  pageOfGame: queryKeys.sessions.page('g1', 1, 20),
+  pending: queryKeys.sessions.pending,
 } as const;
 
 describe('DOMAIN_QUERY_KEYS', () => {
@@ -41,16 +56,37 @@ describe('DOMAIN_QUERY_KEYS', () => {
       );
     }
     assert.ok(covers(queryKeysForDomains(['spend']), STATS_QUERIES.spend));
-    assert.ok(covers(queryKeysForDomains(['sessions']), STATS_QUERIES.sessions));
     assert.ok(covers(queryKeysForDomains(['stateEvents']), STATS_QUERIES.stateEvents));
+    // Y los agregados del main (sesiones, Journey, heatmap) los refresca cada
+    // uno de los cinco: lo derivado de sesiones cuelga de sessions, games y
+    // playthroughs, y las estadísticas, además, de gasto y eventos de estado.
+    for (const domain of [...touching, 'playthroughs'] as const) {
+      for (const [name, key] of Object.entries(STATS_QUERIES)) {
+        if (name === 'spend' || name === 'stateEvents') continue;
+        if (name === 'plannedGames' && domain !== 'games') continue;
+        if (name === 'heatmap' && !['sessions', 'games', 'playthroughs'].includes(domain)) continue;
+        assert.ok(covers(queryKeysForDomains([domain]), key), `${domain} → ${name}`);
+      }
+    }
+    assert.ok(covers(queryKeysForDomains(['sessions']), STATS_QUERIES.sessionStats));
     // Y el Plan (Backlog flow) cuelga de ['games'].
     assert.ok(covers(queryKeysForDomains(['games']), STATS_QUERIES.plannedGames));
   });
 
-  it('un dominio ajeno no toca las Estadísticas', () => {
+  it('toda lectura acotada de sesiones se refresca con sessions, games y playthroughs', () => {
+    for (const domain of ['sessions', 'games', 'playthroughs'] as const) {
+      for (const [name, key] of Object.entries(SESSION_READS)) {
+        assert.ok(covers(queryKeysForDomains([domain]), key), `${domain} → ${name}`);
+      }
+    }
+  });
+
+  it('un dominio ajeno no toca las Estadísticas ni las sesiones', () => {
     const keys = queryKeysForDomains(['memories', 'curiosities', 'radar']);
     assert.ok(!covers(keys, STATS_QUERIES.spend));
-    assert.ok(!covers(keys, STATS_QUERIES.sessions));
+    assert.ok(!covers(keys, STATS_QUERIES.sessionStats));
+    assert.ok(!covers(keys, STATS_QUERIES.journey));
+    for (const key of Object.values(SESSION_READS)) assert.ok(!covers(keys, key));
   });
 });
 
@@ -59,7 +95,12 @@ describe('queryKeysForChange', () => {
     const change: DataChanged = { domains: ['sessions', 'games', 'spend'], origin: 'local' };
     const keys = queryKeysForChange(change);
     assert.equal(new Set(keys.map((key) => JSON.stringify(key))).size, keys.length);
-    assert.deepEqual(keys, [queryKeys.games.all, queryKeys.sessions.all, queryKeys.spend.all]);
+    assert.deepEqual(keys, [
+      queryKeys.games.all,
+      queryKeys.sessions.all,
+      queryKeys.stats.all,
+      queryKeys.spend.all,
+    ]);
   });
 
   it('sin dominios no hay nada que refrescar', () => {

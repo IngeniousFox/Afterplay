@@ -3,36 +3,21 @@ import { useMemo } from 'react';
 import { GREEN } from '../../lib/colors';
 import { monthKey, twelveMonthWindow } from '../../lib/dateMath';
 import { formatHours } from '../../lib/format';
-import { hasMeasuredDuration } from '../../lib/sessionStats';
+import { secondsByMonthOf, type SessionStats } from '../../../../shared/domain/sessionStats';
 import { CategoryBarChart } from './CategoryBarChart';
 import type { Year } from './YearPicker';
 
-type ChartSession = {
-  startedAt: Date;
-  endedAt: Date | null;
-  durationSec: number | null;
-  isManual: boolean;
-};
-
 type HoursByMonthChartProps = {
-  sessions: ChartSession[];
+  stats: Pick<SessionStats, 'days'>;
   year: Year;
 };
 
 // Horas jugadas por mes, 12 barras sobre la ventana compartida de Stats
 // (twelveMonthWindow) y los mismos datos que el resto de gráficas de
 // hábitos: solo sesiones medidas y cerradas (ver sessionStats.ts).
-export const HoursByMonthChart = ({
-  sessions,
-  year,
-}: HoursByMonthChartProps): React.JSX.Element => {
+export const HoursByMonthChart = ({ stats, year }: HoursByMonthChartProps): React.JSX.Element => {
   const { bars, totalSeconds } = useMemo(() => {
-    const secondsByKey = new Map<number, number>();
-    for (const session of sessions) {
-      if (!hasMeasuredDuration(session)) continue;
-      const key = monthKey(session.startedAt);
-      secondsByKey.set(key, (secondsByKey.get(key) ?? 0) + (session.durationSec ?? 0));
-    }
+    const secondsByKey = secondsByMonthOf(stats);
 
     const bars = twelveMonthWindow(year).map((date) => ({
       label: date.toLocaleDateString('en-US', { month: 'short' }),
@@ -42,7 +27,7 @@ export const HoursByMonthChart = ({
     const totalSeconds = bars.reduce((sum, bar) => sum + bar.value, 0);
 
     return { bars, totalSeconds };
-  }, [sessions, year]);
+  }, [stats, year]);
 
   return (
     <CategoryBarChart

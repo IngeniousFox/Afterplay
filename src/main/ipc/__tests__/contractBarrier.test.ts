@@ -146,4 +146,14 @@ describe('contrato IPC: cada canal usado existe, y con su clase', () => {
       'evento que el preload no escucha',
     );
   });
+
+  // F-41 (§15.6): ninguna pantalla pide todas las sesiones. No hay un canal que
+  // las devuelva enteras; los que existen son acotados (abiertas, de un juego,
+  // un rango, una página) o agregados (stats:*). `getPending` es otra cosa.
+  it('no existe "todas las sesiones": ni canal sessions:getAll ni método getAll en el preload', () => {
+    assert.ok(!('sessions:getAll' in contract));
+    const preloadSessions = readFileSync(join(SRC, 'preload/api/sessions.ts'), 'utf8');
+    assert.ok(!/\bgetAll\b/.test(stripComments(preloadSessions)));
+    assert.ok('sessions:getPending' in contract);
+  });
 });

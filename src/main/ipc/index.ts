@@ -19,6 +19,7 @@ import { registerSettingsHandlers } from './settings';
 import { registerSgdbHandlers } from './sgdb';
 import { registerSpendHandlers } from './spend';
 import { registerStateEventsHandlers } from './stateEvents';
+import { registerStatsHandlers } from './stats';
 import { registerSyncHandlers } from './sync';
 import { registerWindowHandlers } from './window';
 
@@ -35,6 +36,7 @@ export const registerIpcHandlers = (): void => {
   registerIterationsHandlers();
   registerSessionsHandlers();
   registerStateEventsHandlers();
+  registerStatsHandlers();
   registerSpendHandlers();
   registerIgdbHandlers();
   registerExternalHandlers();

@@ -2,17 +2,14 @@ import { BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GeneratedMemorySummary } from '../../../shared/types';
-import type { JourneyEntry } from '../lib/journeyEntries';
-import { buildEntries, groupEntriesByYearMonth } from '../lib/journeyEntries';
+import type { JourneyEntrySummary } from '../../../shared/domain/journeyEntries';
+import { groupEntriesByYearMonth } from '../../../shared/domain/journeyEntries';
 import { GameCover } from '../components/GameCover';
-import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
-import { useSessions } from '../hooks/sessions';
-import { useStateEvents } from '../hooks/stateEvents';
+import { useJourneyEntries, useSessionStats } from '../hooks/stats';
 import { BLUE, VIOLET } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
-import { hasMeasuredDuration } from '../lib/sessionStats';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useTvBackdrop } from './backdropContext';
 import { useTvButtons, useTvLegend } from './tvInput';
@@ -58,7 +55,7 @@ type TvJourneyPage =
       kind: 'month';
       year: number;
       month: number;
-      entries: JourneyEntry[];
+      entries: JourneyEntrySummary[];
       hours: number;
       recap: GeneratedMemorySummary | null;
     };
@@ -88,7 +85,7 @@ const JourneyCoverTv = ({
   revealIndex,
   onOpen,
 }: {
-  entry: JourneyEntry;
+  entry: JourneyEntrySummary;
   autoFocus: boolean;
   revealIndex: number;
   onOpen: () => void;
@@ -384,9 +381,10 @@ const PageRibbon = ({ current, total }: { current: number; total: number }): Rea
 
 export const TvJourney = (): React.JSX.Element => {
   const navigate = useNavigate();
-  const { data: games = [] } = useGames();
-  const { data: sessions = [] } = useSessions();
-  const { data: stateEvents = [] } = useStateEvents();
+  // Las carátulas ya cocinadas por el main y el resumen de sesiones (F-41): esta
+  // pantalla no recorre sesiones.
+  const { data: journeyEntries = [] } = useJourneyEntries();
+  const { data: sessionStats } = useSessionStats();
   const { data: memories = [] } = useMemories();
   // La vuelta de una ficha reabre el libro POR LA MISMA PÁGINA
   // (screenMemory) — sin esto, cada vuelta te devolvía a la cubierta.
@@ -409,7 +407,7 @@ export const TvJourney = (): React.JSX.Element => {
   // (groupEntriesByYearMonth), que es donde vive el recorte — solo que
   // aplanadas en una secuencia de PÁGINAS: [año, sus meses..., año, ...].
   const pages = useMemo<TvJourneyPage[]>(() => {
-    const grouped = groupEntriesByYearMonth(buildEntries(games, sessions, stateEvents));
+    const grouped = groupEntriesByYearMonth(journeyEntries);
 
     const list: TvJourneyPage[] = [];
     // La cubierta abre el libro: totales de TODO lo agrupado (los mismos
@@ -428,7 +426,7 @@ export const TvJourney = (): React.JSX.Element => {
       const yearEntries = [...months.values()].flat();
       // El juego del año y las veces que te sentaste — las dos cifras que
       // rematan la portada de capítulo sin convertirla en un panel de datos.
-      const topEntry = yearEntries.reduce<JourneyEntry | null>(
+      const topEntry = yearEntries.reduce<JourneyEntrySummary | null>(
         (best, entry) => (best === null || entry.hours > best.hours ? entry : best),
         null,
       );
@@ -442,9 +440,7 @@ export const TvJourney = (): React.JSX.Element => {
         // TODAS las gráficas de sesiones del escritorio. Contándolas, la
         // portada del año anunciaba veces-que-te-sentaste que en Stats no
         // existían.
-        sessionCount: sessions.filter(
-          (session) => hasMeasuredDuration(session) && session.startedAt.getFullYear() === year,
-        ).length,
+        sessionCount: sessionStats?.lengthByYear.find((entry) => entry.year === year)?.total ?? 0,
         topGame:
           topEntry && topEntry.hours > 0 ? { title: topEntry.title, hours: topEntry.hours } : null,
         recap: recapByScope.get(`year:${year}`) ?? null,
@@ -461,7 +457,7 @@ export const TvJourney = (): React.JSX.Element => {
       }
     }
     return list;
-  }, [games, sessions, stateEvents, recapByScope]);
+  }, [journeyEntries, sessionStats, recapByScope]);
 
   const clamp = (index: number): number => Math.max(0, Math.min(pages.length - 1, index));
   // El paso de página se decide FUERA del updater (los updaters son puros —
@@ -727,7 +723,7 @@ export const TvJourney = (): React.JSX.Element => {
             {/* EL AÑO EN NÚMEROS: las cifras que de verdad se leen desde el
                 sofá — lo que jugaste, cuántos juegos y cuántas veces te
                 sentaste.
-                Horas y juegos salen de las MISMAS JourneyEntry que se ven
+                Horas y juegos salen de las MISMAS JourneyEntrySummary que se ven
                 debajo (Journey.tsx toma la misma decisión y por el mismo
                 motivo: así la cifra cuadra EXACTAMENTE con las carátulas de
                 este capítulo). Y ahí está la diferencia con Stats: una entrada
@@ -801,7 +797,7 @@ export const TvJourney = (): React.JSX.Element => {
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.07)',
               }}
             >
-              <TvActivityHeatmap sessions={sessions} year={page.year} />
+              <TvActivityHeatmap year={page.year} />
             </div>
 
             <div

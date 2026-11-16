@@ -10,7 +10,7 @@ import { queryKeys } from './queryKeys';
 import type { StateEventId } from '../../../shared/entityIds';
 
 // Bloque 5D — todos los cambios de estado de la biblioteca (para "Status
-// Changes" por año en Stats). Misma historia que useSessions()/
+// Changes" por año en Stats). Misma historia que useSessionStats()/
 // useSpendEvents(): staleTime Infinity, invalidada por las mutations de
 // aquí.
 export const stateEventsQueryOptions = {

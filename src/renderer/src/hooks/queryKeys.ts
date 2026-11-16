@@ -55,6 +55,26 @@ export const queryKeys = {
     // Bajo el prefijo ['sessions'] a propósito — cualquier invalidación de
     // sessions.all (el aviso 'data:changed') refresca también la bandeja.
     pending: ['sessions', 'pending'] as const,
+    // Las lecturas acotadas de sesiones (F-41; ninguna pantalla pide todas).
+    // Cuelgan de ['sessions'] a propósito, igual que la bandeja: el dominio
+    // 'sessions' las refresca, y 'games' y 'playthroughs' también (un juego
+    // borrado o una fusión de playthroughs cambian qué sesiones están vivas).
+    open: ['sessions', 'open'] as const,
+    game: (gameId: GameId | null) => ['sessions', 'game', gameId] as const,
+    // Un rango por sus extremos en ms: la clave tiene que ser serializable y
+    // dos Date iguales no son el mismo objeto.
+    range: (from: Date, to: Date) => ['sessions', 'range', from.getTime(), to.getTime()] as const,
+    page: (gameId: GameId | null, page: number, pageSize: number) =>
+      ['sessions', 'page', gameId, page, pageSize] as const,
+  },
+  // Lo que el main calcula agregando sesiones, eventos de estado y juegos
+  // (§15.6, F-41): el resumen de las gráficas y las carátulas del Journey. Raíz
+  // propia porque dependen de CINCO dominios (sesiones, juegos, playthroughs,
+  // eventos de estado y gasto), y domainQueryKeys.ts las cuelga de todos.
+  stats: {
+    all: ['stats'] as const,
+    sessions: ['stats', 'sessions'] as const,
+    journey: ['stats', 'journey'] as const,
   },
   emulators: {
     all: ['emulators'] as const,

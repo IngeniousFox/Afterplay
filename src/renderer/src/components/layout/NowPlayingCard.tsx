@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { GameListItem, PendingSession, SessionWithGame } from '../../../../shared/types';
 import { useDeviceContext } from '../../hooks/devices';
 import { useGames } from '../../hooks/games';
-import { useCloseSession, usePendingSessions, useSessions } from '../../hooks/sessions';
+import { useCloseSession, useOpenSessions, usePendingSessions } from '../../hooks/sessions';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { AMBER, GREEN } from '../../lib/colors';
@@ -36,7 +36,7 @@ type LiveEntry =
 
 export const NowPlayingCard = (): React.JSX.Element | null => {
   const { data: games = [] } = useGames();
-  const { data: sessions = [] } = useSessions();
+  const { data: sessions = [] } = useOpenSessions();
   const { data: pending = [] } = usePendingSessions();
   const [assigning, setAssigning] = useState<PendingSession | null>(null);
   const { thisDeviceId } = useDeviceContext();
