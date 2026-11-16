@@ -2132,11 +2132,13 @@ Hecha y unida a `v2` el 2026-11-15, sin el esquema ni las migraciones tocados. L
 **Pendiente o sin comprobar:**
 
 - **Recuperar la identidad al emparejar** (§12.6, reinstalar): fuera de esta fase. Tampoco se recupera la identidad desde la lista de dispositivos del hub; solo desde el `.bak` o la base local.
-- **Bucket real.** La subida multiparte, el manifiesto con el valor de instalación y la limpieza de huérfanas no se han probado contra un bucket de desarrollo.
-- **Partidas reales.** No se ha probado la ficha con partidas de verdad en dos PCs; ni la casilla de restauración exacta con un juego real.
+- **Bucket real.** Ya se ha probado lo básico (ver abajo). Faltan una subida multiparte de verdad (un zip de más de 16 MB), el bloqueo por instalación copiada y la limpieza de huérfanas.
+- **Restauración exacta.** La casilla no se ha probado con un juego real.
 - **Discos clonados.** Dos PCs con el mismo `MachineGuid` (un disco clonado) no se distinguen si ninguno publicó antes su valor.
 - **Filas recuperadas.** Su reloj de sync es el de la recuperación, así que en la lista pueden salir antes que versiones más nuevas.
 - **TV.** La ficha de TV sigue con su comparación local, sin el estado entre PCs.
+
+**Probado con partidas reales (2026-11-16).** Con R2 y los dos PCs emparejados: un juego jugado en JONATHAN subió su copia, la ficha de SABRINA mostró la versión más nueva de JONATHAN con la restauración destacada, y al restaurar la partida quedó bien en el juego. En una copia del proyecto hay que ejecutar antes `npm run ludusavi:fetch`; si no, la ficha dice que falta el motor de partidas.
 
 ### §20.8 Fase 7 — Main, IPC, renderer, estadísticas, logs (L)
 
