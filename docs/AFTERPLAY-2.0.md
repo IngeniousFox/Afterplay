@@ -2485,7 +2485,7 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 - Al cerrar cada fase se revisa qué ha dejado de usarse, qué código puente se ha añadido y con qué tanda se va.
 - **El código puente nace con fecha.** Todo lo que se escriba solo para convivir con la 1.x (sobre todo en la fase 8) lleva un comentario `PUENTE 1.x → Lx` y una fila aquí.
 - Pendiente de clasificar según avance el trabajo:
-  - **Fase 7 (en curso):** `useWatcherSync` y la invalidación a mano en cada mutación, que sustituye el evento único de §15.4; `useSessions` (todas las sesiones) cuando las pantallas pasen a agregados (§15.6); los tipos del esquema que cruzan el IPC (F-42).
+  - **Fase 7 (en curso):** `useWatcherSync` y la invalidación a mano en cada mutación, que sustituye el evento único de §15.4; `useSessions` (todas las sesiones), ya retirado en §15.6 (F-41): las pantallas leen sesiones abiertas, de un juego, de un rango, una página o los agregados de `stats:*`; los tipos del esquema que cruzan el IPC (F-42).
   - **Fase 8:** qué parte del importador sirve también para "restaurar copia" y cuál es solo migración.
   - **Fase 9:** dependencias que solo usaba la 1.x y que la actualización general permita quitar.
 
