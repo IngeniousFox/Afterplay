@@ -32,8 +32,7 @@ export type PinnedPlanRow<Id extends EntityIdLike = EntityId> = {
 // orden y la columna sigue sincronizando igual).
 //
 // Devuelve id → marca nueva SOLO para los ids que cambian de mano. Un mapa vacío
-// significa "no hay reorden que aplicar", y el escritorio lo traduce a `false`,
-// que el buzón lee como fallo (drainMailbox.ts).
+// significa "no hay reorden que aplicar", y el escritorio lo traduce a `false`.
 export const redistributePinStamps = <Id extends EntityIdLike>(
   rows: readonly PinnedPlanRow<Id>[],
   orderedIds: readonly GameId<Id>[],

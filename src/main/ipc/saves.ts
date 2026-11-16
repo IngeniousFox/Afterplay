@@ -150,8 +150,8 @@ export const registerSavesHandlers = (): void => {
   });
 
   // ── Inventario y recuperación (saves/recovery.ts) ──
-  // Las tres van a la red y salen SIEMPRE de un clic explícito. Van por
-  // handleDb porque cruzan el bucket con el índice y la biblioteca.
+  // Las tres van a la red y salen SIEMPRE de un clic explícito, y cruzan el
+  // bucket con el índice y la biblioteca.
   handle('saves:scanBucket', async (): Promise<CloudInventory> => scanBucket());
 
   handle('saves:recoverFromCloud', async (): Promise<RecoveryResult> => {

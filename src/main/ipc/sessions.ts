@@ -21,8 +21,7 @@ import type { GameId, SessionId } from '../../shared/entityIds';
 import type { SessionsPageRequest, SessionsRangeRequest } from '../../shared/types';
 
 // ¿Se juega con emulador? Lo pregunta el Play antes de armar el overlay —
-// ver el porqué en su handler. Corre dentro del withDbAccess de handleDb,
-// como todo lo demás de este fichero.
+// ver el porqué en su handler.
 const isEmulatedGame = (gameId: GameId): boolean =>
   readGameRow(appCtx(), gameId)?.isEmulated === true;
 

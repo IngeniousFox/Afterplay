@@ -18,6 +18,7 @@ Este documento hace tres cosas: diagnostica la 1.7.3 con evidencia, define la 2.
   - **DEDUCIDO**: se sigue de la semántica de una librería o de un comentario del código, pero no se ha reproducido.
   - **SOSPECHA**: plausible, sin comprobar.
 - Las líneas citadas son de la 1.7.3 en la rama de trabajo del 2026-11-13 y se moverán; el nombre de la función es la referencia estable.
+- El código cita también los documentos de diseño de la 1.x (`PARTIDAS-GUARDADAS.md`, `BIG-PICTURE.md`, `EMULADORES.md`, `PLAN-TO-PLAY.md`, `REMOTO.md`, `OVERLAY.md`…). No están en el repositorio: se guardan aparte, con el resto de notas de trabajo. `CONSULTAS.md` y `MAPA-1X.md` sí están, en `src/main/db/v2/`.
 
 Nada de lo que aquí se describe está implementado. Ningún escenario multi-PC se ha ejecutado: el diagnóstico sale de leer el código.
 
@@ -2146,6 +2147,37 @@ Hecha y unida a `v2` el 2026-11-15, sin el esquema ni las migraciones tocados. L
 
 **Salida:** `index.ts` reducido a componer módulos; todo el IPC pasa por el contrato; ninguna pantalla pide todas las sesiones; E-21 y E-22 pasan; los e2e pasan.
 
+#### §20.8.1 Estado de la fase 7 (2026-11-16)
+
+Los cinco criterios de salida se cumplen en la rama `v2`.
+
+| Criterio                                         | Dónde                                                                                                                | Qué hay                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts` compone módulos                       | `src/main/{bootstrap,windows,lifecycle}/`, `ipc/mainProcess.ts`                                                      | `index.ts` pasa de 1.166 a 39 líneas. Las fases del arranque son funciones en orden (`bootstrap/startup.ts`); el estado vivo tiene un dueño (`bootstrap/appState.ts`, `windows/mainWindow.ts`)                                                                                                                              |
+| Todo el IPC por el contrato                      | `src/shared/ipc/{contract,schemas,define}.ts`, `main/ipc/contractHandlers.ts`, `preload/ipc.ts`                      | 173 canales: 145 con respuesta, 9 sin respuesta y 19 avisos del main. La entrada se valida con zod en el main; la salida es solo de tipos. `games:update` rechaza cualquier campo fuera de los diez editables. Un test de barrera prohíbe `ipcMain`, `ipcRenderer` y `webContents.send` sueltos y canales huérfanos         |
+| Evento único de cambios (§15.4)                  | `shared/ipc/dataChanged.ts`, `main/windows/dataChanged.ts`, `renderer/hooks/{useDataChangedSync,domainQueryKeys}.ts` | `data:changed` con dominios, ids y origen. Sale de la puerta de escritura (uno por transacción confirmada) y del motor de sync (uno por página aplicada), hacia la ventana y el overlay. Un único oyente por ventana invalida desde una tabla dominio → consultas. Un test falla si una tabla sincronizada no tiene dominio |
+| Ninguna pantalla pide todas las sesiones (§15.6) | `queries/stats/`, `shared/domain/{sessionStats,streaks,sessionActivity,journeyEntries,sessionMeasure}.ts`            | `sessions:getAll` ya no existe. Hay lecturas de sesiones abiertas, de un juego, de un rango y por páginas, y los agregados `stats:getSessionStats` y `stats:getJourney`                                                                                                                                                     |
+| E-21 y E-22                                      | `hub/convergence/__tests__/{achievements,dataChanged}.test.ts`, `e2e/data-changed.spec.ts`                           | E-21 ya se cumplía sin tocar código. E-22: un gasto llegado por sync produce el aviso del dominio `spend`, y con Estadísticas abierta el total cambia sin recargar                                                                                                                                                          |
+
+**Comprobado.** Lint, tipos, 3.018 tests y los 94 e2e (`npx playwright test`). `statsEquality.test.ts` compara, sobre tres años de datos sembrados, los agregados del main con las fórmulas que usaba el renderer sobre todas las sesiones.
+
+**Decisiones de esta fase:**
+
+- **Salida sin validar.** Validar también la respuesta costaría en cada llamada y no protege de nada que el compilador no vea ya: el main y el preload se compilan juntos.
+- **Granularidad del aviso.** El aviso dice qué tipo de dato cambió, no qué columna. Fijar un juego en el Plan o escribir la nota de una sesión vuelve a pedir la lista de juegos.
+- **Un aviso por página de sync.** Una bajada larga (el primer emparejado) va enseñando lo que llega, a costa de recargar la biblioteca varias veces seguidas. Si se nota, se agrupan los avisos en el oyente.
+- **Las fórmulas viejas no se copian.** Las reglas de las estadísticas pasaron de `renderer/src/lib` a `shared/domain` casi sin cambios y con sus tests; la prueba de igualdad las reescribe aparte para no compararlas consigo mismas.
+
+**Lo que queda de §15 y §16** (no es criterio de salida; entra cuando se toque cada pieza, o en la fase 9):
+
+- `sandbox: false` sigue en la ventana principal, el overlay y el aviso de logros (F-46).
+- No hay `errorElement` en el router.
+- El log sigue yendo a la consola: falta el log a fichero rotado (F-43) y "Exportar diagnóstico".
+- El estado del sync solo se ve en Ajustes: falta el indicador de la barra lateral y de la bandeja.
+- Las estadísticas de estados y géneros se siguen derivando en el renderer desde la lista de juegos, que no es "todas las sesiones".
+- `spend:getAll` y `stateEvents:getAll` siguen existiendo: son tablas pequeñas, no sesiones.
+- La mayor parte del inventario de cambios visibles (§15.7) está por revisar pieza a pieza.
+
 ### §20.9 Fase 8 — Importador y versión puente (L)
 
 §19.3 a §19.7.
@@ -2409,12 +2441,9 @@ Los tamaños son líneas de TypeScript, sin `node_modules`.
 
 #### L0: sin uso hoy
 
-Hecha en parte el 2026-11-16 (ver §C.4). Queda:
+Hecha el 2026-11-16 (ver §C.4).
 
-| Pieza                                                                                                              | Tamaño     | Por qué sobra                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Comentarios del renderer que citan módulos borrados (`drainMailbox.ts`, `main/db/index.ts`, `runPlanMailboxDrain`) | 2 sitios   | `renderer/hooks/games.ts` y `hooks/sessions.ts`. Los reescribe la tanda del evento único de cambios (§15.4), que cambia justo lo que explican                                                                                                                                                                                                        |
-| Comentarios que citan documentos que no están en el repositorio                                                    | ~450 citas | `PLAN-TO-PLAY.md`, `PARTIDAS-GUARDADAS.md`, `EMULADORES.md`, `BIG-PICTURE.md`, `LOGROS.md`, `AFTERPLAY-LOOP.md`, `REMOTO.md`, `LOGROS-IDEAS.md`, `OVERLAY.md`, `RETROACHIEVEMENTS.md` y otros. Se cambian por la sección de este documento cuando la haya, o se quita la cita. Va al final de la fase 7, cuando nadie más esté tocando esos ficheros |
+Las citas a documentos de diseño de la 1.x que no están en el repositorio (`PARTIDAS-GUARDADAS.md`, `BIG-PICTURE.md` y otros, unas 450) **no** son código muerto: esos documentos existen y se guardan aparte (§0). Se quedan. La excepción es `LOGROS.md`, que ya no existe con ese nombre (hay `LOGROS-REDISENO.md` y `LOGROS-IDEAS.md`): sus 28 citas se revisan cuando se toque el código de logros.
 
 #### L1: al cerrar la fase 8
 
@@ -2472,7 +2501,10 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 | `migrationSync.ts`, su test, `scripts/push-migrations-to-turso.ts` y `db:push:remote`                                                                        | L0, 2026-11-16                                                                     |
 | `scripts/benchmark-db.ts` y `benchmark:db`                                                                                                                   | L0, 2026-11-16                                                                     |
 | `spikes/` (44 ficheros; siguen en el historial de git)                                                                                                       | L0, 2026-11-16                                                                     |
-| `handleDb` y las ~130 cadenas de canal duplicadas                                                                                                            | Fase 7, en curso                                                                   |
+| `useWatcherSync`, los avisos `games:changed` y `sync:changed`, el oyente propio del overlay y la invalidación a mano en las mutaciones                       | Fase 7 (§15.4)                                                                     |
+| `sessions:getAll`, `useSessions` y el cálculo de estadísticas sobre todas las sesiones en el renderer                                                        | Fase 7 (§15.6)                                                                     |
+| Los comentarios que citaban módulos borrados (`drainMailbox.ts`, `handleDb`, `withDbAccess`, el pull de Turso)                                               | Fase 7                                                                             |
+| `handleDb` y las ~130 cadenas de canal duplicadas                                                                                                            | Fase 7 (§15.3)                                                                     |
 
 ### C.5 Barreras para que no vuelva
 
@@ -2485,7 +2517,7 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 - Al cerrar cada fase se revisa qué ha dejado de usarse, qué código puente se ha añadido y con qué tanda se va.
 - **El código puente nace con fecha.** Todo lo que se escriba solo para convivir con la 1.x (sobre todo en la fase 8) lleva un comentario `PUENTE 1.x → Lx` y una fila aquí.
 - Pendiente de clasificar según avance el trabajo:
-  - **Fase 7 (en curso):** `useWatcherSync` y la invalidación a mano en cada mutación, que sustituye el evento único de §15.4; `useSessions` (todas las sesiones), ya retirado en §15.6 (F-41): las pantallas leen sesiones abiertas, de un juego, de un rango, una página o los agregados de `stats:*`; los tipos del esquema que cruzan el IPC (F-42).
+  - **Fase 7:** cerrada. Lo que dejó sin uso ya está en §C.4. Queda revisar si los tipos del esquema que aún cruzan el IPC (F-42) tienen DTO propio.
   - **Fase 8:** qué parte del importador sirve también para "restaurar copia" y cuál es solo migración.
   - **Fase 9:** dependencias que solo usaba la 1.x y que la actualización general permita quitar.
 

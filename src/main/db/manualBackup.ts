@@ -7,10 +7,9 @@ import { vacuumInto } from './backupCore';
 // dailyBackup.ts (a propósito: el usuario la pidió explícitamente como vía
 // de escape aparte). A diferencia de la diaria (que corre en el arranque,
 // antes de que exista ninguna concurrencia real), esta puede dispararse en
-// cualquier momento de una sesión ya en marcha — por eso su único llamador
-// (ipc/backup.ts) la registra con handleDb, igual que el resto de dominios
-// que tocan la DB fuera del arranque; no hace falta un withDbAccess propio
-// aquí encima.
+// cualquier momento de una sesión ya en marcha. La base 2.0 es una sola
+// conexión síncrona, así que no hace falta ningún candado propio aquí encima;
+// su único llamador es ipc/backup.ts.
 //
 // Nombre con fecha Y hora (no solo fecha) porque, a diferencia de la
 // diaria, aquí no hay ningún criterio de "ya se hizo hoy" que evite un
