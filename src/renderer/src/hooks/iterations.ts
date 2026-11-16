@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type {
   ConcurrentPlaythrough,
   MergePlaythroughsOutcome,
@@ -7,7 +7,6 @@ import type {
 } from '../../../shared/playthroughMerge';
 import type { CreateIterationInput, Iteration, UpdateIterationPatch } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
-import { useInvalidatingMutation } from './useInvalidatingMutation';
 import type { GameId, IterationId } from '../../../shared/entityIds';
 
 // No hay useIterations(gameId) — games:getById ya trae las iteraciones
@@ -19,10 +18,7 @@ export const useCreateIteration = (): UseMutationResult<
   CreateIterationInput,
   unknown
 > =>
-  useInvalidatingMutation(
-    (input: CreateIterationInput) => window.api.iterations.create(input),
-    [queryKeys.games.all],
-  );
+  useMutation({ mutationFn: (input: CreateIterationInput) => window.api.iterations.create(input) });
 
 export const useUpdateIteration = (): UseMutationResult<
   Iteration | null,
@@ -30,11 +26,10 @@ export const useUpdateIteration = (): UseMutationResult<
   { id: IterationId; patch: UpdateIterationPatch },
   unknown
 > =>
-  useInvalidatingMutation(
-    ({ id, patch }: { id: IterationId; patch: UpdateIterationPatch }) =>
+  useMutation({
+    mutationFn: ({ id, patch }: { id: IterationId; patch: UpdateIterationPatch }) =>
       window.api.iterations.update(id, patch),
-    [queryKeys.games.all],
-  );
+  });
 
 // Borrar una iteración arrastra en cascada (ON DELETE CASCADE, ver
 // deleteIteration.ts) sus sessions y state_events — igual que useDeleteGame,
@@ -43,10 +38,7 @@ export const useUpdateIteration = (): UseMutationResult<
 // auditoría). Compárese con useResetEndlessState (games.ts), una operación
 // más ligera que ya invalidaba las tres correctamente.
 export const useDeleteIteration = (): UseMutationResult<boolean, Error, IterationId, unknown> =>
-  useInvalidatingMutation(
-    (id: IterationId) => window.api.iterations.delete(id),
-    [queryKeys.games.all, queryKeys.sessions.all, queryKeys.stateEvents.all],
-  );
+  useMutation({ mutationFn: (id: IterationId) => window.api.iterations.delete(id) });
 
 // §10.7 — los playthroughs activos del juego cuando hay MÁS DE UNO (dos PCs
 // sin red crearon cada uno el suyo). Lista vacía = nada que reparar. Su key
@@ -72,13 +64,6 @@ export const useMergePlaythroughs = (): UseMutationResult<
   MergePlaythroughsRequest,
   unknown
 > =>
-  useInvalidatingMutation(
-    (request: MergePlaythroughsRequest) => window.api.iterations.merge(request),
-    [
-      queryKeys.games.all,
-      queryKeys.sessions.all,
-      queryKeys.stateEvents.all,
-      queryKeys.spend.all,
-      queryKeys.achievements.all,
-    ],
-  );
+  useMutation({
+    mutationFn: (request: MergePlaythroughsRequest) => window.api.iterations.merge(request),
+  });

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { asc, eq } from 'drizzle-orm';
-import type { BrowserWindow } from 'electron';
 import { basename } from 'node:path';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { closeAppDbFixture, freshAppDb } from '../../db/v2/__tests__/appDbHarness';
+import { currentChangeOrigin } from '../../lib/changeOrigin';
 import {
   asOtherDevice,
   seedEmulator,
@@ -87,15 +87,6 @@ mock.module('electron', {
   },
 });
 
-const overlayChannels: string[] = [];
-mock.module('../../windows/overlay', {
-  namedExports: {
-    sendToOverlay: (channel: string): void => {
-      overlayChannels.push(channel);
-    },
-  },
-});
-
 // El backup de partidas guardadas se dispara al cerrar sesión
 // (PARTIDAS-GUARDADAS.md §10.2). Aquí solo se apunta A QUÉ JUEGO: con quién se
 // dispara y con quién no es una regla del watcher, subirlo a R2 no.
@@ -169,17 +160,11 @@ const hoursAgo = (hours: number): Date => new Date(ANCHOR_MS - hours * 3_600_000
 
 let fx: QueryFixture;
 let watcher: InstanceType<typeof ProcessWatcher>;
-const rendererChannels: string[] = [];
+// Los avisos de cambio que la puerta de escritura confirmó, con el origen con
+// el que se escribieron (lo que el main convierte en 'data:changed', §15.4).
+const committed: { tables: readonly string[]; origin: string }[] = [];
+let stopListening: (() => void) | null = null;
 const trayUpdates: string[][] = [];
-
-const fakeWindow = {
-  isDestroyed: (): boolean => false,
-  webContents: {
-    send: (channel: string): void => {
-      rendererChannels.push(channel);
-    },
-  },
-};
 
 beforeEach(async () => {
   // Con el reloj del sistema: el watcher mide la gracia de arranque y el
@@ -188,15 +173,15 @@ beforeEach(async () => {
   fx = freshAppDb({ realClock: true });
   systemProcesses = [];
   screenLocked = false;
-  rendererChannels.length = 0;
-  overlayChannels.length = 0;
+  committed.length = 0;
+  stopListening?.();
+  stopListening = fx.local.store.onChange((change) => {
+    committed.push({ tables: change.tables, origin: currentChangeOrigin() });
+  });
   trayUpdates.length = 0;
   closedEvents.length = 0;
   backupsScheduled.length = 0;
-  watcher = new ProcessWatcher(
-    () => fakeWindow as unknown as BrowserWindow,
-    (titles) => trayUpdates.push(titles),
-  );
+  watcher = new ProcessWatcher((titles) => trayUpdates.push(titles));
 });
 
 // ── Utilidades ────────────────────────────────────────────────────────────
@@ -396,11 +381,12 @@ describe('un proceso vigilado que arranca', () => {
     assert.equal(rows[0].iterationId, iterationId);
     assert.deepEqual(await stateLog(iterationId), ['started']);
 
-    // Los DOS avisos. El overlay es otra ventana con otro caché, y durante
-    // mucho tiempo su suscripción a 'games:changed' no llegó a dispararse
-    // nunca porque el aviso solo salía hacia mainWindow.
-    assert.ok(rendererChannels.includes('games:changed'));
-    assert.ok(overlayChannels.includes('games:changed'));
+    // El aviso a la interfaz ya no lo manda el watcher: sale de la puerta de
+    // escritura al confirmar, marcado con su origen (§15.4).
+    assert.ok(
+      committed.some((change) => change.origin === 'watcher' && change.tables.includes('sessions')),
+      'la sesion se escribe con origen watcher',
+    );
     assert.deepEqual(trayUpdates.at(-1), ['Celeste']);
   });
 
@@ -805,7 +791,10 @@ describe('sesiones que quedaron abiertas de la ejecucion anterior', () => {
     assert.equal(session.endedAt?.toISOString(), '2026-03-01T18:00:00.000Z');
     assert.equal(session.durationSec, 0);
     assert.equal(watcher.isGameRunning(gameId), false);
-    assert.ok(rendererChannels.includes('games:changed'), 'la biblioteca tiene que repintarse');
+    assert.ok(
+      committed.some((change) => change.origin === 'watcher'),
+      'la biblioteca tiene que repintarse',
+    );
   });
 
   it('pero espera la gracia: un lanzador lento no pierde la sesion que acaba de abrir', async () => {
@@ -1305,11 +1294,7 @@ describe('cerrar por bloqueo o suspension', () => {
 
 describe('el sync rapido antes de abrir la sesion de un juego', () => {
   const withSync = (syncBeforeCreate: (limitMs: number) => Promise<void>): void => {
-    watcher = new ProcessWatcher(
-      () => fakeWindow as unknown as BrowserWindow,
-      (titles) => trayUpdates.push(titles),
-      { syncBeforeCreate },
-    );
+    watcher = new ProcessWatcher((titles) => trayUpdates.push(titles), { syncBeforeCreate });
   };
 
   it('se pide con tope de 3 s ANTES de abrir, y la sesion se abre al volver', async () => {

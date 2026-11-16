@@ -6,7 +6,7 @@ import { queryKeys } from './queryKeys';
 
 // Los dispositivos vivos que conoce la base (§10.8, §11.4). Mismo staleTime
 // Infinity que el resto: los invalida el aviso de cambios del main
-// (useWatcherSync), que es también por donde llega lo que trae el sync.
+// (dominio 'devices' de 'data:changed'), que es también por donde llega lo que trae el sync.
 export const useDevices = (): UseQueryResult<DeviceInfo[], Error> =>
   useQuery({
     queryKey: queryKeys.devices.all,

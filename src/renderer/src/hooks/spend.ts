@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type {
   AddSpendEventInput,
   SpendEvent,
@@ -7,7 +7,6 @@ import type {
   UpdateSpendEventPatch,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
-import { useInvalidatingMutation } from './useInvalidatingMutation';
 import type { SpendEventId } from '../../../shared/entityIds';
 
 // Bloque 5B — todos los gastos de la biblioteca (para Total Spent / Avg
@@ -24,16 +23,10 @@ export const useSpendEvents = (): UseQueryResult<SpendEventSummary[], Error> =>
 
 // ['games'] cascada al detalle del juego (cambia totalSpend/costPerHour).
 export const useAddSpend = (): UseMutationResult<SpendEvent, Error, AddSpendEventInput, unknown> =>
-  useInvalidatingMutation(
-    (input: AddSpendEventInput) => window.api.spend.add(input),
-    [queryKeys.games.all, queryKeys.spend.all],
-  );
+  useMutation({ mutationFn: (input: AddSpendEventInput) => window.api.spend.add(input) });
 
 export const useDeleteSpendEvent = (): UseMutationResult<boolean, Error, SpendEventId, unknown> =>
-  useInvalidatingMutation(
-    (id: SpendEventId) => window.api.spend.delete(id),
-    [queryKeys.games.all, queryKeys.spend.all],
-  );
+  useMutation({ mutationFn: (id: SpendEventId) => window.api.spend.delete(id) });
 
 export const useUpdateSpendEvent = (): UseMutationResult<
   SpendEvent | null,
@@ -41,8 +34,7 @@ export const useUpdateSpendEvent = (): UseMutationResult<
   { id: SpendEventId; patch: UpdateSpendEventPatch },
   unknown
 > =>
-  useInvalidatingMutation(
-    ({ id, patch }: { id: SpendEventId; patch: UpdateSpendEventPatch }) =>
+  useMutation({
+    mutationFn: ({ id, patch }: { id: SpendEventId; patch: UpdateSpendEventPatch }) =>
       window.api.spend.update(id, patch),
-    [queryKeys.games.all, queryKeys.spend.all],
-  );
+  });

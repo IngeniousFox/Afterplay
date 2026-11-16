@@ -48,7 +48,7 @@ import type { LaunchExecutableResult } from '../../shared/types';
 // ── LO QUE PESA CADA RESPUESTA DE ESTE DOMINIO ─────────────────────────────
 //
 // Cada `invoke` serializa (structured clone) TODO lo que el handler devuelve,
-// y estas dos listas se vuelven a pedir enteras en cada 'games:changed' (un
+// y estas dos listas se vuelven a pedir enteras en cada 'data:changed' (un
 // arranque o cierre de sesión del watcher, un pull de Turso que trae filas,
 // cualquier mutation). Medido sobre la biblioteca real —994 juegos: 333 en
 // biblioteca y 661 planeados— con el payload de verdad, no con datos de
@@ -75,7 +75,7 @@ import type { LaunchExecutableResult } from '../../shared/types';
 // buscador) solo leen id/igdbId/steamAppId/título/carátula/géneros/año — y
 // la lista está ACTIVA fuera del Plan: SagaSection llama a usePlannedGames()
 // antes de su early return, así que cualquier ficha abierta pagaba los
-// 928 KB en cada 'games:changed'. Por eso va partido en DOS canales (la
+// 928 KB en cada 'data:changed'. Por eso va partido en DOS canales (la
 // partición vive en getPlannedGames.ts, la forma en shared/types.ts y la
 // unión por id en hooks/games.ts): el caso común paga ahora 354 KB por aviso
 // (-62%, medido con JSON.stringify sobre los 661 reales), los extras solo

@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type {
   AddStateEventInput,
   StateEvent,
@@ -7,7 +7,6 @@ import type {
   UpdateStateEventPatch,
 } from '../../../shared/types';
 import { queryKeys } from './queryKeys';
-import { useInvalidatingMutation } from './useInvalidatingMutation';
 import type { StateEventId } from '../../../shared/entityIds';
 
 // Bloque 5D — todos los cambios de estado de la biblioteca (para "Status
@@ -31,11 +30,7 @@ export const useAddStateEvent = (): UseMutationResult<
   Error,
   AddStateEventInput,
   unknown
-> =>
-  useInvalidatingMutation(
-    (input: AddStateEventInput) => window.api.stateEvents.add(input),
-    [queryKeys.games.all, queryKeys.stateEvents.all],
-  );
+> => useMutation({ mutationFn: (input: AddStateEventInput) => window.api.stateEvents.add(input) });
 
 // La fecha de un evento puede cambiar el orden del historial y hasta el
 // estado actual derivado (el evento más reciente) — y Stats por año cuenta
@@ -46,18 +41,14 @@ export const useUpdateStateEvent = (): UseMutationResult<
   { id: StateEventId; patch: UpdateStateEventPatch },
   unknown
 > =>
-  useInvalidatingMutation(
-    ({ id, patch }: { id: StateEventId; patch: UpdateStateEventPatch }) =>
+  useMutation({
+    mutationFn: ({ id, patch }: { id: StateEventId; patch: UpdateStateEventPatch }) =>
       window.api.stateEvents.update(id, patch),
-    [queryKeys.games.all, queryKeys.stateEvents.all],
-  );
+  });
 
 // Borrar un evento: la corrección de playthrough del Edit modal
 // (Beaten/Dropped → Playing, ver saveExistingIteration) y la papelera del
 // History de la ficha. El estado derivado del juego cambia igual que con
 // update, mismas invalidaciones.
 export const useDeleteStateEvent = (): UseMutationResult<boolean, Error, StateEventId, unknown> =>
-  useInvalidatingMutation(
-    (id: StateEventId) => window.api.stateEvents.delete(id),
-    [queryKeys.games.all, queryKeys.stateEvents.all],
-  );
+  useMutation({ mutationFn: (id: StateEventId) => window.api.stateEvents.delete(id) });

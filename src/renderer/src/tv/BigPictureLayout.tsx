@@ -457,7 +457,7 @@ const TvShell = (): React.JSX.Element => {
 
   // Y se RETIRA mientras hay un juego corriendo: el pad debajo del audio del
   // juego que acabas de lanzar sería ruido, no ambiente. isLive viene del
-  // watcher (games:changed → useWatcherSync invalida ['games'] en la raíz).
+  // watcher (data:changed → useDataChangedSync invalida ['games'] en la raíz).
   // Sin datos aún (arranque frío directo al modo TV) no se decide nada: el
   // primer commit con caché vacía diría "no hay juego" y desharía la
   // atenuación que sound.ts recuerda justo para ese caso.
@@ -469,19 +469,18 @@ const TvShell = (): React.JSX.Element => {
   }, [gamesFetched, gameRunning]);
 
   // El cierre de sesión, versión sofá (§5.4): el listener de escritorio vive
-  // en RootLayout, que aquí no está montado — este es su gemelo TV. La
-  // invalidación es la misma; la piel, un panel a escala en vez de un toast.
+  // en RootLayout, que aquí no está montado — este es su gemelo TV. La piel es
+  // un panel a escala en vez de un toast; el refresco de datos lo hace
+  // 'data:changed' en la raíz.
   useEffect(() => {
     return window.api.sessions.onSessionClosed((event) => {
       if ('openGame' in event && event.openGame) {
         void navigate(`/tv/game/${event.gameId}`);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.games.all });
       setSessionEvent(event);
     });
-  }, [navigate, queryClient]);
+  }, [navigate]);
 
   // Los recaps siguen generándose con el modo TV puesto, y el Journey TV los
   // pinta: alguien tiene que invalidar (el hook de escritorio que lo hacía

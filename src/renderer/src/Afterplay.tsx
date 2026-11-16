@@ -4,13 +4,12 @@ import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAchievementsActivitySync } from './hooks/achievements';
-import { useSyncChangesSync } from './hooks/syncChanges';
+import { useDataChangedSync } from './hooks/useDataChangedSync';
 import { useCuriositiesActivitySync } from './hooks/curiosities';
 import { useExternalRefreshActivity } from './hooks/external';
 import { useRadarActivity } from './hooks/radar';
 import { useBigPicture } from './hooks/useBigPicture';
 import { useKeysImportToast } from './hooks/useKeysImportToast';
-import { useWatcherSync } from './hooks/useWatcherSync';
 import { useStartupContentSignal } from './hooks/useStartupContentSignal';
 import { BLUE, GREEN, RED } from './lib/colors';
 import { router } from './router';
@@ -54,10 +53,10 @@ const toastClassNames = {
 // Shell raíz de la app — routing de verdad (Bloque 3A, SPEC 10.6): rail
 // lateral + Games/Sessions/Stats, ver router.tsx.
 const Afterplay = (): React.JSX.Element => {
-  // Bloque 3D — mantiene el caché de ['games'] al día con lo que el watcher
-  // del main detecta (arranques/cierres de juegos), una sola suscripción para
-  // toda la app.
-  useWatcherSync();
+  // El único oyente de 'data:changed' (§15.4): mantiene el caché al día con
+  // todo lo que el main cambia sin que ninguna mutation del renderer pase por
+  // ahí (watcher, bajadas del sync) y con las propias mutaciones.
+  useDataChangedSync();
   // El tercer reloj del arranque: avisa al main cuando la biblioteca tiene
   // datos y sus primeras carátulas decodificadas, que es cuando de verdad
   // hay algo que enseñar — el splash aguanta hasta entonces (ver el hook).
@@ -77,10 +76,6 @@ const Afterplay = (): React.JSX.Element => {
   // estés, y sus queries son staleTime Infinity — sin este aviso, una ficha
   // abierta antes de que llegara su catálogo se quedaba vacía hasta reiniciar.
   useAchievementsActivitySync();
-  // Y lo que baja del sync entre PCs (§15.4): el motor cambia filas en el main
-  // sin que ninguna mutation del renderer pase por ahí, así que sin este aviso
-  // las pantallas enseñarían los datos de antes hasta reiniciar.
-  useSyncChangesSync();
   // Y el refresco de datos externos (PLAN-TO-PLAY.md 5): su parte de
   // el barrido dura minutos, mucho mas de lo que nadie deja Ajustes abierto.
   // La suscripcion vive AQUI para que la pasada se siga viendo desde

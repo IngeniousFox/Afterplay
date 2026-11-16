@@ -68,7 +68,7 @@ export interface SyncEngineOptions {
   readonly transport: SyncTransport;
   /** Hora de pared en ms. */
   readonly now: () => number;
-  /** Se llama una vez por ciclo con lo que cambió al BAJAR (no se llama si no cambió nada). */
+  /** Se llama tras cada página de bajada que aplicó algo (no se llama si no cambió nada). */
   readonly onChange?: (change: SyncChange) => void;
   readonly logger?: SyncLogger;
   /** La versión de esquema que escribe esta app (§8.7). Por defecto `APP_SCHEMA_VERSION`. */
@@ -230,19 +230,16 @@ class Engine implements SyncEngine {
 
   private async cycle(): Promise<CycleResult> {
     const result = emptyResult();
-    const changes = new Map<string, Set<string>>();
     try {
-      await this.cycleBody(result, changes);
+      await this.cycleBody(result);
     } catch (error) {
       this.fail(result, error);
-    } finally {
-      this.emitChanges(changes);
     }
     this.recordOutcome(result);
     return result;
   }
 
-  private async cycleBody(result: CycleResult, changes: Map<string, Set<string>>): Promise<void> {
+  private async cycleBody(result: CycleResult): Promise<void> {
     const state = readSyncState(this.db);
 
     // Bloqueo guardado (§8.7): se levanta solo cuando la app ya cumple el mínimo.
@@ -277,7 +274,7 @@ class Engine implements SyncEngine {
     result.reset = this.checkIdentity(readSyncState(this.db), status);
 
     const knownSeq = await this.pushPhase(status, result, status.seq);
-    await this.pullPhase(status, result, changes, knownSeq);
+    await this.pullPhase(status, result, knownSeq);
   }
 
   /** Versión, límites y, si el hub exige más que esta app, el bloqueo (§8.7). */
@@ -566,7 +563,6 @@ class Engine implements SyncEngine {
   private async pullPhase(
     status: StatusResponse,
     result: CycleResult,
-    changes: Map<string, Set<string>>,
     knownSeq: number,
   ): Promise<void> {
     let cursor = readSyncState(this.db).pullCursor;
@@ -588,7 +584,7 @@ class Engine implements SyncEngine {
           true,
         );
       }
-      this.applyPage(page.rows, page.next, result, changes);
+      this.applyPage(page.rows, page.next, result);
       result.pages += 1;
       cursor = page.next;
       if (!page.more) break;
@@ -602,12 +598,7 @@ class Engine implements SyncEngine {
    * aquí (§7.7): una fila puede llegar antes que su padre y una restricción
    * atascaría el sync para siempre.
    */
-  private applyPage(
-    rows: readonly WireRow[],
-    next: number,
-    result: CycleResult,
-    changes: Map<string, Set<string>>,
-  ): void {
+  private applyPage(rows: readonly WireRow[], next: number, result: CycleResult): void {
     const client = this.db.$client;
     const touched: [string, string][] = [];
     let applied = 0;
@@ -631,11 +622,16 @@ class Engine implements SyncEngine {
     result.pulled += rows.length;
     result.applied += applied;
     result.skipped += skipped;
+    // El aviso sale con la página YA confirmada, no al final del ciclo: una
+    // bajada larga (primer emparejado) enseña lo que va llegando, y un ciclo
+    // que falla a mitad no se traga lo que ya entró.
+    const changes = new Map<string, Set<string>>();
     for (const [table, id] of touched) {
       let ids = changes.get(table);
       if (!ids) changes.set(table, (ids = new Set()));
       ids.add(id);
     }
+    this.emitChanges(changes);
   }
 
   /** Fusiona una fila entrante con la local. `unknown` = tabla que este cliente no tiene (§8.7). */

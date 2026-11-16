@@ -367,6 +367,22 @@ describe('bajada', () => {
     assert.deepEqual(b.changes[0].ids.games, [id]);
   });
 
+  it('avisa tras CADA página de bajada que aplicó algo, no solo al final del ciclo (§15.4)', async () => {
+    const hub = newHub();
+    hub.limits = { ...hub.limits, pullPageRows: 2 };
+    const a = pc(hub);
+    const ids = [0, 1, 2, 3, 4].map((i) => seedGame(a.fx.ctx, { title: `J${i}` }));
+    await a.engine.runCycle();
+
+    const b = pc(hub, { deviceId: OTHER });
+    const result = await b.engine.runCycle();
+
+    assert.ok(result.pages >= 3);
+    assert.ok(b.changes.length >= 3, 'un aviso por página con filas nuevas');
+    const announced = b.changes.flatMap((change) => change.ids.games ?? []);
+    assert.deepEqual([...announced].sort(), [...ids].sort(), 'cada juego se avisa una sola vez');
+  });
+
   it('una fila local pendiente sigue pendiente tras fusionar lo que llega', async () => {
     const hub = newHub();
     const a = pc(hub);

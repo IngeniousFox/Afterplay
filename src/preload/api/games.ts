@@ -18,7 +18,7 @@ export const gamesApi = {
   getAll: (): Promise<GameListItem[]> => invoke('games:getAll'),
   // La lista del Plan viaja en DOS canales (la medida que lo justifica esta
   // en ipc/games.ts): getPlanned es el escueto que pagan todos sus
-  // consumidores en cada 'games:changed', y getPlannedExtras lleva los
+  // consumidores en cada 'data:changed', y getPlannedExtras lleva los
   // campos que SOLO mira la pantalla del Plan (sinopsis, porque, fecha
   // completa, notas, etiquetas, hero) — la pantalla los junta por id con
   // usePlannedGamesWithExtras.
