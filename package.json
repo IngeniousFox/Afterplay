@@ -22,7 +22,6 @@
     "test:e2e:only": "playwright test",
     "benchmark:journey": "tsx scripts/benchmark-journey.ts",
     "benchmark:shared": "tsx scripts/benchmark-shared.ts",
-    "benchmark:db": "tsx --test --experimental-test-module-mocks scripts/benchmark-db.ts",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "dev:v2": "tsx scripts/dev-profile.ts v2",
@@ -38,7 +37,6 @@
     "release:win": "tsx scripts/release.ts",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "db:push:remote": "tsx scripts/push-migrations-to-turso.ts",
     "db:v2:generate": "drizzle-kit generate --config drizzle.v2.config.ts",
     "db:v2:import": "tsx scripts/import-1x-to-v2.ts"
   },

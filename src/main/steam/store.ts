@@ -112,7 +112,7 @@ export type SteamStoreDetails = {
 // no resuelve— SALE tal cual, con su `response.status` y su `code` intactos.
 // Antes todo el cuerpo iba dentro de un try que devolvía null pasara lo que
 // pasara, y eso hacía indistinguible "Steam retiró el juego" de "Steam tuvo un
-// mal minuto". El precio lo pagaba el buzón del Plan (plan/drainMailbox.ts):
+// mal minuto". El precio lo pagaba el buzón del Plan de la 1.x:
 // clasificaba el mal minuto como veredicto definitivo y QUEMABA un alta buena
 // del móvil en el primer intento, sin gastar ninguno de sus tres reintentos.
 // La diferencia no se puede recuperar aguas abajo, así que tiene que nacer

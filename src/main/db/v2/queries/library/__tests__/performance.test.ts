@@ -15,7 +15,7 @@ import { countWork, type QueryStats } from './helpers';
 // `game_installs`, `plan_entries`, curiosidades y siete `external_checks`) y
 // el `NOT EXISTS` del Plan por fila— mucho más que la 1.x?
 //
-// Mismo banco que scripts/benchmark-db.ts de la 1.x: 600 juegos (300 de la
+// Mismo banco que tenía el benchmark de la 1.x (scripts/benchmark-db.ts, ya borrado): 600 juegos (300 de la
 // biblioteca y 300 planeados), 3 playthroughs por juego (1.800) con un
 // `started` cada uno, y 18.000 sesiones repartidas entre los 900 playthroughs
 // de la biblioteca. Además, lo que en la 1.x eran columnas de `games` y en

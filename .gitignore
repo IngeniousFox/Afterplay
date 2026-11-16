@@ -27,3 +27,7 @@ ludusavi
 # Playwright (E2E)
 test-results/
 playwright-report/
+
+# Restos locales de los prototipos de la fase 0 (borrados del repo; pueden
+# contener copias de datos reales). No se suben.
+spikes

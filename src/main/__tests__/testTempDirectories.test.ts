@@ -38,8 +38,6 @@ it('accepts all verified mkdtemp test families and only their exact six-characte
     'ficha-test',
     'legacyenv',
     'keys',
-    'migrations',
-    'remoto',
     'backups',
     'parsers',
     'scancache',

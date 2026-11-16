@@ -1,6 +1,6 @@
 // Reloj lógico híbrido por dispositivo (AFTERPLAY-2.0.md §8.2).
 //
-// Portado del prototipo validado en spikes/sync-core/src/clock.ts. Formato de
+// Portado del prototipo validado en spikes/sync-core/src/clock.ts (fase 0; borrado, sigue en el historial de git). Formato de
 // ancho fijo, comparable como TEXTO:
 //
 //   <milisegundos, 13 dígitos>-<contador, 4 dígitos>-<id corto, 6 [0-9a-z]>

@@ -88,7 +88,7 @@ const resolveFromSteam = async (
   // que Steam conteste "no tengo ese appid" es definitivo (el juego se retiró),
   // pero que no conteste —un 502, un timeout— no dice nada del juego. Antes los
   // dos acababan en el mismo Error pelado, y quien clasifica errores para
-  // decidir si reintentar (el buzón del Plan, plan/drainMailbox.ts) no tenía
+  // decidir si reintentar (en la 1.x, el buzón del Plan) no tenía
   // por dónde distinguirlos: un mal minuto de Steam quemaba el alta que venía
   // del móvil en el primer intento. El fallo original viaja en `cause` con su
   // response.status y su code, que es lo que ese clasificador lee.

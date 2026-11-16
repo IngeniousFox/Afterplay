@@ -15,8 +15,6 @@ const TEST_TEMP_PREFIXES = [
   'afterplay-ficha-test-', // gameDetailParity.test.ts
   'afterplay-legacyenv-', // legacyEnv.test.ts
   'afterplay-keys-', // credentials.test.ts
-  'afterplay-migrations-', // migrationSync.test.ts
-  'afterplay-remoto-', // migrationSync.test.ts
   'afterplay-backups-', // dailyBackup.test.ts
   'afterplay-parsers-', // steam/__tests__/parsers.test.ts
   'afterplay-scancache-', // scan/__tests__/cache.test.ts

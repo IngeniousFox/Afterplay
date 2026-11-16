@@ -1746,7 +1746,7 @@ Volumen real medido en la copia del 2026-11-13, para dimensionar la siembra del 
 
 #### §20.1.2 Resultado de las comprobaciones previas (2026-11-13)
 
-Los prototipos viven en `spikes/` y no forman parte del producto.
+Los prototipos vivían en `spikes/` y no formaban parte del producto. Se borraron en la limpieza L0 (2026-11-16, Apéndice C); siguen en el historial de git.
 
 | Id   | Resultado                                                                                                                                                                                                                                                                                                     | Dónde                                            | Qué queda                                                                                                                                                                     |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2409,14 +2409,12 @@ Los tamaños son líneas de TypeScript, sin `node_modules`.
 
 #### L0: sin uso hoy
 
-| Pieza                                                                                                 | Tamaño           | Por qué sobra                                                                                                                                                                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/db/migrationSync.ts`, su test y `scripts/push-migrations-to-turso.ts` (`db:push:remote`)    | ~190 más el test | Subían migraciones a Turso. El esquema ya no viaja (D-10). Solo los citan su test y `scripts/lib/testTempDirectories.ts`                                                                                                                                                      |
-| `scripts/benchmark-db.ts` (`benchmark:db`)                                                            | 1 script         | Mide lecturas 1.x (`getGames`, `getGameById`) sobre el esquema 1.x. Si hace falta, se reescribe contra la 2.0                                                                                                                                                                 |
-| `spikes/` (`hub-do`, `local-driver`, `sync-core`, `turso-collision`)                                  | 44 ficheros      | Pruebas de la fase 0. Sus conclusiones ya están en §20.1                                                                                                                                                                                                                      |
-| Vista previa del buzón en `shared/domain/planOrder.ts`                                                | ~110             | **Hecho el 2026-11-16**                                                                                                                                                                                                                                                       |
-| Comentarios que citan módulos borrados (`drainMailbox.ts`, `main/db/index.ts`, `runPlanMailboxDrain`) | ~10 sitios       | Están en `renderer/hooks/games.ts`, `hooks/sessions.ts`, `external/resolveGameEnrichment.ts`, `steam/store.ts` y `web/components/`                                                                                                                                            |
-| Comentarios que citan documentos que no están en el repositorio                                       | ~450 citas       | `PLAN-TO-PLAY.md`, `PARTIDAS-GUARDADAS.md`, `EMULADORES.md`, `BIG-PICTURE.md`, `LOGROS.md`, `AFTERPLAY-LOOP.md`, `REMOTO.md`, `LOGROS-IDEAS.md`, `OVERLAY.md`, `RETROACHIEVEMENTS.md` y otros. Se cambian por la sección de este documento cuando la haya, o se quita la cita |
+Hecha en parte el 2026-11-16 (ver §C.4). Queda:
+
+| Pieza                                                                                                              | Tamaño     | Por qué sobra                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Comentarios del renderer que citan módulos borrados (`drainMailbox.ts`, `main/db/index.ts`, `runPlanMailboxDrain`) | 2 sitios   | `renderer/hooks/games.ts` y `hooks/sessions.ts`. Los reescribe la tanda del evento único de cambios (§15.4), que cambia justo lo que explican                                                                                                                                                                                                        |
+| Comentarios que citan documentos que no están en el repositorio                                                    | ~450 citas | `PLAN-TO-PLAY.md`, `PARTIDAS-GUARDADAS.md`, `EMULADORES.md`, `BIG-PICTURE.md`, `LOGROS.md`, `AFTERPLAY-LOOP.md`, `REMOTO.md`, `LOGROS-IDEAS.md`, `OVERLAY.md`, `RETROACHIEVEMENTS.md` y otros. Se cambian por la sección de este documento cuando la haya, o se quita la cita. Va al final de la fase 7, cuando nadie más esté tocando esos ficheros |
 
 #### L1: al cerrar la fase 8
 
@@ -2471,12 +2469,15 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 | `games.planned`, `plan_to_play`, `sessions.isManual`, `sessions.lastHeartbeatAt`, las columnas `…CheckedAt` y `…SyncedAt`, `isAddedAtArtifact`               | Fase 2: no están en el esquema 2.0. Siguen en el esquema 1.x que lee el importador |
 | El buzón y el estado "pendiente" en la PWA                                                                                                                   | Fase 5                                                                             |
 | La vista previa del buzón en `planOrder.ts`                                                                                                                  | 2026-11-16                                                                         |
+| `migrationSync.ts`, su test, `scripts/push-migrations-to-turso.ts` y `db:push:remote`                                                                        | L0, 2026-11-16                                                                     |
+| `scripts/benchmark-db.ts` y `benchmark:db`                                                                                                                   | L0, 2026-11-16                                                                     |
+| `spikes/` (44 ficheros; siguen en el historial de git)                                                                                                       | L0, 2026-11-16                                                                     |
 | `handleDb` y las ~130 cadenas de canal duplicadas                                                                                                            | Fase 7, en curso                                                                   |
 
 ### C.5 Barreras para que no vuelva
 
 - **Ya existe:** `noTursoInMain.test.ts` recorre el grafo de imports del main y falla si aparece Turso.
-- **Falta (L0):** un test igual para el código 1.x. Nada fuera de `src/main/db/v2/importer/` puede importar `src/main/db/schema.ts`, `src/main/db/queries/`, `src/main/db/index.ts` ni `worker/`. Hoy se cumple; el test lo mantiene mientras el importador siga vivo.
+- **Ya existe (L0, 2026-11-16):** `noLegacyOutsideImporter.test.ts`. Nada fuera del importador y sus herramientas puede importar `src/main/db/schema.ts`, `src/main/db/queries/`, `src/main/db/index.ts`, `db/projections.ts` ni `worker/`, tampoco como tipo.
 - **Falta (L1):** que `lint`, `typecheck` y `test` dejen de recorrer `worker/`.
 
 ### C.6 Cómo se mantiene esta lista

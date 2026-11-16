@@ -386,16 +386,15 @@ npm install
 npm run dev
 ```
 
-| Command                  | What it does                              |
-| ------------------------ | ----------------------------------------- |
-| `npm run dev`            | Development with hot reload               |
-| `npm run typecheck`      | Type-check main and renderer              |
-| `npm run lint`           | ESLint, cached                            |
-| `npm run build`          | Type-check and build                      |
-| `npm run build:win`      | Full Windows installer                    |
-| `npm run build:unpack`   | Unpacked build, for checking packaging    |
-| `npm run ludusavi:fetch` | Download the pinned ludusavi binary       |
-| `npm run db:push:remote` | Push pending migrations straight to Turso |
+| Command                  | What it does                           |
+| ------------------------ | -------------------------------------- |
+| `npm run dev`            | Development with hot reload            |
+| `npm run typecheck`      | Type-check main and renderer           |
+| `npm run lint`           | ESLint, cached                         |
+| `npm run build`          | Type-check and build                   |
+| `npm run build:win`      | Full Windows installer                 |
+| `npm run build:unpack`   | Unpacked build, for checking packaging |
+| `npm run ludusavi:fetch` | Download the pinned ludusavi binary    |
 
 The ludusavi binary isn't in the repo. It's 33 MB and Git would hang on to every
 version of it forever. `ludusavi.lock.json` pins the exact release and its

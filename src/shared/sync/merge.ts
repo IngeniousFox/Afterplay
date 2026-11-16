@@ -1,6 +1,6 @@
 // Fusión por campo (§8.3). LA MISMA función la usan el hub y el cliente.
 //
-// Portada de `spikes/sync-core/src/merge.ts`, donde se demostró con 20.000
+// Portada de `spikes/sync-core/src/merge.ts` (fase 0; borrado, sigue en el historial de git), donde se demostró con 20.000
 // casos aleatorios por propiedad que es conmutativa, asociativa e idempotente
 // y que converge con varias réplicas y un hub (§20.1.2).
 //
