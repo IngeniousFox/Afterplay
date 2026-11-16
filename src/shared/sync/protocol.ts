@@ -29,6 +29,7 @@ export const SYNC_ROUTES = {
 export const DEFAULT_LIMITS: SyncLimits = {
   pushMaxRows: 200,
   pushMaxBytes: 256 * 1024,
+  pushMaxRowBytes: 1536 * 1024,
   pullPageRows: 1000,
 };
 
@@ -36,6 +37,13 @@ export interface SyncLimits {
   pushMaxRows: number;
   /** Tamaño máximo del cuerpo JSON de un `push`, en bytes UTF-8. */
   pushMaxBytes: number;
+  /**
+   * Tamaño máximo del cuerpo de un `push` de UNA sola fila que no cabe en
+   * `pushMaxBytes` (un catálogo de logros enorme). Va sola en su lote. Queda
+   * por debajo de los 2 MB por fila del SQLite de los Durable Objects. Un hub
+   * que no lo anuncia no admite más que `pushMaxBytes`.
+   */
+  pushMaxRowBytes?: number;
   pullPageRows: number;
 }
 

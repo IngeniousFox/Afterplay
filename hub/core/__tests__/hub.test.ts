@@ -495,6 +495,43 @@ describe('paginación del pull', () => {
     assert.equal(cursor, 6);
   });
 
+  it('corta la página por bytes, con al menos una fila, sin perder ninguna', () => {
+    const fill = (target: TenantHub): void => {
+      for (let n = 1; n <= 5; n++) {
+        push(target, wire({ id: `g${n}`, at: clockAt(n, A), fields: { title: 'x'.repeat(1000) } }));
+      }
+    };
+    // Medir una fila tal como sale y dejar sitio para dos y media.
+    const probe = makeHub().hub;
+    fill(probe);
+    const rowBytes = Buffer.byteLength(JSON.stringify(probe.pull(0, 1, VERSION).rows[0]), 'utf8');
+    const { hub } = makeHub({ pullPageMaxBytes: Math.floor(rowBytes * 2.5) });
+    fill(hub);
+    const pages: string[][] = [];
+    let cursor = 0;
+    for (;;) {
+      const page = hub.pull(cursor, 100, VERSION);
+      pages.push(page.rows.map((r) => r.id));
+      assert.ok(page.next > cursor, 'el cursor avanza');
+      cursor = page.next;
+      if (!page.more) break;
+    }
+    assert.deepEqual(pages, [['g1', 'g2'], ['g3', 'g4'], ['g5']]);
+    assert.equal(cursor, 5);
+
+    // Una fila más grande que el tope sale sola.
+    const tiny = makeHub({ pullPageMaxBytes: 10 }).hub;
+    push(tiny, wire({ id: 'a', at: clockAt(1, A), fields: { title: 'grande' } }));
+    push(tiny, wire({ id: 'b', at: clockAt(2, A), fields: { title: 'grande' } }));
+    const first = tiny.pull(0, 100, VERSION);
+    assert.deepEqual(
+      first.rows.map((r) => r.id),
+      ['a'],
+    );
+    assert.equal(first.next, 1);
+    assert.equal(first.more, true);
+  });
+
   it('una página exacta no anuncia `more`', () => {
     const { hub } = makeHub();
     for (let n = 1; n <= 4; n++)

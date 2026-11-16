@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DEFAULT_LIMITS, SYNC_ROUTES, formatDeviceToken } from '../../../src/shared/sync/protocol';
+import { SYNC_ROUTES, formatDeviceToken } from '../../../src/shared/sync/protocol';
 import type { DeviceTokenInfo } from '../../core/hub';
-import { readLimitedText } from '../src/router';
+import { PUSH_BODY_MAX_BYTES, readLimitedText } from '../src/router';
 import { HOST, VERSION, makeWorld, pairDevice, statusPath } from './helpers';
 
 const json = async (response: Response): Promise<Record<string, unknown>> =>
@@ -92,13 +92,13 @@ describe('rutas de dispositivo (/sync/v1)', () => {
     assert.equal((await world.call('/')).status, 404);
   });
 
-  it('push: por encima de 256 KB es invalid_request ANTES de parsear, con y sin Content-Length', async () => {
+  it('push: por encima del tope de una fila sola es invalid_request ANTES de parsear, con y sin Content-Length', async () => {
     const world = makeWorld();
     const { token } = await pairDevice(world);
     const big = JSON.stringify({
       ...VERSION,
       rows: [],
-      pad: 'x'.repeat(DEFAULT_LIMITS.pushMaxBytes),
+      pad: 'x'.repeat(PUSH_BODY_MAX_BYTES),
     });
 
     const declared = await world.call(SYNC_ROUTES.push, { token, rawBody: big });
@@ -109,7 +109,7 @@ describe('rutas de dispositivo (/sync/v1)', () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const chunk = new TextEncoder().encode('x'.repeat(64 * 1024));
-        for (let i = 0; i < 5; i++) controller.enqueue(chunk);
+        for (let i = 0; i <= PUSH_BODY_MAX_BYTES / chunk.byteLength; i++) controller.enqueue(chunk);
         controller.close();
       },
     });

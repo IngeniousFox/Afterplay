@@ -2079,7 +2079,15 @@ Las claves de Ajustes → Connections ya no son solo de cada PC: viajan por el h
 **Pendiente o sin comprobar:**
 
 - La PWA carga a través de Access en el hub de desarrollo (escritorio); falta probarla en un móvil real.
-- `src/shared/domain/planOrder.ts` conserva funciones del buzón que ya nadie usa en la PWA.
+
+#### §20.6.3 Filas grandes (2026-11-16)
+
+Dos catálogos de logros de 675 KB y 284 KB no cabían en un lote de subida (256 KB) y se quedaban sin subir.
+
+- **Subida.** El hub anuncia en `/status` `pushMaxRowBytes` (1,5 MiB, por debajo de los 2 MB por fila del SQLite de los Durable Objects). Una fila que no cabe en `pushMaxBytes` pero sí en ese tope sube sola en su lote. El router admite cuerpos de `push` hasta ese tope.
+- **Hubs anteriores.** Un hub que no anuncia `pushMaxRowBytes` se trata como antes: nada por encima de `pushMaxBytes`, y la fila queda como `oversized` sin atascar el ciclo. Por eso el hub se despliega antes que los clientes.
+- **Bajada.** Cada página de `pull` lleva como mucho 4 MiB de filas (`PULL_PAGE_MAX_BYTES`), además de las 1.000 filas; siempre al menos una. Si se corta, `next` es la última fila entregada y `more` es true. El cliente no cambia: ya sigue `next`.
+- **Lo que sigue sin caber.** Un catálogo de más de 1,5 MiB (unos 3.000 logros) sigue sin subir y lo dice el log. Haría falta guardar las URLs de los iconos sin su prefijo común.
 
 ### §20.7 Fase 6 — Partidas guardadas (M)
 

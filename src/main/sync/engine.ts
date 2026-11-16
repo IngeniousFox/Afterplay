@@ -160,6 +160,13 @@ interface Snapshot {
 
 const bytes = (text: string): number => Buffer.byteLength(text, 'utf8');
 
+/** Sin límites válidos del hub, nada de filas grandes: puede ser un hub anterior. */
+const FALLBACK_LIMITS: SyncLimits = {
+  pushMaxRows: DEFAULT_LIMITS.pushMaxRows,
+  pushMaxBytes: DEFAULT_LIMITS.pushMaxBytes,
+  pullPageRows: DEFAULT_LIMITS.pullPageRows,
+};
+
 export interface SyncEngine {
   /**
    * Un ciclo (§8.5). SOLO UNO A LA VEZ: si ya hay uno en marcha, esta llamada
@@ -188,7 +195,7 @@ class Engine implements SyncEngine {
   private readonly schemaVersion: number;
   private readonly version: ClientVersion;
   /** Los límites del último `/status` (§8.4); antes del primero, los de por defecto. */
-  private limits: SyncLimits = DEFAULT_LIMITS;
+  private limits: SyncLimits = FALLBACK_LIMITS;
   private inFlight: Promise<CycleResult> | null = null;
 
   constructor(options: SyncEngineOptions) {
@@ -305,7 +312,20 @@ class Engine implements SyncEngine {
       limits.pushMaxBytes > 0 &&
       Number.isInteger(limits.pullPageRows) &&
       limits.pullPageRows > 0;
-    this.limits = valid ? limits : DEFAULT_LIMITS;
+    if (!valid) {
+      this.limits = FALLBACK_LIMITS;
+      return;
+    }
+    // Un hub anterior no anuncia `pushMaxRowBytes`: entonces una fila sola
+    // tampoco puede pasar de `pushMaxBytes`.
+    const rowMax = limits.pushMaxRowBytes;
+    const validRowMax = Number.isInteger(rowMax) && (rowMax as number) > limits.pushMaxBytes;
+    this.limits = {
+      pushMaxRows: limits.pushMaxRows,
+      pushMaxBytes: limits.pushMaxBytes,
+      pullPageRows: limits.pullPageRows,
+      ...(validRowMax ? { pushMaxRowBytes: rowMax } : {}),
+    };
   }
 
   /**
@@ -424,13 +444,15 @@ class Engine implements SyncEngine {
    * Lee del cursor en adelante las filas pendientes que caben en un lote
    * (`pushMaxRows` filas y `pushMaxBytes` bytes de cuerpo, §8.4). Tablas en el
    * orden del registro y filas por `id`: así la pasada avanza aunque el hub
-   * rechace algunas, que siguen pendientes.
+   * rechace algunas, que siguen pendientes. Una fila que no cabe en
+   * `pushMaxBytes` pero sí en `pushMaxRowBytes` sube sola en su lote.
    */
   private collectBatch(
     cursor: DirtyCursor,
     result: CycleResult,
   ): { rows: WireRow[]; snapshots: Snapshot[] } {
     const { pushMaxRows, pushMaxBytes } = this.limits;
+    const rowMaxBytes = Math.max(pushMaxBytes, this.limits.pushMaxRowBytes ?? pushMaxBytes);
     const rows: WireRow[] = [];
     const snapshots: Snapshot[] = [];
     let used = bytes(JSON.stringify({ ...this.version, rows: [] }));
@@ -443,6 +465,17 @@ class Engine implements SyncEngine {
         const size = bytes(JSON.stringify(wire)) + 1; // la coma
         if (used + size > pushMaxBytes) {
           if (rows.length > 0) return { rows, snapshots };
+          if (used + size <= rowMaxBytes) {
+            // Grande, pero admisible sola: un lote para ella.
+            rows.push(wire);
+            snapshots.push({
+              table: table.name,
+              id: row.id as string,
+              updated: row.syncUpdated as Clock,
+            });
+            cursor.id = row.id as string;
+            return { rows, snapshots };
+          }
           // Una sola fila que no cabe en ningún lote: subirla sería un error
           // de petición que atascaría el sync entero.
           this.log.error(`${table.name}/${String(row.id)} no cabe en un lote (${size} bytes)`);

@@ -91,6 +91,10 @@ export interface Backend {
 export const SMALL_BODY_MAX_BYTES = 16 * 1024;
 /** El paquete de credenciales: ~20 claves de hasta 4096 caracteres, normalmente decenas. */
 export const CREDENTIALS_BODY_MAX_BYTES = 128 * 1024;
+export const PUSH_BODY_MAX_BYTES = Math.max(
+  DEFAULT_LIMITS.pushMaxBytes,
+  DEFAULT_LIMITS.pushMaxRowBytes ?? 0,
+);
 
 class RequestError extends Error {
   constructor(readonly body: SyncErrorBody) {
@@ -236,7 +240,8 @@ async function handleSync(request: Request, url: URL, backend: Backend): Promise
       return outcomeResponse(await tenant.pull(token, since, limit, versionFromQuery(url)));
     }
     case SYNC_ROUTES.push: {
-      const body = await readJsonObject(request, DEFAULT_LIMITS.pushMaxBytes);
+      // El tope de una fila sola: los lotes de varias filas son más pequeños.
+      const body = await readJsonObject(request, PUSH_BODY_MAX_BYTES);
       return outcomeResponse(await tenant.push(token, body as unknown as PushRequest));
     }
     case SYNC_ROUTES.jobsClaim: {

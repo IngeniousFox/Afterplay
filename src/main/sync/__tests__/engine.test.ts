@@ -161,9 +161,45 @@ describe('subida', () => {
     assert.ok(total > 0);
   });
 
+  it('una fila que no cabe en un lote pero sí en pushMaxRowBytes sube sola', async () => {
+    const hub = newHub();
+    const a = pc(hub);
+    seedGame(a.fx.ctx, { title: 'Pequeño' });
+    seedGame(a.fx.ctx, { title: `Grande ${'x'.repeat(4000)}` });
+    seedGame(a.fx.ctx, { title: 'Otro pequeño' });
+    const total = totalDirty(a);
+    hub.limits = { ...hub.limits, pushMaxBytes: 3000, pushMaxRowBytes: 64 * 1024 };
+
+    const result = await a.engine.runCycle();
+
+    assert.equal(result.status, 'ok');
+    assert.equal(result.oversized, 0);
+    assert.equal(result.pushed, total);
+    assert.equal(totalDirty(a), 0);
+    const pushes = hub.calls.filter((c) => c.kind === 'push');
+    const big = pushes.filter((c) => c.bytes > 3000);
+    assert.equal(big.length, 1, 'un solo lote grande');
+    assert.equal(big[0].rows, 1, 'con la fila grande sola');
+    assert.ok(big[0].bytes <= 64 * 1024);
+  });
+
+  it('un hub que no anuncia pushMaxRowBytes no recibe filas por encima de pushMaxBytes', async () => {
+    const hub = newHub();
+    const a = pc(hub);
+    seedGame(a.fx.ctx, { title: `Grande ${'x'.repeat(4000)}` });
+    hub.limits = { ...hub.limits, pushMaxBytes: 3000 };
+    delete hub.limits.pushMaxRowBytes;
+
+    const result = await a.engine.runCycle();
+
+    assert.equal(result.status, 'ok');
+    assert.ok(result.oversized >= 1);
+    assert.ok(hub.calls.filter((c) => c.kind === 'push').every((c) => c.bytes <= 3000));
+  });
+
   it('una fila que no cabe en ningún lote no atasca el ciclo', async () => {
     const hub = newHub();
-    hub.limits = { ...hub.limits, pushMaxBytes: 100 };
+    hub.limits = { ...hub.limits, pushMaxBytes: 100, pushMaxRowBytes: 100 };
     const a = pc(hub);
     seedGame(a.fx.ctx, { title: 'Grande' });
     const total = totalDirty(a);

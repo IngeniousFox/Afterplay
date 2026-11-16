@@ -109,6 +109,16 @@ const CODE_LENGTH = 10;
 const SHORT_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 const SHORT_ID_ATTEMPTS = 64;
 
+/**
+ * Bytes de filas por página de `pull`, además de `pullPageRows`. Una página
+ * lleva al menos una fila aunque pase de aquí; si no, se corta en la última
+ * que cabe y `more` queda en true. No se anuncia: el cliente sigue `next`.
+ */
+export const PULL_PAGE_MAX_BYTES = 4 * 1024 * 1024;
+
+const utf8 = new TextEncoder();
+const utf8Length = (text: string): number => utf8.encode(text).byteLength;
+
 export interface HubOptions {
   /** El inquilino al que sirve este hub: va en los tokens `ap1.<inquilino>.<secreto>`. */
   tenantId: string;
@@ -116,6 +126,8 @@ export interface HubOptions {
   hubId?: string;
   /** Máximos que anuncia `/status`. Por defecto `DEFAULT_LIMITS`. */
   limits?: Partial<SyncLimits>;
+  /** Bytes de filas por página de `pull`. Por defecto `PULL_PAGE_MAX_BYTES`. */
+  pullPageMaxBytes?: number;
   /** Cuánto puede adelantarse un reloj a la hora del hub. Por defecto 10 min (§8.2). */
   maxAheadMs?: number;
   /** Mayor `schemaVersion` que acepta. Por defecto la de este build. */
@@ -592,12 +604,23 @@ export class TenantHub {
       }
     }
     delivered.sort((a, b) => a.seq - b.seq);
+    // Tope de bytes: catálogos de logros grandes harían respuestas enormes.
+    const maxBytes = this.options.pullPageMaxBytes ?? PULL_PAGE_MAX_BYTES;
+    let used = 0;
+    let kept = 0;
+    for (const { wire } of delivered) {
+      const size = utf8Length(JSON.stringify(wire));
+      if (kept > 0 && used + size > maxBytes) break;
+      used += size;
+      kept += 1;
+    }
+    const cut = kept < delivered.length;
     return {
       hubId: meta.hubId,
       epoch: meta.epoch,
-      rows: delivered.map(({ wire }) => wire),
-      next,
-      more: seqs.length > pageSize,
+      rows: delivered.slice(0, kept).map(({ wire }) => wire),
+      next: cut ? delivered[kept - 1].seq : next,
+      more: cut || seqs.length > pageSize,
       seq: meta.seq,
     };
   }
