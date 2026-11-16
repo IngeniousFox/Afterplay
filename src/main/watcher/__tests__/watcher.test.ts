@@ -88,7 +88,7 @@ mock.module('electron', {
 });
 
 const overlayChannels: string[] = [];
-mock.module('../../overlay', {
+mock.module('../../windows/overlay', {
   namedExports: {
     sendToOverlay: (channel: string): void => {
       overlayChannels.push(channel);

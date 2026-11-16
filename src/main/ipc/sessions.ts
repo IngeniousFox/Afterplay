@@ -11,7 +11,7 @@ import {
   startGameSession,
   updateSessionNote,
 } from '../db/v2/queries/sessions';
-import { notifyOverlaySessionStarted } from '../overlay';
+import { notifyOverlaySessionStarted } from '../windows/overlay';
 import { scheduleSaveBackup } from '../saves/sessionHook';
 import { getSyncRuntime } from '../sync/instance';
 import { CREATE_SYNC_LIMIT_MS } from '../sync/scheduler';

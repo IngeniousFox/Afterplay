@@ -15,7 +15,7 @@ import { HIDDEN_LAUNCH_ARG } from '../lib/loginItem';
 import { isDevProfile } from '../lib/devProfileRules';
 import { isE2E } from '../lib/e2e';
 import { openPathResult } from '../lib/openPath';
-import { getOverlayShortcutStatus, refreshOverlaySettings } from '../overlay';
+import { getOverlayShortcutStatus, refreshOverlaySettings } from '../windows/overlay';
 import { beginStorageMigration } from '../saves/r2';
 import { migrateStorageObjects } from '../saves/migrateStorage';
 import { verifyMigratedRestore } from '../saves/verifyStorageRestore';
