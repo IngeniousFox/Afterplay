@@ -1,53 +1,37 @@
-import { ipcRenderer } from 'electron';
+import { invoke, send, subscribe } from '../ipc';
 
 export const windowApi = {
   // La versión instalada — el pie de Ajustes.
-  getVersion: (): Promise<string> => ipcRenderer.invoke('window:get-version'),
+  getVersion: (): Promise<string> => invoke('window:get-version'),
   // El TERCER reloj del arranque (ver revealWhenReady en main/index.ts): el
   // renderer avisa cuando la biblioteca tiene contenido DE VERDAD pintable —
   // datos cargados y las primeras carátulas decodificadas. Sin esto, la
   // ventana se enseñaba con el primer frame del cascarón y las carátulas
   // aterrizaban delante del usuario, que es justo el hueco feo que el splash
   // existe para tapar.
-  startupContentReady: (): void => ipcRenderer.send('window:startup-content-ready'),
-  minimize: (): void => ipcRenderer.send('window:minimize'),
-  maximize: (): void => ipcRenderer.send('window:maximize'),
-  close: (): void => ipcRenderer.send('window:close'),
-  onMaximizedChange: (callback: (isMaximized: boolean) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean): void =>
-      callback(isMaximized);
-    ipcRenderer.on('window:maximized-change', listener);
-    return () => ipcRenderer.removeListener('window:maximized-change', listener);
-  },
-  onFullscreenChange: (callback: (isFullscreen: boolean) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, isFullscreen: boolean): void =>
-      callback(isFullscreen);
-    ipcRenderer.on('window:fullscreen-change', listener);
-    return () => ipcRenderer.removeListener('window:fullscreen-change', listener);
-  },
-  isVisible: (): Promise<boolean> => ipcRenderer.invoke('window:is-visible'),
-  onVisibleChange: (callback: (isVisible: boolean) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, isVisible: boolean): void =>
-      callback(isVisible);
-    ipcRenderer.on('window:visible-change', listener);
-    return () => ipcRenderer.removeListener('window:visible-change', listener);
-  },
+  startupContentReady: (): void => send('window:startup-content-ready'),
+  minimize: (): void => send('window:minimize'),
+  maximize: (): void => send('window:maximize'),
+  close: (): void => send('window:close'),
+  onMaximizedChange: (callback: (isMaximized: boolean) => void): (() => void) =>
+    subscribe('window:maximized-change', callback),
+  onFullscreenChange: (callback: (isFullscreen: boolean) => void): (() => void) =>
+    subscribe('window:fullscreen-change', callback),
+  isVisible: (): Promise<boolean> => invoke('window:is-visible'),
+  onVisibleChange: (callback: (isVisible: boolean) => void): (() => void) =>
+    subscribe('window:visible-change', callback),
   // ── Big Picture (BIG-PICTURE.md) ────────────────────────────────────────
   // El estado vive en el main (argv/F11/second-instance nacen allí); aquí
   // solo la consulta inicial + el aviso de cambios — mismo contrato que la
   // visibilidad de arriba.
   bigPicture: {
-    get: (): Promise<boolean> => ipcRenderer.invoke('bigpicture:get'),
-    enter: (): void => ipcRenderer.send('bigpicture:enter'),
-    exit: (): void => ipcRenderer.send('bigpicture:exit'),
-    onChange: (callback: (active: boolean) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, active: boolean): void =>
-        callback(active);
-      ipcRenderer.on('bigpicture:changed', listener);
-      return () => ipcRenderer.removeListener('bigpicture:changed', listener);
-    },
+    get: (): Promise<boolean> => invoke('bigpicture:get'),
+    enter: (): void => send('bigpicture:enter'),
+    exit: (): void => send('bigpicture:exit'),
+    onChange: (callback: (active: boolean) => void): (() => void) =>
+      subscribe('bigpicture:changed', callback),
   },
   // El cierre REAL (menú del modo TV) — el close() de arriba solo esconde a
   // la bandeja, por diseño.
-  quitApp: (): void => ipcRenderer.send('app:quit'),
+  quitApp: (): void => send('app:quit'),
 };
