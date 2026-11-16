@@ -470,7 +470,7 @@ describe('una sola regla del alta, y no cuatro copias del mismo número', () => 
     // una recaída —declarar un margen o restar fechas a mano—, pero ya no se
     // le exige llamar a la función: no debe tener dónde.
     const copias: { ruta: string; debeLlamar: boolean }[] = [
-      { ruta: '../../../renderer/src/lib/journeyEntries.ts', debeLlamar: true },
+      { ruta: '../../domain/journeyEntries.ts', debeLlamar: true },
       { ruta: '../../domain/library.ts', debeLlamar: true },
       { ruta: '../../../../worker/src/queries/library.ts', debeLlamar: false },
     ];

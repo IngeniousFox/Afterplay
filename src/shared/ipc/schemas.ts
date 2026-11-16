@@ -213,6 +213,15 @@ export const getSgdbImagesInput: z.ZodType<GetSgdbImagesInput, GetSgdbImagesInpu
   z.object({ sgdbId: z.number() }),
 ]);
 
+// Las lecturas acotadas de sesiones (F-41): un rango de inicio y una página.
+export const sessionsRangeInput = z.object({ from: z.date(), to: z.date() });
+
+export const sessionsPageInput = z.object({
+  gameId: entityId.nullable(),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1).max(200),
+});
+
 export const imageCacheType = z.enum(['covers', 'heroes', 'screenshots', 'achievements']);
 
 export const restoreRequestInput: z.ZodType<RestoreRequestInput, RestoreRequestInput> = z.object({

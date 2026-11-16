@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildEntries, groupEntriesByYearMonth } from '../src/renderer/src/lib/journeyEntries';
-import { syntheticJourney } from '../src/renderer/src/lib/__tests__/journeyFixtures';
+import { buildEntries, groupEntriesByYearMonth } from '../src/shared/domain/journeyEntries';
+import { syntheticJourney } from '../src/shared/domain/__tests__/journeyFixtures';
 
 // npx tsx scripts/benchmark-journey.ts [ruta al journeyEntries.ts anterior]
 // Solo objetos sintéticos en memoria; ninguna base de datos ni servicios.
