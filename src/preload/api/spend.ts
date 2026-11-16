@@ -1,4 +1,4 @@
-import { ipcRenderer } from 'electron';
+import { invoke } from '../ipc';
 import type {
   AddSpendEventInput,
   SpendEvent,
@@ -8,9 +8,9 @@ import type {
 import type { SpendEventId } from '../../shared/entityIds';
 
 export const spendApi = {
-  add: (input: AddSpendEventInput): Promise<SpendEvent> => ipcRenderer.invoke('spend:add', input),
-  getAll: (): Promise<SpendEventSummary[]> => ipcRenderer.invoke('spend:getAll'),
-  delete: (id: SpendEventId): Promise<boolean> => ipcRenderer.invoke('spend:delete', id),
+  add: (input: AddSpendEventInput): Promise<SpendEvent> => invoke('spend:add', input),
+  getAll: (): Promise<SpendEventSummary[]> => invoke('spend:getAll'),
+  delete: (id: SpendEventId): Promise<boolean> => invoke('spend:delete', id),
   update: (id: SpendEventId, patch: UpdateSpendEventPatch): Promise<SpendEvent | null> =>
-    ipcRenderer.invoke('spend:update', id, patch),
+    invoke('spend:update', id, patch),
 };

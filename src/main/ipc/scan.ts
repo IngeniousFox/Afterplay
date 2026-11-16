@@ -1,5 +1,4 @@
-import { ipcMain } from 'electron';
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import { getConfigValue, setConfigValue } from '../config/store';
 import { appCtx } from '../db/v2/appDb';
 import { getOwnedGames } from '../db/v2/queries/library';
@@ -101,9 +100,9 @@ export const registerScanHandlers = (): void => {
   // Las carpetas elegidas se recuerdan: escanear es algo que se repite cada
   // vez que instalas algo, y volver a señalarlas cada vez sería el peaje que
   // haría que nadie usara esto dos veces.
-  ipcMain.handle('scan:getFolders', () => getConfigValue('scanFolders'));
+  handle('scan:getFolders', () => getConfigValue('scanFolders'));
 
-  ipcMain.handle('scan:setFolders', (_event, folders: string[]) => {
+  handle('scan:setFolders', (_event, folders: string[]) => {
     setConfigValue('scanFolders', folders);
     // Reenganchar la vigilancia EN CALIENTE. Señalar una carpeta nueva y que
     // no pasara nada hasta el siguiente barrido sería justo el momento en el
@@ -114,11 +113,11 @@ export const registerScanHandlers = (): void => {
 
   // Lo que se pinta al abrir la pantalla: sale entero de la caché, así que
   // es instantáneo y no gasta ni disco ni cuota de IGDB.
-  handleDb('scan:cached', (): Promise<ScanReport> => buildReport());
+  handle('scan:cached', (): Promise<ScanReport> => buildReport());
 
   // El botón. Rehace todo ignorando la caché — la vía de escape para cuando
   // algo no cuadra (un juego movido a mano, un tamaño que se quedó viejo).
-  handleDb('scan:run', async (): Promise<ScanReport> => {
+  handle('scan:run', async (): Promise<ScanReport> => {
     await getScanWatcher()?.force();
     return buildReport();
   });
@@ -132,7 +131,7 @@ export const registerScanHandlers = (): void => {
   //   2º similitud de nombre — la misma maquinaria (findInLibrary: limpiar
   //      edición/ruido + Dice ≥ 0.82) que ya decide "ya está en la
   //      biblioteca", aquí con la pregunta del revés.
-  ipcMain.handle(
+  handle(
     'scan:matchTitle',
     (_event, query: { title: string; igdbId: number | null }): ScannedFolder | null => {
       const entries = getCachedEntries(getConfigValue('scanFolders'));

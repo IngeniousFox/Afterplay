@@ -1,4 +1,4 @@
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import { appCtx } from '../db/v2/appDb';
 import { readGameRow } from '../db/v2/queries/common';
 import {
@@ -35,7 +35,7 @@ export const registerSessionsHandlers = (): void => {
   // todo en una sola transacción. Devuelve null si ya había una sesión
   // abierta (no debería pasar — el botón está deshabilitado mientras hay una
   // live — pero no es un error, el juego ya se está trackeando igual).
-  handleDb('sessions:startForGame', async (_event, gameId: GameId) => {
+  handle('sessions:startForGame', async (_event, gameId: GameId) => {
     // Prevención de dos playthroughs activos (AFTERPLAY-2.0.md §10.7): abrir la
     // sesión puede CREAR el playthrough, y otro PC puede haberlo creado ya sin
     // que este lo sepa. Un ciclo de sync rápido, con tope de 3 s, trae lo que
@@ -67,28 +67,28 @@ export const registerSessionsHandlers = (): void => {
     return session;
   });
 
-  handleDb('sessions:getAll', async () => {
+  handle('sessions:getAll', async () => {
     return getAllSessions(appCtx());
   });
 
-  handleDb('sessions:close', async (_event, id: SessionId, endedAt: Date) => {
+  handle('sessions:close', async (_event, id: SessionId, endedAt: Date) => {
     // Un Stop pulsado por una persona (R-12).
     return closeSession(appCtx(), id, { endedAt, closedBy: 'user' });
   });
 
   // Borrar una sesión cerrada (vista de Sesiones / Session History del
   // detalle) — rechaza abiertas (ver deleteSession.ts).
-  handleDb('sessions:delete', async (_event, id: SessionId) => {
+  handle('sessions:delete', async (_event, id: SessionId) => {
     return deleteSession(appCtx(), id);
   });
 
   // EMULADORES.md — bandeja de sesiones de emulador sin asignar y su
   // asignación a un juego de la biblioteca.
-  handleDb('sessions:getPending', async () => {
+  handle('sessions:getPending', async () => {
     return getPendingSessions(appCtx());
   });
 
-  handleDb('sessions:assign', async (_event, sessionId: SessionId, gameId: GameId) => {
+  handle('sessions:assign', async (_event, sessionId: SessionId, gameId: GameId) => {
     const session = assignSession(appCtx(), sessionId, gameId);
     // La asignación es EL momento en que por fin se sabe de qué juego son
     // esas partidas — el equivalente al cierre de sesión de un juego normal
@@ -128,12 +128,12 @@ export const registerSessionsHandlers = (): void => {
     return session;
   });
 
-  handleDb('sessions:deletePending', async (_event, sessionId: SessionId) => {
+  handle('sessions:deletePending', async (_event, sessionId: SessionId) => {
     return deletePendingSession(appCtx(), sessionId);
   });
 
   // Diario de sesión — desde el aviso de cierre o desde la fila de la sesión.
-  handleDb('sessions:setNote', async (_event, id: SessionId, note: string) => {
+  handle('sessions:setNote', async (_event, id: SessionId, note: string) => {
     return updateSessionNote(appCtx(), id, note);
   });
 };

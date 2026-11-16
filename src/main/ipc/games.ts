@@ -1,5 +1,5 @@
 import { access } from 'node:fs/promises';
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import { pickUpdateGamePatch } from './gamePatch';
 import type {
   CreateGameWithDetailsInput,
@@ -96,15 +96,15 @@ const enrichForNewGame = async (
 };
 
 export const registerGamesHandlers = (): void => {
-  handleDb('games:getAll', async () => {
+  handle('games:getAll', async () => {
     return getGames(appCtx());
   });
 
-  handleDb('games:getById', async (_event, id: GameId) => {
+  handle('games:getById', async (_event, id: GameId) => {
     return getGameById(appCtx(), id);
   });
 
-  handleDb('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
+  handle('games:createWithDetails', async (_event, input: CreateGameWithDetailsInput) => {
     const enrichment = await enrichForNewGame(input);
     const game = createGameWithDetails(appCtx(), input, enrichment);
     warmImageCache(game);
@@ -120,18 +120,18 @@ export const registerGamesHandlers = (): void => {
   });
 
   // Sección Plan to Play (alta reducida + lista propia + paso a biblioteca).
-  handleDb('games:getPlanned', async () => {
+  handle('games:getPlanned', async () => {
     return getPlannedGames(appCtx());
   });
 
   // El segundo canal de la lista del Plan (ver la tabla de payloads de
   // arriba): solo lo pide la query de extras del renderer, que únicamente
   // está suscrita mientras la pantalla del Plan está montada.
-  handleDb('games:getPlannedExtras', async () => {
+  handle('games:getPlannedExtras', async () => {
     return getPlannedGameExtras(appCtx());
   });
 
-  handleDb('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
+  handle('games:createPlanned', async (_event, input: CreatePlannedGameInput) => {
     const enrichment = await enrichForNewGame(input);
     const game = createPlannedGame(appCtx(), input, enrichment);
     warmImageCache(game);
@@ -160,17 +160,17 @@ export const registerGamesHandlers = (): void => {
 
   // "Up next" (PLAN-TO-PLAY.md §2.2) — fijar/soltar un planeado como
   // prioridad de verdad. Un solo campo, sin nada externo que resolver.
-  handleDb('games:setPlanPinned', async (_event, id: GameId, pinned: boolean) => {
+  handle('games:setPlanPinned', async (_event, id: GameId, pinned: boolean) => {
     return setPlanPinned(appCtx(), id, pinned);
   });
 
   // Y reordenarlos arrastrando: reparte los timestamps de planPinnedAt que ya
   // existen en el orden nuevo (ver la query para el porqué).
-  handleDb('games:reorderUpNext', async (_event, orderedIds: GameId[]) => {
+  handle('games:reorderUpNext', async (_event, orderedIds: GameId[]) => {
     return reorderUpNext(appCtx(), orderedIds);
   });
 
-  handleDb('games:promote', async (_event, input: PromotePlannedGameInput) => {
+  handle('games:promote', async (_event, input: PromotePlannedGameInput) => {
     const game = promotePlannedGame(appCtx(), input);
     warmImageCache(game);
     generateCuriositiesInBackground(game);
@@ -180,11 +180,11 @@ export const registerGamesHandlers = (): void => {
     return game;
   });
 
-  handleDb('games:moveToPlan', async (_event, gameId: GameId) => {
+  handle('games:moveToPlan', async (_event, gameId: GameId) => {
     return moveToPlan(appCtx(), gameId);
   });
 
-  handleDb('games:update', async (_event, id: GameId, rawPatch: UpdateGamePatch) => {
+  handle('games:update', async (_event, id: GameId, rawPatch: UpdateGamePatch) => {
     // El aviso explícito de siempre para el appid: tiene su propio editor y
     // mandarlo aquí es un error de quien llama, no algo que tragarse.
     if ('steamAppId' in rawPatch || 'steamAppIdManual' in rawPatch) {
@@ -208,7 +208,7 @@ export const registerGamesHandlers = (): void => {
     return game;
   });
 
-  handleDb('games:setSteamAppId', async (_event, id: GameId, appId: number) => {
+  handle('games:setSteamAppId', async (_event, id: GameId, appId: number) => {
     const game = setSteamAppId(appCtx(), id, appId);
     if (!game) return null;
     notifyAchievementsActivity({ kind: 'synced', gameId: id, catalogCount: 0, unlockedCount: 0 });
@@ -217,7 +217,7 @@ export const registerGamesHandlers = (): void => {
     return game;
   });
 
-  handleDb('games:delete', async (_event, id: GameId) => {
+  handle('games:delete', async (_event, id: GameId) => {
     // Borrar un juego ya no borra sus copias de partidas (§12.7, I-07): las
     // filas de save_backups y los objetos del bucket se quedan, y volver a
     // añadir el juego las recupera.
@@ -226,7 +226,7 @@ export const registerGamesHandlers = (): void => {
 
   // Conversión a endless: limpia desenlaces y marcadores de partida discreta
   // CONSERVANDO sesiones trackeadas y horas manuales (ver la query).
-  handleDb('games:resetEndlessState', async (_event, id: GameId) => {
+  handle('games:resetEndlessState', async (_event, id: GameId) => {
     return resetEndlessState(appCtx(), id);
   });
 
@@ -239,21 +239,19 @@ export const registerGamesHandlers = (): void => {
   // del texto crudo del sistema operativo — y sirve igual para un .exe que
   // para un directorio (abrir carpetas en el explorador es lo mismo para
   // openPath que "ejecutar" un archivo).
-  handleDb('games:launchExecutable', (_event, gameId: GameId): Promise<LaunchExecutableResult> =>
+  handle('games:launchExecutable', (_event, gameId: GameId): Promise<LaunchExecutableResult> =>
     openLocalPath(getLocalInstall(appCtx(), gameId)?.executablePath ?? null),
   );
 
-  handleDb(
-    'games:openInstallDirectory',
-    (_event, gameId: GameId): Promise<LaunchExecutableResult> =>
-      openLocalPath(getLocalInstall(appCtx(), gameId)?.installDirectory ?? null),
+  handle('games:openInstallDirectory', (_event, gameId: GameId): Promise<LaunchExecutableResult> =>
+    openLocalPath(getLocalInstall(appCtx(), gameId)?.installDirectory ?? null),
   );
 
   // La ficha: en qué dispositivos está instalado el juego (sin rutas) y si el
   // ejecutable de ESTE PC sigue donde se guardó (§11.3). Comprobar es LEER el
   // disco: no escribe nada en la base (no queremos tráfico de sync por
   // comprobaciones) y no borra la instalación.
-  handleDb('games:getInstallInfo', async (_event, gameId: GameId): Promise<GameInstallInfo> => {
+  handle('games:getInstallInfo', async (_event, gameId: GameId): Promise<GameInstallInfo> => {
     const ctx = appCtx();
     return {
       installedOn: getInstalledOn(ctx, gameId),

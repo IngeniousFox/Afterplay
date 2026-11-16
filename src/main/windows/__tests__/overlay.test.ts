@@ -174,10 +174,10 @@ describe('el contador de generación frente a una ventana cancelada a media carg
     await Promise.resolve();
 
     assert.equal(creada.destroyed, false, 'nadie la canceló: sigue viva');
-    overlay.sendToOverlay('overlay:test', 'x');
+    overlay.sendToOverlay('overlay:state', true);
     assert.deepEqual(
       creada.sentChannels,
-      ['overlay:test'],
+      ['overlay:state'],
       'es la ventana vigente: le llega lo que se manda',
     );
   });
@@ -204,7 +204,7 @@ describe('el contador de generación frente a una ventana cancelada a media carg
       'la ventana huérfana se autodestruye sola al terminar de cargar',
     );
 
-    overlay.sendToOverlay('overlay:test', 'x');
+    overlay.sendToOverlay('overlay:state', true);
     assert.deepEqual(
       creada.sentChannels,
       [],
@@ -237,7 +237,7 @@ describe('el contador de generación frente a una ventana cancelada a media carg
     pendingLoads.shift()?.();
     await Promise.resolve();
     await Promise.resolve();
-    overlay.sendToOverlay('overlay:test', 'y');
-    assert.deepEqual(segunda.sentChannels, ['overlay:test'], 'esta sí es la vigente');
+    overlay.sendToOverlay('overlay:state', false);
+    assert.deepEqual(segunda.sentChannels, ['overlay:state'], 'esta sí es la vigente');
   });
 });

@@ -1,3 +1,4 @@
+import { emit } from '../ipc/contractHandlers';
 import { powerMonitor, type BrowserWindow } from 'electron';
 import { closeSync, openSync } from 'node:fs';
 import { appCtx } from '../db/v2/appDb';
@@ -1074,7 +1075,7 @@ export class ProcessWatcher {
   private notifyRenderer(): void {
     const window = this.getWindow();
     if (window && !window.isDestroyed()) {
-      window.webContents.send('games:changed');
+      emit(window.webContents, 'games:changed');
     }
     // Y al HUD, que es otra ventana con otro caché (ver sendToOverlay en
     // overlay.ts). Su OverlayHud lleva desde el principio suscrito a este

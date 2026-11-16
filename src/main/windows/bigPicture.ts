@@ -1,3 +1,4 @@
+import { emit } from '../ipc/contractHandlers';
 import { getMainWindow, showMainWindow } from './mainWindow';
 
 // ── Big Picture (BIG-PICTURE.md) ─────────────────────────────────────────
@@ -23,7 +24,7 @@ export const setBigPictureMode = (value: boolean): void => {
 export function sendBigPictureState(): void {
   const mainWindow = getMainWindow();
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('bigpicture:changed', bigPictureMode);
+    emit(mainWindow.webContents, 'bigpicture:changed', bigPictureMode);
   }
 }
 

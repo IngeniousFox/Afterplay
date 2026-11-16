@@ -1,4 +1,4 @@
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import type { CreateIterationInput, UpdateIterationPatch } from '../../shared/types';
 import { appCtx } from '../db/v2/appDb';
 import {
@@ -46,21 +46,21 @@ export const mergeOutcome = (request: MergePlaythroughsRequest): MergePlaythroug
 };
 
 export const registerIterationsHandlers = (): void => {
-  handleDb('iterations:create', async (_event, input: CreateIterationInput) => {
+  handle('iterations:create', async (_event, input: CreateIterationInput) => {
     return createIteration(appCtx(), input);
   });
 
-  handleDb('iterations:update', async (_event, id: IterationId, patch: UpdateIterationPatch) => {
+  handle('iterations:update', async (_event, id: IterationId, patch: UpdateIterationPatch) => {
     return updateIteration(appCtx(), id, patch);
   });
 
-  handleDb('iterations:delete', async (_event, id: IterationId) => {
+  handle('iterations:delete', async (_event, id: IterationId) => {
     return deleteIteration(appCtx(), id);
   });
 
   // Los playthroughs activos de un juego cuando hay MÁS DE UNO (§10.7); lista
   // vacía si no. Es lo que dice "Two playthroughs are in progress" en la ficha.
-  handleDb(
+  handle(
     'iterations:concurrent',
     async (_event, gameId: GameId): Promise<ConcurrentPlaythrough[]> =>
       findConcurrentActivePlaythroughs(appCtx(), gameId).map(({ id, label, current }) => ({
@@ -70,7 +70,7 @@ export const registerIterationsHandlers = (): void => {
       })),
   );
 
-  handleDb(
+  handle(
     'iterations:merge',
     async (_event, request: MergePlaythroughsRequest): Promise<MergePlaythroughsOutcome> =>
       mergeOutcome({ keepId: request.keepId, dropId: request.dropId }),

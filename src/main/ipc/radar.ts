@@ -1,14 +1,14 @@
 import { appCtx } from '../db/v2/appDb';
 import { dismissRadarGame, listRadarGames } from '../db/v2/queries/loop';
 import type { RadarGame } from '../../shared/types';
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 
 // El radar de secuelas (PLAN-TO-PLAY.md §4) — lo que la pasada semanal ha
 // descubierto, para pintarlo en "On the horizon" del Plan.
 export const registerRadarHandlers = (): void => {
-  handleDb('radar:list', async (): Promise<RadarGame[]> => listRadarGames(appCtx()));
+  handle('radar:list', async (): Promise<RadarGame[]> => listRadarGames(appCtx()));
 
-  handleDb('radar:dismiss', async (_event, igdbId: number) => {
+  handle('radar:dismiss', async (_event, igdbId: number) => {
     dismissRadarGame(appCtx(), igdbId);
     return true;
   });
@@ -16,7 +16,7 @@ export const registerRadarHandlers = (): void => {
   // No hay ningún canal para forzar la pasada, y no es un olvido: el radar es
   // lo único automático de todo el documento y así debe seguir (§4).
   //
-  // Aquí vivía un ipcMain.handle('radar:runNow') presentado como "la vía de
+  // Aquí vivía un handle('radar:runNow') presentado como "la vía de
   // escape para probarlo sin esperar siete días". No lo era: con
   // contextIsolation la página solo ve lo que expone `api` por contextBridge,
   // y ese canal era el único de toda la app sin pareja en preload/ — así que

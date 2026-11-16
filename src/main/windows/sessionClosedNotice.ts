@@ -1,3 +1,4 @@
+import { emit } from '../ipc/contractHandlers';
 import { Notification } from 'electron';
 import { pngIcon } from '../lib/appIcon';
 import { queueAchievementsRefreshForGame } from '../steam/backfill';
@@ -44,7 +45,7 @@ export const wireSessionClosedNotice = (): void => {
     // de aquí abajo ni se llegaba a mirar. Mismo predicado que ipc/window.ts
     // usa para contestar "¿se ve la ventana?".
     if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized()) {
-      window.webContents.send('sessions:closed', event);
+      emit(window.webContents, 'sessions:closed', event);
       return;
     }
 
@@ -87,10 +88,10 @@ export const wireSessionClosedNotice = (): void => {
       // vacío. Con 'did-finish-load' ya hay quien escuche.
       if (target.webContents.isLoading()) {
         target.webContents.once('did-finish-load', () => {
-          target.webContents.send('sessions:closed', { ...event, openGame: true });
+          emit(target.webContents, 'sessions:closed', { ...event, openGame: true });
         });
       } else {
-        target.webContents.send('sessions:closed', { ...event, openGame: true });
+        emit(target.webContents, 'sessions:closed', { ...event, openGame: true });
       }
     });
     notification.show();

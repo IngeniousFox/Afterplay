@@ -1,4 +1,4 @@
-import { ipcRenderer } from 'electron';
+import { invoke } from '../ipc';
 import type {
   AddStateEventInput,
   StateEvent,
@@ -8,10 +8,9 @@ import type {
 import type { StateEventId } from '../../shared/entityIds';
 
 export const stateEventsApi = {
-  add: (input: AddStateEventInput): Promise<StateEvent> =>
-    ipcRenderer.invoke('stateEvents:add', input),
-  getAll: (): Promise<StateEventSummary[]> => ipcRenderer.invoke('stateEvents:getAll'),
+  add: (input: AddStateEventInput): Promise<StateEvent> => invoke('stateEvents:add', input),
+  getAll: (): Promise<StateEventSummary[]> => invoke('stateEvents:getAll'),
   update: (id: StateEventId, patch: UpdateStateEventPatch): Promise<StateEvent | null> =>
-    ipcRenderer.invoke('stateEvents:update', id, patch),
-  delete: (id: StateEventId): Promise<boolean> => ipcRenderer.invoke('stateEvents:delete', id),
+    invoke('stateEvents:update', id, patch),
+  delete: (id: StateEventId): Promise<boolean> => invoke('stateEvents:delete', id),
 };

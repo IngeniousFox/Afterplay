@@ -1,5 +1,4 @@
-import { ipcMain } from 'electron';
-import { handleDb } from './dbHandle';
+import { handle } from './contractHandlers';
 import { appCtx } from '../db/v2/appDb';
 import {
   getAchievementsOverview,
@@ -18,7 +17,7 @@ import { requestAchievementsStop, retryFailedAchievements } from '../steam/queue
 import type { GameId } from '../../shared/entityIds';
 
 export const registerAchievementsHandlers = (): void => {
-  handleDb('achievements:getForGame', async (_event, gameId: GameId) => {
+  handle('achievements:getForGame', async (_event, gameId: GameId) => {
     const data = getGameAchievements(appCtx(), gameId);
 
     // Los ocultos que siguen mudos tras las dos fuentes propias (la API de
@@ -43,17 +42,17 @@ export const registerAchievementsHandlers = (): void => {
     };
   });
 
-  handleDb('achievements:getStatus', async () => getSteamAchievementsStatus());
+  handle('achievements:getStatus', async () => getSteamAchievementsStatus());
 
   // La vista global para el bloque de trofeos de Stats (LOGROS-IDEAS.md).
   // year=null → All Time; con año, las piezas temporales se acotan a él.
-  handleDb('achievements:getOverview', async (_event, year: number | null) =>
+  handle('achievements:getOverview', async (_event, year: number | null) =>
     getAchievementsOverview(appCtx(), year),
   );
 
   // Los desbloqueos colgados de sesiones, para las filas de la pantalla de
   // Sesiones — una consulta para todas en vez de una por juego.
-  handleDb('achievements:getSessionUnlocks', async () => getSessionUnlocks(appCtx()));
+  handle('achievements:getSessionUnlocks', async () => getSessionUnlocks(appCtx()));
 
   // Encola y devuelve cuántos juegos entraron: la sincronización va de uno en
   // uno por la cola (steam/queue.ts) y su progreso viaja por el canal de
@@ -61,18 +60,18 @@ export const registerAchievementsHandlers = (): void => {
   // 300 juegos tarda minutos y ningún invoke debe colgarse tanto.
   // El full arrastra también a RetroAchievements: "Sync now" re-sincroniza
   // las DOS fuentes, o el botón mentiría a medias.
-  ipcMain.handle('achievements:sync', async (_event, full: boolean) => {
+  handle('achievements:sync', async (_event, full: boolean) => {
     const steamQueued = await runAchievementsBackfill(full);
     const raQueued = full ? await runRaFullResync() : 0;
     return steamQueued + raQueued;
   });
 
-  ipcMain.handle('achievements:stop', () => {
+  handle('achievements:stop', () => {
     requestAchievementsStop();
   });
 
   // Reintentar solo los que fallaron, sin repetir la pasada entera.
-  ipcMain.handle('achievements:retryFailed', () => retryFailedAchievements());
+  handle('achievements:retryFailed', () => retryFailedAchievements());
 
   // Refrescar UN juego desde su ficha. Existe porque el catálogo, una vez
   // traído, no se vuelve a pedir nunca por su cuenta: la pasada del arranque
@@ -85,14 +84,14 @@ export const registerAchievementsHandlers = (): void => {
   // lista se actualiza sola delante de ti — una tarjeta encima sobraría.
   // forceRaRematch: el botón es el "hoy le han publicado set y lo quiero YA"
   // — re-intenta el emparejado de RA aunque ya se hubiera preguntado.
-  ipcMain.handle('achievements:refreshGame', (_event, gameId: GameId) =>
+  handle('achievements:refreshGame', (_event, gameId: GameId) =>
     queueAchievementsRefreshForGame(gameId, { notify: false, forceRaRematch: true }),
   );
 
   // Recolocar los desbloqueos ya guardados sobre las sesiones actuales, sin
   // tocar la red — para cuando se corrigen fechas o se asigna a mano una
   // sesión de emulador.
-  handleDb('achievements:replacePlacements', async (_event, gameId: GameId) =>
+  handle('achievements:replacePlacements', async (_event, gameId: GameId) =>
     replaceUnlockPlacements(appCtx(), gameId),
   );
 };

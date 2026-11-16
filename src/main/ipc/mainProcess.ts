@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { handle, on } from './contractHandlers';
 import { quitApp } from '../lifecycle/quit';
 import { enterBigPicture, exitBigPicture, isBigPictureMode } from '../windows/bigPicture';
 import { onStartupContentReady } from '../windows/mainWindow';
@@ -10,7 +10,7 @@ import { onStartupContentReady } from '../windows/mainWindow';
 // El tercer reloj de la ventana (ver startupContentPainted en
 // windows/mainWindow.ts). Se registra ANTES del candado de instancia única.
 export const registerStartupContentIpc = (): void => {
-  ipcMain.on('window:startup-content-ready', () => {
+  on('window:startup-content-ready', () => {
     onStartupContentReady();
   });
 };
@@ -18,13 +18,13 @@ export const registerStartupContentIpc = (): void => {
 // IPC de Big Picture y del quit real, registrados aparte de registerIpcHandlers
 // — su estado (bigPictureMode, isQuitting) vive en windows/ y lifecycle/.
 export const registerBigPictureIpc = (): void => {
-  ipcMain.handle('bigpicture:get', () => isBigPictureMode());
-  ipcMain.on('bigpicture:enter', () => enterBigPicture());
-  ipcMain.on('bigpicture:exit', () => exitBigPicture());
+  handle('bigpicture:get', () => isBigPictureMode());
+  on('bigpicture:enter', () => enterBigPicture());
+  on('bigpicture:exit', () => exitBigPicture());
   // El "Quit Afterplay" del menú del modo TV: el MISMO cierre real que el
   // "Quit" del tray — sin marcar isQuitting, el interceptor de la X lo
   // convertiría en un simple esconderse a la bandeja.
-  ipcMain.on('app:quit', () => {
+  on('app:quit', () => {
     quitApp();
   });
 };

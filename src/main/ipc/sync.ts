@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { handle } from './contractHandlers';
 import { getSyncRuntime } from '../sync/instance';
 import type { PairRequest, SyncStatus } from '../../shared/sync/status';
 import type { PairResult } from '../sync/runtime';
@@ -22,11 +22,11 @@ const UNAVAILABLE: SyncStatus = {
 };
 
 export const registerSyncHandlers = (): void => {
-  ipcMain.handle('sync:getStatus', (): SyncStatus => getSyncRuntime()?.status() ?? UNAVAILABLE);
+  handle('sync:getStatus', (): SyncStatus => getSyncRuntime()?.status() ?? UNAVAILABLE);
 
   // Devuelve el resultado en vez de lanzar: un error lanzado cruza el IPC con
   // el prefijo "Error invoking remote method" y la frase ya viene redactada.
-  ipcMain.handle(
+  handle(
     'sync:pair',
     async (_event, request: PairRequest): Promise<PairResult> =>
       getSyncRuntime()?.pair({
@@ -35,9 +35,9 @@ export const registerSyncHandlers = (): void => {
       }) ?? { ok: false, message: 'Sync is not available right now.' },
   );
 
-  ipcMain.handle('sync:unpair', (): SyncStatus => getSyncRuntime()?.unpair() ?? UNAVAILABLE);
+  handle('sync:unpair', (): SyncStatus => getSyncRuntime()?.unpair() ?? UNAVAILABLE);
 
-  ipcMain.handle('sync:syncNow', (): void => {
+  handle('sync:syncNow', (): void => {
     getSyncRuntime()?.syncNow();
   });
 };

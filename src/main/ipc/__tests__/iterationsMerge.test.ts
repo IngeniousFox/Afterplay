@@ -20,9 +20,9 @@ type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>;
 const handlers = new Map<string, Handler>();
 
 mock.module('electron', { namedExports: { ipcMain: { handle: (): void => {} } } });
-mock.module('../dbHandle', {
+mock.module('../contractHandlers', {
   namedExports: {
-    handleDb: (channel: string, handler: Handler): void => {
+    handle: (channel: string, handler: Handler): void => {
       handlers.set(channel, handler);
     },
   },

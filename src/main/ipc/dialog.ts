@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
+import { handle } from './contractHandlers';
 import { getDirectorySize } from '../lib/directorySize';
 
 // Los tres handlers de abajo abren un diálogo nativo de "elegir archivo/
@@ -23,7 +24,7 @@ export const registerDialogHandlers = (): void => {
   // Windows: en dev el propio Electron.exe también tiene extensión .exe, así
   // que restringir el filtro no cuesta nada y evita que el usuario pique un
   // .dll o un acceso directo por error.
-  ipcMain.handle('dialog:pickExecutable', (event) =>
+  handle('dialog:pickExecutable', (event) =>
     showPicker(event, {
       properties: ['openFile'],
       filters: [
@@ -36,7 +37,7 @@ export const registerDialogHandlers = (): void => {
   // Campo "Install directory" (Add/Edit game) — al elegir la carpeta se
   // calcula su tamaño en el sitio, para no tener que recorrerla de nuevo
   // cada vez que se abre el detalle del juego.
-  ipcMain.handle('dialog:pickDirectory', async (event) => {
+  handle('dialog:pickDirectory', async (event) => {
     const path = await showPicker(event, { properties: ['openDirectory'] });
     if (path === null) return null;
 
@@ -47,9 +48,7 @@ export const registerDialogHandlers = (): void => {
   // Botón "Back up now" de Ajustes — a diferencia de pickDirectory, no hace
   // falta el tamaño de la carpeta elegida, así que no vale la pena pagar el
   // recorrido de getDirectorySize por algo que se va a ignorar.
-  ipcMain.handle('dialog:pickFolder', (event) =>
-    showPicker(event, { properties: ['openDirectory'] }),
-  );
+  handle('dialog:pickFolder', (event) => showPicker(event, { properties: ['openDirectory'] }));
 
   // "Add a single file" de la sección Saves. Existe por los emuladores que
   // guardan TODO en un único fichero: la memory card de PCSX2 (Mcd001.ps2)
@@ -58,5 +57,5 @@ export const registerDialogHandlers = (): void => {
   // Sin filtro de extensiones a propósito: cada emulador usa la suya
   // (.ps2, .mcd, .mcr, .srm, .sav…) y una lista cerrada solo serviría para
   // dejar fuera el emulador que no se me haya ocurrido.
-  ipcMain.handle('dialog:pickFile', (event) => showPicker(event, { properties: ['openFile'] }));
+  handle('dialog:pickFile', (event) => showPicker(event, { properties: ['openFile'] }));
 };
