@@ -4,10 +4,9 @@
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    // Los tipos de Workers se toman del paquete que ya instala worker/ (la 1.x
-    // desaparece en la fase 10; entonces este tsconfig apuntará al suyo).
+    // Los tipos de Workers vienen del paquete que instala hub/worker/package.json.
     // `node` es solo para los tests, que usan node:test y node:sqlite.
-    "types": ["../../worker/node_modules/@cloudflare/workers-types", "node"],
+    "types": ["./node_modules/@cloudflare/workers-types", "node"],
     "typeRoots": ["../../node_modules/@types"],
     "strict": true,
     "noEmit": true,
