@@ -1532,6 +1532,40 @@ El Worker actual recibe el cambio equivalente: con `cutover` activo, cronómetro
 - Obliga a mantener vivo el Worker antiguo y su secreto `TENANTS` para el móvil de quien no haya migrado.
 - No recibe funciones nuevas.
 
+#### §19.3.1 Contrato de `app_meta` (fijado el 2026-11-17)
+
+La 1.8 vive en `main` y la 2.0 en `v2`: este es el único punto en el que se tocan, así que el formato se fija aquí y ninguna de las dos lo cambia sin cambiarlo antes en este documento.
+
+**Tabla** (migración aditiva de la 1.8 en la base 1.x; viaja a Turso como las demás):
+
+| Columna     | Tipo               | Notas                       |
+| ----------- | ------------------ | --------------------------- |
+| `key`       | `TEXT PRIMARY KEY` |                             |
+| `value`     | `TEXT NOT NULL`    | JSON                        |
+| `updatedAt` | `INTEGER NOT NULL` | milisegundos desde la época |
+
+**Claves:**
+
+| Clave                       | Valor (JSON)                                                                                                | Quién la escribe                |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `cutover`                   | `{ "state": "migrating" \| "done", "deviceId", "deviceName", "appVersion", "at" }`. Sin fila = no hay corte | La 2.0 del PC migrador          |
+| `hub`                       | `{ "url", "enrollSecret", "expiresAt" }`. Solo existe con `cutover.state = "done"`                          | La 2.0 del PC migrador          |
+| `device_status:<machineId>` | `{ "deviceName", "appVersion", "lastPushOkAt", "pendingChanges", "at" }`. `lastPushOkAt` puede ser `null`   | Cada 1.8, en cada ciclo de sync |
+
+`deviceId` es el `machineId` de la 1.x, que la 2.0 conserva (§19.6). Las fechas, en milisegundos.
+
+**Operaciones de la 2.0**, directas contra Turso, cada una en una sola sentencia:
+
+- **Reclamar:** `INSERT INTO app_meta (key, value, updatedAt) VALUES ('cutover', ?, ?) ON CONFLICT (key) DO NOTHING`. Gana quien ve `rowsAffected = 1`. Si ve 0, lee la fila: si es suya y está en `migrating`, sigue (reintento tras un cierre); si no, no migra.
+- **Soltar** (la importación o la validación fallaron): `DELETE FROM app_meta WHERE key = 'cutover' AND json_extract(value, '$.state') = 'migrating' AND json_extract(value, '$.deviceId') = ?`.
+- **Terminar:** en una transacción, `cutover` pasa a `done` y se escribe `hub`.
+
+**Lo que hace la 1.8:** ve `cutover` (en cualquier estado) → modo solo lectura en ese mismo ciclo. No escribe nunca `cutover` ni `hub`.
+
+**Secreto de alta** (§9.3). Lo emite el hub a petición del PC migrador, ya emparejado, con su token; vale para varios emparejados y caduca (7 días). El hub guarda solo su huella. Un PC que se empareja con él recibe su propio token, como con el código de un solo uso.
+
+**Por qué la 2.0 habla con Turso** (decidido el 2026-11-17): reclamar el corte tiene que ser una escritura condicional en la base que comparten todos los PCs de la 1.x. La 2.0 lleva para eso un cliente de Turso por HTTP en un módulo puente, y solo en él (`PUENTE 1.x → L3`). La alternativa, un punto nuevo en el Worker antiguo, obligaba a modificar y desplegar `afterplay-web`.
+
 ### §19.4 Auditoría previa de los datos
 
 Antes de fijar las reglas del importador, ejecutar las consultas del apéndice B sobre **una copia** (los backups diarios son copias completas; nunca sobre `Afterplay.db` en uso). Sirven para saber:
