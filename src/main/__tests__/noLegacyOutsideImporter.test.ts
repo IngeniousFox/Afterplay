@@ -5,8 +5,8 @@ import { describe, it } from 'node:test';
 
 // LA 2.0 NO IMPORTA CÓDIGO 1.x (AFTERPLAY-2.0.md, Apéndice C, §C.5).
 //
-// Lo que queda de la 1.x en esta rama —su esquema, sus lecturas y la web
-// móvil antigua de `worker/`— está congelado y solo lo necesita el importador
+// Lo que queda de la 1.x en esta rama —su esquema y sus lecturas— está
+// congelado y solo lo necesita el importador
 // (`src/main/db/v2/importer/`), que lee la base 1.x y comprueba que la 2.0
 // enseña lo mismo. Si cualquier otro fichero empieza a importarlo, volvemos a
 // mantener dos versiones a la vez, y el día de borrar la 1.x ya no se puede.
@@ -28,7 +28,6 @@ const LEGACY = [
   'src/main/db/projections.ts',
   'src/main/db/queries',
   'src/main/db/__tests__/harness.ts',
-  'worker',
 ];
 
 // Quién sí puede: el propio código 1.x, el importador y sus herramientas.
@@ -80,7 +79,7 @@ const sourceFiles = (dir: string): string[] => {
 };
 
 describe('la 2.0 no importa código 1.x', () => {
-  it('solo el importador y sus herramientas llegan al esquema, las lecturas y el Worker de la 1.x', () => {
+  it('solo el importador y sus herramientas llegan al esquema y a las lecturas de la 1.x', () => {
     const offenders: string[] = [];
     let scanned = 0;
     for (const root of SCANNED) {
@@ -106,5 +105,14 @@ describe('la 2.0 no importa código 1.x', () => {
   it('las piezas 1.x vigiladas existen (si se borran, se quitan de la lista)', () => {
     const missing = LEGACY.filter((path) => !existsSync(resolve(ROOT, path)));
     assert.deepEqual(missing, []);
+  });
+});
+
+describe('el Worker de la 1.x no vuelve a esta rama', () => {
+  // `worker/` (la web móvil 1.x) salió de la rama v2 en L1. Vive en `main`
+  // hasta que se retire el Worker desplegado (L2). Si reaparece, ha llegado por
+  // una fusión: el hub tiene su propio `hub/worker`.
+  it('no existe el directorio worker/', () => {
+    assert.equal(existsSync(resolve(ROOT, 'worker')), false);
   });
 });

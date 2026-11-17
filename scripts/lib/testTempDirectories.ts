@@ -10,8 +10,6 @@ const TEST_TEMP_PREFIXES = [
   'afterplay-test-goldberg-', // steam/__tests__/goldbergCatalog.test.ts
   'afterplay-e2e-', // e2e/sandbox.ts
   'afterplay-e2e-keys-', // e2e/plan-ajustes.spec.ts
-  'afterplay-worker-test-', // workerQueries.test.ts
-  'afterplay-worker-paridad-', // workerParidad.test.ts
   'afterplay-ficha-test-', // gameDetailParity.test.ts
   'afterplay-legacyenv-', // legacyEnv.test.ts
   'afterplay-keys-', // credentials.test.ts

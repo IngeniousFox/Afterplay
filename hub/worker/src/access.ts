@@ -1,9 +1,7 @@
-// COPIA de worker/src/access.ts (validación del JWT de Cloudflare Access). Se
-// copia y no se importa porque el Worker de la 1.x desaparece en la fase 10 y
-// este fichero pasa a ser el único. Los cambios respecto al original son solo
-// el tipo `AccessEnv` (en vez de `Env`) y este aviso; la lógica y los
-// comentarios son los mismos y siguen cubiertos por
-// worker/src/__tests__/access.test.ts mientras ambos existan.
+// Validación del JWT de Cloudflare Access. Nació como copia de
+// worker/src/access.ts del Worker de la 1.x (que ya no está en esta rama, y
+// sigue en `main`); este fichero es ahora el único en la 2.0 y lo cubre
+// __tests__/errors.test.ts.
 
 // Lo que `authenticate` necesita del entorno. Sin valores por defecto: si falta
 // algo, falla cerrado.

@@ -31,18 +31,19 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             web/package-lock.json
-            worker/package-lock.json
+            hub/worker/package-lock.json
 
-      # Tres instalaciones: la raíz, la PWA y el Worker tienen cada uno su
-      # package.json, y `npm run typecheck` compila los tres.
+      # Tres instalaciones: la raíz, la PWA y el Worker del hub tienen cada uno su
+      # package.json (`wrangler` y los tipos de Workers), y `npm run typecheck`
+      # compila los tres.
       - name: Install (root)
         run: npm ci
       - name: Install (web)
         run: npm ci
         working-directory: web
-      - name: Install (worker)
+      - name: Install (hub worker)
         run: npm ci
-        working-directory: worker
+        working-directory: hub/worker
 
       - name: Lint
         run: npm run lint

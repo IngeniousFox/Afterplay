@@ -1,14 +1,14 @@
 {
-  "$schema": "../../worker/node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   // Hub de Afterplay 2.0 (§9). La configuración de arriba es la de PRODUCCIÓN
   // (`afterplay-hub`) y NO se despliega hasta la puesta en marcha. Lo que hay
   // desplegado es el hub de DESARROLLO, siempre con `--env dev` (ver abajo).
   // Este Worker NUNCA debe llamarse `afterplay-web`: ese es el Worker de
-  // producción de la 1.x (worker/), que sigue sirviendo hasta la fase 10. Un
+  // producción de la 1.x (rama main), que sigue sirviendo hasta la fase 10. Un
   // `wrangler deploy` con el nombre equivocado machacaría el de producción.
   "name": "afterplay-hub",
   "main": "src/index.ts",
-  // Mismo contrato de ejecución fijado que worker/wrangler.jsonc.
+  // Contrato de ejecución fijado, el mismo que usó el Worker de la 1.x.
   "compatibility_date": "2026-08-08",
   "compatibility_flags": ["nodejs_compat"],
 
