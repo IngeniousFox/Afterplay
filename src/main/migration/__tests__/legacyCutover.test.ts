@@ -47,6 +47,7 @@ const status = (over: Partial<DeviceStatus> = {}): DeviceStatus => ({
   lastPushOkAt: T0,
   pendingChanges: 0,
   at: T0,
+  seenCutoverAt: T0,
   ...over,
 });
 
@@ -197,7 +198,37 @@ describe('puente del corte 1.x (legacyCutover)', () => {
     ]);
   });
 
-  it('findLaggingDevices: ignora al propio PC y marca pendientes y rezagados', () => {
+  it('readDeviceStatuses expone seenCutoverAt y lo trata como opcional', async () => {
+    await put(
+      raw,
+      'device_status:machine-b',
+      JSON.stringify({
+        deviceName: 'PC-B',
+        appVersion: '1.8.1',
+        lastPushOkAt: T0,
+        pendingChanges: 0,
+        at: T0,
+        seenCutoverAt: T0 - 5,
+      }),
+    );
+    const statuses = await bridge.readDeviceStatuses();
+    assert.equal(statuses[0].seenCutoverAt, T0 - 5);
+  });
+
+  it('readLegacyMachines devuelve los machineId distintos de save_backups', async () => {
+    await raw.execute(
+      'CREATE TABLE save_backups (id INTEGER PRIMARY KEY, machineId TEXT NOT NULL, machineName TEXT NOT NULL)',
+    );
+    await raw.execute(
+      "INSERT INTO save_backups (machineId, machineName) VALUES ('m-1', 'PC-1'), ('m-1', 'PC-1'), ('m-2', 'PC-2')",
+    );
+    assert.deepEqual(await bridge.readLegacyMachines(), [
+      { machineId: 'm-1', machineName: 'PC-1' },
+      { machineId: 'm-2', machineName: 'PC-2' },
+    ]);
+  });
+
+  it('findLaggingDevices: solo es seguro quien repite el reclamo y no tiene pendientes', () => {
     const HOUR = 3_600_000;
     const lagging = findLaggingDevices(
       [
@@ -206,16 +237,42 @@ describe('puente del corte 1.x (legacyCutover)', () => {
         status({ deviceId: 'machine-c', deviceName: 'PC-C', pendingChanges: 2 }),
         status({ deviceId: 'machine-d', deviceName: 'PC-D', at: T0 - 2 * HOUR }),
         status({ deviceId: 'machine-e', deviceName: 'PC-E', at: T0 - HOUR }),
+        // «0 pendientes» publicado ANTES del reclamo: no prueba nada.
+        status({ deviceId: 'machine-f', deviceName: 'PC-F', seenCutoverAt: null }),
+        status({ deviceId: 'machine-g', deviceName: 'PC-G', seenCutoverAt: undefined }),
+        status({ deviceId: 'machine-h', deviceName: 'PC-H', seenCutoverAt: T0 - 1 }),
       ],
       'machine-a',
       T0,
       HOUR,
+      T0,
     );
     assert.deepEqual(lagging, [
       { deviceId: 'machine-c', deviceName: 'PC-C', reason: 'pending-changes' },
       { deviceId: 'machine-d', deviceName: 'PC-D', reason: 'stale' },
+      { deviceId: 'machine-f', deviceName: 'PC-F', reason: 'not-confirmed' },
+      { deviceId: 'machine-g', deviceName: 'PC-G', reason: 'not-confirmed' },
+      { deviceId: 'machine-h', deviceName: 'PC-H', reason: 'not-confirmed' },
     ]);
-    assert.deepEqual(findLaggingDevices([], 'machine-a', T0, HOUR), []);
+    assert.deepEqual(findLaggingDevices([], 'machine-a', T0, HOUR, T0), []);
+  });
+
+  it('findLaggingDevices: un PC de save_backups sin device_status nunca informó', () => {
+    const lagging = findLaggingDevices(
+      [status({ deviceId: 'machine-b' })],
+      'machine-a',
+      T0,
+      3_600_000,
+      T0,
+      [
+        { machineId: 'machine-a', machineName: 'PC-A' },
+        { machineId: 'machine-b', machineName: 'PC-B' },
+        { machineId: 'machine-z', machineName: 'PC-Z' },
+      ],
+    );
+    assert.deepEqual(lagging, [
+      { deviceId: 'machine-z', deviceName: 'PC-Z', reason: 'never-reported' },
+    ]);
   });
 
   it('sin la tabla app_meta (1.8 sin instalar) todo da missing-table', async () => {

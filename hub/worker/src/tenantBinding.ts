@@ -23,6 +23,7 @@ export function bindTenant(rpc: TenantRpc, tenantId: string): TenantApi {
     enroll: (...a) => rpc.enroll(tenantId, ...a),
     createEnrollmentSecret: (...a) => rpc.createEnrollmentSecret(tenantId, ...a),
     createEnrollmentCode: (...a) => rpc.createEnrollmentCode(tenantId, ...a),
+    bumpEpoch: (...a) => rpc.bumpEpoch(tenantId, ...a),
     listTokens: (...a) => rpc.listTokens(tenantId, ...a),
     revokeToken: (...a) => rpc.revokeToken(tenantId, ...a),
     web: (...a) => rpc.web(tenantId, ...a),

@@ -22,6 +22,7 @@ describe('bindTenant', () => {
       enroll: record('enroll'),
       createEnrollmentSecret: record('createEnrollmentSecret'),
       createEnrollmentCode: record('createEnrollmentCode'),
+      bumpEpoch: record('bumpEpoch'),
       listTokens: record('listTokens'),
       revokeToken: record('revokeToken'),
       web: record('web'),

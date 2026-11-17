@@ -775,6 +775,7 @@ El hub usa el mismo módulo de fusión; las escrituras del móvil entran por él
 - Cliente más viejo que el hub: sigue funcionando. Solo envía las columnas que conoce; el hub conserva las que no. Ignora las columnas y tablas que no entiende al bajar.
 - Cliente que se actualiza y gana tablas o columnas: pone su cursor a cero y vuelve a bajar todo. Es barato (pocos MB) y la fusión es idempotente.
 - Cliente por debajo del mínimo admitido (`minSchema`, que el hub sube en cambios incompatibles): el hub responde con un código específico; el cliente deja de sincronizar, sigue en local y muestra "actualiza Afterplay para volver a sincronizar". Nunca escribe a ciegas (F-15).
+- Cliente por delante del hub (despliegue en curso o hub sin actualizar): `status` NO lo rechaza, anuncia `maxSchema` y el cliente responde con el fallo reintentable `hub_behind`, sin escribir. `push` y `pull` sí lo rechazan (`protocol_mismatch`).
 - El esquema no viaja: desaparecen `pushMigrationsToRemote`, `migrateWithoutCapture`, `remoteSchemaAhead`, `pendingTableRebuild` y todo lo que el apéndice A lista como parche de DDL.
 
 ### §8.8 Qué no hace el sync
@@ -890,6 +891,12 @@ Margen de uno a dos órdenes de magnitud. Los dos casos que sí pueden rozar el 
 Medido en Cloudflare el 2026-11-13 con un despliegue de prueba (§20.1.2): la CPU no es el problema. La biblioteca del móvil consume 6-17 ms dentro del Durable Object, cuyo límite es de 30 s por petición. Lo que sí pesa es el cupo de **filas leídas**: esa consulta lee 11.207 filas, así que el cupo gratuito de 5 millones da para unas 446 al día entre todos los inquilinos. Medida: el hub guarda el resultado en caché y solo lo recalcula cuando cambia la secuencia del inquilino; si aun así no bastara, tablas de proyección.
 
 Si el hub no está disponible, los PCs siguen en local y se ponen al día después. Ese es el comportamiento de diseño, no un modo degradado.
+
+### §9.8 Operación: restaurar el hub desde una copia
+
+Un hub restaurado desde una copia (de un Durable Object o de su almacenamiento) conserva su `hubId` y su época, así que los clientes pueden no notar el cambio: solo ven un cursor mayor que la secuencia, y solo si la copia es lo bastante antigua. **Tras CUALQUIER restauración de un hub o de un DO desde una copia, hay que subir la época de todos los inquilinos antes de dejar que los clientes sincronicen.** Al verla cambiar, cada cliente vuelve a subirlo todo (§8.4) y lo que la copia no tenía se recupera.
+
+Cómo: `POST /api/v2/admin/epoch` con el cuerpo `{ "all": true }` (o `{ "tenantId": "<id>" }` para uno solo). Solo lo atiende el anfitrión, con la misma puerta que las invitaciones (Cloudflare Access o la cabecera `x-afterplay-admin-token`). Devuelve `{ "epochs": { "<inquilino>": <nueva época> } }`. Subir la época no cambia ningún dato del hub.
 
 ---
 
@@ -1546,13 +1553,15 @@ La 1.8 vive en `main` y la 2.0 en `v2`: este es el único punto en el que se toc
 
 **Claves:**
 
-| Clave                       | Valor (JSON)                                                                                                | Quién la escribe                |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `cutover`                   | `{ "state": "migrating" \| "done", "deviceId", "deviceName", "appVersion", "at" }`. Sin fila = no hay corte | La 2.0 del PC migrador          |
-| `hub`                       | `{ "url", "enrollSecret", "expiresAt" }`. Solo existe con `cutover.state = "done"`                          | La 2.0 del PC migrador          |
-| `device_status:<machineId>` | `{ "deviceName", "appVersion", "lastPushOkAt", "pendingChanges", "at" }`. `lastPushOkAt` puede ser `null`   | Cada 1.8, en cada ciclo de sync |
+| Clave                       | Valor (JSON)                                                                                                                | Quién la escribe                |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `cutover`                   | `{ "state": "migrating" \| "done", "deviceId", "deviceName", "appVersion", "at" }`. Sin fila = no hay corte                 | La 2.0 del PC migrador          |
+| `hub`                       | `{ "url", "enrollSecret", "expiresAt" }`. Solo existe con `cutover.state = "done"`                                          | La 2.0 del PC migrador          |
+| `device_status:<machineId>` | `{ "deviceName", "appVersion", "lastPushOkAt", "pendingChanges", "at", "seenCutoverAt"? }`. `lastPushOkAt` puede ser `null` | Cada 1.8, en cada ciclo de sync |
 
 `deviceId` es el `machineId` de la 1.x, que la 2.0 conserva (§19.6). Las fechas, en milisegundos.
+
+**`seenCutoverAt`** (opcional, `number | null`, añadido el 2026-11-17): el `at` de la fila `cutover` que esa 1.8 ya había leído (y por tanto ya estaba en solo lectura) cuando midió `pendingChanges`; `null` si no había fila. La 1.8 publica su estado DESPUÉS de leer `cutover` en cada ciclo, así que en cuanto ve el reclamo su estado repite `seenCutoverAt = cutover.at`. Un `pendingChanges = 0` sin ese eco no prueba nada: ese PC pudo escribir y subir después de la instantánea. Una 1.8 sin el campo cuenta como «no ha confirmado».
 
 **Operaciones de la 2.0**, directas contra Turso, cada una en una sola sentencia:
 
@@ -1683,7 +1692,7 @@ El informe de validación se guarda en el log. Si falla, se borra `Afterplay2.db
 **El primer PC que acepta la 2.0 (el "migrador"):**
 
 1. Reclama el corte con una escritura condicional directa en Turso (`cutover = migrating`). Solo uno puede ganar. A partir de aquí las 1.8 y el Worker antiguo quedan en solo lectura.
-2. Comprueba `device_status`: todos los PCs conocidos sin cambios pendientes. Si alguno no ha informado, **la única pregunta posible**: "PC-B no ha sincronizado desde X. Enciéndelo, o continúa y lo suyo se recuperará después desde su copia local."
+2. Comprueba `device_status`: un PC solo es seguro si su último estado repite el `at` de ESTE reclamo (`seenCutoverAt`) y tiene `pendingChanges = 0`. Los que aún no han repetido el reclamo se esperan en silencio unos minutos (margen de ~3 min: su ciclo de sync es de ~60 s). Si alguno sigue sin confirmar, o no ha informado, **la única pregunta posible**: "PC-B no ha sincronizado desde X. Enciéndelo, o continúa y lo suyo se recuperará después desde su copia local."
 3. Cierra en origen cualquier sesión abierta, en su último latido.
 4. Cierra su conexión 1.x, saca una copia consistente de `Afterplay.db` a `backups/`, e importa y valida desde esa copia (§19.5). El importador solo escribe en la carpeta de datos con la opción `cutover`, y solo `Afterplay2.db`.
 5. Se empareja con el hub y lo siembra (§19.7).
@@ -1717,11 +1726,11 @@ Está en `src/main/migration/` (`cutover.ts`, `cutoverRuntime.ts`, `cutoverProgr
 **Migrador**, en este orden:
 
 1. Reclama el corte (§19.3.1).
-2. Hace la pregunta de los rezagados si hace falta. Un PC es rezagado si tiene cambios sin subir o no ha informado en 24 horas. **Este mismo PC** también cuenta: la 1.8 se sustituyó por la 2.0 y puede haber dejado cambios sin subir en su réplica. Continuar acepta perderlos (quedan en la copia de `backups/`).
+2. Hace la pregunta de los rezagados si hace falta. Un PC es rezagado si no ha informado en 24 horas, si su último estado no repite el `at` de este reclamo (`not-confirmed`; antes de preguntar se les da un margen de 3 minutos, con el estado «waiting-devices» en pantalla), si lo repite pero tiene cambios sin subir, o si consta en `save_backups.machineId` de Turso sin haber publicado nunca `device_status` (`never-reported`, p. ej. una 1.7.x; si esa lectura falla se registra y se sigue sin ella). La instantánea se saca solo cuando esta comprobación pasa. **Este mismo PC** también cuenta: la 1.8 se sustituyó por la 2.0 y puede haber dejado cambios sin subir en su réplica. Continuar acepta perderlos (quedan en la copia de `backups/`).
 3. Saca una **instantánea de Turso**, en una sola transacción de lectura, a `backups/Afterplay-remote-<fecha>.db`, e importa desde ella. No importa la réplica local: esa solo tiene lo que este PC bajó en su último ciclo. Sin Turso configurado (un solo PC) importa la copia local, como dice §19.5.
 4. Si el buzón del móvil tiene órdenes sin aplicar, para antes de importar y suelta el reclamo: la 1.8 sale del modo solo lectura, las aplica y se reintenta.
 5. Las sesiones abiertas se cierran en su último latido, también en producción.
-6. Se empareja con el hub (la primera vez, con el código de la PWA) y espera a que la siembra termine. La siembra es el primer ciclo normal del motor contra un hub nuevo, que marca todas las filas para subir; termina cuando no queda ninguna.
+6. Se empareja con el hub (la primera vez, con el código de la PWA) y espera a que la siembra termine. Un PC con una biblioteca importada de la 1.x (dispositivo `legacy` o `local_legacy_ids`) **se niega a emparejarse con un hub que ya tiene datos** (`status.seq > 0`) que no conoce, para no mezclar bibliotecas distintas; vale igual desde Ajustes. El secundario del corte no lo sufre: empareja con una base vacía, sin importar nada. La siembra es el primer ciclo normal del motor contra un hub nuevo, que marca todas las filas para subir; termina cuando no queda ninguna.
 7. Pide el secreto de alta y cierra el corte (`done` y `hub`, en una transacción).
 
 Un fallo antes de que la importación valide borra `Afterplay2.db` y suelta el reclamo. Un fallo después conserva el reclamo y se reanuda en el paso en que estaba.
@@ -1735,6 +1744,7 @@ Un fallo antes de que la importación valide borra `Afterplay2.db` y suelta el r
 - Si el PC que tiene el reclamo se rompe a mitad y no vuelve, los demás esperan sin fin. Hoy se arregla a mano, borrando la fila `cutover`.
 - Si el hub rechaza una fila, la siembra no llega a cero y el corte no termina.
 - No está el importador del PC rezagado (§19.6, último párrafo).
+- **Una fila descargada a la que le falta una columna obligatoria se salta y el cursor avanza** (`engine.ts`, aplicar fila): se registra y no se vuelve a pedir. Se acepta porque las migraciones son solo aditivas (§8.7: toda columna nueva lleva valor por defecto), así que un hub bien desplegado no envía filas así.
 - La instantánea y el detector de cambios sin subir solo se han probado contra una base libsql en fichero, no contra Turso por HTTP. Los nombres de columna de la cola de la réplica (`turso_cdc`, `turso_sync_last_change_id`) no se han comprobado sobre una réplica real; si no coinciden, el detector devuelve "desconocido" y se usa solo el estado que publica la 1.8.
 
 ### §19.7 Siembra del hub
@@ -1760,6 +1770,8 @@ Un fallo antes de que la importación valide borra `Afterplay2.db` y suelta el r
 | Tras usar la 2.0                            | Lo mismo                                                                        | Lo registrado en 2.0 desde el corte |
 
 La base de Turso, la base local 1.x y los backups locales se conservan al menos 60 días. La 2.0 no escribe en ninguno de ellos.
+
+**Tras una vuelta atrás, la 2.0 no puede reimportar sin más.** Hay que apartar (renombrar, no borrar) el fichero de datos 2.0 (`Afterplay2.db`) y el de progreso del corte (`cutover-progress.json`) de cada PC; si no, la 2.0 cree que ya migró o reanuda a medias. Y para volver a migrar hace falta un hub nuevo y vacío, o subir la época del inquilino (§9.8) y vaciar su contenido: un hub con datos de la migración anterior rechaza el emparejado de una biblioteca recién importada (§19.6.1) y mezclaría filas sin relación.
 
 ### §19.10 Qué se migra y qué se regenera
 

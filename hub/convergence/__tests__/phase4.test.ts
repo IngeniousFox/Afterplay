@@ -199,6 +199,36 @@ describe('escenarios de la fase 4 (§17.3)', () => {
     assert.equal(session.durationSec, 45 * 60);
   });
 
+  it('una sesión barrida por el hub se resube entera a un hub nuevo y queda igual', async () => {
+    const w = start();
+    const a = await w.addClient('a');
+    const gameId = addGame(a, 40010, { title: 'Hub perdido' });
+    await settle(w);
+
+    const sessionId = openSession(a, gameId);
+    assert.ok(sessionId);
+    w.advance(20 * MINUTE_MS);
+    heartbeatSessions(a.ctx, [sessionId], a.ctx.now());
+    await settle(w);
+    w.advance(ABANDONED_SESSION_MS);
+    assert.equal(w.hub.sweep().abandonedSessions, 1);
+    await settle(w);
+    const swept = w.hubRows('sessions').get(sessionId);
+    assert.equal(parseClock(swept!.clocks.closedBy).dev, RESERVED_DEVICE_ID);
+    assert.equal(sessionIn(a, sessionId).closedBy, 'janitor');
+
+    // El hub se pierde y se recrea vacío (otro hubId): A lo vuelve a subir todo.
+    w.replaceHub();
+    await a.enroll();
+    const result = await a.syncOk();
+    assert.equal(result.reset, 'new_hub');
+    assert.deepEqual(result.rejected, [], 'el hub nuevo acepta el reloj reservado');
+    const again = w.hubRows('sessions').get(sessionId);
+    assert.deepEqual(again?.fields, swept?.fields);
+    assert.deepEqual(again?.clocks, swept?.clocks);
+    assert.deepEqual(convergenceProblems(w), []);
+  });
+
   it('E-09: A estuvo 30 h offline con una sesión que cerró bien; gana el cierre de A', async () => {
     const w = start();
     const a = await w.addClient('a');

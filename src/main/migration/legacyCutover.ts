@@ -56,6 +56,10 @@ const deviceStatusSchema = z.object({
   lastPushOkAt: z.number().nullable(),
   pendingChanges: z.number(),
   at: z.number(),
+  // El `at` de la fila `cutover` que esa 1.8 ya había leído (y por tanto estaba
+  // en solo lectura) al medir `pendingChanges`. Ausente en las 1.8 anteriores
+  // al contrato: equivale a «no ha confirmado» (§19.3.1).
+  seenCutoverAt: z.number().nullable().optional(),
 });
 export type DeviceStatusValue = z.infer<typeof deviceStatusSchema>;
 export type DeviceStatus = DeviceStatusValue & { deviceId: string };
@@ -80,6 +84,11 @@ const toSqlValue = (value: unknown): SQLInputValue => {
   return value as SQLInputValue;
 };
 
+export interface LegacyMachine {
+  machineId: string;
+  machineName: string;
+}
+
 export interface CutoverSelf {
   deviceId: string;
   deviceName: string;
@@ -99,6 +108,11 @@ export interface LegacyCutover {
   releaseCutover(deviceId: string): Promise<boolean>;
   completeCutover(deviceId: string, hub: HubEnrollment): Promise<void>;
   readDeviceStatuses(): Promise<DeviceStatus[]>;
+  /**
+   * Los PCs que han subido copias de partidas (`save_backups.machineId`): sirve
+   * para detectar PCs que nunca publicaron `device_status` (1.7.x). Solo lee.
+   */
+  readLegacyMachines(): Promise<LegacyMachine[]>;
   readHubEnrollment(): Promise<HubEnrollment | null>;
   /**
    * Vuelca la base 1.x REMOTA (todas las tablas de datos) en un fichero SQLite
@@ -234,6 +248,17 @@ export const createLegacyCutover = (
       }));
     },
 
+    async readLegacyMachines() {
+      const result = await run({
+        sql: `SELECT machineId, MAX(machineName) AS machineName FROM save_backups
+                WHERE machineId IS NOT NULL AND machineId <> '' GROUP BY machineId ORDER BY machineId`,
+      });
+      return result.rows.map((row) => ({
+        machineId: String(row.machineId),
+        machineName: String(row.machineName ?? ''),
+      }));
+    },
+
     // Solo con `cutover = done`: antes de eso el hub aún no está listo.
     async readHubEnrollment() {
       const cutover = await readCutover();
@@ -351,23 +376,46 @@ export const openLegacyCutover = async (
 export interface LaggingDevice {
   deviceId: string;
   deviceName: string;
-  reason: 'pending-changes' | 'stale';
+  /**
+   * `not-confirmed`: aún no ha leído ESTE reclamo (puede seguir escribiendo).
+   * `never-reported`: hay un PC en `save_backups` que nunca publicó estado.
+   */
+  reason: 'pending-changes' | 'stale' | 'not-confirmed' | 'never-reported';
 }
 
 /**
- * La pregunta del §19.6 paso 2: ¿qué OTROS PCs tienen cambios sin subir o no
- * han informado en `staleAfterMs`? Vacío = se puede migrar sin preguntar.
+ * La pregunta del §19.6 paso 2: ¿qué OTROS PCs pueden tener cambios que no
+ * entrarán en la 2.0? Un PC es seguro SOLO si su último estado repite el `at`
+ * de ESTE reclamo (`seenCutoverAt`, o sea ya era de solo lectura al medir) y
+ * tiene `pendingChanges = 0`: un «0» publicado antes del reclamo no vale, ese PC
+ * pudo escribir después. Además, todo PC que consta en `legacyMachines` y no ha
+ * publicado estado es rezagado. Vacío = se puede migrar sin preguntar.
  */
 export const findLaggingDevices = (
   statuses: readonly DeviceStatus[],
   selfDeviceId: string,
   nowMs: number,
   staleAfterMs: number,
-): LaggingDevice[] =>
-  statuses.flatMap((status): LaggingDevice[] => {
+  claimAt: number,
+  legacyMachines: readonly LegacyMachine[] = [],
+): LaggingDevice[] => {
+  const lagging = statuses.flatMap((status): LaggingDevice[] => {
     if (status.deviceId === selfDeviceId) return [];
     const base = { deviceId: status.deviceId, deviceName: status.deviceName };
-    if (status.pendingChanges > 0) return [{ ...base, reason: 'pending-changes' }];
     if (nowMs - status.at > staleAfterMs) return [{ ...base, reason: 'stale' }];
+    if (status.seenCutoverAt !== claimAt) return [{ ...base, reason: 'not-confirmed' }];
+    if (status.pendingChanges > 0) return [{ ...base, reason: 'pending-changes' }];
     return [];
   });
+  const reported = new Set(statuses.map((s) => s.deviceId));
+  for (const machine of legacyMachines) {
+    if (machine.machineId === selfDeviceId || reported.has(machine.machineId)) continue;
+    reported.add(machine.machineId);
+    lagging.push({
+      deviceId: machine.machineId,
+      deviceName: machine.machineName || machine.machineId,
+      reason: 'never-reported',
+    });
+  }
+  return lagging;
+};

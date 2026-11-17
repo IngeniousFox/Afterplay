@@ -41,6 +41,7 @@ const ALL: CutoverState[] = [
   { kind: 'seeding', rowsLeft: 1, rowsTotal: 2, problem: null },
   { kind: 'finishing' },
   { kind: 'waiting-other', deviceName: 'X', since: 0 },
+  { kind: 'waiting-devices', devices: ['PC-B', 'PC-C'] },
   { kind: 'pulling', rowsLocal: 5, problem: null },
   { kind: 'local-migration' },
 ];
@@ -70,6 +71,7 @@ describe('cutoverStepIndex', () => {
       [0, 1, 2, 3, 4],
     );
     assert.equal(index('waiting-other'), null);
+    assert.equal(index('waiting-devices'), 0);
     assert.equal(index('pulling'), null);
   });
 });
@@ -95,6 +97,8 @@ describe('laggingReason y agoText', () => {
       laggingReason({ ...device, reason: 'stale', lastReportAt: 0 }, 3 * day),
       'Has not checked in since 3 days ago.',
     );
+    assert.match(laggingReason({ ...device, reason: 'not-confirmed' }, 0), /not confirmed/);
+    assert.match(laggingReason({ ...device, reason: 'never-reported' }, 0), /never reported/);
     assert.equal(agoText(0, 90 * 60 * 1000), '2 hours ago');
     assert.equal(agoText(0, 10 * 1000), 'moments ago');
   });

@@ -66,6 +66,8 @@ export interface TenantApi {
   /** El secreto de alta de la migración (§19.3.1), con el token del PC que lo pide. */
   createEnrollmentSecret(token: string): Promise<Outcome<EnrollmentSecret>>;
   createEnrollmentCode(ttlMinutes?: number): Promise<Outcome<{ code: string; expiresAt: number }>>;
+  /** Sube la época del inquilino (restauración desde copia). Devuelve la nueva. */
+  bumpEpoch(): Promise<Outcome<{ epoch: number }>>;
   listTokens(): Promise<Outcome<DeviceTokenInfo[]>>;
   revokeToken(tokenId: string): Promise<Outcome<{ revoked: boolean }>>;
   /** La API de la PWA (§13), ya autenticada: se reparte dentro del DO (web/routes.ts). */
@@ -78,6 +80,8 @@ export interface DirectoryApi {
     adminEmail: string | undefined,
   ): Promise<{ tenantId: string; created: boolean } | null>;
   invite(email: string, invitedBy: string): Promise<InviteResult>;
+  /** Ids de todos los inquilinos. */
+  tenantIds(): Promise<string[]>;
 }
 
 export interface Backend {
@@ -391,6 +395,33 @@ async function handleApi(request: Request, url: URL, backend: Backend): Promise<
     return result.reason === 'invalid_email'
       ? errorResponse(apiError('invalid_request', 'correo no válido'))
       : errorResponse(apiError('conflict', 'esa persona ya tiene su propio espacio'));
+  }
+
+  // Procedimiento de restauración (§19.9): subir la época de un inquilino o de
+  // todos, para que sus clientes vuelvan a subirlo todo. Solo el anfitrión, con
+  // la misma puerta que las invitaciones (Access o el token de administración).
+  if (route === '/admin/epoch') {
+    if (request.method !== 'POST') return methodNotAllowed('POST');
+    if (!backend.adminEmail || normalizeEmail(backend.adminEmail) !== email) {
+      return errorResponse(apiError('forbidden', 'solo el anfitrión puede subir la época'));
+    }
+    const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
+    const known = await backend.directory.tenantIds();
+    let targets: string[];
+    if (body.all === true) targets = known;
+    else if (typeof body.tenantId === 'string') {
+      if (!known.includes(body.tenantId)) {
+        return errorResponse(apiError('not_found', 'inquilino desconocido'));
+      }
+      targets = [body.tenantId];
+    } else throw invalid('falta tenantId o all: true');
+    const epochs: Record<string, number> = {};
+    for (const tenantId of targets) {
+      const outcome = await backend.tenant(tenantId).bumpEpoch();
+      if (!outcome.ok) return outcomeResponse(outcome);
+      epochs[tenantId] = outcome.value.epoch;
+    }
+    return jsonResponse({ epochs });
   }
 
   // El resto es la API de la PWA, que vive en el Durable Object (web/routes.ts).

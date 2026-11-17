@@ -259,9 +259,14 @@ describe('rechazos por fila', () => {
     assert.equal(res.seq, 2);
   });
 
-  it('rechaza lo firmado con el id corto reservado, pero no BOTTOM', () => {
+  it('rechaza lo firmado con el id corto reservado en una fila que el hub ya tiene, pero no BOTTOM', () => {
     const { hub } = makeHub();
-    const reserved = wire({ id: 'r', at: clockAt(1, '000000'), fields: { title: 'x' } });
+    push(
+      hub,
+      wire({ id: 'r', at: clockAt(1, A), fields: { title: 'x' } }),
+      wire({ id: 'r2', at: clockAt(1, A), fields: { title: 'x' } }),
+    );
+    const reserved = wire({ id: 'r', at: clockAt(2, '000000'), fields: { title: 'x' } });
     const inColumn = wire({
       id: 'r2',
       at: clockAt(1, A),
@@ -315,16 +320,25 @@ describe('rechazos por fila', () => {
     const res2 = push(hub, forged, other);
     assert.deepEqual(res2.rejected, [{ table: 'games', id: 'g1', reason: 'reserved_device' }]);
     assert.deepEqual(res2.accepted, [{ table: 'games', id: 'g2' }]);
-    // Tampoco vale el mismo reloj en otra columna, ni en una fila que el hub no tiene.
+    // Tampoco vale el mismo reloj en otra columna de una fila que el hub sí tiene.
     const moved = { ...after, clocks: { ...after.clocks, title: reserved } };
-    const fresh = wire({ id: 'g3', at: clockAt(3, '000000'), fields: { title: 'z' } });
     assert.deepEqual(
-      push(hub, moved, fresh).rejected.map((r) => [r.id, r.reason]),
-      [
-        ['g1', 'reserved_device'],
-        ['g3', 'reserved_device'],
-      ],
+      push(hub, moved).rejected.map((r) => [r.id, r.reason]),
+      [['g1', 'reserved_device']],
     );
+  });
+
+  it('acepta un reloj reservado en una fila que el hub no tiene (hub nuevo tras un barrido)', () => {
+    const { hub } = makeHub();
+    const fresh = wire({ id: 'g3', at: clockAt(3, '000000'), fields: { title: 'z' } });
+    const res = push(hub, fresh);
+    assert.deepEqual(res.rejected, []);
+    assert.deepEqual(res.accepted, [{ table: 'games', id: 'g3' }]);
+    // Ya existe: a partir de aquí un reloj reservado distinto del guardado se rechaza.
+    const other = wire({ id: 'g3', at: clockAt(4, '000000'), fields: { title: 'z' } });
+    assert.deepEqual(push(hub, other).rejected, [
+      { table: 'games', id: 'g3', reason: 'reserved_device' },
+    ]);
   });
 
   it('rechaza tablas desconocidas y filas mal formadas', () => {
@@ -679,6 +693,21 @@ describe('versiones', () => {
     assert.equal(
       codeOf(() => hub.status({} as never)),
       'invalid_request',
+    );
+  });
+
+  it('status contesta a un cliente por delante con maxSchema; push y pull lo siguen rechazando', () => {
+    const { hub } = makeHub();
+    const ahead = { ...VERSION, schemaVersion: APP_SCHEMA_VERSION + 1 };
+    assert.equal(hub.status(ahead).maxSchema, APP_SCHEMA_VERSION);
+    assert.equal(
+      codeOf(() => hub.pull(0, 10, ahead)),
+      'protocol_mismatch',
+    );
+    // Un protocolo distinto sigue siendo un fallo permanente, también en status.
+    assert.equal(
+      codeOf(() => hub.status({ ...VERSION, protocolVersion: VERSION.protocolVersion + 1 })),
+      'protocol_mismatch',
     );
   });
 });

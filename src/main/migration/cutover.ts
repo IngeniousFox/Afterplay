@@ -51,9 +51,11 @@ import {
 import {
   findLaggingDevices,
   LegacyCutoverError,
+  type LaggingDevice,
   type CutoverSelf,
   type DeviceStatus,
   type LegacyCutover,
+  type LegacyMachine,
 } from './legacyCutover';
 
 // ── Constantes de tiempo ────────────────────────────────────────────────────
@@ -64,6 +66,10 @@ export const CUTOVER_POLL_MS = 2_000;
 export const CUTOVER_WAIT_OTHER_MS = 10_000;
 /** Cada cuánto se comprueba solo si los PCs rezagados ya han informado. */
 export const CUTOVER_LAGGING_RECHECK_MS = 30_000;
+/** Cada cuánto se mira si los demás PCs ya han confirmado el reclamo (§19.6 paso 2). */
+export const CUTOVER_CONFIRM_POLL_MS = 10_000;
+/** Margen para que las 1.8 lean el reclamo (su ciclo es de ~60 s) antes de preguntar. */
+export const CUTOVER_CONFIRM_GRACE_MS = 3 * 60_000;
 /** Cada cuánto se da un toque al sync si va parado (levanta una pausa). */
 export const CUTOVER_SYNC_NUDGE_MS = 60_000;
 
@@ -170,6 +176,8 @@ export interface CutoverDeps {
     pollMs: number;
     waitOtherMs: number;
     laggingRecheckMs: number;
+    confirmPollMs: number;
+    confirmGraceMs: number;
     syncNudgeMs: number;
     staleAfterMs: number;
   }>;
@@ -240,6 +248,7 @@ const guardBridge = (bridge: LegacyCutover): LegacyCutover => {
     releaseCutover: (deviceId) => guard(() => bridge.releaseCutover(deviceId)),
     completeCutover: (deviceId, hub) => guard(() => bridge.completeCutover(deviceId, hub)),
     readDeviceStatuses: () => guard(() => bridge.readDeviceStatuses()),
+    readLegacyMachines: () => guard(() => bridge.readLegacyMachines()),
     snapshotRemote: (dest) => guard(() => bridge.snapshotRemote(dest)),
     readHubEnrollment: () => guard(() => bridge.readHubEnrollment()),
     close: () => bridge.close(),
@@ -446,11 +455,33 @@ export class CutoverController {
     } catch {
       deps.log('[cutover] no se pudo mirar la cola local de la 1.x');
     }
+    // El `at` del reclamo: las 1.8 lo repiten en `seenCutoverAt` cuando ya son
+    // de solo lectura. Sin ese eco un «0 pendientes» no prueba nada (§19.3.1).
+    const claim = await bridge.readCutover();
+    if (claim?.state !== 'migrating' || claim.deviceId !== deps.self.deviceId) {
+      throw new LegacyCutoverError('not-owner', 'El reclamo ya no es de este PC');
+    }
+    const claimAt = claim.at;
+    let machinesFailed = false;
     const lagging = async (): Promise<CutoverLaggingDevice[]> => {
       const statuses = await bridge.readDeviceStatuses();
+      let machines: LegacyMachine[] = [];
+      try {
+        machines = await bridge.readLegacyMachines();
+      } catch {
+        if (!machinesFailed) deps.log('[cutover] no se pudo leer la lista de PCs de save_backups');
+        machinesFailed = true;
+      }
       const others = describeLagging(
         statuses,
-        findLaggingDevices(statuses, deps.self.deviceId, deps.now(), this.timing().staleAfterMs),
+        findLaggingDevices(
+          statuses,
+          deps.self.deviceId,
+          deps.now(),
+          this.timing().staleAfterMs,
+          claimAt,
+          machines,
+        ),
       );
       const own = statuses.find((s) => s.deviceId === deps.self.deviceId);
       const pending = Math.max(own?.pendingChanges ?? 0, localPending ?? 0);
@@ -469,6 +500,22 @@ export class CutoverController {
     };
 
     let devices = await lagging();
+    // Justo tras reclamar, las demás 1.8 aún no han leído el reclamo (su ciclo es
+    // de ~60 s): se les da un margen, en silencio, antes de preguntar. Solo se
+    // espera por los que pueden confirmar; un PC caduco o que nunca informó va
+    // directo a la pregunta.
+    const graceEnd = deps.now() + this.timing().confirmGraceMs;
+    for (;;) {
+      const unconfirmed = devices.filter((d) => d.reason === 'not-confirmed');
+      if (unconfirmed.length === 0 || deps.now() >= graceEnd) break;
+      this.setState({ kind: 'waiting-devices', devices: unconfirmed.map((d) => d.deviceName) });
+      await deps.sleep(this.timing().confirmPollMs);
+      try {
+        devices = await lagging();
+      } catch {
+        // se conserva la lista anterior
+      }
+    }
     let rechecking = false;
     while (devices.length > 0) {
       const action = await this.ask(
@@ -690,6 +737,8 @@ export class CutoverController {
       pollMs: t.pollMs ?? CUTOVER_POLL_MS,
       waitOtherMs: t.waitOtherMs ?? CUTOVER_WAIT_OTHER_MS,
       laggingRecheckMs: t.laggingRecheckMs ?? CUTOVER_LAGGING_RECHECK_MS,
+      confirmPollMs: t.confirmPollMs ?? CUTOVER_CONFIRM_POLL_MS,
+      confirmGraceMs: t.confirmGraceMs ?? CUTOVER_CONFIRM_GRACE_MS,
       syncNudgeMs: t.syncNudgeMs ?? CUTOVER_SYNC_NUDGE_MS,
       staleAfterMs: t.staleAfterMs ?? CUTOVER_STALE_AFTER_MS,
     };
@@ -759,7 +808,7 @@ export class CutoverController {
 
 const describeLagging = (
   statuses: readonly DeviceStatus[],
-  lagging: readonly { deviceId: string; deviceName: string; reason: 'pending-changes' | 'stale' }[],
+  lagging: readonly LaggingDevice[],
 ): CutoverLaggingDevice[] =>
   lagging.map((device) => {
     const status = statuses.find((s) => s.deviceId === device.deviceId);

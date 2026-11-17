@@ -386,6 +386,38 @@ describe('rutas de la PWA (/api/v2)', () => {
     assert.equal(missing.status, 400);
   });
 
+  it('subir la época (restauración): solo el anfitrión, un inquilino o todos', async () => {
+    const world = makeWorld();
+    const host = await pairDevice(world);
+    await world.call('/api/v2/invitations', { email: HOST, body: { email: 'ana@example.com' } });
+    await world.call('/api/v2/devices', { email: 'ana@example.com' });
+    const anaTenant = world.directoryStore.tenantOf('ana@example.com')!.id;
+    const epochOf = async (token: string): Promise<number> =>
+      ((await (await world.call(statusPath, { token })).json()) as { epoch: number }).epoch;
+    const before = await epochOf(host.token);
+
+    const call = (email: string | undefined, body: unknown): Promise<Response> =>
+      world.call('/api/v2/admin/epoch', { email, body });
+    assert.equal((await call(undefined, { all: true })).status, 401);
+    assert.equal((await call('ana@example.com', { all: true })).status, 403);
+    assert.equal((await world.call('/api/v2/admin/epoch', { email: HOST })).status, 405);
+    assert.equal((await call(HOST, {})).status, 400);
+    assert.equal((await call(HOST, { tenantId: 'zzzzzz' })).status, 404);
+    assert.equal(await epochOf(host.token), before, 'nada cambió con las peticiones rechazadas');
+
+    const one = await call(HOST, { tenantId: host.tenantId });
+    assert.equal(one.status, 200);
+    assert.deepEqual(await one.json(), { epochs: { [host.tenantId]: before + 1 } });
+    assert.equal(await epochOf(host.token), before + 1);
+
+    const all = (await (await call(HOST, { all: true })).json()) as {
+      epochs: Record<string, number>;
+    };
+    assert.deepEqual(Object.keys(all.epochs).sort(), [host.tenantId, anaTenant].sort());
+    assert.equal(all.epochs[host.tenantId], before + 2);
+    assert.equal(await epochOf(host.token), before + 2);
+  });
+
   it('las peticiones que cambian algo y vienen de otro origen se rechazan', async () => {
     const world = makeWorld();
     const response = await world.call('/api/v2/devices/enroll-code', {

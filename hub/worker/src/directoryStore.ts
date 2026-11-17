@@ -68,6 +68,13 @@ export class DirectoryStore {
     return this.storage.exec(`SELECT 1 AS found FROM tenants WHERE id = ?`, id).length > 0;
   }
 
+  /** Todos los inquilinos (para el procedimiento de restauración: subir la época de cada uno). */
+  tenantIds(): string[] {
+    return this.storage
+      .exec(`SELECT id FROM tenants ORDER BY createdAt, id`)
+      .map((r) => String(r.id));
+  }
+
   tenantOf(email: string): TenantRecord | null {
     const row = this.storage.exec(
       `SELECT id, email, createdAt FROM tenants WHERE email = ?`,

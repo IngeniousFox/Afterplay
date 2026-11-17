@@ -20,6 +20,7 @@ import {
   type DeviceStatus,
   type HubEnrollment,
   type LegacyCutover,
+  type LegacyMachine,
   type RemoteSnapshotReport,
 } from '../legacyCutover';
 
@@ -86,6 +87,13 @@ class FakeBridge implements LegacyCutover {
     this.hub = hub;
     this.completedWith = { deviceId, hub };
     return Promise.resolve();
+  }
+  machines: LegacyMachine[] = [];
+  machinesError: Error | null = null;
+  readLegacyMachines(): Promise<LegacyMachine[]> {
+    this.calls.push('machines');
+    if (this.machinesError) return Promise.reject(this.machinesError);
+    return Promise.resolve([...this.machines]);
   }
   readDeviceStatuses(): Promise<DeviceStatus[]> {
     this.calls.push('statuses');
@@ -203,6 +211,7 @@ interface World {
   sleeps: number;
   /** Se llama en cada espera (un tic de tiempo): los tests cambian el mundo aquí. */
   tick: ((n: number) => void) | null;
+  timing: CutoverDeps['timing'];
 }
 
 const world = (): World => ({
@@ -221,6 +230,7 @@ const world = (): World => ({
   now: T0,
   sleeps: 0,
   tick: null,
+  timing: undefined,
 });
 
 const deps = (w: World): CutoverDeps => ({
@@ -266,6 +276,7 @@ const deps = (w: World): CutoverDeps => ({
     if (w.secondaryLocalError) throw w.secondaryLocalError;
   },
   sync: w.sync,
+  timing: w.timing,
 });
 
 /**
@@ -297,6 +308,7 @@ const status = (over: Partial<DeviceStatus> = {}): DeviceStatus => ({
   lastPushOkAt: T0,
   pendingChanges: 0,
   at: T0,
+  seenCutoverAt: T0,
   ...over,
 });
 
@@ -491,6 +503,71 @@ describe('cutover: la pregunta de los rezagados', () => {
     };
     const { done } = start(w);
     await done;
+    assert.equal(w.events.includes('import'), true);
+  });
+
+  it('un PC que aún no ha leído el reclamo: espera en silencio y sigue cuando lo confirma', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.timing = { confirmGraceMs: 60_000 };
+    w.bridge.statuses = [status({ seenCutoverAt: null })];
+    w.tick = (n) => {
+      if (n === 3) w.bridge.statuses = [status({ seenCutoverAt: T0, at: w.now })];
+    };
+    const { states, done } = start(w);
+    await done;
+    const waiting = states.find((s) => s.kind === 'waiting-devices');
+    assert.ok(waiting?.kind === 'waiting-devices');
+    assert.deepEqual(waiting.devices, ['PC-B']);
+    assert.equal(kinds(states).includes('question-lagging'), false);
+    // La instantánea se saca DESPUÉS de que pase la comprobación.
+    const calls = w.bridge.calls;
+    assert.ok(calls.lastIndexOf('statuses') < calls.indexOf('snapshot'));
+  });
+
+  it('un «0 pendientes» anterior al reclamo no basta: tras el margen se pregunta', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.timing = { confirmGraceMs: 5_000 };
+    w.bridge.statuses = [status({ seenCutoverAt: T0 - 10_000 })];
+    const { states, done } = start(w, { 'question-lagging': () => ({ type: 'continue' }) });
+    await done;
+    assert.equal(kinds(states).includes('waiting-devices'), true);
+    const question = states.find((s) => s.kind === 'question-lagging');
+    assert.ok(question?.kind === 'question-lagging');
+    assert.equal(question.devices[0].reason, 'not-confirmed');
+    assert.ok(kinds(states).indexOf('waiting-devices') < kinds(states).indexOf('question-lagging'));
+  });
+
+  it('un PC de save_backups sin device_status se pregunta enseguida (never-reported)', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.bridge.machines = [
+      { machineId: SELF.deviceId, machineName: 'PC-A' },
+      { machineId: 'machine-old', machineName: 'PC-Viejo' },
+    ];
+    const { states, done } = start(w, { 'question-lagging': () => ({ type: 'continue' }) });
+    await done;
+    assert.equal(kinds(states).includes('waiting-devices'), false);
+    const question = states.find((s) => s.kind === 'question-lagging');
+    assert.ok(question?.kind === 'question-lagging');
+    assert.deepEqual(
+      question.devices.map((d) => [d.deviceName, d.reason]),
+      [['PC-Viejo', 'never-reported']],
+    );
+  });
+
+  it('si no se puede leer save_backups, se registra y se sigue sin esa lista', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.bridge.machinesError = new LegacyCutoverError('malformed', 'no');
+    const { states, done } = start(w);
+    await done;
+    assert.equal(kinds(states).includes('question-lagging'), false);
+    assert.equal(
+      w.log.some((l) => l.includes('save_backups')),
+      true,
+    );
     assert.equal(w.events.includes('import'), true);
   });
 

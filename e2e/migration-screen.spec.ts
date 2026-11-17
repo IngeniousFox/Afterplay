@@ -92,6 +92,10 @@ test.describe('pantalla de migración', () => {
       window.getByRole('heading', { name: 'Another PC is moving your library' }),
     ).toBeVisible();
     await expect(window.getByText(/Desk PC started at/)).toBeVisible();
+
+    await force(app, { kind: 'waiting-devices', devices: ['Desk PC', 'Laptop'] });
+    await expect(window.getByRole('heading', { name: 'Waiting for your other PCs' })).toBeVisible();
+    await expect(window.getByText(/confirm: Desk PC, Laptop/)).toBeVisible();
   });
 
   test('la pregunta de los PCs rezagados manda wait y continue', async ({ afterplay }) => {
