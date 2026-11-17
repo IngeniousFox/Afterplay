@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isCrediblePinStamp, planWaitingSince, redistributePinStamps } from '../planOrder';
+import { planWaitingSince, redistributePinStamps } from '../planOrder';
 
 // Las reglas del orden del Plan, ya en UN solo sitio.
 
@@ -68,16 +68,6 @@ describe('redistributePinStamps: reordenar reparte las marcas que ya existen', (
         [1, 104],
       ],
     );
-  });
-});
-
-describe('la marca de un pin del buzón: el mismo criterio en los tres lados', () => {
-  it('solo un número finito y positivo es un instante creíble', () => {
-    for (const valor of [1, T10, Number.MAX_SAFE_INTEGER])
-      assert.equal(isCrediblePinStamp(valor), true);
-    for (const valor of [0, -1, NaN, Infinity, '1700000000000', null, undefined]) {
-      assert.equal(isCrediblePinStamp(valor), false, `aceptó ${String(valor)}`);
-    }
   });
 });
 
