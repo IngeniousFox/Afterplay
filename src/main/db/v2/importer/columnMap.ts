@@ -630,7 +630,7 @@ const EMULATORS: TableDecl = {
 
 // ── save_backups y plan_mailbox: no se migran filas ─────────────────────────
 
-const SAVE_REINDEX = 'save_backups se reindexa desde el bucket en la fase 6 (§19.5)';
+const SAVE_REINDEX = 'save_backups se reindexa desde el bucket tras importar (saves/postImportReindex.ts, §19.5)';
 const SAVE_BACKUPS: TableDecl = {
   rowsNotMigrated: SAVE_REINDEX,
   columns: Object.fromEntries(

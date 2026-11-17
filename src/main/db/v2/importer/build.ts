@@ -1088,7 +1088,7 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
 
   // ── Lo que no se migra ───────────────────────────────────────────────────
   count('save_backups').read = data.saveBackupCount;
-  discard('save_backups', 'se reindexa desde el bucket en la fase 6 (§19.5)', data.saveBackupCount);
+  discard('save_backups', 'se reindexa desde el bucket tras importar (saves/postImportReindex.ts, §19.5)', data.saveBackupCount);
   count('plan_mailbox').read = data.mailboxCount;
   discard(
     'plan_mailbox',

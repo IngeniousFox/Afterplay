@@ -7,6 +7,7 @@ import { copySourceConsistently, removeDatabaseFiles } from './importer/sourceCo
 import { createQueryContext, type QueryContext } from './queries/common/context';
 import { ensureThisDevice, type ThisDeviceInfo } from './queries/common/device';
 import { saveMaintenanceForeignWriteRule } from './queries/saves/maintenanceRule';
+import { markSaveReindexPending } from './queries/saves/postImport';
 import { timerForeignWriteRule } from './queries/sessions/timerRule';
 
 // La base 2.0 de la app en marcha (AFTERPLAY-2.0.md §8.9, CONSULTAS.md P9).
@@ -96,6 +97,11 @@ export function openAppDatabase(options: OpenAppDatabaseOptions): OpenedAppDatab
   });
   const ctx = createQueryContext(local, { now });
   ensureThisDevice(ctx, { ...options.device, now: now() });
+  // `save_backups` no se importa (§19.5): el índice se reindexa desde el bucket
+  // en segundo plano cuando haya credenciales. El marcador es local y se deja
+  // aquí, ya fuera de la transacción de la importación; lo cumple (y lo
+  // reintenta si falla) `saves/postImportReindex.ts`.
+  if (imported) markSaveReindexPending(ctx);
   return { local, ctx, imported };
 }
 
