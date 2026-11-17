@@ -1,6 +1,7 @@
 import { achievementsApi } from './achievements';
 import { backupApi } from './backup';
 import { curiositiesApi } from './curiosities';
+import { cutoverApi } from './cutover';
 import { dataChangedApi } from './dataChanged';
 import { devicesApi } from './devices';
 import { dialogApi } from './dialog';
@@ -52,6 +53,7 @@ export const api = {
   radar: radarApi,
   overlay: overlayApi,
   sync: syncApi,
+  cutover: cutoverApi,
 };
 
 export type Api = typeof api;

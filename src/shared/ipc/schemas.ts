@@ -18,6 +18,7 @@ import type {
 } from '../types';
 import type { MergePlaythroughsRequest } from '../playthroughMerge';
 import type { PairRequest } from '../sync/status';
+import type { CutoverAction } from '../cutover';
 import type { DuplicateResolution, RestoreRequestInput } from '../../main/saves/contracts';
 
 // LOS ESQUEMAS DE ENTRADA DEL CONTRATO IPC (AFTERPLAY-2.0.md §15.3).
@@ -269,3 +270,15 @@ export const pairRequest: z.ZodType<PairRequest, PairRequest> = z.object({
   hubUrl: z.string(),
   code: z.string(),
 });
+
+// PUENTE 1.x → L3: lo que la persona contesta durante el corte (shared/cutover.ts).
+export const cutoverAction: z.ZodType<CutoverAction, CutoverAction> = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('continue') }),
+  z.object({ type: z.literal('wait') }),
+  z.object({ type: z.literal('retry') }),
+  z.object({
+    type: z.literal('submit-pairing'),
+    hubUrl: z.string().max(2048),
+    code: z.string().max(256),
+  }),
+]);
