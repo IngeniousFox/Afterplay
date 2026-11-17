@@ -19,7 +19,7 @@ import {
 } from './migrationSync';
 import { markRemotePullSucceeded, setRemoteExpected } from './remoteFreshness';
 import { publishDeviceStatus, readCutover } from './appMeta';
-import { guardDb, setCutover } from './readOnly';
+import { getCutover, guardDb, setCutover } from './readOnly';
 import { getMachineId, getMachineName } from '../saves/machine';
 
 // Bloque 4 — @tursodatabase/sync sustituye por completo a @tursodatabase/
@@ -509,8 +509,12 @@ const refreshCutover = async (): Promise<void> => {
 // subir. Nunca lanza — es información, no parte del sync.
 let lastPushOkAt: number | null = null;
 
+// ORDEN IMPORTANTE: se llama siempre DESPUÉS de refreshCutover() en el mismo
+// ciclo, así que el solo lectura ya está puesto cuando se mide pendingChanges
+// (stats() de aquí abajo) y seenCutoverAt refleja el corte que este PC ya vio.
 const publishStatus = async (db: Db): Promise<void> => {
   try {
+    const seenCutoverAt = getCutover()?.at ?? null;
     let pendingChanges = 0;
     const client = db.$client as { stats?: () => Promise<{ cdcOperations: number }> };
     if (typeof client.stats === 'function') pendingChanges = (await client.stats()).cdcOperations;
@@ -520,6 +524,7 @@ const publishStatus = async (db: Db): Promise<void> => {
       lastPushOkAt,
       pendingChanges,
       at: Date.now(),
+      seenCutoverAt,
     });
   } catch (error) {
     console.warn('[db] no se pudo publicar device_status:', error);

@@ -24,6 +24,11 @@ export type DeviceStatus = {
   pendingChanges: number;
   // ms: cuándo se publicó esta foto.
   at: number;
+  // `at` de la fila `cutover` que este PC tenía asumida al construir la foto
+  // (null = aún no ha visto ningún corte). Campo opcional del contrato: los
+  // lectores antiguos lo ignoran. Si trae valor, este PC ya estaba en solo
+  // lectura cuando midió pendingChanges.
+  seenCutoverAt?: number | null;
 };
 
 export const CUTOVER_KEY = 'cutover';
@@ -76,6 +81,7 @@ export const publishDeviceStatus = async (
     lastPushOkAt: status.lastPushOkAt,
     pendingChanges: status.pendingChanges,
     at: status.at,
+    seenCutoverAt: status.seenCutoverAt ?? null,
   });
   await db.run(sql`
     INSERT INTO app_meta (key, value, updatedAt)

@@ -110,7 +110,27 @@ describe('publishDeviceStatus', () => {
     assert.equal(rows[0].key, deviceStatusKey('pc-a'));
     assert.equal(rows[0].key, 'device_status:pc-a');
     assert.equal(rows[0].updatedAt, status.at);
-    assert.deepEqual(JSON.parse(rows[0].value), status);
+    assert.deepEqual(JSON.parse(rows[0].value), { ...status, seenCutoverAt: null });
+    assert.deepEqual(Object.keys(JSON.parse(rows[0].value)), [
+      'deviceName',
+      'appVersion',
+      'lastPushOkAt',
+      'pendingChanges',
+      'at',
+      'seenCutoverAt',
+    ]);
+  });
+
+  it('seenCutoverAt publica el at del corte visto, y null si no hay', async () => {
+    await publishDeviceStatus(db, 'pc-a', { ...status, seenCutoverAt: 1_700_000_050_000 });
+    const [row] = await rowsOf();
+    assert.equal(
+      (JSON.parse(row.value) as { seenCutoverAt: unknown }).seenCutoverAt,
+      1_700_000_050_000,
+    );
+    await publishDeviceStatus(db, 'pc-a', { ...status, seenCutoverAt: null });
+    const [again] = await rowsOf();
+    assert.equal((JSON.parse(again.value) as { seenCutoverAt: unknown }).seenCutoverAt, null);
   });
 
   it('lastPushOkAt puede ser null', async () => {
