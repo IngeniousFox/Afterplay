@@ -333,6 +333,19 @@ describe('un proceso vigilado que arranca', () => {
     assert.deepEqual(trayUpdates.at(-1), ['Celeste']);
   });
 
+  it('con la biblioteca migrada a la 2.0 (solo lectura) no abre sesion alguna', async () => {
+    const { setCutover, resetReadOnlyForTests } = await import('../../db/readOnly');
+    await makeGame(db, { title: 'Celeste', executablePath: EXE_CELESTE });
+    launch(4100, EXE_CELESTE);
+    setCutover({ state: 'done', deviceId: null, deviceName: null, appVersion: null, at: null });
+    try {
+      await cycle();
+    } finally {
+      resetReadOnlyForTests();
+    }
+    assert.equal((await sessions()).length, 0);
+  });
+
   it('no abre una segunda sesion en los ciclos siguientes mientras el proceso viva', async () => {
     // SPEC 4.5: como mucho UNA sesión abierta por juego. Dos sesiones vivas
     // del mismo juego son las mismas horas contadas dos veces.

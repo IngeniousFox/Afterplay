@@ -18,6 +18,9 @@ import {
   type LocalMigration,
 } from './migrationSync';
 import { markRemotePullSucceeded, setRemoteExpected } from './remoteFreshness';
+import { publishDeviceStatus, readCutover } from './appMeta';
+import { guardDb, setCutover } from './readOnly';
+import { getMachineId, getMachineName } from '../saves/machine';
 
 // Bloque 4 — @tursodatabase/sync sustituye por completo a @tursodatabase/
 // database: su propio connect() ya da el mismo Database (mismo prepare/exec/
@@ -65,11 +68,25 @@ const currentRemoteLabel = (): string => remoteLabel(process.env.DATABASE_URL);
 // la conexión todavía sin abrir) sino la PUERTA DE ARRANQUE de withDbAccess:
 // esperar ahí es lo que hace que aquí abajo siempre haya conexión. Llamar a
 // getDb() por fuera de withDbAccess sigue siendo un error, y por eso lanza.
+//
+// Devuelve la instancia ENVUELTA por guardDb (readOnly.ts): en modo solo lectura
+// (la biblioteca se migró a la 2.0, §19.3) cualquier insert/update/delete/
+// transaction lanza ReadOnlyError. Es EL guardia de escritura de toda la app —
+// los handlers IPC, el watcher, el buzón y las pasadas de fondo escriben todos
+// por aquí — y por eso no hay comprobaciones sueltas en cada uno.
+let guardedFor: Db | null = null;
+let guardedDb: Db | null = null;
 export const getDb = (): Db => {
   if (!dbInstance) {
     throw new Error('getDb() llamado antes de runMigrations() — la DB todavía no está conectada.');
   }
-  return dbInstance;
+  // La instancia cambia al ascender de local a sync (attemptSyncUpgrade): el
+  // envoltorio se rehace solo cuando cambia, no en cada llamada.
+  if (guardedFor !== dbInstance) {
+    guardedFor = dbInstance;
+    guardedDb = guardDb(dbInstance);
+  }
+  return guardedDb as Db;
 };
 
 // Una conexión sin url no registra sus escrituras en la cola de CDC (el
@@ -466,7 +483,47 @@ const connectAndMigrate = async (): Promise<void> => {
 // que no se pudo preparar solo añadiría errores encima del que importa.
 export const runMigrations = async (): Promise<void> => {
   await connectAndMigrate();
+  // Con la copia local ya abierta, antes de dejar pasar a nadie: si la 2.0
+  // reclamó el corte en un ciclo anterior, esta sesión arranca ya en solo
+  // lectura (§19.3).
+  await refreshCutover();
   openStartupGate();
+};
+
+// ¿Hay fila `cutover` en app_meta? Lee la conexión SIN envolver y solo la copia
+// local (llega por pull, así que es tan fresca como el último ciclo). Si falla
+// —tabla sin migrar todavía, conexión en swap— NO cambia el estado: un error
+// pasajero no debe levantar el modo solo lectura ni ponerlo.
+const refreshCutover = async (): Promise<void> => {
+  if (!dbInstance) return;
+  try {
+    setCutover(await readCutover(dbInstance));
+  } catch (error) {
+    console.warn('[db] no se pudo leer app_meta.cutover (mantengo el estado anterior):', error);
+  }
+};
+
+// device_status de este PC (§19.3.1), en cada ciclo. Usa la conexión sin
+// envolver: se sigue publicando aunque la biblioteca esté en solo lectura,
+// porque es justo lo que el PC migrador mira para saber si queda algo sin
+// subir. Nunca lanza — es información, no parte del sync.
+let lastPushOkAt: number | null = null;
+
+const publishStatus = async (db: Db): Promise<void> => {
+  try {
+    let pendingChanges = 0;
+    const client = db.$client as { stats?: () => Promise<{ cdcOperations: number }> };
+    if (typeof client.stats === 'function') pendingChanges = (await client.stats()).cdcOperations;
+    await publishDeviceStatus(db, getMachineId(), {
+      deviceName: getMachineName(),
+      appVersion: app.getVersion(),
+      lastPushOkAt,
+      pendingChanges,
+      at: Date.now(),
+    });
+  } catch (error) {
+    console.warn('[db] no se pudo publicar device_status:', error);
+  }
 };
 
 // EL ARREGLO DE LA DOBLE APLICACIÓN — la pieza que faltaba desde el 7-ago-2026.
@@ -1083,8 +1140,19 @@ export const runSyncCycle = async (): Promise<void> => {
     // cada tic de 60s invalidaría el caché entero de la ventana un minuto sí
     // y otro también sin que nada hubiera cambiado.
     await db.$client.push();
+    lastPushOkAt = Date.now();
     const pulled = await db.$client.pull();
     lastSyncFailure = null;
+    // Solo lectura en ESTE mismo ciclo (§19.3): justo tras el pull, que es lo
+    // que trae la fila `cutover` si la 2.0 la escribió. Antes del drenado del
+    // buzón y de cualquier pasada de fondo de abajo.
+    await refreshCutover();
+    // Estado de este PC para el migrador. Va tras el push de arriba (el
+    // pendiente medido es el de después de subir) y lleva su propio push
+    // corto para que la fila llegue a Turso en este ciclo y no en el
+    // siguiente; si falla, el próximo ciclo la sube.
+    await publishStatus(db);
+    await db.$client.push().catch(() => {});
     // La copia local vuelve a valer para decidir (el barrido de cronómetros
     // del watcher espera a esto: ver remoteFreshness.ts).
     markRemotePullSucceeded();

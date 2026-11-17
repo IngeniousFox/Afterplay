@@ -1012,3 +1012,24 @@ describe('el error que se guarda cabe en una tarjeta de móvil', () => {
     assert.equal(orden.error, null);
   });
 });
+
+describe('biblioteca migrada a la 2.0 (puente 1.8, solo lectura)', () => {
+  it('no drena el buzón: la orden se queda pendiente y no se llama al alta', async () => {
+    const { setCutover, resetReadOnlyForTests } = await import('../../db/readOnly');
+    const id = await encolar(unAlta);
+    setCutover({
+      state: 'migrating',
+      deviceId: null,
+      deviceName: null,
+      appVersion: null,
+      at: null,
+    });
+    try {
+      await runPlanMailboxDrain();
+    } finally {
+      resetReadOnlyForTests();
+    }
+    assert.equal(altaCalls.length, 0);
+    assert.equal((await leerOrden(id)).processedAt, null);
+  });
+});

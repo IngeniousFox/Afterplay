@@ -25,6 +25,14 @@ export const windowApi = {
     ipcRenderer.on('window:fullscreen-change', listener);
     return () => ipcRenderer.removeListener('window:fullscreen-change', listener);
   },
+  // ¿Biblioteca migrada a Afterplay 2 (solo lectura)? — el banner fijo.
+  isLibraryReadOnly: (): Promise<boolean> => ipcRenderer.invoke('library:is-read-only'),
+  onLibraryReadOnlyChange: (callback: (readOnly: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, readOnly: boolean): void =>
+      callback(readOnly);
+    ipcRenderer.on('library:read-only-changed', listener);
+    return () => ipcRenderer.removeListener('library:read-only-changed', listener);
+  },
   isVisible: (): Promise<boolean> => ipcRenderer.invoke('window:is-visible'),
   onVisibleChange: (callback: (isVisible: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, isVisible: boolean): void =>

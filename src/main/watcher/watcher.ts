@@ -15,6 +15,7 @@ import { notifySessionClosed } from './notifySession';
 // La regla de frescura del cronómetro (REMOTO.md §7.4) es la MISMA aquí y en
 // el Worker, así que se importa en vez de reescribirse: ver timerFreshness.ts.
 import { TIMER_STALE_MS, isTimerStale, timerLastBeat } from '../../shared/timerFreshness';
+import { isReadOnly } from '../db/readOnly';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -301,6 +302,9 @@ export class ProcessWatcher {
       this.resumeRequested = false;
       console.log('[watcher] reanudado - el PC ya no esta bloqueado');
     }
+    // Biblioteca migrada a la 2.0 (puente 1.8): ni se abren ni se cierran sesiones.
+    // Antes de marcar `polling` y de escanear procesos — no hay nada que hacer.
+    if (isReadOnly()) return;
     // Un ciclo puede tardar más que el intervalo si find-process va lento (o
     // el sistema tiene muchos procesos) — evito que dos ciclos se solapen.
     if (this.polling) return;

@@ -1,6 +1,19 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { isReadOnly, onCutoverChange } from '../db/readOnly';
 
 export const registerWindowHandlers = (): void => {
+  // Modo solo lectura del puente 1.8 (la biblioteca se migró a la 2.0): el
+  // banner del renderer lo pide en frío al montar y escucha los cambios. Mismo
+  // contrato que window:is-visible — la consulta cubre lo ocurrido antes de
+  // montar, el aviso lo posterior.
+  ipcMain.handle('library:is-read-only', () => isReadOnly());
+  onCutoverChange((info) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed())
+        window.webContents.send('library:read-only-changed', info !== null);
+    }
+  });
+
   // La versión instalada, para el pie de Ajustes — app.getVersion() lee
   // package.json (o el manifest del build empaquetado), así que nunca hay que
   // acordarse de mantener este número sincronizado a mano en ningún otro

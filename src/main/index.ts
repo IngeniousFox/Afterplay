@@ -29,6 +29,7 @@ import { setExternalNotifier } from './external/notify';
 import { runMemoriesDailyTick } from './memories/detect';
 import { runPlanMailboxDrain } from './plan/drainMailbox';
 import { notifyPulledChanges, onSyncCompleted } from './db';
+import { isReadOnly } from './db/readOnly';
 import { runSteamAppIdBackfill } from './steam/appIdBackfill';
 import {
   queueAchievementsRefreshForGame,
@@ -1007,6 +1008,14 @@ app.whenReady().then(async () => {
       mark('pasadas de arranque OMITIDAS (modo E2E)');
       return;
     }
+    // Biblioteca migrada a la 2.0 (puente 1.8, solo lectura): ninguna pasada de
+    // fondo. Todas escriben datos de usuario (logros, recaps, radar, appids) y
+    // algunas gastan red para nada. El watcher también está parado (ver su
+    // poll), y se retoma al reiniciar si el corte se soltó.
+    if (isReadOnly()) {
+      mark('pasadas de arranque OMITIDAS (biblioteca en solo lectura)');
+      return;
+    }
     // El buzón ya se ha drenado aquí dentro: runSyncCycle lo dispara solo tras
     // el pull (ver onSyncCompleted arriba). Un alta encolada existe por tanto
     // como juego ANTES de que pasen por encima el backfill de appids y las
@@ -1086,10 +1095,14 @@ app.whenReady().then(async () => {
   // reinicio completo.
   syncTimer = setInterval(() => void runSyncCycle(), SYNC_INTERVAL_MS);
   memoriesTimer = setInterval(() => {
-    void runMemoriesDailyTick();
-    // Mismo tic para el radar: la app puede pasar semanas sin reiniciarse
-    // (vive en la bandeja), asi que mirarlo solo al arrancar no basta.
-    void runRadarTick();
+    // Recaps y radar escriben datos de usuario: en solo lectura (puente 1.8),
+    // fuera. La copia local de abajo es lectura y sigue.
+    if (!isReadOnly()) {
+      void runMemoriesDailyTick();
+      // Mismo tic para el radar: la app puede pasar semanas sin reiniciarse
+      // (vive en la bandeja), asi que mirarlo solo al arrancar no basta.
+      void runRadarTick();
+    }
     // Y la copia local, por exactamente el mismo motivo. Estaba SOLO en el
     // arranque, con lo que "una copia cada 6 horas" era en realidad "una copia
     // por cada vez que abres la app": con la app en la bandeja tres semanas,

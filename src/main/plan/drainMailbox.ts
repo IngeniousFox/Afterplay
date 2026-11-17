@@ -1,5 +1,6 @@
 import { and, asc, eq, isNull, notInArray } from 'drizzle-orm';
 import { getDb, withDbAccess } from '../db';
+import { isReadOnly } from '../db/readOnly';
 import { createPlannedGame } from '../db/queries/games/createPlannedGame';
 import { reorderUpNext, setPlanPinned } from '../db/queries/games/getPlannedGames';
 import { warmImageCache, warmSteamData } from '../external/warmNewGame';
@@ -446,6 +447,10 @@ export const drainPlanMailbox = async (): Promise<DrainResult> => {
 // watcher, y este drenado era un tercero silencioso. Sin el aviso, un juego
 // añadido desde el móvil no aparecía en el PC en toda la sesión.
 export const runPlanMailboxDrain = async (onChanged?: () => void): Promise<void> => {
+  // Biblioteca migrada a la 2.0 (puente 1.8): el buzón se queda como está, sin
+  // drenar. Lo encolado desde el móvil se queda pendiente (el Worker ya
+  // responde "en mantenimiento" en este caso).
+  if (isReadOnly()) return;
   try {
     const { applied } = await drainPlanMailbox();
     if (applied > 0) onChanged?.();
