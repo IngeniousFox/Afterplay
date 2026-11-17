@@ -43,6 +43,7 @@ export function makeWorld(
     directory: {
       resolve: async (email, admin) => directoryStore.resolve(email, admin),
       invite: async (email, by) => directoryStore.invite(email, by),
+      tenantIds: async () => directoryStore.tenantIds(),
     } satisfies DirectoryApi,
     tenantExists: async (id) => directoryStore.tenantExists(id),
     authenticateAccess: async (request) => {

@@ -25,6 +25,10 @@ export class DirectoryObject extends DurableObject {
     return this.store.resolve(email, adminEmail);
   }
 
+  tenantIds(): string[] {
+    return this.store.tenantIds();
+  }
+
   tenantExists(tenantId: string): boolean {
     return this.store.tenantExists(tenantId);
   }

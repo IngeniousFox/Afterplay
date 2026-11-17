@@ -120,6 +120,12 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     return this.serviceFor(tenantId).createEnrollmentCode(ttlMinutes);
   }
 
+  async bumpEpoch(
+    ...[tenantId]: Parameters<TenantRpc['bumpEpoch']>
+  ): ReturnType<TenantRpc['bumpEpoch']> {
+    return this.serviceFor(tenantId).bumpEpoch();
+  }
+
   async listTokens(
     ...[tenantId]: Parameters<TenantRpc['listTokens']>
   ): ReturnType<TenantRpc['listTokens']> {

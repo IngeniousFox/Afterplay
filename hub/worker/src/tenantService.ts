@@ -340,6 +340,11 @@ export class TenantService {
     return this.run(() => this.hub.createEnrollmentCode({ ttlMinutes }));
   }
 
+  /** Sube la época del inquilino tras restaurar el hub desde una copia (§8.4, §19.9). */
+  bumpEpoch(): Outcome<{ epoch: number }> {
+    return ok({ epoch: this.hub.bumpEpoch() });
+  }
+
   listTokens(): Outcome<DeviceTokenInfo[]> {
     return ok(this.hub.listTokens());
   }

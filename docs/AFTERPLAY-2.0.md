@@ -891,6 +891,12 @@ Medido en Cloudflare el 2026-11-13 con un despliegue de prueba (§20.1.2): la CP
 
 Si el hub no está disponible, los PCs siguen en local y se ponen al día después. Ese es el comportamiento de diseño, no un modo degradado.
 
+### §9.8 Operación: restaurar el hub desde una copia
+
+Un hub restaurado desde una copia (de un Durable Object o de su almacenamiento) conserva su `hubId` y su época, así que los clientes pueden no notar el cambio: solo ven un cursor mayor que la secuencia, y solo si la copia es lo bastante antigua. **Tras CUALQUIER restauración de un hub o de un DO desde una copia, hay que subir la época de todos los inquilinos antes de dejar que los clientes sincronicen.** Al verla cambiar, cada cliente vuelve a subirlo todo (§8.4) y lo que la copia no tenía se recupera.
+
+Cómo: `POST /api/v2/admin/epoch` con el cuerpo `{ "all": true }` (o `{ "tenantId": "<id>" }` para uno solo). Solo lo atiende el anfitrión, con la misma puerta que las invitaciones (Cloudflare Access o la cabecera `x-afterplay-admin-token`). Devuelve `{ "epochs": { "<inquilino>": <nueva época> } }`. Subir la época no cambia ningún dato del hub.
+
 ---
 
 ## §10. Sesiones y watcher
