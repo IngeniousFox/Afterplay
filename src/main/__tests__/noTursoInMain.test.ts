@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, it } from 'node:test';
 
 // UN BUILD 2.0 NUNCA ABRE TURSO (R-14, src/main/db/v2/CONSULTAS.md).
@@ -20,7 +29,14 @@ import { describe, it } from 'node:test';
 //
 // Se miran imports estáticos (`import … from`, `export … from`) y dinámicos
 // (`import('…')`), que es como el main carga lo pesado bajo demanda.
+//
+// ÚNICA EXCEPCIÓN (PUENTE 1.x → L3, §19.3.1): el módulo del corte de la 1.x
+// puede cargar `@libsql/client/web` (HTTP, sin nativos) con un import
+// DINÁMICO. Ni un import estático desde él, ni ese import desde otro fichero,
+// ni `@libsql/client` a secas valen. Se va con el módulo en la tanda L3.
 
+const BRIDGE_FILE = 'src/main/migration/legacyCutover.ts';
+const BRIDGE_SPECIFIER = '@libsql/client/web';
 const ROOT = process.cwd();
 const ENTRIES = ['src/main/index.ts', 'src/preload/index.ts'];
 const FORBIDDEN = ['@tursodatabase/sync', '@libsql/client', 'drizzle-orm/libsql'];
@@ -51,18 +67,21 @@ const resolveLocal = (fromFile: string, specifier: string): string | null => {
 // Las importaciones de solo tipos se borran al compilar: no llegan al bundle.
 const isTypeOnly = (statement: string): boolean => /^(?:import|export)\s+type\s/.test(statement);
 
-const walk = (): { reached: Map<string, string[]>; unresolved: string[] } => {
+const walk = (
+  root: string = ROOT,
+  entries: readonly string[] = ENTRIES,
+): { reached: Map<string, string[]>; unresolved: string[] } => {
   // paquete prohibido -> cadena de ficheros que lo arrastra
   const reached = new Map<string, string[]>();
   const unresolved: string[] = [];
   const parent = new Map<string, string | null>();
-  const queue = ENTRIES.map((entry) => resolve(ROOT, entry));
+  const queue = entries.map((entry) => resolve(root, entry));
   for (const entry of queue) parent.set(entry, null);
 
   const chainOf = (file: string): string[] => {
     const chain: string[] = [];
     for (let at: string | null = file; at; at = parent.get(at) ?? null) {
-      chain.unshift(relative(ROOT, at));
+      chain.unshift(relative(root, at).split(sep).join('/'));
     }
     return chain;
   };
@@ -73,6 +92,9 @@ const walk = (): { reached: Map<string, string[]>; unresolved: string[] } => {
     for (const match of source.matchAll(IMPORT_RE)) {
       if (isTypeOnly(match[0])) continue;
       const specifier = match[1] ?? match[2];
+      const isDynamic = match[2] !== undefined;
+      const fromBridge = relative(root, file).split(sep).join('/') === BRIDGE_FILE;
+      if (specifier === BRIDGE_SPECIFIER && isDynamic && fromBridge) continue;
       if (FORBIDDEN.some((name) => specifier === name || specifier.startsWith(`${name}/`))) {
         if (!reached.has(specifier)) reached.set(specifier, chainOf(file));
         continue;
@@ -83,7 +105,7 @@ const walk = (): { reached: Map<string, string[]>; unresolved: string[] } => {
       // (?asset, .css, .json): no trae código que pueda abrir una base.
       if (!target) {
         if (!/\?|\.(css|json|png|svg|html)$/.test(specifier)) {
-          unresolved.push(`${relative(ROOT, file)} -> ${specifier}`);
+          unresolved.push(`${relative(root, file)} -> ${specifier}`);
         }
         continue;
       }
@@ -107,5 +129,59 @@ describe('el proceso principal 2.0 no arrastra los drivers de Turso (R-14)', () 
 
   it('el recorrido entiende todos los imports relativos (si no, el test no vería nada)', () => {
     assert.deepEqual(unresolved, []);
+  });
+});
+
+describe('la excepción del puente 1.x solo vale para su módulo y su import dinámico', () => {
+  // Monta un mini-proyecto en un directorio temporal y devuelve los paquetes
+  // prohibidos que alcanza el recorrido desde `src/main/index.ts`.
+  const fixture = (files: Record<string, string>): string[] => {
+    const root = mkdtempSync(join(tmpdir(), 'afterplay-barrier-'));
+    try {
+      for (const [name, text] of Object.entries(files)) {
+        mkdirSync(dirname(join(root, name)), { recursive: true });
+        writeFileSync(join(root, name), text);
+      }
+      return [...walk(root, ['src/main/index.ts']).reached.keys()];
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  const INDEX = "import './migration/legacyCutover';";
+  const dynamic = (specifier: string): string =>
+    `export const open = () => import('${specifier}');`;
+
+  it('el módulo puente con import dinámico pasa', () => {
+    assert.deepEqual(
+      fixture({ 'src/main/index.ts': INDEX, [BRIDGE_FILE]: dynamic(BRIDGE_SPECIFIER) }),
+      [],
+    );
+  });
+
+  it('otro fichero con el mismo import dinámico sigue fallando', () => {
+    assert.deepEqual(
+      fixture({
+        'src/main/index.ts': "import './other';",
+        'src/main/other.ts': dynamic(BRIDGE_SPECIFIER),
+      }),
+      [BRIDGE_SPECIFIER],
+    );
+  });
+
+  it('el módulo puente con import estático o con @libsql/client a secas falla', () => {
+    for (const text of [
+      `import { createClient } from '${BRIDGE_SPECIFIER}';`,
+      dynamic('@libsql/client'),
+    ]) {
+      assert.equal(fixture({ 'src/main/index.ts': INDEX, [BRIDGE_FILE]: text }).length, 1);
+    }
+  });
+
+  it('@tursodatabase/sync y drizzle-orm/libsql siguen prohibidos también en el puente', () => {
+    for (const name of ['@tursodatabase/sync', 'drizzle-orm/libsql']) {
+      assert.deepEqual(fixture({ 'src/main/index.ts': INDEX, [BRIDGE_FILE]: dynamic(name) }), [
+        name,
+      ]);
+    }
   });
 });
