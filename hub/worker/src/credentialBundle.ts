@@ -1,11 +1,11 @@
 // Las credenciales de servicios de UN inquilino, guardadas cifradas y
 // fusionadas entre los PCs emparejados (ver shared/sync/credentialsBundle.ts).
 //
-// Mismo esquema que `igdbCredentials.ts`: el paquete entero se cifra con
-// `HUB_SECRETS_KEY` (hub/core/secretBox.ts) y solo el sobre llega al
-// almacenamiento. Nunca se guarda ni se registra nada en claro. A diferencia
-// de aquella, esta SÍ devuelve el contenido: a los PCs del propio dueño,
-// autenticados con su token, para que las claves lleguen a todos.
+// El paquete entero se cifra con `HUB_SECRETS_KEY` (hub/core/secretBox.ts) y
+// solo el sobre llega al almacenamiento. Nunca se guarda ni se registra nada en
+// claro. Se devuelve el contenido a los PCs del propio dueño, autenticados con
+// su token, para que las claves lleguen a todos; la PWA lee de aquí las claves
+// de IGDB (tenantService.ts).
 
 import { HubError } from '../../core/hub';
 import { SecretBoxError, openSecret, sealSecret } from '../../core/secretBox';

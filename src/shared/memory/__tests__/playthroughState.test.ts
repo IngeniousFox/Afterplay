@@ -462,17 +462,9 @@ describe('una sola regla del alta, y no cuatro copias del mismo número', () => 
     // suelto — un 5000 de un timeout ajeno pondría esto rojo sin motivo — y la
     // tolerancia se busca con su `=` delante para no cazar los comentarios que
     // cuentan justo esta historia.
-    //
-    // Desde la fase 1 de la 2.0 la biblioteca del móvil ya no decide nada por
-    // su cuenta: la regla que comparte con el escritorio vive en
-    // shared/domain/library.ts, y es ESE fichero el que tiene que preguntar a
-    // isAddedAtArtifact. Al del Worker se le sigue vigilando lo que delataría
-    // una recaída —declarar un margen o restar fechas a mano—, pero ya no se
-    // le exige llamar a la función: no debe tener dónde.
     const copias: { ruta: string; debeLlamar: boolean }[] = [
       { ruta: '../../domain/journeyEntries.ts', debeLlamar: true },
       { ruta: '../../domain/library.ts', debeLlamar: true },
-      { ruta: '../../../../worker/src/queries/library.ts', debeLlamar: false },
     ];
     for (const { ruta, debeLlamar } of copias) {
       const fuente = readFileSync(fileURLToPath(new URL(ruta, import.meta.url)), 'utf8');

@@ -33,8 +33,6 @@ it('accepts all verified mkdtemp test families and only their exact six-characte
     'test',
     'e2e',
     'e2e-keys',
-    'worker-test',
-    'worker-paridad',
     'ficha-test',
     'legacyenv',
     'keys',

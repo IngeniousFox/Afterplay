@@ -98,12 +98,6 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     return this.serviceFor(tenantId).doneJob(token, request);
   }
 
-  storeIgdbCredentials(
-    ...[tenantId, token, request]: Parameters<TenantRpc['storeIgdbCredentials']>
-  ): ReturnType<TenantRpc['storeIgdbCredentials']> {
-    return this.serviceFor(tenantId).storeIgdbCredentials(token, request);
-  }
-
   exchangeCredentials(
     ...[tenantId, token, request]: Parameters<TenantRpc['exchangeCredentials']>
   ): ReturnType<TenantRpc['exchangeCredentials']> {

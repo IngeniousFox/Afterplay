@@ -59,20 +59,6 @@ export const redistributePinStamps = <Id extends EntityIdLike>(
   return new Map(ids.map((id, index) => [id, stamps[index]]));
 };
 
-// ── LA MARCA DE UN PIN QUE VIENE DEL MÓVIL ─────────────────────────────────
-
-// ¿Es `value` un instante con el que se puede sellar un pin? Lo usan los TRES
-// lados con el mismo criterio: el Worker 1.x para rechazar la orden al
-// encolarla y el drenado del buzón para decidir si sella con la marca del
-// teléfono o cae a "ahora". La vista previa del buzón en la PWA desapareció con
-// la API v2, que escribe directamente.
-//
-// El futuro NO se recorta a propósito: un teléfono con el reloj adelantado deja
-// su juego al final de Up next, que es raro pero es SU orden, y reordenar desde
-// cualquiera de los dos lados lo arregla repartiendo las marcas existentes.
-export const isCrediblePinStamp = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0;
-
 // ── DESDE CUÁNDO ESPERA UN PLANEADO ────────────────────────────────────────
 
 // La fecha con la que un planeado "espera" en el Plan: la del PRIMER evento

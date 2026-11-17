@@ -22,7 +22,7 @@ it('every source mkdtemp family is covered by pretest cleanup or has an explicit
   // disposal policy is reviewed. Parse only files mentioning mkdtemp;
   // comments, fixture strings and formatting changes cannot create matches.
   let checked = 0;
-  for (const root of ['src', 'worker/src', 'web/src', 'e2e', 'scripts']) {
+  for (const root of ['src', 'web/src', 'e2e', 'scripts']) {
     for (const path of sourceFiles(root)) {
       const text = readFileSync(path, 'utf8');
       if (!text.includes('mkdtemp')) continue;

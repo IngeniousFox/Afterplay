@@ -44,7 +44,7 @@ describe('error -> HTTP', () => {
   });
 });
 
-describe('Access (copia de worker/src/access.ts): falla cerrado', () => {
+describe('Access: falla cerrado', () => {
   const request = new Request('https://hub.test/api/v2/devices');
 
   it('sin configuración de Access no se valida nada', async () => {

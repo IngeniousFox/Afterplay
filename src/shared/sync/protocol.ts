@@ -21,7 +21,6 @@ export const SYNC_ROUTES = {
   pull: `${SYNC_BASE_PATH}/pull`,
   jobsClaim: `${SYNC_BASE_PATH}/jobs/claim`,
   jobsDone: `${SYNC_BASE_PATH}/jobs/done`,
-  igdbCredentials: `${SYNC_BASE_PATH}/igdb-credentials`,
   credentials: `${SYNC_BASE_PATH}/credentials`,
   enrollSecret: `${SYNC_BASE_PATH}/enroll-secret`,
 } as const;
@@ -301,25 +300,6 @@ export interface JobDoneRequest {
 export interface JobDoneResponse {
   closed: boolean;
 }
-
-// ---------- POST /igdb-credentials (F-29) ----------
-
-/**
- * Las claves de Twitch/IGDB de la persona, que el PC sube para que la PWA
- * pueda buscar juegos. El hub las guarda CIFRADAS con `HUB_SECRETS_KEY` y no
- * las devuelve jamás: la respuesta solo confirma que están guardadas.
- */
-export interface IgdbCredentialsRequest {
-  clientId: string;
-  clientSecret: string;
-}
-
-export interface IgdbCredentialsResponse {
-  stored: true;
-}
-
-/** Tope de cada clave: las de Twitch miden 30 caracteres; esto solo corta basura. */
-export const IGDB_KEY_MAX_LENGTH = 200;
 
 // ---------- POST /credentials ----------
 

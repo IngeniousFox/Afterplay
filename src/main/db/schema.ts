@@ -1,6 +1,5 @@
 import { index, int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { RecapPayload } from '../../shared/memory/payload';
-import type { PlanMailboxEntry, PlanMailboxType } from '../../shared/planMailbox';
 
 // Nada de `check()` SQL en columnas tipo-enum (type/milestone/datePrecision/
 // format), y el motivo cambió el 8-ago-2026 aunque la decisión se mantenga.
@@ -607,6 +606,23 @@ export const generatedMemoriesTable = sqliteTable(
 
 // ── El buzón del Plan (REMOTO.md §6) ──────────────────────────────────────
 //
+// La forma del JSON del buzón 1.x. El contrato salió de `src/shared` con el
+// Worker 1.x; aquí queda congelado solo para tipar la columna que lee el
+// importador (que no migra filas del buzón, §13.3).
+type PlanMailboxEntry =
+  | {
+      type: 'add';
+      source: { igdbId: number } | { steamAppId: number };
+      title: string;
+      coverUrl: string | null;
+      note: string | null;
+    }
+  | { type: 'pin'; gameId: number; pinnedAt: number }
+  | { type: 'unpin'; gameId: number }
+  | { type: 'reorder'; orderedIds: number[] };
+
+type PlanMailboxType = PlanMailboxEntry['type'];
+
 // Lo que el móvil ENCOLA y este escritorio DRENA al arrancar. Tabla minúscula
 // y DESECHABLE: el cliente web nunca escribe en las tablas reales, solo aquí,
 // así que un bug en la web no puede corromper la biblioteca — como mucho deja
@@ -626,7 +642,7 @@ export const planMailboxTable = sqliteTable(
     // Duplicado del `type` que ya va dentro del payload, a propósito: permite
     // filtrar e indexar sin abrir el JSON de cada fila.
     type: text().$type<PlanMailboxType>().notNull(),
-    payload: text({ mode: 'json' }).$type<PlanMailboxEntry<number>>().notNull(),
+    payload: text({ mode: 'json' }).$type<PlanMailboxEntry>().notNull(),
     createdAt: int({ mode: 'timestamp_ms' })
       .notNull()
       .$defaultFn(() => new Date()),
