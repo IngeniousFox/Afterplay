@@ -4,6 +4,7 @@ import {
   type ClientVersion,
   type EnrollRequest,
   type EnrollResponse,
+  type EnrollSecretResponse,
   type CredentialsExchangeRequest,
   type CredentialsExchangeResponse,
   type JobClaimRequest,
@@ -216,6 +217,27 @@ export function exchangeCredentials(
     url: joinUrl(options.baseUrl, SYNC_ROUTES.credentials),
     token: options.token,
     body,
+    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    fetchImpl: options.fetch ?? fetch,
+  });
+}
+
+/**
+ * Pide al hub un secreto de alta de varios usos (§9.3, §19.3.1). Va con el
+ * token del dispositivo. La respuesta lleva el secreto: no se registra ni se
+ * copia a un error.
+ */
+export function requestEnrollSecret(options: {
+  baseUrl: string;
+  token: string;
+  timeoutMs?: number;
+  fetch?: typeof fetch;
+}): Promise<EnrollSecretResponse> {
+  return request<EnrollSecretResponse>({
+    method: 'POST',
+    url: joinUrl(options.baseUrl, SYNC_ROUTES.enrollSecret),
+    token: options.token,
+    body: {},
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     fetchImpl: options.fetch ?? fetch,
   });

@@ -23,6 +23,7 @@ export const SYNC_ROUTES = {
   jobsDone: `${SYNC_BASE_PATH}/jobs/done`,
   igdbCredentials: `${SYNC_BASE_PATH}/igdb-credentials`,
   credentials: `${SYNC_BASE_PATH}/credentials`,
+  enrollSecret: `${SYNC_BASE_PATH}/enroll-secret`,
 } as const;
 
 /** Máximos por defecto (§8.4). El hub anuncia los suyos en `/status`. */
@@ -67,6 +68,29 @@ export function parseDeviceToken(token: string): ParsedDeviceToken | null {
   return { tenantId, secret };
 }
 
+// ---------- Secreto de alta (§9.3, §19.3.1) ----------
+
+export const ENROLL_SECRET_PREFIX = 'aes1';
+
+/** El secreto de alta caduca a los 7 días (§19.3.1). */
+export const ENROLL_SECRET_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Forma de lo que viaja: `aes1.<inquilino>.<secreto>`. Como el token, lleva el
+ * inquilino delante para que el Worker sepa a qué Durable Object enrutar el
+ * canje; lo secreto son los 43 caracteres base64url finales (258 bits).
+ */
+export function isEnrollSecretShape(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 128) return false;
+  const parts = value.split('.');
+  return (
+    parts.length === 3 &&
+    parts[0] === ENROLL_SECRET_PREFIX &&
+    /^[0-9a-zA-Z_-]{1,64}$/.test(parts[1]) &&
+    /^[0-9a-zA-Z_-]{43}$/.test(parts[2])
+  );
+}
+
 export function formatDeviceToken(tenantId: string, secret: string): string {
   return `${TOKEN_PREFIX}.${tenantId}.${secret}`;
 }
@@ -84,7 +108,8 @@ export function formatDeviceToken(tenantId: string, secret: string): string {
  * - `quota_exceeded`: Cloudflare agotó un cupo diario (§9.7) (503). Se
  *   reintenta más tarde sin perder nada.
  * - `invalid_request`: cuerpo mal formado o por encima de los límites (400).
- * - `enroll_code_invalid`: código de emparejado desconocido, usado o caducado (400).
+ * - `enroll_code_invalid`: código de emparejado o secreto de alta desconocido, usado,
+ *   sustituido o caducado (400). Son indistinguibles desde fuera.
  * - `not_found`: ruta desconocida (404).
  * - `rate_limited`: demasiados intentos fallidos de emparejado; el hub
  *   bloquea un rato y lo dice en `Retry-After` (429).
@@ -210,9 +235,16 @@ export interface PullResponse extends HubIdentity {
 
 // ---------- POST /enroll (§9.3) ----------
 
+/**
+ * Se canjea una de dos cosas, exactamente una: `code`, el código de un solo uso
+ * que muestra la PWA ("Añadir dispositivo"), o `enrollSecret`, el secreto de
+ * alta de varios usos que deja el primer PC en la migración (`POST
+ * /enroll-secret`). Si vienen los dos o ninguno, el canje falla. Cada canje
+ * correcto crea un token NUEVO para el dispositivo, en ambos casos.
+ */
 export interface EnrollRequest extends ClientVersion {
-  /** Código de un solo uso que muestra la PWA ("Añadir dispositivo"). */
-  code: string;
+  code?: string;
+  enrollSecret?: string;
   /** El `machineId` del PC (id de su fila en `devices`). */
   deviceId: string;
   deviceName: string;
@@ -228,6 +260,16 @@ export interface EnrollResponse extends HubIdentity {
    */
   shortDeviceId: string;
   serverTime: number;
+}
+
+// ---------- POST /enroll-secret (§9.3, §19.3.1) ----------
+
+/** Va con el token del dispositivo y sin cuerpo. Sustituye al secreto anterior. */
+export interface EnrollSecretResponse {
+  /** `aes1.<inquilino>.<secreto>`. Solo se ve aquí: el hub guarda su huella. */
+  enrollSecret: string;
+  /** ms desde la época: 7 días tras la emisión. */
+  expiresAt: number;
 }
 
 // ---------- POST /jobs/claim y /jobs/done (§14.3) ----------

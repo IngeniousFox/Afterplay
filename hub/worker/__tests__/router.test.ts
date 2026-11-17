@@ -408,3 +408,166 @@ describe('rutas de la PWA (/api/v2)', () => {
     assert.equal((await world.call('/api/v2/devices/enroll-code', { email: HOST })).status, 405);
   });
 });
+
+describe('secreto de alta (/sync/v1/enroll-secret)', () => {
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  const enrollWith = (enrollSecret: unknown, deviceId = 'pc-9'): Record<string, unknown> => ({
+    ...VERSION,
+    enrollSecret,
+    deviceId,
+    deviceName: 'PC',
+  });
+  const issue = async (
+    world: ReturnType<typeof makeWorld>,
+    token: string,
+  ): Promise<{ enrollSecret: string; expiresAt: number }> => {
+    const response = await world.call(SYNC_ROUTES.enrollSecret, { method: 'POST', token });
+    assert.equal(response.status, 200);
+    return (await json(response)) as { enrollSecret: string; expiresAt: number };
+  };
+
+  it('emitir exige un token válido: sin él, mal formado, falso o revocado, 401', async () => {
+    const world = makeWorld();
+    const { token, tenantId } = await pairDevice(world);
+    const forged = formatDeviceToken(tenantId, 'c'.repeat(43));
+    for (const bad of [undefined, 'basura', forged]) {
+      const response = await world.call(SYNC_ROUTES.enrollSecret, { method: 'POST', token: bad });
+      assert.equal(response.status, 401, String(bad));
+    }
+    // La PWA (Access) no es la puerta de esta ruta.
+    const viaAccess = await world.call(SYNC_ROUTES.enrollSecret, { method: 'POST', email: HOST });
+    assert.equal(viaAccess.status, 401);
+    assert.equal((await world.call(SYNC_ROUTES.enrollSecret, { token })).status, 405);
+    // Revocado: deja de poder emitir.
+    const devices = (await (await world.call('/api/v2/devices', { email: HOST })).json()) as {
+      tokenId: string;
+    }[];
+    await world.call(`/api/v2/devices/${devices[0].tokenId}/revoke`, {
+      method: 'POST',
+      email: HOST,
+    });
+    const revoked = await world.call(SYNC_ROUTES.enrollSecret, { method: 'POST', token });
+    assert.equal(revoked.status, 401);
+  });
+
+  it('el secreto lleva el inquilino delante, caduca a los 7 días y canjea en varios PCs', async () => {
+    const world = makeWorld();
+    const { token, tenantId } = await pairDevice(world);
+    const { enrollSecret, expiresAt } = await issue(world, token);
+    assert.match(enrollSecret, new RegExp(`^aes1\\.${tenantId}\\.[0-9a-zA-Z_-]{43}$`));
+    assert.equal(expiresAt, world.time.now + WEEK);
+
+    const tokens = new Set<string>([token]);
+    for (const deviceId of ['pc-a', 'pc-b', 'pc-c']) {
+      const response = await world.call(SYNC_ROUTES.enroll, {
+        body: enrollWith(enrollSecret, deviceId),
+      });
+      assert.equal(response.status, 200);
+      const enrolled = await json(response);
+      assert.equal(enrolled.tenantId, tenantId);
+      tokens.add(String(enrolled.token));
+      const status = await world.call(statusPath, { token: String(enrolled.token) });
+      assert.equal(status.status, 200);
+    }
+    assert.equal(tokens.size, 4, 'cada alta crea un token nuevo');
+  });
+
+  it('caducado, o sustituido por uno nuevo, falla como un código desconocido', async () => {
+    const world = makeWorld();
+    const { token } = await pairDevice(world);
+    const old = await issue(world, token);
+    const fresh = await issue(world, token);
+    assert.notEqual(old.enrollSecret, fresh.enrollSecret);
+
+    const replaced = await world.call(SYNC_ROUTES.enroll, { body: enrollWith(old.enrollSecret) });
+    assert.equal(replaced.status, 400);
+    assert.equal((await json(replaced)).error, 'enroll_code_invalid');
+    assert.equal(
+      (await world.call(SYNC_ROUTES.enroll, { body: enrollWith(fresh.enrollSecret) })).status,
+      200,
+    );
+
+    world.time.now += WEEK;
+    const expired = await world.call(SYNC_ROUTES.enroll, { body: enrollWith(fresh.enrollSecret) });
+    assert.equal(expired.status, 400);
+    assert.equal((await json(expired)).error, 'enroll_code_invalid');
+  });
+
+  it('basura, otro inquilino, inquilino inexistente y secreto equivocado se ven iguales', async () => {
+    const world = makeWorld();
+    const { token, tenantId } = await pairDevice(world);
+    await world.call('/api/v2/invitations', { email: HOST, body: { email: 'ana@example.com' } });
+    await world.call('/api/v2/devices', { email: 'ana@example.com' });
+    const tenantOfAna = world.directoryStore.tenantOf('ana@example.com')!.id;
+    const { enrollSecret } = await issue(world, token);
+    const body43 = enrollSecret.split('.')[2];
+    const candidates: unknown[] = [
+      '',
+      42,
+      'abc',
+      `aes1.${tenantId}.corto`,
+      `aes1.zzzzzz.${body43}`,
+      `aes1.${tenantOfAna}.${body43}`,
+      `aes1.${tenantId}.${'a'.repeat(43)}`,
+      `ap1.${tenantId}.${body43}`,
+    ];
+    const bodies = new Set<string>();
+    for (const candidate of candidates) {
+      const response = await world.call(SYNC_ROUTES.enroll, { body: enrollWith(candidate) });
+      assert.equal(response.status, 400, String(candidate));
+      bodies.add(await response.text());
+    }
+    assert.equal(bodies.size, 1);
+    assert.equal(JSON.parse([...bodies][0]).error, 'enroll_code_invalid');
+    assert.equal(world.touched.includes('zzzzzz'), false);
+    // Código y secreto a la vez: tampoco canjea.
+    const both = await world.call(SYNC_ROUTES.enroll, {
+      body: { ...enrollWith(enrollSecret), code: 'x' },
+    });
+    assert.equal(both.status, 400);
+    assert.equal((await json(both)).error, 'enroll_code_invalid');
+  });
+
+  it('bloqueo por fuerza bruta: 5 fallos y el siguiente, aunque sea el secreto bueno, es 429', async () => {
+    const world = makeWorld();
+    const { token, tenantId } = await pairDevice(world);
+    const { enrollSecret } = await issue(world, token);
+    for (let i = 0; i < 5; i++) {
+      const wrong = `aes1.${tenantId}.${String(i).repeat(43)}`;
+      const response = await world.call(SYNC_ROUTES.enroll, { body: enrollWith(wrong) });
+      assert.equal(response.status, 400);
+    }
+    const locked = await world.call(SYNC_ROUTES.enroll, { body: enrollWith(enrollSecret) });
+    assert.equal(locked.status, 429);
+    assert.equal((await json(locked)).error, 'rate_limited');
+    assert.ok(Number(locked.headers.get('retry-after')) > 0);
+    // Pasado el bloqueo, el secreto bueno vuelve a valer.
+    world.time.now += 16 * 60_000;
+    assert.equal(
+      (await world.call(SYNC_ROUTES.enroll, { body: enrollWith(enrollSecret) })).status,
+      200,
+    );
+  });
+
+  it('ni las respuestas de error ni el log contienen el secreto', async () => {
+    const world = makeWorld();
+    const { token, tenantId } = await pairDevice(world);
+    const { enrollSecret } = await issue(world, token);
+    const raw = enrollSecret.split('.')[2];
+    const wrong = `aes1.${tenantId}.${raw.split('').reverse().join('')}`;
+    const seen: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => seen.push(args.map(String).join(' '));
+    try {
+      const failed = await world.call(SYNC_ROUTES.enroll, { body: enrollWith(wrong) });
+      seen.push(await failed.text());
+      const malformed = await world.call(SYNC_ROUTES.enroll, {
+        rawBody: `{"enrollSecret":"${raw}`,
+      });
+      seen.push(await malformed.text());
+    } finally {
+      console.error = original;
+    }
+    for (const text of seen) assert.ok(!text.includes(raw) && !text.includes(wrong));
+  });
+});

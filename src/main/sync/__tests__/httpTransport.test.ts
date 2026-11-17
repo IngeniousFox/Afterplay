@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { SyncRequestError } from '../../../shared/sync/protocol';
-import { createHttpTransport, enroll, exchangeCredentials } from '../httpTransport';
+import {
+  createHttpTransport,
+  enroll,
+  exchangeCredentials,
+  requestEnrollSecret,
+} from '../httpTransport';
 
 // El transporte HTTP con un `fetch` falso: ni red ni credenciales reales.
 
@@ -222,6 +227,45 @@ describe('transporte HTTP', () => {
       ),
       (error: unknown) => error instanceof SyncRequestError && error.code === 'enroll_code_invalid',
     );
+  });
+});
+
+describe('secreto de alta', () => {
+  const secret = `aes1.tenant1.${'z'.repeat(43)}`;
+
+  it('POST con el token del dispositivo y devuelve secreto y caducidad', async () => {
+    const { fetch, seen } = fakeFetch(() => json({ enrollSecret: secret, expiresAt: 9 }));
+
+    const response = await requestEnrollSecret({
+      baseUrl: 'https://hub.example.test/',
+      token: TOKEN,
+      fetch,
+    });
+
+    assert.deepEqual(response, { enrollSecret: secret, expiresAt: 9 });
+    assert.equal(seen[0].url, 'https://hub.example.test/sync/v1/enroll-secret');
+    assert.equal(seen[0].method, 'POST');
+    assert.equal(seen[0].headers.Authorization, `Bearer ${TOKEN}`);
+  });
+
+  it('enroll con secreto va sin token y un fallo no repite el secreto', async () => {
+    const { fetch, seen } = fakeFetch(() =>
+      json({ error: 'enroll_code_invalid', message: 'código de emparejado desconocido' }, 400),
+    );
+    await assert.rejects(
+      enroll(
+        'https://h.test',
+        { ...VERSION, enrollSecret: secret, deviceId: 'd', deviceName: 'PC' },
+        { fetch },
+      ),
+      (error: unknown) =>
+        error instanceof SyncRequestError &&
+        error.code === 'enroll_code_invalid' &&
+        !JSON.stringify(error).includes('zzzz') &&
+        !error.message.includes('zzzz'),
+    );
+    assert.equal(seen[0].headers.Authorization, undefined);
+    assert.equal(JSON.parse(seen[0].body ?? '').enrollSecret, secret);
   });
 });
 

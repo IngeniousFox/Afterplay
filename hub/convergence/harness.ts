@@ -276,6 +276,27 @@ export class Client {
     this.enrolled = true;
   }
 
+  /**
+   * Empareja con el secreto de alta de la migración (§9.3, §19.3.1): sin
+   * código, con el secreto que emitió el primer PC. Crea un token propio.
+   */
+  async enrollWithSecret(enrollSecret: string): Promise<void> {
+    const response = await enrollInProcess(
+      this.world.hub,
+      this.online,
+      {
+        ...version(this.schemaVersion),
+        enrollSecret,
+        deviceId: this.deviceId,
+        deviceName: `PC-${this.name}`,
+      },
+      this.world.faults,
+    );
+    applyEnrollment(this.fx.local.db, response, this.fx.local.clock);
+    this.token = response.token;
+    this.enrolled = true;
+  }
+
   /** Un ciclo de sync (nunca lanza: el resultado lo dice). */
   async sync(): Promise<CycleResult> {
     const result = await this.engine.runCycle();

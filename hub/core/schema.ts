@@ -234,6 +234,14 @@ const HUB_OWN_SQL = [
   expiresAt INTEGER NOT NULL,
   usesLeft INTEGER NOT NULL
 );`,
+  // Secreto de alta de la migración (§9.3, §19.3.1): UNO por inquilino (`id = 1`),
+  // de varios usos, que caduca. Emitir otro sustituye al anterior. Solo huella.
+  `CREATE TABLE IF NOT EXISTS enrollment_secret (
+  id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+  secretHash TEXT NOT NULL,
+  createdAt INTEGER NOT NULL,
+  expiresAt INTEGER NOT NULL
+);`,
   // Concesiones de trabajo (§14.3). Cerrada = `closedAt` no nulo; cerrada sigue ocupando el par hasta `expiresAt`.
   `CREATE TABLE IF NOT EXISTS job_leases (
   id TEXT PRIMARY KEY NOT NULL,

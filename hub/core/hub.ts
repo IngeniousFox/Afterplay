@@ -39,6 +39,7 @@ import { DELETED_COLUMN } from '../../src/shared/sync/fieldClocks';
 import { isDeviceShortId, isReservedDeviceShortId } from '../../src/shared/sync/clock';
 import {
   DEFAULT_LIMITS,
+  ENROLL_SECRET_TTL_MS,
   PROTOCOL_VERSION,
   formatDeviceToken,
   parseDeviceToken,
@@ -154,6 +155,12 @@ export interface DeviceTokenInfo extends HubDevice {
 export interface EnrollmentCode {
   /** Lo que se enseña al usuario, p. ej. `K7M2P-9XQ4T`. Solo se ve aquí: el hub guarda su huella. */
   code: string;
+  expiresAt: number;
+}
+
+export interface EnrollmentSecret {
+  /** Los 43 caracteres secretos; el Worker les pone el inquilino delante. Solo se ven aquí. */
+  secret: string;
   expiresAt: number;
 }
 
@@ -657,6 +664,27 @@ export class TenantHub {
     return { code: `${raw.slice(0, 5)}-${raw.slice(5)}`, expiresAt };
   }
 
+  /**
+   * Emite el secreto de alta de la migración (§9.3, §19.3.1): de varios usos,
+   * caduca a los 7 días y sustituye al anterior (un solo secreto vivo por
+   * inquilino, así que emitir otro también revoca el viejo). Nunca se teclea,
+   * por eso tiene 258 bits y no los 50 del código.
+   */
+  async createEnrollmentSecret(): Promise<EnrollmentSecret> {
+    const secret = randomSecret();
+    const secretHash = await sha256Hex(secret);
+    const now = this.now();
+    const expiresAt = now + ENROLL_SECRET_TTL_MS;
+    this.storage.exec(
+      `INSERT INTO enrollment_secret (id, secretHash, createdAt, expiresAt) VALUES (1, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET secretHash = excluded.secretHash, createdAt = excluded.createdAt, expiresAt = excluded.expiresAt`,
+      secretHash,
+      now,
+      expiresAt,
+    );
+    return { secret, expiresAt };
+  }
+
   // ---------- Escrituras del móvil (§13.3; las usa `queries.ts`) ----------
   //
   // El móvil escribe con la MISMA puerta de escritura que los PCs
@@ -754,38 +782,54 @@ export class TenantHub {
    */
   async enroll(request: EnrollRequest): Promise<EnrollResponse> {
     this.checkVersion(request);
-    const { code, deviceId, deviceName } = request ?? ({} as Partial<EnrollRequest>);
+    const { code, enrollSecret, deviceId, deviceName } = request ?? ({} as Partial<EnrollRequest>);
+    // Exactamente uno de los dos: el código de un solo uso o el secreto de alta.
     if (
-      typeof code !== 'string' ||
+      (typeof code === 'string') === (typeof enrollSecret === 'string') ||
       typeof deviceId !== 'string' ||
       typeof deviceName !== 'string'
     ) {
-      throw new HubError('invalid_request', 'faltan code, deviceId o deviceName');
+      throw new HubError('invalid_request', 'faltan code o enrollSecret, deviceId o deviceName');
     }
     if (deviceId === '' || deviceId.length > 128 || deviceName.length > 200) {
       throw new HubError('invalid_request', 'deviceId o deviceName no válidos');
     }
     // Huellas y secreto ANTES de la transacción: SHA-256 es asíncrona.
-    const codeHash = await sha256Hex(normalizeEnrollmentCode(code));
+    const credentialHash =
+      typeof code === 'string'
+        ? await sha256Hex(normalizeEnrollmentCode(code))
+        : await sha256Hex(enrollSecret as string);
     const secret = randomSecret();
     const tokenHash = await sha256Hex(secret);
 
     const now = this.now();
     const result = this.storage.transactionSync(() => {
-      const row = this.storage.exec(
-        `SELECT usesLeft FROM enrollment_codes WHERE codeHash = ? AND expiresAt > ? AND usesLeft > 0`,
-        codeHash,
-        now,
-      )[0];
-      if (!row) return null;
-      // Gasta un uso; al agotarse, desaparece (usado y desconocido se ven igual).
-      if (num(row.usesLeft) <= 1) {
-        this.storage.exec(`DELETE FROM enrollment_codes WHERE codeHash = ?`, codeHash);
-      } else {
-        this.storage.exec(
-          `UPDATE enrollment_codes SET usesLeft = usesLeft - 1 WHERE codeHash = ?`,
+      if (typeof code === 'string') {
+        const codeHash = credentialHash;
+        const row = this.storage.exec(
+          `SELECT usesLeft FROM enrollment_codes WHERE codeHash = ? AND expiresAt > ? AND usesLeft > 0`,
           codeHash,
-        );
+          now,
+        )[0];
+        if (!row) return null;
+        // Gasta un uso; al agotarse, desaparece (usado y desconocido se ven igual).
+        if (num(row.usesLeft) <= 1) {
+          this.storage.exec(`DELETE FROM enrollment_codes WHERE codeHash = ?`, codeHash);
+        } else {
+          this.storage.exec(
+            `UPDATE enrollment_codes SET usesLeft = usesLeft - 1 WHERE codeHash = ?`,
+            codeHash,
+          );
+        }
+      } else {
+        // El secreto de alta no se gasta: vale para varios PCs hasta que caduca
+        // o se emite otro. Cada canje, aun así, crea un token nuevo (abajo).
+        const row = this.storage.exec(
+          `SELECT 1 AS found FROM enrollment_secret WHERE id = 1 AND secretHash = ? AND expiresAt > ?`,
+          credentialHash,
+          now,
+        )[0];
+        if (!row) return null;
       }
       const shortDeviceId = this.shortIdFor(deviceId);
       this.storage.exec(
@@ -987,10 +1031,14 @@ export class TenantHub {
         `DELETE FROM enrollment_codes WHERE expiresAt <= ? OR usesLeft <= 0 RETURNING codeHash`,
         now,
       );
+      const deletedSecret = this.storage.exec(
+        `DELETE FROM enrollment_secret WHERE expiresAt <= ? RETURNING id`,
+        now,
+      );
       return {
         expiredLeases: expired.length,
         deletedLeases: deletedLeases.length,
-        deletedEnrollmentCodes: deletedCodes.length,
+        deletedEnrollmentCodes: deletedCodes.length + deletedSecret.length,
         abandonedSessions: this.sweepAbandonedSessions(now),
       };
     });

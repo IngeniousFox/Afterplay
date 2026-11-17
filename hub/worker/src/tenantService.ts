@@ -29,7 +29,7 @@ import type {
   PushResponse,
   StatusResponse,
 } from '../../../src/shared/sync/protocol';
-import type { EnrollmentCode } from '../../core/hub';
+import type { EnrollmentCode, EnrollmentSecret } from '../../core/hub';
 import { CredentialBundleStore } from './credentialBundle';
 import { IgdbCredentialStore } from './igdbCredentials';
 import { IgdbClient, type IgdbKeys } from './web/igdbClient';
@@ -316,7 +316,7 @@ export class TenantService {
     });
   }
 
-  /** Canje de un código (sin token). Con bloqueo por intentos fallidos. */
+  /** Canje de un código o del secreto de alta (sin token). Con bloqueo por intentos fallidos. */
   async enroll(request: EnrollRequest): Promise<Outcome<EnrollResponse>> {
     const lockedFor = this.throttle.lockedForSec();
     if (lockedFor > 0) {
@@ -333,6 +333,17 @@ export class TenantService {
     if (outcome.ok) this.throttle.reset();
     else if (outcome.error.error === 'enroll_code_invalid') this.throttle.recordFailure();
     return outcome;
+  }
+
+  /**
+   * Emite el secreto de alta de la migración (§19.3.1) a un PC ya emparejado.
+   * Sustituye al anterior. Va con el token del dispositivo.
+   */
+  createEnrollmentSecret(token: string): Promise<Outcome<EnrollmentSecret>> {
+    return this.run(async () => {
+      await this.hub.authenticateToken(token);
+      return this.hub.createEnrollmentSecret();
+    });
   }
 
   // ---- Administración (las llama la PWA, ya autenticada por Access) ----
