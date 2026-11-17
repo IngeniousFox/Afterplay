@@ -1708,6 +1708,35 @@ El informe de validación se guarda en el log. Si falla, se borra `Afterplay2.db
 
 **PC rezagado** (se saltó el paso 2 del migrador y tenía cambios sin subir): al actualizarse, un importador secundario compara su base 1.x local con lo que hay en el hub y propone las filas que faltan, emparejando por contenido (`startedAt`, juego, duración), no por id. Con informe y confirmación: es el caso anómalo.
 
+#### §19.6.1 Cómo quedó el corte en la 2.0 (2026-11-17)
+
+Está en `src/main/migration/` (`cutover.ts`, `cutoverRuntime.ts`, `cutoverProgress.ts`) y se va entero con el importador (L3).
+
+**Cuándo se dispara.** Al arrancar la 2.0, si en la carpeta de datos hay una `Afterplay.db` de la 1.x y no hay `Afterplay2.db`, o hay una migración a medias (`cutover-progress.json`). Los perfiles de desarrollo y los e2e siguen importando solos y sin Turso; `AFTERPLAY_CUTOVER=1` fuerza el corte real en un perfil de desarrollo. Mientras dura, la ventana enseña la pantalla de migración y no arranca nada que necesite la base.
+
+**Migrador**, en este orden:
+
+1. Reclama el corte (§19.3.1).
+2. Hace la pregunta de los rezagados si hace falta. Un PC es rezagado si tiene cambios sin subir o no ha informado en 24 horas. **Este mismo PC** también cuenta: la 1.8 se sustituyó por la 2.0 y puede haber dejado cambios sin subir en su réplica. Continuar acepta perderlos (quedan en la copia de `backups/`).
+3. Saca una **instantánea de Turso**, en una sola transacción de lectura, a `backups/Afterplay-remote-<fecha>.db`, e importa desde ella. No importa la réplica local: esa solo tiene lo que este PC bajó en su último ciclo. Sin Turso configurado (un solo PC) importa la copia local, como dice §19.5.
+4. Si el buzón del móvil tiene órdenes sin aplicar, para antes de importar y suelta el reclamo: la 1.8 sale del modo solo lectura, las aplica y se reintenta.
+5. Las sesiones abiertas se cierran en su último latido, también en producción.
+6. Se empareja con el hub (la primera vez, con el código de la PWA) y espera a que la siembra termine. La siembra es el primer ciclo normal del motor contra un hub nuevo, que marca todas las filas para subir; termina cuando no queda ninguna.
+7. Pide el secreto de alta y cierra el corte (`done` y `hub`, en una transacción).
+
+Un fallo antes de que la importación valide borra `Afterplay2.db` y suelta el reclamo. Un fallo después conserva el reclamo y se reanuda en el paso en que estaba.
+
+**Secundario:** lee el hub y el secreto de `app_meta`, se empareja (si el secreto caducó, pide un código), baja todo y hace la migración local. Como no ha importado, reconstruye `local_legacy_ids` de juegos y emuladores desde su propia base 1.x, con la misma regla de ids que el importador. Con eso reclama las instalaciones, pasa los destinos de restauración y siembra `lastSyncedHash`.
+
+**No se valida en la app contra las lecturas 1.x.** Esa comparación necesita el código 1.x, que no puede entrar en la app (`noTursoInMain`). En la app corren las validaciones de `validate.ts`: recuentos, reglas de dominio y conciliación columna a columna. La comparación con las lecturas 1.x se hace en el ensayo (fase 9) con `scripts/import-1x-to-v2.ts`.
+
+**Límites conocidos** (para el ensayo de la fase 9):
+
+- Si el PC que tiene el reclamo se rompe a mitad y no vuelve, los demás esperan sin fin. Hoy se arregla a mano, borrando la fila `cutover`.
+- Si el hub rechaza una fila, la siembra no llega a cero y el corte no termina.
+- No está el importador del PC rezagado (§19.6, último párrafo).
+- La instantánea y el detector de cambios sin subir solo se han probado contra una base libsql en fichero, no contra Turso por HTTP. Los nombres de columna de la cola de la réplica (`turso_cdc`, `turso_sync_last_change_id`) no se han comprobado sobre una réplica real; si no coinciden, el detector devuelve "desconocido" y se usa solo el estado que publica la 1.8.
+
 ### §19.7 Siembra del hub
 
 - El migrador sube su base 2.0 por el camino normal (`push`), en lotes.
