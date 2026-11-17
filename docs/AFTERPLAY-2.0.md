@@ -1564,6 +1564,37 @@ La 1.8 vive en `main` y la 2.0 en `v2`: este es el único punto en el que se toc
 
 **Secreto de alta** (§9.3). Lo emite el hub a petición del PC migrador, ya emparejado, con su token; vale para varios emparejados y caduca (7 días). El hub guarda solo su huella. Un PC que se empareja con él recibe su propio token, como con el código de un solo uso.
 
+Cómo quedó en el hub (2026-11-17):
+
+- Se pide con `POST /sync/v1/enroll-secret` y el token del PC, sin cuerpo. Devuelve `{ enrollSecret, expiresAt }`.
+- Tiene la forma `aes1.<inquilino>.<43 caracteres base64url>` (258 bits). Lleva el inquilino delante, como los códigos, para que el hub sepa a quién va.
+- Hay un solo secreto vivo por inquilino: pedir otro anula el anterior. No se gasta con el uso ni tiene tope de usos; deja de valer al caducar o al ser sustituido.
+- La petición de emparejado lleva exactamente uno de los dos campos, `code` o `enrollSecret`. Todos los fallos se ven iguales desde fuera (`enroll_code_invalid`), y el código y el secreto comparten el bloqueo por intentos del inquilino.
+- Quien tenga el secreto puede emparejar un PC nuevo durante 7 días. Por eso solo se guarda en `app_meta` de la base de Turso de esa persona, que ya da acceso a toda su biblioteca 1.x.
+
+#### §19.3.2 Estado de la 1.8 (2026-11-17)
+
+Hecha en la rama `bridge-1.8`, sacada de `main`. No está fusionada en `main` ni publicada, y la versión sigue sin cambiar.
+
+- **`app_meta`**: es una migración de `drizzle/` como las demás, y llega a Turso por el mismo camino que el resto del esquema 1.x.
+- **Estado de cada PC**: se publica en cada ciclo de sync, después de subir, con un segundo envío corto para que llegue en ese mismo ciclo. `pendingChanges` son las operaciones de la cola de cambios que quedan tras subir. Se sigue publicando en solo lectura: es lo que mira el PC migrador.
+- **Solo lectura**:
+  - Se decide al arrancar y justo después de cada bajada.
+  - El guardia es uno solo, en `getDb()`: cualquier escritura lanza `LIBRARY_MIGRATED`.
+  - El watcher, el buzón y las pasadas de fondo, además, ni lo intentan.
+  - Si la 2.0 suelta el corte, el modo se levanta.
+  - El aviso fijo dice "This library has moved to Afterplay 2" (la interfaz de la 1.x está en inglés).
+- **Freno del actualizador**: una versión mayor ya no se descarga sola. Pregunta "Afterplay 2 is ready and migrates your data. Now?"; si se rechaza, vuelve a preguntar en la siguiente comprobación (cada 6 horas).
+- **Worker antiguo**: con el corte, el cronómetro y el buzón responden 503 `maintenance`, y la PWA lo enseña. Las lecturas siguen funcionando. Es solo código: no se ha desplegado.
+
+Límites conocidos:
+
+- Al arrancar se mira la copia local. Un corte reclamado con la app cerrada se ve tras la primera bajada, no antes.
+- El modo TV no enseña el aviso, aunque tampoco puede escribir.
+- Las subidas de partidas guardadas al bucket no pasan por el guardia. Solo salen de sesiones o de acciones a mano, y las dos están bloqueadas.
+
+Dos fallos que ya estaban en `main` siguen ahí: `testTempCoverage` (un prefijo de carpeta temporal sin declarar) y el e2e `integraciones.spec.ts:311`. No son de la 1.8.
+
 **Por qué la 2.0 habla con Turso** (decidido el 2026-11-17): reclamar el corte tiene que ser una escritura condicional en la base que comparten todos los PCs de la 1.x. La 2.0 lleva para eso un cliente de Turso por HTTP en un módulo puente, y solo en él (`PUENTE 1.x → L3`). La alternativa, un punto nuevo en el Worker antiguo, obligaba a modificar y desplegar `afterplay-web`.
 
 ### §19.4 Auditoría previa de los datos
@@ -2507,16 +2538,19 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 
 #### L3: con la retirada del importador (2.1)
 
-| Pieza                                                                                          | Tamaño                    | Qué lo retiene                                                           |
-| ---------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
-| `src/main/db/v2/importer/`, `scripts/import-1x-to-v2.ts` y `scripts/audit-1x-data.ts`          | ~6.500 más 2.100 de tests | Es la migración. Mientras exista una `Afterplay.db` sin migrar, se queda |
-| `src/main/db/schema.ts` (esquema 1.x), `db/index.ts` (`getDb` que lanza) y `db/projections.ts` | ~850                      | Lo leen el importador y sus lecturas de comprobación                     |
-| Lo que queda de `src/main/db/queries/` (20 lecturas 1.x)                                       | ~1.850                    | `importer/legacyQueries.ts` las ejecuta para comparar la 1.x con la 2.0  |
-| `drizzle/` (migraciones 1.x) y `drizzle.config.ts`                                             | carpeta                   | Los tests del importador montan una base 1.x con ellas                   |
-| `src/main/db/__tests__/harness.ts`                                                             | 1 fichero                 | Andamio de tests 1.x que usa el importador                               |
-| `@libsql/client`, `@tursodatabase/sync` (ya en `devDependencies`) y `drizzle-orm/libsql`       | 2 paquetes                | `importer/source.ts`, `legacyQueryHost.ts` y `scripts/gen-e2e-seed.ts`   |
-| `src/main/__tests__/noTursoInMain.test.ts`                                                     | 1 test                    | Deja de tener sentido cuando los paquetes ya no están instalados         |
-| El aviso de la 1.8 y la pantalla de migración de la 2.0 (§15.7)                                | por escribir (fase 8)     | Nacen ya con fecha de retirada: L3                                       |
+| Pieza                                                                                                              | Tamaño                    | Qué lo retiene                                                                  |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------- |
+| `src/main/db/v2/importer/`, `scripts/import-1x-to-v2.ts` y `scripts/audit-1x-data.ts`                              | ~6.500 más 2.100 de tests | Es la migración. Mientras exista una `Afterplay.db` sin migrar, se queda        |
+| `src/main/db/schema.ts` (esquema 1.x), `db/index.ts` (`getDb` que lanza) y `db/projections.ts`                     | ~850                      | Lo leen el importador y sus lecturas de comprobación                            |
+| Lo que queda de `src/main/db/queries/` (20 lecturas 1.x)                                                           | ~1.850                    | `importer/legacyQueries.ts` las ejecuta para comparar la 1.x con la 2.0         |
+| `drizzle/` (migraciones 1.x) y `drizzle.config.ts`                                                                 | carpeta                   | Los tests del importador montan una base 1.x con ellas                          |
+| `src/main/db/__tests__/harness.ts`                                                                                 | 1 fichero                 | Andamio de tests 1.x que usa el importador                                      |
+| `@libsql/client`, `@tursodatabase/sync` (ya en `devDependencies`) y `drizzle-orm/libsql`                           | 2 paquetes                | `importer/source.ts`, `legacyQueryHost.ts` y `scripts/gen-e2e-seed.ts`          |
+| `src/main/__tests__/noTursoInMain.test.ts`                                                                         | 1 test                    | Deja de tener sentido cuando los paquetes ya no están instalados                |
+| El aviso de la 1.8 y la pantalla de migración de la 2.0 (§15.7)                                                    | por escribir (fase 8)     | Nacen ya con fecha de retirada: L3                                              |
+| `src/main/migration/legacyCutover.ts` (el cliente Turso puente, §19.3.1) y su excepción en `noTursoInMain.test.ts` | ~260 más sus tests        | Reclama y cierra el corte. Se va con el importador                              |
+| `POST /sync/v1/enroll-secret`, la tabla `enrollment_secret` del hub y `pairWithSecret`                             | ~300                      | Solo sirve para emparejar los PCs que migran. Un PC nuevo después usa el código |
+| El reindexado de partidas tras importar (`saves/postImportReindex.ts`, `queries/saves/postImport.ts`)              | ~240                      | Solo actúa tras una importación                                                 |
 
 **Lo que parece 1.x y no se borra nunca**, porque son datos y no código:
 
