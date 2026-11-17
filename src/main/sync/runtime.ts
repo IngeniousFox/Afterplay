@@ -339,8 +339,8 @@ export class SyncRuntime {
   }
 
   /**
-   * Si este PC tiene una biblioteca importada de la 1.x y el hub ya tiene datos
-   * (y no es un hub con el que este PC ya sincronizó), la frase para rechazar el
+   * Si este PC tiene una biblioteca importada de la 1.x que nunca sincronizó con
+   * ningún hub, y el hub ya tiene datos, la frase para rechazar el
    * emparejado; si no, null. El secundario del corte no entra aquí: empareja con
    * una base vacía, sin importar nada. Ante la duda (no se pudo mirar el hub) se
    * rechaza.
@@ -351,7 +351,11 @@ export class SyncRuntime {
   ): Promise<string | null> {
     const { db } = this.deps.local;
     if (!hasImportedLibrary(db)) return null;
-    if (readSyncState(db).hubId === response.hubId) return null;
+    // Un PC que ya sincronizó con algún hub tiene su biblioteca fundida en esa
+    // familia: volver a emparejarlo (el mismo hub, o uno recreado tras perder el
+    // anterior, §8.4) no mezcla nada nuevo. El riesgo es solo la importación que
+    // nunca subió a ningún hub (corte sin Turso, `runLocalOnly`).
+    if (readSyncState(db).hubId !== null) return null;
     try {
       const transport = (this.deps.createTransport ?? createHttpTransport)({
         baseUrl: hubUrl,

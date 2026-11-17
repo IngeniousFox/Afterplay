@@ -309,6 +309,17 @@ describe('emparejar una biblioteca importada de la 1.x', () => {
     assert.equal(result.ok, true);
   });
 
+  it('acepta un hub recreado (otro hubId) con datos si este PC ya había sincronizado', async () => {
+    const s = setup();
+    markImported(s);
+    s.hub.seq = 7;
+    s.fx.local.db.$client
+      .prepare(`UPDATE "local_sync_state" SET "hubId" = 'hub-perdido' WHERE "id" = 1`)
+      .run();
+    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
+    assert.equal(result.ok, true);
+  });
+
   it('una base sin filas importadas (secundario del corte) se empareja con un hub poblado', async () => {
     const s = setup();
     s.hub.seq = 7;
