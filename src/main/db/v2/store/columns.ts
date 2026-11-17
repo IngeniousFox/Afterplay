@@ -1,3 +1,4 @@
+import { nodeSQLiteCodecs } from 'drizzle-orm/node-sqlite';
 import { getTableConfig, type SQLiteColumn, type SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { sameValue } from '../../../../shared/sync/fieldClocks';
 import { SYNC_COLUMN_NAMES } from '../schema';
@@ -210,7 +211,21 @@ export function normalizeValue(table: string, column: ColumnInfo, value: unknown
   if (value === null) return null;
   validate(table, column, value);
   const driver: unknown = column.column.mapToDriverValue(value);
-  return column.column.mapFromDriverValue(driver);
+  return decodeFromDriver(column.column, driver);
+}
+
+// Drizzle 1.0 rc.5 sacó la lectura de las columnas: `mapFromDriverValue` ya no
+// decodifica (devuelve el valor tal cual) y quien lo hace al leer una fila es
+// el códec del driver, elegido por el nombre de códec de la columna
+// (`text:json`, `integer:boolean`...). Aquí se aplica ese mismo códec para
+// seguir devolviendo la forma exacta con la que Drizzle entrega la fila.
+type CodecTable = Record<string, { readonly normalize?: (value: never) => unknown } | undefined>;
+
+function decodeFromDriver(column: SQLiteColumn, driver: unknown): unknown {
+  const codec = (column as unknown as { codec?: string }).codec;
+  const normalize =
+    codec === undefined ? undefined : (nodeSQLiteCodecs as CodecTable)[codec]?.normalize;
+  return normalize ? (normalize as (value: unknown) => unknown)(driver) : driver;
 }
 
 /**
