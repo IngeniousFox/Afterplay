@@ -11,7 +11,13 @@ import {
   recordSaveReindexRun,
   remapLegacyRestoreTargets,
 } from '../queries/saves';
-import { AppDatabaseError, openAppDatabase, type OpenedAppDatabase } from '../runtime';
+import {
+  AppDatabaseError,
+  importLegacyIntoLocal,
+  openAppDatabase,
+  removeLocalDatabase,
+  type OpenedAppDatabase,
+} from '../runtime';
 import { MIGRATIONS_FOLDER, count, tempDir } from './helpers';
 
 const NOW = Date.UTC(2026, 10, 14);
@@ -46,7 +52,7 @@ const userData = (withLegacyGames = 0): string => {
   return path;
 };
 
-const open = (dir: string, allowImport = true): OpenedAppDatabase => {
+const open = (dir: string, allowImport = true, freshDatabase = false): OpenedAppDatabase => {
   const result = openAppDatabase({
     userDataDir: dir,
     deviceId: DEVICE,
@@ -58,6 +64,7 @@ const open = (dir: string, allowImport = true): OpenedAppDatabase => {
       schemaVersion: 1,
     },
     allowImport,
+    freshDatabase,
     now: () => new Date(NOW),
     log: () => {},
   });
@@ -161,5 +168,91 @@ describe('runtime: abrir la base 2.0 de la app', () => {
     assert.throws(() => open(dir), AppDatabaseError);
     assert.equal(existsSync(join(dir, 'Afterplay2.db')), false);
     assert.equal(existsSync(join(dir, 'Afterplay2.db.importing')), false);
+  });
+  it('freshDatabase crea una base vacía junto a la 1.x sin importarla (PC secundario del corte)', () => {
+    const dir = userData(3);
+    const app = open(dir, false, true);
+    assert.equal(app.imported, null);
+    assert.equal(count(app.local, 'games'), 0);
+    assert.equal(count(app.local, 'devices', `id = '${DEVICE}'`), 1);
+    assert.equal(isSaveReindexPending(app.ctx), false);
+    assert.ok(existsSync(join(dir, 'Afterplay.db')), 'la 1.x sigue en su sitio');
+    assert.equal(existsSync(join(dir, 'backups')), false, 'no copia ni importa nada');
+  });
+});
+
+describe('runtime: la importación del corte (importLegacyIntoLocal)', () => {
+  const importNow = (dir: string): ReturnType<typeof importLegacyIntoLocal> =>
+    importLegacyIntoLocal({
+      userDataDir: dir,
+      deviceId: DEVICE,
+      migrationsFolder: MIGRATIONS_FOLDER,
+      now: new Date(NOW),
+      log: () => {},
+    });
+
+  const vacuumTo = (legacy: LegacyDb, dir: string): void => {
+    legacy.client.exec(`VACUUM INTO '${join(dir, 'Afterplay.db').replace(/'/g, "''")}'`);
+    legacy.close();
+  };
+
+  it('importa antes de abrir y la base resultante se abre sin volver a importar', () => {
+    const dir = userData(3);
+    const report = importNow(dir);
+    assert.ok(report.validation.ok);
+    assert.ok(existsSync(join(dir, 'Afterplay2.db')));
+    assert.equal(existsSync(join(dir, 'Afterplay2.db.importing')), false);
+    assert.equal(readdirSync(join(dir, 'backups')).filter((n) => n.endsWith('.db')).length, 1);
+    const app = open(dir, false);
+    assert.equal(app.imported, null);
+    assert.equal(count(app.local, 'games'), 3);
+  });
+
+  it('cierra las sesiones abiertas en su último latido (también en producción)', () => {
+    const dir = userData();
+    const legacy = new LegacyDb();
+    const game = legacy.game({ title: 'Abierto', addedAt: NOW - 10 * DAY });
+    const iteration = legacy.iteration(game);
+    legacy.insert('sessions', {
+      iterationId: iteration,
+      startedAt: NOW - 3 * DAY,
+      lastHeartbeatAt: NOW - 3 * DAY + 90 * 60_000,
+      startedBy: 'watcher',
+      datePrecision: 'datetime',
+    });
+    vacuumTo(legacy, dir);
+
+    importNow(dir);
+    const app = open(dir, false);
+    const row = app.local.db.$client.prepare('SELECT durationSec FROM sessions').get() as {
+      durationSec: number;
+    };
+    assert.equal(row.durationSec, 90 * 60);
+  });
+
+  it('un buzón con órdenes pendientes lo bloquea y no deja base ni marcador', () => {
+    const dir = userData();
+    const legacy = new LegacyDb();
+    legacy.game({ title: 'Uno', addedAt: NOW - DAY });
+    legacy.insert('plan_mailbox', { type: 'pin', payload: '{}', createdAt: NOW - DAY });
+    vacuumTo(legacy, dir);
+    assert.throws(
+      () => importNow(dir),
+      (error: unknown) =>
+        error instanceof AppDatabaseError &&
+        (error.cause as Error | undefined)?.name === 'ImportBlockedError',
+    );
+    assert.equal(existsSync(join(dir, 'Afterplay2.db')), false);
+    assert.equal(existsSync(join(dir, 'Afterplay2.db.importing')), false);
+  });
+
+  it('removeLocalDatabase borra la base y su marcador y no toca la 1.x', () => {
+    const dir = userData(1);
+    importNow(dir);
+    writeFileSync(join(dir, 'Afterplay2.db.importing'), 'x');
+    removeLocalDatabase(dir);
+    assert.equal(existsSync(join(dir, 'Afterplay2.db')), false);
+    assert.equal(existsSync(join(dir, 'Afterplay2.db.importing')), false);
+    assert.ok(existsSync(join(dir, 'Afterplay.db')), 'la 1.x intacta');
   });
 });

@@ -499,7 +499,7 @@ describe('importador 1.x → 2.0: bloqueos (§19.7)', () => {
       (e: unknown) => e instanceof ImportBlockedError && /1 sesión/.test((e as Error).message),
     );
     assert.equal(rows(target, 'games').length, 0);
-    const report = importInto(db, target, { devCloseOpenSessions: true });
+    const report = importInto(db, target, { closeOpenSessions: true });
     assert.equal(report.validation.ok, true);
     const closed = rows(target, 'sessions', `startedAt = ${T + 100 * DAY}`)[0];
     assert.equal(closed.endedAt, T + 100 * DAY + 60_000);

@@ -3,6 +3,7 @@ import type { DeviceInfo, GameInstallInfo } from '../devices';
 import type { JourneyEntrySummary } from '../domain/journeyEntries';
 import type { SessionStats } from '../domain/sessionStats';
 import type { ConcurrentPlaythrough, MergePlaythroughsOutcome } from '../playthroughMerge';
+import type { CutoverState } from '../cutover';
 import type { SyncStatus } from '../sync/status';
 import type { DataChanged } from './dataChanged';
 import type {
@@ -83,6 +84,7 @@ import {
   createIterationInput,
   createPlannedGameInput,
   credentialsValues,
+  cutoverAction,
   duplicateResolution,
   entityId,
   getSgdbImagesInput,
@@ -158,6 +160,13 @@ export const contract = {
   'sync:unpair': invoke(none, type<SyncStatus>()),
   'sync:syncNow': invoke(none, type<void>()),
   'sync:status': event(type<void>()),
+
+  // ── corte 1.x → 2.0 (PUENTE 1.x → L3, §19.6) ─────────────────────────────
+  // El estado se documenta en shared/cutover.ts: mientras bloquee la
+  // biblioteca, la ventana enseña la pantalla de migración.
+  'cutover:getState': invoke(none, type<CutoverState>()),
+  'cutover:action': send(z.tuple([cutoverAction])),
+  'cutover:state': event(type<CutoverState>()),
   // El único aviso de cambio de datos (§15.4): ver shared/ipc/dataChanged.ts.
   'data:changed': event(type<DataChanged>()),
 

@@ -81,8 +81,8 @@ export interface ImportLegacyOptions {
    * discrepar.
    */
   readonly currency?: string;
-  /** Desarrollo: importar las sesiones abiertas cerradas en su último latido. */
-  readonly devCloseOpenSessions?: boolean;
+  /** Importar las sesiones abiertas cerradas en su último latido (§19.6 paso 3; el corte lo pide siempre). */
+  readonly closeOpenSessions?: boolean;
   /** Desarrollo: seguir aunque el buzón tenga órdenes pendientes. */
   readonly devIgnorePendingMailbox?: boolean;
   /** Para los tests de instalaciones: qué rutas "existen". */
@@ -160,7 +160,7 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
   }
   const plan: ImportPlan = buildImportPlan(data, {
     currency: options.currency ?? DEFAULT_CURRENCY,
-    devCloseOpenSessions: options.devCloseOpenSessions ?? false,
+    closeOpenSessions: options.closeOpenSessions ?? false,
   });
   if (data.pendingMailbox > 0) {
     plan.facts['órdenes pendientes del buzón ignoradas (opción de desarrollo)'] =
@@ -217,12 +217,12 @@ export function importLegacyDatabase(options: ImportLegacyOptions): ImportReport
 /** Solo construye el plan (sin escribir): para tests y diagnósticos. */
 export function planLegacyImport(
   source: string | DatabaseSync,
-  options: { currency?: string; devCloseOpenSessions?: boolean; now?: number } = {},
+  options: { currency?: string; closeOpenSessions?: boolean; now?: number } = {},
 ): ImportPlan {
   const now = options.now ?? Date.now();
   const data = withLegacySource(source, (db) => readLegacyData(db, { now }));
   return buildImportPlan(data, {
     currency: options.currency ?? DEFAULT_CURRENCY,
-    devCloseOpenSessions: options.devCloseOpenSessions ?? false,
+    closeOpenSessions: options.closeOpenSessions ?? false,
   });
 }

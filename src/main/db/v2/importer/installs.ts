@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import type { LocalDatabase } from '../connection';
 import { gameInstallId, emulatorInstallId } from '../../../../shared/sync/ids';
-import type { ImportContext } from './build';
+import type { SqlValue } from './source';
 
 // Reclamo de instalaciones de ESTE PC (§19.6 "Migración local").
 //
@@ -24,9 +24,29 @@ export interface ClaimReport {
   alreadyPresent: number;
 }
 
+/**
+ * Lo mínimo de la 1.x que hace falta para reclamar instalaciones: las rutas de
+ * cada juego y emulador y el id 2.0 de cada uno. Lo cumple el `ImportContext`
+ * de una importación y lo arma a mano el PC secundario del corte, que no
+ * importa (`secondaryLocal.ts`).
+ */
+export interface InstallSource {
+  readonly data: {
+    readonly games: readonly {
+      readonly id: SqlValue;
+      readonly executablePath: SqlValue;
+      readonly installDirectory: SqlValue;
+      readonly installSizeBytes: SqlValue;
+    }[];
+    readonly emulators: readonly { readonly id: SqlValue; readonly executablePath: SqlValue }[];
+  };
+  readonly gameIds: ReadonlyMap<number, string>;
+  readonly emulatorIds: ReadonlyMap<number, string>;
+}
+
 export function claimInstalls(
   target: LocalDatabase,
-  ctx: ImportContext,
+  ctx: InstallSource,
   options: { readonly pathExists?: (path: string) => boolean; readonly now: number },
 ): ClaimReport {
   const exists = options.pathExists ?? existsSync;

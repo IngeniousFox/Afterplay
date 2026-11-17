@@ -1,6 +1,7 @@
 import { registerAchievementsHandlers } from './achievements';
 import { registerBackupHandlers } from './backup';
 import { registerCuriositiesHandlers } from './curiosities';
+import { registerCutoverHandlers } from './cutover';
 import { registerDevicesHandlers } from './devices';
 import { registerDialogHandlers } from './dialog';
 import { registerEmulatorsHandlers } from './emulators';
@@ -51,4 +52,5 @@ export const registerIpcHandlers = (): void => {
   registerAchievementsHandlers();
   registerRadarHandlers();
   registerSyncHandlers();
+  registerCutoverHandlers();
 };

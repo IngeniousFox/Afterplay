@@ -4,6 +4,10 @@ import { app, dialog, Menu } from 'electron';
 import { initCredentials } from '../config/credentials';
 import { runDailyBackup } from '../db/dailyBackup';
 import { appLocalDb, initAppDb } from '../db/v2/appDb';
+import { isDevProfile } from '../lib/devProfileRules';
+import { isE2E } from '../lib/e2e';
+import { cutoverNeeded } from '../migration/cutoverProgress';
+import { runCutover } from '../migration/cutoverRuntime';
 import { runEnrichPending } from '../external/enrichPendingApp';
 import { registerImageProtocolHandler } from '../images/protocol';
 import { registerIpcHandlers } from '../ipc';
@@ -142,6 +146,8 @@ function openLocalDb(): boolean {
 // Depende de: la base abierta. El sync se CREA aquí pero no arranca todavía: el
 // primer ciclo va delante de las pasadas de fondo (ver backgroundJobs.ts).
 function createSyncRuntime(): void {
+  // El corte (más abajo) la crea al abrir la base; después el arranque normal la repite.
+  if (appState.syncRuntime) return;
   // El aviso único de cambio de datos (§15.4): las transacciones locales y las
   // del watcher salen de la puerta de escritura, las de una bajada del sync
   // salen del motor (más abajo).
@@ -158,6 +164,35 @@ function createSyncRuntime(): void {
     status: () => sendSyncStatus(),
   });
 }
+
+// PUENTE 1.x → L3. El corte 1.x → 2.0 (§19.6), en lugar de `openLocalDb` cuando
+// hay una 1.x sin migrar en este PC. Depende de: handlers IPC y ventana creados.
+// NO enseña la biblioteca: la ventana ya está viva y pinta la pantalla de
+// migración según `cutover:state`; esto no vuelve hasta que el corte termina
+// con la base 2.0 abierta y el sync creado. Hasta entonces no corre nada que
+// necesite la base (watchers, trabajos de fondo, bandeja).
+async function runCutoverPhase(): Promise<void> {
+  // La ventana no espera a la base: sin esto el splash taparía la migración.
+  markDbReady();
+  await runCutover({
+    openDatabase: (mode) => {
+      initAppDb({ fresh: mode === 'fresh' });
+      createSyncRuntime();
+      mark('base 2.0 abierta (corte)');
+    },
+  });
+}
+
+// ¿Hay que hacer el corte en este arranque? El perfil de desarrollo y los e2e
+// importan solos (sin Turso); AFTERPLAY_CUTOVER=1 fuerza el corte real en un
+// perfil de desarrollo (nunca en un e2e).
+const needsCutover = (): boolean =>
+  cutoverNeeded({
+    userDataDir: app.getPath('userData'),
+    isE2E: isE2E(),
+    isDevProfile: isDevProfile(),
+    force: process.env.AFTERPLAY_CUTOVER === '1',
+  });
 
 // Depende de: la base abierta y la ventana creada.
 function revealWindowWhenDbReady(): void {
@@ -291,7 +326,8 @@ export const runStartup = async (isPrimaryInstance: boolean): Promise<void> => {
   startElectronShell();
   loadConfigAndCredentials();
   registerIpcAndCreateWindow();
-  if (!openLocalDb()) return;
+  if (needsCutover()) await runCutoverPhase();
+  else if (!openLocalDb()) return;
   createSyncRuntime();
   revealWindowWhenDbReady();
   createTray();
