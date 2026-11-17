@@ -17,6 +17,7 @@ import {
   type ClientVersion,
   type EnrollRequest,
   type EnrollResponse,
+  type EnrollSecretResponse,
   type CredentialsExchangeResponse,
   type IgdbCredentialsResponse,
   type JobClaimRequest,
@@ -29,11 +30,16 @@ import {
   type StatusResponse,
   type SyncErrorBody,
 } from '../../../src/shared/sync/protocol';
-import type { DeviceTokenInfo } from '../../core/hub';
+import type { DeviceTokenInfo, EnrollmentSecret } from '../../core/hub';
 import { AccessError } from './access';
 import type { InviteResult } from './directoryStore';
 import { normalizeEmail } from './emailIdentity';
-import { formatEnrollCode, splitEnrollCode } from './enrollCode';
+import {
+  formatEnrollCode,
+  formatEnrollSecret,
+  splitEnrollCode,
+  splitEnrollSecret,
+} from './enrollCode';
 import { apiError, classifyUnexpected, errorResponse, jsonResponse } from './errors';
 import type { Outcome } from './outcome';
 import type { WebRequest } from './web/types';
@@ -60,6 +66,8 @@ export interface TenantApi {
     request: unknown,
   ): Promise<Outcome<CredentialsExchangeResponse>>;
   enroll(request: EnrollRequest): Promise<Outcome<EnrollResponse>>;
+  /** El secreto de alta de la migración (§19.3.1), con el token del PC que lo pide. */
+  createEnrollmentSecret(token: string): Promise<Outcome<EnrollmentSecret>>;
   createEnrollmentCode(ttlMinutes?: number): Promise<Outcome<{ code: string; expiresAt: number }>>;
   listTokens(): Promise<Outcome<DeviceTokenInfo[]>>;
   revokeToken(tokenId: string): Promise<Outcome<{ revoked: boolean }>>;
@@ -209,6 +217,7 @@ const SYNC_METHODS: Record<string, string> = {
   [SYNC_ROUTES.jobsDone]: 'POST',
   [SYNC_ROUTES.igdbCredentials]: 'POST',
   [SYNC_ROUTES.credentials]: 'POST',
+  [SYNC_ROUTES.enrollSecret]: 'POST',
 };
 
 async function handleSync(request: Request, url: URL, backend: Backend): Promise<Response> {
@@ -252,6 +261,17 @@ async function handleSync(request: Request, url: URL, backend: Backend): Promise
       const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
       return outcomeResponse(await tenant.storeIgdbCredentials(token, body));
     }
+    case SYNC_ROUTES.enrollSecret: {
+      // Sin cuerpo útil: se lee con tope solo para no aceptar basura enorme.
+      await readLimitedText(request, SMALL_BODY_MAX_BYTES);
+      const outcome = await tenant.createEnrollmentSecret(token);
+      if (!outcome.ok) return outcomeResponse(outcome);
+      const body: EnrollSecretResponse = {
+        enrollSecret: formatEnrollSecret(bearer.tenantId, outcome.value.secret),
+        expiresAt: outcome.value.expiresAt,
+      };
+      return jsonResponse(body);
+    }
     case SYNC_ROUTES.credentials: {
       const body = await readJsonObject(request, CREDENTIALS_BODY_MAX_BYTES);
       return outcomeResponse(await tenant.exchangeCredentials(token, body));
@@ -276,12 +296,30 @@ async function handleEnroll(request: Request, backend: Backend): Promise<Respons
     error: 'enroll_code_invalid',
     message: 'código de emparejado desconocido, usado o caducado',
   });
+  // Código (un uso, lo teclea la persona) o secreto de alta (varios usos, no se
+  // teclea): campos distintos. Si vienen los dos o ninguno, no se canjea nada.
+  const hasCode = body.code !== undefined;
+  const hasSecret = body.enrollSecret !== undefined;
+  if (hasCode === hasSecret) return invalidCode;
+  const rest: Record<string, unknown> = { ...body };
+  delete rest.code;
+  delete rest.enrollSecret;
+  if (hasSecret) {
+    const split = splitEnrollSecret(body.enrollSecret);
+    if (!split || !(await backend.tenantExists(split.tenantId))) return invalidCode;
+    return outcomeResponse(
+      await backend
+        .tenant(split.tenantId)
+        .enroll({ ...(rest as unknown as EnrollRequest), enrollSecret: split.secret }),
+    );
+  }
   const split = splitEnrollCode(body.code);
   if (!split || !(await backend.tenantExists(split.tenantId))) return invalidCode;
-  const outcome = await backend
-    .tenant(split.tenantId)
-    .enroll({ ...(body as unknown as EnrollRequest), code: split.code });
-  return outcomeResponse(outcome);
+  return outcomeResponse(
+    await backend
+      .tenant(split.tenantId)
+      .enroll({ ...(rest as unknown as EnrollRequest), code: split.code }),
+  );
 }
 
 // ---------- /api/v2/* (PWA, tras Access) ----------

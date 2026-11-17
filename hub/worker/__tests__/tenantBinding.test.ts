@@ -21,6 +21,7 @@ describe('bindTenant', () => {
       storeIgdbCredentials: record('storeIgdbCredentials'),
       exchangeCredentials: record('exchangeCredentials'),
       enroll: record('enroll'),
+      createEnrollmentSecret: record('createEnrollmentSecret'),
       createEnrollmentCode: record('createEnrollmentCode'),
       listTokens: record('listTokens'),
       revokeToken: record('revokeToken'),

@@ -13,6 +13,7 @@
 // i/l/o/u, normalizar lo que teclea la persona (mayúsculas, O->0, I/L->1) es
 // reversible y no mezcla ids distintos.
 
+import { ENROLL_SECRET_PREFIX, isEnrollSecretShape } from '../../../src/shared/sync/protocol';
 import { TENANT_ID_ALPHABET, TENANT_ID_LENGTH } from './directoryStore';
 
 const CODE_BODY_LENGTH = 10;
@@ -40,4 +41,17 @@ export function splitEnrollCode(raw: unknown): { tenantId: string; code: string 
     tenantId: compact.slice(0, TENANT_ID_LENGTH),
     code: compact.slice(TENANT_ID_LENGTH).toUpperCase(),
   };
+}
+
+// ---------- Secreto de alta (§9.3, §19.3.1) ----------
+
+/** `aes1.<inquilino>.<secreto>`: lo que el PC migrador deja para los demás. */
+export const formatEnrollSecret = (tenantId: string, hubSecret: string): string =>
+  `${ENROLL_SECRET_PREFIX}.${tenantId}.${hubSecret}`;
+
+/** Separa inquilino y secreto del hub. Null si no tiene la forma. */
+export function splitEnrollSecret(raw: unknown): { tenantId: string; secret: string } | null {
+  if (!isEnrollSecretShape(raw)) return null;
+  const [, tenantId, secret] = raw.split('.');
+  return { tenantId, secret };
 }

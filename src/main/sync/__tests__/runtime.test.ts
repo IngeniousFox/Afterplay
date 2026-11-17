@@ -710,3 +710,166 @@ describe('credenciales con el hub', () => {
     assert.equal(s.uploads.length, 2);
   });
 });
+
+describe('secreto de alta (migración, §19.3.1)', () => {
+  // 43 caracteres base64url: la forma de un secreto del hub (el valor es de prueba).
+  const SECRET = `aes1.tenant.${'k'.repeat(43)}`;
+  const recording = (): { logger: SyncLogger; lines: string[] } => {
+    const lines: string[] = [];
+    const push = (...args: unknown[]): void => {
+      lines.push(args.map(String).join(' '));
+    };
+    return { logger: { info: push, warn: push, error: push }, lines };
+  };
+
+  it('pide el secreto al hub con el token de este PC y devuelve dirección, secreto y caducidad', async () => {
+    const calls: { baseUrl: string; token: string }[] = [];
+    const s = setup(
+      {
+        requestEnrollSecret: (options) => {
+          calls.push({ baseUrl: options.baseUrl, token: options.token });
+          return Promise.resolve({ enrollSecret: SECRET, expiresAt: T0 + 7 * 86_400_000 });
+        },
+      },
+      { paired: true },
+    );
+    await s.runtime.start(2000);
+
+    const result = await s.runtime.requestEnrollSecret();
+
+    assert.deepEqual(calls, [{ baseUrl: 'https://hub.example', token: TOKEN }]);
+    assert.deepEqual(result, {
+      ok: true,
+      grant: { url: 'https://hub.example', enrollSecret: SECRET, expiresAt: T0 + 7 * 86_400_000 },
+    });
+  });
+
+  it('sin emparejar, o en E2E, no llama al hub', async () => {
+    let called = 0;
+    const requestEnrollSecret = (): Promise<never> => {
+      called++;
+      return Promise.reject(new Error('no debería llamarse'));
+    };
+    const unpaired = setup({ requestEnrollSecret });
+    assert.equal((await unpaired.runtime.requestEnrollSecret()).ok, false);
+    const e2e = setup({ isE2E: true, requestEnrollSecret }, { paired: true });
+    assert.equal((await e2e.runtime.requestEnrollSecret()).ok, false);
+    assert.equal(called, 0);
+  });
+
+  it('un fallo del hub se cuenta con su código y nunca lanza; una respuesta rara no se acepta', async () => {
+    const down = setup(
+      {
+        requestEnrollSecret: () => Promise.reject(new SyncRequestError('unauthorized', 'no', 401)),
+      },
+      { paired: true },
+    );
+    await down.runtime.start(2000);
+    const failed = await down.runtime.requestEnrollSecret();
+    assert.equal(failed.ok, false);
+
+    const odd = setup(
+      {
+        requestEnrollSecret: () => Promise.resolve({ enrollSecret: 'otra-cosa', expiresAt: 1 }),
+      },
+      { paired: true },
+    );
+    await odd.runtime.start(2000);
+    assert.equal((await odd.runtime.requestEnrollSecret()).ok, false);
+  });
+
+  it('empareja con dirección + secreto por el mismo camino que el código y guarda su propio token', async () => {
+    const s = setup();
+
+    const result = await s.runtime.pairWithSecret({
+      hubUrl: ' https://hub.example/ ',
+      enrollSecret: ` ${SECRET} `,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(s.enrollCalls.length, 1);
+    assert.equal(s.enrollCalls[0].baseUrl, 'https://hub.example');
+    assert.deepEqual(s.enrollCalls[0].request, {
+      enrollSecret: SECRET,
+      deviceId: s.fx.local.deviceId,
+      deviceName: 'PC de prueba',
+      protocolVersion: 1,
+      schemaVersion: 1,
+    });
+    assert.deepEqual(s.credentials.value, { hubUrl: 'https://hub.example', token: TOKEN });
+    assert.equal(readSyncState(s.fx.local.db).shortDeviceId, 'abc123');
+    assert.equal(s.runtime.isActive, true);
+  });
+
+  it('rechaza un secreto sin forma, y con el PC ya emparejado o en E2E, sin llamar al hub', async () => {
+    const s = setup();
+    assert.equal(
+      (await s.runtime.pairWithSecret({ hubUrl: 'https://hub.example', enrollSecret: 'x' })).ok,
+      false,
+    );
+    const paired = setup({}, { paired: true });
+    assert.equal(
+      (await paired.runtime.pairWithSecret({ hubUrl: 'https://hub.example', enrollSecret: SECRET }))
+        .ok,
+      false,
+    );
+    const e2e = setup({ isE2E: true });
+    assert.equal(
+      (await e2e.runtime.pairWithSecret({ hubUrl: 'https://hub.example', enrollSecret: SECRET }))
+        .ok,
+      false,
+    );
+    assert.equal(s.enrollCalls.length + paired.enrollCalls.length + e2e.enrollCalls.length, 0);
+  });
+
+  it('un secreto caducado o sustituido dice que no vale y no deja nada guardado', async () => {
+    const s = setup(
+      {},
+      {
+        enroll: () => Promise.reject(new SyncRequestError('enroll_code_invalid', 'caducado', 400)),
+      },
+    );
+
+    const result = await s.runtime.pairWithSecret({
+      hubUrl: 'https://hub.example',
+      enrollSecret: SECRET,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(s.credentials.value, null);
+    assert.equal(s.runtime.isActive, false);
+  });
+
+  it('el secreto jamás va al log ni al mensaje de error, ni al emparejar ni al pedirlo', async () => {
+    const { logger, lines } = recording();
+    const raw = SECRET.split('.')[2];
+    const s = setup(
+      {
+        logger,
+        requestEnrollSecret: () => Promise.resolve({ enrollSecret: SECRET, expiresAt: T0 + 1 }),
+      },
+      {
+        enroll: () =>
+          Promise.reject(new SyncRequestError('enroll_code_invalid', 'secreto caducado', 400)),
+      },
+    );
+
+    const failed = await s.runtime.pairWithSecret({
+      hubUrl: 'https://hub.example',
+      enrollSecret: SECRET,
+    });
+    const issued = setup(
+      {
+        logger,
+        requestEnrollSecret: () => Promise.reject(new SyncRequestError('network', 'fallo', 0)),
+      },
+      { paired: true },
+    );
+    await issued.runtime.start(2000);
+    const denied = await issued.runtime.requestEnrollSecret();
+
+    const everything = JSON.stringify([lines, failed, denied]);
+    assert.ok(lines.length > 0, 'sí se registra el fallo, con su código');
+    assert.ok(!everything.includes(raw));
+  });
+});

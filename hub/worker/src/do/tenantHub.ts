@@ -114,6 +114,12 @@ export class TenantHubObject extends DurableObject implements TenantRpc {
     return this.serviceFor(tenantId).enroll(request);
   }
 
+  createEnrollmentSecret(
+    ...[tenantId, token]: Parameters<TenantRpc['createEnrollmentSecret']>
+  ): ReturnType<TenantRpc['createEnrollmentSecret']> {
+    return this.serviceFor(tenantId).createEnrollmentSecret(token);
+  }
+
   createEnrollmentCode(
     ...[tenantId, ttlMinutes]: Parameters<TenantRpc['createEnrollmentCode']>
   ): ReturnType<TenantRpc['createEnrollmentCode']> {

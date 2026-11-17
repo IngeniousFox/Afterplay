@@ -38,6 +38,7 @@ describe('el esquema del hub no se desvía del cliente', () => {
       'device_tokens',
       'device_short_ids',
       'enrollment_codes',
+      'enrollment_secret',
       'job_leases',
     ];
     const locals = localEntries.map((entry) => entry.name);
@@ -174,5 +175,18 @@ describe('migración aditiva al abrir', () => {
       wire({ table: 'radar_games', id: 'igdb:1', at: clockAt(3, A), fields: { title: 'r' } }),
     );
     assert.equal(pullAll(reopened).length, 2);
+  });
+
+  it('un hub desplegado antes del secreto de alta gana su tabla sin perder nada', async () => {
+    const test = makeHub();
+    push(test.hub, wire({ id: 'g1', at: clockAt(1, A), fields: { title: 'Hades' } }));
+    // El hub de antes: sin la tabla y con la huella vieja.
+    test.storage.exec(`DROP TABLE enrollment_secret`);
+    test.storage.exec(`DELETE FROM tenant_meta WHERE k = 'schemaStamp'`);
+    const reopened = new TenantHub(test.storage, () => T0, { tenantId: 'tenant1' });
+    assert.equal(pullAll(reopened).length, 1);
+    assert.equal(reopened.status(VERSION).seq, 1);
+    const { expiresAt } = await reopened.createEnrollmentSecret();
+    assert.ok(expiresAt > T0);
   });
 });

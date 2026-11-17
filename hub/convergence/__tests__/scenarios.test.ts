@@ -594,5 +594,45 @@ describe('E-24: hub vacío; un PC con todos los datos sincroniza', () => {
   });
 });
 
+describe('alta de varios PCs con el secreto de la migración (§9.3, §19.6)', () => {
+  it('B y C se emparejan con el secreto que emitió A, bajan todo y convergen con tokens propios', async () => {
+    const w = start();
+    const a = await w.addClient('a');
+    addGame(a, 20101, { title: 'Hades' });
+    addGame(a, 20102, { title: 'Celeste' });
+    await a.syncOk();
+
+    const { secret } = await w.hub.createEnrollmentSecret();
+    const b = await w.addClient('b', { enroll: false });
+    const c = await w.addClient('c', { enroll: false });
+    await b.enrollWithSecret(secret);
+    await c.enrollWithSecret(secret);
+    await b.syncOk();
+    await c.syncOk();
+
+    assert.deepEqual(libraryTitles(b), ['Celeste', 'Hades']);
+    assert.deepEqual(libraryTitles(c), ['Celeste', 'Hades']);
+    const tokens = w.storage.exec(
+      'SELECT COUNT(*) AS n FROM device_tokens WHERE revokedAt IS NULL',
+    );
+    assert.equal(tokens[0].n, 3, 'un token vivo por PC');
+    // Una segunda vuelta: cada PC baja la fila de dispositivo de los que llegaron después.
+    await a.syncOk();
+    await b.syncOk();
+    await c.syncOk();
+    assert.deepEqual(convergenceProblems(w), []);
+  });
+
+  it('un secreto sustituido deja fuera a quien llega tarde, que tiene que pedir el nuevo', async () => {
+    const w = start();
+    const old = await w.hub.createEnrollmentSecret();
+    const fresh = await w.hub.createEnrollmentSecret();
+    const late = await w.addClient('late', { enroll: false });
+    await assert.rejects(late.enrollWithSecret(old.secret), /enroll_code_invalid|desconocido/);
+    await late.enrollWithSecret(fresh.secret);
+    assert.equal(late.enrolled, true);
+  });
+});
+
 // Evita que el linter marque `version` como no usado si se retira un escenario.
 void version;

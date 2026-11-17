@@ -22,6 +22,7 @@ export function bindTenant(rpc: TenantRpc, tenantId: string): TenantApi {
     storeIgdbCredentials: (...a) => rpc.storeIgdbCredentials(tenantId, ...a),
     exchangeCredentials: (...a) => rpc.exchangeCredentials(tenantId, ...a),
     enroll: (...a) => rpc.enroll(tenantId, ...a),
+    createEnrollmentSecret: (...a) => rpc.createEnrollmentSecret(tenantId, ...a),
     createEnrollmentCode: (...a) => rpc.createEnrollmentCode(tenantId, ...a),
     listTokens: (...a) => rpc.listTokens(tenantId, ...a),
     revokeToken: (...a) => rpc.revokeToken(tenantId, ...a),

@@ -213,3 +213,96 @@ describe('autenticación de tokens', () => {
     assert.equal(lastUsed(), T0 + LAST_USED_WRITE_INTERVAL_MS);
   });
 });
+
+describe('secreto de alta (§9.3, §19.3.1)', () => {
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  const withSecret = (secret: string, deviceId = 'pc-1'): EnrollRequest => ({
+    ...VERSION,
+    enrollSecret: secret,
+    deviceId,
+    deviceName: 'Sobremesa',
+  });
+
+  it('se emite con 258 bits, caduca a los 7 días y el hub solo guarda su huella', async () => {
+    const test = makeHub();
+    const { secret, expiresAt } = await test.hub.createEnrollmentSecret();
+    assert.match(secret, /^[0-9a-zA-Z_-]{43}$/);
+    assert.equal(expiresAt, T0 + WEEK);
+    const stored = JSON.stringify(test.storage.exec('SELECT * FROM enrollment_secret'));
+    assert.ok(!stored.includes(secret));
+    assert.match(
+      String(test.storage.exec('SELECT secretHash FROM enrollment_secret')[0].secretHash),
+      /^[0-9a-f]{64}$/,
+    );
+  });
+
+  it('vale para varios PCs y cada uno recibe su propio token', async () => {
+    const test = makeHub();
+    const { secret } = await test.hub.createEnrollmentSecret();
+    const a = await test.hub.enroll(withSecret(secret, 'pc-1'));
+    const b = await test.hub.enroll(withSecret(secret, 'pc-2'));
+    const c = await test.hub.enroll(withSecret(secret, 'pc-3'));
+    assert.equal(new Set([a.token, b.token, c.token]).size, 3);
+    assert.equal(new Set([a.shortDeviceId, b.shortDeviceId, c.shortDeviceId]).size, 3);
+    for (const res of [a, b, c]) {
+      assert.equal((await test.hub.authenticateToken(res.token)).deviceId.startsWith('pc-'), true);
+    }
+    // El secreto no se gasta con los usos.
+    assert.equal(test.storage.exec('SELECT COUNT(*) AS c FROM enrollment_secret')[0].c, 1);
+  });
+
+  it('un PC que se empareja otra vez con el secreto revoca su token anterior', async () => {
+    const test = makeHub();
+    const { secret } = await test.hub.createEnrollmentSecret();
+    const first = await test.hub.enroll(withSecret(secret, 'pc-1'));
+    const second = await test.hub.enroll(withSecret(secret, 'pc-1'));
+    assert.equal(await codeOf(test.hub.authenticateToken(first.token)), 'unauthorized');
+    assert.ok(await test.hub.authenticateToken(second.token));
+  });
+
+  it('caducado falla igual que uno desconocido, y el barrido lo borra', async () => {
+    const test = makeHub();
+    const { secret } = await test.hub.createEnrollmentSecret();
+    test.time.now = T0 + WEEK - 1;
+    assert.ok((await test.hub.enroll(withSecret(secret))).token);
+    test.time.now = T0 + WEEK;
+    assert.equal(await codeOf(test.hub.enroll(withSecret(secret, 'pc-2'))), 'enroll_code_invalid');
+    assert.equal(test.hub.sweep().deletedEnrollmentCodes, 1);
+    assert.equal(test.storage.exec('SELECT COUNT(*) AS c FROM enrollment_secret')[0].c, 0);
+  });
+
+  it('emitir otro sustituye al anterior: el viejo deja de valer', async () => {
+    const test = makeHub();
+    const old = await test.hub.createEnrollmentSecret();
+    test.time.now += 1000;
+    const fresh = await test.hub.createEnrollmentSecret();
+    assert.notEqual(old.secret, fresh.secret);
+    assert.equal(fresh.expiresAt, T0 + 1000 + WEEK);
+    assert.equal(test.storage.exec('SELECT COUNT(*) AS c FROM enrollment_secret')[0].c, 1);
+    assert.equal(await codeOf(test.hub.enroll(withSecret(old.secret))), 'enroll_code_invalid');
+    assert.ok((await test.hub.enroll(withSecret(fresh.secret))).token);
+  });
+
+  it('un secreto desconocido o sin emitir ninguno falla con el mismo código', async () => {
+    const test = makeHub();
+    assert.equal(await codeOf(test.hub.enroll(withSecret('a'.repeat(43)))), 'enroll_code_invalid');
+    await test.hub.createEnrollmentSecret();
+    assert.equal(await codeOf(test.hub.enroll(withSecret('a'.repeat(43)))), 'enroll_code_invalid');
+  });
+
+  it('el secreto no canjea como código ni al revés; mandar los dos o ninguno es invalid_request', async () => {
+    const test = makeHub();
+    const { secret } = await test.hub.createEnrollmentSecret();
+    const { code } = await test.hub.createEnrollmentCode({ ttlMinutes: 10 });
+    assert.equal(await codeOf(test.hub.enroll(request(secret))), 'enroll_code_invalid');
+    assert.equal(await codeOf(test.hub.enroll(withSecret(code))), 'enroll_code_invalid');
+    assert.equal(
+      await codeOf(test.hub.enroll({ ...withSecret(secret), code } as EnrollRequest)),
+      'invalid_request',
+    );
+    assert.equal(
+      await codeOf(test.hub.enroll({ ...VERSION, deviceId: 'pc', deviceName: 'PC' })),
+      'invalid_request',
+    );
+  });
+});

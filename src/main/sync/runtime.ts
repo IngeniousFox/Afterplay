@@ -8,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   SyncRequestError,
   type EnrollResponse,
+  isEnrollSecretShape,
   type SyncTransport,
 } from '../../shared/sync/protocol';
 import {
@@ -29,6 +30,7 @@ import {
   enroll as httpEnroll,
   createHttpTransport,
   exchangeCredentials as httpExchangeCredentials,
+  requestEnrollSecret as httpRequestEnrollSecret,
 } from './httpTransport';
 import { SyncScheduler, type FlushOutcome, type SchedulerTimers } from './scheduler';
 import { applyEnrollment, readSyncState } from './state';
@@ -95,10 +97,22 @@ export interface SyncRuntimeDeps {
   // Para los tests.
   readonly enroll?: typeof httpEnroll;
   readonly exchangeCredentials?: typeof httpExchangeCredentials;
+  readonly requestEnrollSecret?: typeof httpRequestEnrollSecret;
   readonly createTransport?: (options: { baseUrl: string; token: string }) => SyncTransport;
   readonly timers?: SchedulerTimers;
   readonly schedulerOptions?: { debounceMs?: number; intervalMs?: number };
 }
+
+/** Lo que el PC migrador deja para los demás (§19.3.1). El secreto jamás va al log. */
+export interface EnrollSecretGrant {
+  readonly url: string;
+  readonly enrollSecret: string;
+  readonly expiresAt: number;
+}
+
+export type EnrollSecretResult =
+  | { readonly ok: true; readonly grant: EnrollSecretGrant }
+  | { readonly ok: false; readonly message: string };
 
 export type PairResult =
   | { readonly ok: true; readonly status: SyncStatus }
@@ -192,15 +206,78 @@ export class SyncRuntime {
   }
 
   async pair(request: PairRequest): Promise<PairResult> {
+    const code = request.code.trim();
+    if (code === '') return fail('Enter the pairing code shown in the web app.');
+    return this.pairWith(request.hubUrl, { code });
+  }
+
+  /**
+   * Empareja con el secreto de alta que dejó el primer PC (§9.3, §19.6): sin
+   * teclear nada. Es el mismo camino que `pair`; el hub crea un token NUEVO
+   * para este PC igual que con un código.
+   */
+  async pairWithSecret(request: { hubUrl: string; enrollSecret: string }): Promise<PairResult> {
+    const enrollSecret = request.enrollSecret.trim();
+    // La forma se comprueba aquí para no gastar un intento del bloqueo del hub
+    // con basura; el mensaje no repite lo recibido.
+    if (!isEnrollSecretShape(enrollSecret)) {
+      return fail('The enrollment secret is not valid.');
+    }
+    return this.pairWith(request.hubUrl, { enrollSecret });
+  }
+
+  /**
+   * Pide al hub un secreto de alta (solo emparejado y con el hub activo). Lo
+   * emite el hub con el token de este PC; sustituye al anterior. NUNCA lanza.
+   */
+  async requestEnrollSecret(): Promise<EnrollSecretResult> {
+    if (this.deps.isE2E) return fail('Sync is turned off while running tests.');
+    const credentials = this.deps.credentials.read();
+    if (!credentials || !this.active) return fail('This PC is not paired with a hub.');
+    try {
+      const response = await (this.deps.requestEnrollSecret ?? httpRequestEnrollSecret)({
+        baseUrl: credentials.hubUrl,
+        token: credentials.token,
+      });
+      if (
+        !isEnrollSecretShape(response?.enrollSecret) ||
+        typeof response.expiresAt !== 'number' ||
+        !Number.isFinite(response.expiresAt)
+      ) {
+        return fail("That hub's reply was not understood.");
+      }
+      return {
+        ok: true,
+        grant: {
+          url: credentials.hubUrl,
+          enrollSecret: response.enrollSecret,
+          expiresAt: response.expiresAt,
+        },
+      };
+    } catch (error) {
+      const known = error instanceof SyncRequestError;
+      this.deps.logger.warn(
+        `no se pudo pedir el secreto de alta: ${known ? error.code : 'error inesperado'}`,
+      );
+      return fail(
+        known
+          ? describePairError(error.code, error.message)
+          : "Couldn't ask the hub for an enrollment secret.",
+      );
+    }
+  }
+
+  private async pairWith(
+    hubUrl: string,
+    credential: { code: string } | { enrollSecret: string },
+  ): Promise<PairResult> {
     if (this.deps.isE2E) return fail('Sync is turned off while running tests.');
     if (this.pairing) return fail('Pairing is already in progress.');
     if (this.active || this.deps.credentials.read()) {
       return fail('This PC is already paired. Unpair it first to use a different hub.');
     }
-    const check = checkHubUrl(request.hubUrl);
+    const check = checkHubUrl(hubUrl);
     if (!check.ok) return fail(check.message);
-    const code = request.code.trim();
-    if (code === '') return fail('Enter the pairing code shown in the web app.');
     if (this.deps.isHubBlocked(check.url)) {
       return fail('This development profile can only pair with a development hub.');
     }
@@ -211,7 +288,7 @@ export class SyncRuntime {
       try {
         const enroll = this.deps.enroll ?? httpEnroll;
         response = await enroll(check.url, {
-          code,
+          ...credential,
           deviceId: this.deps.local.deviceId,
           deviceName: this.deps.deviceName,
           protocolVersion: PROTOCOL_VERSION,
@@ -470,4 +547,7 @@ function hubWins(local: CredentialsBundle, hub: CredentialsBundle): CredentialsB
   return out;
 }
 
-const fail = (message: string): PairResult => ({ ok: false, message });
+const fail = (message: string): { readonly ok: false; readonly message: string } => ({
+  ok: false,
+  message,
+});
