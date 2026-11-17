@@ -114,7 +114,7 @@ const copy = `${stem}.db`;
 void main().then((code) => process.exit(code));
 
 async function main(): Promise<number> {
-  let exitCode = 0;
+  let exitCode: number;
   try {
     copySourceConsistently(from, raw, copy);
     // La foto 1.x primero (asíncrona, conexión propia que se cierra al acabar);

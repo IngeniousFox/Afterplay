@@ -259,6 +259,7 @@ function selectAll<C extends string>(
     throw new Error(
       `La base 1.x no tiene la forma esperada en "${table}" (${(error as Error).message}). ` +
         '¿Es una copia de una versión anterior de la 1.x? Ábrela antes con la 1.x actual para que se migre.',
+      { cause: error },
     );
   }
   const counts = db

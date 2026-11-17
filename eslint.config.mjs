@@ -13,7 +13,8 @@ export default defineConfig(
   {
     settings: {
       react: {
-        version: 'detect',
+        // Fijo, no 'detect': eslint-plugin-react 7.37 aún llama a context.getFilename (quitado en ESLint 10) al detectar.
+        version: '19.3',
       },
     },
   },
