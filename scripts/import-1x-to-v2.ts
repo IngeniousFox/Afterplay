@@ -163,7 +163,7 @@ function runImport(legacyQueryViews: LegacyQueryViews | undefined): number {
       source: copy,
       target,
       claimInstalls: flag('--claim-installs'),
-      devCloseOpenSessions: flag('--dev-close-open-sessions'),
+      closeOpenSessions: flag('--dev-close-open-sessions'),
       devIgnorePendingMailbox: flag('--dev-ignore-pending-mailbox'),
       legacyQueryViews,
     });

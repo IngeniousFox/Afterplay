@@ -56,7 +56,7 @@ function sourceRows(data: LegacyData, ctx: ImportContext): Record<string, readon
   return {
     games: data.games,
     radar_games: data.radarGames,
-    // Las sesiones con las abiertas ya cerradas si se pidió (opción de desarrollo).
+    // Las sesiones con las abiertas ya cerradas si se pidió.
     sessions: ctx.sessions,
     iterations: data.iterations,
     state_events: data.stateEvents,

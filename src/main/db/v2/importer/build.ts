@@ -11,7 +11,6 @@ import {
   achievementCatalogId,
   achievementUnlockId,
   externalCheckId,
-  gameIdForIgdb,
   generatedMemoryId,
   radarGameId,
 } from '../../../../shared/sync/ids';
@@ -30,7 +29,7 @@ import {
   nextLegacyClock,
   type ClockInput,
 } from './legacyClocks';
-import { legacyUuid } from './legacyIds';
+import { legacyGameId, legacyUuid } from './legacyIds';
 import type {
   LegacyData,
   LegacyGame,
@@ -66,8 +65,8 @@ export interface LegacyIdEntry {
 export interface BuildOptions {
   /** Moneda de los gastos (D-23). La 1.x solo conoce el euro (`formatMoney`). */
   readonly currency: string;
-  /** Desarrollo: importar cerradas en su último latido las sesiones abiertas. */
-  readonly devCloseOpenSessions: boolean;
+  /** Importar cerradas en su último latido las sesiones abiertas (§19.6 paso 3). */
+  readonly closeOpenSessions: boolean;
 }
 
 /** Recuento por tabla 1.x: leídas, importadas y descartadas con su motivo. */
@@ -315,7 +314,7 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
 
   // ── Sesiones abiertas (§19.7) ────────────────────────────────────────────
   const open = data.sessions.filter((s) => s.endedAt === null);
-  if (open.length > 0 && !options.devCloseOpenSessions) {
+  if (open.length > 0 && !options.closeOpenSessions) {
     throw new ImportBlockedError(
       `La base 1.x tiene ${open.length} sesión(es) abierta(s). Ciérralas en la 1.x antes de importar (§19.7): ` +
         'el importador no se inventa cuándo terminaron.',
@@ -323,10 +322,10 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
   }
   const sessions: LegacySession[] = data.sessions.map((s) => {
     if (s.endedAt !== null) return s;
-    // Solo en desarrollo: cerrarla en su último latido, como haría la
+    // Con la opción (el corte la pide siempre): cerrarla en su último latido, como haría la
     // recuperación de la 1.x tras un corte.
     const endedAt = num(s.lastHeartbeatAt) ?? req(s.startedAt);
-    fact('sesiones abiertas importadas cerradas en su último latido (opción de desarrollo)');
+    fact('sesiones abiertas importadas cerradas en su último latido');
     return { ...s, endedAt, durationSec: durationBetween(req(s.startedAt), endedAt) };
   });
 
@@ -352,7 +351,7 @@ export function buildImportPlan(data: LegacyData, options: BuildOptions): Import
   const seenGameIds = new Set<string>();
   for (const g of data.games) {
     const igdbId = num(g.igdbId);
-    const id = igdbId !== null ? gameIdForIgdb(igdbId) : legacyUuid('games', g.id as number);
+    const id = legacyGameId(igdbId, g.id as number);
     if (seenGameIds.has(id))
       throw new Error(`dos juegos 1.x dan el mismo id 2.0 (id 1.x ${String(g.id)})`);
     seenGameIds.add(id);

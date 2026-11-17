@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { gameIdForIgdb } from '../../../../shared/sync/ids';
 
 // Ids de lo importado de la 1.x en las tablas de id aleatorio (§7.2, §19.5).
 //
@@ -72,6 +73,16 @@ export function legacyUuid(table: LegacyIdTable, legacyId: number): string {
   for (let i = 9; i < 16; i++) bytes[i] = hash[i - 6];
   const h = hex(bytes);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/**
+ * El id 2.0 de un juego 1.x (§19.5): el natural de §7.2 si tiene `igdbId`, y si
+ * no el determinista de `legacyUuid`. LA regla vive aquí: el importador y el
+ * PC secundario del corte (`secondaryLocal.ts`) la usan, así que dos PCs
+ * derivan siempre el mismo id para el mismo juego.
+ */
+export function legacyGameId(igdbId: number | null, legacyId: number): string {
+  return igdbId !== null ? gameIdForIgdb(igdbId) : legacyUuid('games', legacyId);
 }
 
 /** Milisegundos de la parte de tiempo de un UUIDv7 (o de cualquier UUID). */
