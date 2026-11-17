@@ -310,6 +310,11 @@ export class SyncRuntime {
         return fail("That hub's reply was not understood. Check the address.");
       }
 
+      // Una biblioteca importada de la 1.x no se mezcla con un hub que ya tiene
+      // datos de otra biblioteca: las filas no se corresponden (§19.6).
+      const conflict = await this.importedLibraryConflict(check.url, response);
+      if (conflict) return fail(conflict);
+
       // Primero el id de reloj y luego el token: si lo segundo falla la app
       // queda sin emparejar pero con un id válido (inofensivo); al revés
       // quedaría emparejada firmando con un id que el hub no conoce.
@@ -331,6 +336,40 @@ export class SyncRuntime {
     } finally {
       this.pairing = false;
     }
+  }
+
+  /**
+   * Si este PC tiene una biblioteca importada de la 1.x y el hub ya tiene datos
+   * (y no es un hub con el que este PC ya sincronizó), la frase para rechazar el
+   * emparejado; si no, null. El secundario del corte no entra aquí: empareja con
+   * una base vacía, sin importar nada. Ante la duda (no se pudo mirar el hub) se
+   * rechaza.
+   */
+  private async importedLibraryConflict(
+    hubUrl: string,
+    response: EnrollResponse,
+  ): Promise<string | null> {
+    const { db } = this.deps.local;
+    if (!hasImportedLibrary(db)) return null;
+    if (readSyncState(db).hubId === response.hubId) return null;
+    try {
+      const transport = (this.deps.createTransport ?? createHttpTransport)({
+        baseUrl: hubUrl,
+        token: response.token,
+      });
+      const hub = await transport.status({
+        protocolVersion: PROTOCOL_VERSION,
+        schemaVersion: APP_SCHEMA_VERSION,
+      });
+      if (!(hub.seq > 0)) return null;
+    } catch (error) {
+      this.deps.logger.warn(
+        `no se pudo comprobar si el hub está vacío: ${error instanceof SyncRequestError ? error.code : 'error inesperado'}`,
+      );
+      return "Couldn't check whether that hub is empty, so this library was not paired. Try again.";
+    }
+    this.deps.logger.warn('emparejado rechazado: biblioteca importada y hub con datos');
+    return IMPORTED_LIBRARY_CONFLICT;
   }
 
   /**
@@ -511,6 +550,21 @@ export class SyncRuntime {
     }
     this.deps.onStatus();
   }
+}
+
+export const IMPORTED_LIBRARY_CONFLICT =
+  'This library was imported from Afterplay 1.x on this PC and the hub already has data, so pairing would mix two unrelated libraries. Pair with an empty hub instead.';
+
+/** ¿Tiene esta base filas importadas de la 1.x? (dispositivo `legacy` o mapa de ids). */
+function hasImportedLibrary(db: LocalDb): boolean {
+  const client = db.$client;
+  const legacyDevice = client
+    .prepare(
+      `SELECT 1 AS found FROM "devices" WHERE "kind" = 'legacy' AND "syncDeleted" IS NULL LIMIT 1`,
+    )
+    .get();
+  if (legacyDevice) return true;
+  return client.prepare('SELECT 1 AS found FROM "local_legacy_ids" LIMIT 1').get() !== undefined;
 }
 
 const EMPTY_STATUS: SyncStatus = {

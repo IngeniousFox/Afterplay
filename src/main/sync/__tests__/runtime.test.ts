@@ -9,6 +9,7 @@ import {
 import { SyncRequestError } from '../../../shared/sync/protocol';
 import { OTHER, T0 } from '../../db/v2/__tests__/helpers';
 import {
+  insertSynced,
   openQueryDb,
   seedGame,
   type QueryFixture,
@@ -16,6 +17,7 @@ import {
 import { createSyncEngine, type SyncChange, type SyncLogger } from '../engine';
 import {
   CREDENTIALS_SYNC_INTERVAL_MS,
+  IMPORTED_LIBRARY_CONFLICT,
   SyncRuntime,
   type CredentialsSource,
   type SyncCredentialsStore,
@@ -252,6 +254,79 @@ describe('cambios locales (la puerta de escritura avisa al planificador)', () =>
     await pause(80);
 
     assert.equal(statusCalls(s.hub), before);
+  });
+});
+
+const markImported = (s: Setup): void => {
+  insertSynced(s.fx.ctx, 'devices', {
+    id: 'legacy',
+    name: 'Afterplay 1.x',
+    kind: 'legacy',
+    os: 'windows',
+    firstSeenAt: new Date(T0),
+  });
+};
+
+describe('emparejar una biblioteca importada de la 1.x', () => {
+  const SECRET_OK = `aes1.tenant.${'a'.repeat(43)}`;
+
+  it('rechaza (con código y con secreto) un hub que ya tiene datos y no guarda nada', async () => {
+    for (const via of ['code', 'secret'] as const) {
+      const s = setup();
+      markImported(s);
+      s.hub.seq = 7;
+      const result =
+        via === 'code'
+          ? await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' })
+          : await s.runtime.pairWithSecret({
+              hubUrl: 'https://hub.example',
+              enrollSecret: SECRET_OK,
+            });
+      assert.deepEqual(result, { ok: false, message: IMPORTED_LIBRARY_CONFLICT }, via);
+      assert.equal(s.credentials.value, null, via);
+      assert.equal(s.credentials.writes, 0, via);
+      assert.equal(s.runtime.isActive, false, via);
+      assert.notEqual(readSyncState(s.fx.local.db).shortDeviceId, 'abc123', via);
+    }
+  });
+
+  it('acepta un hub vacío: es la siembra del migrador', async () => {
+    const s = setup();
+    markImported(s);
+    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
+    assert.equal(result.ok, true);
+    assert.deepEqual(s.credentials.value, { hubUrl: 'https://hub.example', token: TOKEN });
+  });
+
+  it('acepta un hub con datos si este PC ya había sincronizado con él', async () => {
+    const s = setup();
+    markImported(s);
+    s.hub.seq = 7;
+    s.fx.local.db.$client
+      .prepare(`UPDATE "local_sync_state" SET "hubId" = 'hub-1' WHERE "id" = 1`)
+      .run();
+    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
+    assert.equal(result.ok, true);
+  });
+
+  it('una base sin filas importadas (secundario del corte) se empareja con un hub poblado', async () => {
+    const s = setup();
+    s.hub.seq = 7;
+    const secret = await s.runtime.pairWithSecret({
+      hubUrl: 'https://hub.example',
+      enrollSecret: SECRET_OK,
+    });
+    assert.equal(secret.ok, true);
+    assert.equal(s.transports.length, 1, 'solo el del ciclo normal: no se consultó el hub antes');
+  });
+
+  it('si no se puede mirar el hub, rechaza en vez de arriesgar la mezcla', async () => {
+    const s = setup();
+    markImported(s);
+    s.hub.failures.push(new SyncRequestError('network', 'sin red'));
+    const result = await s.runtime.pair({ hubUrl: 'https://hub.example', code: 'K7-93' });
+    assert.equal(result.ok, false);
+    assert.equal(s.credentials.value, null);
   });
 });
 
