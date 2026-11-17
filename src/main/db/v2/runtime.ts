@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openLocalDatabase, type LocalDatabase } from './connection';
-import { importLegacyDatabase, type ImportReport } from './importer';
+import { importLegacyDatabase, type ImportReport, type LegacyQueryViews } from './importer';
 import { LOCAL_DATABASE_FILE } from './importer/appData';
 import { copySourceConsistently, removeDatabaseFiles } from './importer/sourceCopy';
 import { createQueryContext, type QueryContext } from './queries/common/context';
@@ -29,9 +29,10 @@ import { timerForeignWriteRule } from './queries/sessions/timerRule';
 //      volver), se borra la base 2.0 y la app no arranca: la 1.x sigue
 //      intacta y se vuelve a intentar en el siguiente arranque.
 //
-// Quién puede importar lo decide quien llama (`allowImport`): en la fase 2
-// solo el perfil de desarrollo y los e2e. La app instalada de la 1.x NO se
-// migra desde aquí hasta el corte de la fase 10, con su reclamo en Turso.
+// Quién puede importar AQUÍ lo decide quien llama (`allowImport`): solo el
+// perfil de desarrollo y los e2e. La app instalada migra con el orquestador del
+// corte (`migration/cutover.ts`: reclamo en Turso, hub...), que usa la misma
+// `importLegacyIntoLocal` de más abajo ANTES de abrir la base.
 
 export interface OpenAppDatabaseOptions {
   readonly userDataDir: string;
@@ -40,6 +41,13 @@ export interface OpenAppDatabaseOptions {
   readonly device: Omit<ThisDeviceInfo, 'now'>;
   /** ¿Se puede importar la 1.x de esta carpeta si aún no hay base 2.0? */
   readonly allowImport: boolean;
+  /**
+   * Crear una base 2.0 VACÍA aunque haya una 1.x al lado, sin importarla: el
+   * PC secundario del corte (§19.6), que lo baja todo del hub. Solo lo pide el
+   * orquestador (`migration/cutover.ts`); sin él, una 1.x sin importar sigue
+   * siendo un error.
+   */
+  readonly freshDatabase?: boolean;
   readonly now?: () => Date;
   readonly log?: (message: string) => void;
 }
@@ -61,6 +69,24 @@ export class AppDatabaseError extends Error {
 const LEGACY_FILE = 'Afterplay.db';
 const IMPORTING_SUFFIX = '.importing';
 
+/** La `Afterplay.db` 1.x de una carpeta de datos (puede no existir). */
+export const legacyDatabasePath = (userDataDir: string): string => join(userDataDir, LEGACY_FILE);
+
+/** La base 2.0 de una carpeta de datos (puede no existir). */
+export const localDatabasePath = (userDataDir: string): string =>
+  join(userDataDir, LOCAL_DATABASE_FILE);
+
+/**
+ * Borra la base 2.0 de la carpeta y su marcador de "importando". Solo para
+ * quien la abrió y ya la cerró (o no llegó a abrirla): el orquestador del
+ * corte, cuando una importación falla o se repite.
+ */
+export function removeLocalDatabase(userDataDir: string): void {
+  const target = localDatabasePath(userDataDir);
+  removeDatabaseFiles(target);
+  rmSync(`${target}${IMPORTING_SUFFIX}`, { force: true });
+}
+
 const stamp = (date: Date): string => date.toISOString().replace(/[:.]/g, '-');
 
 /** Abre (y la primera vez, importa) la base 2.0 de esta carpeta de datos. */
@@ -79,13 +105,13 @@ export function openAppDatabase(options: OpenAppDatabaseOptions): OpenedAppDatab
 
   if (!existsSync(target)) {
     const legacy = join(options.userDataDir, LEGACY_FILE);
-    if (existsSync(legacy)) {
+    if (existsSync(legacy) && !options.freshDatabase) {
       if (!options.allowImport) {
         throw new AppDatabaseError(
           'Esta carpeta de datos es de la 1.x y esta versión no puede migrarla todavía.',
         );
       }
-      imported = importLegacy(options, legacy, target, now(), log);
+      imported = importLegacyIntoLocal({ ...options, now: now(), log });
     }
   }
 
@@ -105,13 +131,32 @@ export function openAppDatabase(options: OpenAppDatabaseOptions): OpenedAppDatab
   return { local, ctx, imported };
 }
 
-function importLegacy(
-  options: OpenAppDatabaseOptions,
-  legacy: string,
-  target: string,
-  started: Date,
-  log: (message: string) => void,
-): ImportReport {
+export interface ImportLegacyIntoLocalOptions {
+  readonly userDataDir: string;
+  readonly deviceId: string;
+  readonly migrationsFolder: string;
+  readonly now: Date;
+  readonly log: (message: string) => void;
+  /** La foto de las lecturas 1.x, si quien llama pudo tomarla (ver importer/index.ts). */
+  readonly legacyQueryViews?: LegacyQueryViews;
+}
+
+/**
+ * LA importación de la app (§19.6 paso 4): copia consistente de la 1.x a
+ * `backups/`, importa y valida desde esa copia directamente en `Afterplay2.db`
+ * y, si algo falla, borra la base 2.0 y relanza (la 1.x no se ha tocado).
+ * La usan el arranque del perfil de desarrollo / e2e (`openAppDatabase`) y el
+ * orquestador del corte (`migration/cutover.ts`): un solo camino.
+ *
+ * Las sesiones abiertas se importan cerradas en su último latido, en
+ * producción también (§19.6 paso 3). Un buzón con órdenes pendientes sigue
+ * abortando (§19.7).
+ */
+export function importLegacyIntoLocal(options: ImportLegacyIntoLocalOptions): ImportReport {
+  const { log } = options;
+  const started = options.now;
+  const target = join(options.userDataDir, LOCAL_DATABASE_FILE);
+  const legacy = join(options.userDataDir, LEGACY_FILE);
   const backups = join(options.userDataDir, 'backups');
   mkdirSync(backups, { recursive: true });
   // Nunca pisa una copia anterior (dos intentos en el mismo milisegundo, o un reloj atrasado).
@@ -139,6 +184,8 @@ function importLegacy(
         target: fresh,
         deviceId: options.deviceId,
         claimInstalls: true,
+        closeOpenSessions: true,
+        legacyQueryViews: options.legacyQueryViews,
         cutover: { userDataDir: options.userDataDir },
       });
     } finally {
