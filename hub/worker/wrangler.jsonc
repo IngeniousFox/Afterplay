@@ -9,7 +9,7 @@
   "name": "afterplay-hub",
   "main": "src/index.ts",
   // Contrato de ejecución fijado, el mismo que usó el Worker de la 1.x.
-  "compatibility_date": "2026-08-08",
+  "compatibility_date": "2026-11-17",
   "compatibility_flags": ["nodejs_compat"],
 
   // Sin "routes" ni dominios propios: de momento solo *.workers.dev. Las
