@@ -106,6 +106,7 @@ const DATA_TABLES = [
   'curiosities',
   'radar_games',
   'plan_mailbox',
+  'app_meta',
   'games',
   'emulators',
 ];

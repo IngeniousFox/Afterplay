@@ -661,3 +661,15 @@ export const spendEventsTable = sqliteTable('spend_events', {
   datePrecision: text({ enum: ['year', 'month', 'day', 'datetime'] }).notNull(),
   note: text(),
 });
+
+// Metadatos de la biblioteca compartidos entre PCs (puente 1.8, AFTERPLAY-2.0
+// §19.3.1 — formato fijado ahí; no cambiarlo sin cambiarlo antes en el doc).
+//
+// Claves: `cutover` y `hub` las escribe SOLO la 2.0 (la 1.8 jamás); la 1.8
+// escribe únicamente `device_status:<machineId>`. `value` es JSON en texto
+// plano (no mode:'json': el Worker y la 2.0 lo leen con SQL crudo).
+export const appMetaTable = sqliteTable('app_meta', {
+  key: text().primaryKey(),
+  value: text().notNull(),
+  updatedAt: int().notNull(),
+});
