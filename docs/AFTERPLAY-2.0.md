@@ -1546,13 +1546,15 @@ La 1.8 vive en `main` y la 2.0 en `v2`: este es el único punto en el que se toc
 
 **Claves:**
 
-| Clave                       | Valor (JSON)                                                                                                | Quién la escribe                |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `cutover`                   | `{ "state": "migrating" \| "done", "deviceId", "deviceName", "appVersion", "at" }`. Sin fila = no hay corte | La 2.0 del PC migrador          |
-| `hub`                       | `{ "url", "enrollSecret", "expiresAt" }`. Solo existe con `cutover.state = "done"`                          | La 2.0 del PC migrador          |
-| `device_status:<machineId>` | `{ "deviceName", "appVersion", "lastPushOkAt", "pendingChanges", "at" }`. `lastPushOkAt` puede ser `null`   | Cada 1.8, en cada ciclo de sync |
+| Clave                       | Valor (JSON)                                                                                                                | Quién la escribe                |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `cutover`                   | `{ "state": "migrating" \| "done", "deviceId", "deviceName", "appVersion", "at" }`. Sin fila = no hay corte                 | La 2.0 del PC migrador          |
+| `hub`                       | `{ "url", "enrollSecret", "expiresAt" }`. Solo existe con `cutover.state = "done"`                                          | La 2.0 del PC migrador          |
+| `device_status:<machineId>` | `{ "deviceName", "appVersion", "lastPushOkAt", "pendingChanges", "at", "seenCutoverAt"? }`. `lastPushOkAt` puede ser `null` | Cada 1.8, en cada ciclo de sync |
 
 `deviceId` es el `machineId` de la 1.x, que la 2.0 conserva (§19.6). Las fechas, en milisegundos.
+
+**`seenCutoverAt`** (opcional, `number | null`, añadido el 2026-11-17): el `at` de la fila `cutover` que esa 1.8 ya había leído (y por tanto ya estaba en solo lectura) cuando midió `pendingChanges`; `null` si no había fila. La 1.8 publica su estado DESPUÉS de leer `cutover` en cada ciclo, así que en cuanto ve el reclamo su estado repite `seenCutoverAt = cutover.at`. Un `pendingChanges = 0` sin ese eco no prueba nada: ese PC pudo escribir y subir después de la instantánea. Una 1.8 sin el campo cuenta como «no ha confirmado».
 
 **Operaciones de la 2.0**, directas contra Turso, cada una en una sola sentencia:
 
@@ -1683,7 +1685,7 @@ El informe de validación se guarda en el log. Si falla, se borra `Afterplay2.db
 **El primer PC que acepta la 2.0 (el "migrador"):**
 
 1. Reclama el corte con una escritura condicional directa en Turso (`cutover = migrating`). Solo uno puede ganar. A partir de aquí las 1.8 y el Worker antiguo quedan en solo lectura.
-2. Comprueba `device_status`: todos los PCs conocidos sin cambios pendientes. Si alguno no ha informado, **la única pregunta posible**: "PC-B no ha sincronizado desde X. Enciéndelo, o continúa y lo suyo se recuperará después desde su copia local."
+2. Comprueba `device_status`: un PC solo es seguro si su último estado repite el `at` de ESTE reclamo (`seenCutoverAt`) y tiene `pendingChanges = 0`. Los que aún no han repetido el reclamo se esperan en silencio unos minutos (margen de ~3 min: su ciclo de sync es de ~60 s). Si alguno sigue sin confirmar, o no ha informado, **la única pregunta posible**: "PC-B no ha sincronizado desde X. Enciéndelo, o continúa y lo suyo se recuperará después desde su copia local."
 3. Cierra en origen cualquier sesión abierta, en su último latido.
 4. Cierra su conexión 1.x, saca una copia consistente de `Afterplay.db` a `backups/`, e importa y valida desde esa copia (§19.5). El importador solo escribe en la carpeta de datos con la opción `cutover`, y solo `Afterplay2.db`.
 5. Se empareja con el hub y lo siembra (§19.7).
@@ -1717,7 +1719,7 @@ Está en `src/main/migration/` (`cutover.ts`, `cutoverRuntime.ts`, `cutoverProgr
 **Migrador**, en este orden:
 
 1. Reclama el corte (§19.3.1).
-2. Hace la pregunta de los rezagados si hace falta. Un PC es rezagado si tiene cambios sin subir o no ha informado en 24 horas. **Este mismo PC** también cuenta: la 1.8 se sustituyó por la 2.0 y puede haber dejado cambios sin subir en su réplica. Continuar acepta perderlos (quedan en la copia de `backups/`).
+2. Hace la pregunta de los rezagados si hace falta. Un PC es rezagado si no ha informado en 24 horas, si su último estado no repite el `at` de este reclamo (`not-confirmed`; antes de preguntar se les da un margen de 3 minutos, con el estado «waiting-devices» en pantalla), si lo repite pero tiene cambios sin subir, o si consta en `save_backups.machineId` de Turso sin haber publicado nunca `device_status` (`never-reported`, p. ej. una 1.7.x; si esa lectura falla se registra y se sigue sin ella). La instantánea se saca solo cuando esta comprobación pasa. **Este mismo PC** también cuenta: la 1.8 se sustituyó por la 2.0 y puede haber dejado cambios sin subir en su réplica. Continuar acepta perderlos (quedan en la copia de `backups/`).
 3. Saca una **instantánea de Turso**, en una sola transacción de lectura, a `backups/Afterplay-remote-<fecha>.db`, e importa desde ella. No importa la réplica local: esa solo tiene lo que este PC bajó en su último ciclo. Sin Turso configurado (un solo PC) importa la copia local, como dice §19.5.
 4. Si el buzón del móvil tiene órdenes sin aplicar, para antes de importar y suelta el reclamo: la 1.8 sale del modo solo lectura, las aplica y se reintenta.
 5. Las sesiones abiertas se cierran en su último latido, también en producción.

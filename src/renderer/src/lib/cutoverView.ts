@@ -29,6 +29,7 @@ export type CutoverStepId = (typeof CUTOVER_STEPS)[number]['id'];
 const STEP_OF_KIND: Partial<Record<CutoverStateKind, CutoverStepId>> = {
   checking: 'check',
   'question-lagging': 'check',
+  'waiting-devices': 'check',
   importing: 'copy',
   'needs-pairing': 'connect',
   pairing: 'connect',
@@ -86,6 +87,12 @@ export const describeCutover = (state: CutoverState): CutoverCopy => {
       return {
         title: 'Getting ready',
         body: 'Checking your other PCs before moving your library to Afterplay 2.',
+        busy: true,
+      };
+    case 'waiting-devices':
+      return {
+        title: 'Waiting for your other PCs',
+        body: `Waiting for your other PCs to confirm: ${state.devices.join(', ')}. Open Afterplay on them if they are off.`,
         busy: true,
       };
     case 'question-lagging':
@@ -181,6 +188,12 @@ export const laggingReason = (device: CutoverLaggingDevice, now: number): string
   }
   if (device.reason === 'pending-changes') {
     return `${pluralChanges(device.pendingChanges)} not uploaded yet.`;
+  }
+  if (device.reason === 'not-confirmed') {
+    return 'Has not confirmed that it is up to date yet. Open Afterplay on it.';
+  }
+  if (device.reason === 'never-reported') {
+    return 'Has never reported its state. It may be running an older version.';
   }
   return `Has not checked in since ${agoText(device.lastReportAt, now)}.`;
 };

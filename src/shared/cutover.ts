@@ -26,6 +26,10 @@
 //                     `self: true` es ESTE PC: tiene cambios de la 1.x que
 //                     nunca llegaron a la base compartida y continuar los
 //                     descarta (la copia local queda en backups/).
+//   waiting-devices   Justo tras reclamar, los demás PCs aún no han confirmado
+//                     que ya son de solo lectura (§19.3.1 `seenCutoverAt`).
+//                     Se les da un margen (unos minutos) antes de preguntar.
+//                     `devices` son los nombres de los que faltan. Sin acciones.
 //   importing         `reading-remote`: leyendo la base compartida (Turso,
 //                     la fuente de verdad, §19.5). `importing`: copiando e
 //                     importando. Bloquea el proceso principal unos segundos: no esperes más cambios hasta
@@ -62,7 +66,7 @@ export const CUTOVER_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 export interface CutoverLaggingDevice {
   readonly deviceId: string;
   readonly deviceName: string;
-  readonly reason: 'pending-changes' | 'stale';
+  readonly reason: 'pending-changes' | 'stale' | 'not-confirmed' | 'never-reported';
   /** Este mismo PC: sus cambios de la 1.x sin subir se perderían si se continúa. */
   readonly self: boolean;
   /** Último informe de ese PC (ms), para "no ha sincronizado desde X". */
@@ -90,6 +94,7 @@ export type CutoverState =
       /** Una comprobación en curso (tras `wait`). */
       readonly rechecking: boolean;
     }
+  | { readonly kind: 'waiting-devices'; readonly devices: readonly string[] }
   | { readonly kind: 'importing'; readonly phase: 'reading-remote' | 'importing' }
   | {
       readonly kind: 'needs-pairing';

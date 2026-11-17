@@ -300,6 +300,7 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
         </div>
       );
     case 'checking':
+    case 'waiting-devices':
     case 'importing':
     case 'pairing':
     case 'finishing':
