@@ -47,7 +47,7 @@ async function runAndCheck(options: {
     try {
       rounds = await world.quiesce(15);
     } catch (error) {
-      throw new Error(`${(error as Error).message}${context()}`);
+      throw new Error(`${(error as Error).message}${context()}`, { cause: error });
     }
     assert.deepEqual(convergenceProblems(world), [], `las bases no convergen${context()}`);
 

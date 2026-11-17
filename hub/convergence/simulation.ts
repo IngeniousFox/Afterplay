@@ -274,7 +274,7 @@ export async function runSimulation(options: SimulationOptions): Promise<Simulat
     const client = world.clients[rng.int(world.clients.length)];
     let label: string;
     if (kind < 55) {
-      let done: string | null = null;
+      let done: string | null;
       try {
         done = domainOp(client);
       } catch (error) {

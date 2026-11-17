@@ -204,7 +204,7 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
       continue;
     }
 
-    let mapping: BackupMapping | null = null;
+    let mapping: BackupMapping | null;
     try {
       mapping = (parse(raw) as BackupMapping | null) ?? null;
     } catch {

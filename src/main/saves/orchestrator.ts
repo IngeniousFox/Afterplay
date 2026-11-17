@@ -458,6 +458,7 @@ const removeDeletedLocalVersions = (gameId: GameId, ludusaviName: string): void 
   } catch (error) {
     throw new Error(
       `Some versions of "${ludusaviName}" were deleted, but their local copies couldn't be removed, so no new backup was made (it would bring them back). ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 };

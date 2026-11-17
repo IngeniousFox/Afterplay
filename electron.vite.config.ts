@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import type { Plugin } from 'vite';
 import { resolve } from 'path';
@@ -111,14 +112,6 @@ export default defineConfig({
         '@': resolve('src/renderer/src'),
       },
     },
-    plugins: [
-      react({
-        babel: {
-          plugins: ['babel-plugin-react-compiler'],
-        },
-      }),
-      tailwindcss(),
-      bundleBudget(),
-    ],
+    plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), bundleBudget()],
   },
 });

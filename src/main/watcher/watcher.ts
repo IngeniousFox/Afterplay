@@ -579,7 +579,7 @@ export class ProcessWatcher {
             // ofrece esa lectura (la decide dentro de startGameSession).
             if (this.opening.has(key)) continue;
             this.opening.add(key);
-            let session: Session<string> | null = null;
+            let session: Session<string> | null;
             try {
               if (info.target.kind === 'game' && this.syncBeforeCreate && !syncedThisCycle) {
                 syncedThisCycle = true;
@@ -988,7 +988,7 @@ export class ProcessWatcher {
       // null = "no se pudo leer la ruta del proceso": pasa con juegos
       // protegidos por anti-cheat (bloquean la introspección vía WMI incluso
       // al mismo usuario) y si el pid murió entre Fase 1 y 2.
-      let cmd: string | null = null;
+      let cmd: string | null;
       try {
         const [detail] = await find('pid', pid);
         cmd = detail?.cmd?.trim() ? detail.cmd.toLowerCase() : null;

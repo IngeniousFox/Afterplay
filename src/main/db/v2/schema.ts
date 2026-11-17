@@ -196,6 +196,7 @@ type TableOf<
   schema: undefined;
   columns: BuildColumns<TName, TColumns, 'sqlite'>;
   dialect: 'sqlite';
+  isAlias: false;
 }>;
 
 // Nombres de las columnas comunes, para el registro y los tests.

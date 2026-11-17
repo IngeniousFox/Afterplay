@@ -30,7 +30,7 @@ const formatterFor = (timeZone: string): Intl.DateTimeFormat | null => {
   const cached = formatters.get(timeZone);
   if (cached !== undefined) return cached;
 
-  let formatter: Intl.DateTimeFormat | null = null;
+  let formatter: Intl.DateTimeFormat | null;
   try {
     // Calendario gregoriano y locale fijos a propósito: aquí no se está
     // formateando nada para leer, se está extrayendo un número. Con el locale
