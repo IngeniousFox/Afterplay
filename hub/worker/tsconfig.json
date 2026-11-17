@@ -4,10 +4,10 @@
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    // Los tipos de Workers vienen del paquete que instala hub/worker/package.json.
+    // Los tipos de Workers vienen de hub/worker/node_modules (su package.json).
     // `node` es solo para los tests, que usan node:test y node:sqlite.
-    "types": ["./node_modules/@cloudflare/workers-types", "node"],
-    "typeRoots": ["../../node_modules/@types"],
+    "types": ["@cloudflare/workers-types", "node"],
+    "typeRoots": ["../../node_modules/@types", "./node_modules"],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,

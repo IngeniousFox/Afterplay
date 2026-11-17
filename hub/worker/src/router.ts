@@ -19,7 +19,6 @@ import {
   type EnrollResponse,
   type EnrollSecretResponse,
   type CredentialsExchangeResponse,
-  type IgdbCredentialsResponse,
   type JobClaimRequest,
   type JobClaimResponse,
   type JobDoneRequest,
@@ -58,8 +57,6 @@ export interface TenantApi {
   ): Promise<Outcome<PullResponse>>;
   claimJob(token: string, request: JobClaimRequest): Promise<Outcome<JobClaimResponse>>;
   doneJob(token: string, request: JobDoneRequest): Promise<Outcome<JobDoneResponse>>;
-  /** Las claves de IGDB del PC; el hub las guarda cifradas (F-29). */
-  storeIgdbCredentials(token: string, request: unknown): Promise<Outcome<IgdbCredentialsResponse>>;
   /** Sube las credenciales del PC y devuelve las fusionadas con las del hub. */
   exchangeCredentials(
     token: string,
@@ -215,7 +212,6 @@ const SYNC_METHODS: Record<string, string> = {
   [SYNC_ROUTES.pull]: 'GET',
   [SYNC_ROUTES.jobsClaim]: 'POST',
   [SYNC_ROUTES.jobsDone]: 'POST',
-  [SYNC_ROUTES.igdbCredentials]: 'POST',
   [SYNC_ROUTES.credentials]: 'POST',
   [SYNC_ROUTES.enrollSecret]: 'POST',
 };
@@ -256,10 +252,6 @@ async function handleSync(request: Request, url: URL, backend: Backend): Promise
     case SYNC_ROUTES.jobsClaim: {
       const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
       return outcomeResponse(await tenant.claimJob(token, body as unknown as JobClaimRequest));
-    }
-    case SYNC_ROUTES.igdbCredentials: {
-      const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
-      return outcomeResponse(await tenant.storeIgdbCredentials(token, body));
     }
     case SYNC_ROUTES.enrollSecret: {
       // Sin cuerpo útil: se lee con tope solo para no aceptar basura enorme.

@@ -4,7 +4,7 @@
 //   GET /games/:id/saga     capítulos de la saga, cruzados con tu biblioteca y tu Plan
 //   GET /games/:id/media    capturas y tráiler
 //
-// Las claves viven cifradas en el hub (igdbCredentials.ts) y el cliente
+// Las claves viven cifradas en el hub (credentialBundle.ts) y el cliente
 // (igdbClient.ts) las usa en memoria. Sin ellas, las tres rutas fallan con
 // `igdb_not_configured` y la PWA dice "abre Afterplay en tu PC una vez" — salvo
 // cuando no hay nada que pedir a IGDB (búsqueda vacía, juego sin `igdbId` o sin

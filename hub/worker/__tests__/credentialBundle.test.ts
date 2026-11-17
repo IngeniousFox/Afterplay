@@ -218,21 +218,20 @@ describe('IGDB de la PWA con el paquete de credenciales', () => {
     assert.match(calls[0], /client_secret=secreto-bundle/);
   });
 
-  it('con el paquete incompleto o borrado recurre al almacén antiguo', async () => {
+  it('con el paquete incompleto responde igdb_not_configured', async () => {
     calls.length = 0;
     const { world, token } = await readyWorld(fakeFetch);
-    await world.call(SYNC_ROUTES.igdbCredentials, {
-      token,
-      body: { clientId: 'cliente-antiguo', clientSecret: 'secreto-antiguo' },
-    });
     // Solo el id: el paquete no sirve.
     await exchange(world, token, { twitchClientId: entry('cliente-bundle', 5) });
 
-    assert.equal((await search(world)).status, 200);
-    assert.match(calls[0], /client_id=cliente-antiguo/);
+    const response = await search(world);
+
+    assert.equal(response.status, 409);
+    assert.equal(((await response.json()) as { error: string }).error, 'igdb_not_configured');
+    assert.equal(calls.length, 0);
   });
 
-  it('sin ninguna de las dos responde igdb_not_configured', async () => {
+  it('sin paquete responde igdb_not_configured', async () => {
     const { world } = await readyWorld(fakeFetch);
     const response = await search(world);
     assert.equal(response.status, 409);

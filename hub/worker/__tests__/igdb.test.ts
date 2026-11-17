@@ -3,12 +3,10 @@ import { describe, it } from 'node:test';
 import { seedGame } from '../../../src/main/db/v2/queries/common/__tests__/fixtures';
 import { SYNC_ROUTES } from '../../../src/shared/sync/protocol';
 import type { GameMedia, IgdbSearchResult, SagaEntry } from '../../../src/shared/api/v2/igdb';
-import { IGDB_SECRET_PURPOSE } from '../src/igdbCredentials';
 import { IgdbClient } from '../src/web/igdbClient';
-import { openSecret } from '../../core/secretBox';
 import { HOST, makeWorld, pairDevice, type World } from './helpers';
 
-// Claves de IGDB del hub (F-29): subida cifrada, rutas de la PWA y cliente de
+// Claves de IGDB del hub (F-29): rutas de la PWA y cliente de
 // IGDB. Todo con valores inventados y un `fetch` falso: nada de red.
 
 const SECRETS_KEY = 'clave-maestra-de-prueba-con-mas-de-32-caracteres';
@@ -41,8 +39,17 @@ function fakeIgdb(
   return { fetch: impl, calls };
 }
 
-const upload = (world: World, token: string, body: unknown = KEYS): Promise<Response> =>
-  world.call(SYNC_ROUTES.igdbCredentials, { token, body });
+/** Sube las claves de IGDB como las sube un PC: dentro del paquete de credenciales. */
+const upload = (world: World, token: string): Promise<Response> =>
+  world.call(SYNC_ROUTES.credentials, {
+    token,
+    body: {
+      entries: {
+        twitchClientId: { value: KEYS.clientId, updatedAt: 1 },
+        twitchClientSecret: { value: KEYS.clientSecret, updatedAt: 1 },
+      },
+    },
+  });
 
 const get = (world: World, path: string): Promise<Response> =>
   world.call(`/api/v2${path}`, { email: HOST });
@@ -56,99 +63,6 @@ async function readyWorld(
   const { token, tenantId } = await pairDevice(world);
   return { world, token, tenantId, igdb };
 }
-
-describe('POST /sync/v1/igdb-credentials', () => {
-  it('guarda las claves cifradas: en el almacenamiento no hay nada en claro', async () => {
-    const { world, token, tenantId } = await readyWorld();
-
-    const response = await upload(world, token);
-
-    assert.equal(response.status, 200);
-    const text = await response.text();
-    assert.deepEqual(JSON.parse(text), { stored: true });
-    assert.ok(!text.includes(KEYS.clientSecret), 'la respuesta no devuelve las claves');
-
-    const storage = (world.services.get(tenantId) as unknown as { igdbStore: unknown })
-      .igdbStore as {
-      storage: { exec(sql: string): Record<string, unknown>[] };
-    };
-    const rows = storage.storage.exec('SELECT envelope FROM worker_igdb_credentials');
-    assert.equal(rows.length, 1);
-    const envelope = String(rows[0].envelope);
-    assert.match(envelope, /^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+$/);
-    assert.ok(!envelope.includes(KEYS.clientId) && !envelope.includes(KEYS.clientSecret));
-    // Y con la clave del Worker se abre al contenido exacto.
-    assert.deepEqual(
-      JSON.parse(await openSecret(SECRETS_KEY, IGDB_SECRET_PURPOSE, tenantId, envelope)),
-      KEYS,
-    );
-  });
-
-  it('subir otras claves sustituye a las anteriores', async () => {
-    const { world, token, igdb } = await readyWorld(() => []);
-    await upload(world, token);
-    await upload(world, token, { clientId: 'cliente-nuevo', clientSecret: 'secreto-nuevo' });
-
-    await get(world, '/search?q=zelda');
-
-    const withToken = igdb.calls.filter((call) => call.url.startsWith('https://id.twitch.tv/'));
-    assert.match(withToken[0].body, /client_id=cliente-nuevo/);
-  });
-
-  it('sin HUB_SECRETS_KEY responde un error claro y no guarda nada', async () => {
-    const world = makeWorld(HOST, {});
-    const { token, tenantId } = await pairDevice(world);
-
-    const response = await upload(world, token);
-
-    assert.equal(response.status, 500);
-    const body = (await response.json()) as { error: string; message: string };
-    assert.equal(body.error, 'internal');
-    assert.match(body.message, /HUB_SECRETS_KEY/);
-    assert.ok(!JSON.stringify(body).includes(KEYS.clientSecret));
-    const service = world.services.get(tenantId) as unknown as {
-      igdbStore: { has(): boolean };
-    };
-    assert.equal(service.igdbStore.has(), false);
-  });
-
-  it('con una HUB_SECRETS_KEY demasiado corta tampoco guarda nada', async () => {
-    const world = makeWorld(HOST, { secretsKey: 'corta' });
-    const { token, tenantId } = await pairDevice(world);
-
-    const response = await upload(world, token);
-
-    assert.equal(response.status, 500);
-    const service = world.services.get(tenantId) as unknown as { igdbStore: { has(): boolean } };
-    assert.equal(service.igdbStore.has(), false);
-  });
-
-  it('exige el token del dispositivo', async () => {
-    const { world } = await readyWorld();
-    assert.equal((await world.call(SYNC_ROUTES.igdbCredentials, { body: KEYS })).status, 401);
-    assert.equal(
-      (
-        await world.call(SYNC_ROUTES.igdbCredentials, {
-          token: 'ap1.abc.desconocido-0123456789',
-          body: KEYS,
-        })
-      ).status,
-      401,
-    );
-  });
-
-  it('rechaza cuerpos que no son dos textos y solo admite POST', async () => {
-    const { world, token } = await readyWorld();
-    assert.equal((await upload(world, token, { clientId: 'solo-uno' })).status, 400);
-    assert.equal((await upload(world, token, { clientId: 1, clientSecret: 2 })).status, 400);
-    assert.equal(
-      (await upload(world, token, { clientId: 'con espacio', clientSecret: 'x' })).status,
-      400,
-    );
-    const get405 = await world.call(SYNC_ROUTES.igdbCredentials, { token, method: 'GET' });
-    assert.equal(get405.status, 405);
-  });
-});
 
 describe('GET /api/v2/search', () => {
   it('sin claves subidas responde igdb_not_configured', async () => {
