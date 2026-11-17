@@ -2,6 +2,7 @@ import { parse } from 'yaml';
 import { appCtx } from '../db/v2/appDb';
 import {
   deleteDeviceSaveBackups,
+  getDeviceHome,
   listIndexedSaveObjectKeys,
   listSaveGames,
   listSaveKeyGames,
@@ -227,7 +228,14 @@ export const recoverIndexFromCloud = async (): Promise<RecoveryResult> => {
     // que calculó el dueño al subir, y esta fila puede encontrarse por sync
     // con la del dueño: ante la duda, sin huella (la ficha lo trata como
     // informativo) antes que una huella distinta.
-    const hashHome = manifest?.home ? manifest.home : null;
+    // Salvo la carpeta de ESTE PC sin manifiesto: su carpeta de usuario es la
+    // que consta en `devices`, y es la misma con la que calcula sus huellas
+    // al subir (reindexado tras la migración, §19.5).
+    const hashHome = manifest?.home
+      ? manifest.home
+      : folder.machineId === appCtx().deviceId
+        ? getDeviceHome(appCtx(), folder.machineId)
+        : null;
 
     for (const version of versions) {
       const key = `${prefix}${version.name}`;

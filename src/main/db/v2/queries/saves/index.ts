@@ -73,6 +73,16 @@ export {
   type SaveRestoreTarget,
 } from './localState';
 export {
+  SAVE_REINDEX_JOB,
+  getDeviceHome,
+  getSaveReindexError,
+  isSaveReindexPending,
+  markSaveReindexPending,
+  recordSaveReindexRun,
+  remapLegacyRestoreTargets,
+  seedOwnLastSyncedHashes,
+} from './postImport';
+export {
   checkInstallNonce,
   forcePublishInstallNonce,
   readPublishedInstallNonce,

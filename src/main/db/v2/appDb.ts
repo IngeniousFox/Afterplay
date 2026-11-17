@@ -6,9 +6,7 @@ import { isE2E } from '../../lib/e2e';
 import { getMachineId, listLegacySaveLocationOverrides } from '../../saves/machine';
 import type { LocalDatabase } from './connection';
 import type { ImportReport } from './importer';
-import { legacyUuid } from './importer/legacyIds';
-import { setSaveRestoreTarget } from './queries/saves';
-import { isGameAlive } from './queries/sessions';
+import { remapLegacyRestoreTargets } from './queries/saves';
 import type { QueryContext } from './queries/common/context';
 import { openAppDatabase } from './runtime';
 
@@ -52,19 +50,13 @@ export function initAppDb(): ImportReport | null {
 /**
  * Los destinos de restauración que la 1.x guardaba en machine-saves.json por id
  * numérico pasan a `local_save_state`, con el id de juego que les ha dado el
- * importador (`legacyUuid`). Solo tras una importación, y solo los de juegos
- * que existen. El fichero no se toca: es la vuelta atrás a la 1.x.
+ * importador (`local_legacy_ids`). Solo tras una importación, y solo los de
+ * juegos que existen. El fichero no se toca: es la vuelta atrás a la 1.x.
  */
 function importSaveRestoreTargets(ctx: QueryContext): void {
-  let moved = 0;
-  for (const [legacyId, target] of listLegacySaveLocationOverrides()) {
-    const numeric = Number(legacyId);
-    if (!Number.isSafeInteger(numeric) || numeric <= 0) continue;
-    const gameId = legacyUuid('games', numeric);
-    if (!isGameAlive(ctx, gameId)) continue;
-    setSaveRestoreTarget(ctx, gameId, target);
-    moved++;
-  }
+  // Con `local_legacy_ids`, no con `legacyUuid`: un juego con igdbId tiene un
+  // id derivado del igdbId (§19.5), no del id antiguo.
+  const moved = remapLegacyRestoreTargets(ctx, listLegacySaveLocationOverrides());
   if (moved > 0) console.log(`[v2] ${moved} destino(s) de restauracion de partidas importados`);
 }
 

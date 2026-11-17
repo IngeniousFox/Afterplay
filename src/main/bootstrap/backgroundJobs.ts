@@ -3,6 +3,7 @@ import { runEnrichPending } from '../external/enrichPendingApp';
 import { isE2E } from '../lib/e2e';
 import { runMemoriesDailyTick } from '../memories/detect';
 import { runRadarTick } from '../radar/pass';
+import { runPendingSaveReindex } from '../saves/postImportReindex';
 import { runRaStartupPass } from '../ra/backfill';
 import { startRaLivePoll } from '../ra/livePoll';
 import { runSteamAppIdBackfill } from '../steam/appIdBackfill';
@@ -56,6 +57,10 @@ export const startBackgroundJobs = (): void => {
       console.warn('[sync] el arranque del sync falló (sigo sin él):', error);
     }
     mark('sync inicial hecho o con tope');
+    // Reindexado de las partidas tras importar la 1.x: solo hace algo si la
+    // importación dejó el marcador y hay credenciales (si no, espera al tic
+    // horario o al siguiente arranque). No se espera: va en paralelo.
+    void runPendingSaveReindex();
     // De aquí para abajo el orden ya no es una fila: cada pasada corre en
     // paralelo con las que no comparten NI api NI filas, y en fila con las
     // que sí. Las promesas se recogen en const (antes eran void) solo para
@@ -118,6 +123,9 @@ export const startBackgroundJobs = (): void => {
     // Mismo tic para el radar: la app puede pasar semanas sin reiniciarse
     // (vive en la bandeja), asi que mirarlo solo al arrancar no basta.
     void runRadarTick();
+    // Y el reindexado pendiente de las partidas: unas credenciales puestas con
+    // la app abierta lo desbloquean sin esperar a otro arranque.
+    if (!isE2E()) void runPendingSaveReindex();
     // Y la copia local, por exactamente el mismo motivo. Estaba SOLO en el
     // arranque, con lo que "una copia cada 6 horas" era en realidad "una copia
     // por cada vez que abres la app": con la app en la bandeja tres semanas,
