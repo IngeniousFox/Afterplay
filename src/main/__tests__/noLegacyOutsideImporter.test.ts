@@ -111,8 +111,11 @@ describe('la 2.0 no importa código 1.x', () => {
 describe('el Worker de la 1.x no vuelve a esta rama', () => {
   // `worker/` (la web móvil 1.x) salió de la rama v2 en L1. Vive en `main`
   // hasta que se retire el Worker desplegado (L2). Si reaparece, ha llegado por
-  // una fusión: el hub tiene su propio `hub/worker`.
-  it('no existe el directorio worker/', () => {
-    assert.equal(existsSync(resolve(ROOT, 'worker')), false);
+  // una fusión: el hub tiene su propio `hub/worker`. Se mira el código y no la
+  // carpeta: quien cambie desde `main` conserva en `worker/` lo que git ignora
+  // (`node_modules`, `.dev.vars`), y eso no es código.
+  it('no hay código de worker/', () => {
+    assert.equal(existsSync(resolve(ROOT, 'worker/src')), false);
+    assert.equal(existsSync(resolve(ROOT, 'worker/package.json')), false);
   });
 });
