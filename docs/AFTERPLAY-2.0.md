@@ -2281,6 +2281,34 @@ Los cinco criterios de salida se cumplen en la rama `v2`.
 
 **Salida:** el importador pasa la validación sobre bases sintéticas y sobre la semilla de e2e; la 1.8 entra en solo lectura al ver el corte.
 
+#### §20.9.1 Estado de la fase 8 (2026-11-17)
+
+Los dos criterios de salida se cumplen:
+
+- **El importador pasa la validación** sobre bases sintéticas y sobre la semilla de los e2e (`importer/__tests__/importer.test.ts`, `queryValidation.test.ts`).
+- **La 1.8 entra en solo lectura al ver el corte**, en la rama `bridge-1.8` (§19.3.2). No está fusionada en `main` ni publicada: eso es el paso 1 de la fase 10.
+
+Lo que se hizo en esta fase:
+
+| Pieza                 | Dónde                                                                     | Detalle                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contrato `app_meta`   | §19.3.1                                                                   | Fijado antes de escribir código, porque lo comparten dos ramas                                                                                |
+| La 1.8                | rama `bridge-1.8`                                                         | §19.3.2                                                                                                                                       |
+| Cliente Turso puente  | `src/main/migration/legacyCutover.ts`                                     | Reclamar, soltar y cerrar el corte; estado de los PCs; instantánea de Turso. Es el único sitio de la 2.0 que puede hablar con Turso           |
+| Secreto de alta       | `hub/core/hub.ts`, `hub/worker/src/router.ts`, `src/main/sync/runtime.ts` | §19.3.1, al final                                                                                                                             |
+| Orquestador del corte | `src/main/migration/`                                                     | §19.6.1                                                                                                                                       |
+| Pantalla de migración | `src/renderer/src/migration/`                                             | Sustituye a la biblioteca mientras dura el corte. Una sola pregunta, la de los PCs rezagados, y el formulario de emparejado para el primer PC |
+| Partidas tras migrar  | `saves/postImportReindex.ts`, `queries/saves/postImport.ts`               | Reindexado desde el bucket en segundo plano y huella del último backup de este PC                                                             |
+
+**Fallos encontrados por el camino:**
+
+- Las ubicaciones de restauración de los juegos con id de IGDB se perdían al migrar: se buscaban con el id que no era.
+- En la primera versión del orquestador, el PC migrador importaba su réplica local en vez de Turso, y habría perdido lo que el otro PC hubiera subido después de su última bajada.
+
+**Comprobado.** Lint, tipos, 3.157 tests y los 100 e2e. La 1.8, en su rama: 1.087 tests y 84 e2e. Fallan dos que ya fallaban en `main` (§19.3.2).
+
+**No comprobado, para el ensayo (fase 9):** nada de esto ha corrido contra Turso ni contra el hub de verdad, solo contra dobles en los tests. El ensayo tiene que pasar por un corte completo con dos PCs y comprobar en especial la instantánea por HTTP y el detector de cambios sin subir (§19.6.1, límites).
+
 ### §20.10 Fase 9 — Ensayo general (M)
 
 Sobre una **copia** completa de los datos reales: importar, validar, sembrar un hub de pruebas, emparejar un segundo perfil, usar la app unos días.
@@ -2567,19 +2595,19 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 
 #### L3: con la retirada del importador (2.1)
 
-| Pieza                                                                                                              | Tamaño                    | Qué lo retiene                                                                  |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------- |
-| `src/main/db/v2/importer/`, `scripts/import-1x-to-v2.ts` y `scripts/audit-1x-data.ts`                              | ~6.500 más 2.100 de tests | Es la migración. Mientras exista una `Afterplay.db` sin migrar, se queda        |
-| `src/main/db/schema.ts` (esquema 1.x), `db/index.ts` (`getDb` que lanza) y `db/projections.ts`                     | ~850                      | Lo leen el importador y sus lecturas de comprobación                            |
-| Lo que queda de `src/main/db/queries/` (20 lecturas 1.x)                                                           | ~1.850                    | `importer/legacyQueries.ts` las ejecuta para comparar la 1.x con la 2.0         |
-| `drizzle/` (migraciones 1.x) y `drizzle.config.ts`                                                                 | carpeta                   | Los tests del importador montan una base 1.x con ellas                          |
-| `src/main/db/__tests__/harness.ts`                                                                                 | 1 fichero                 | Andamio de tests 1.x que usa el importador                                      |
-| `@libsql/client`, `@tursodatabase/sync` (ya en `devDependencies`) y `drizzle-orm/libsql`                           | 2 paquetes                | `importer/source.ts`, `legacyQueryHost.ts` y `scripts/gen-e2e-seed.ts`          |
-| `src/main/__tests__/noTursoInMain.test.ts`                                                                         | 1 test                    | Deja de tener sentido cuando los paquetes ya no están instalados                |
-| El aviso de la 1.8 y la pantalla de migración de la 2.0 (§15.7)                                                    | por escribir (fase 8)     | Nacen ya con fecha de retirada: L3                                              |
-| `src/main/migration/legacyCutover.ts` (el cliente Turso puente, §19.3.1) y su excepción en `noTursoInMain.test.ts` | ~260 más sus tests        | Reclama y cierra el corte. Se va con el importador                              |
-| `POST /sync/v1/enroll-secret`, la tabla `enrollment_secret` del hub y `pairWithSecret`                             | ~300                      | Solo sirve para emparejar los PCs que migran. Un PC nuevo después usa el código |
-| El reindexado de partidas tras importar (`saves/postImportReindex.ts`, `queries/saves/postImport.ts`)              | ~240                      | Solo actúa tras una importación                                                 |
+| Pieza                                                                                                                             | Tamaño                    | Qué lo retiene                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `src/main/db/v2/importer/`, `scripts/import-1x-to-v2.ts` y `scripts/audit-1x-data.ts`                                             | ~6.500 más 2.100 de tests | Es la migración. Mientras exista una `Afterplay.db` sin migrar, se queda                               |
+| `src/main/db/schema.ts` (esquema 1.x), `db/index.ts` (`getDb` que lanza) y `db/projections.ts`                                    | ~850                      | Lo leen el importador y sus lecturas de comprobación                                                   |
+| Lo que queda de `src/main/db/queries/` (20 lecturas 1.x)                                                                          | ~1.850                    | `importer/legacyQueries.ts` las ejecuta para comparar la 1.x con la 2.0                                |
+| `drizzle/` (migraciones 1.x) y `drizzle.config.ts`                                                                                | carpeta                   | Los tests del importador montan una base 1.x con ellas                                                 |
+| `src/main/db/__tests__/harness.ts`                                                                                                | 1 fichero                 | Andamio de tests 1.x que usa el importador                                                             |
+| `@libsql/client`, `@tursodatabase/sync` (ya en `devDependencies`) y `drizzle-orm/libsql`                                          | 2 paquetes                | `importer/source.ts`, `legacyQueryHost.ts` y `scripts/gen-e2e-seed.ts`                                 |
+| `src/main/__tests__/noTursoInMain.test.ts`                                                                                        | 1 test                    | Deja de tener sentido cuando los paquetes ya no están instalados                                       |
+| La pantalla de migración (`src/renderer/src/migration/`, `lib/cutoverView.ts`) y el orquestador del corte (`src/main/migration/`) | ~3.500 más sus tests      | Solo sirven mientras quede una 1.x por migrar. El aviso de la 1.8 vive en `main` y se va con ella (L2) |
+| `src/main/migration/legacyCutover.ts` (el cliente Turso puente, §19.3.1) y su excepción en `noTursoInMain.test.ts`                | ~260 más sus tests        | Reclama y cierra el corte. Se va con el importador                                                     |
+| `POST /sync/v1/enroll-secret`, la tabla `enrollment_secret` del hub y `pairWithSecret`                                            | ~300                      | Solo sirve para emparejar los PCs que migran. Un PC nuevo después usa el código                        |
+| El reindexado de partidas tras importar (`saves/postImportReindex.ts`, `queries/saves/postImport.ts`)                             | ~240                      | Solo actúa tras una importación                                                                        |
 
 **Lo que parece 1.x y no se borra nunca**, porque son datos y no código:
 
@@ -2618,7 +2646,7 @@ Nada de esto vive en la rama `v2`: es infraestructura y `main`.
 - **El código puente nace con fecha.** Todo lo que se escriba solo para convivir con la 1.x (sobre todo en la fase 8) lleva un comentario `PUENTE 1.x → Lx` y una fila aquí.
 - Pendiente de clasificar según avance el trabajo:
   - **Fase 7:** cerrada. Lo que dejó sin uso ya está en §C.4. Queda revisar si los tipos del esquema que aún cruzan el IPC (F-42) tienen DTO propio.
-  - **Fase 8:** qué parte del importador sirve también para "restaurar copia" y cuál es solo migración.
+  - **Fase 8:** cerrada. Lo que añadió es todo puente y está en L3. El importador no lo usa nada más que la migración: restaurar una copia de la 2.0 no pasa por él, así que puede irse entero en L3.
   - **Fase 9:** dependencias que solo usaba la 1.x y que la actualización general permita quitar.
 
 ---
