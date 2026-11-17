@@ -482,8 +482,10 @@ export class TenantHub {
       // Un reloj `000000` solo se acepta si el hub ya lo tiene tal cual en esa
       // columna de esa fila: es el eco del barrido. Uno que se inventa un cliente
       // se rechaza; el rechazo es de esta fila y no afecta a las demás del lote.
+      // Si el hub NO tiene la fila (hub nuevo o recreado, y el cliente resube lo
+      // que el barrido de otro hub ya cerró), el reloj no pisa nada: se admite.
       const forged = reserved.some(({ slot, clock }) => {
-        if (!before) return true;
+        if (!before) return false;
         if (slot === 'created') return before.created !== clock;
         if (slot === 'deleted') return before.fields[DELETED_COLUMN] !== clock;
         return before.clocks[slot] !== clock;
