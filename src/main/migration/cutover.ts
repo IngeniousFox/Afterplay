@@ -147,7 +147,15 @@ export interface CutoverDeps {
    * sesiones abiertas cerradas en su último latido. Si falla, lanza (el
    * orquestador borra la base y suelta el reclamo).
    */
-  readonly importLegacy: () => Promise<void>;
+  readonly importLegacy: (sourcePath: string | null) => Promise<void>;
+  /** Dónde dejar el volcado de la base remota (en backups/, junto a la copia local). */
+  readonly snapshotPath: () => string;
+  readonly removeSnapshot: (path: string) => void;
+  /**
+   * Cambios de la 1.x de ESTE PC que nunca llegaron a Turso (la cola del
+   * replicador de la réplica local), o null si no se puede saber.
+   */
+  readonly localPendingChanges: () => Promise<number | null>;
   /**
    * Abre la base 2.0 y crea el sync de la app. `fresh` crea una base vacía
    * junto a la 1.x (secundario). Idempotente.
@@ -232,6 +240,7 @@ const guardBridge = (bridge: LegacyCutover): LegacyCutover => {
     releaseCutover: (deviceId) => guard(() => bridge.releaseCutover(deviceId)),
     completeCutover: (deviceId, hub) => guard(() => bridge.completeCutover(deviceId, hub)),
     readDeviceStatuses: () => guard(() => bridge.readDeviceStatuses()),
+    snapshotRemote: (dest) => guard(() => bridge.snapshotRemote(dest)),
     readHubEnrollment: () => guard(() => bridge.readHubEnrollment()),
     close: () => bridge.close(),
   };
@@ -428,12 +437,35 @@ export class CutoverController {
   private async laggingGate(bridge: LegacyCutover): Promise<void> {
     if (this.progress().laggingAck) return;
     const { deps } = this;
+    // La réplica local pudo quedarse con operaciones sin subir (la 1.8 se
+    // sustituyó por la 2.0 antes de empujarlas): importar desde Turso las
+    // dejaría fuera, así que se avisa en la misma pregunta.
+    let localPending: number | null = null;
+    try {
+      localPending = await deps.localPendingChanges();
+    } catch {
+      deps.log('[cutover] no se pudo mirar la cola local de la 1.x');
+    }
     const lagging = async (): Promise<CutoverLaggingDevice[]> => {
       const statuses = await bridge.readDeviceStatuses();
-      return describeLagging(
+      const others = describeLagging(
         statuses,
         findLaggingDevices(statuses, deps.self.deviceId, deps.now(), this.timing().staleAfterMs),
       );
+      const own = statuses.find((s) => s.deviceId === deps.self.deviceId);
+      const pending = Math.max(own?.pendingChanges ?? 0, localPending ?? 0);
+      if (pending === 0) return others;
+      return [
+        {
+          deviceId: deps.self.deviceId,
+          deviceName: deps.self.deviceName,
+          reason: 'pending-changes',
+          self: true,
+          lastReportAt: own?.at ?? 0,
+          pendingChanges: pending,
+        },
+        ...others,
+      ];
     };
 
     let devices = await lagging();
@@ -462,12 +494,36 @@ export class CutoverController {
   }
 
   private async importStep(bridge: LegacyCutover | null): Promise<void> {
-    this.setState({ kind: 'importing' });
+    this.setState({ kind: 'importing', phase: bridge ? 'reading-remote' : 'importing' });
     this.deps.removeLocalDatabase();
+    // Con Turso la fuente de verdad es el REMOTO (§19.5), no la réplica local:
+    // se vuelca a un fichero con el mismo esquema y el importador lo lee tal cual.
+    let snapshot: string | null = null;
+    if (bridge) {
+      const path = this.deps.snapshotPath();
+      let report: Awaited<ReturnType<LegacyCutover['snapshotRemote']>>;
+      try {
+        report = await bridge.snapshotRemote(path);
+      } catch (error) {
+        this.deps.removeSnapshot(path);
+        throw error;
+      }
+      // El buzón pendiente del REMOTO bloquea el corte (§19.7), antes de importar nada.
+      if (report.pendingMailbox > 0) {
+        this.deps.removeSnapshot(path);
+        throw new CutoverFailure(
+          'import-blocked',
+          `There are ${report.pendingMailbox} pending plan order(s) waiting in Afterplay 1.x. Nothing has been changed: let them finish in Afterplay 1.x and try again.`,
+        );
+      }
+      snapshot = path;
+      this.setState({ kind: 'importing', phase: 'importing' });
+    }
     try {
-      await this.deps.importLegacy();
+      await this.deps.importLegacy(snapshot);
     } catch (error) {
       this.deps.removeLocalDatabase();
+      if (snapshot) this.deps.removeSnapshot(snapshot);
       const blocked = importBlocked(error);
       throw new CutoverFailure(
         blocked ? 'import-blocked' : 'import-failed',
@@ -709,6 +765,7 @@ const describeLagging = (
     const status = statuses.find((s) => s.deviceId === device.deviceId);
     return {
       ...device,
+      self: false,
       lastReportAt: status?.at ?? 0,
       pendingChanges: status?.pendingChanges ?? 0,
     };

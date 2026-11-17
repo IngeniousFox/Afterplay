@@ -20,6 +20,7 @@ import {
   type DeviceStatus,
   type HubEnrollment,
   type LegacyCutover,
+  type RemoteSnapshotReport,
 } from '../legacyCutover';
 
 // El orquestador del corte con dobles: un puente de Turso falso, un sync falso,
@@ -92,6 +93,15 @@ class FakeBridge implements LegacyCutover {
     const result = [...this.statuses];
     this.onReadStatuses?.();
     return Promise.resolve(result);
+  }
+  snapshots: string[] = [];
+  /** Lo que "hay" en el remoto: el importador falso lo recibe a través de la foto. */
+  pendingMailbox = 0;
+  snapshotRemote(destPath: string): Promise<RemoteSnapshotReport> {
+    this.calls.push('snapshot');
+    this.check();
+    this.snapshots.push(destPath);
+    return Promise.resolve({ tables: { games: 1 }, rows: 1, pendingMailbox: this.pendingMailbox });
   }
   readHubEnrollment(): Promise<HubEnrollment | null> {
     this.calls.push('hub');
@@ -184,6 +194,10 @@ interface World {
   /** El importador falso: lanza lo que haya aquí (una vez por intento). */
   importErrors: Error[];
   bridgeConfigured: boolean;
+  /** Rutas con las que se llamó al importador (null = la copia local). */
+  importSources: (string | null)[];
+  removedSnapshots: string[];
+  localPending: number | null;
   secondaryLocalError: Error | null;
   now: number;
   sleeps: number;
@@ -200,6 +214,9 @@ const world = (): World => ({
   dbFile: false,
   importErrors: [],
   bridgeConfigured: true,
+  importSources: [],
+  removedSnapshots: [],
+  localPending: 0,
   secondaryLocalError: null,
   now: T0,
   sleeps: 0,
@@ -225,8 +242,12 @@ const deps = (w: World): CutoverDeps => ({
     w.events.push('remove-db');
     w.dbFile = false;
   },
-  importLegacy: () => {
+  snapshotPath: () => 'backups/Afterplay-remote-test.db',
+  removeSnapshot: (path) => w.removedSnapshots.push(path),
+  localPendingChanges: () => Promise.resolve(w.localPending),
+  importLegacy: (sourcePath) => {
     w.events.push('import');
+    w.importSources.push(sourcePath);
     const error = w.importErrors.shift();
     if (error) {
       w.dbFile = true; // una importación a medias deja ficheros que hay que borrar
@@ -506,6 +527,98 @@ describe('cutover: fallos y garantía de no dejar nada a medias', () => {
     controller.dispatch({ type: 'retry' });
     await done;
     assert.equal(rowOf(w)?.state, 'done');
+  });
+
+  it('con puente importa la FOTO del remoto, no la réplica local', async () => {
+    const w = world();
+    w.sync.paired = true;
+    const { done } = start(w);
+    await done;
+    assert.deepEqual(w.bridge.snapshots, ['backups/Afterplay-remote-test.db']);
+    assert.deepEqual(w.importSources, ['backups/Afterplay-remote-test.db']);
+    assert.ok(
+      w.bridge.calls.indexOf('snapshot') > w.bridge.calls.indexOf('claim'),
+      'tras el reclamo',
+    );
+  });
+
+  it('sin puente (sin credenciales) importa la copia local y no hay foto', async () => {
+    const w = world();
+    w.bridgeConfigured = false;
+    w.sync.paired = true;
+    const { done } = start(w);
+    await done;
+    assert.deepEqual(w.importSources, [null]);
+    assert.equal(w.bridge.snapshots.length, 0);
+  });
+
+  it('si la foto del remoto falla, no se importa nada y el reclamo se suelta', async () => {
+    const w = world();
+    w.bridge.snapshotRemote = () => Promise.reject(new Error('sin red'));
+    const { states } = start(w);
+    await new Promise((resolve) => setImmediate(resolve));
+    const last = states.at(-1);
+    assert.ok(last?.kind === 'error');
+    assert.equal(w.importSources.length, 0);
+    assert.equal(w.bridge.row, null);
+    assert.ok(w.removedSnapshots.length > 0, 'la foto a medias se borra');
+  });
+
+  it('un buzón pendiente en el REMOTO bloquea antes de importar y suelta el reclamo', async () => {
+    const w = world();
+    w.bridge.pendingMailbox = 3;
+    const { states } = start(w);
+    await new Promise((resolve) => setImmediate(resolve));
+    const last = states.at(-1);
+    assert.ok(last?.kind === 'error');
+    assert.equal(last.code, 'import-blocked');
+    assert.match(last.message, /3 pending/);
+    assert.equal(w.importSources.length, 0, 'no llegó a importar');
+    assert.equal(w.bridge.row, null, 'reclamo soltado');
+    assert.deepEqual(w.removedSnapshots, ['backups/Afterplay-remote-test.db']);
+  });
+
+  it('cambios sin subir de ESTE PC (cola local) se preguntan como "este PC"; continuar los descarta', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.localPending = 12;
+    const { states, done } = start(w, {
+      'question-lagging': () => ({ type: 'continue' }),
+    });
+    await done;
+    const question = states.find((s) => s.kind === 'question-lagging');
+    assert.ok(question?.kind === 'question-lagging');
+    assert.deepEqual(
+      question.devices.map((d) => [d.deviceId, d.self, d.pendingChanges, d.reason]),
+      [[SELF.deviceId, true, 12, 'pending-changes']],
+    );
+    assert.equal(rowOf(w)?.state, 'done');
+  });
+
+  it('el device_status propio del remoto también cuenta como cambios sin subir de este PC', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.bridge.statuses = [
+      status({ deviceId: SELF.deviceId, deviceName: 'PC-A', pendingChanges: 4 }),
+    ];
+    const { states, controller, done } = start(w, {
+      'question-lagging': () => ({ type: 'continue' }),
+    });
+    await done;
+    const question = states.find((s) => s.kind === 'question-lagging');
+    assert.ok(question?.kind === 'question-lagging');
+    assert.equal(question.devices[0]?.self, true);
+    assert.equal(question.devices[0]?.pendingChanges, 4);
+    assert.equal(controller.state.kind, 'done');
+  });
+
+  it('si la cola local no se puede mirar (null) y no hay otro aviso, no se pregunta', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.localPending = null;
+    const { states, done } = start(w);
+    await done;
+    assert.equal(kinds(states).includes('question-lagging'), false);
   });
 
   it('un bloqueo del importador (buzón pendiente) se distingue de un fallo de validación', async () => {

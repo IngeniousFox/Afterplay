@@ -27,6 +27,7 @@ import { CutoverController, type CutoverDeps, type CutoverSync } from './cutover
 import { createFileProgressStore } from './cutoverProgress';
 import { readCutoverSyncProgress } from './cutoverSyncProgress';
 import { openLegacyCutover } from './legacyCutover';
+import { countLocalPendingChanges } from './legacyPending';
 
 // ── Estado compartido con el IPC ────────────────────────────────────────────
 
@@ -123,11 +124,19 @@ export async function runCutover(options: RunCutoverOptions): Promise<void> {
     progress: createFileProgressStore(userDataDir),
     openBridge: () => openLegacyCutover(),
     removeLocalDatabase: () => removeLocalDatabase(userDataDir),
-    importLegacy: async () => {
+    snapshotPath: () => {
+      const backups = join(userDataDir, 'backups');
+      mkdirSync(backups, { recursive: true });
+      return join(backups, `Afterplay-remote-${stamp(new Date())}.db`);
+    },
+    removeSnapshot: (path) => removeDatabaseFiles(path),
+    localPendingChanges: () =>
+      countLocalPendingChanges(legacyDatabasePath(userDataDir), join(userDataDir, 'backups')),
+    importLegacy: async (sourcePath) => {
       // La importación es síncrona y bloquea el proceso: se deja un turno para
       // que el estado `importing` llegue a la ventana antes.
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
-      importLegacyForCutover();
+      importLegacyForCutover(sourcePath ?? undefined);
     },
     openDatabase: options.openDatabase,
     afterImport: () => {

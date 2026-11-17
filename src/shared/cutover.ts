@@ -22,9 +22,13 @@
 //                     tienen cambios sin subir. Acciones: `wait` (volver a
 //                     comprobar ya; también se comprueba solo cada 30 s) y
 //                     `continue` (migrar igualmente; lo suyo se recuperará
-//                     después desde su copia local).
-//   importing         Copiando e importando la base 1.x. Bloquea el proceso
-//                     principal unos segundos: no esperes más cambios hasta
+//                     después desde su copia local). Un dispositivo con
+//                     `self: true` es ESTE PC: tiene cambios de la 1.x que
+//                     nunca llegaron a la base compartida y continuar los
+//                     descarta (la copia local queda en backups/).
+//   importing         `reading-remote`: leyendo la base compartida (Turso,
+//                     la fuente de verdad, §19.5). `importing`: copiando e
+//                     importando. Bloquea el proceso principal unos segundos: no esperes más cambios hasta
 //                     que acabe. Sin acciones.
 //   needs-pairing     Hace falta unir este PC a un hub con una dirección y un
 //                     código de un solo uso (el primer PC de una persona, o un
@@ -59,6 +63,8 @@ export interface CutoverLaggingDevice {
   readonly deviceId: string;
   readonly deviceName: string;
   readonly reason: 'pending-changes' | 'stale';
+  /** Este mismo PC: sus cambios de la 1.x sin subir se perderían si se continúa. */
+  readonly self: boolean;
   /** Último informe de ese PC (ms), para "no ha sincronizado desde X". */
   readonly lastReportAt: number;
   readonly pendingChanges: number;
@@ -84,7 +90,7 @@ export type CutoverState =
       /** Una comprobación en curso (tras `wait`). */
       readonly rechecking: boolean;
     }
-  | { readonly kind: 'importing' }
+  | { readonly kind: 'importing'; readonly phase: 'reading-remote' | 'importing' }
   | {
       readonly kind: 'needs-pairing';
       readonly reason: 'first-pc' | 'secret-expired' | 'secret-failed';

@@ -55,7 +55,7 @@ export function initAppDb(options: { readonly fresh?: boolean } = {}): ImportRep
  * y lanza. Va ANTES de abrir la base (`initAppDb`): la base no puede estar
  * abierta. La llama el orquestador (`migration/cutover.ts`).
  */
-export function importLegacyForCutover(): ImportReport {
+export function importLegacyForCutover(sourcePath?: string): ImportReport {
   if (current) throw new Error('importLegacyForCutover() con la base ya abierta');
   return importLegacyIntoLocal({
     userDataDir: app.getPath('userData'),
@@ -63,6 +63,7 @@ export function importLegacyForCutover(): ImportReport {
     migrationsFolder: MIGRATIONS_FOLDER,
     now: new Date(),
     log: (message) => console.log(message),
+    sourcePath,
   });
 }
 

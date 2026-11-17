@@ -139,6 +139,12 @@ export interface ImportLegacyIntoLocalOptions {
   readonly log: (message: string) => void;
   /** La foto de las lecturas 1.x, si quien llama pudo tomarla (ver importer/index.ts). */
   readonly legacyQueryViews?: LegacyQueryViews;
+  /**
+   * Una foto de la base 1.x REMOTA ya volcada por el puente (§19.5): se importa
+   * desde ella en lugar de desde la copia de la réplica local. La copia local se
+   * saca igual a `backups/` (es la vuelta atrás y guarda lo que no llegó a subir).
+   */
+  readonly sourcePath?: string;
 }
 
 /**
@@ -180,7 +186,7 @@ export function importLegacyIntoLocal(options: ImportLegacyIntoLocalOptions): Im
     });
     try {
       report = importLegacyDatabase({
-        source: copy,
+        source: options.sourcePath ?? copy,
         target: fresh,
         deviceId: options.deviceId,
         claimInstalls: true,

@@ -23,7 +23,7 @@ const TEST_TEMP_PREFIXES = [
   'afterplay-saves-identity-', // saves/__tests__/identity.test.ts
   'afterplay-saves-machine-', // saves/__tests__/machine.test.ts
   'afterplay-saves-orch-', // saves/__tests__/orchestrator.test.ts
-  'afterplay-cutover-', // migration/__tests__/legacyCutover.test.ts
+  'afterplay-cutover-', // migration/__tests__/legacyCutover.test.ts, legacyPending.test.ts
   'afterplay-barrier-', // __tests__/noTursoInMain.test.ts
 ] as const;
 
