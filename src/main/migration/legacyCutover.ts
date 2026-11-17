@@ -15,6 +15,8 @@
 // Este módulo no se conecta a nada por su cuenta: lo orquesta otra pieza.
 
 import type { Client, InStatement, ResultSet } from '@libsql/client';
+import { rmSync } from 'node:fs';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { z } from 'zod';
 
 export type LegacyCutoverErrorCode =
@@ -58,6 +60,26 @@ const deviceStatusSchema = z.object({
 export type DeviceStatusValue = z.infer<typeof deviceStatusSchema>;
 export type DeviceStatus = DeviceStatusValue & { deviceId: string };
 
+/** Lo que dejó `snapshotRemote`: filas copiadas por tabla (nunca contenido). */
+export interface RemoteSnapshotReport {
+  readonly tables: Readonly<Record<string, number>>;
+  readonly rows: number;
+  /** Órdenes del buzón del plan aún sin procesar en el remoto (§19.7): bloquean el corte. */
+  readonly pendingMailbox: number;
+}
+
+/** Filas por petición al volcar el remoto. */
+const SNAPSHOT_PAGE_ROWS = 500;
+
+const quoteIdent = (name: string): string => `"${name.replaceAll('"', '""')}"`;
+
+// Valores del cliente HTTP → valores que acepta `node:sqlite`.
+const toSqlValue = (value: unknown): SQLInputValue => {
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  return value as SQLInputValue;
+};
+
 export interface CutoverSelf {
   deviceId: string;
   deviceName: string;
@@ -78,6 +100,12 @@ export interface LegacyCutover {
   completeCutover(deviceId: string, hub: HubEnrollment): Promise<void>;
   readDeviceStatuses(): Promise<DeviceStatus[]>;
   readHubEnrollment(): Promise<HubEnrollment | null>;
+  /**
+   * Vuelca la base 1.x REMOTA (todas las tablas de datos) en un fichero SQLite
+   * local con el mismo esquema, dentro de UNA transacción de lectura (§19.5:
+   * la fuente de verdad es Turso, no la réplica local). Solo lee.
+   */
+  snapshotRemote(destPath: string): Promise<RemoteSnapshotReport>;
   close(): void;
 }
 
@@ -212,6 +240,87 @@ export const createLegacyCutover = (
       if (cutover?.state !== 'done') return null;
       const raw = await readRow(HUB_KEY);
       return raw === null ? null : parseValue(HUB_KEY, raw, hubSchema);
+    },
+
+    // Una transacción de lectura da una foto coherente de todas las tablas. Además
+    // el reclamo `migrating` ya tiene congeladas las 1.8 y el Worker (§19.3).
+    async snapshotRemote(destPath) {
+      rmSync(destPath, { force: true });
+      const tx = await client.transaction('read');
+      const dest = new DatabaseSync(destPath, { enableForeignKeyConstraints: false });
+      const tables: Record<string, number> = {};
+      let pendingMailbox = 0;
+      try {
+        const master = await tx.execute(
+          `SELECT type, name, sql FROM sqlite_master
+             WHERE sql IS NOT NULL AND type IN ('table', 'index')
+               AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE 'turso\\_%' ESCAPE '\\'
+               AND tbl_name NOT LIKE 'turso\\_%' ESCAPE '\\'
+             ORDER BY type DESC, name`,
+        );
+        const defs = master.rows.map((row) => ({
+          type: String(row.type),
+          name: String(row.name),
+          sql: String(row.sql),
+        }));
+        dest.exec('BEGIN');
+        for (const def of defs.filter((d) => d.type === 'table')) {
+          dest.exec(def.sql);
+          let count = 0;
+          let after = -1;
+          let insert: ReturnType<DatabaseSync['prepare']> | null = null;
+          for (;;) {
+            let page: ResultSet;
+            try {
+              page = await tx.execute({
+                sql: `SELECT rowid AS __rowid, * FROM ${quoteIdent(def.name)} WHERE rowid > ? ORDER BY rowid LIMIT ?`,
+                args: [after, SNAPSHOT_PAGE_ROWS],
+              });
+            } catch (cause) {
+              // Una tabla WITHOUT ROWID: se lee entera de una vez.
+              if (!/rowid/i.test(String((cause as Error)?.message))) throw cause;
+              page = await tx.execute(`SELECT *, 0 AS __rowid FROM ${quoteIdent(def.name)}`);
+              after = Number.MAX_SAFE_INTEGER;
+            }
+            if (page.rows.length === 0) break;
+            const columns = page.columns.filter((c) => c !== '__rowid');
+            insert ??= dest.prepare(
+              `INSERT INTO ${quoteIdent(def.name)} (${columns.map(quoteIdent).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+            );
+            for (const row of page.rows) {
+              insert.run(...columns.map((c) => toSqlValue(row[c])));
+              after = Number(row.__rowid);
+              count += 1;
+            }
+            if (page.rows.length < SNAPSHOT_PAGE_ROWS) break;
+          }
+          tables[def.name] = count;
+        }
+        for (const def of defs.filter((d) => d.type === 'index')) dest.exec(def.sql);
+        dest.exec('COMMIT');
+        if ('plan_mailbox' in tables) {
+          try {
+            const row = dest
+              .prepare('SELECT count(*) AS n FROM plan_mailbox WHERE "processedAt" IS NULL')
+              .get() as { n: number };
+            pendingMailbox = Number(row.n);
+          } catch {
+            // sin la columna: lo decide el importador, que vuelve a mirarlo
+          }
+        }
+      } catch (error) {
+        dest.close();
+        rmSync(destPath, { force: true });
+        throw error;
+      } finally {
+        tx.close();
+      }
+      dest.close();
+      return {
+        tables,
+        rows: Object.values(tables).reduce((sum, n) => sum + n, 0),
+        pendingMailbox,
+      };
     },
 
     close: () => client.close(),

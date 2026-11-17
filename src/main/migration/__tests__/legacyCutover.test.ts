@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { createClient, type Client, type ResultSet } from '@libsql/client';
+import { createClient, type Client, type InStatement, type ResultSet } from '@libsql/client';
 import {
   createLegacyCutover,
   findLaggingDevices,
@@ -263,5 +264,140 @@ describe('puente del corte 1.x (legacyCutover)', () => {
     await assert.rejects(openLegacyCutover({ url: '', authToken: '' }), {
       code: 'not-configured',
     });
+  });
+});
+
+describe('puente del corte 1.x: foto del remoto (snapshotRemote)', () => {
+  let dir: string;
+  let client: Client;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'afterplay-cutover-'));
+    client = createClient({ url: pathToFileURL(join(dir, 'turso.db')).href });
+  });
+
+  afterEach(() => {
+    client.close();
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // EBUSY en Windows: lo barre scripts/clean-test-temp.ts
+    }
+  });
+
+  const seed = async (): Promise<void> => {
+    await client.batch(
+      [
+        CREATE_APP_META,
+        'CREATE TABLE games (id INTEGER PRIMARY KEY, name TEXT NOT NULL, cover BLOB, rating REAL)',
+        'CREATE INDEX games_name ON games (name)',
+        'CREATE TABLE sessions (id INTEGER PRIMARY KEY, gameId INTEGER NOT NULL REFERENCES games(id), seconds INTEGER)',
+        'CREATE TABLE plan_mailbox (id INTEGER PRIMARY KEY, kind TEXT, createdAt INTEGER, processedAt INTEGER)',
+        'CREATE TABLE tags (name TEXT PRIMARY KEY, color TEXT) WITHOUT ROWID',
+        // Tablas del replicador: no son datos y no se copian.
+        'CREATE TABLE turso_cdc (change_id INTEGER PRIMARY KEY, payload TEXT)',
+        "INSERT INTO turso_cdc VALUES (1, 'x')",
+        "INSERT INTO tags VALUES ('rpg', '#fff'), ('indie', NULL)",
+      ],
+      'write',
+    );
+    // Más de una página (500 filas), con un blob, un real y un NULL.
+    const inserts: InStatement[] = [];
+    for (let id = 1; id <= 1203; id++) {
+      inserts.push({
+        sql: 'INSERT INTO games (id, name, cover, rating) VALUES (?, ?, ?, ?)',
+        args: [id, `Juego ${id}`, id % 7 === 0 ? new Uint8Array([id % 256, 1, 2]) : null, id / 4],
+      });
+    }
+    inserts.push({ sql: 'INSERT INTO sessions (gameId, seconds) VALUES (?, ?)', args: [1, 90] });
+    await client.batch(inserts, 'write');
+  };
+
+  const dump = (path: string, table: string): Record<string, unknown>[] => {
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      return db.prepare(`SELECT * FROM "${table}" ORDER BY 1`).all() as Record<string, unknown>[];
+    } finally {
+      db.close();
+    }
+  };
+
+  it('copia cada tabla de datos igual que el remoto, con su esquema e índices, y nada del replicador', async () => {
+    await seed();
+    const bridge = createLegacyCutover(client, () => T0);
+    const dest = join(dir, 'snapshot.db');
+    const report = await bridge.snapshotRemote(dest);
+
+    assert.deepEqual(report.tables, {
+      app_meta: 0,
+      games: 1203,
+      plan_mailbox: 0,
+      sessions: 1,
+      tags: 2,
+    });
+    assert.equal(report.rows, 1206);
+    assert.equal(report.pendingMailbox, 0);
+
+    for (const table of Object.keys(report.tables)) {
+      const remote = await client.execute(`SELECT * FROM "${table}" ORDER BY 1`);
+      const local = dump(dest, table);
+      assert.equal(local.length, remote.rows.length, table);
+      remote.rows.forEach((row, at) => {
+        for (const column of remote.columns) {
+          const got = local[at]?.[column];
+          const want = row[column];
+          if (want instanceof ArrayBuffer) assert.deepEqual(got, new Uint8Array(want), table);
+          else assert.equal(got, want, `${table}.${column}`);
+        }
+      });
+    }
+
+    const db = new DatabaseSync(dest, { readOnly: true });
+    try {
+      const names = (
+        db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','index')").all() as {
+          name: string;
+        }[]
+      ).map((r) => r.name);
+      assert.ok(names.includes('games_name'), 'el índice se recrea');
+      assert.equal(
+        names.some((name) => name.startsWith('turso_')),
+        false,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('una fila que solo existe en el remoto acaba en la foto', async () => {
+    await seed();
+    await client.execute("INSERT INTO games (id, name) VALUES (5000, 'Solo en Turso')");
+    const dest = join(dir, 'snapshot.db');
+    await createLegacyCutover(client, () => T0).snapshotRemote(dest);
+    const rows = dump(dest, 'games') as { id: number; name: string }[];
+    assert.ok(rows.some((r) => r.id === 5000 && r.name === 'Solo en Turso'));
+  });
+
+  it('cuenta las órdenes del buzón sin procesar', async () => {
+    await seed();
+    await client.batch(
+      [
+        "INSERT INTO plan_mailbox (kind, createdAt, processedAt) VALUES ('a', 1, NULL)",
+        "INSERT INTO plan_mailbox (kind, createdAt, processedAt) VALUES ('b', 1, 5)",
+        "INSERT INTO plan_mailbox (kind, createdAt, processedAt) VALUES ('c', 2, NULL)",
+      ],
+      'write',
+    );
+    const report = await createLegacyCutover(client, () => T0).snapshotRemote(
+      join(dir, 'snapshot.db'),
+    );
+    assert.equal(report.pendingMailbox, 2);
+  });
+
+  it('si el destino no se puede crear, falla sin dejar nada', async () => {
+    await seed();
+    const dest = join(dir, 'no-existe', 'x.db');
+    await assert.rejects(createLegacyCutover(client, () => T0).snapshotRemote(dest));
+    assert.equal(existsSync(dest), false);
   });
 });
