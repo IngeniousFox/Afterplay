@@ -5,6 +5,7 @@ import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import TitleBar from './components/TitleBar';
 import { queryClient } from './lib/queryClient';
+import { MigrationGate } from './migration/MigrationGate';
 import { Afterplay, OverlayHud } from './WindowRoots';
 
 // LAS DOS VENTANAS SE PARTEN AQUÍ, Y ESO ES TODO EL TRUCO DE ARRANQUE.
@@ -84,6 +85,11 @@ if (isOverlayWindow) {
   }
 }
 
+// El chunk de la app empieza a bajar YA, en paralelo a la pregunta de la puerta
+// de migración (MigrationGate): sin corte pendiente —el caso normal— el IPC no
+// añade espera al primer pintado de la biblioteca.
+if (!isOverlayWindow) void import('./Afterplay');
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -104,9 +110,13 @@ createRoot(document.getElementById('root')!).render(
               llega a pintar algo mucho antes en vez de estar en blanco hasta
               tener los 2 MB ejecutados. */}
           <TitleBar />
-          <Suspense fallback={null}>
-            <Afterplay />
-          </Suspense>
+          {/* La puerta de la migración 1.x → 2.0 va POR FUERA de la app: mientras
+              el corte bloquea, nada que pida datos se monta (ver MigrationGate). */}
+          <MigrationGate>
+            <Suspense fallback={null}>
+              <Afterplay />
+            </Suspense>
+          </MigrationGate>
         </>
       )}
     </QueryClientProvider>
