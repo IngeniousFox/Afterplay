@@ -695,6 +695,21 @@ describe('versiones', () => {
       'invalid_request',
     );
   });
+
+  it('status contesta a un cliente por delante con maxSchema; push y pull lo siguen rechazando', () => {
+    const { hub } = makeHub();
+    const ahead = { ...VERSION, schemaVersion: APP_SCHEMA_VERSION + 1 };
+    assert.equal(hub.status(ahead).maxSchema, APP_SCHEMA_VERSION);
+    assert.equal(
+      codeOf(() => hub.pull(0, 10, ahead)),
+      'protocol_mismatch',
+    );
+    // Un protocolo distinto sigue siendo un fallo permanente, también en status.
+    assert.equal(
+      codeOf(() => hub.status({ ...VERSION, protocolVersion: VERSION.protocolVersion + 1 })),
+      'protocol_mismatch',
+    );
+  });
 });
 
 describe('límites de sentencia del Durable Object', () => {

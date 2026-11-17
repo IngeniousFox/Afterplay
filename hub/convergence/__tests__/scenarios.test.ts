@@ -387,6 +387,20 @@ describe('E-14: B tiene una versión anterior de la app (esquema menor)', () => 
   });
 });
 
+describe('un cliente por delante del hub (§8.7)', () => {
+  it('el ciclo da hub_behind y se reintenta, no pide actualizar la app; al desplegar el hub sigue', async () => {
+    const w = start({ hub: { maxSchema: 1 } });
+    const a = await w.addClient('a', { schemaVersion: 1 });
+    await a.syncOk();
+    a.upgrade(2); // la app se actualiza antes de que se despliegue el hub
+    const result = await a.sync();
+    assert.equal(result.status, 'error');
+    assert.equal(result.retry, true);
+    assert.equal(result.error?.code, 'hub_behind');
+    assert.equal(a.syncState().blockedMinSchema, null);
+  });
+});
+
 describe('E-15: B está por debajo del mínimo admitido', () => {
   it('deja de sincronizar, sigue en local, lo avisa; al actualizarse vuelve', async () => {
     const w = start({ hub: { maxSchema: 2 } });

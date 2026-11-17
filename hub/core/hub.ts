@@ -321,7 +321,13 @@ export class TenantHub {
 
   // ---------- Versiones (§8.7) ----------
 
-  private checkVersion(version: ClientVersion): void {
+  /**
+   * `allowNewer`: `status` deja pasar un esquema por delante del hub. Lo anuncia
+   * en `maxSchema` y es el cliente quien decide (`hub_behind`, reintentable: el
+   * hub se despliega primero, §8.7); un `protocol_mismatch` aquí lo haría pasar
+   * por un fallo permanente de versión. `push` y `pull` siguen rechazándolo.
+   */
+  private checkVersion(version: ClientVersion, allowNewer = false): void {
     const { protocolVersion, schemaVersion } = (version ?? {}) as Partial<ClientVersion>;
     if (!Number.isInteger(protocolVersion) || !Number.isInteger(schemaVersion)) {
       throw new HubError('invalid_request', 'faltan protocolVersion o schemaVersion');
@@ -343,7 +349,7 @@ export class TenantHub {
     // Un cliente por delante del hub rompe la regla de despliegue (§8.7: el hub
     // va primero). Aceptarlo perdería en silencio las columnas que el hub no
     // conoce, y un cliente "nunca escribe a ciegas" (F-15): se rechaza.
-    if ((schemaVersion as number) > this.maxSchema) {
+    if (!allowNewer && (schemaVersion as number) > this.maxSchema) {
       throw new HubError(
         'protocol_mismatch',
         `el cliente usa el esquema ${schemaVersion} y el hub solo llega al ${this.maxSchema}: hay que desplegar el hub primero`,
@@ -354,7 +360,7 @@ export class TenantHub {
   // ---------- status ----------
 
   status(version: ClientVersion): StatusResponse {
-    this.checkVersion(version);
+    this.checkVersion(version, true);
     const meta = this.readMeta();
     return {
       hubId: meta.hubId,

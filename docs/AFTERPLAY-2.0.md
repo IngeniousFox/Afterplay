@@ -775,6 +775,7 @@ El hub usa el mismo módulo de fusión; las escrituras del móvil entran por él
 - Cliente más viejo que el hub: sigue funcionando. Solo envía las columnas que conoce; el hub conserva las que no. Ignora las columnas y tablas que no entiende al bajar.
 - Cliente que se actualiza y gana tablas o columnas: pone su cursor a cero y vuelve a bajar todo. Es barato (pocos MB) y la fusión es idempotente.
 - Cliente por debajo del mínimo admitido (`minSchema`, que el hub sube en cambios incompatibles): el hub responde con un código específico; el cliente deja de sincronizar, sigue en local y muestra "actualiza Afterplay para volver a sincronizar". Nunca escribe a ciegas (F-15).
+- Cliente por delante del hub (despliegue en curso o hub sin actualizar): `status` NO lo rechaza, anuncia `maxSchema` y el cliente responde con el fallo reintentable `hub_behind`, sin escribir. `push` y `pull` sí lo rechazan (`protocol_mismatch`).
 - El esquema no viaja: desaparecen `pushMigrationsToRemote`, `migrateWithoutCapture`, `remoteSchemaAhead`, `pendingTableRebuild` y todo lo que el apéndice A lista como parche de DDL.
 
 ### §8.8 Qué no hace el sync
@@ -1743,6 +1744,7 @@ Un fallo antes de que la importación valide borra `Afterplay2.db` y suelta el r
 - Si el PC que tiene el reclamo se rompe a mitad y no vuelve, los demás esperan sin fin. Hoy se arregla a mano, borrando la fila `cutover`.
 - Si el hub rechaza una fila, la siembra no llega a cero y el corte no termina.
 - No está el importador del PC rezagado (§19.6, último párrafo).
+- **Una fila descargada a la que le falta una columna obligatoria se salta y el cursor avanza** (`engine.ts`, aplicar fila): se registra y no se vuelve a pedir. Se acepta porque las migraciones son solo aditivas (§8.7: toda columna nueva lleva valor por defecto), así que un hub bien desplegado no envía filas así.
 - La instantánea y el detector de cambios sin subir solo se han probado contra una base libsql en fichero, no contra Turso por HTTP. Los nombres de columna de la cola de la réplica (`turso_cdc`, `turso_sync_last_change_id`) no se han comprobado sobre una réplica real; si no coinciden, el detector devuelve "desconocido" y se usa solo el estado que publica la 1.8.
 
 ### §19.7 Siembra del hub
@@ -1768,6 +1770,8 @@ Un fallo antes de que la importación valide borra `Afterplay2.db` y suelta el r
 | Tras usar la 2.0                            | Lo mismo                                                                        | Lo registrado en 2.0 desde el corte |
 
 La base de Turso, la base local 1.x y los backups locales se conservan al menos 60 días. La 2.0 no escribe en ninguno de ellos.
+
+**Tras una vuelta atrás, la 2.0 no puede reimportar sin más.** Hay que apartar (renombrar, no borrar) el fichero de datos 2.0 (`Afterplay2.db`) y el de progreso del corte (`cutover-progress.json`) de cada PC; si no, la 2.0 cree que ya migró o reanuda a medias. Y para volver a migrar hace falta un hub nuevo y vacío, o subir la época del inquilino (§9.8) y vaciar su contenido: un hub con datos de la migración anterior rechaza el emparejado de una biblioteca recién importada (§19.6.1) y mezclaría filas sin relación.
 
 ### §19.10 Qué se migra y qué se regenera
 
