@@ -1950,12 +1950,15 @@ Huecos de este documento encontrados en la fase 2 y **todavía sin resolver**. N
 | Forma exacta de la clave de objeto de la que sale el id de `save_backups` (prefijo, separadores)                                                                    | Fase 6      |
 | `machineHome` pasa de ser por copia a ser por dispositivo: si la carpeta de usuario de un PC cambió, las copias antiguas generarían redirects equivocados           | Fase 6      |
 | Ubicación de restauración: §7.6 la pone en `local_save_state` y §19.6 en `machine-saves.json`, que hoy la guarda con el id numérico del juego como clave            | Fase 6      |
-| Importador: §19.5 da id `legacy:<tabla>:<id>` a todo lo que no es un juego con `igdbId`, pero las tablas de id compuesto o determinista deben usar su id natural    | Fase 8      |
-| Importador: la firma de cada recap incluye el id del juego, así que al cambiar los ids todos saldrían desactualizados. Hay que reescribir las firmas o sacar el id  | Fase 8      |
-| Importador: `achievements` 1.x no distingue Steam de RetroAchievements; `achievementsSyncedAt` lo escriben los dos                                                  | Fase 8      |
-| Importador: `achievementsUnlocksSyncedAt` no tiene fuente equivalente en `external_checks`                                                                          | Fase 8      |
-| Importador: el `syncCreated` de los playthroughs tiene que respetar el orden por id antiguo para que "Playthrough N" no cambie                                      | Fase 8      |
-| Importador: la nota y la fecha del `plan_to_play` de un juego ya promocionado no tienen destino                                                                     | Fase 8      |
+
+Los seis huecos del importador que esta tabla apuntaba para la fase 8 se resolvieron al escribir su primera versión (revisado el 2026-11-17):
+
+- **Ids.** Las tablas de id natural o compuesto (catálogos y desbloqueos de logros, `external_checks`, recaps, radar) usan su id natural (`importer/build.ts`). Las demás llevan un UUIDv7 determinista cuyo tiempo es el id antiguo, no el UUIDv5 de §19.5: así el orden de creación sigue siendo el de la 1.x (`importer/legacyIds.ts`).
+- **Firmas de los recaps.** Se recalculan con los hechos de la 2.0 y se vuelven a sellar si coincidían (`importer/memorySignatures.ts`). La firma depende de la zona horaria: un recap solo se vuelve a sellar si se importa en la zona en que se generó.
+- **Logros de Steam y de RetroAchievements.** Se separan por indicios (origen del desbloqueo, icono de RA, `raGameId`); si hay indicios de los dos lados, la fila va a los dos y cuenta como conflicto (`importer/achievements.ts`).
+- **`achievementsUnlocksSyncedAt`.** Las dos marcas 1.x se reparten entre `steam_achievements`, `steam_unlocks` y `ra_achievements` (`importer/achievementStamps.ts`).
+- **Orden de los playthroughs.** `syncCreated` sale de la fecha y, como desempate, del id antiguo; la etiqueta solo se guarda si no es la automática de su posición.
+- **`plan_to_play` de un juego ya empezado.** La fecha y la nota del primero van a `plan_entries` con lápida en la fecha en que se empezó. Los siguientes de un mismo juego se descartan y se cuentan en el informe.
 
 ### §20.4 Fase 3 — Motor de sync y hub (XL)
 
