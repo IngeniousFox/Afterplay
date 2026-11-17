@@ -54,7 +54,15 @@ const queryClient = new QueryClient({
       // insistiendo, solo gastan batería y retrasan el mensaje de verdad.
       retry: (failureCount, error) => {
         if (error instanceof ApiFailure) {
-          if (['forbidden', 'unauthenticated', 'schema_outdated', 'not_found'].includes(error.code))
+          if (
+            [
+              'forbidden',
+              'unauthenticated',
+              'schema_outdated',
+              'not_found',
+              'maintenance',
+            ].includes(error.code)
+          )
             return false;
         }
         return failureCount < 2;

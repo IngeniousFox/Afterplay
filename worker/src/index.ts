@@ -17,6 +17,7 @@ import {
 import { getCuriosities, getGameAchievements } from './queries/achievements';
 import { getGameDetail } from './queries/game';
 import { findOwned, listLibrary, listPlanned } from './queries/library';
+import { isInMaintenance } from './queries/maintenance';
 import { getSaga } from './queries/saga';
 import { beatTimer, getActiveTimer, startTimer, stopTimer, TimerError } from './queries/timer';
 import { listSessions } from './queries/sessions';
@@ -151,6 +152,21 @@ export default {
     const db = openTenantDb(tenant);
 
     try {
+      // ── Mantenimiento (puente 1.8, §19.3) ───────────────────────────────
+      // Con `cutover` en app_meta la biblioteca ya es de la 2.0: cronómetro y
+      // buzón no escriben. Son los POST y el GET de /api/timer, que también
+      // escribe (cierra cronómetros abandonados). Las lecturas siguen. 503 con
+      // código propio para que la PWA diga "en mantenimiento" y no "sin red".
+      const writes =
+        request.method === 'POST' || (request.method === 'GET' && url.pathname === '/api/timer');
+      if (writes && (await isInMaintenance(db))) {
+        return fail(
+          'maintenance',
+          'esta biblioteca se ha migrado a Afterplay 2: en mantenimiento, no admite escrituras',
+          503,
+        );
+      }
+
       // ── Las escrituras de la API (§8.1: solo Plan y cronómetro) ─────────
       // Casi todas son del buzón, y el buzón no toca ninguna tabla real: deja
       // una orden que el escritorio drena al arrancar llamando al código de

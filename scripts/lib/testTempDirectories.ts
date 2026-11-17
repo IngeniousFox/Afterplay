@@ -10,7 +10,7 @@ const TEST_TEMP_PREFIXES = [
   'afterplay-e2e-keys-', // e2e/plan-ajustes.spec.ts
   'afterplay-worker-test-', // workerQueries.test.ts
   'afterplay-worker-paridad-', // workerParidad.test.ts
-  'afterplay-ficha-test-', // gameDetailParity.test.ts
+  'afterplay-worker-maint-', // maintenance.test.ts  'afterplay-ficha-test-', // gameDetailParity.test.ts
   'afterplay-legacyenv-', // legacyEnv.test.ts
   'afterplay-keys-', // credentials.test.ts
   'afterplay-migrations-', // migrationSync.test.ts

@@ -54,6 +54,14 @@ const describe = (error: unknown): Described => {
         recover: 'retry',
       };
     }
+    if (error.code === 'maintenance') {
+      return {
+        title: 'Library moved to Afterplay 2',
+        hint: 'This library has moved to Afterplay 2, so the web app is read-only for now.',
+        Icon: RefreshCw,
+        recover: 'none',
+      };
+    }
     if (error.code === 'forbidden' || error.code === 'unauthenticated') {
       return {
         title: 'No library for this account',

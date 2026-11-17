@@ -325,6 +325,7 @@ export type ApiError = {
       | 'forbidden'
       | 'not_found'
       | 'schema_outdated'
+      | 'maintenance'
       | 'upstream_unavailable'
       | 'internal';
     message: string;
