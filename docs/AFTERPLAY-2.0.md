@@ -2389,6 +2389,14 @@ Sobre una **copia** completa de los datos reales: importar, validar, sembrar un 
 7. Segunda persona, cuando quiera.
 8. A los 60 días: retirar el Worker antiguo y archivar la base de Turso.
 
+**Hecho (2026-11-18):**
+
+- **Paso 1.** La 1.8.0 está publicada en GitHub. Al crearla, dos publicadores abrieron la release a la vez y se perdió la subida del instalador; se subieron después a mano el instalador y `latest.yml` de la misma compilación. Conviene revisar los ficheros de cada release tras `npm run release:win`.
+- **Paso 2.** El hub de producción `afterplay-hub` está en `https://afterplay-hub.afterplay-worker.workers.dev`. Se despliega con `npx wrangler deploy` desde `hub/worker/`, sin `--env`.
+  - **Access:** igual que en el de desarrollo, con dos aplicaciones. «Afterplay hub» cubre todo el host con «Accesos por email». «Afterplay hub - sync de los PCs» cubre `/sync/*` con «Bypass sync PCs». No tiene token de servicio ni `HUB_ADMIN_TOKEN`: los scripts de administración son solo del hub de desarrollo.
+  - **Secretos:** `ADMIN_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` y `HUB_SECRETS_KEY`. La clave es nueva y solo vive en Cloudflare; si se pierde, hay que volver a meter las claves de IGDB.
+  - **Comprobado:** `/` y `/api/v2/*` redirigen al login de Access y `/sync/*` llega al Worker. El anfitrión ya ha entrado en la PWA, lo que crea su inquilino. Ningún PC está emparejado todavía: eso es del paso 5.
+
 #### §20.11.1 Limpieza del código 1.x
 
 El borrado no es una fase aparte: va por tandas, cada una con su condición (Apéndice C).
