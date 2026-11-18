@@ -2362,7 +2362,21 @@ Sobre una **copia** completa de los datos reales: importar, validar, sembrar un 
 
 **Comprobado.** Lint, tipos, 3.067 tests, el build del escritorio y de la PWA, y los 100 e2e. La 1.8, en su rama y con `seenCutoverAt`: sus tests pasan salvo los dos que ya fallaban en `main`.
 
-**Falta para salir de la fase:** el ensayo sobre una copia de los datos reales (importar, validar, sembrar un hub de pruebas, emparejar un segundo perfil, usarla unos días), los escenarios de §17.3 y la lista de sorpresas.
+**Ensayo sobre datos reales (2026-11-18).** Sobre una copia de la base 1.x de producción del 13 de noviembre:
+
+1. **Importar y validar** con `npm run db:v2:import -- --from <copia> --out <fichero>`: 1.011 juegos, 278 sesiones, 40.452 logros y 3.370 desbloqueos en 5 s. La comparación con las lecturas 1.x recorre 774.257 valores sin diferencias fuera de las esperadas. Ningún reloj en el futuro, ningún texto con NUL, ninguna fila duplicada. El buzón del móvil tenía 9 filas, todas ya drenadas.
+2. **Hub de desarrollo desplegado** con el código de esta fase. El perfil `v2` hizo un ciclo completo contra él.
+3. **Sembrar un hub de pruebas.** Un hub local (`wrangler dev --local`, con su propio almacenamiento y variables de ensayo) y un perfil de desarrollo `ensayo-a` con la base importada: el primer ciclo subió 13.497 filas en unos 3 s y dejó 0 pendientes. Después subieron los 70 desbloqueos de emulador que este PC detectó al arrancar.
+4. **Emparejar un segundo perfil** (`ensayo-b`, vacío): bajó 13.567 filas en un ciclo. Comparadas fila a fila y columna a columna con `ensayo-a`, relojes incluidos, son idénticas; la única diferencia es la fila de su propio dispositivo.
+
+**§17.3:** los escenarios los cubren las pruebas de convergencia (`hub/convergence/`), en verde. E-24 (hub vacío, un PC con todos los datos) pasa además con los datos reales.
+
+**Sorpresas del ensayo:**
+
+- Ninguna en la app.
+- Una de método: una base copiada a la carpeta de un perfil desde el sandbox de las herramientas no llegó a la app, que creó una base vacía. Las copias para un ensayo se hacen desde una terminal normal.
+
+**Falta para salir de la fase:** usar la app unos días sobre los datos del ensayo.
 
 ### §20.11 Fase 10 — Corte (S)
 
