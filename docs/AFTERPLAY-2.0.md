@@ -1399,12 +1399,12 @@ Nada obligatorio. Las horas de dos PCs ya suman en los totales. Un desglose por 
 
 #### Móvil
 
-| Dónde             | Qué se añade o cambia                                             | Por qué |
-| ----------------- | ----------------------------------------------------------------- | ------- |
-| Ficha de juego    | "Instalado en: PC-A, PC-B" en lugar de rutas                      | F-31    |
-| Sesión en marcha  | En qué dispositivo                                                | §10.8   |
-| Ajustes del móvil | "Añadir dispositivo": muestra el código de emparejado             | §9.3    |
-| Plan              | Las acciones dejan de mostrar "pendiente de que tu PC lo aplique" | §13.3   |
+| Dónde             | Qué se añade o cambia                                                                                                      | Por qué |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Ficha de juego    | "Instalado en: PC-A, PC-B" en lugar de rutas                                                                               | F-31    |
+| Sesión en marcha  | En qué dispositivo                                                                                                         | §10.8   |
+| Ajustes del móvil | "Añadir dispositivo" (código de emparejado), lista de dispositivos con revocar e invitar a una persona (solo el anfitrión) | §9.3    |
+| Plan              | Las acciones dejan de mostrar "pendiente de que tu PC lo aplique"                                                          | §13.3   |
 
 #### Lo que no cambia
 
@@ -2396,6 +2396,11 @@ Sobre una **copia** completa de los datos reales: importar, validar, sembrar un 
   - **Access:** igual que en el de desarrollo, con dos aplicaciones. «Afterplay hub» cubre todo el host con «Accesos por email». «Afterplay hub - sync de los PCs» cubre `/sync/*` con «Bypass sync PCs». No tiene token de servicio ni `HUB_ADMIN_TOKEN`: los scripts de administración son solo del hub de desarrollo.
   - **Secretos:** `ADMIN_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` y `HUB_SECRETS_KEY`. La clave es nueva y solo vive en Cloudflare; si se pierde, hay que volver a meter las claves de IGDB.
   - **Comprobado:** `/` y `/api/v2/*` redirigen al login de Access y `/sync/*` llega al Worker. El anfitrión ya ha entrado en la PWA, lo que crea su inquilino. Ningún PC está emparejado todavía: eso es del paso 5.
+
+**Ajustes de la PWA (2026-11-19).** A la PWA le faltaba la pantalla para emparejar el primer PC e invitar a otra persona. Ahora tiene un engranaje que abre Ajustes con «Add device» (código de un solo uso con cuenta atrás y la dirección del hub), la lista de dispositivos con revocar y, solo para el anfitrión, «Invite a person». El hub añade `GET /api/v2/me`, que dice si quien llama es el anfitrión.
+
+- **Comprobado:** tipos, tests y lint; en el hub de desarrollo, la pantalla carga, genera un código y enseña los dos PCs, y a 390 px no se desborda ni queda tapada por la barra inferior.
+- **Pendiente:** el hub de producción todavía sirve la PWA anterior. Antes del paso 5 hay que compilar la PWA (`npm --prefix web run build`) y volver a desplegarlo.
 
 #### §20.11.1 Limpieza del código 1.x
 
