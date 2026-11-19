@@ -4,3 +4,4 @@
 export * from './reads';
 export * from './writes';
 export * from './igdb';
+export * from './account';

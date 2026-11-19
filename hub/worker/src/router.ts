@@ -29,6 +29,7 @@ import {
   type StatusResponse,
   type SyncErrorBody,
 } from '../../../src/shared/sync/protocol';
+import type { MeResponse } from '../../../src/shared/api/v2';
 import type { DeviceTokenInfo, EnrollmentSecret } from '../../core/hub';
 import { AccessError } from './access';
 import type { InviteResult } from './directoryStore';
@@ -333,6 +334,10 @@ function sameOrigin(request: Request, url: URL): boolean {
   return origin === null || origin === url.origin;
 }
 
+/** El anfitrión es ADMIN_EMAIL. Sin él configurado nadie lo es. */
+const isHost = (backend: Backend, email: string): boolean =>
+  !!backend.adminEmail && normalizeEmail(backend.adminEmail) === email;
+
 async function handleApi(request: Request, url: URL, backend: Backend): Promise<Response> {
   if (request.method !== 'GET' && !sameOrigin(request, url)) {
     return errorResponse(apiError('forbidden', 'origen no permitido'));
@@ -354,6 +359,12 @@ async function handleApi(request: Request, url: URL, backend: Backend): Promise<
   const tenant = backend.tenant(resolved.tenantId);
 
   const route = url.pathname.slice(API_PREFIX.length);
+
+  if (route === '/me') {
+    if (request.method !== 'GET') return methodNotAllowed('GET');
+    const me: MeResponse = { email, isHost: isHost(backend, email) };
+    return jsonResponse(me);
+  }
 
   if (route === '/devices/enroll-code') {
     if (request.method !== 'POST') return methodNotAllowed('POST');
@@ -385,7 +396,7 @@ async function handleApi(request: Request, url: URL, backend: Backend): Promise<
   if (route === '/invitations') {
     if (request.method !== 'POST') return methodNotAllowed('POST');
     // Solo el anfitrión. Sin ADMIN_EMAIL configurado nadie lo es.
-    if (!backend.adminEmail || normalizeEmail(backend.adminEmail) !== email) {
+    if (!isHost(backend, email)) {
       return errorResponse(apiError('forbidden', 'solo el anfitrión puede invitar'));
     }
     const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);
@@ -402,7 +413,7 @@ async function handleApi(request: Request, url: URL, backend: Backend): Promise<
   // la misma puerta que las invitaciones (Access o el token de administración).
   if (route === '/admin/epoch') {
     if (request.method !== 'POST') return methodNotAllowed('POST');
-    if (!backend.adminEmail || normalizeEmail(backend.adminEmail) !== email) {
+    if (!isHost(backend, email)) {
       return errorResponse(apiError('forbidden', 'solo el anfitrión puede subir la época'));
     }
     const body = await readJsonObject(request, SMALL_BODY_MAX_BYTES);

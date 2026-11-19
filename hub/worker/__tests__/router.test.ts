@@ -290,6 +290,28 @@ describe('rutas de la PWA (/api/v2)', () => {
     assert.equal((await world.call('/api/v2/devices', { email: HOST })).status, 403);
   });
 
+  it('/me: dice quién eres y si eres el anfitrión (sin distinguir mayúsculas)', async () => {
+    const world = makeWorld();
+    const host = await world.call('/api/v2/me', { email: HOST.toUpperCase() });
+    assert.equal(host.status, 200);
+    assert.deepEqual(await json(host), { email: HOST, isHost: true });
+
+    await world.call('/api/v2/invitations', { email: HOST, body: { email: 'ana@example.com' } });
+    const ana = await world.call('/api/v2/me', { email: 'ana@example.com' });
+    assert.deepEqual(await json(ana), { email: 'ana@example.com', isHost: false });
+  });
+
+  it('/me: sin sesión 401, desconocido 403, otro método 405; sin ADMIN_EMAIL nadie es anfitrión', async () => {
+    const world = makeWorld();
+    assert.equal((await world.call('/api/v2/me')).status, 401);
+    assert.equal((await world.call('/api/v2/me', { email: 'intruso@example.com' })).status, 403);
+    const post = await world.call('/api/v2/me', { email: HOST, method: 'POST' });
+    assert.equal(post.status, 405);
+
+    const noHost = makeWorld(null);
+    assert.equal((await noHost.call('/api/v2/me', { email: HOST })).status, 403);
+  });
+
   it('la primera entrada del anfitrión crea su inquilino; el código lleva su id', async () => {
     const world = makeWorld();
     const response = await world.call('/api/v2/devices/enroll-code', {
