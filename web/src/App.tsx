@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Settings } from 'lucide-react';
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { ApiFailure } from './api';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loading } from './components/States';
@@ -30,6 +31,10 @@ const importSessions = (): Promise<typeof import('./screens/SessionsScreen')> =>
 const importGameDetail = (): Promise<typeof import('./screens/GameDetailScreen')> =>
   import('./screens/GameDetailScreen');
 
+const importSettings = (): Promise<typeof import('./screens/SettingsScreen')> =>
+  import('./screens/SettingsScreen');
+
+const SettingsScreen = lazy(async () => ({ default: (await importSettings()).SettingsScreen }));
 const PlanScreen = lazy(async () => ({ default: (await importPlan()).PlanScreen }));
 const SessionsScreen = lazy(async () => ({ default: (await importSessions()).SessionsScreen }));
 const GameDetailScreen = lazy(async () => ({
@@ -82,10 +87,23 @@ const Header = (): React.JSX.Element | null => {
   if (pathname.startsWith('/game/')) return null;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-[#0a0b0a]/90 px-4 py-3 backdrop-blur-lg">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-[#0a0b0a]/90 px-4 py-3 backdrop-blur-lg">
       <span className="text-[15px] font-extrabold tracking-tight">
         After<span className="text-primary">play</span>
       </span>
+      {/* Ajustes no es una pestaña: se usa una vez cada mucho (emparejar un
+          PC), así que no se come un hueco de la barra de abajo. */}
+      <NavLink
+        to="/settings"
+        aria-label="Settings"
+        className={({ isActive }) =>
+          `-my-2 -mr-2 flex h-11 w-11 items-center justify-center transition-colors ${
+            isActive ? 'text-primary' : 'text-muted-foreground'
+          }`
+        }
+      >
+        <Settings size={20} strokeWidth={1.8} />
+      </NavLink>
     </header>
   );
 };
@@ -101,6 +119,7 @@ const Shell = (): React.JSX.Element => {
       void importGameDetail();
       void importPlan();
       void importSessions();
+      void importSettings();
     };
     // typeof y no `'requestIdleCallback' in window`: lib.dom lo declara como
     // siempre presente, así que el `in` deja la otra rama en `never` y no
@@ -129,6 +148,7 @@ const Shell = (): React.JSX.Element => {
             <Route path="/library" element={<Library />} />
             <Route path="/plan" element={<PlanScreen />} />
             <Route path="/sessions" element={<SessionsScreen />} />
+            <Route path="/settings" element={<SettingsScreen />} />
             <Route path="/game/:id" element={<GameDetailScreen />} />
           </Routes>
         </Suspense>

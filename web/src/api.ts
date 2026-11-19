@@ -27,6 +27,13 @@
   TimerResponse,
   TimerStopResponse,
 } from '../../src/shared/api/v2';
+import type {
+  DeviceDto,
+  EnrollCodeResponse,
+  InvitationDto,
+  MeResponse,
+  RevokeDeviceResponse,
+} from '../../src/shared/api/v2';
 import type { SyncErrorBody, SyncErrorCode } from '../../src/shared/sync/protocol';
 
 // El contrato de la API se importa de src/shared/api/v2, que es de donde lo
@@ -36,14 +43,18 @@ import type { SyncErrorBody, SyncErrorCode } from '../../src/shared/sync/protoco
 export type {
   AchievementEntry,
   ActiveTimerDto,
+  DeviceDto,
+  EnrollCodeResponse,
   EventDatePrecision,
   GameAchievements,
   GameDetail,
   GameMedia,
   GameSession,
   IgdbSearchResult,
+  InvitationDto,
   IterationDetail,
   LibraryGame,
+  MeResponse,
   PlannedGame,
   SagaEntry,
   SessionPage,
@@ -247,6 +258,27 @@ export const addToPlan = (game: IgdbSearchHit): Promise<PlanAddResponse> =>
     coverUrl: game.coverUrl,
     releaseYear: game.releaseYear,
   } satisfies PlanAddRequest);
+
+// ── Ajustes: dispositivos e invitaciones ───────────────────────────────────
+
+// Quién soy y si soy el anfitrión (el único que puede invitar). Lo decide el
+// hub: la PWA solo lo usa para enseñar u ocultar la sección.
+export const fetchMe = (): Promise<MeResponse> => get<MeResponse>('/me');
+
+// Un código de emparejado de un solo uso, que se teclea en el PC junto con la
+// dirección del hub. Caduca en unos minutos (`expiresAt`, ms epoch).
+export const createEnrollCode = (): Promise<EnrollCodeResponse> =>
+  post<EnrollCodeResponse>('/devices/enroll-code', {});
+
+export const fetchDevices = (): Promise<DeviceDto[]> => get<DeviceDto[]>('/devices');
+
+export const revokeDevice = (tokenId: string): Promise<RevokeDeviceResponse> =>
+  post<RevokeDeviceResponse>(`/devices/${id(tokenId)}/revoke`, {});
+
+// Solo el anfitrión. Los errores son `invalid_request` (correo no válido),
+// `conflict` (esa persona ya tiene su espacio) y `forbidden`.
+export const inviteByEmail = (email: string): Promise<InvitationDto> =>
+  post<InvitationDto>('/invitations', { email });
 
 // ── El cronómetro ──────────────────────────────────────────────────────────
 
