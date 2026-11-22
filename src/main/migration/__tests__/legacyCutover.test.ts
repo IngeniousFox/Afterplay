@@ -8,7 +8,9 @@ import { pathToFileURL } from 'node:url';
 import { createClient, type Client, type InStatement, type ResultSet } from '@libsql/client';
 import {
   createLegacyCutover,
+  effectivePendingChanges,
   findLaggingDevices,
+  SAME_CYCLE_MS,
   LegacyCutoverError,
   openLegacyCutover,
   type DeviceStatus,
@@ -234,7 +236,15 @@ describe('puente del corte 1.x (legacyCutover)', () => {
       [
         status({ deviceId: 'machine-a', deviceName: 'PC-A', pendingChanges: 9 }),
         status({ deviceId: 'machine-b', deviceName: 'PC-B' }),
-        status({ deviceId: 'machine-c', deviceName: 'PC-C', pendingChanges: 2 }),
+        // Sin subida buena, sus 2 operaciones pueden ser cambios de verdad.
+        status({
+          deviceId: 'machine-c',
+          deviceName: 'PC-C',
+          pendingChanges: 2,
+          lastPushOkAt: null,
+        }),
+        // Subió en este ciclo: 2 operaciones son solo la contabilidad del sync.
+        status({ deviceId: 'machine-i', deviceName: 'PC-I', pendingChanges: 2 }),
         status({ deviceId: 'machine-d', deviceName: 'PC-D', at: T0 - 2 * HOUR }),
         status({ deviceId: 'machine-e', deviceName: 'PC-E', at: T0 - HOUR }),
         // «0 pendientes» publicado ANTES del reclamo: no prueba nada.
@@ -255,6 +265,19 @@ describe('puente del corte 1.x (legacyCutover)', () => {
       { deviceId: 'machine-h', deviceName: 'PC-H', reason: 'not-confirmed' },
     ]);
     assert.deepEqual(findLaggingDevices([], 'machine-a', T0, HOUR, T0), []);
+  });
+
+  it('effectivePendingChanges descuenta la contabilidad solo si subió en el mismo ciclo', () => {
+    const at = T0;
+    const value = (pendingChanges: number, lastPushOkAt: number | null): number =>
+      effectivePendingChanges({ pendingChanges, lastPushOkAt, at });
+    assert.equal(value(2, at - 105), 0);
+    assert.equal(value(5, at - 105), 3);
+    assert.equal(value(1, at), 0);
+    assert.equal(value(2, null), 2);
+    assert.equal(value(2, at - SAME_CYCLE_MS - 1), 2);
+    // Una subida «del futuro» (relojes raros) no se fía.
+    assert.equal(value(2, at + 1), 2);
   });
 
   it('findLaggingDevices: un PC de save_backups sin device_status nunca informó', () => {

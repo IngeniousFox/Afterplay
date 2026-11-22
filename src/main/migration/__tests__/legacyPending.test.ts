@@ -6,8 +6,14 @@ import { describe, it } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { countLocalPendingChanges, pendingChangesIn } from '../legacyPending';
 
-// La cola CDC de la réplica local, con datos inventados. Los nombres de las
-// tablas del replicador son los supuestos de `legacyPending.ts`.
+// La cola CDC de la réplica local, con datos inventados pero con la forma de una
+// réplica real de la 1.8: cada transacción deja sus filas y una marca de fin
+// (`table_name` nulo).
+
+const CDC =
+  'CREATE TABLE turso_cdc (change_id INTEGER PRIMARY KEY, change_type INTEGER, table_name TEXT, id INTEGER)';
+const MARKS = 'CREATE TABLE turso_sync_last_change_id (client_id TEXT, change_id INTEGER)';
+const META = 'CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT, updatedAt INTEGER)';
 
 const memory = (statements: string[]): DatabaseSync => {
   const db = new DatabaseSync(':memory:');
@@ -15,22 +21,42 @@ const memory = (statements: string[]): DatabaseSync => {
   return db;
 };
 
+// Lo que hay en la cola justo después de una subida: la marca que reescribe el
+// replicador y el device_status que la 1.8 publica después, cada uno con su fin.
+const bookkeeping = [
+  CDC,
+  MARKS,
+  META,
+  "INSERT INTO turso_sync_last_change_id VALUES ('client-old', 22000), ('client-now', 0)",
+  "INSERT INTO app_meta (rowid, key, value, updatedAt) VALUES (1, 'device_status:pc-a', '{}', 1)",
+  `INSERT INTO turso_cdc VALUES
+     (1, 0, 'turso_sync_last_change_id', 2), (2, 2, NULL, NULL),
+     (3, 0, 'app_meta', 1), (4, 2, NULL, NULL)`,
+];
+
 describe('legacyPending: cambios de la 1.x sin subir', () => {
-  it('cuenta las filas de la cola por encima de la marca de lo subido', () => {
-    const db = memory([
-      'CREATE TABLE turso_cdc (change_id INTEGER PRIMARY KEY, payload TEXT)',
-      'CREATE TABLE turso_sync_last_change_id (change_id INTEGER)',
-      "INSERT INTO turso_cdc VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd')",
-      'INSERT INTO turso_sync_last_change_id VALUES (2)',
-    ]);
-    assert.equal(pendingChangesIn(db), 2);
+  it('la contabilidad del sync no cuenta: una réplica al día da 0', () => {
+    const db = memory(bookkeeping);
+    assert.equal(pendingChangesIn(db), 0);
     db.close();
   });
 
-  it('sin marca de lo subido, toda la cola está pendiente', () => {
+  it('cuenta las filas de datos aunque una marca vieja sea más alta que toda la cola', () => {
     const db = memory([
-      'CREATE TABLE turso_cdc (change_id INTEGER PRIMARY KEY)',
-      'INSERT INTO turso_cdc VALUES (1), (2)',
+      ...bookkeeping,
+      `INSERT INTO turso_cdc VALUES
+         (5, 1, 'sessions', 40), (6, 0, 'games', 7), (7, 2, NULL, NULL),
+         (8, -1, 'notes', 3), (9, 2, NULL, NULL)`,
+    ]);
+    assert.equal(pendingChangesIn(db), 3);
+    db.close();
+  });
+
+  it('app_meta que no es device_status sí cuenta, y también una fila de app_meta ya borrada', () => {
+    const db = memory([
+      ...bookkeeping,
+      "INSERT INTO app_meta (rowid, key, value, updatedAt) VALUES (2, 'otra', '{}', 1)",
+      "INSERT INTO turso_cdc VALUES (5, 0, 'app_meta', 2), (6, -1, 'app_meta', 99), (7, 2, NULL, NULL)",
     ]);
     assert.equal(pendingChangesIn(db), 2);
     db.close();
@@ -40,12 +66,7 @@ describe('legacyPending: cambios de la 1.x sin subir', () => {
     assert.equal(pendingChangesIn(memory(['CREATE TABLE games (id INTEGER)'])), null);
     assert.equal(pendingChangesIn(memory(['CREATE TABLE turso_cdc (otra TEXT)'])), null);
     assert.equal(
-      pendingChangesIn(
-        memory([
-          'CREATE TABLE turso_cdc (change_id INTEGER)',
-          'CREATE TABLE turso_sync_last_change_id (rara TEXT)',
-        ]),
-      ),
+      pendingChangesIn(memory(['CREATE TABLE turso_cdc (change_id INTEGER, id INTEGER)'])),
       null,
     );
   });
@@ -56,11 +77,11 @@ describe('legacyPending: cambios de la 1.x sin subir', () => {
       const path = join(dir, 'Afterplay.db');
       const db = new DatabaseSync(path);
       db.exec(
-        `CREATE TABLE turso_cdc (change_id INTEGER PRIMARY KEY);
-         INSERT INTO turso_cdc VALUES (1), (2), (3);`,
+        `${CDC};
+         INSERT INTO turso_cdc VALUES (1, 1, 'games', 1), (2, 1, 'games', 2), (3, 2, NULL, NULL);`,
       );
       db.close();
-      assert.equal(await countLocalPendingChanges(path, join(dir, 'backups')), 3);
+      assert.equal(await countLocalPendingChanges(path, join(dir, 'backups')), 2);
       assert.equal(
         await countLocalPendingChanges(join(dir, 'no-existe.db'), join(dir, 'backups')),
         null,

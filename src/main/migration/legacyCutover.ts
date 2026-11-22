@@ -64,6 +64,34 @@ const deviceStatusSchema = z.object({
 export type DeviceStatusValue = z.infer<typeof deviceStatusSchema>;
 export type DeviceStatus = DeviceStatusValue & { deviceId: string };
 
+/**
+ * Lo que la 1.8 mide en `pendingChanges` son operaciones de la cola del
+ * replicador (`stats().cdcOperations`), justo después de subir. En ese momento
+ * la cola nunca está vacía: el replicador acaba de reescribir su marca de lo
+ * subido, y eso son 2 operaciones (la fila y el fin de transacción). Una 1.8 al
+ * día publica siempre 2 (visto en una réplica real el 2026-11-22).
+ */
+export const SYNC_BOOKKEEPING_OPS = 2;
+/** La subida y la medición son del mismo ciclo (en la práctica, milisegundos). */
+export const SAME_CYCLE_MS = 60_000;
+
+/**
+ * Los cambios de verdad que ese PC no ha subido. Solo se descuenta la
+ * contabilidad cuando la última subida buena es de ese mismo ciclo; si no subió
+ * (o hace mucho), el número se toma tal cual: mejor avisar de más.
+ */
+export const effectivePendingChanges = (
+  status: Pick<DeviceStatusValue, 'pendingChanges' | 'lastPushOkAt' | 'at'>,
+): number => {
+  const pushedThisCycle =
+    status.lastPushOkAt !== null &&
+    status.at >= status.lastPushOkAt &&
+    status.at - status.lastPushOkAt <= SAME_CYCLE_MS;
+  return pushedThisCycle
+    ? Math.max(0, status.pendingChanges - SYNC_BOOKKEEPING_OPS)
+    : status.pendingChanges;
+};
+
 /** Lo que dejó `snapshotRemote`: filas copiadas por tabla (nunca contenido). */
 export interface RemoteSnapshotReport {
   readonly tables: Readonly<Record<string, number>>;
@@ -404,7 +432,7 @@ export const findLaggingDevices = (
     const base = { deviceId: status.deviceId, deviceName: status.deviceName };
     if (nowMs - status.at > staleAfterMs) return [{ ...base, reason: 'stale' }];
     if (status.seenCutoverAt !== claimAt) return [{ ...base, reason: 'not-confirmed' }];
-    if (status.pendingChanges > 0) return [{ ...base, reason: 'pending-changes' }];
+    if (effectivePendingChanges(status) > 0) return [{ ...base, reason: 'pending-changes' }];
     return [];
   });
   const reported = new Set(statuses.map((s) => s.deviceId));

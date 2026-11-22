@@ -685,8 +685,22 @@ describe('cutover: fallos y garantía de no dejar nada a medias', () => {
     const question = states.find((s) => s.kind === 'question-lagging');
     assert.ok(question?.kind === 'question-lagging');
     assert.equal(question.devices[0]?.self, true);
-    assert.equal(question.devices[0]?.pendingChanges, 4);
+    // 4 operaciones, menos las 2 de contabilidad del replicador.
+    assert.equal(question.devices[0]?.pendingChanges, 2);
     assert.equal(controller.state.kind, 'done');
+  });
+
+  it('una 1.8 al día (2 operaciones de contabilidad tras subir) no se pregunta', async () => {
+    const w = world();
+    w.sync.paired = true;
+    w.bridge.statuses = [
+      status({ deviceId: SELF.deviceId, deviceName: 'PC-A', pendingChanges: 2 }),
+      status({ pendingChanges: 2 }),
+    ];
+    const { states, done } = start(w);
+    await done;
+    assert.equal(kinds(states).includes('question-lagging'), false);
+    assert.equal(rowOf(w)?.state, 'done');
   });
 
   it('si la cola local no se puede mirar (null) y no hay otro aviso, no se pregunta', async () => {

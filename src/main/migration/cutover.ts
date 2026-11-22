@@ -49,6 +49,7 @@ import {
   type CutoverState,
 } from '../../shared/cutover';
 import {
+  effectivePendingChanges,
   findLaggingDevices,
   LegacyCutoverError,
   type LaggingDevice,
@@ -484,7 +485,7 @@ export class CutoverController {
         ),
       );
       const own = statuses.find((s) => s.deviceId === deps.self.deviceId);
-      const pending = Math.max(own?.pendingChanges ?? 0, localPending ?? 0);
+      const pending = Math.max(own ? effectivePendingChanges(own) : 0, localPending ?? 0);
       if (pending === 0) return others;
       return [
         {
@@ -816,7 +817,7 @@ const describeLagging = (
       ...device,
       self: false,
       lastReportAt: status?.at ?? 0,
-      pendingChanges: status?.pendingChanges ?? 0,
+      pendingChanges: status ? effectivePendingChanges(status) : 0,
     };
   });
 

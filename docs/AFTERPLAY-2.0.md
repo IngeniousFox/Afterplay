@@ -2400,7 +2400,16 @@ Sobre una **copia** completa de los datos reales: importar, validar, sembrar un 
 **Ajustes de la PWA (2026-11-19).** A la PWA le faltaba la pantalla para emparejar el primer PC e invitar a otra persona. Ahora tiene un engranaje que abre Ajustes con «Add device» (código de un solo uso con cuenta atrás y la dirección del hub), la lista de dispositivos con revocar y, solo para el anfitrión, «Invite a person». El hub añade `GET /api/v2/me`, que dice si quien llama es el anfitrión.
 
 - **Comprobado:** tipos, tests y lint; en el hub de desarrollo, la pantalla carga, genera un código y enseña los dos PCs, y a 390 px no se desborda ni queda tapada por la barra inferior.
-- **Pendiente:** el hub de producción todavía sirve la PWA anterior. Antes del paso 5 hay que compilar la PWA (`npm --prefix web run build`) y volver a desplegarlo.
+- **Desplegado (2026-11-22):** el hub de producción ya sirve la PWA con Ajustes.
+
+**Corte del anfitrión (2026-11-22).** El anfitrión migra antes que nadie con un instalador `2.0.0-rc.1` compilado en local y sin publicar (`electron-builder --publish never -c.extraMetadata.version=2.0.0-rc.1`). Así la 1.8 de la segunda persona no recibe la 2.0, y la 2.0.0 oficial le llegará como actualización. El Worker antiguo no se ha puesto en mantenimiento: el anfitrión no usa la PWA antigua.
+
+**Falso «cambios sin subir» en el corte (arreglado el 2026-11-22).** En la migración real, el PC migrador salía con «2 changes never reached the sync service». Mirado en una copia de su réplica, esos 2 eran solo contabilidad: la marca de lo subido que reescribe el replicador y el `device_status` de la 1.8. Había dos fallos:
+
+- **El número de la 1.8.** `pendingChanges` cuenta operaciones de la cola justo después de subir, y en ese momento siempre hay 2: la marca y su fin de transacción. Una 1.8 al día publicaba siempre 2. Ahora la 2.0 descuenta esas 2 cuando la subida buena es del mismo ciclo (`effectivePendingChanges`); si no subió, el número vale tal cual.
+- **El recuento local (`legacyPending.ts`).** Comparaba la cola con la marca más alta de `turso_sync_last_change_id`, que guarda una marca por cada cliente que ha tenido la réplica. Una marca vieja (22.373) contra una cola que empezaba en 1 daba siempre 0, que es el error peligroso: escondía cambios de verdad. Ahora cuenta las filas de datos de la cola, sin las marcas de fin de transacción, las tablas `turso_*` ni el `device_status:*`.
+
+El instalador `rc.1` del anfitrión es anterior al arreglo: a él le salió el aviso y lo correcto era continuar.
 
 #### §20.11.1 Limpieza del código 1.x
 
