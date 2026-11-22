@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  BRAND_FONT_FAMILY,
-  BRAND_VEIL_BACKGROUND,
   BRAND_WORDMARK,
-  BRAND_WORDMARK_SHADOW,
   BRAND_WORDMARK_TRACKING,
   BRAND_WORDMARK_WEIGHT,
 } from '../../shared/branding';
@@ -21,16 +18,19 @@ describe('startup branding', () => {
     assert.ok(html.includes('role="status" aria-label="Loading Afterplay"'));
   });
 
-  it('shares the TV typography, green veil and glow', () => {
+  it('uses the Fósforo cabinet, phosphor accent and the wordmark spacing', () => {
     const html = buildSplashHtml(ICON);
     for (const value of [
-      BRAND_FONT_FAMILY,
-      BRAND_VEIL_BACKGROUND,
-      BRAND_WORDMARK_SHADOW,
+      '#101416',
+      '#e9e4d8',
+      '#ffb347',
+      'Bahnschrift',
       BRAND_WORDMARK_TRACKING,
       `font-weight: ${BRAND_WORDMARK_WEIGHT}`,
     ])
       assert.ok(html.includes(value), value);
+    // Nothing of the 1.x green is left.
+    assert.doesNotMatch(html, /#2fdc7e|47,220,126/i);
   });
 
   it('is self-contained, never delays startup and supports reduced motion', () => {

@@ -10,8 +10,8 @@ import type { OverlayPayload } from './overlayHtml';
 //
 // Es una ventana APARTE de la principal, y esa es toda la gracia: funciona
 // con Afterplay minimizada, escondida en la bandeja o cerrada a la X. No es
-// una notificación de Windows — es una tarjeta nuestra, con nuestra
-// tipografía y nuestro verde, dibujada encima del juego.
+// una notificación de Windows — es una tarjeta nuestra, con los colores de
+// Fósforo, dibujada encima del juego.
 //
 // Las tres claves para que no estorbe, comprobadas en el presentador de Hydra
 // (MIT), que resuelve el mismo problema:
@@ -40,9 +40,13 @@ export type AchievementToast = {
   celebration?: boolean;
 };
 
-const GREEN = '#2fdc7e';
-const AMBER = '#e3b24a';
-const VIOLET = '#e0a3ff';
+// Los acentos de Fósforo (src/shared/theme/fosforo.css): Phosphor para un logro
+// normal, Phosphor hi (más claro) para el raro y el 100%, y el violeta de los
+// ultra raros que usa toda la app (ULTRA_VIOLET). Tienen que ser TRES valores
+// distintos: `rare` se decide comparando el acento con el común.
+const ACCENT_COMMON = '#ffb347';
+const ACCENT_RARE = '#ffc266';
+const ACCENT_ULTRA = '#e0a3ff';
 
 const SINGLE_MS = 4200;
 const COMBINED_MS = 5200;
@@ -65,10 +69,10 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let generation = 0;
 
 const accentFor = (percent: number | null): string => {
-  if (percent === null) return GREEN;
-  if (percent < ULTRA_RARE) return VIOLET;
-  if (percent < RARE) return AMBER;
-  return GREEN;
+  if (percent === null) return ACCENT_COMMON;
+  if (percent < ULTRA_RARE) return ACCENT_ULTRA;
+  if (percent < RARE) return ACCENT_RARE;
+  return ACCENT_COMMON;
 };
 
 // El icono viaja como data URI, no como URL. Motivo: la ventana se carga
@@ -244,7 +248,7 @@ const drain = async (): Promise<void> => {
             gameTitle: game,
             iconDataUri: await toDataUri(batch[0].iconUrl),
             heroDataUri: await toDataUri(batch[0].gameHeroUrl, 'heroes'),
-            accent: GREEN,
+            accent: ACCENT_COMMON,
             rarity: null,
             durationMs: COMBINED_MS,
             rare: false,
@@ -256,10 +260,10 @@ const drain = async (): Promise<void> => {
 
       for (const toast of batch) {
         if (run !== generation) break;
-        // El 100% viste ORO fijo y su propia letra — es el final de una
+        // El 100% viste su acento fijo y su propia letra — es el final de una
         // cacería, no un logro más.
         const celebration = toast.celebration === true;
-        const accent = celebration ? AMBER : accentFor(toast.globalPercent);
+        const accent = celebration ? ACCENT_RARE : accentFor(toast.globalPercent);
         await present(
           {
             token: `s${Date.now()}-${toast.displayName}`,
@@ -275,7 +279,7 @@ const drain = async (): Promise<void> => {
                 ? `Only ${toast.globalPercent.toFixed(1)}% of players have this`
                 : null,
             durationMs: celebration ? COMBINED_MS : SINGLE_MS,
-            rare: celebration || accent !== GREEN,
+            rare: celebration || accent !== ACCENT_COMMON,
           },
           run,
         );

@@ -1,22 +1,10 @@
-import {
-  CalendarDays,
-  Check,
-  Flame,
-  Gamepad2,
-  History,
-  Hourglass,
-  Loader2,
-  Play,
-  Quote,
-  Timer,
-  Trophy,
-  X,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Check, Flame, Gamepad2, Loader2, MonitorPlay, Timer, Trophy, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { GameCover } from '../components/GameCover';
+import { Tabs, tabId, tabPanelId } from '../components/ui/tabs';
+import { kbdClass, primaryButtonClass, secondaryButtonClass } from '../components/shell/controls';
 import {
   createAchievementsActivityInvalidator,
   useGameAchievements,
@@ -40,7 +28,6 @@ import {
   ULTRA_RARE,
   ULTRA_VIOLET,
 } from '../lib/achievements';
-import { AMBER, BLUE, GREEN, RED, VIOLET } from '../lib/colors';
 import { daysBetween, humanizeSpan } from '../lib/dateMath';
 import {
   formatByPrecision,
@@ -50,6 +37,7 @@ import {
   formatTime,
 } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
+import { cn } from '@/lib/utils';
 import { OverlayToaster } from './OverlayToaster';
 import type {
   AchievementEntry,
@@ -59,14 +47,18 @@ import type {
 } from '../../../shared/types';
 import type { SessionId } from '../../../shared/entityIds';
 
-// La capa del overlay in-game (OVERLAY.md + decisión 2026-08-07): pantalla
-// completa estilo Steam, con el lenguaje de la casa — el arte del juego dos
-// veces (a sangre completa tras el velo y nítido en la banda de cabecera,
-// como el HeroBanner de la ficha), la barra de HowLongToBeat de tres tramos
-// con su marcador y sus tiles (clonada de HowLongToBeatCard), el catálogo de
-// logros entero con scroll y hover, tu historial en baldosas, la hora — que
-// jugando se pierde — y la nota rápida (§7.2.1) con la MISMA mutación que el
-// toast de cierre.
+// La capa del overlay in-game (OVERLAY.md + rediseño Fósforo, estados §8):
+// un HUD COMPACTO arriba a la derecha sobre el juego, que sigue viéndose. El
+// panel lleva el tiempo de la sesión en grande y dos pestañas:
+//   · Session: la nota rápida (§7.2.1, con la MISMA mutación que el toast de
+//     cierre) y el catálogo de logros entero, desbloqueados primero.
+//   · History: la barra de HowLongToBeat (clonada de HowLongToBeatCard) y tu
+//     historial con este juego, cada sesión con sus trofeos y su nota.
+// No se pierde nada de la pantalla completa anterior: la hora y el día van en
+// la cabecera del panel, y año, géneros, estado y momentos junto al título.
+// Las dos pestañas se quedan MONTADAS (la oculta con `hidden`): el borrador de
+// la nota, el scroll y las tandas de logros sobreviven al cambio de pestaña, y
+// el coste es el mismo que cuando todo se veía a la vez.
 //
 // ── SINCRONIZACIÓN CON EL MAIN, y por qué así ───────────────────────────
 // El estado de visibilidad vive en el main (§8.3) y aquí se espeja con el
@@ -85,6 +77,11 @@ import type { SessionId } from '../../../shared/entityIds';
 // contenido ajeno, cualquier movimiento vertical parece un error de
 // posición, no una entrada. Steam abre el suyo prácticamente instantáneo.
 //
+// LA VENTANA ES TRANSPARENTE y mide el monitor entero (main/windows/overlay.ts;
+// main.tsx le quita el fondo y el hueco de la TitleBar). Por eso el panel no
+// usa backdrop-filter: dentro de una ventana transparente no hay nada que
+// desenfocar, el juego lo compone Windows por detrás. El panel es casi opaco.
+//
 // MANDO (§6.3): Guía abre/cierra y B cierra, ambos leídos por SDL en el main
 // (ver gamepad.ts) — este componente no sondea nada.
 
@@ -102,25 +99,19 @@ const secondsSince = (since: Date | null): number =>
 // ventana ya oculta no queda nada montado — Regla 1: oculto, coste cero).
 type Phase = 'hidden' | 'open' | 'closing';
 
-// El margen que la pantalla SIEMPRE conserva por arriba y por abajo,
-// pase lo que pase con el contenido — el overlay nunca toca borde a borde.
-// En px y no en vh: un margen relativo a la ventana (que ya es del tamaño
-// del monitor) da lo mismo en la práctica, y en px es un número que se lee
-// y se ajusta sin hacer cuentas.
+// El margen que el panel SIEMPRE conserva respecto a los bordes de la
+// pantalla, pase lo que pase con el contenido — el overlay nunca toca borde a
+// borde. En px y no en vh: la ventana ya es del tamaño del monitor, y en px es
+// un número que se lee y se ajusta sin hacer cuentas.
 const OVERLAY_VERTICAL_MARGIN = 44;
 
-const enterClass = (closing: boolean): string =>
-  closing ? '' : 'animate-in fade-in-0 duration-150';
-
-// Panel de la casa con su veladura de color por sección (el mismo recurso
-// que las filas fijadas del Plan y la cabecera de deuda).
-const panelStyle = (accent: string): React.CSSProperties => ({
-  background: `linear-gradient(135deg, ${accent}10, transparent 52%) #242c31`,
-});
-const PANEL_CLASS = 'rounded-[16px] border border-input shadow-[0_24px_70px_rgba(3,6,7,.65)]';
+// Un título de sección dentro del panel: Barlow semibold en Bone, con su dato
+// a la derecha en Dust.
+const sectionTitleClass = 'text-small font-semibold text-bone';
+const sectionMetaClass = 'ml-auto text-micro text-dust tabular-nums';
 
 // Los colores de los tres tramos — LOS MISMOS de HowLongToBeatCard, que es
-// lo que las hace la misma pieza.
+// lo que las hace la misma pieza (Tube, Tube hi y Phosphor).
 const HLTB_MAIN = '#5fd3e0';
 const HLTB_EXTRA = '#8ce4ee';
 const HLTB_COMPLETIONIST = '#ffb347';
@@ -152,43 +143,21 @@ const TIER_ORDER: TierKey[] = ['main', 'extra', 'completionist'];
 const tierReached = (reachedTier: TierKey | null, key: TierKey): boolean =>
   reachedTier !== null && TIER_ORDER.indexOf(reachedTier) >= TIER_ORDER.indexOf(key);
 
-// El chip de icono de las cabeceras — idéntico al de PlanSectionHeading.
-const SectionIcon = ({
-  icon: Icon,
-  color,
-}: {
-  icon: LucideIcon;
-  color: string;
-}): React.JSX.Element => (
-  <span
-    className="flex h-6 w-6 flex-none items-center justify-center rounded-lg"
-    style={{ background: `${color}1c`, border: `1px solid ${color}33` }}
-  >
-    <Icon size={12} style={{ color }} />
-  </span>
-);
-
 const Key = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <kbd className="rounded-[6px] border border-line-strong bg-bone/[0.08] px-1.5 py-0.5 text-micro font-bold text-bone">
-    {children}
-  </kbd>
+  <kbd className={kbdClass}>{children}</kbd>
 );
 
 // Un momento que está pasando AHORA (§7.2.3): celebratorio y sin interrumpir.
+// Phosphor tenue, como las cifras clave de Fósforo.
 const MomentChip = ({
-  icon: Icon,
-  color,
   label,
+  icon: Icon,
 }: {
-  icon: LucideIcon;
-  color: string;
   label: string;
+  icon: typeof Flame;
 }): React.JSX.Element => (
-  <span
-    className="flex items-center gap-1.75 rounded-full border px-3 py-1.25 text-[11.5px] font-bold"
-    style={{ borderColor: `${color}45`, background: `${color}14`, color }}
-  >
-    <Icon size={12} className="flex-none" />
+  <span className="flex items-center gap-1.5 rounded-sm border border-phosphor/35 bg-phosphor-tint px-2 py-0.5 text-micro font-semibold text-phosphor">
+    <Icon aria-hidden size={12} className="flex-none" />
     {label}
   </span>
 );
@@ -216,12 +185,12 @@ const TierTile = ({
     <div
       onMouseEnter={() => onHover(tierKey)}
       onMouseLeave={() => onHover(null)}
-      className="flex-1 rounded-[10px] border px-2 py-2 text-center transition-[opacity,box-shadow,border-color,background-color] duration-150"
+      className="flex-1 rounded-sm border px-1.5 py-2 text-center transition-[opacity,box-shadow,border-color,background-color] duration-150"
       style={{
         opacity: dimmed ? 0.4 : 1,
         ...(reached || hovered
           ? { borderColor: `${color}5c`, background: `${color}17` }
-          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }),
+          : { borderColor: 'var(--color-line)', background: 'var(--color-inset)' }),
         ...(hovered ? { boxShadow: `0 0 0 1px ${color}59, 0 0 14px ${color}33` } : {}),
       }}
     >
@@ -229,18 +198,18 @@ const TierTile = ({
         {reached ? (
           <Check size={10} color={color} strokeWidth={3.5} />
         ) : (
-          <span className="h-2 w-2 flex-none rounded-[2px]" style={{ background: color }} />
+          <span className="h-2 w-2 flex-none rounded-xs" style={{ background: color }} />
         )}
         <span
-          className="text-micro font-bold tracking-[.06em] whitespace-nowrap"
-          style={{ color: reached || hovered ? color : 'var(--muted-foreground)' }}
+          className="text-micro font-semibold whitespace-nowrap"
+          style={{ color: reached || hovered ? color : 'var(--color-dust)' }}
         >
           {TIER_LABEL[tierKey]}
         </span>
       </div>
       <div
-        className="text-[13.5px] font-extrabold tabular-nums"
-        style={{ color: reached || hovered ? color : 'var(--foreground)' }}
+        className="font-display text-figure font-bold tabular-nums"
+        style={{ color: reached || hovered ? color : 'var(--color-bone)' }}
       >
         {value}
       </div>
@@ -253,11 +222,9 @@ const TierTile = ({
 const HltbPanel = ({
   game,
   markerHours,
-  closing,
 }: {
   game: GameListItem;
   markerHours: number;
-  closing: boolean;
 }): React.JSX.Element => {
   const [hoveredTier, setHoveredTier] = useState<TierKey | null>(null);
   const main = game.hltbMain ?? 0;
@@ -267,16 +234,12 @@ const HltbPanel = ({
 
   if (!hasData) {
     return (
-      <div
-        className={`${PANEL_CLASS} flex items-center gap-2.5 px-5.5 py-3.5 ${enterClass(closing)}`}
-        style={panelStyle(HLTB_MAIN)}
-      >
-        <SectionIcon icon={Hourglass} color={HLTB_MAIN} />
-        <span className="text-[13.5px] font-bold text-foreground">How long to beat</span>
-        <span className="text-[11.5px] text-muted-foreground">
-          no confident match for this one · {formatHours(markerHours)} played and counting
-        </span>
-      </div>
+      <section className="flex-none border-b border-line px-4 py-3.5">
+        <div className={sectionTitleClass}>How long to beat</div>
+        <p className="mt-1 text-micro text-dust">
+          No confident match for this one · {formatHours(markerHours)} played and counting
+        </p>
+      </section>
     );
   }
 
@@ -307,23 +270,19 @@ const HltbPanel = ({
   const nextTier = tiers.find((tier) => tier.threshold > markerHours) ?? null;
 
   return (
-    <div
-      className={`${PANEL_CLASS} px-5.5 py-4.5 ${enterClass(closing)}`}
-      style={panelStyle(HLTB_MAIN)}
-    >
-      <div className="flex items-center gap-2">
-        <SectionIcon icon={Hourglass} color={HLTB_MAIN} />
-        <span className="text-[13.5px] font-bold text-foreground">How long to beat</span>
-        <span className="ml-auto text-[11px] font-semibold text-muted-foreground tabular-nums">
+    <section className="flex-none border-b border-line px-4 pt-3.5 pb-4">
+      <div className="flex items-baseline gap-2">
+        <span className={sectionTitleClass}>How long to beat</span>
+        <span className={sectionMetaClass}>
           {nextTier ? (
             <>
-              <span style={{ color: TIER_COLOR[nextTier.key] }}>
+              <span className="font-semibold" style={{ color: TIER_COLOR[nextTier.key] }}>
                 {formatHours(Math.max(0, nextTier.threshold - markerHours))}
               </span>{' '}
               to {TIER_LABEL[nextTier.key]}
             </>
           ) : (
-            <span style={{ color: HLTB_COMPLETIONIST }}>everything reached</span>
+            <span className="font-semibold text-phosphor">everything reached</span>
           )}
         </span>
       </div>
@@ -333,33 +292,24 @@ const HltbPanel = ({
           tramos creciendo en cadena de izquierda a derecha. */}
       <div className="relative mt-7 mb-1">
         <div
-          className="absolute -top-5 rounded-md border border-input px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
+          className="absolute -top-5.5 z-2 rounded-sm border border-line-strong bg-raised px-1.5 py-px text-micro font-semibold whitespace-nowrap text-bone tabular-nums shadow-lift motion-reduce:animate-none"
           style={{
             left: `${markerPct}%`,
-            background: '#1f272b',
-            animation: 'afterplay-drop-in 420ms ease-out 380ms both',
             // Los tramos llevan transform (su crecido) y eso crea contexto de
             // apilado: sin z-index explícito, el marcador se pintaba debajo.
-            zIndex: 2,
+            animation: 'afterplay-drop-in 420ms ease-out 380ms both',
           }}
         >
           {formatHours(markerHours)}
         </div>
         <div
-          className="absolute -top-1 rounded-sm bg-bone"
+          className="absolute -top-1 z-2 h-5.5 w-0.75 rounded-xs bg-bone shadow-[0_0_0_2px_rgb(12_16_18/.85),0_0_12px_rgb(233_228_216/.5)] motion-reduce:animate-none"
           style={{
             left: `${markerPct}%`,
-            width: 3,
-            height: 22,
-            boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',
             animation: 'afterplay-drop-in 420ms ease-out 380ms both',
-            zIndex: 2,
           }}
         />
-        <div
-          className="flex h-3.5 overflow-hidden rounded-[5px] bg-bone/5"
-          style={{ boxShadow: 'inset 0 1px 3px rgba(3,6,7,.4)' }}
-        >
+        <div className="flex h-3 overflow-hidden rounded-xs bg-inset shadow-[inset_0_1px_3px_rgb(3_6_7/.4)]">
           {(
             [
               { key: 'main' as const, width: segMain, background: HLTB_MAIN },
@@ -374,11 +324,10 @@ const HltbPanel = ({
                 key={segment.key}
                 onMouseEnter={() => setHoveredTier(segment.key)}
                 onMouseLeave={() => setHoveredTier(null)}
-                className="transition-[opacity,filter] duration-150"
+                className="origin-left transition-[opacity,filter] duration-150 motion-reduce:animate-none"
                 style={{
                   width: `${segment.width}%`,
                   background: segment.background,
-                  transformOrigin: 'left',
                   opacity: isDimmed ? 0.4 : 1,
                   filter: isHovered ? 'brightness(1.25)' : 'none',
                   boxShadow: isHovered ? `inset 0 0 10px ${segment.background}99` : 'none',
@@ -390,7 +339,7 @@ const HltbPanel = ({
         </div>
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex gap-1.5">
         {(['main', 'extra', 'completionist'] as TierKey[]).map((key) => {
           const threshold = key === 'main' ? main : key === 'extra' ? extra : completionist;
           return (
@@ -406,7 +355,7 @@ const HltbPanel = ({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 };
 
@@ -450,24 +399,25 @@ const AchievementRow = memo(
       // con altura acotada, un hijo se encoge antes que desbordar — y una fila
       // de logro estrujada pierde su icono y su texto en vez de provocar el
       // scroll que toca.
-      <div className="group -mx-2 flex flex-none items-center gap-2.75 rounded-[10px] px-2 py-1.75 transition-colors duration-150 hover:bg-bone/[0.05]">
+      <div className="group -mx-2 flex flex-none items-center gap-2.5 rounded-sm px-2 py-1.5 transition-colors duration-150 hover:bg-bone/5">
         <span
-          className={`relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-bone/[0.04] transition-[opacity,filter] duration-150 ${
-            unlocked ? '' : 'opacity-55 grayscale group-hover:opacity-80'
-          }`}
+          className={cn(
+            'relative size-8.5 flex-none overflow-hidden rounded-sm bg-inset transition-[opacity,filter] duration-150',
+            !unlocked && 'opacity-55 grayscale group-hover:opacity-80',
+          )}
           style={{ boxShadow: iconShadow }}
         >
           {src ? (
             <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
           ) : (
             <span className="flex h-full w-full items-center justify-center">
-              <Trophy size={14} className="text-muted-foreground/40" />
+              <Trophy size={14} className="text-dust/50" />
             </span>
           )}
           {unlocked && (
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-[8px]"
+              className="pointer-events-none absolute inset-0 rounded-sm"
               style={{
                 background: `radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,${ultra ? 0.28 : rare ? 0.22 : 0.14}), transparent 46%)`,
               }}
@@ -476,20 +426,21 @@ const AchievementRow = memo(
         </span>
         <span className="min-w-0 flex-1">
           <span
-            className={`block truncate text-[12.5px] font-semibold ${
-              unlocked ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground/80'
-            }`}
+            className={cn(
+              'block truncate text-small font-semibold',
+              unlocked ? 'text-bone' : 'text-dust group-hover:text-bone/80',
+            )}
           >
             {entry.displayName}
           </span>
-          <span className="block truncate text-micro text-muted-foreground/60">
+          <span className="block truncate text-micro text-dust">
             {entry.description ?? (entry.hidden ? 'Hidden achievement' : '')}
           </span>
         </span>
         {entry.globalPercent !== null && (
           <span
-            className="flex-none text-[11px] font-bold tabular-nums"
-            style={{ color: unlocked ? accent : 'var(--muted-foreground)' }}
+            className="flex-none font-display text-[17px] leading-none font-bold tabular-nums"
+            style={{ color: unlocked ? accent : 'var(--color-dust)' }}
           >
             {percentLabel(entry.globalPercent)}
           </span>
@@ -515,10 +466,10 @@ AchievementRow.displayName = 'AchievementRow';
 // primer pintado baja a 14-29 ms y las 1.300 filas restantes entran por los
 // huecos de los frames siguientes, sin quitarle uno entero a nadie.
 //
-// 28 de salida: en el panel se ven ~8 filas (mide unos 380px y la fila ~48px),
-// así que son tres pantallazos y medio de colchón — ni un scroll rápido
-// alcanza a la cola de tandas. Las tandas son las mismas 24 que el Plan: es lo
-// que cabe holgado en un respiro de frame, medido allí.
+// 28 de salida: en el panel se ven ~8 filas, así que son tres pantallazos y
+// medio de colchón — ni un scroll rápido alcanza a la cola de tandas. Las
+// tandas son las mismas 24 que el Plan: es lo que cabe holgado en un respiro
+// de frame, medido allí.
 const INITIAL_ACHIEVEMENT_ROWS = 28;
 const ACHIEVEMENT_ROWS_PER_BATCH = 24;
 const ACHIEVEMENT_BATCH_TIMEOUT_MS = 120;
@@ -549,17 +500,15 @@ const scheduleIdle = (run: () => void): (() => void) => {
 // dentro, cada tic del cronómetro reconstruía las 1.328 filas de Payday 2:
 // 23 ms de React por segundo, para siempre, sobre el juego. Fuera, el bloque
 // del padre se rehace igual pero este componente tiene su PROPIO caché, sus
-// dependencias (`entries`, `closing`) no cambian con el reloj, devuelve el
-// mismo árbol y React se para ahí: 23 ms → 0,8 ms por tic.
+// dependencias (`entries`) no cambian con el reloj, devuelve el mismo árbol y
+// React se para ahí: 23 ms → 0,8 ms por tic.
 //
 // El día que alguien lo vuelva a meter en línea "para leerlo todo junto", el
 // coste vuelve entero y sin avisar.
 const AchievementsPanel = ({
   entries,
-  closing,
 }: {
   entries: AchievementEntry[];
-  closing: boolean;
 }): React.JSX.Element | null => {
   const [rowLimit, setRowLimit] = useState(INITIAL_ACHIEVEMENT_ROWS);
 
@@ -612,53 +561,34 @@ const AchievementsPanel = ({
   if (entries.length === 0) return null;
 
   return (
-    <div
-      className={`${PANEL_CLASS} flex min-h-0 flex-1 flex-col px-5.5 py-4.5 ${enterClass(closing)}`}
-      style={panelStyle(AMBER)}
-    >
-      {/* La cifra RESPIRA: el conteo iba pegado al porcentaje en
-          un solo bloque ("6/24 · 25%") y se leía como un número
-          raro. Ahora el porcentaje manda en grande con el acento, y
-          el conteo va debajo en pequeño — el mismo reparto
-          cifra-gorda/rótulo que las cards de Stats. */}
-      <div className="flex flex-none items-start gap-2">
-        <SectionIcon icon={Trophy} color={AMBER} />
-        <span className="text-[13.5px] font-bold text-foreground">Achievements</span>
-        <span className="ml-auto text-right">
-          <span
-            className="block text-[17px] leading-none font-extrabold tabular-nums"
-            style={{ color: AMBER }}
-          >
-            {achievementsPercent}%
-          </span>
-          <span className="mt-1 block text-micro font-semibold text-muted-foreground tabular-nums">
-            {unlocked.length} of {entries.length}
-            {rareCount > 0 && <span style={{ color: AMBER }}> · {rareCount} rare</span>}
-            {ultraCount > 0 && <span style={{ color: ULTRA_VIOLET }}> · {ultraCount} ultra</span>}
-          </span>
+    <section className="flex min-h-48 flex-1 flex-col px-4 pt-3.5">
+      {/* El porcentaje manda en Big Shoulders con el acento, y el conteo va a
+          su lado en pequeño — el mismo reparto cifra-gorda/rótulo que Stats. */}
+      <div className="flex flex-none items-baseline gap-2">
+        <span className={sectionTitleClass}>Achievements</span>
+        <span className="ml-auto text-micro text-dust tabular-nums">
+          {unlocked.length} of {entries.length}
+          {rareCount > 0 && <span className="text-phosphor"> · {rareCount} rare</span>}
+          {ultraCount > 0 && <span style={{ color: ULTRA_VIOLET }}> · {ultraCount} ultra</span>}
+        </span>
+        <span className="font-display text-figure font-bold text-phosphor tabular-nums">
+          {achievementsPercent}%
         </span>
       </div>
-      <div className="mt-2.5 h-1.5 flex-none overflow-hidden rounded-full bg-bone/[0.06]">
+      <div className="mt-2 h-1 flex-none overflow-hidden rounded-full bg-inset">
         <div
-          className="h-full rounded-full transition-[width] duration-700 ease-out"
-          style={{
-            width: `${achievementsPercent}%`,
-            background: `linear-gradient(90deg, ${AMBER}88, ${AMBER})`,
-          }}
+          className="h-full rounded-full bg-phosphor shadow-glow-bar transition-[width] duration-700 ease-out motion-reduce:transition-none"
+          style={{ width: `${achievementsPercent}%` }}
         />
       </div>
 
-      {/* El catálogo ENTERO. Antes tenía un max-h fijo (264px);
-          ahora el panel ENTERO crece con flex-1 hasta el hueco real
-          de la columna ("hazlo más alto"), y este scroll interno es
-          quien absorbe lo que sobre por encima de esa altura. */}
-      <div className="-mr-2 mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
+      {/* El catálogo ENTERO, con su propio scroll: el panel crece con flex-1
+          hasta el hueco real de la pestaña y este scroll absorbe el resto. */}
+      <div className="-mr-2 mt-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 pb-3">
         {unlocked.length > 0 && (
           <>
-            <div className="text-micro font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
-              Unlocked · {unlocked.length}
-            </div>
-            <div className="mt-1.5 mb-3 flex flex-col">
+            <div className="text-micro font-semibold text-dust">Unlocked · {unlocked.length}</div>
+            <div className="mt-1 mb-3 flex flex-col">
               {shownUnlocked.map((entry) => (
                 <AchievementRow key={entry.id} entry={entry} unlocked />
               ))}
@@ -667,10 +597,10 @@ const AchievementsPanel = ({
         )}
         {locked.length > 0 && (
           <>
-            <div className="text-micro font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
+            <div className="text-micro font-semibold text-dust">
               Still locked · {locked.length} — most common first
             </div>
-            <div className="mt-1.5 flex flex-col">
+            <div className="mt-1 flex flex-col">
               {shownLocked.map((entry) => (
                 <AchievementRow key={entry.id} entry={entry} unlocked={false} />
               ))}
@@ -678,40 +608,28 @@ const AchievementsPanel = ({
           </>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 
-// Una cifra del resumen, en baldosa TEÑIDA de su color — el molde exacto de
-// los DebtTile de la cabecera del Plan y de las cards de Stats: chip de
-// icono diminuto, rótulo con tracking, y la cifra gorda en el acento.
+// Una cifra del historial: rótulo en Dust y la cifra en Big Shoulders. La de
+// la sesión más larga va en Phosphor (es la cifra clave del bloque).
 const HistoryStat = ({
-  icon: Icon,
-  color,
   label,
   value,
+  accent = false,
 }: {
-  icon: LucideIcon;
-  color: string;
   label: string;
   value: string;
+  accent?: boolean;
 }): React.JSX.Element => (
-  <div
-    className="min-w-0 rounded-[12px] border px-3 py-2.5"
-    style={{ borderColor: `${color}2e`, background: `${color}0f` }}
-  >
-    <div className="flex items-center gap-1.25">
-      <Icon size={10} style={{ color: `${color}c4` }} className="flex-none" />
-      <span
-        className="text-micro font-bold tracking-[.11em] uppercase"
-        style={{ color: `${color}c4` }}
-      >
-        {label}
-      </span>
-    </div>
+  <div className="min-w-0 rounded-sm border border-line bg-inset px-2.5 py-2">
+    <div className="text-micro text-dust">{label}</div>
     <div
-      className="mt-1 truncate text-[19px] leading-none font-extrabold tabular-nums"
-      style={{ color }}
+      className={cn(
+        'mt-1 font-display text-figure font-bold break-words tabular-nums',
+        accent ? 'text-phosphor' : 'text-bone',
+      )}
     >
       {value}
     </div>
@@ -722,15 +640,12 @@ const HistoryStat = ({
 // SessionRow y su sitio de uso.
 const NO_UNLOCKS: SessionAchievementEntry[] = [];
 
-// Una sesión del historial — CLON literal de SessionRow en
-// SessionHistoryList.tsx (la ficha del juego): mismas clases, mismos
-// tamaños, mismos colores, misma pieza SessionAchievements y el mismo
-// SessionNote por fila. No es "parecido": es el mismo dibujo, para que
-// saltar de la ficha al overlay no obligue a re-aprender cómo se lee una
-// fila. Los únicos cambios son de DATOS (SessionWithGame trae gameId/title/
-// coverUrl de más, que aquí no hacen falta) y la ausencia del borrar/
-// destellar dorado del aviso de cierre, que no tienen sentido sobre el
-// juego en marcha.
+// Una sesión del historial — el mismo dibujo que SessionRow en
+// SessionHistoryList.tsx (la ficha del juego), en el ancho del HUD: misma
+// pieza SessionAchievements y el mismo SessionNote por fila, para que saltar
+// de la ficha al overlay no obligue a re-aprender cómo se lee una fila. Sin el
+// borrar ni el destello dorado del aviso de cierre, que no tienen sentido
+// sobre el juego en marcha.
 //
 // Y en memo(), por el segundo que pasa: `elapsed` cambia cada tic y hasta
 // ahora entraba en TODAS las filas (`liveSeconds`), así que el historial
@@ -775,37 +690,26 @@ const SessionRow = memo(
         // nunca, porque el contenido "cabía" a base de estrujarse. Con
         // flex-none cada sesión conserva su alto natural y lo que no cabe lo
         // resuelve el scroll del contenedor, que es lo que se quería.
-        className="group/session relative flex flex-none items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
-        style={
-          isLive
-            ? { borderColor: 'rgba(255,179,71,.4)', background: 'rgba(255,179,71,.06)' }
-            : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
-        }
+        className={cn(
+          'group/session relative flex flex-none items-start gap-3 overflow-hidden rounded-md border px-3 py-2.5',
+          isLive ? 'border-phosphor/40 bg-phosphor-tint' : 'border-line bg-inset/60',
+        )}
       >
         {fillPct > 0 && (
           <div
-            className="pointer-events-none absolute inset-y-0 left-0"
-            style={{
-              width: `${fillPct}%`,
-              background: 'linear-gradient(90deg, rgba(233,228,216,.05), rgba(233,228,216,.01))',
-              borderRight: '1.5px solid rgba(233,228,216,.14)',
-            }}
+            className="pointer-events-none absolute inset-y-0 left-0 border-r-[1.5px] border-bone/14 bg-linear-to-r from-bone/5 to-bone/1"
+            style={{ width: `${fillPct}%` }}
           />
         )}
-        <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-bone/5">
-          <Timer size={15} className="text-muted-foreground" />
+        <div className="relative z-1 mt-0.5 flex size-7 flex-none items-center justify-center rounded-sm bg-bone/5">
+          <Timer aria-hidden size={14} className={isLive ? 'text-phosphor' : 'text-dust'} />
         </div>
         <div className="relative z-1 min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold text-foreground">
+          <div className="text-small font-semibold text-bone">
             {formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}
+            {endTime && <span className="font-normal text-dust"> → {endTime}</span>}
           </div>
-          {endTime && (
-            <div className="mt-0.25 text-[11.5px] text-muted-foreground/70">→ {endTime}</div>
-          )}
-          <div
-            className="mt-0.5 text-xs"
-            style={{ color: isLive ? '#ffb347' : 'var(--muted-foreground)' }}
-          >
+          <div className={cn('mt-0.5 text-micro', isLive ? 'text-phosphor' : 'text-dust')}>
             {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
           </div>
 
@@ -814,27 +718,25 @@ const SessionRow = memo(
           <SessionAchievements entries={achievements} />
 
           {/* El diario de ESTA sesión, editable aquí igual que en la ficha —
-            no solo la de ahora mismo (esa la cubre el panel "Where are you?"
-            grande de al lado): cualquier sesión pasada de este juego.
+            no solo la de ahora mismo (esa la cubre la nota rápida de la
+            pestaña Session): cualquier sesión pasada de este juego.
 
             key con la propia nota, y no es decorativo: SessionNote inicializa
             su borrador UNA vez con useState(note ?? '') y no vuelve a
             sincronizarlo con el prop nunca. Aquí —único sitio de la app donde
-            DOS editores de la MISMA nota conviven en pantalla: este y el
-            panel grande, porque la fila viva ES openSession— escribías la
-            nota arriba, pulsabas el lapicero de la fila para releerla y el
-            input se abría VACÍO (el '' del montaje); confirmar con Enter
-            mandaba note:'' y BORRABA lo que acababas de escribir. Cambiar la
-            nota cambia la key, así que el editor se remonta leyendo el valor
-            de verdad.
+            DOS editores de la MISMA nota conviven: este y la nota rápida,
+            porque la fila viva ES openSession— escribías la nota arriba,
+            pulsabas el lapicero de la fila para releerla y el input se abría
+            VACÍO (el '' del montaje); confirmar con Enter mandaba note:'' y
+            BORRABA lo que acababas de escribir. Cambiar la nota cambia la key,
+            así que el editor se remonta leyendo el valor de verdad.
 
             El precio, que no es gratis: remontar por VALOR también tira un
             borrador a medias. Si abres el lapicero de esta fila, escribes SIN
-            confirmar y la nota cambia por fuera —guardando desde el panel
-            grande de al lado, o por el push del watcher cuando la escribe la
-            ventana principal—, la key cambia, el editor se remonta y tu texto a
-            medio escribir desaparece con él. Es estrecho (hay que abandonar el
-            editor abierto para ir a guardar arriba) y se acepta a sabiendas:
+            confirmar y la nota cambia por fuera —guardando desde la nota
+            rápida, o por el push del watcher cuando la escribe la ventana
+            principal—, la key cambia, el editor se remonta y tu texto a medio
+            escribir desaparece con él. Es estrecho y se acepta a sabiendas:
             perder cuatro palabras a medias duele menos que mandar note:'' y
             BORRAR la nota entera, que es lo que pasaba antes.
 
@@ -844,11 +746,13 @@ const SessionRow = memo(
             key es una tirita local al overlay, no la cura. */}
           <SessionNote key={session.note ?? ''} sessionId={session.id} note={session.note} />
         </div>
-        <div className="relative z-1 flex flex-none items-center gap-1.5">
-          {isRecord && <Flame size={13} color="#ff5e57" />}
+        <div className="relative z-1 flex flex-none items-center gap-1.5 pt-0.5">
+          {isRecord && <Flame aria-label="Your longest session" size={13} className="text-live" />}
           <span
-            className="text-[13px] font-semibold tabular-nums"
-            style={{ color: isLive ? '#ffb347' : 'var(--foreground)' }}
+            className={cn(
+              'font-display text-figure font-bold tabular-nums',
+              isLive ? 'text-phosphor' : 'text-bone',
+            )}
           >
             {formatElapsed(durationSec)}
           </span>
@@ -858,6 +762,58 @@ const SessionRow = memo(
   },
 );
 SessionRow.displayName = 'SessionRow';
+
+// Las dos pestañas del panel. El estado vive AQUÍ, en un componente que está
+// dentro del árbol con key={openCount}: cada apertura del telón lo remonta y
+// el HUD vuelve siempre a Session, donde está la nota que recibe el foco.
+type HudTab = 'session' | 'history';
+const HUD_TABS_ID = 'overlay-hud';
+
+const HudTabs = ({
+  sessionCount,
+  session,
+  history,
+}: {
+  sessionCount: number;
+  session: React.ReactNode;
+  history: React.ReactNode;
+}): React.JSX.Element => {
+  const [tab, setTab] = useState<HudTab>('session');
+  const panelClass = 'min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain';
+  return (
+    <>
+      <Tabs<HudTab>
+        items={[
+          { key: 'session', label: 'Session' },
+          { key: 'history', label: 'History', count: String(sessionCount) },
+        ]}
+        value={tab}
+        onChange={setTab}
+        label="Overlay sections"
+        idPrefix={HUD_TABS_ID}
+        className="flex-none border-b border-line px-1.5"
+      />
+      <div
+        role="tabpanel"
+        id={tabPanelId(HUD_TABS_ID, 'session')}
+        aria-labelledby={tabId(HUD_TABS_ID, 'session')}
+        hidden={tab !== 'session'}
+        className={cn(panelClass, tab === 'session' ? 'flex' : 'hidden')}
+      >
+        {session}
+      </div>
+      <div
+        role="tabpanel"
+        id={tabPanelId(HUD_TABS_ID, 'history')}
+        aria-labelledby={tabId(HUD_TABS_ID, 'history')}
+        hidden={tab !== 'history'}
+        className={cn(panelClass, tab === 'history' ? 'flex' : 'hidden')}
+      >
+        {history}
+      </div>
+    </>
+  );
+};
 
 export const OverlayHud = (): React.JSX.Element | null => {
   const queryClient = useQueryClient();
@@ -1202,6 +1158,9 @@ export const OverlayHud = (): React.JSX.Element | null => {
     );
   };
 
+  // Lo que se ve de la sesión de un vistazo, bajo el cronómetro.
+  const longestSec = Math.max(longestPreviousSec, elapsed);
+
   return (
     <div
       key={openCount}
@@ -1209,365 +1168,297 @@ export const OverlayHud = (): React.JSX.Element | null => {
       onClick={(event) => {
         if (event.target === event.currentTarget) window.api.overlay.dismiss();
       }}
-      className={`relative h-screen w-screen overflow-hidden ${
+      className={cn(
+        'relative h-screen w-screen overflow-hidden',
+        // Un velo que solo oscurece el lado del panel: el juego se sigue
+        // viendo, pero el texto del HUD nunca compite con una escena clara.
+        'bg-[linear-gradient(90deg,transparent_40%,rgb(8_11_12/.5))]',
         closing
           ? 'animate-out fade-out-0 fill-mode-forwards duration-200'
-          : 'animate-in fade-in-0 duration-150'
-      }`}
+          : 'animate-in fade-in-0 duration-150',
+      )}
     >
-      {/* El arte a sangre completa tras el velo — fixed para que no viaje con
-          el scroll, pointer-events-none para que el clic del fondo siga
-          llegando al cierre. */}
-      <div className="pointer-events-none fixed inset-0">
-        {heroSrc ? (
-          <img src={heroSrc} alt="" className="h-full w-full object-cover" />
-        ) : coverSrc ? (
-          <img src={coverSrc} alt="" className="h-full w-full scale-110 object-cover blur-2xl" />
-        ) : null}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(7,9,8,.92) 0%, rgba(7,9,8,.80) 34%, rgba(7,9,8,.84) 66%, rgba(7,9,8,.95) 100%)',
-          }}
-        />
-      </div>
-
-      {/* CONTENEDOR ACOTADO: nunca más alto que la pantalla menos un margen
-          fijo (OVERLAY_VERTICAL_MARGIN arriba y abajo, con my- y no padding —
-          así el margen se descuenta de fuera, no de dentro). El fondo de
-          arriba SÍ cubre la pantalla entera (fixed inset-0); lo que queda a
-          raya es solo el contenido interactivo. Es un flex-col con altura
-          DEFINIDA: los bloques fijos (marquesina, hero, HLTB, pie) llevan
-          flex-none, y el único tramo elástico es la rejilla de logros +
-          sesiones (flex-1 min-h-0) — crece hasta el hueco que queda y ahí
-          para; lo que no cabe lo absorben los scrolls INTERNOS de esos dos
-          paneles (ver grid-rows-[1fr] + min-h-0 en cascada más abajo), nunca
-          un scroll de la ventana entera. */}
-      <div
-        className="relative mx-auto flex w-[920px] max-w-[94vw] flex-col"
+      {/* EL PANEL ACOTADO: nunca más alto que la pantalla menos un margen fijo
+          arriba y abajo (OVERLAY_VERTICAL_MARGIN). Es un flex-col con altura
+          máxima: cabecera, juego, cronómetro y pie llevan flex-none, y el
+          único tramo elástico es la pestaña activa, que hace scroll por dentro
+          — nunca un scroll de la ventana entera. */}
+      <aside
+        aria-label={`Afterplay overlay: ${live.title}`}
+        className={cn(
+          'absolute right-11 flex w-[440px] max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-md',
+          'border border-line-strong bg-[rgb(16_20_22/.94)] shadow-modal',
+        )}
         style={{
-          height: `calc(100vh - ${OVERLAY_VERTICAL_MARGIN * 2}px)`,
-          marginBlock: OVERLAY_VERTICAL_MARGIN,
+          top: OVERLAY_VERTICAL_MARGIN,
+          maxHeight: `calc(100vh - ${OVERLAY_VERTICAL_MARGIN * 2}px)`,
         }}
       >
-        {/* La marquesina: quién firma, la hora y el día. */}
-        <div className={`mb-4 flex flex-none items-end justify-between ${enterClass(closing)}`}>
-          <div className="flex items-center gap-2 pb-1">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: RED, animation: 'afterplay-pulse-dot 1.4s infinite' }}
-            />
-            <span className="text-[11px] font-extrabold tracking-[.28em] text-dust">AFTERPLAY</span>
-          </div>
-          <div className="text-right">
-            <div className="text-[28px] leading-none font-display font-bold text-bone tabular-nums drop-shadow-[0_2px_10px_rgba(3,6,7,.7)]">
-              {formatTime(now, timeFormat)}
-            </div>
-            <div className="mt-1 text-micro font-semibold text-dust">
-              {now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-            </div>
-          </div>
-        </div>
+        {/* Líneas de escaneo muy tenues, la textura de Fósforo. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-(image:--scan) opacity-60"
+        />
 
-        {/* La banda-hero: el arte NÍTIDO dentro de la cabecera, con los dos
-            degradados del HeroBanner de la ficha. */}
-        <div className={`${PANEL_CLASS} relative flex-none overflow-hidden ${enterClass(closing)}`}>
-          <div className="absolute inset-0">
+        {/* Cabecera: la marca y la hora del día, que jugando se pierde. */}
+        <header className="relative flex h-11 flex-none items-center gap-2 border-b border-line px-4">
+          <MonitorPlay aria-hidden size={16} className="flex-none text-phosphor" />
+          <span className="text-small font-medium text-dust">Afterplay</span>
+          <span className="ml-auto text-right text-micro text-dust tabular-nums">
+            <span className="font-semibold text-bone">{formatTime(now, timeFormat)}</span>
+            {' · '}
+            {now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </span>
+        </header>
+
+        {/* El juego: carátula, título y datos, con el arte del juego muy
+            apagado detrás (el mismo recurso que la cabecera de la ficha). */}
+        <div className="relative flex-none overflow-hidden">
+          <div aria-hidden className="pointer-events-none absolute inset-0">
             {heroSrc ? (
-              <img src={heroSrc} alt="" className="h-full w-full object-cover" />
+              <img src={heroSrc} alt="" className="h-full w-full object-cover opacity-30" />
             ) : coverSrc ? (
-              <img src={coverSrc} alt="" className="h-full w-full scale-110 object-cover blur-xl" />
-            ) : (
-              <div className="h-full w-full" style={panelStyle(GREEN)} />
-            )}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  'linear-gradient(180deg, rgba(12,16,18,.30) 0%, rgba(12,16,18,.62) 55%, rgba(12,16,18,.90) 100%)',
-              }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{ background: 'linear-gradient(90deg, rgba(12,16,18,.78), transparent 48%)' }}
-            />
+              <img
+                src={coverSrc}
+                alt=""
+                className="h-full w-full scale-110 object-cover opacity-30 blur-xl"
+              />
+            ) : null}
+            <div className="absolute inset-0 bg-linear-to-b from-[rgb(16_20_22/.55)] to-[rgb(16_20_22/.97)]" />
           </div>
 
-          <div className="relative flex items-center gap-4.5 px-6 py-5">
+          <div className="relative flex items-start gap-3 px-4 pt-3.5">
             <GameCover
               url={live.coverUrl}
-              className="h-[110px] w-[78px] flex-none overflow-hidden rounded-[10px] border border-line-strong shadow-[0_10px_30px_rgba(3,6,7,.6)]"
-              iconSize={22}
+              className="h-[62px] w-11 flex-none overflow-hidden rounded-sm border border-line-strong shadow-lift"
+              iconSize={16}
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[21px] font-extrabold tracking-[-.01em] text-bone drop-shadow-[0_1px_4px_rgba(3,6,7,.8)]">
-                {live.title}
+              <div className="text-lead font-semibold break-words text-bone">{live.title}</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-micro text-dust">
+                <span
+                  aria-hidden
+                  className="size-2 flex-none rounded-full bg-live animate-led-live motion-reduce:animate-none"
+                />
+                <span className="tabular-nums">
+                  Session since {live.liveSince ? formatTime(live.liveSince, timeFormat) : '—'}
+                </span>
               </div>
-              <div className="mt-1.5 flex items-center gap-2 text-[11.5px] font-semibold text-dust">
+              <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro text-dust">
                 {live.releaseYear !== null && (
                   <span className="tabular-nums">{live.releaseYear}</span>
                 )}
                 {live.genres && live.genres.length > 0 && (
                   <>
-                    <span className="text-bone/30">·</span>
-                    <span className="truncate drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
-                      {live.genres.slice(0, 3).join(' · ')}
-                    </span>
+                    {live.releaseYear !== null && <span className="text-bone/30">·</span>}
+                    <span>{live.genres.slice(0, 3).join(' · ')}</span>
                   </>
                 )}
                 {status && (
                   <span
-                    className="ml-1 flex items-center gap-1.25 rounded-[7px] border px-2 py-0.5 text-micro font-bold"
+                    className="rounded-sm border px-1.5 py-px text-micro font-semibold"
                     style={{
                       color: status.color,
                       borderColor: `${status.color}55`,
-                      background: 'rgba(8,11,12,.55)',
+                      background: 'rgb(8 11 12 / .55)',
                     }}
                   >
                     {status.label}
                   </span>
                 )}
               </div>
-              {(isLongestSession || crossedMainStory) && (
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {isLongestSession && (
-                    <MomentChip
-                      icon={Flame}
-                      color={AMBER}
-                      label="Your longest session with this game"
-                    />
-                  )}
-                  {crossedMainStory && (
-                    <MomentChip icon={Trophy} color={GREEN} label="Past the main story length" />
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex-none text-right">
-              <div className="flex items-center justify-end gap-2">
-                <span
-                  className="h-2 w-2 flex-none rounded-full"
-                  style={{ background: RED, animation: 'afterplay-pulse-dot 1.4s infinite' }}
-                />
-                <span
-                  className="text-[32px] leading-none font-display font-bold tabular-nums"
-                  style={{ color: GREEN, textShadow: `0 0 28px ${GREEN}66` }}
-                >
-                  {formatElapsed(elapsed)}
-                </span>
-              </div>
-              <div className="mt-1.25 text-[11.5px] font-semibold text-dust drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
-                this session · {formatHours(hoursWithLive)} total
-              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mt-3 flex-none">
-          <HltbPanel game={live} markerHours={hoursWithLive} closing={closing} />
-        </div>
-
-        {/* Dos columnas de ALTURA IGUALADA por CSS grid (self-stretch en el
-            panel derecho, ver más abajo) — antes esa igualación la cobraba
-            la nota, que se estiraba a la altura del stack izquierdo entero
-            (logros + historial) y se quedaba como una caja de texto gigante
-            casi vacía. Ahora es al revés: la nota es COMPACTA y vive en la
-            columna izquierda, encima de los logros; y la columna derecha —
-            liberada — es el LISTADO DE SESIONES, que sí tiene contenido de
-            sobra para llenar el hueco y crece con flex-1 hasta el alto real
-            que el stack izquierdo determine, con su propio scroll interno si
-            se queda corto. */}
-        {/* El ÚNICO tramo elástico de la columna: flex-1 min-h-0 le da la
-            altura exacta que sobra tras marquesina+hero+HLTB+pie, y
-            grid-rows-[1fr] es lo que hace que esa altura se REPARTA a las
-            dos columnas de la rejilla — sin él, una fila "auto" de grid se
-            mide por el contenido y listos, ignorando que el contenedor ya
-            tiene una altura fijada desde fuera. items-stretch (default,
-            explícito para que quede dicho) es lo que hace que ambas columnas
-            LLEGUEN a esa altura en vez de quedarse en la suya propia. */}
-        {/* minmax(0, ·fr) y no ·fr a secas: un track fr tiene el min-content
-            de su contenido como MÍNIMO, y estas dos columnas van llenas de
-            texto con truncate — que es nowrap, o sea que su "mínimo" es el
-            ancho SIN cortar. El caso real que lo destapó (Naiad, primera
-            sesión de la vida): el historial, casi vacío, colapsaba a su
-            mínimo (~300px) y la columna de logros se comía el resto — 600/300
-            en vez del 47/53 pactado, con los tiles truncando ("0h ...",
-            "3 d..."). Con el mínimo a 0 el reparto es el pactado SIEMPRE, y
-            del sobrante se encargan los truncate de dentro, que para eso
-            están. Es exactamente lo que Tailwind pone de serie en sus
-            grid-cols-N (repeat(N, minmax(0, 1fr))), y por este mismo motivo. */}
-        <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] grid-rows-[1fr] items-stretch gap-3">
-          <div className="flex min-h-0 flex-col gap-3">
-            {/* La nota rápida (§7.2.1), COMPACTA: 3 líneas le bastan para
-                "dónde lo dejo" — no necesita ni pretende llenar una columna
-                entera. */}
+          {/* El cronómetro manda: Big Shoulders en Phosphor, 104 px en una
+              pantalla de 1080 y menos en una baja, para dejar sitio a la
+              pestaña. */}
+          <div className="relative px-4 pt-2 pb-3">
             <div
-              className={`${PANEL_CLASS} px-5.5 py-4 ${enterClass(closing)}`}
-              style={panelStyle(BLUE)}
+              className="font-display text-[clamp(64px,11vh,104px)] leading-[0.9] font-bold text-phosphor tabular-nums [text-shadow:0_0_28px_rgb(255_179_71/.35)]"
+              aria-label={`This session: ${formatElapsed(elapsed)}`}
             >
-              <div className="flex items-center gap-2">
-                <SectionIcon icon={Quote} color={BLUE} />
-                <span className="text-[13.5px] font-bold text-foreground">Where are you?</span>
-                <span className="ml-auto text-micro font-semibold text-muted-foreground/60">
-                  saved to this session
-                </span>
-              </div>
-              <textarea
-                ref={noteRef}
-                value={note}
-                rows={3}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  setSavedFlash(false);
-                }}
-                onKeyDown={(event) => {
-                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                    event.preventDefault();
-                    saveNote();
-                  }
-                }}
-                placeholder="Jot it down while it's fresh — where you left off, what to do next…"
-                disabled={!openSession}
-                className="mt-2.5 w-full resize-none rounded-[10px] border border-edge bg-inset px-3 py-2.5 text-[13px] text-foreground transition-colors duration-150 placeholder:text-muted-foreground/50 focus:border-line-hover focus:outline-none disabled:opacity-50"
-              />
-              <div className="mt-2 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-micro text-muted-foreground/60">
-                  <Key>Ctrl</Key>+<Key>Enter</Key> saves
-                </span>
-                <button
-                  type="button"
-                  onClick={saveNote}
-                  disabled={!openSession || draft === null || savingNote}
-                  className="flex items-center gap-1.5 rounded-[9px] px-3.5 py-1.75 text-[12.5px] font-bold text-ink shadow-[0_4px_14px_rgba(255,179,71,0.25)] transition-[opacity,transform,box-shadow] duration-150 hover:brightness-105 active:scale-[.97] disabled:opacity-40 disabled:shadow-none"
-                  style={{ background: `linear-gradient(135deg, ${GREEN}, #e39a2e)` }}
-                >
-                  {savingNote ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : savedFlash ? (
-                    <Check size={13} className="animate-in zoom-in-50 duration-200" />
-                  ) : null}
-                  {savedFlash && draft === null ? 'Saved' : 'Save note'}
-                </button>
-              </div>
+              {formatElapsed(elapsed)}
             </div>
-
-            <AchievementsPanel entries={entries} closing={closing} />
-          </div>
-
-          {/* La columna DERECHA, liberada de la nota: "Your history" con sus
-              tres baldosas arriba y, debajo, el LISTADO ENTERO de sesiones
-              creciendo con flex-1 — self-stretch en el panel hace que tome
-              exactamente el alto del stack izquierdo (nota + logros), y
-              min-h-0 en el propio div de la lista es lo que permite que ese
-              flex-1 SE ACHIQUE hasta caber (sin él, un flex-child por
-              defecto no encoge por debajo de su contenido y el overflow
-              rompía el borde del panel en vez de activar el scroll). */}
-          <div
-            className={`${PANEL_CLASS} flex min-h-0 flex-col self-stretch px-5.5 py-4 ${enterClass(closing)}`}
-            style={panelStyle(VIOLET)}
-          >
-            <div className="flex flex-none items-center gap-2">
-              <SectionIcon icon={History} color={VIOLET} />
-              <span className="text-[13.5px] font-bold text-foreground">Your history</span>
-              <span className="ml-auto text-micro font-semibold text-muted-foreground/60">
-                {previousEndedAt !== null
-                  ? `last played ${humanizeSpan(daysBetween(previousEndedAt, new Date()))} ago`
-                  : 'first time here'}
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-micro text-dust">
+              <span>
+                <span className="font-semibold text-bone tabular-nums">
+                  {formatHours(hoursWithLive)}
+                </span>{' '}
+                total
+              </span>
+              <span>
+                <span className="font-semibold text-bone tabular-nums">{gameSessions.length}</span>{' '}
+                {gameSessions.length === 1 ? 'session' : 'sessions'}
+              </span>
+              <span>
+                Longest{' '}
+                <span className="font-semibold text-bone tabular-nums">
+                  {formatHours(longestSec / 3600)}
+                </span>
               </span>
             </div>
-            <div className="mt-3 flex-none grid grid-cols-3 gap-2">
-              {/* La MISMA lista que se pinta debajo, la viva incluida — así el
-                  número y las filas no pueden discrepar. El sessionCount+1 de
-                  antes partía de un comentario falso ("solo cuenta las
-                  cerradas"): getGames cuenta TODAS las sesiones, la abierta
-                  también, así que jugando siempre salía una de más. Con 36
-                  sesiones nadie lo nota; en la PRIMERA sesión de un juego era
-                  un "2" clavado sobre una lista de una fila. */}
-              <HistoryStat
-                icon={Play}
-                color={GREEN}
-                label="Sessions"
-                value={String(gameSessions.length)}
-              />
-              <HistoryStat
-                icon={Timer}
-                color={AMBER}
-                label="Longest"
-                value={formatHours(Math.max(longestPreviousSec, elapsed) / 3600)}
-              />
-              <HistoryStat
-                icon={CalendarDays}
-                color={BLUE}
-                label="In library"
-                value={humanizeSpan(daysBetween(live.addedAt, new Date()))}
-              />
-            </div>
-
-            {/* El LISTADO de sesiones de este juego — la de ahora arriba,
-                latiendo en verde, y debajo todas las anteriores con su barra
-                de proporción contra la más larga. Es el historial de la
-                ficha traído aquí: mirar "¿cuánto llevo hoy comparado con
-                otros días?" es media razón de abrir el overlay. gap-2.25: el
-                mismo espaciado que SessionHistoryList en la ficha, no un
-                valor propio inventado. */}
-            {gameSessions.length > 0 && (
-              <div className="-mr-2 mt-3 flex min-h-0 flex-1 flex-col gap-2.25 overflow-y-auto overscroll-contain pr-2">
-                {gameSessions.map((session) => (
-                  <SessionRow
-                    key={session.id}
-                    session={session}
-                    // La duración YA resuelta aquí, y no un `liveSeconds` para
-                    // todas: el cronómetro solo es la duración de la fila VIVA
-                    // (ver el memo de SessionRow). Las cerradas reciben su
-                    // número de siempre, que no cambia con el segundo.
-                    durationSec={session.endedAt === null ? elapsed : (session.durationSec ?? 0)}
-                    maxDurationSec={Math.max(longestPreviousSec, elapsed)}
-                    isRecord={
-                      session.durationSec !== null &&
-                      session.durationSec > 0 &&
-                      session.durationSec === longestPreviousSec
-                    }
-                    // NO_UNLOCKS y no `?? []`: un array nuevo por render le
-                    // rompía el memo a todas las sesiones sin trofeos, que son
-                    // la mayoría.
-                    achievements={unlocksBySession.get(session.id) ?? NO_UNLOCKS}
-                    timeFormat={timeFormat}
-                  />
-                ))}
+            {(isLongestSession || crossedMainStory) && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {isLongestSession && (
+                  <MomentChip icon={Flame} label="Your longest session with this game" />
+                )}
+                {crossedMainStory && (
+                  <MomentChip icon={Trophy} label="Past the main story length" />
+                )}
               </div>
             )}
           </div>
         </div>
 
-        <div
-          className={`mt-5 flex flex-none items-center justify-center gap-4 ${enterClass(closing)}`}
-        >
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-dust">
-            <Gamepad2 size={13} className="flex-none" />
+        <HudTabs
+          sessionCount={gameSessions.length}
+          session={
+            <>
+              {/* La nota rápida (§7.2.1): 3 líneas bastan para "dónde lo
+                  dejo". Ctrl+Enter guarda. */}
+              <section className="flex-none border-b border-line px-4 pt-3.5 pb-3.5">
+                <div className="flex items-baseline gap-2">
+                  <label htmlFor="overlay-quick-note" className={sectionTitleClass}>
+                    Quick note
+                  </label>
+                  <span className={sectionMetaClass}>saved to this session</span>
+                </div>
+                <textarea
+                  id="overlay-quick-note"
+                  ref={noteRef}
+                  value={note}
+                  rows={3}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    setSavedFlash(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                      event.preventDefault();
+                      saveNote();
+                    }
+                  }}
+                  placeholder="Jot it down while it's fresh — where you left off, what to do next…"
+                  disabled={!openSession}
+                  className={cn(
+                    'mt-2 w-full resize-none rounded-sm border border-edge bg-inset px-3 py-2.5 text-body text-bone',
+                    'transition-[border-color,box-shadow] duration-150 placeholder:text-dust',
+                    'outline-hidden focus:border-phosphor focus:shadow-focus-field disabled:opacity-50',
+                  )}
+                />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-1 text-micro text-dust">
+                    <Key>Ctrl</Key>+<Key>Enter</Key> saves
+                  </span>
+                  <button
+                    type="button"
+                    onClick={saveNote}
+                    disabled={!openSession || draft === null || savingNote}
+                    className={cn(primaryButtonClass, 'h-8.5 px-3.5 text-body')}
+                  >
+                    {savingNote ? (
+                      <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />
+                    ) : savedFlash ? (
+                      <Check size={14} className="animate-in zoom-in-50 duration-200" />
+                    ) : null}
+                    {savedFlash && draft === null ? 'Saved' : 'Save note'}
+                  </button>
+                </div>
+              </section>
+
+              <AchievementsPanel entries={entries} />
+            </>
+          }
+          history={
+            <>
+              <HltbPanel game={live} markerHours={hoursWithLive} />
+
+              {/* Tu historial con este juego: tres cifras y, debajo, TODAS las
+                  sesiones — la de ahora arriba en Phosphor y las anteriores
+                  con su barra de proporción contra la más larga. */}
+              <section className="flex min-h-48 flex-1 flex-col px-4 pt-3.5">
+                <div className="flex flex-none items-baseline gap-2">
+                  <span className={sectionTitleClass}>Your history</span>
+                  <span className={sectionMetaClass}>
+                    {previousEndedAt !== null
+                      ? `last played ${humanizeSpan(daysBetween(previousEndedAt, new Date()))} ago`
+                      : 'first time here'}
+                  </span>
+                </div>
+                <div className="mt-2.5 grid flex-none grid-cols-3 gap-1.5">
+                  {/* La MISMA lista que se pinta debajo, la viva incluida — así
+                      el número y las filas no pueden discrepar. El
+                      sessionCount+1 de antes partía de un comentario falso
+                      ("solo cuenta las cerradas"): getGames cuenta TODAS las
+                      sesiones, la abierta también, así que jugando siempre
+                      salía una de más. */}
+                  <HistoryStat label="Sessions" value={String(gameSessions.length)} />
+                  <HistoryStat label="Longest" value={formatHours(longestSec / 3600)} accent />
+                  <HistoryStat
+                    label="In library"
+                    value={humanizeSpan(daysBetween(live.addedAt, new Date()))}
+                  />
+                </div>
+
+                {gameSessions.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-2 pb-3.5">
+                    {gameSessions.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        // La duración YA resuelta aquí, y no un `liveSeconds`
+                        // para todas: el cronómetro solo es la duración de la
+                        // fila VIVA (ver el memo de SessionRow). Las cerradas
+                        // reciben su número de siempre, que no cambia con el
+                        // segundo.
+                        durationSec={
+                          session.endedAt === null ? elapsed : (session.durationSec ?? 0)
+                        }
+                        maxDurationSec={longestSec}
+                        isRecord={
+                          session.durationSec !== null &&
+                          session.durationSec > 0 &&
+                          session.durationSec === longestPreviousSec
+                        }
+                        // NO_UNLOCKS y no `?? []`: un array nuevo por render le
+                        // rompía el memo a todas las sesiones sin trofeos, que
+                        // son la mayoría.
+                        achievements={unlocksBySession.get(session.id) ?? NO_UNLOCKS}
+                        timeFormat={timeFormat}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          }
+        />
+
+        {/* El pie: cómo se vuelve al juego. */}
+        <footer className="relative flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-2.5 text-micro text-dust">
+          <span className="flex items-center gap-1.5">
+            <Gamepad2 aria-hidden size={14} className="flex-none" />
             <Key>B</Key> closes
           </span>
-          <span className="text-bone/20">·</span>
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-dust">
+          <span className="flex items-center gap-1.5">
             <Key>Esc</Key>
             {shortcut !== '' && (
               <>
-                {' '}
                 or <Key>{humanizeShortcut(shortcut)}</Key>
               </>
             )}
           </span>
-          <span className="text-bone/20">·</span>
           <button
             type="button"
             onClick={() => window.api.overlay.dismiss()}
-            className="flex items-center gap-1.5 rounded-full border border-line-strong bg-inset/40 px-4 py-1.5 text-[12px] font-semibold text-dust transition-[background-color,color,transform] duration-150 hover:bg-inset/60 hover:text-bone active:scale-[.97]"
+            className={cn(secondaryButtonClass, 'ml-auto h-8 px-3 text-small')}
           >
-            <X size={13} />
+            <X aria-hidden size={14} />
             Back to game
           </button>
-        </div>
-      </div>
+        </footer>
+      </aside>
 
       {/* DENTRO del árbol del HUD y no en main.tsx, por dos motivos: aquí solo
           existe con el telón arriba (Regla 1, "oculto = coste cero"), y viaja

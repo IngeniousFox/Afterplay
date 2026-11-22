@@ -1,14 +1,28 @@
 import {
-  BRAND_FONT_FAMILY,
   BRAND_NAME,
-  BRAND_VEIL_BACKGROUND,
   BRAND_WORDMARK,
-  BRAND_WORDMARK_SHADOW,
   BRAND_WORDMARK_TRACKING,
   BRAND_WORDMARK_WEIGHT,
 } from '../../shared/branding';
 
 export const SPLASH_SIZE = { width: 380, height: 340 } as const;
+
+// Fósforo (docs/redesign/concepts/b-fosforo/README-sistema.md): fondo Cabinet
+// con un tinte petróleo en el centro y líneas de escaneo, texto Bone y acento
+// Phosphor. Los valores son los de src/shared/theme/fosforo.css, escritos a
+// mano porque esta página es HTML suelto en una data: URL: su CSP
+// (default-src 'none') no deja cargar las fuentes de la app, y no hay Tailwind.
+// Por eso la letra es una pila del sistema parecida: Bahnschrift (Windows 10+,
+// estrecha y geométrica como Big Shoulders y Barlow) y, si falta, las
+// condensadas habituales.
+const CABINET = '#101416';
+const BONE = '#e9e4d8';
+const PHOSPHOR = '#ffb347';
+const SPLASH_BACKGROUND = `radial-gradient(ellipse 60% 45% at 50% 44%, #15201f 0%, ${CABINET} 70%)`;
+const SPLASH_SCAN =
+  'repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px)';
+const SPLASH_FONT_FAMILY =
+  "'Bahnschrift SemiCondensed', 'Bahnschrift', 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif";
 
 // A pure builder also lets the visual tests inspect the real startup page
 // without keeping a production startup waiting just to take a screenshot.
@@ -28,9 +42,10 @@ export const buildSplashHtml = (iconDataUrl: string): string => {
   body {
     -webkit-app-region: drag;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: ${BRAND_VEIL_BACKGROUND};
-    font-family: ${BRAND_FONT_FAMILY};
-    color: #eaece9;
+    background: ${SPLASH_SCAN}, ${SPLASH_BACKGROUND};
+    background-color: ${CABINET};
+    font-family: ${SPLASH_FONT_FAMILY};
+    color: ${BONE};
     -webkit-user-select: none;
     user-select: none;
   }
@@ -44,18 +59,18 @@ export const buildSplashHtml = (iconDataUrl: string): string => {
     font-weight: ${BRAND_WORDMARK_WEIGHT};
     letter-spacing: ${BRAND_WORDMARK_TRACKING};
     padding-left: ${BRAND_WORDMARK_TRACKING};
-    text-shadow: ${BRAND_WORDMARK_SHADOW};
+    text-shadow: 0 0 2.4em rgba(255,179,71,.2);
     animation: afterplay-splash-mark 1000ms cubic-bezier(.22,1,.36,1) both;
   }
   .line {
     width: 180px; height: 2px; margin-top: 13px; border-radius: 2px;
-    background: linear-gradient(90deg, transparent, #2fdc7e, transparent);
-    box-shadow: 0 0 12px rgba(47,220,126,.5);
+    background: linear-gradient(90deg, transparent, ${PHOSPHOR}, transparent);
+    box-shadow: 0 0 12px rgba(255,179,71,.6);
     animation: afterplay-splash-line 900ms cubic-bezier(.22,1,.36,1) both;
   }
   .dots { display: flex; gap: 6px; margin-top: 25px; }
   .dot {
-    width: 5px; height: 5px; border-radius: 50%; background: #2fdc7e;
+    width: 5px; height: 5px; border-radius: 50%; background: ${PHOSPHOR};
     animation: afterplay-splash-pulse 1.2s ease-in-out infinite;
   }
   .dot:nth-child(2) { animation-delay: .15s; }
