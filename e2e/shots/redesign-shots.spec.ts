@@ -1299,6 +1299,116 @@ test('capturas de movimiento', async () => {
   }
 });
 
+// MOVIMIENTO DE LA FICHA («rock and roll», fase B): la cabecera al entrar (el
+// título que se enciende la primera vez, el panel, Ken Burns), el cambio de
+// pestaña (la raya que se desliza y el contenido que se enciende) y el
+// medidor de HowLongToBeat rellenándose con su marcador cayendo. Misma
+// técnica que el test de arriba: las animaciones nuevas nacen en pausa y se
+// fotografían fotograma a fotograma. Las cifras que cuentan van por rAF y no
+// se congelan: en estos fotogramas salen ya avanzadas.
+test('capturas de movimiento de la ficha', async () => {
+  test.setTimeout(240_000);
+  const MOTION = join(process.cwd(), 'docs', 'redesign', 'screens', 'motion');
+  mkdirSync(MOTION, { recursive: true });
+  const { app, window, sandbox } = await launchAfterplay();
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await window.waitForTimeout(1500);
+
+    const holdNew = (): Promise<void> =>
+      window.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        proto.heldAnimate ??= proto.animate;
+        const original = proto.heldAnimate;
+        proto.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+          const animation = original.apply(this, args);
+          animation.pause();
+          return animation;
+        };
+      });
+    const freezeAt = (ms: number): Promise<void> =>
+      window.evaluate((time) => {
+        for (const animation of document.getAnimations()) {
+          animation.pause();
+          animation.currentTime = time;
+        }
+      }, ms);
+    const release = (): Promise<void> =>
+      window.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        if (proto.heldAnimate) proto.animate = proto.heldAnimate;
+        for (const animation of document.getAnimations()) animation.play();
+      });
+    const frames = async (
+      name: string,
+      times: number[],
+      clip: { x: number; y: number; width: number; height: number },
+    ): Promise<void> => {
+      for (const time of times) {
+        await freezeAt(time);
+        await window.waitForTimeout(80);
+        await window.screenshot({
+          path: join(MOTION, `${name}-${String(time).padStart(4, '0')}ms.png`),
+          clip,
+        });
+      }
+      await release();
+    };
+
+    const detailId = gameIdOf(sandbox, 'Strange Horticulture');
+    await goTo(window, '/home');
+    await window.waitForTimeout(1200);
+
+    // 1. La cabecera al abrir la ficha por primera vez en la sesión.
+    await holdNew();
+    await goTo(window, `/games/${detailId}` as Route);
+    await window.locator('h1').first().waitFor();
+    await frames('ficha-cabecera', [40, 160, 320, 520, 760, 1000], {
+      x: 0,
+      y: 56,
+      width: 1600,
+      height: 600,
+    });
+    await window.waitForTimeout(1500);
+
+    // 2. El cambio de pestaña: la raya se desliza y el panel se enciende.
+    await holdNew();
+    await window.getByRole('tab', { name: /^Sessions/ }).click();
+    await frames('ficha-pestana', [30, 90, 160, 260, 420], {
+      x: 0,
+      y: 56,
+      width: 1600,
+      height: 620,
+    });
+    await window.waitForTimeout(800);
+
+    // 3. HowLongToBeat: al volver a Overview el medidor se rellena tramo a
+    // tramo y el marcador cae con rebote.
+    await holdNew();
+    await window.getByRole('tab', { name: /^Overview/ }).click();
+    const hltb = window.getByText('How long to beat', { exact: true });
+    await hltb.waitFor();
+    await window.waitForTimeout(150);
+    const card = hltb.locator('xpath=ancestor::div[contains(@class,"rounded-md")][1]');
+    const box = await card.boundingBox();
+    if (box) {
+      await frames('ficha-hltb', [0, 180, 360, 560, 760, 900, 1040, 1240], {
+        x: Math.max(0, box.x - 12),
+        y: Math.max(0, box.y - 12),
+        width: box.width + 24,
+        height: box.height + 24,
+      });
+    }
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});
+
 // RENDIMIENTO con una biblioteca del tamaño de la real (331 juegos): cuántas
 // animaciones siguen corriendo tras la entrada y cómo van los frames al hacer
 // scroll por Library con el ratón encima de las portadas (tilt). No guarda

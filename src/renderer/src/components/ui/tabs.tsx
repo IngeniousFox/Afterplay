@@ -1,11 +1,15 @@
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { SlidingIndicator } from '../fx/SlidingIndicator';
 
 // Pestañas de Fósforo (ficha de juego): texto Barlow en Dust, la activa en
 // Bone semibold con una raya Phosphor de 2 px debajo, y a la derecha de cada
 // una su cifra en una placa Inset. Un punto opcional avisa de que la pestaña
 // pide atención (los saves divergidos, por ejemplo). Las flechas mueven el
 // foco y la selección, como pide el patrón de tablist.
+//
+// `sliding`: la raya no salta de pestaña en pestaña, se desliza con un muelle
+// corto (fx/SlidingIndicator). Sin él, cada pestaña pinta la suya (el HUD).
 
 export type TabItem<K extends string> = {
   key: K;
@@ -25,6 +29,7 @@ type TabsProps<K extends string> = {
   // Prefijo de los id de pestaña y panel, para aria-controls.
   idPrefix: string;
   className?: string;
+  sliding?: boolean;
 };
 
 export const tabPanelId = (idPrefix: string, key: string): string => `${idPrefix}-panel-${key}`;
@@ -37,8 +42,17 @@ export const Tabs = <K extends string>({
   label,
   idPrefix,
   className,
+  sliding = false,
 }: TabsProps<K>): React.JSX.Element => {
   const listRef = useRef<HTMLDivElement>(null);
+  // La raya deslizante se monta cuando la lista ya existe: su efecto de
+  // medida corre ANTES de que React enganche la ref del padre (los efectos de
+  // los hijos van primero), y sin esto la primera medida no encontraba nada.
+  const [listReady, setListReady] = useState(false);
+  const attachList = useCallback((node: HTMLDivElement | null) => {
+    listRef.current = node;
+    setListReady(node !== null);
+  }, []);
 
   const focusAt = (index: number): void => {
     const next = items[(index + items.length) % items.length];
@@ -60,11 +74,15 @@ export const Tabs = <K extends string>({
 
   return (
     <div
-      ref={listRef}
+      ref={attachList}
       role="tablist"
       aria-label={label}
       onKeyDown={handleKeyDown}
-      className={cn('flex min-w-0 flex-wrap items-stretch gap-x-2', className)}
+      className={cn(
+        'flex min-w-0 flex-wrap items-stretch gap-x-2',
+        sliding && 'relative',
+        className,
+      )}
     >
       {items.map((item) => {
         const active = item.key === value;
@@ -84,7 +102,7 @@ export const Tabs = <K extends string>({
               'outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
               'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors after:duration-150',
               active
-                ? 'font-semibold text-bone after:bg-phosphor'
+                ? cn('font-semibold text-bone', !sliding && 'after:bg-phosphor')
                 : 'text-dust after:bg-transparent hover:text-bone',
             )}
           >
@@ -104,6 +122,13 @@ export const Tabs = <K extends string>({
           </button>
         );
       })}
+      {sliding && listReady && (
+        <SlidingIndicator
+          containerRef={listRef}
+          activeKey={value}
+          className="bottom-0 h-0.5 rounded-full bg-phosphor shadow-glow-bar"
+        />
+      )}
     </div>
   );
 };

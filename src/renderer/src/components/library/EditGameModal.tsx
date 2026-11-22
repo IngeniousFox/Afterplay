@@ -23,8 +23,17 @@ import {
 import { ENDLESS_STATUS_OPTIONS, NORMAL_STATUS_OPTIONS } from '../../lib/gameStatus';
 import { activeOrLastIteration } from '../../lib/iterations';
 import { BLUE, GRAY, GREEN, TEAL, VIOLET } from '../../lib/colors';
-import { expandClass, revealClass, revealStyle } from '../../lib/styles';
-import { ModalFooter, ModalShell } from '../ui/modal-shell';
+import {
+  expandClass,
+  primaryButtonClass,
+  revealClass,
+  revealStyle,
+  secondaryButtonClass,
+} from '../../lib/styles';
+import { cn } from '../../lib/utils';
+import { PressButton } from '../fx/PressButton';
+import { pressClass } from '../fx/press';
+import { ModalShell } from '../ui/modal-shell';
 import { Cell } from './detail/DetailsCard';
 import { NotesEditor } from './detail/NotesEditor';
 import { CheckboxRow } from './add-game/CheckboxRow';
@@ -228,15 +237,29 @@ export const EditGameModal = ({
       widthClass="w-[1180px]"
       maxHClass="max-h-[88vh]"
       headerExtra={<div className="mt-0.5 text-small text-dust">{game.title}</div>}
+      // El pie de ModalFooter, con la física de PressButton: los dos botones
+      // se hunden al pulsar y rebotan al soltar.
       footer={
-        <ModalFooter
-          onCancel={handleClose}
-          onSubmit={handleSave}
-          submitting={isSaving}
-          submitLabel="Save changes"
-          submittingLabel="Saving…"
-          icon={<Save size={16} />}
-        />
+        <>
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isSaving}
+            className={cn(secondaryButtonClass, pressClass)}
+          >
+            Cancel
+          </button>
+          <PressButton
+            burst="phosphor"
+            onClick={handleSave}
+            disabled={isSaving}
+            aria-busy={isSaving || undefined}
+            className={primaryButtonClass}
+          >
+            <Save size={16} />
+            <span>{isSaving ? 'Saving…' : 'Save changes'}</span>
+          </PressButton>
+        </>
       }
     >
       <FormProvider {...methods}>

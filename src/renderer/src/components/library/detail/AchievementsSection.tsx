@@ -34,6 +34,7 @@ import { AMBER, GREEN } from '../../../lib/colors';
 import { formatByPrecision } from '../../../lib/format';
 import { cn } from '../../../lib/utils';
 import { revealClass, revealStyle } from '../../../lib/styles';
+import { chartGroup, growX, useInView } from '../../fx/chart';
 import type { AchievementId, GameId } from '../../../../../shared/entityIds';
 
 // LOS LOGROS DE LA FICHA, tras el rediseño (LOGROS-REDISENO.md §2).
@@ -64,6 +65,16 @@ type Filter = 'all' | 'unlocked' | 'locked' | 'rare';
 // SVG y no conic-gradient porque el trazo redondeado solo sale bien con
 // stroke; se dibuja al entrar (afterplay-ring-in en main.css).
 
+// Una animación montada EN PAUSA que arranca cuando su grupo (chartGroup)
+// entra en vista, como las gráficas de fx/chart. La clase de la animación va
+// literal en quien llama, para que Tailwind la encuentre. Reduced motion:
+// sin animación, entero desde el principio.
+const inViewPaused = (animation: string): string =>
+  cn(
+    animation,
+    '[animation-play-state:paused] group-data-inview/chart:[animation-play-state:running] motion-reduce:animate-none',
+  );
+
 const RING_SIZE = 44;
 const RING_STROKE = 5;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
@@ -84,8 +95,15 @@ const ProgressRing = ({
   const percent = complete
     ? 100
     : Math.min(99, Math.max(fraction > 0 ? 1 : 0, Math.round(fraction * 100)));
+  // El arco se dibuja la primera vez que el anillo entra en vista (fx/chart).
+  const { observe, inView } = useInView();
   return (
-    <div className="relative flex-none" style={{ width: RING_SIZE, height: RING_SIZE }}>
+    <div
+      ref={observe}
+      data-inview={inView || undefined}
+      className={cn('relative flex-none', chartGroup)}
+      style={{ width: RING_SIZE, height: RING_SIZE }}
+    >
       <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90">
         <circle
           cx={RING_SIZE / 2}
@@ -104,11 +122,13 @@ const ProgressRing = ({
             stroke={color}
             strokeWidth={RING_STROKE}
             strokeLinecap="round"
+            className={inViewPaused(
+              'animate-[afterplay-ring-in_1s_var(--ease-out)_150ms_backwards]',
+            )}
             style={{
               strokeDasharray: RING_C,
               strokeDashoffset: RING_C * (1 - fraction),
               ['--afterplay-ring-c' as string]: `${RING_C}`,
-              animation: 'afterplay-ring-in 1s cubic-bezier(.22,1,.36,1) 150ms backwards',
             }}
           />
         )}
@@ -470,12 +490,23 @@ const SourceCompletionRow = ({
 // Los iconos viven en el CDN de Steam y el CSP solo deja cargar imágenes por
 // afterplay-image:, así que pasan por la MISMA caché que las carátulas. Se
 // resuelve por fila: solo se descargan los que llegas a mirar.
+// Desbloqueado hace poco (y con fecha de fiar): su icono lleva un brillo.
+const RECENT_MS = 7 * 24 * 3_600_000;
+const isRecentUnlock = (entry: AchievementEntry): boolean =>
+  entry.unlockedAt !== null &&
+  entry.dateReliable &&
+  Date.now() - entry.unlockedAt.getTime() < RECENT_MS;
+
 const RowIcon = ({
   entry,
   unlocked,
+  recent = false,
 }: {
   entry: AchievementEntry;
   unlocked: boolean;
+  // Recién conseguido: halo de fósforo y un destello que lo cruza una vez
+  // cuando la lista entra en vista. Nada en bucle (la regla de la casa).
+  recent?: boolean;
 }): React.JSX.Element => {
   const remoteUrl = (unlocked ? entry.iconUrl : (entry.iconGrayUrl ?? entry.iconUrl)) ?? null;
   const src = useImageSrc(remoteUrl, 'achievements');
@@ -502,7 +533,12 @@ const RowIcon = ({
       className={`relative h-11 w-11 flex-none overflow-hidden rounded-md transition-transform duration-200 ease-[cubic-bezier(.2,.7,.3,1)] hover:scale-[1.07] ${
         unlocked ? '' : 'opacity-30 grayscale'
       }`}
-      style={{ boxShadow: shadow }}
+      style={{
+        boxShadow:
+          recent && unlocked
+            ? `${shadow}, 0 0 0 1px rgba(255,179,71,.55), 0 0 16px rgba(255,179,71,.42)`
+            : shadow,
+      }}
     >
       {src ? (
         <img src={src} alt="" className="h-full w-full object-cover" />
@@ -518,6 +554,15 @@ const RowIcon = ({
           style={{
             background: `radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,${specular}), transparent 46%)`,
           }}
+        />
+      )}
+      {recent && unlocked && (
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-linear-to-r from-transparent via-[rgb(255_236_200/0.75)] to-transparent mix-blend-screen motion-reduce:hidden',
+            inViewPaused('animate-[afterplay-game-badge-glint_900ms_var(--ease-out)_500ms_both]'),
+          )}
         />
       )}
     </div>
@@ -633,7 +678,7 @@ const AchievementRow = ({
         />
       )}
 
-      <RowIcon entry={entry} unlocked={unlocked} />
+      <RowIcon entry={entry} unlocked={unlocked} recent={isRecentUnlock(entry)} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.75">
@@ -684,8 +729,9 @@ const AchievementRow = ({
             {percentLabel(percent)}
           </span>
           <div className="h-[3px] w-11 overflow-hidden rounded-full bg-bone/[0.08]">
+            {/* Se rellena cuando la lista entra en vista (el grupo es la lista). */}
             <div
-              className="h-full rounded-full"
+              className={cn('h-full rounded-full', growX)}
               style={{
                 width: `${Math.max(3, Math.min(100, percent))}%`,
                 background: rare ? accent : 'rgba(233,228,216,.35)',
@@ -744,6 +790,9 @@ export const AchievementsSection = ({
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  // Las barras de rareza y el destello de los recientes arrancan cuando la
+  // lista entra en vista (fx/chart).
+  const { observe: observeList, inView: listInView } = useInView();
 
   // El logro pendiente de aterrizar (lib/achievementFlash): llega de pulsar
   // un trofeo en una sesión — de otra pantalla o de esta misma ficha.
@@ -908,7 +957,14 @@ export const AchievementsSection = ({
 
       {filtered.length > 0 ? (
         <div
-          className={`overflow-hidden rounded-md border border-line bg-bone/[0.012] ${showToolbar ? '' : 'mt-2.5'} ${revealClass}`}
+          ref={observeList}
+          data-inview={listInView || undefined}
+          className={cn(
+            'overflow-hidden rounded-md border border-line bg-bone/[0.012]',
+            !showToolbar && 'mt-2.5',
+            revealClass,
+            chartGroup,
+          )}
           style={revealStyle(2)}
         >
           {visible.map((entry) => (

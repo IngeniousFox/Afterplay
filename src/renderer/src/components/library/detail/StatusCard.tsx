@@ -1,9 +1,11 @@
 import { Check } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useCreateIteration } from '../../../hooks/iterations';
 import { useAddStateEvent } from '../../../hooks/stateEvents';
-import { celebrateCompletion } from '../../../lib/celebrate';
+import { celebrate } from '../../fx/sparks';
+import { pressClass } from '../../fx/press';
+import { cn } from '@/lib/utils';
 import { daysBetween, humanizeSpan } from '../../../lib/dateMath';
 import {
   ENDLESS_STATUS_OPTIONS,
@@ -46,6 +48,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
       : options[0],
   );
   const [note, setNote] = useState('');
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
   const addIteration = useCreateIteration();
   const addStateEvent = useAddStateEvent();
   const status = getGameStatusMeta(game.currentState);
@@ -147,7 +150,9 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
     // saltara antes se estaría celebrando algo que puede fallar. Que se
     // dispare también al re-marcar un juego ya completado (para añadirle una
     // nota) es a propósito — sigue siendo un juego terminado.
-    if (pending === 'beaten') celebrateCompletion();
+    // Chispas de fósforo (fx/sparks) saliendo del propio botón; con reduced
+    // motion, un destello de luz que se funde.
+    if (pending === 'beaten') celebrate('beaten', { origin: saveButtonRef.current });
   };
 
   return (
@@ -160,11 +165,11 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
       <div className="rounded-md border border-border bg-card">
         {/* Banner del estado actual: el color del propio estado como
             degradado de fondo, para que la respuesta a "¿cómo va este
-            juego?" se lea antes de leer nada. rounded-t-[13px] = 14px de la
+            juego?" se lea antes de leer nada. rounded-t-[7px] = 8px (rounded-md) de la
             card menos el borde de 1px, para que el degradado no asome por las
             esquinas. */}
         <div
-          className="flex items-center gap-3.5 rounded-t-[13px] px-4.5 py-4"
+          className="flex items-center gap-3.5 rounded-t-[7px] px-4.5 py-4"
           style={{
             background: `linear-gradient(135deg, ${status.color}1f, ${status.color}08 60%, transparent)`,
             borderBottom: `1px solid ${status.color}1f`,
@@ -212,6 +217,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
           />
 
           <button
+            ref={saveButtonRef}
             type="button"
             onClick={handleSave}
             disabled={isSaving || isNoOp}
@@ -222,7 +228,10 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
                   ' — add a note to log it again'
                 : undefined
             }
-            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-sm py-2.75 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
+            className={cn(
+              'mt-2.5 flex w-full items-center justify-center gap-2 rounded-sm py-2.75 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-60',
+              pressClass,
+            )}
             style={accentGradientStyle}
           >
             <Check size={16} />

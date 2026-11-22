@@ -16,6 +16,9 @@ import { useLiveTimer } from '../../../hooks/useLiveTimer';
 import { useNoSignalText } from '../../../hooks/sessionDevice';
 import { formatElapsed } from '../../../lib/format';
 import { liveButtonClass, primaryButtonClass, secondaryButtonClass } from '../../shell/controls';
+import { GlowText } from '../../fx/GlowText';
+import { PressButton } from '../../fx/PressButton';
+import { Odometer } from '../../fx/Ticker';
 import { AddSpendPopover } from './AddSpendPopover';
 import { HeaderUtilityButton } from './DetailHeader';
 import type { GameActionsState } from './useGameActions';
@@ -46,8 +49,10 @@ export const GameHeaderActions = ({
   const size = compact ? 'h-9 px-4 text-body' : 'h-11 px-5 text-lead';
   return (
     <>
-      <button
-        type="button"
+      {/* Play y Stop se hunden al pulsar y sueltan un anillo con destello:
+          ámbar al encender, Live al apagar. */}
+      <PressButton
+        burst={state.isLive ? 'live' : 'phosphor'}
         onClick={() => void state.togglePlay()}
         disabled={state.isBusy || !state.canPlay}
         title={
@@ -71,7 +76,7 @@ export const GameHeaderActions = ({
           <Play size={compact ? 14 : 16} fill="currentColor" />
         )}
         <span>{state.isLive ? 'Stop' : state.launching ? 'Launching…' : 'Play'}</span>
-      </button>
+      </PressButton>
 
       {notInstalledHere && (
         <button
@@ -228,14 +233,16 @@ export const OwnLivePill = ({
         className="size-2 flex-none animate-led-live rounded-full bg-live motion-reduce:animate-none"
       />
       <span className="sr-only">Playing now for</span>
-      <span
+      {/* El cronómetro vivo: bloom que respira y dígitos que caen al cambiar. */}
+      <GlowText
+        breathe
         className={cn(
           'font-display leading-none font-bold text-phosphor tabular-nums',
           compact ? 'text-[24px]' : 'text-[34px]',
         )}
       >
-        {formatElapsed(elapsed)}
-      </span>
+        <Odometer value={formatElapsed(elapsed)} />
+      </GlowText>
     </div>
   );
 };

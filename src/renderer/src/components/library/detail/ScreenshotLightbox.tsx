@@ -4,6 +4,7 @@ import { useImageSrc } from '../../../hooks/useImageSrc';
 import { GREEN } from '../../../lib/colors';
 import type { CarouselSlide } from './carouselSlides';
 import { slideKey } from './carouselSlides';
+import { useCrtReveal } from '../../fx/crt';
 
 // En ms — el mismo número gobierna la clase Tailwind (duration-200) de abajo
 // y el setTimeout que espera a que la animación de salida termine antes de
@@ -130,6 +131,7 @@ export const ScreenshotLightbox = ({
   // (`{lightboxOpen && <ScreenshotLightbox/>}` en ScreenshotsCarousel) como
   // está, no hay forma de animar la salida sin este paso intermedio.
   const [closing, setClosing] = useState(false);
+  const screenRef = useCrtReveal<HTMLDivElement>('panel');
 
   const startClose = (): void => {
     if (closing) return; // ya en marcha — un segundo click no la reinicia
@@ -185,10 +187,13 @@ export const ScreenshotLightbox = ({
         <ChevronRight size={24} />
       </button>
 
+      {/* La captura "se enciende" como un tubo al abrir (fx/CrtReveal, WAAPI
+          al montar); al cerrar se encoge con la salida de siempre. */}
       <div
+        ref={screenRef}
         onClick={(event) => event.stopPropagation()}
         className={`w-full max-w-275 overflow-hidden rounded-md border border-line-strong shadow-[0_30px_90px_rgba(3,6,7,.6)] duration-200 ${
-          closing ? `${CLOSING_ANIM} zoom-out-95` : 'animate-in zoom-in-95'
+          closing ? `${CLOSING_ANIM} zoom-out-95` : ''
         }`}
       >
         {current?.kind === 'trailer' ? (

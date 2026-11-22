@@ -7,6 +7,7 @@ import { slideKey, trailerPoster } from './carouselSlides';
 import { ScreenshotLightbox } from './ScreenshotLightbox';
 import { SectionLabel } from './SectionLabel';
 import { GREEN } from '../../../lib/colors';
+import { TiltCover, TiltGlare } from '../../fx/TiltCover';
 
 type ScreenshotsCarouselProps = {
   igdbId: number;
@@ -40,7 +41,7 @@ const ScreenshotSlide = ({
       // group + hover:-translate-y — mismo lenguaje que las carátulas de
       // Completed (Stats): la fila entera "levanta" al pasar el ratón, no
       // solo cambia de color, para que se sienta clicable de verdad.
-      className={`group/shot relative overflow-hidden transition-[transform,scale,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,scale,border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor ${slideShellClass}`}
     >
       {/* useImageSrc resuelve por IPC (caché local o descarga) — mientras no
           hay src, un esqueleto propio con el tamaño exacto de la miniatura,
@@ -67,6 +68,7 @@ const ScreenshotSlide = ({
           >
             <Maximize2 size={12} />
           </div>
+          <TiltGlare />
         </>
       ) : (
         <div className="h-full w-full animate-pulse motion-reduce:animate-none bg-bone/[0.06]" />
@@ -100,7 +102,7 @@ const TrailerSlide = ({
       type="button"
       onClick={onClick}
       title={slide.name ?? 'Trailer'}
-      className={`group/shot relative overflow-hidden transition-[transform,scale,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,scale,border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor ${slideShellClass}`}
     >
       {src ? (
         <img
@@ -145,6 +147,7 @@ const TrailerSlide = ({
       >
         Trailer
       </span>
+      <TiltGlare />
     </button>
   );
 };
@@ -247,17 +250,16 @@ export const ScreenshotsCarousel = ({
         </div>
       </div>
 
-      {/* -my-2 py-2 (solo vertical, no -m-2): overflow-hidden aquí es solo
+      {/* -my-4 py-4 (solo vertical, no -m-4): overflow-hidden aquí es solo
           para esconder horizontalmente las capturas que no caben a los lados
-          del carril — pero al ser la altura EXACTA de una miniatura, el
-          hover:-translate-y-1 de ScreenshotSlide se salía por arriba y el
-          propio borde del recorte se comía el borde/esquina superior de la
-          miniatura levantada. El padding da el margen vertical que faltaba
-          para que quepa el levantado sin recortarse; el margen negativo (solo
+          del carril — pero al ser la altura EXACTA de una miniatura, la
+          inclinación de TiltCover (que levanta las esquinas) se salía por
+          arriba y abajo y el propio borde del recorte se la comía. El padding
+          da el margen vertical que faltaba; el margen negativo (solo
           arriba/abajo) lo compensa para que el carril no baje ni empuje lo de
-          debajo — un -m-2 a secas habría tirado también de los lados y
+          debajo — un -m-4 a secas habría tirado también de los lados y
           desplazado/ensanchado el carril hacia la izquierda sin querer. */}
-      <div className="-my-2 overflow-hidden rounded-md py-2">
+      <div className="-my-4 overflow-hidden rounded-md py-4">
         <div
           className="flex gap-3.5 transition-transform duration-320 ease-[cubic-bezier(.4,0,.2,1)]"
           style={{ transform: `translateX(${trackX}px)` }}
@@ -267,10 +269,16 @@ export const ScreenshotsCarousel = ({
               setIndex(i);
               setLightboxOpen(true);
             };
-            return slide.kind === 'trailer' ? (
-              <TrailerSlide key={slideKey(slide)} slide={slide} onClick={open} />
-            ) : (
-              <ScreenshotSlide key={slideKey(slide)} url={slide.url} onClick={open} />
+            // Cada miniatura se inclina bajo el ratón con su reflejo
+            // (fx/TiltCover; el listener es el del <main> de RootLayout).
+            return (
+              <TiltCover key={slideKey(slide)} className="flex-none rounded-md">
+                {slide.kind === 'trailer' ? (
+                  <TrailerSlide slide={slide} onClick={open} />
+                ) : (
+                  <ScreenshotSlide url={slide.url} onClick={open} />
+                )}
+              </TiltCover>
             );
           })}
         </div>

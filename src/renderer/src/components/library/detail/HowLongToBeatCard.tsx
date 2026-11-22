@@ -6,6 +6,7 @@ import type { GameDetail } from '../../../../../shared/types';
 import { useRefreshGameHltb } from '../../../hooks/hltb';
 import { formatHours } from '../../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
+import { chartGroup, growX, useInView } from '../../fx/chart';
 
 type HowLongToBeatCardProps = {
   game: GameDetail;
@@ -22,6 +23,12 @@ type HowLongToBeatCardProps = {
 };
 
 type TierKey = 'main' | 'extra' | 'completionist';
+
+// El marcador del medidor compacto cae con rebote cuando el medidor entra en
+// vista (keyframe afterplay-marker-drop en main.css), después de los tramos.
+// Va en clases y no en un style inline, para que reduced motion lo apague.
+const markerDropClass =
+  'animate-[afterplay-marker-drop_620ms_var(--ease-out)_620ms_both] [animation-play-state:paused] group-data-inview/chart:[animation-play-state:running] motion-reduce:animate-none';
 
 const MAIN = '#5fd3e0';
 const EXTRA = '#8ce4ee'; // --color-tube-hi: distinto de MAIN
@@ -122,6 +129,9 @@ export const HowLongToBeatCard = ({
   // Antes del early return de abajo: un hook nunca puede ser condicional.
   const [hoveredTier, setHoveredTier] = useState<TierKey | null>(null);
   const refresh = useRefreshGameHltb();
+  // El medidor (variante compacta) se rellena al entrar en vista, no al
+  // montar: en la ventana mínima la card cae bajo el pliegue.
+  const { observe: observeMeter, inView: meterInView } = useInView();
 
   const main = game.hltbMain ?? 0;
   const extra = game.hltbMainExtras ?? 0;
@@ -604,41 +614,41 @@ export const HowLongToBeatCard = ({
         )}
       </div>
 
-      <div className="relative mb-4.5">
+      {/* El medidor se rellena la primera vez que entra en vista (fx/chart):
+          las animaciones están montadas en pausa y arrancan con data-inview.
+          Con reduced motion no hay animación y está entero desde el principio. */}
+      <div
+        ref={observeMeter}
+        data-inview={meterInView || undefined}
+        className={cn('relative mb-4.5', chartGroup)}
+      >
         {hasOwnHours && (
           <>
             {/* El marcador entra el último (delay > que el crecido de los
-                tramos) y "aterriza" desde arriba: sin eso, la barra se anima
-                pero el dato propio —lo único que es TUYO en esta card—
-                aparece ya puesto. */}
+                tramos) y CAE desde arriba con un rebote: sin eso, la barra se
+                anima pero el dato propio —lo único que es TUYO en esta card—
+                aparece ya puesto. Centrado con `translate` (-translate-x-1/2)
+                y no con el keyframe, que solo mueve `transform`: así el
+                reposo (y reduced motion, sin animación) queda en su sitio.
+                z-2: los tramos animan `transform` y crean contexto de apilado
+                propio; sin z-index explícito el marcador se pintaba debajo. */}
             <div
-              className="absolute -top-6.5 rounded-md border border-input px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
-              style={{
-                left: `${markerPct}%`,
-                background: '#1f272b',
-                animation: 'afterplay-drop-in 420ms ease-out 620ms both',
-                // Los tramos de la barra llevan `transform` para su animación
-                // de crecido, y un transform crea contexto de apilado propio:
-                // sin un z-index explícito aquí, el marcador (posicionado,
-                // pero con z-index auto) se pinta POR DEBAJO de ellos y
-                // desaparece.
-                zIndex: 2,
-              }}
+              className={cn(
+                'absolute -top-6.5 z-2 -translate-x-1/2 rounded-sm border border-line-strong bg-raised px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-bone tabular-nums shadow-[0_4px_10px_rgb(3_6_7/0.4)]',
+                markerDropClass,
+              )}
+              style={{ left: `${markerPct}%` }}
             >
               {formatHours(markerHours)}
             </div>
+            {/* Halo claro además del contorno oscuro: separa el marcador del
+                tramo que tenga debajo, sea del color que sea. */}
             <div
-              className="absolute -top-0.5 rounded-sm bg-bone"
-              style={{
-                left: `${markerPct}%`,
-                width: 3,
-                height: 18,
-                // Halo blanco además del contorno oscuro: separa el marcador
-                // del tramo que tenga debajo, sea del color que sea.
-                boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',
-                animation: 'afterplay-drop-in 420ms ease-out 620ms both',
-                zIndex: 2,
-              }}
+              className={cn(
+                'absolute -top-0.5 z-2 h-4.5 w-0.75 -translate-x-1/2 rounded-sm bg-bone shadow-[0_0_0_2px_rgb(12_16_18/0.85),0_0_12px_rgb(233_228_216/0.5)]',
+                markerDropClass,
+              )}
+              style={{ left: `${markerPct}%` }}
             />
           </>
         )}
@@ -660,17 +670,16 @@ export const HowLongToBeatCard = ({
                 key={segment.key}
                 onMouseEnter={() => setHoveredTier(segment.key)}
                 onMouseLeave={() => setHoveredTier(null)}
-                className="transition-[opacity,filter] duration-150"
+                className={cn('transition-[opacity,filter] duration-150', growX)}
                 style={{
                   width: `${segment.width}%`,
                   background: segment.background,
-                  transformOrigin: 'left',
                   opacity: isDimmed ? 0.4 : 1,
                   filter: isHovered ? 'brightness(1.25)' : 'none',
                   boxShadow: isHovered ? `inset 0 0 10px ${segment.background}99` : 'none',
                   // Escalonado: los tramos se encadenan de izquierda a
                   // derecha como si la barra se fuera llenando.
-                  animation: `afterplay-grow-x 520ms ease-out ${index * 110}ms both`,
+                  animationDelay: `${index * 110}ms`,
                   // Esquinas exteriores redondeadas a juego con el contenedor
                   // (rounded-[5px]): el primer tramo por la izquierda, el
                   // último por la derecha — así, aunque quede un resto de

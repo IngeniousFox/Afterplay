@@ -14,7 +14,7 @@ export { useTiltRegion } from './tilt';
 export { PressButton } from './PressButton';
 export { pressClass } from './press';
 export { SlidingIndicator } from './SlidingIndicator';
-export { celebrate, type CelebrationKind, type SparkOrigin } from './sparks';
+export { celebrate, confirmFlash, type CelebrationKind, type SparkOrigin } from './sparks';
 export { VuMeter } from './VuMeter';
 export { Glitch } from './Glitch';
 export { chartGroup, drawLine, growX, growY, spinIn, useInView } from './chart';

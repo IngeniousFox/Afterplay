@@ -86,6 +86,14 @@ const flash = (origin: { x: number; y: number }): void => {
   void animation.finished.finally(() => glow.remove());
 };
 
+// Solo el destello, sin chispas y con o sin reduced motion: una confirmación
+// breve («añadido»), no una celebración. Mide el origen al llamarla: si el
+// elemento va a desaparecer (un modal que se cierra), pasa su DOMRect.
+export const confirmFlash = (origin?: SparkOrigin): void => {
+  if (typeof document === 'undefined') return;
+  flash(originOf(origin));
+};
+
 export const celebrate = (
   kind: CelebrationKind = 'session',
   { origin }: { origin?: SparkOrigin } = {},

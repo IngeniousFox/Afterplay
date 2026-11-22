@@ -2,7 +2,12 @@ import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { GameDetail } from '../../../../../shared/types';
+import type { GameId } from '../../../../../shared/entityIds';
 import { useImageSrc } from '../../../hooks/useImageSrc';
+import { useOffscreenAnimation } from '../../../hooks/useOffscreenAnimation';
+import { Grain, ScanBeam, Vignette } from '../../fx/Backdrop';
+import { useCrtReveal } from '../../fx/crt';
+import { GlowText } from '../../fx/GlowText';
 import { focusRing } from '../../shell/controls';
 import { Tabs, tabId, tabPanelId, type TabItem } from '../../ui/tabs';
 import { CoverThumb } from '../add-game/CoverThumb';
@@ -71,6 +76,13 @@ export const DetailLayout = <K extends string>({
   const withBanner = tab === bannerTab;
   const compact = !withBanner || bannerOut;
   const heroSrc = useImageSrc(game.heroUrl, 'heroes');
+  // ¿Primera vez que se abre esta ficha desde que arrancó la app? Se lee al
+  // montar y se apunta en un efecto (no en el inicializador, que el modo
+  // estricto llama dos veces).
+  const [firstOpen] = useState(() => !openedThisSession.has(game.id));
+  useEffect(() => {
+    openedThisSession.add(game.id);
+  }, [game.id]);
   // Lo que mide la banda compacta flotante (envuelve en ventanas estrechas).
   const [bandHeight, setBandHeight] = useState(0);
   const bandObserver = useRef<ResizeObserver | null>(null);
@@ -117,50 +129,67 @@ export const DetailLayout = <K extends string>({
           label="Game sections"
           idPrefix="game-detail"
           className="-mx-4.5"
+          sliding
         />
       </div>
     </div>
   );
 
+  // El panel de la pestaña "se enciende" al cambiar: solo brillo y opacidad
+  // (variante screen, sin geometría), para que nada mida cajas a medio
+  // escalar. Remonta por key, así que el hook arranca solo.
+  const panelRef = useCrtReveal<HTMLDivElement>('screen', tab);
+
+  // Una sola estructura para las dos cabeceras: la barra de pestañas ocupa
+  // SIEMPRE el mismo sitio del árbol, así no se remonta al pasar de Overview
+  // a otra pestaña y su raya puede deslizarse en vez de aparecer de nuevo.
   return (
     <div ref={scrollerRef} className="h-full overflow-y-auto">
-      {withBanner ? (
-        <>
-          <div ref={bannerRef}>
-            <DetailBanner game={game} heroSrc={heroSrc} hidden={compact} {...slots} />
-          </div>
-          {notices}
-          {/* La banda compacta cuelga POR ENCIMA de las pestañas (bottom-full)
-              y las pestañas se pegan a su altura: aparecer no empuja nada del
-              flujo, así que el scroll no salta. */}
-          <div className="sticky z-30" style={{ top: compact ? bandHeight : 0 }}>
-            {compact && (
-              <div
-                ref={bandRef}
-                className="absolute inset-x-0 bottom-full animate-fade-in motion-reduce:animate-none"
-              >
-                <CompactBand game={game} heroSrc={heroSrc} asHeading={false} {...slots} />
-              </div>
-            )}
-            {tabBar}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="sticky top-0 z-30">
-            <CompactBand game={game} heroSrc={heroSrc} asHeading {...slots} />
-            {tabBar}
-          </div>
-          {notices}
-        </>
+      {withBanner && (
+        <div ref={bannerRef}>
+          <DetailBanner
+            game={game}
+            heroSrc={heroSrc}
+            hidden={compact}
+            firstOpen={firstOpen}
+            {...slots}
+          />
+        </div>
       )}
+      {withBanner && notices}
+      {/* Con banner, la banda compacta cuelga POR ENCIMA de las pestañas
+          (bottom-full) y las pestañas se pegan a su altura: aparecer no empuja
+          nada del flujo, así que el scroll no salta. Sin banner, la banda ES la
+          cabecera y va en el flujo. */}
+      <div className="sticky z-30" style={{ top: withBanner && compact ? bandHeight : 0 }}>
+        {withBanner ? (
+          compact && (
+            <div
+              ref={bandRef}
+              className={cn(
+                'absolute inset-x-0 bottom-full',
+                // Entra deslizándose desde arriba, como una persiana corta.
+                'animate-in fade-in-0 slide-in-from-top-3 duration-260 ease-out',
+                'motion-reduce:slide-in-from-top-0',
+              )}
+            >
+              <CompactBand game={game} heroSrc={heroSrc} asHeading={false} {...slots} />
+            </div>
+          )
+        ) : (
+          <CompactBand game={game} heroSrc={heroSrc} asHeading {...slots} />
+        )}
+        {tabBar}
+      </div>
+      {!withBanner && notices}
 
       <div
         key={`${game.id}-${tab}`}
+        ref={panelRef}
         role="tabpanel"
         id={tabPanelId('game-detail', tab)}
         aria-labelledby={tabId('game-detail', tab)}
-        className="mx-auto max-w-[1600px] px-6 pt-7 pb-28 animate-screen-in motion-reduce:animate-none"
+        className="mx-auto max-w-[1600px] px-6 pt-7 pb-28"
       >
         {children}
       </div>
@@ -170,6 +199,10 @@ export const DetailLayout = <K extends string>({
   );
 };
 
+// Las fichas que ya se han abierto en esta sesión de la app: el título solo
+// se enciende con parpadeo la primera vez (luego sería un tic, no un momento).
+const openedThisSession = new Set<GameId>();
+
 // Fondo compartido por banner y banda: el arte del juego (o, sin él, los
 // anillos de fósforo de detail.png) con la protección de Fósforo encima.
 const HeaderArt = ({
@@ -178,34 +211,52 @@ const HeaderArt = ({
 }: {
   heroSrc: string | null;
   compact: boolean;
-}): React.JSX.Element => (
-  <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-    {heroSrc ? (
-      <img
-        src={heroSrc}
-        alt=""
+}): React.JSX.Element => {
+  // Ken Burns solo en el banner grande, y en pausa cuando sale de la vista
+  // (al bajar por la ficha el banner sigue montado, fuera de pantalla).
+  const { observe, playState } = useOffscreenAnimation();
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {heroSrc ? (
+        <img
+          ref={compact ? undefined : observe}
+          src={heroSrc}
+          alt=""
+          className={cn(
+            'absolute inset-0 h-full w-full object-cover',
+            compact
+              ? 'object-[50%_30%] opacity-45'
+              : 'animate-ken-burns object-[50%_25%] motion-reduce:animate-none',
+          )}
+          style={compact ? undefined : { animationPlayState: playState }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-panel">
+          <div className="absolute inset-0 bg-[repeating-radial-gradient(circle_at_50%_48%,rgb(255_179_71/0.16)_0_1px,transparent_1px_9px)] [mask-image:radial-gradient(closest-side_at_50%_48%,black,transparent)]" />
+        </div>
+      )}
+      <div className="absolute inset-0 bg-(image:--scan) opacity-60" />
+      {/* El banner es un héroe: grano, viñeta y un haz que lo barre de vez en
+          cuando. Por debajo de la protección y del texto. */}
+      {!compact && (
+        <>
+          <Grain />
+          <Vignette />
+          <ScanBeam every={9} />
+        </>
+      )}
+      <div className="absolute inset-0 bg-(image:--protect-side)" />
+      <div
         className={cn(
-          'absolute inset-0 h-full w-full object-cover',
-          compact ? 'object-[50%_30%] opacity-45' : 'object-[50%_25%]',
+          'absolute inset-0',
+          compact
+            ? 'bg-[linear-gradient(0deg,var(--color-cabinet)_0%,rgb(16_20_22/0.82)_60%,rgb(16_20_22/0.7)_100%)]'
+            : 'bg-(image:--protect-bottom)',
         )}
       />
-    ) : (
-      <div className="absolute inset-0 bg-panel">
-        <div className="absolute inset-0 bg-[repeating-radial-gradient(circle_at_50%_48%,rgb(255_179_71/0.16)_0_1px,transparent_1px_9px)] [mask-image:radial-gradient(closest-side_at_50%_48%,black,transparent)]" />
-      </div>
-    )}
-    <div className="absolute inset-0 bg-(image:--scan) opacity-60" />
-    <div className="absolute inset-0 bg-(image:--protect-side)" />
-    <div
-      className={cn(
-        'absolute inset-0',
-        compact
-          ? 'bg-[linear-gradient(0deg,var(--color-cabinet)_0%,rgb(16_20_22/0.82)_60%,rgb(16_20_22/0.7)_100%)]'
-          : 'bg-(image:--protect-bottom)',
-      )}
-    />
-  </div>
-);
+    </div>
+  );
+};
 
 const DetailBanner = ({
   game,
@@ -216,12 +267,15 @@ const DetailBanner = ({
   status,
   meta,
   live,
+  firstOpen,
 }: HeaderSlots & {
   game: GameDetail;
   heroSrc: string | null;
   // La banda compacta está a la vista: este juego de acciones (fuera de
   // pantalla) se aparta del foco y de la accesibilidad.
   hidden: boolean;
+  // Primera vez que se abre la ficha en esta sesión: el título se enciende.
+  firstOpen: boolean;
 }): React.JSX.Element => (
   <header className="relative flex min-h-90 flex-col justify-end overflow-hidden">
     <HeaderArt heroSrc={heroSrc} compact={false} />
@@ -239,9 +293,16 @@ const DetailBanner = ({
           <CoverThumb url={game.coverUrl} alt="" className="h-full w-full object-cover" />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="m-0 font-display text-[clamp(44px,5.4vw,84px)] leading-[0.94] font-bold tracking-[0.005em] text-balance text-bone [overflow-wrap:anywhere] [text-shadow:0_2px_18px_rgb(3_6_7/0.55)]">
+          {/* Bloom de fósforo sobre el arte (tono bone: halo ámbar suave) y,
+              la primera vez que se abre en la sesión, parpadeo de tubo. */}
+          <GlowText
+            as="h1"
+            tone="bone"
+            flicker={firstOpen}
+            className="m-0 font-display text-[clamp(44px,5.4vw,84px)] leading-[0.94] font-bold tracking-[0.005em] text-balance text-bone [overflow-wrap:anywhere]"
+          >
             {game.title}
-          </h1>
+          </GlowText>
           <div className="mt-3.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-body text-bone">
             {status}
             {meta}
@@ -385,11 +446,33 @@ export const DetailMeta = ({
   );
 };
 
-export const DetailStatus = ({ game }: { game: GameDetail }): React.JSX.Element => {
+// `live`: hay una sesión en marcha. El LED cobra vida: respira y suelta un
+// anillo que se expande, como el de las tarjetas «en marcha» de Home.
+export const DetailStatus = ({
+  game,
+  live = false,
+}: {
+  game: GameDetail;
+  live?: boolean;
+}): React.JSX.Element => {
   const key = statusKeyOfDetail(game);
   return (
     <span className="flex items-center gap-2 font-semibold">
-      <StatusLed status={key} />
+      <span className="relative inline-flex flex-none">
+        {live && (
+          <span
+            aria-hidden
+            className="absolute inset-0 animate-led-ring rounded-full bg-phosphor motion-reduce:hidden"
+          />
+        )}
+        <StatusLed
+          status={key}
+          className={cn(
+            live &&
+              'animate-led-live shadow-[0_0_8px_rgb(255_179_71/0.7)] motion-reduce:animate-none',
+          )}
+        />
+      </span>
       {STATUS_META[key].label}
     </span>
   );

@@ -49,6 +49,9 @@ import { describeAgo } from '../../../lib/syncText';
 import { DeleteSaveBackupDialog } from './DeleteSaveBackupDialog';
 import { RestoreSaveDialog } from './RestoreSaveDialog';
 import type { GameId } from '../../../../../shared/entityIds';
+import { useOffscreenAnimation } from '../../../hooks/useOffscreenAnimation';
+import { Glitch } from '../../fx/Glitch';
+import { Stagger } from '../../fx/Stagger';
 
 type SavesSectionProps = {
   gameId: GameId;
@@ -303,6 +306,10 @@ const SyncHero = ({
   const meta = syncMeta ?? CHANGE_META[change] ?? CHANGE_META.none;
   const tone = TONE_CLASS[meta.tone];
   const Icon = meta.icon;
+  // Hay algo que hacer (copiar cambios, traer una versión): el chip late
+  // suave. Divergido: un glitch al entrar en el estado, no en bucle.
+  const pending = meta.tone === 'phosphor' || meta.tone === 'tube';
+  const conflict = meta.tone === 'live';
   return (
     <div
       className={cn(
@@ -310,14 +317,20 @@ const SyncHero = ({
         tone.box,
       )}
     >
-      <div className="flex min-w-0 flex-[1_1_380px] items-center gap-4">
+      <Glitch
+        as="div"
+        active={conflict}
+        replayKey={meta.label}
+        className="min-w-0 flex-[1_1_380px] items-center gap-4"
+      >
         <div
           className={cn(
-            'flex size-11 flex-none items-center justify-center rounded-full ring-1',
+            'relative flex size-11 flex-none items-center justify-center rounded-full ring-1',
             tone.chip,
           )}
         >
-          <Icon size={19} />
+          {pending && <PendingPulse tone={meta.tone === 'tube' ? 'tube' : 'phosphor'} />}
+          <Icon size={19} className="relative" />
         </div>
         <div className="min-w-0">
           <div
@@ -333,9 +346,27 @@ const SyncHero = ({
             </div>
           )}
         </div>
-      </div>
+      </Glitch>
       {children}
     </div>
+  );
+};
+
+// El latido del chip cuando hay una acción pendiente: un halo del color del
+// estado que respira detrás del icono. Se pausa fuera de la vista; con
+// reduced motion se queda quieto (el color ya lo dice).
+const PendingPulse = ({ tone }: { tone: 'phosphor' | 'tube' }): React.JSX.Element => {
+  const { observe, playState } = useOffscreenAnimation();
+  return (
+    <span
+      ref={observe}
+      aria-hidden
+      className={cn(
+        'absolute -inset-1.5 animate-pulse-soft rounded-full blur-[6px] [animation-duration:2.4s] motion-reduce:animate-none motion-reduce:opacity-60',
+        tone === 'tube' ? 'bg-tube/30' : 'bg-phosphor/30',
+      )}
+      style={{ animationPlayState: playState }}
+    />
   );
 };
 
@@ -1015,7 +1046,8 @@ const VersionList = ({
 
       {/* Carril de tiempo: un raíl vertical con un punto por versión, de
           arriba (reciente) a abajo (antigua); la más reciente con aro. */}
-      <ol className="relative mt-2">
+      {/* Las versiones entran escalonadas al abrir la pestaña (fx/Stagger). */}
+      <Stagger as="ol" className="relative mt-2">
         <span aria-hidden className="absolute top-6 bottom-6 left-2 w-px bg-line-strong" />
         {visible.map((version, index) => (
           <li
@@ -1077,7 +1109,7 @@ const VersionList = ({
             </button>
           </li>
         ))}
-      </ol>
+      </Stagger>
 
       {versions.length > VISIBLE_VERSIONS && (
         <button
