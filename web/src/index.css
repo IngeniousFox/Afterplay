@@ -1,4 +1,12 @@
 @import 'tailwindcss';
+@import '../../src/shared/theme/fosforo.css';
+@import '@fontsource/barlow/400';
+@import '@fontsource/barlow/500';
+@import '@fontsource/barlow/600';
+@import '@fontsource/barlow/700';
+@import '@fontsource/big-shoulders-display/600';
+@import '@fontsource/big-shoulders-display/700';
+@import '@fontsource/big-shoulders-display/800';
 
 /*
  * La paleta de Afterplay, portada del escritorio tal cual
@@ -12,7 +20,6 @@
  * pelearse con el gesto que todo el mundo tiene en el dedo.
  */
 @theme inline {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -25,16 +32,17 @@
 }
 
 :root {
-  --background: #0a0b0a;
-  --foreground: #eaece9;
-  --card: rgba(255, 255, 255, 0.024);
-  --muted: rgba(255, 255, 255, 0.024);
-  --muted-foreground: #888f8a;
-  --primary: #2fdc7e;
-  --primary-foreground: #0a0b0a;
-  --destructive: #e85d72;
-  --border: rgba(255, 255, 255, 0.08);
-  --radius: 0.5rem;
+  color-scheme: dark;
+  --background: var(--color-cabinet);
+  --foreground: var(--color-bone);
+  --card: var(--color-panel);
+  --muted: var(--color-raised);
+  --muted-foreground: var(--color-dust);
+  --primary: var(--color-phosphor);
+  --primary-foreground: var(--color-ink);
+  --destructive: var(--color-live);
+  --border: var(--color-line);
+  --radius: 8px;
 }
 
 @layer base {

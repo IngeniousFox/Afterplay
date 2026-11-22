@@ -1,0 +1,285 @@
+/*
+ * FÓSFORO: los tokens visuales de Afterplay 2.0, compartidos por el escritorio
+ * (src/renderer/src/assets/main.css) y la PWA (web/src/index.css).
+ *
+ * Referencia: docs/redesign/concepts/b-fosforo/README-sistema.md.
+ * Solo modo oscuro. Las fuentes se importan en cada entrada (cada app las
+ * resuelve desde su propio node_modules); aquí solo van sus nombres.
+ *
+ * No se resetean los colores por defecto de Tailwind: la migración es por
+ * tandas y hay pantallas que aún los usan.
+ */
+@theme {
+  /* Superficies (de más profunda a más alta) */
+  --color-inset: #0c1012;
+  --color-cabinet: #101416;
+  --color-panel: #171d20;
+  --color-raised: #1f272b;
+  --color-overlay: #242c31;
+  --color-raised-hover: #2a343a;
+  --color-raised-active: #1a2226;
+  --color-selected: #2a2923;
+
+  /* Bordes */
+  --color-line: rgb(233 228 216 / 0.09);
+  --color-line-strong: rgb(233 228 216 / 0.17);
+  --color-line-hover: rgb(233 228 216 / 0.3);
+  --color-edge: #707370;
+
+  /* Texto */
+  --color-bone: #e9e4d8;
+  --color-dust: #8a9496;
+  --color-ink: #1a1100;
+  --color-ink-live: #1c0605;
+
+  /* Acento y señales (los avisos usan phosphor con triángulo; no hay "caution") */
+  --color-phosphor: #ffb347;
+  --color-phosphor-hi: #ffc266;
+  --color-phosphor-lo: #e39a2e;
+  --color-phosphor-tint: rgb(255 179 71 / 0.11);
+  --color-tube: #5fd3e0;
+  --color-tube-hi: #8ce4ee;
+  --color-live: #ff5e57;
+  --color-live-hi: #ff756f;
+  --color-live-lo: #e5463f;
+  --color-success: #9bd67a;
+  --color-scrim: rgb(8 11 12 / 0.72);
+
+  /* LED de estado del juego */
+  --color-st-playing: #ffb347;
+  --color-st-beaten: #9bd67a;
+  --color-st-backlog: #5fd3e0;
+  --color-st-resting: #b9a6ff;
+  --color-st-dropped: #8a9496;
+
+  /* Tipografía */
+  --font-display: 'Big Shoulders Display', 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-sans: 'Barlow', system-ui, 'Segoe UI', sans-serif;
+
+  --text-hero: 96px;
+  --text-hero--line-height: 88px;
+  --text-hero--letter-spacing: 0.005em;
+  --text-stat: 76px;
+  --text-stat--line-height: 72px;
+  --text-stat--letter-spacing: 0.005em;
+  --text-page: 44px;
+  --text-page--line-height: 44px;
+  --text-page--letter-spacing: 0.005em;
+  --text-title: 28px;
+  --text-title--line-height: 30px;
+  --text-title--letter-spacing: 0.01em;
+  --text-figure: 20px;
+  --text-figure--line-height: 20px;
+  --text-figure--letter-spacing: 0.02em;
+  --text-lead: 16px;
+  --text-lead--line-height: 22px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-small: 13px;
+  --text-small--line-height: 18px;
+  --text-micro: 12px;
+  --text-micro--line-height: 16px;
+
+  /* Radios: 4 px en controles, 8 px en paneles */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
+
+  /* Elevación (solo lo que flota) */
+  --shadow-float: inset 0 1px 0 rgb(233 228 216 / 0.06), 0 18px 40px -10px rgb(3 6 7 / 0.8);
+  --shadow-modal: inset 0 1px 0 rgb(233 228 216 / 0.06), 0 28px 70px -14px rgb(3 6 7 / 0.9);
+  --shadow-lift: 0 10px 20px -8px rgb(3 6 7 / 0.8);
+  --shadow-glow-text: 0 0 18px rgb(255 179 71 / 0.35);
+  --shadow-glow-bar: 0 0 12px rgb(255 179 71 / 0.6);
+  --shadow-glow-halo: 0 0 0 2px #ffb347, 0 0 32px rgb(255 179 71 / 0.45);
+  --shadow-focus-field: 0 0 0 3px rgb(255 179 71 / 0.22);
+
+  /* Curvas */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Animaciones */
+  --animate-screen-in: screen-in 240ms var(--ease-out) both;
+  --animate-pop-in: pop-in 150ms var(--ease-out) both;
+  --animate-dialog-in: dialog-in 220ms var(--ease-out) both;
+  --animate-dialog-out: dialog-out 140ms var(--ease-out) both;
+  --animate-sheet-in: sheet-in 320ms var(--ease-drawer) both;
+  --animate-sheet-out: sheet-out 220ms var(--ease-drawer) both;
+  --animate-toast-in: toast-in 360ms var(--ease-out) both;
+  --animate-toast-out: toast-out 200ms var(--ease-out) both;
+  --animate-np-in: np-in 320ms var(--ease-drawer) both;
+  --animate-fade-in: fade-in 160ms var(--ease-out) both;
+  --animate-led-live: led-live 1.8s var(--ease-in-out) infinite;
+  --animate-led-ring: led-ring 1.8s var(--ease-out) infinite;
+  --animate-timer-breathe: timer-breathe 3.6s var(--ease-in-out) infinite;
+  --animate-sweep: sweep 1.6s var(--ease-in-out) infinite;
+  --animate-pulse-soft: pulse-soft 1.4s var(--ease-in-out) infinite;
+
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--move-y, 8px));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(var(--scale-from, 0.97));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: scale(var(--scale-dialog, 0.96));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes dialog-out {
+    to {
+      opacity: 0;
+      transform: scale(var(--scale-out, 0.98));
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      opacity: var(--sheet-fade, 1);
+      transform: translateX(var(--sheet-x, 100%));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes sheet-out {
+    to {
+      opacity: var(--sheet-fade, 1);
+      transform: translateX(var(--sheet-x, 100%));
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--move-y-toast, 16px));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes toast-out {
+    to {
+      opacity: 0;
+      transform: translateX(var(--move-x-toast, 24px));
+    }
+  }
+  @keyframes np-in {
+    from {
+      opacity: var(--np-fade, 1);
+      transform: translateY(var(--np-y, 100%));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes led-live {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
+  }
+  @keyframes led-ring {
+    from {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+  @keyframes timer-breathe {
+    0%,
+    100% {
+      text-shadow: 0 0 18px rgb(255 179 71 / 0.22);
+    }
+    50% {
+      text-shadow: 0 0 18px rgb(255 179 71 / 0.35);
+    }
+  }
+  @keyframes sweep {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* Texturas: se usan con bg-(image:--scan) y compañía. */
+:root {
+  --scan: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 3px);
+  --glow-ambient: radial-gradient(70% 90% at 15% 110%, rgb(255 179 71 / 0.2), transparent 70%);
+  --protect-bottom: linear-gradient(0deg, #101416 0%, rgb(16 20 22 / 0.78) 30%, transparent 66%);
+  --protect-side: linear-gradient(
+    90deg,
+    rgb(16 20 22 / 0.85) 0%,
+    rgb(16 20 22 / 0.5) 38%,
+    transparent 72%
+  );
+}
+
+/* Movimiento reducido: se anula la distancia y se conserva el fundido. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --move-y: 0px;
+    --move-y-toast: 0px;
+    --move-x-toast: 0px;
+    --scale-from: 1;
+    --scale-dialog: 1;
+    --scale-out: 1;
+    --scale-hover: 1;
+    --sheet-x: 0px;
+    --sheet-fade: 0;
+    --np-y: 0px;
+    --np-fade: 0;
+  }
+}
