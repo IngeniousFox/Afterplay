@@ -124,7 +124,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
     return (
       <div className="flex flex-col gap-3.5">
         {newPlaythroughs.length === 0 && (
-          <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-border py-9 text-center">
+          <div className="flex flex-col items-center gap-2.5 rounded-md border border-dashed border-border py-9 text-center">
             <p className="text-[13px] font-semibold text-foreground">No playthroughs yet.</p>
             <p className="max-w-72 text-[12px] text-muted-foreground">
               Add a manual playthrough to log a run you already did outside the app.
@@ -138,7 +138,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
 
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="flex flex-col gap-3.5 rounded-[11px] border border-border bg-bone/[0.02] p-3.5">
+      <div className="flex flex-col gap-3.5 rounded-md border border-border bg-bone/[0.02] p-3.5">
         {/* Misma chapa numerada que los pendientes de abajo: el guardado que
             se está editando también dice cuál es de la lista. El número es su
             posición real (game.iterations viene ordenado por id ascendente),
@@ -222,7 +222,7 @@ export const IterationSection = ({ game }: IterationSectionProps): React.JSX.Ele
               type="button"
               onClick={() => setConfirmingRemove(true)}
               disabled={deleteIteration.isPending}
-              className="flex w-fit items-center gap-1.5 rounded-[9px] px-3 py-1.75 text-[12.5px] font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              className="flex w-fit items-center gap-1.5 rounded-sm px-3 py-1.75 text-[12.5px] font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
             >
               <Trash2 size={13} />
               Remove playthrough
@@ -285,7 +285,7 @@ const RemovePlaythroughDialog = ({
           }}
         />
         <div className="relative flex items-center gap-3 px-5.5 py-5">
-          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-destructive/12">
             <Trash2 size={16} className="text-destructive" />
           </div>
           <AlertDialogTitle>Remove playthrough</AlertDialogTitle>
@@ -321,7 +321,7 @@ const RemovePlaythroughDialog = ({
           type="button"
           onClick={onClose}
           disabled={pending}
-          className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
+          className="rounded-sm border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
         >
           Cancel
         </button>
@@ -429,9 +429,9 @@ const ReadonlyDateField = ({
     <div className="flex-1">
       <div className={fieldLabelClass}>{label}</div>
       <Tooltip>
-        <TooltipTrigger className="flex w-full items-center gap-1.5 rounded-[9px] border border-input bg-bone/[0.02] px-3.25 py-2.5 text-left text-[13px] text-muted-foreground">
+        <TooltipTrigger className="flex w-full items-center gap-1.5 rounded-sm border border-input bg-bone/[0.02] px-3.25 py-2.5 text-left text-[13px] text-muted-foreground">
           {date ? formatByPrecision(date, 'day', timeFormat) : '—'}
-          <span className="text-[11px]">(auto)</span>
+          <span className="text-micro">(auto)</span>
         </TooltipTrigger>
         <TooltipContent>Derived from this playthrough&apos;s sessions.</TooltipContent>
       </Tooltip>

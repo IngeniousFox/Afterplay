@@ -17,7 +17,7 @@ type InfoChipProps = {
 export const InfoChip = ({ Icon, children, color, title }: InfoChipProps): React.JSX.Element => (
   <span
     title={title}
-    className="inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.25 py-1 text-[11.5px] font-semibold"
+    className="inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.25 py-1 text-micro font-semibold"
     style={
       color
         ? { color, borderColor: `${color}3d`, background: `${color}14` }

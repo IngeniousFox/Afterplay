@@ -124,7 +124,7 @@ export const CoverPicker = ({
           {isFetchingMore && (
             <div
               className={cn(
-                'flex animate-pulse items-center justify-center rounded-lg border border-dashed border-input px-2 text-center text-[11px] text-muted-foreground',
+                'flex animate-pulse items-center justify-center rounded-lg border border-dashed border-input px-2 text-center text-micro text-muted-foreground',
                 TILE_CLASS[target],
               )}
             >

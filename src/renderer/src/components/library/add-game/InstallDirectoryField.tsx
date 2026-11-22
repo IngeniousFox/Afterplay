@@ -68,14 +68,14 @@ export const InstallDirectoryField = ({
           type="button"
           onClick={handleBrowse}
           disabled={calculating}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-raised-hover disabled:opacity-60"
+          className="flex flex-none items-center gap-1.75 rounded-sm border border-line-strong bg-raised px-3.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-raised-hover disabled:opacity-60"
         >
           <Folder size={15} />
           <span>{calculating ? 'Calculating…' : 'Browse'}</span>
         </button>
       </div>
       {sizeBytes !== null && !calculating && (
-        <div className="mt-1.25 text-[11.5px] text-muted-foreground">
+        <div className="mt-1.25 text-micro text-muted-foreground">
           {formatBytes(sizeBytes)} on disk
         </div>
       )}

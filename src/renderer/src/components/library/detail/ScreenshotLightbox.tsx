@@ -150,7 +150,7 @@ export const ScreenshotLightbox = ({
         // gana sobre cualquier clase (por mucho hover: que le pongas), así que
         // hover:bg-bone/10 sería letra muerta si el fondo base siguiera en
         // `style`.
-        className="absolute top-5.5 right-6.5 z-10 flex h-10 w-10 items-center justify-center rounded-[10px] border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10"
+        className="absolute top-5.5 right-6.5 z-10 flex h-10 w-10 items-center justify-center rounded-sm border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10"
       >
         <X size={18} />
       </button>
@@ -179,7 +179,7 @@ export const ScreenshotLightbox = ({
 
       <div
         onClick={(event) => event.stopPropagation()}
-        className={`w-full max-w-275 overflow-hidden rounded-[14px] border border-line-strong shadow-[0_30px_90px_rgba(3,6,7,.6)] duration-200 ${
+        className={`w-full max-w-275 overflow-hidden rounded-md border border-line-strong shadow-[0_30px_90px_rgba(3,6,7,.6)] duration-200 ${
           closing ? `${CLOSING_ANIM} zoom-out-95` : 'animate-in zoom-in-95'
         }`}
       >

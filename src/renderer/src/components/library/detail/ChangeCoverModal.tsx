@@ -109,7 +109,7 @@ export const ChangeCoverModal = ({
           />
 
           {updateGame.error && !updateGame.isPending && (
-            <div className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+            <div className="mt-5 rounded-sm border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
               Couldn&apos;t save the images — {updateGame.error.message}
             </div>
           )}

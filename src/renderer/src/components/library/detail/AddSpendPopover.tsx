@@ -14,6 +14,8 @@ import type { GameId } from '../../../../../shared/entityIds';
 
 type AddSpendPopoverProps = {
   gameId: GameId;
+  // La clase del botón que lo abre: la cabecera lo pinta a dos tamaños.
+  triggerClassName: string;
 };
 
 const TYPE_OPTIONS: { value: SpendEvent['type']; label: string }[] = [
@@ -24,7 +26,10 @@ const TYPE_OPTIONS: { value: SpendEvent['type']; label: string }[] = [
 // Botón "Añadir gasto" de la barra de acciones (SPEC 4.5) — popover con un
 // formulario pequeño e independiente del playthrough: tipo, cantidad, fecha
 // con precisión, nota libre. Crea un spendEvent suelto colgando del juego.
-export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Element => {
+export const AddSpendPopover = ({
+  gameId,
+  triggerClassName,
+}: AddSpendPopoverProps): React.JSX.Element => {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<SpendEvent['type']>('purchase');
   const [amount, setAmount] = useState('');
@@ -65,7 +70,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
         if (!next) reset();
       }}
     >
-      <PopoverTrigger className="flex items-center gap-2 rounded-[11px] border border-line-strong bg-raised px-4.5 py-3 text-[14px] font-semibold text-foreground hover:bg-raised-hover">
+      <PopoverTrigger className={triggerClassName}>
         <Plus size={16} />
         Add spend
       </PopoverTrigger>
@@ -77,7 +82,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
           </div>
 
           <MoneyAmountField
-            label="AMOUNT (€)"
+            label="Amount (€)"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />

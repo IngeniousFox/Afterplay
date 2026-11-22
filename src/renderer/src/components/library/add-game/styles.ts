@@ -7,7 +7,7 @@ export const fieldLabelClass = 'mb-1.75 text-small font-semibold text-dust';
 // foco con borde Phosphor + halo. El foco va incluido: todos los campos lo
 // llevan.
 export const textInputClass =
-  'w-full rounded-sm border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-bone outline-none placeholder:text-dust transition-[border-color,box-shadow] duration-150 focus:border-phosphor focus:shadow-focus-field';
+  'w-full rounded-sm border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-bone outline-hidden placeholder:text-dust transition-[border-color,box-shadow] duration-150 focus:border-phosphor focus:shadow-focus-field';
 
 // Se mantiene por compatibilidad con los campos que ya lo componían con
 // textInputClass; hoy el foco ya viene en textInputClass.

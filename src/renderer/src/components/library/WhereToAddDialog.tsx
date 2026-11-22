@@ -37,7 +37,7 @@ const DoorButton = ({
   <button
     type="button"
     onClick={onClick}
-    className="group flex flex-1 flex-col items-center gap-2 rounded-[13px] border px-3 pt-4.5 pb-3.5 transition-[transform,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5"
+    className="group flex flex-1 flex-col items-center gap-2 rounded-md border px-3 pt-4.5 pb-3.5 transition-[transform,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5"
     style={{ borderColor: `${color}30`, background: `${color}0d` }}
     onMouseEnter={(event) => {
       event.currentTarget.style.borderColor = `${color}6b`;
@@ -51,7 +51,7 @@ const DoorButton = ({
     }}
   >
     <span
-      className="flex h-11 w-11 items-center justify-center rounded-[12px]"
+      className="flex h-11 w-11 items-center justify-center rounded-md"
       style={{ background: `${color}1f`, border: `1px solid ${color}38` }}
     >
       <Icon size={19} style={{ color }} />
@@ -111,7 +111,7 @@ export const WhereToAddDialog = ({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className={`w-96 rounded-[18px] border p-5.5 ${floatingPanelClass} duration-200 ${
+        className={`w-96 rounded-md border p-5.5 ${floatingPanelClass} duration-200 ${
           closing ? `${CLOSING_ANIM} fade-out-0 zoom-out-95` : 'animate-in fade-in-0 zoom-in-95'
         }`}
       >

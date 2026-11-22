@@ -1,8 +1,20 @@
-import { ArrowRight, Flame, Timer, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  Flame,
+  Monitor,
+  NotebookPen,
+  PencilLine,
+  Smartphone,
+  Timer,
+  Trash2,
+} from 'lucide-react';
 import { useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Session } from '../../../../../shared/types';
+import { cn } from '@/lib/utils';
+import type { IterationDetail, Session } from '../../../../../shared/types';
 import { useGameAchievements } from '../../../hooks/achievements';
+import { useDeviceContext } from '../../../hooks/devices';
 import {
   SessionAchievements,
   type SessionAchievementEntry,
@@ -16,31 +28,96 @@ import {
   subscribeSessionFlash,
 } from '../../../hooks/useSessionClosedToast';
 import { requestAchievementFlash } from '../../../lib/achievementFlash';
-import { formatByPrecision, formatElapsed, formatSessionEndTime } from '../../../lib/format';
-import { revealClass, revealStyle } from '../../../lib/styles';
+import {
+  formatByPrecision,
+  formatElapsed,
+  formatHours,
+  formatTime,
+  pluralize,
+} from '../../../lib/format';
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
 import { useSessionDevice } from '../../../hooks/sessionDevice';
 import { SessionNote } from '../../sessions/SessionNote';
-import { SectionLabel } from './SectionLabel';
+import { textLinkClass } from '../../shell/controls';
 import type { AchievementId, GameId, SessionId } from '../../../../../shared/entityIds';
 
-type SessionHistoryListProps = {
-  sessions: Session[];
-  gameId: GameId;
+// LAS SESIONES DE LA FICHA (ficha-sesiones.png).
+//
+// En Overview, las tres más recientes en filas compactas con "See all". En la
+// pestaña Sessions, todas: agrupadas por playthrough (el actual abierto, los
+// anteriores plegados) y dentro por semana, la más nueva arriba, con el total
+// de la semana a la izquierda. Cada fila dice día, horas, duración en Big
+// Shoulders, dispositivo y sus marcas: logros de la noche (que llevan a su
+// logro), "Closed automatically" si la cerró el barrido (§10.5), "Added by
+// hand" si se tecleó, y la nota de la sesión debajo.
+
+// "22m" y no "0h 22m": por debajo de la hora las horas no dicen nada.
+const formatDuration = (seconds: number): string =>
+  seconds < 3600 ? `${Math.round(seconds / 60)}m` : formatHours(seconds / 3600);
+
+const sessionSeconds = (session: Session, liveSeconds: number): number =>
+  session.endedAt === null ? liveSeconds : (session.durationSec ?? 0);
+
+const dayLabel = (session: Session, timeFormat: '12h' | '24h'): string => {
+  if (session.datePrecision !== 'datetime' && session.datePrecision !== 'day') {
+    return formatByPrecision(session.startedAt, session.datePrecision, timeFormat);
+  }
+  return session.startedAt
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .replace(',', '');
 };
 
-const VISIBLE_LIMIT = 5;
+const timeRange = (session: Session, timeFormat: '12h' | '24h'): string | null => {
+  if (session.datePrecision !== 'datetime') return null;
+  const start = formatTime(session.startedAt, timeFormat);
+  if (session.endedAt === null) return `since ${start}`;
+  return `${start} to ${formatTime(session.endedAt, timeFormat)}`;
+};
 
-// SPEC 10.7 / prototipo — icono + fecha + subtítulo (Manual/Live/marcador) +
-// relleno proporcional a la duración (relativa a la más larga de ESTA
-// lista) DETRÁS de la fila entera (mismo lenguaje que la vista global de
-// Sesiones: la fila ES la barra, no una barra suelta al lado) + duración a
-// la derecha, con llama si es la más larga (contador en vivo si es la
-// sesión activa). Máximo 5 filas — el botón "ver todas" lleva a la pestaña
-// de Sesiones (Bloque 5A) filtrada por este juego.
+// Los logros del juego, agrupados por la sesión en la que cayeron — el cruce
+// ya viene hecho del main (placeUnlock); esto solo lo indexa. Los que no
+// cayeron en ninguna sesión trackeada no aparecen en ninguna fila.
+const useAchievementsBySession = (gameId: GameId): Map<SessionId, SessionAchievementEntry[]> => {
+  const { data } = useGameAchievements(gameId);
+  const bySession = new Map<SessionId, SessionAchievementEntry[]>();
+  for (const entry of data?.entries ?? []) {
+    if (entry.sessionId === null || entry.unlockedAt === null) continue;
+    const list = bySession.get(entry.sessionId) ?? [];
+    // Con el achievementId EXPLÍCITO: sin él el trofeo no enlaza a nada.
+    list.push({
+      achievementId: entry.id,
+      displayName: entry.displayName,
+      iconUrl: entry.iconUrl,
+      globalPercent: entry.globalPercent,
+    });
+    bySession.set(entry.sessionId, list);
+  }
+  return bySession;
+};
+
+const DeviceLabel = ({
+  session,
+  tag,
+}: {
+  session: Session;
+  tag: string | null;
+}): React.JSX.Element | null => {
+  const { devices } = useDeviceContext();
+  if (tag === null) return null;
+  const os = devices.find((device) => device.id === session.deviceId)?.os;
+  const Icon = os === 'web' || session.startedBy === 'timer' ? Smartphone : Monitor;
+  return (
+    <span className="flex min-w-0 items-center gap-2 text-body font-semibold text-bone">
+      <Icon size={14} className="flex-none text-dust" />
+      <span className="[overflow-wrap:anywhere]">{tag}</span>
+    </span>
+  );
+};
+
+const markClass = 'flex items-center gap-1.5 text-small text-dust';
+
 const SessionRow = ({
   session,
-  maxDurationSec,
   isRecord,
   flash,
   achievements,
@@ -48,203 +125,476 @@ const SessionRow = ({
   onDelete,
 }: {
   session: Session;
-  maxDurationSec: number;
   isRecord: boolean;
-  // Pulsar un trofeo de la fila salta a SU logro, unas secciones más abajo
-  // (LOGROS-REDISENO §1) — el módulo del flash hace de mensajero.
-  onOpenAchievement: (achievementId: AchievementId) => void;
   // Parpadeo dorado al llegar desde el aviso de cierre: "esta es la sesión de
-  // la que te hablaba". Dos pulsos y se acaba (ver main.css).
+  // la que te hablaba". Dos pulsos y se acaba.
   flash: boolean;
-  // Los logros que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1) — ya
-  // cruzados por el main (sessionId en cada desbloqueo); aquí solo se pintan.
+  // Los logros que cayeron EN esta sesión (LOGROS-IDEAS.md §2.1).
   achievements: SessionAchievementEntry[];
-  // Solo llega para sesiones CERRADAS — una viva se para con Stop, no se
-  // borra (el watcher la reabriría al ciclo siguiente).
+  // Pulsar un trofeo salta a SU logro, en la pestaña Achievements.
+  onOpenAchievement: (achievementId: AchievementId) => void;
+  // Solo para sesiones CERRADAS — una viva se para con Stop, no se borra.
   onDelete?: () => void;
 }): React.JSX.Element => {
   const isLive = session.endedAt === null;
   const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
-  const durationSec = isLive ? liveSeconds : (session.durationSec ?? 0);
+  const seconds = sessionSeconds(session, liveSeconds);
   // §10.8: una abierta en otro PC es "Playing on PC-A"; y con más de un
   // dispositivo conocido, cada fila dice en cuál se jugó.
   const device = useSessionDevice(session);
   const { data: timeFormat = '24h' } = useTimeFormat();
-  const endTime = formatSessionEndTime(session.endedAt, session.datePrecision, timeFormat);
-  // Modelo v2: toda sesión es tiempo jugado real — los marcadores de borde
-  // de duración 0 ya no existen (las fechas viven en el historial).
-  const fillPct =
-    !isLive && maxDurationSec > 0 ? Math.max(3, (durationSec / maxDurationSec) * 100) : 0;
-
-  // El parpadeo no sirve de nada si pasa fuera de pantalla: al llegar desde
-  // el aviso, la ficha se abre arriba del todo (hero, acciones…) y el
-  // historial de sesiones queda mucho más abajo. Así que primero se lleva la
-  // fila a la vista y SOLO DESPUÉS empieza a parpadear (ver useFlashLanding,
-  // compartido con la sección de logros).
+  const range = timeRange(session, timeFormat);
   const { rowRef, flashClass, onAnimationEnd } = useFlashLanding(flash, consumeSessionFlash);
 
   return (
     <div
       ref={rowRef}
       onAnimationEnd={onAnimationEnd}
-      className={`group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5 ${flashClass}`}
-      style={
-        isLive
-          ? { borderColor: 'rgba(255,179,71,.4)', background: 'rgba(255,179,71,.06)' }
-          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
-      }
+      className={cn(
+        'group/session relative scroll-mt-48 border-b border-line py-2.5 pl-3 last:border-b-0',
+        isLive && 'border-l-2 border-l-live bg-live/6 pl-3.5',
+        flashClass,
+      )}
     >
-      {fillPct > 0 && (
-        <div
-          className="pointer-events-none absolute inset-y-0 left-0"
-          style={{
-            width: `${fillPct}%`,
-            background: 'linear-gradient(90deg, rgba(233,228,216,.05), rgba(233,228,216,.01))',
-            borderRight: '1.5px solid rgba(233,228,216,.14)',
-          }}
-        />
-      )}
-      <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-bone/5">
-        <Timer size={15} className="text-muted-foreground" />
-      </div>
-      <div className="relative z-1 min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold text-foreground">
-          {formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}
-        </div>
-        {endTime && (
-          <div className="mt-0.25 text-[11.5px] text-muted-foreground/70">→ {endTime}</div>
-        )}
-        <div
-          className="mt-0.5 text-xs"
-          style={{ color: isLive ? '#ffb347' : 'var(--muted-foreground)' }}
-        >
-          {isLive
-            ? device.remote
-              ? `Playing on ${device.deviceName}`
-              : 'Live now'
-            : session.isManual
-              ? 'Manual'
-              : 'Tracked'}
-          {!isLive && device.deviceTag !== null && ` · ${device.deviceTag}`}
-          {device.noSignal !== null && (
-            <span className="ml-2 font-semibold text-phosphor">{device.noSignal}</span>
-          )}
-        </div>
-
-        {/* Los trofeos de la noche (LOGROS-IDEAS.md §2.1): la misma pieza
-            que las filas de la pantalla de Sesiones y el aviso de cierre —
-            píldora teñida del más raro + los iconos de verdad. */}
-        <SessionAchievements entries={achievements} onOpen={onOpenAchievement} />
-
-        {/* Diario de sesión: "dónde lo dejé" — ver SessionNote. */}
-        <SessionNote sessionId={session.id} note={session.note} />
-      </div>
-      <div className="relative z-1 flex flex-none items-center gap-1.5">
-        {isRecord && <Flame size={13} color="#ff5e57" />}
-        <span
-          className="text-[13px] font-semibold tabular-nums"
-          style={{ color: isLive ? '#ffb347' : 'var(--foreground)' }}
-        >
-          {formatElapsed(durationSec)}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <span className="w-26 flex-none text-body font-semibold text-bone">
+          {dayLabel(session, timeFormat)}
         </span>
-      </div>
-      {onDelete && (
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label="Delete session"
-          className="relative z-1 flex-none rounded-md p-1.5 text-muted-foreground opacity-0 group-hover/session:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+        <span className="w-28 flex-none text-body text-bone tabular-nums">{range ?? ''}</span>
+        <span
+          className={cn(
+            'w-22 flex-none font-display text-[24px] leading-none font-bold tabular-nums',
+            isLive ? 'text-live' : 'text-bone',
+          )}
         >
-          <Trash2 size={14} />
-        </button>
-      )}
+          {isLive ? formatElapsed(seconds) : formatDuration(seconds)}
+        </span>
+        <span className="min-w-32 flex-[1_1_140px]">
+          {isLive ? (
+            <span className="flex items-center gap-2 text-body font-semibold text-live">
+              <span
+                aria-hidden
+                className="size-2 flex-none animate-led-live rounded-full bg-live motion-reduce:animate-none"
+              />
+              {device.remote ? `Playing on ${device.deviceName}` : 'Playing now'}
+              {device.noSignal !== null && (
+                <span className="font-normal text-dust">{device.noSignal}</span>
+              )}
+            </span>
+          ) : session.isManual ? (
+            <span className="text-body text-dust">No device</span>
+          ) : (
+            <DeviceLabel session={session} tag={device.deviceTag} />
+          )}
+        </span>
+        <span className="flex min-w-0 flex-[2_1_220px] flex-wrap items-center gap-x-4 gap-y-1">
+          {/* Los trofeos de la noche: la misma pieza que las filas de la
+              pantalla de Sesiones y el aviso de cierre. */}
+          <SessionAchievements entries={achievements} onOpen={onOpenAchievement} />
+          {session.closedBy === 'janitor' && (
+            <span
+              className={markClass}
+              title="Afterplay closed it after losing the signal; the end time is the last one it saw."
+            >
+              <Timer size={13} className="flex-none" />
+              Closed automatically
+            </span>
+          )}
+          {session.isManual && !isLive && (
+            <span className={markClass}>
+              <PencilLine size={13} className="flex-none" />
+              Added by hand
+            </span>
+          )}
+          {isRecord && (
+            <span className={markClass}>
+              <Flame size={13} className="flex-none text-live" />
+              Longest
+            </span>
+          )}
+          {/* Sin nota, "Add a note" asoma al pasar por la fila: en una lista
+              larga, una pastilla por fila taparía las marcas de verdad. */}
+          {!session.note && (
+            <span className="-mt-1.5 opacity-0 transition-opacity duration-150 group-hover/session:opacity-100 focus-within:opacity-100">
+              <SessionNote sessionId={session.id} note={session.note} />
+            </span>
+          )}
+        </span>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete session"
+            className="flex size-7 flex-none items-center justify-center rounded-sm text-dust opacity-0 transition-[opacity,background-color,color] duration-150 group-hover/session:opacity-100 hover:bg-live/12 hover:text-live focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-phosphor"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Diario de sesión: "dónde lo dejé", a todo el ancho — ver SessionNote. */}
+      {session.note && <SessionNote sessionId={session.id} note={session.note} />}
     </div>
   );
 };
 
-export const SessionHistoryList = ({
+// ── Overview ────────────────────────────────────────────────────────────────
+
+const RECENT_LIMIT = 3;
+
+const RecentRow = ({ session }: { session: Session }): React.JSX.Element => {
+  const isLive = session.endedAt === null;
+  const liveSeconds = useLiveTimer(isLive ? session.startedAt : null);
+  const device = useSessionDevice(session);
+  const { data: timeFormat = '24h' } = useTimeFormat();
+  const seconds = sessionSeconds(session, liveSeconds);
+  return (
+    <li
+      className={cn(
+        'flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-3 last:border-b-0',
+        isLive && 'border-l-2 border-l-live bg-live/6',
+      )}
+    >
+      <span className="w-24 flex-none text-body text-bone">{dayLabel(session, timeFormat)}</span>
+      <span className="w-32 flex-none text-body text-bone tabular-nums">
+        {timeRange(session, timeFormat) ?? ''}
+      </span>
+      <span
+        className={cn(
+          'w-22 flex-none font-display text-[24px] leading-none font-bold tabular-nums',
+          isLive ? 'text-live' : 'text-bone',
+        )}
+      >
+        {isLive ? formatElapsed(seconds) : formatDuration(seconds)}
+      </span>
+      <span className="min-w-0 flex-1 text-body text-bone [overflow-wrap:anywhere]">
+        {isLive
+          ? device.remote
+            ? `Playing on ${device.deviceName}`
+            : 'Playing now'
+          : session.isManual
+            ? 'Added by hand'
+            : (device.deviceTag ?? 'Tracked')}
+      </span>
+    </li>
+  );
+};
+
+export const RecentSessions = ({
   sessions,
+  onSeeAll,
+}: {
+  sessions: Session[];
+  onSeeAll: () => void;
+}): React.JSX.Element | null => {
+  if (sessions.length === 0) return null;
+  return (
+    <section>
+      <div className="mb-2.5 flex items-baseline justify-between gap-3">
+        <h2 className="text-small font-semibold text-dust">Recent sessions</h2>
+        <button type="button" onClick={onSeeAll} className={textLinkClass}>
+          See all
+        </button>
+      </div>
+      <ul className="overflow-hidden rounded-md border border-line bg-panel">
+        {sessions.slice(0, RECENT_LIMIT).map((session) => (
+          <RecentRow key={session.id} session={session} />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+// ── Pestaña Sessions ────────────────────────────────────────────────────────
+
+type Week = { key: number; start: Date; sessions: Session[] };
+
+const startOfWeek = (date: Date): Date => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  // Semana de lunes a domingo.
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return start;
+};
+
+const groupByWeek = (sessions: Session[]): Week[] => {
+  const weeks = new Map<number, Week>();
+  for (const session of sessions) {
+    const start = startOfWeek(session.startedAt);
+    const key = start.getTime();
+    const week = weeks.get(key) ?? { key, start, sessions: [] };
+    week.sessions.push(session);
+    weeks.set(key, week);
+  }
+  return [...weeks.values()].sort((a, b) => b.key - a.key);
+};
+
+const weekLabel = (start: Date): string => {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const month = (date: Date): string => date.toLocaleDateString('en-US', { month: 'short' });
+  const thisYear = new Date().getFullYear();
+  const year = end.getFullYear() === thisYear ? '' : `, ${end.getFullYear()}`;
+  return start.getMonth() === end.getMonth()
+    ? `${month(start)} ${start.getDate()} to ${end.getDate()}${year}`
+    : `${month(start)} ${start.getDate()} to ${month(end)} ${end.getDate()}${year}`;
+};
+
+const PlaythroughBlock = ({
+  iteration,
+  open,
+  onToggle,
+  flashSessionId,
+  achievementsBySession,
+  onDelete,
+}: {
+  iteration: IterationDetail;
+  open: boolean;
+  onToggle: () => void;
+  flashSessionId: SessionId | null;
+  achievementsBySession: Map<SessionId, SessionAchievementEntry[]>;
+  onDelete: (session: Session) => void;
+}): React.JSX.Element => {
+  const sessions = [...iteration.sessions].sort(
+    (a, b) => b.startedAt.getTime() - a.startedAt.getTime(),
+  );
+  const weeks = groupByWeek(sessions);
+  const closed = sessions.filter((session) => session.endedAt !== null);
+  const average =
+    closed.length > 0
+      ? closed.reduce((sum, session) => sum + (session.durationSec ?? 0), 0) / closed.length
+      : 0;
+  const maxSeconds = Math.max(0, ...closed.map((session) => session.durationSec ?? 0));
+  const currentWeek = startOfWeek(new Date()).getTime();
+  const started = iteration.startedAt
+    ? iteration.startedAt.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
+
+  return (
+    <section className="border-b border-line pb-4 last:border-b-0">
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 border-b border-line pb-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="group/pt flex items-center gap-2.5 rounded-sm text-left outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+        >
+          <ChevronDown
+            size={18}
+            className={cn(
+              'flex-none text-dust transition-transform duration-150 motion-reduce:transition-none',
+              !open && '-rotate-90',
+            )}
+          />
+          <span>
+            <span className="block font-display text-title font-bold text-bone group-hover/pt:text-phosphor">
+              {iteration.label}
+            </span>
+            <span className="block text-small text-dust">
+              {started ? `Started ${started}` : 'No start date'}
+              {iteration.endedAt === null && iteration.startedAt !== null && ' · still going'}
+            </span>
+          </span>
+        </button>
+        <dl className="flex gap-8">
+          {[
+            ['played', formatDuration(iteration.hours * 3600)],
+            ['sessions', String(sessions.length)],
+            ['average', average > 0 ? formatDuration(average) : '—'],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dd className="font-display text-[30px] leading-none font-bold text-bone tabular-nums">
+                {value}
+              </dd>
+              <dt className="mt-1 text-small text-dust">{label}</dt>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {open &&
+        (weeks.length === 0 ? (
+          <p className="py-4 text-body text-dust">No sessions in this playthrough yet.</p>
+        ) : (
+          weeks.map((week, index) => {
+            const total = week.sessions.reduce(
+              (sum, session) => sum + (session.endedAt === null ? 0 : (session.durationSec ?? 0)),
+              0,
+            );
+            return (
+              <div
+                key={week.key}
+                className="grid grid-cols-[132px_minmax(0,1fr)] gap-x-4 border-b border-line last:border-b-0"
+              >
+                <div className="py-2.5">
+                  <div className="text-body font-semibold text-bone">{weekLabel(week.start)}</div>
+                  {week.key === currentWeek && (
+                    <div className="text-small text-dust">this week</div>
+                  )}
+                  {index === weeks.length - 1 && week.key !== currentWeek && weeks.length > 1 && (
+                    <div className="text-small text-dust">first week</div>
+                  )}
+                  <div className="mt-1 font-display text-[24px] leading-none font-bold text-bone tabular-nums">
+                    {formatDuration(total)}
+                  </div>
+                </div>
+                <div>
+                  {week.sessions.map((session) => (
+                    <SessionRow
+                      key={session.id}
+                      session={session}
+                      isRecord={
+                        closed.length > 1 &&
+                        session.endedAt !== null &&
+                        (session.durationSec ?? 0) > 0 &&
+                        session.durationSec === maxSeconds
+                      }
+                      flash={session.id === flashSessionId}
+                      achievements={achievementsBySession.get(session.id) ?? []}
+                      // El flash viaja por el módulo y la ficha cambia sola a
+                      // la pestaña Achievements, que lo recoge al montar.
+                      onOpenAchievement={requestAchievementFlash}
+                      onDelete={session.endedAt !== null ? () => onDelete(session) : undefined}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        ))}
+    </section>
+  );
+};
+
+// Tiempo por dispositivo (barras), solo con más de un dispositivo conocido:
+// con un PC solo es una barra al 100 %.
+const TimeByDevice = ({ sessions }: { sessions: Session[] }): React.JSX.Element | null => {
+  const { hasSeveral, nameOf, devices } = useDeviceContext();
+  if (!hasSeveral) return null;
+  const totals = new Map<string, { label: string; seconds: number; phone: boolean }>();
+  for (const session of sessions) {
+    if (session.endedAt === null) continue;
+    const key = session.isManual ? 'manual' : session.deviceId;
+    const os = devices.find((device) => device.id === session.deviceId)?.os;
+    const row = totals.get(key) ?? {
+      label: session.isManual ? 'Added by hand' : nameOf(session.deviceId),
+      seconds: 0,
+      phone: !session.isManual && (os === 'web' || session.startedBy === 'timer'),
+    };
+    row.seconds += session.durationSec ?? 0;
+    totals.set(key, row);
+  }
+  const rows = [...totals.entries()].sort((a, b) => b[1].seconds - a[1].seconds);
+  if (rows.length === 0) return null;
+  const max = Math.max(1, ...rows.map(([, row]) => row.seconds));
+  const BAR = ['bg-phosphor', 'bg-tube', 'bg-st-resting', 'bg-st-beaten'];
+
+  return (
+    <section>
+      <h2 className="mb-3 text-lead font-semibold text-bone">Time by device</h2>
+      <ul className="flex flex-col gap-4">
+        {rows.map(([key, row], index) => (
+          <li key={key}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="flex items-center gap-2 text-body font-semibold text-bone">
+                {key !== 'manual' &&
+                  (row.phone ? (
+                    <Smartphone size={14} className="text-dust" />
+                  ) : (
+                    <Monitor size={14} className="text-dust" />
+                  ))}
+                {row.label}
+              </span>
+              <span className="font-display text-[24px] leading-none font-bold text-bone tabular-nums">
+                {formatDuration(row.seconds)}
+              </span>
+            </div>
+            {key !== 'manual' && (
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-inset">
+                <div
+                  className={cn('h-full rounded-full', BAR[index] ?? 'bg-dust')}
+                  style={{ width: `${Math.max(2, (row.seconds / max) * 100)}%` }}
+                />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+export const SessionsTab = ({
   gameId,
-}: SessionHistoryListProps): React.JSX.Element | null => {
+  iterations,
+  aside,
+}: {
+  gameId: GameId;
+  iterations: IterationDetail[];
+  // La columna derecha que pone la ficha (el History).
+  aside?: React.ReactNode;
+}): React.JSX.Element => {
   const navigate = useNavigate();
-  // Sesión pendiente de confirmación de borrado (null = diálogo cerrado).
   const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
   const { data: timeFormat = '24h' } = useTimeFormat();
   // Qué sesión resaltar por haber llegado desde el aviso de cierre. Vive
-  // fuera de React (el aviso puede llegar en cualquier pantalla), así que se
-  // lee con useSyncExternalStore — que además cubre el caso de estar YA en
-  // esta ficha, donde no hay remontaje. Quien lo consume es la propia fila,
-  // en cuanto arranca el parpadeo.
+  // fuera de React (el aviso puede llegar en cualquier pantalla). Quien lo
+  // consume es la propia fila, en cuanto arranca el parpadeo.
   const flashSessionId = useSyncExternalStore(subscribeSessionFlash, getPendingSessionFlash);
+  const achievementsBySession = useAchievementsBySession(gameId);
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
 
-  // Los logros del juego, agrupados por la sesión en la que cayeron — el
-  // cruce ya viene hecho del main (placeUnlock); esto solo lo indexa. Los
-  // que no cayeron en ninguna sesión trackeada (sessionId null: anteriores a
-  // la app, u otro PC) simplemente no aparecen en ninguna fila — regla 3 de
-  // LOGROS-IDEAS.md: lo sesional solo cuenta lo sesional.
-  const { data: achievementsData } = useGameAchievements(gameId);
-  // Con el achievementId EXPLICITO: AchievementEntry lo llama `id` y la forma
-  // compartida `achievementId` — sin este mapeo el campo quedaba undefined
-  // por estructura y los trofeos de la fila no enlazaban a nada (el boton ni
-  // se pintaba), que es justo lo que el rediseño vino a arreglar.
-  const achievementsBySession = new Map<SessionId, SessionAchievementEntry[]>();
-  for (const entry of achievementsData?.entries ?? []) {
-    if (entry.sessionId === null || entry.unlockedAt === null) continue;
-    const list = achievementsBySession.get(entry.sessionId) ?? [];
-    list.push({
-      achievementId: entry.id,
-      displayName: entry.displayName,
-      iconUrl: entry.iconUrl,
-      globalPercent: entry.globalPercent,
-    });
-    achievementsBySession.set(entry.sessionId, list);
-  }
-
-  if (sessions.length === 0) return null;
-
-  const maxDurationSec = Math.max(
-    ...sessions.map((session) => session.durationSec ?? (session.endedAt === null ? 1 : 0)),
-    1,
-  );
-  const visible = sessions.slice(0, VISIBLE_LIMIT);
-  const realSessionsCount = sessions.length;
+  const ordered = [...iterations].reverse();
+  const newestId = ordered[0]?.id;
+  const allSessions = iterations.flatMap((iteration) => iteration.sessions);
 
   return (
-    <div className="mt-7.5">
-      <SectionLabel className="mb-3.25">Session history</SectionLabel>
-      <div className="flex flex-col gap-2.25">
-        {visible.map((session, index) => (
-          <div key={session.id} className={revealClass} style={revealStyle(index)}>
-            <SessionRow
-              session={session}
-              maxDurationSec={maxDurationSec}
-              isRecord={
-                session.endedAt !== null &&
-                session.durationSec !== null &&
-                session.durationSec > 0 &&
-                session.durationSec === maxDurationSec
-              }
-              flash={session.id === flashSessionId}
-              achievements={achievementsBySession.get(session.id) ?? []}
-              // Ya estamos en la ficha del juego: no hay ruta que cambiar. El
-              // flash viaja por el módulo y AchievementsSection (más abajo en
-              // esta misma pantalla) lo recoge en caliente.
-              onOpenAchievement={requestAchievementFlash}
-              onDelete={session.endedAt !== null ? () => setPendingDelete(session) : undefined}
-            />
+    <div className="grid items-start gap-x-12 gap-y-10 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="min-w-0">
+        {allSessions.length === 0 ? (
+          <div className="flex items-center gap-3 rounded-md border border-dashed border-line-strong px-5 py-6 text-body text-dust">
+            <NotebookPen size={16} className="flex-none" />
+            No sessions yet. Play it from here or let Afterplay notice it running.
           </div>
-        ))}
-        {sessions.length > VISIBLE_LIMIT && (
+        ) : (
+          <div className="flex flex-col gap-6">
+            {ordered.map((iteration) => {
+              const holdsFlash = iteration.sessions.some((s) => s.id === flashSessionId);
+              const open = toggled[iteration.id] ?? (iteration.id === newestId || holdsFlash);
+              return (
+                <PlaythroughBlock
+                  key={iteration.id}
+                  iteration={iteration}
+                  open={open || holdsFlash}
+                  onToggle={() => setToggled((current) => ({ ...current, [iteration.id]: !open }))}
+                  flashSessionId={flashSessionId}
+                  achievementsBySession={achievementsBySession}
+                  onDelete={setPendingDelete}
+                />
+              );
+            })}
+          </div>
+        )}
+        {allSessions.length > 0 && (
           <button
             type="button"
             onClick={() => navigate(`/sessions?game=${gameId}`)}
-            className="flex w-fit items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-4 py-2.25 text-[13px] font-semibold text-foreground hover:bg-raised-hover"
+            className={cn(textLinkClass, 'mt-5 inline-flex items-center gap-1.5')}
           >
-            <span>View all {realSessionsCount} sessions</span>
+            Open in Sessions ({pluralize(allSessions.length, 'session')})
             <ArrowRight size={14} />
           </button>
         )}
       </div>
+
+      <aside className="flex flex-col gap-9">
+        <TimeByDevice sessions={allSessions} />
+        {aside}
+      </aside>
 
       <DeleteSessionDialog
         session={

@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -18,6 +17,7 @@ import { useScanFolders, useScanResults, useSetScanFolders } from '../../../hook
 import { AMBER, BLUE, GREEN } from '../../../lib/colors';
 import { formatBytes } from '../../../lib/format';
 import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../../lib/styles';
+import { AddModeSwitch } from './AddModeSwitch';
 import { CoverThumb } from './CoverThumb';
 import { ExecutablePicker } from './ExecutablePicker';
 import type { OwnedGameMatch } from './SearchStep';
@@ -93,25 +93,14 @@ export const FolderScanStep = ({
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-2.75 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover"
-        >
-          <ArrowLeft size={13} />
-          Search instead
-        </button>
-        <div className="flex-1 text-[12px] text-muted-foreground">
-          One level per folder — each subfolder is a game.
-        </div>
-      </div>
+      <AddModeSwitch mode="scan" onSearch={onBack} onScan={() => {}} />
+      <div className="text-small text-dust">One level per folder — each subfolder is a game.</div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {folders.map((folder) => (
           <span
             key={folder}
-            className="flex max-w-full items-center gap-1.5 rounded-[8px] border px-2.25 py-1.25"
+            className="flex max-w-full items-center gap-1.5 rounded-sm border px-2.25 py-1.25"
             style={{ borderColor: `${BLUE}2e`, background: `${BLUE}0d` }}
           >
             <HardDrive size={11} className="flex-none" style={{ color: BLUE }} />
@@ -131,7 +120,7 @@ export const FolderScanStep = ({
         <button
           type="button"
           onClick={handleAddFolder}
-          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-input px-2.25 py-1.25 text-[11px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground"
+          className="flex items-center gap-1.5 rounded-sm border border-dashed border-input px-2.25 py-1.25 text-micro font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground"
         >
           <FolderPlus size={12} />
           {folders.length === 0 ? 'Choose a games folder' : 'Add another'}
@@ -142,7 +131,7 @@ export const FolderScanStep = ({
         type="button"
         onClick={rescan}
         disabled={folders.length === 0 || isRescanning}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border border-input bg-bone/[0.04] px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-bone/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-sm border border-input bg-bone/[0.04] px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-bone/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isRescanning ? <Loader2 size={15} className="animate-spin" /> : <FolderSearch size={15} />}
         {/* "Rescan" cuando ya hay algo: el botón dejó de ser la única forma
@@ -155,13 +144,13 @@ export const FolderScanStep = ({
           no se traga en silencio: sin esto, el spinner paraba con la foto
           vieja y no había forma de distinguirlo de "no encontre nada". */}
       {rescanError && !isRescanning && (
-        <div className="mt-2 text-center text-[11.5px] font-semibold text-destructive">
+        <div className="mt-2 text-center text-micro font-semibold text-destructive">
           Couldn&apos;t scan your folders — {rescanError.message}
         </div>
       )}
 
       {setFolders.isError && (
-        <div className="mt-2 text-center text-[11.5px] font-semibold text-destructive">
+        <div className="mt-2 text-center text-micro font-semibold text-destructive">
           Couldn&apos;t update your folders — {setFolders.error.message}
         </div>
       )}
@@ -170,7 +159,7 @@ export const FolderScanStep = ({
           sola en segundo plano, no decirlo dejaría al usuario sin saber si
           mira algo de hace un minuto o de la semana pasada. */}
       {report?.scannedAt && !isRescanning && (
-        <div className="mt-1.75 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-1.75 flex items-center justify-center gap-1.5 text-micro text-muted-foreground">
           <RefreshCw size={10.5} className="flex-none" />
           Updated {formatAgo(report.scannedAt)} · watching {folders.length}{' '}
           {folders.length === 1 ? 'folder' : 'folders'} for new games
@@ -200,7 +189,7 @@ export const FolderScanStep = ({
             Point at the folders where your games live. Each subfolder is looked up in IGDB by its
             name, and the game&apos;s executable is found for you — you pick which ones to add.
           </p>
-          <p className="max-w-72 text-[11.5px] leading-relaxed text-muted-foreground/70">
+          <p className="max-w-72 text-micro leading-relaxed text-muted-foreground/70">
             Afterplay keeps watching them afterwards, so anything you install later shows up here on
             its own.
           </p>
@@ -252,7 +241,7 @@ const Results = ({
 
   if (results.length === 0) {
     return (
-      <div className="mt-4 rounded-[10px] border border-dashed border-border px-4 py-6 text-center text-[12.5px] text-muted-foreground">
+      <div className="mt-4 rounded-sm border border-dashed border-border px-4 py-6 text-center text-[12.5px] text-muted-foreground">
         No subfolders found there. Point at the folder that CONTAINS your games, not at one game.
       </div>
     );
@@ -261,8 +250,8 @@ const Results = ({
   return (
     <div className="mt-3.5">
       <div className="mb-2 flex items-center justify-between px-0.5">
-        <span className="text-[11px] font-bold tracking-[.11em] text-muted-foreground">
-          {addable.length} {addable.length === 1 ? 'GAME' : 'GAMES'} TO ADD
+        <span className="text-micro font-semibold text-muted-foreground">
+          {addable.length} {addable.length === 1 ? 'game' : 'games'} to add
         </span>
         <span className="flex items-center gap-2.5">
           {planned.length > 0 && (
@@ -380,7 +369,7 @@ const CandidateRow = ({
             ? onSelect(proposed, { ...entry, executablePath })
             : onPromotePlanned?.(plannedGameId, { ...entry, executablePath })
         }
-        className={`group/result flex w-full items-start gap-3.25 rounded-[11px] border bg-bone/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+        className={`group/result flex w-full items-start gap-3.25 rounded-md border bg-bone/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
           isLocked
             ? 'cursor-default border-border opacity-55'
             : `hover:-translate-y-0.5 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
@@ -389,7 +378,7 @@ const CandidateRow = ({
         }`}
         style={plannedGameId === null || isLocked ? undefined : { borderColor: `${BLUE}55` }}
       >
-        <div className="h-25 w-18 flex-none overflow-hidden rounded-[8px] border border-border bg-muted">
+        <div className="h-25 w-18 flex-none overflow-hidden rounded-sm border border-border bg-muted">
           <CoverThumb
             url={proposed.coverUrl}
             alt=""
@@ -407,10 +396,10 @@ const CandidateRow = ({
             )}
             {plannedGameId !== null && (
               <span
-                className="flex-none rounded-md px-1.75 py-0.5 text-micro font-bold tracking-[.08em]"
+                className="flex-none rounded-md px-1.75 py-0.5 text-micro font-semibold"
                 style={{ background: `${BLUE}22`, color: BLUE }}
               >
-                IN YOUR PLAN
+                In your plan
               </span>
             )}
           </div>
@@ -433,7 +422,7 @@ const CandidateRow = ({
           <div className="mt-1.75 flex items-center gap-1.5">
             <HardDrive size={11} className="flex-none" style={{ color: BLUE }} />
             <span
-              className="truncate text-[11px] font-semibold text-foreground/90"
+              className="truncate text-micro font-semibold text-foreground/90"
               title={entry.path}
             >
               {entry.folderName}
@@ -447,7 +436,7 @@ const CandidateRow = ({
               resulta que ya está instalado. Se dice explícitamente porque el
               clic NO hace lo mismo que en las demás filas. */}
           {plannedGameId !== null && (
-            <p className="mt-1.5 text-[11px] leading-relaxed" style={{ color: BLUE }}>
+            <p className="mt-1.5 text-micro leading-relaxed" style={{ color: BLUE }}>
               {isLocked
                 ? 'Already in your plan.'
                 : 'Planned and already installed — move it into your library.'}
@@ -478,7 +467,7 @@ const CandidateRow = ({
             <button
               type="button"
               onClick={() => setShowAlternatives((current) => !current)}
-              className="flex w-full items-center gap-2 border-t border-border px-3 py-1.75 text-left outline-none transition-colors duration-150 hover:bg-bone/[0.03] focus-visible:bg-bone/[0.05]"
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-1.75 text-left outline-hidden transition-colors duration-150 hover:bg-bone/[0.03] focus-visible:bg-bone/[0.05]"
             >
               <ChevronDown
                 size={12}
@@ -502,7 +491,7 @@ const CandidateRow = ({
                   </span>
                 ))}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate text-micro font-semibold text-muted-foreground">
                 Not this one? Pick from {alternatives.length} other{' '}
                 {alternatives.length === 1 ? 'match' : 'matches'}
               </span>
@@ -513,8 +502,8 @@ const CandidateRow = ({
                 className={`border-t border-border bg-inset/20 px-2.5 pt-2 pb-2.5 ${expandClass}`}
               >
                 <div className="mb-2 flex items-center justify-between px-0.5">
-                  <span className="text-micro font-bold tracking-[.12em] text-muted-foreground">
-                    OTHER MATCHES
+                  <span className="text-micro font-semibold text-muted-foreground">
+                    Other matches
                   </span>
                   <span className="text-micro text-muted-foreground/60">
                     Click a cover to use it
@@ -567,7 +556,7 @@ const FixMatchRow = ({
 
   return (
     <div
-      className="overflow-hidden rounded-[11px] border border-dashed transition-colors duration-150"
+      className="overflow-hidden rounded-md border border-dashed transition-colors duration-150"
       style={{ borderColor: open ? `${AMBER}55` : 'var(--input)' }}
     >
       <button
@@ -618,18 +607,18 @@ const FixMatchRow = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search the catalog…"
-              className="w-full rounded-[9px] border border-edge bg-inset py-2 pr-3 pl-8.5 text-[12.5px] text-foreground outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
+              className="w-full rounded-sm border border-edge bg-inset py-2 pr-3 pl-8.5 text-[12.5px] text-foreground outline-hidden transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
             />
           </div>
 
           <div className="mt-2 max-h-80 overflow-y-auto">
             {search.isLoading && query.trim() ? (
-              <div className="flex items-center gap-2 px-1 py-2 text-[11.5px] text-muted-foreground">
+              <div className="flex items-center gap-2 px-1 py-2 text-micro text-muted-foreground">
                 <Loader2 size={12} className="animate-spin" />
                 Searching…
               </div>
             ) : search.data?.length === 0 ? (
-              <div className="px-1 py-2 text-[11.5px] text-muted-foreground">
+              <div className="px-1 py-2 text-micro text-muted-foreground">
                 Nothing found — try fewer words.
               </div>
             ) : search.data && search.data.length > 0 ? (
@@ -682,7 +671,7 @@ const MatchCardGrid = ({
           type="button"
           disabled={isLocked}
           onClick={() => (owned && canPromote ? onPickPlanned?.(owned.gameId) : onPick(match))}
-          className={`group/alt relative overflow-hidden rounded-[10px] border border-border bg-muted text-left outline-none transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] ${
+          className={`group/alt relative overflow-hidden rounded-sm border border-border bg-muted text-left outline-hidden transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] ${
             isLocked
               ? 'cursor-default opacity-45'
               : 'hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_12px_28px_rgba(3,6,7,.5)] focus-visible:border-primary/60'
@@ -701,7 +690,7 @@ const MatchCardGrid = ({
           {/* El año SOBRE la carátula: entre cinco juegos homónimos es el dato
               que desempata, y aquí no puede perderse por truncado. */}
           {match.releaseYear !== null && (
-            <span className="absolute top-1.5 right-1.5 rounded-[6px] bg-inset/75 px-1.5 py-0.5 text-micro font-bold text-bone tabular-nums shadow-[0_2px_6px_rgba(3,6,7,.4)] backdrop-blur-sm">
+            <span className="absolute top-1.5 right-1.5 rounded-sm bg-inset/75 px-1.5 py-0.5 text-micro font-bold text-bone tabular-nums shadow-[0_2px_6px_rgba(3,6,7,.4)] backdrop-blur-sm">
               {match.releaseYear}
             </span>
           )}
@@ -710,7 +699,7 @@ const MatchCardGrid = ({
               mirando el ojo al elegir de una rejilla. */}
           {owned && (
             <span
-              className="absolute top-1.5 left-1.5 rounded-[6px] px-1.5 py-0.5 text-micro font-bold tracking-[.06em] shadow-[0_2px_6px_rgba(3,6,7,.4)] backdrop-blur-sm"
+              className="absolute top-1.5 left-1.5 rounded-sm px-1.5 py-0.5 text-micro font-semibold shadow-[0_2px_6px_rgba(3,6,7,.4)] backdrop-blur-sm"
               style={{ background: 'rgba(8,11,12,.82)', color: owned.color }}
             >
               {owned.label}
@@ -761,7 +750,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left transition-colors duration-150 hover:bg-bone/[0.03]"
+        className="flex w-full items-center gap-2 rounded-sm px-1 py-1.5 text-left transition-colors duration-150 hover:bg-bone/[0.03]"
       >
         <ChevronDown
           size={13}
@@ -769,7 +758,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
           style={open ? undefined : { transform: 'rotate(-90deg)' }}
         />
         <Check size={13} className="flex-none" style={{ color: GREEN }} />
-        <span className="flex-1 text-[11.5px] font-semibold text-muted-foreground">
+        <span className="flex-1 text-micro font-semibold text-muted-foreground">
           Already in your library
           {linkedCount > 0 && (
             <span className="ml-2 font-medium" style={{ color: GREEN }}>
@@ -790,7 +779,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
           {entries.map((entry) => (
             <div
               key={entry.path}
-              className="flex items-center gap-2.5 rounded-[9px] border border-border bg-bone/[0.015] px-3 py-1.75"
+              className="flex items-center gap-2.5 rounded-sm border border-border bg-bone/[0.015] px-3 py-1.75"
             >
               <Check size={12} className="flex-none" style={{ color: GREEN }} />
               <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">

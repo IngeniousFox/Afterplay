@@ -47,7 +47,7 @@ const SteamResultRow = ({
         isLocked ? 'cursor-default opacity-55' : 'hover:bg-bone/[0.05]'
       }`}
     >
-      <div className="h-11.5 w-23 flex-none overflow-hidden rounded-[7px] border border-line bg-bone/[0.03]">
+      <div className="h-11.5 w-23 flex-none overflow-hidden rounded-sm border border-line bg-bone/[0.03]">
         {src && <img src={src} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="min-w-0 flex-1">
@@ -57,7 +57,7 @@ const SteamResultRow = ({
           </span>
           {owned && (
             <span
-              className="flex-none rounded-md px-1.75 py-0.5 text-micro font-bold tracking-[.08em]"
+              className="flex-none rounded-md px-1.75 py-0.5 text-micro font-semibold"
               style={{ background: `${owned.color}22`, color: owned.color }}
             >
               {owned.label}
@@ -68,11 +68,11 @@ const SteamResultRow = ({
             lo que hay que decidir aquí ya no es "¿es este juego?" sino qué va
             a pasar al pincharlo — que no es dar de alta nada nuevo. */}
         {owned ? (
-          <div className="mt-0.5 text-[11px]" style={{ color: owned.color }}>
+          <div className="mt-0.5 text-micro" style={{ color: owned.color }}>
             {owned.hint}
           </div>
         ) : (
-          <div className="mt-0.5 text-[11px] text-muted-foreground">Steam · {result.appId}</div>
+          <div className="mt-0.5 text-micro text-muted-foreground">Steam · {result.appId}</div>
         )}
       </div>
     </button>
@@ -140,10 +140,10 @@ export const SteamFallback = ({
   return (
     <div className="flex flex-col">
       <div className="px-3.5 pt-3 pb-2">
-        <div className="text-micro font-bold tracking-[.09em]" style={{ color: BLUE }}>
+        <div className="text-micro font-semibold" style={{ color: BLUE }}>
           NOT IN IGDB YET — FOUND ON STEAM
         </div>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
           Newly announced games take a while to reach IGDB. Add it from Steam and it comes with its
           cover, description and genres — Afterplay switches it over to IGDB on its own as soon as
           it shows up there.

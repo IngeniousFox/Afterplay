@@ -1,8 +1,8 @@
-import { ArrowRight, FolderSearch, Gamepad2, Search, TriangleAlert, X } from 'lucide-react';
+import { ArrowRight, Gamepad2, Search, TriangleAlert, X } from 'lucide-react';
 import { useState } from 'react';
 import type { IgdbSearchResult, SteamSearchResult } from '../../../../../shared/types';
+import { AddModeSwitch } from './AddModeSwitch';
 import { SteamFallback } from './SteamFallback';
-import { BLUE } from '../../../lib/colors';
 import { revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
 import type { GameId } from '../../../../../shared/entityIds';
@@ -62,7 +62,7 @@ const MAX_GENRES = 2;
 // tamaño. Sin nada superpuesto encima: la carátula se ve entera, que es
 // media gracia de reconocer un juego de un vistazo.
 const CoverFrame = ({ url }: { url: string | null }): React.JSX.Element => (
-  <div className="h-25 w-18 flex-none overflow-hidden rounded-[8px] border border-border bg-muted">
+  <div className="h-25 w-18 flex-none overflow-hidden rounded-sm border border-border bg-muted">
     <CoverThumb
       url={url}
       alt=""
@@ -133,6 +133,7 @@ export const SearchStep = ({
 
   return (
     <>
+      {onScanFolders && <AddModeSwitch mode="search" onSearch={() => {}} onScan={onScanFolders} />}
       {/* group + focus-within: el brillo del foco tiene que envolver también
           al icono y al botón de limpiar, no solo al campo de texto. */}
       <div className="group/search relative">
@@ -146,7 +147,7 @@ export const SearchStep = ({
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search a game… (e.g. Sekiro)"
-          className="w-full rounded-[10px] border border-edge bg-inset py-2.75 pr-9.5 pl-9.5 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
+          className="w-full rounded-sm border border-edge bg-inset py-2.75 pr-9.5 pl-9.5 text-sm text-foreground outline-hidden transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
         />
         {trimmed !== '' && (
           <button
@@ -160,40 +161,10 @@ export const SearchStep = ({
         )}
       </div>
 
-      {/* La otra vía de alta, al lado del buscador y no escondida en un menú:
-          quien acaba de instalar un juego no quiere teclear su nombre, quiere
-          que la app lo encuentre en su disco. */}
-      {onScanFolders && (
-        <button
-          type="button"
-          onClick={onScanFolders}
-          className="group/scan mt-2.5 flex w-full items-center gap-2.5 rounded-[10px] border border-dashed border-input bg-bone/[0.02] px-3.25 py-2.5 text-left transition-colors duration-150 hover:border-primary/45 hover:bg-bone/[0.04]"
-        >
-          <span
-            className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
-            style={{ background: `${BLUE}1f` }}
-          >
-            <FolderSearch size={14} style={{ color: BLUE }} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[12.5px] font-semibold text-foreground">
-              Scan my game folders
-            </span>
-            <span className="block text-[11px] text-muted-foreground">
-              Find installed games on disk, with their folder and executable
-            </span>
-          </span>
-          <ArrowRight
-            size={14}
-            className="flex-none text-muted-foreground transition-[transform,color] duration-150 group-hover/scan:translate-x-0.75 group-hover/scan:text-primary"
-          />
-        </button>
-      )}
-
       {hasResults && (
         <div className="mt-3.5 flex items-center justify-between px-0.5">
-          <span className="text-[11px] font-bold tracking-[.11em] text-muted-foreground">
-            {results.length} {results.length === 1 ? 'RESULT' : 'RESULTS'}
+          <span className="text-micro font-semibold text-muted-foreground">
+            {results.length} {results.length === 1 ? 'result' : 'results'}
           </span>
           <span className="text-micro text-muted-foreground/60">↑ ↓ to browse · ↵ to pick</span>
         </div>
@@ -204,11 +175,11 @@ export const SearchStep = ({
           Array.from({ length: 4 }, (_, index) => (
             <div
               key={index}
-              className="flex animate-pulse items-center gap-3.25 rounded-[11px] border border-border p-2.75"
+              className="flex animate-pulse items-center gap-3.25 rounded-md border border-border p-2.75"
             >
               {/* Mismo tamaño que CoverFrame, para que al llegar los
                   resultados la fila no cambie de alto ni dé el salto. */}
-              <div className="h-25 w-18 flex-none rounded-[8px] bg-bone/[0.06]" />
+              <div className="h-25 w-18 flex-none rounded-sm bg-bone/[0.06]" />
               <div className="flex-1">
                 <div className="h-3.5 w-2/3 rounded bg-bone/[0.06]" />
                 <div className="mt-2 h-3 w-1/3 rounded bg-bone/[0.05]" />
@@ -271,7 +242,7 @@ export const SearchStep = ({
                 // se ve entera), así que vale con llamarlo al pintar la fila
                 // resaltada — sin efectos ni refs que mantener.
                 ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-                className={`group/result flex items-start gap-3.25 rounded-[11px] border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+                className={`group/result flex items-start gap-3.25 rounded-md border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
                   isLocked
                     ? 'cursor-default border-border bg-bone/[0.02] opacity-55'
                     : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
@@ -301,7 +272,7 @@ export const SearchStep = ({
                     )}
                     {owned && (
                       <span
-                        className="flex-none rounded-md px-1.75 py-0.5 text-micro font-bold tracking-[.08em]"
+                        className="flex-none rounded-md px-1.75 py-0.5 text-micro font-semibold"
                         style={{ background: `${owned.color}22`, color: owned.color }}
                       >
                         {owned.label}
@@ -330,15 +301,12 @@ export const SearchStep = ({
                       juego?" (eso lo zanja el tenerlo ya) sino qué va a pasar
                       al pincharlo — que no es dar de alta nada nuevo. */}
                   {owned ? (
-                    <p
-                      className="mt-1.5 text-[11.5px] leading-relaxed"
-                      style={{ color: owned.color }}
-                    >
+                    <p className="mt-1.5 text-micro leading-relaxed" style={{ color: owned.color }}>
                       {owned.hint}
                     </p>
                   ) : (
                     result.summary && (
-                      <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground/75">
+                      <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground/75">
                         {result.summary}
                       </p>
                     )

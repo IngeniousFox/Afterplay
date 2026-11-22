@@ -237,7 +237,7 @@ const TrophyCase = ({
 
   return (
     <div
-      className="relative overflow-hidden rounded-[16px] border"
+      className="relative overflow-hidden rounded-md border"
       style={{
         borderColor: `${accent}33`,
         background: `linear-gradient(118deg, ${accent}1c, rgba(233,228,216,.016) 54%)`,
@@ -288,8 +288,8 @@ const TrophyCase = ({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-micro font-extrabold tracking-[.2em]" style={{ color: accent }}>
-              {complete ? 'COMPLETED' : starUltra ? 'YOUR RAREST PIECE' : 'RAREST UNLOCKED'}
+            <div className="text-micro font-semibold" style={{ color: accent }}>
+              {complete ? 'Completed' : starUltra ? 'Your rarest piece' : 'Rarest unlocked'}
             </div>
             <div className="mt-1.75 text-[25px] leading-[1.12] font-display font-bold text-foreground tabular-nums">
               {star.displayName}
@@ -319,7 +319,7 @@ const TrophyCase = ({
                 </span>
               )}
               {star.unlockedAt && star.dateReliable && (
-                <span className="text-[11.5px] text-muted-foreground/70">
+                <span className="text-micro text-muted-foreground/70">
                   {formatByPrecision(star.unlockedAt, 'day', timeFormat)}
                 </span>
               )}
@@ -331,9 +331,7 @@ const TrophyCase = ({
               huérfanos custodiando el vacío. */}
           {alsoRare.length > 0 && (
             <div className="hidden flex-none flex-col items-center justify-center gap-2.75 self-stretch border-l border-line pl-5.5 min-[900px]:flex">
-              <span className="text-micro font-extrabold tracking-[.18em] text-muted-foreground/50">
-                ALSO RARE
-              </span>
+              <span className="text-micro font-semibold text-muted-foreground/50">Also rare</span>
               <div className="flex gap-3.5">
                 {alsoRare.map((entry) => (
                   <RarestMedal key={entry.id} entry={entry} />
@@ -365,7 +363,7 @@ const TrophyCase = ({
         )}
         {rareCount > 0 && (
           <span
-            className="flex items-center gap-1 text-[11.5px] font-extrabold tabular-nums"
+            className="flex items-center gap-1 text-micro font-extrabold tabular-nums"
             style={{ color: AMBER }}
             title={`${rareCount} rare (under 10% of players)`}
           >
@@ -375,7 +373,7 @@ const TrophyCase = ({
         )}
         {ultraCount > 0 && (
           <span
-            className="flex items-center gap-1 text-[11.5px] font-extrabold tabular-nums"
+            className="flex items-center gap-1 text-micro font-extrabold tabular-nums"
             style={{ color: ULTRA_VIOLET }}
             title={`${ultraCount} ultra rare (under ${ULTRA_RARE}% of players)`}
           >
@@ -387,7 +385,7 @@ const TrophyCase = ({
             estrecha de la ficha el zócalo envuelve, y sueltos el botón se
             descolgaba solo a una segunda línea, huérfano. */}
         <span className="ml-auto flex items-center gap-2">
-          <span className="text-[11.5px] text-muted-foreground/60 tabular-nums">
+          <span className="text-micro text-muted-foreground/60 tabular-nums">
             {unlockedCount === 0
               ? 'none unlocked yet'
               : complete
@@ -433,14 +431,14 @@ const SourceCompletionRow = ({
     {completion.map((source) => (
       <span
         key={source.source}
-        className="flex items-baseline gap-1.5 text-[11.5px] tabular-nums"
+        className="flex items-baseline gap-1.5 text-micro tabular-nums"
         title={
           source.complete && source.completedAt
             ? `100% since ${source.completedAt.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`
             : undefined
         }
       >
-        <span className="text-micro font-bold tracking-[.12em] text-muted-foreground uppercase">
+        <span className="text-micro font-semibold text-muted-foreground">
           {ACHIEVEMENT_SOURCE_LABEL[source.source]}
         </span>
         {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
@@ -498,7 +496,7 @@ const RowIcon = ({
 
   return (
     <div
-      className={`relative h-11 w-11 flex-none overflow-hidden rounded-[11px] transition-transform duration-200 ease-[cubic-bezier(.2,.7,.3,1)] hover:scale-[1.07] ${
+      className={`relative h-11 w-11 flex-none overflow-hidden rounded-md transition-transform duration-200 ease-[cubic-bezier(.2,.7,.3,1)] hover:scale-[1.07] ${
         unlocked ? '' : 'opacity-30 grayscale'
       }`}
       style={{ boxShadow: shadow }}
@@ -513,7 +511,7 @@ const RowIcon = ({
       {unlocked && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[11px]"
+          className="pointer-events-none absolute inset-0 rounded-md"
           style={{
             background: `radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,${specular}), transparent 46%)`,
           }}
@@ -538,14 +536,14 @@ const RowDescription = ({
   if (!entry.hidden || unlocked || revealed) {
     if (!entry.description) {
       return entry.hidden && !unlocked ? (
-        <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground/45 italic">
+        <span className="min-w-0 flex-1 truncate text-micro text-muted-foreground/45 italic">
           Hidden achievement
         </span>
       ) : null;
     }
     return (
       <span
-        className={`min-w-0 flex-1 truncate text-[11.5px] ${
+        className={`min-w-0 flex-1 truncate text-micro ${
           unlocked ? 'text-muted-foreground/75' : 'text-muted-foreground/45'
         }`}
         title={entry.description}
@@ -559,7 +557,7 @@ const RowDescription = ({
     <button
       type="button"
       onClick={() => setRevealed(true)}
-      className="group/reveal flex min-w-0 flex-1 items-center gap-1.5 truncate text-[11.5px] text-muted-foreground/45 italic transition-colors duration-150 hover:text-muted-foreground"
+      className="group/reveal flex min-w-0 flex-1 items-center gap-1.5 truncate text-micro text-muted-foreground/45 italic transition-colors duration-150 hover:text-muted-foreground"
     >
       <span className="grid flex-none place-items-center">
         <EyeOff
@@ -651,7 +649,7 @@ const AchievementRow = ({
           {unlocked &&
             !entry.sources.includes('steam') &&
             (entry.sources.includes('emu') || entry.sources.includes('ra')) && (
-              <span className="flex-none rounded px-1 py-0.25 text-micro font-bold tracking-[.06em] text-muted-foreground/60 uppercase">
+              <span className="flex-none rounded px-1 py-0.25 text-micro font-semibold text-muted-foreground/60">
                 {entry.sources.includes('emu') ? 'local' : 'RA'}
               </span>
             )}
@@ -723,7 +721,7 @@ const GroupHeader = ({
       style={{ background: unlocked ? GREEN : 'rgba(139,145,140,.5)' }}
     />
     <span
-      className="text-micro font-extrabold tracking-[.18em]"
+      className="text-micro font-semibold"
       style={{ color: unlocked ? GREEN : 'rgba(139,145,140,.8)' }}
     >
       {label}
@@ -832,7 +830,7 @@ export const AchievementsSection = ({
   const lockedShown = filtered.length - unlockedShown;
 
   return (
-    <div className="mt-7.5">
+    <div>
       <div className={revealClass} style={revealStyle(0)}>
         <TrophyCase
           unlockedCount={unlockedCount}
@@ -864,7 +862,7 @@ export const AchievementsSection = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search achievements…"
-              className="w-full rounded-[10px] border border-line-strong bg-bone/[0.03] py-2.25 pr-8 pl-8.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+              className="w-full rounded-sm border border-line-strong bg-bone/[0.03] py-2.25 pr-8 pl-8.5 text-[13px] text-foreground outline-hidden placeholder:text-muted-foreground/60 focus:border-primary/45"
             />
             {searching && (
               <button
@@ -877,13 +875,13 @@ export const AchievementsSection = ({
               </button>
             )}
           </div>
-          <div className="flex gap-1.25 rounded-[10px] border border-line bg-bone/[0.03] p-0.75">
+          <div className="flex gap-1.25 rounded-sm border border-line bg-bone/[0.03] p-0.75">
             {filters.map((option) => (
               <button
                 key={option.key}
                 type="button"
                 onClick={() => setFilter(option.key)}
-                className="flex items-center gap-1.25 rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition-colors duration-150"
+                className="flex items-center gap-1.25 rounded-sm px-3 py-1.5 text-[12px] font-bold transition-colors duration-150"
                 style={
                   filter === option.key
                     ? { background: 'rgba(233,228,216,.1)', color: 'var(--foreground)' }
@@ -899,7 +897,7 @@ export const AchievementsSection = ({
       )}
 
       {showToolbar && (
-        <div className="mx-0.5 mt-3 mb-2 text-[11.5px] text-muted-foreground">
+        <div className="mx-0.5 mt-3 mb-2 text-micro text-muted-foreground">
           {searching
             ? `${filtered.length} ${filtered.length === 1 ? 'match' : 'matches'}`
             : `${visible.length} of ${filtered.length} · unlocked first, recent on top`}
@@ -908,16 +906,16 @@ export const AchievementsSection = ({
 
       {filtered.length > 0 ? (
         <div
-          className={`overflow-hidden rounded-[14px] border border-line bg-bone/[0.012] ${showToolbar ? '' : 'mt-2.5'} ${revealClass}`}
+          className={`overflow-hidden rounded-md border border-line bg-bone/[0.012] ${showToolbar ? '' : 'mt-2.5'} ${revealClass}`}
           style={revealStyle(2)}
         >
           {visible.map((entry) => (
             <div key={entry.id}>
               {entry.id === firstUnlockedId && (
-                <GroupHeader label="UNLOCKED" count={unlockedShown} unlocked />
+                <GroupHeader label="Unlocked" count={unlockedShown} unlocked />
               )}
               {entry.id === firstLockedId && (
-                <GroupHeader label="LOCKED" count={lockedShown} unlocked={false} />
+                <GroupHeader label="Locked" count={lockedShown} unlocked={false} />
               )}
               <AchievementRow
                 entry={entry}
@@ -942,7 +940,7 @@ export const AchievementsSection = ({
           )}
         </div>
       ) : (
-        <div className="mt-2.5 rounded-[14px] border border-dashed border-line px-8 py-8.5 text-center">
+        <div className="mt-2.5 rounded-md border border-dashed border-line px-8 py-8.5 text-center">
           <Trophy size={22} className="mx-auto mb-2.25 text-muted-foreground/35" />
           <div className="text-[13px] text-muted-foreground">
             Nothing matches{' '}
@@ -954,7 +952,7 @@ export const AchievementsSection = ({
               setQuery('');
               setFilter('all');
             }}
-            className="mt-3 rounded-[9px] border border-line-strong bg-bone/[0.03] px-3.75 py-1.75 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:bg-bone/[0.07]"
+            className="mt-3 rounded-sm border border-line-strong bg-bone/[0.03] px-3.75 py-1.75 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:bg-bone/[0.07]"
           >
             Clear search
           </button>

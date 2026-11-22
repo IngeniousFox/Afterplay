@@ -23,7 +23,13 @@ import type {
   SaveSyncState,
   SaveTip,
 } from '../../../../../shared/types';
-import { AMBER, BLUE, GRAY, GREEN, TEAL } from '../../../lib/colors';
+import { cn } from '@/lib/utils';
+import {
+  ghostButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+  textLinkClass,
+} from '../../shell/controls';
 import {
   useBackupNow,
   useClearSaveDetection,
@@ -49,8 +55,9 @@ type SavesSectionProps = {
   gameTitle: string;
 };
 
-// Card "Saves" del sidebar de la ficha (PARTIDAS-GUARDADAS.md §10.4), al lado
-// de Details y con su mismo lenguaje visual. Es el ÚNICO sitio de la app
+// La pestaña Saves de la ficha (PARTIDAS-GUARDADAS.md §10.4, ficha-saves.png):
+// arriba el bloque de estado, debajo las versiones y a la derecha la copia en
+// la nube y dónde guarda en este PC. Es el ÚNICO sitio de la app
 // desde el que se restaura una partida: no hay restauración automática en
 // ninguna parte — ni al arrancar, ni al detectar el juego, ni al pulsar Play
 // (§10bis.0).
@@ -94,31 +101,10 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
   };
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
-      {/* Chip de color + título, el mismo lenguaje de identidad que
-          SettingsCard y las cabeceras de los modales — aquí es lo que
-          distingue esta card de la de Details, que va justo encima. */}
-      <div className="flex items-center gap-2">
-        <div
-          className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-          style={{ background: `${BLUE}1f` }}
-        >
-          <CloudUpload size={13} style={{ color: BLUE }} />
-        </div>
-        <div className="flex-1 text-[13.5px] font-bold text-foreground">Saves</div>
-        {state?.cloud.length ? (
-          <span
-            className="flex-none rounded-full px-2 py-0.5 text-micro font-bold tabular-nums"
-            style={{ background: `${BLUE}1f`, color: BLUE }}
-          >
-            {state.cloud.length} in cloud
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-3.5">
+    <div>
+      <div>
         {!ready ? (
-          <div className="flex flex-col gap-3.5">
+          <div className="flex max-w-240 flex-col gap-5">
             <DisabledNotice status={status} />
             {/* Restaurar SÍ necesita el motor, así que la lista va en modo
                 lectura con el motivo. Pero la lista se ve. */}
@@ -136,12 +122,12 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
             )}
           </div>
         ) : isLoading ? (
-          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-            <Loader2 size={13} className="animate-spin" />
+          <div className="flex items-center gap-2 text-body text-dust">
+            <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />
             {queuedBehind ? `Waiting behind: ${queuedBehind}…` : 'Checking…'}
           </div>
         ) : !state?.ludusaviName ? (
-          <div className="flex flex-col gap-3.5">
+          <div className="flex max-w-240 flex-col gap-5">
             <NotDetected
               detecting={detect.isPending}
               picking={addFolder.isPending}
@@ -198,10 +184,18 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
 // el motivo) en vez de ocultarse: si no existe nunca, no hay forma de
 // descubrir que la app puede hacer esto.
 const DisabledNotice = ({ status }: { status: SavesStatus | undefined }): React.JSX.Element => (
-  <div className="text-[12px] leading-relaxed text-muted-foreground">
-    {status && !status.binaryAvailable
-      ? 'The save-backup engine isn’t available in this install — an antivirus may have quarantined it. Everything else works as usual.'
-      : 'Add cloud save credentials in Settings → API & Sync to back up saves. Nothing is uploaded until then.'}
+  <div className="flex items-start gap-4 rounded-md border border-dashed border-line-strong px-5 py-4.5">
+    <span className="flex size-11 flex-none items-center justify-center rounded-full bg-bone/6 text-dust ring-1 ring-line-strong">
+      <CloudOff size={19} />
+    </span>
+    <div className="min-w-0">
+      <div className="text-lead font-semibold text-bone">Save backups are off</div>
+      <p className="mt-0.5 text-body text-dust">
+        {status && !status.binaryAvailable
+          ? 'The save-backup engine isn’t available in this install — an antivirus may have quarantined it. Everything else works as usual.'
+          : 'Add cloud save credentials in Settings → Saves to back up saves. Nothing is uploaded until then.'}
+      </p>
+    </div>
   </div>
 );
 
@@ -218,11 +212,11 @@ const NotDetected = ({
   onDetect: () => void;
   onPickFolder: () => void;
 }): React.JSX.Element => (
-  <div className="flex flex-col gap-2.5">
-    <div className="text-[12px] leading-relaxed text-muted-foreground">
+  <div className="flex flex-col gap-3">
+    <div className="text-body text-dust">
       Afterplay doesn&apos;t know where this game keeps its saves yet.
     </div>
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-wrap items-center gap-3">
       <SidebarButton onClick={onDetect} disabled={detecting} icon={detecting ? Loader2 : Radar}>
         {detecting ? 'Looking up…' : 'Detect automatically'}
       </SidebarButton>
@@ -230,9 +224,9 @@ const NotDetected = ({
         type="button"
         onClick={onPickFolder}
         disabled={picking}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] py-1.5 text-[11.5px] font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
+        className={cn(textLinkClass, 'flex items-center gap-1.5 disabled:opacity-50')}
       >
-        <FolderOpen size={12} />
+        <FolderOpen size={14} />
         Choose the folder myself
       </button>
     </div>
@@ -244,73 +238,106 @@ const NotDetected = ({
   </div>
 );
 
-// Cada estado con su color e icono, como StatusCard: el verde es "no tienes
-// que hacer nada" y el ámbar "hay algo pendiente de subir". Es LA respuesta
-// de esta card, así que se pinta como banner-héroe y no como una línea más.
-const CHANGE_META: Record<string, { label: string; color: string; icon: typeof CloudUpload }> = {
-  new: { label: 'Not backed up yet', color: AMBER, icon: CloudUpload },
-  different: { label: 'Changes to back up', color: AMBER, icon: CloudUpload },
-  same: { label: 'Up to date', color: GREEN, icon: Check },
-  none: { label: 'No save files here', color: GRAY, icon: CloudOff },
+// Los tonos del bloque de estado (README-ficha.md): al día verde, cambios sin
+// copiar ámbar, por detrás y disponible Tube, divergido Live, y "no sé decir"
+// gris. Clases literales para que Tailwind las encuentre.
+type Tone = 'success' | 'phosphor' | 'tube' | 'live' | 'dust';
+
+const TONE_CLASS: Record<Tone, { box: string; chip: string; text: string }> = {
+  success: {
+    box: 'border-success/35 bg-success/6',
+    chip: 'bg-success/14 text-success ring-success/35',
+    text: 'text-success',
+  },
+  phosphor: {
+    box: 'border-phosphor/40 bg-phosphor/6',
+    chip: 'bg-phosphor/14 text-phosphor ring-phosphor/35',
+    text: 'text-phosphor',
+  },
+  tube: {
+    box: 'border-tube/40 bg-tube/6',
+    chip: 'bg-tube/14 text-tube ring-tube/35',
+    text: 'text-tube',
+  },
+  live: {
+    box: 'border-live/45 bg-live/8',
+    chip: 'bg-live/16 text-live ring-live/40',
+    text: 'text-live',
+  },
+  dust: {
+    box: 'border-line-strong bg-panel',
+    chip: 'bg-bone/6 text-dust ring-line-strong',
+    text: 'text-bone',
+  },
 };
 
-// Banner-héroe del estado de sincronización — el mismo recurso que el banner
-// de estado de StatusCard, a escala de sidebar: degradado del color del
-// estado, chip con icono y la respuesta en grande. "¿Están a salvo mis
-// partidas?" se contesta antes de leer nada.
+type SyncMeta = { label: string; tone: Tone; icon: typeof CloudUpload };
+
+// La respuesta de "¿están a salvo mis partidas?" cuando no hay copias en la
+// nube con las que comparar: la comparación local de siempre.
+const CHANGE_META: Record<string, SyncMeta> = {
+  new: { label: 'Not backed up yet', tone: 'phosphor', icon: CloudUpload },
+  different: { label: 'Changes to back up', tone: 'phosphor', icon: CloudUpload },
+  same: { label: 'Up to date', tone: 'success', icon: Check },
+  none: { label: 'No save files here', tone: 'dust', icon: CloudOff },
+};
+
+// El bloque de estado de arriba, con la misma forma siempre: icono en círculo
+// del color del estado, la frase, el detalle y las acciones a la derecha.
 const SyncHero = ({
   change,
   stats,
   sync,
+  children,
 }: {
   change: string;
   // null = no hay nada en este PC que contar (solo se enseña el estado).
   stats: { files: number; bytes: number; registryKeys: number } | null;
   sync: SaveSyncState;
+  // Las acciones del estado (restaurar la versión de otro PC...).
+  children?: React.ReactNode;
 }): React.JSX.Element => {
   // Con estado entre PCs (§12.4) manda ese; si no hay copias en la nube
   // (status 'none') sigue valiendo la comparación local de siempre.
   const syncMeta = syncStatusMeta(sync);
   const meta = syncMeta ?? CHANGE_META[change] ?? CHANGE_META.none;
+  const tone = TONE_CLASS[meta.tone];
   const Icon = meta.icon;
   return (
     <div
-      className="flex items-center gap-2.75 rounded-[11px] px-3 py-2.75"
-      style={{
-        background: `linear-gradient(135deg, ${meta.color}1f, ${meta.color}08 60%, transparent)`,
-        border: `1px solid ${meta.color}2e`,
-      }}
+      className={cn(
+        'flex flex-wrap items-center gap-x-6 gap-y-4 rounded-md border px-5 py-4.5',
+        tone.box,
+      )}
     >
-      <div
-        className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]"
-        style={{ background: `${meta.color}24`, border: `1px solid ${meta.color}3d` }}
-      >
-        <Icon size={17} style={{ color: meta.color }} />
-      </div>
-      <div className="min-w-0">
+      <div className="flex min-w-0 flex-[1_1_380px] items-center gap-4">
         <div
-          data-testid={syncMeta ? 'saves-sync-status' : undefined}
-          className={
-            syncMeta
-              ? 'text-[12.5px] leading-snug font-bold'
-              : 'truncate text-[14px] font-extrabold'
-          }
-          style={{ color: meta.color }}
+          className={cn(
+            'flex size-11 flex-none items-center justify-center rounded-full ring-1',
+            tone.chip,
+          )}
         >
-          {meta.label}
+          <Icon size={19} />
         </div>
-        {stats && (
-          <div className="mt-0.25 truncate text-micro text-muted-foreground">
-            {pluralize(stats.files, 'file')} · {formatBytes(stats.bytes)}
-            {stats.registryKeys > 0 && ` · ${pluralize(stats.registryKeys, 'registry key')}`}
+        <div className="min-w-0">
+          <div
+            data-testid={syncMeta ? 'saves-sync-status' : undefined}
+            className={cn('text-lead font-semibold', tone.text)}
+          >
+            {meta.label}
           </div>
-        )}
+          {stats && (
+            <div className="mt-0.5 text-small text-dust">
+              {pluralize(stats.files, 'file')} · {formatBytes(stats.bytes)}
+              {stats.registryKeys > 0 && ` · ${pluralize(stats.registryKeys, 'registry key')}`}
+            </div>
+          )}
+        </div>
       </div>
+      {children}
     </div>
   );
 };
-
-type SyncMeta = { label: string; color: string; icon: typeof CloudUpload };
 
 // "Este PC" si la partida es de aquí, el nombre del PC si no.
 const tipName = (tip: SaveTip): string => (tip.isOwn ? 'this PC' : tip.deviceName);
@@ -328,18 +355,18 @@ const syncStatusMeta = (sync: SaveSyncState): SyncMeta | null => {
   const head = sync.head;
   switch (sync.status) {
     case 'synced':
-      return { label: 'Up to date', color: GREEN, icon: Check };
+      return { label: 'Up to date', tone: 'success', icon: Check };
     case 'local-changes':
       return {
         label: "There are changes here that aren't backed up yet",
-        color: AMBER,
+        tone: 'phosphor',
         icon: CloudUpload,
       };
     case 'behind':
       return head
         ? {
             label: `There's a newer save from ${tipName(head)} (${tipAgo(head)})`,
-            color: BLUE,
+            tone: 'tube',
             icon: HardDriveDownload,
           }
         : null;
@@ -347,26 +374,26 @@ const syncStatusMeta = (sync: SaveSyncState): SyncMeta | null => {
       if (sync.tips.length > 1) {
         return {
           label: `The saves from ${joinNames(sync.tips.map(tipName))} have gone different ways`,
-          color: AMBER,
+          tone: 'live',
           icon: TriangleAlert,
         };
       }
       return head
         ? {
             label: `You have changes here and there's a newer save from ${tipName(head)}`,
-            color: AMBER,
+            tone: 'live',
             icon: TriangleAlert,
           }
         : null;
     case 'available':
       return head
-        ? { label: `There's a save from ${tipName(head)}`, color: BLUE, icon: HardDriveDownload }
+        ? { label: `There's a save from ${tipName(head)}`, tone: 'tube', icon: HardDriveDownload }
         : null;
     case 'unlinked':
       return head
         ? {
             label: `Latest backup: ${tipName(head)}, ${tipAgo(head)}. Afterplay can't tell yet whether it's newer than the save on this PC.`,
-            color: GRAY,
+            tone: 'dust',
             icon: CloudUpload,
           }
         : null;
@@ -375,10 +402,10 @@ const syncStatusMeta = (sync: SaveSyncState): SyncMeta | null => {
   }
 };
 
-// Acciones de la card según el estado. En 'behind' y 'diverged' la acción
-// destacada es restaurar ESA versión, por el mismo flujo manual de siempre
-// (diálogo con copia de seguridad previa): nada se restaura solo. En
-// 'available' es una acción más, sin destacar.
+// Acciones del estado. En 'behind' y 'diverged' la acción destacada es
+// restaurar ESA versión, por el mismo flujo manual de siempre (diálogo con
+// copia de seguridad previa): nada se restaura solo. En 'available' es una
+// acción más, sin destacar.
 const SyncActions = ({
   sync,
   versions,
@@ -412,43 +439,34 @@ const SyncActions = ({
   if (rows.length === 0 && !showUnverified) return null;
 
   return (
-    <>
+    <div className="flex flex-col items-end gap-2">
       {rows.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {rows.map(({ tip, backup }) =>
-            primary ? (
-              <button
-                key={tip.backupId}
-                type="button"
-                data-testid="saves-sync-restore"
-                onClick={() => onRestore(backup)}
-                disabled={blocked}
-                className="flex w-full items-center justify-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-bold text-bone transition-colors duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: BLUE }}
-              >
-                <HardDriveDownload size={13} />
-                Restore the save from {tipName(tip)}…
-              </button>
-            ) : (
-              <SidebarButton
-                key={tip.backupId}
-                onClick={() => onRestore(backup)}
-                disabled={blocked}
-                icon={HardDriveDownload}
-              >
-                Restore the save from {tipName(tip)}…
-              </SidebarButton>
-            ),
-          )}
+        <div className="flex flex-wrap justify-end gap-2.5">
+          {rows.map(({ tip, backup }, index) => (
+            <button
+              key={tip.backupId}
+              type="button"
+              data-testid={primary ? 'saves-sync-restore' : undefined}
+              onClick={() => onRestore(backup)}
+              disabled={blocked}
+              className={cn(
+                primary && index === 0 ? primaryButtonClass : secondaryButtonClass,
+                'h-9 px-4 text-body',
+              )}
+            >
+              <HardDriveDownload size={15} />
+              Restore the save from {tipName(tip)}…
+            </button>
+          ))}
         </div>
       )}
       {showUnverified && (
-        <div className="text-micro leading-relaxed text-muted-foreground">
+        <div className="max-w-90 text-right text-small text-dust">
           The save on this disk couldn&apos;t be checked, so local changes aren&apos;t taken into
           account.
         </div>
       )}
-    </>
+    </div>
   );
 };
 
@@ -471,7 +489,7 @@ const Detected = ({
   const backupNow = useBackupNow();
   const clearDetection = useClearSaveDetection();
   const activity = useSaveBackupActivity(gameId);
-  const [flash, setFlash] = useState<{ text: string; color: string } | null>(null);
+  const [flash, setFlash] = useState<{ text: string; tone: string } | null>(null);
 
   const handleBackupNow = async (): Promise<void> => {
     setFlash(null);
@@ -481,7 +499,7 @@ const Detected = ({
       result.uploaded > 0
         ? {
             text: `Backed up — ${pluralize(result.uploaded, 'new version')} in the cloud`,
-            color: GREEN,
+            tone: 'text-success',
           }
         : // "Nada que subir" son DOS cosas, y antes las dos decían lo mismo.
           // Que no haya NI UN archivo donde miramos no es tranquilizador: es
@@ -489,176 +507,178 @@ const Detected = ({
           // añadiste a mano se quedó vieja — y la copia lleva fallando en
           // silencio desde entonces.
           result.foundFiles
-          ? { text: 'Nothing changed since the last backup.', color: 'var(--muted-foreground)' }
+          ? { text: 'Nothing changed since the last backup.', tone: 'text-dust' }
           : {
               text: 'No save files found where Afterplay is looking — nothing was backed up.',
-              color: AMBER,
+              tone: 'text-phosphor',
             },
     );
     setTimeout(() => setFlash(null), 6000);
   };
 
+  const actions = (
+    <SyncActions
+      sync={state.sync}
+      versions={state.cloud}
+      blocked={state.running}
+      onRestore={onRestore}
+    />
+  );
+
   return (
-    <div className="flex flex-col gap-3.5">
-      <div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 truncate text-[12.5px] font-semibold text-foreground">
-            {state.ludusaviName}
-          </span>
-          <span className="flex-none text-micro text-muted-foreground">
-            {state.detectionSource === 'manual' ? 'manual' : 'auto'}
-          </span>
-        </div>
-
-        {/* Vía de escape de un emparejado automático equivocado (o de uno
-            correcto pero sin nada que enseñar aún — jugar el título casó
-            con otro juego del manifest de ludusavi, verificado en la
-            biblioteca real: "Nuts", "Nidhogg"... casaban sin ser el juego).
-            Sin esto no había forma de volver a "sin detectar": ni un botón
-            que quitase la carpeta AUTO, ni un camino de vuelta desde aquí. */}
-        {state.detectionSource === 'auto' && (
-          <>
-            <button
-              type="button"
-              onClick={() => clearDetection.mutate(gameId)}
-              disabled={clearDetection.isPending}
-              className="mt-1 text-micro font-semibold text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground disabled:opacity-50"
-            >
-              {clearDetection.isPending ? 'Resetting…' : 'Not the right game? Reset detection'}
-            </button>
-            {/* Es la vía de escape de un atasco — si ESTA falla en silencio,
-                el usuario se queda atrapado en el mismo sitio del que
-                intentaba salir, sin saber siquiera que lo intentó. */}
-            {clearDetection.isError && (
-              <div className="mt-1 text-micro font-semibold text-destructive">
-                Couldn&apos;t reset it — {clearDetection.error.message}
-              </div>
-            )}
-          </>
-        )}
-
+    <div className="grid items-start gap-x-12 gap-y-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="flex min-w-0 flex-col gap-6 xl:col-span-2">
         {state.local ? (
-          <div className="mt-2.5">
-            <SyncHero
-              change={state.local.change}
-              stats={{
-                files: state.local.files,
-                bytes: state.local.bytes,
-                registryKeys: state.local.registryKeys.length,
-              }}
-              sync={state.sync}
-            />
-          </div>
+          <SyncHero
+            change={state.local.change}
+            stats={{
+              files: state.local.files,
+              bytes: state.local.bytes,
+              registryKeys: state.local.registryKeys.length,
+            }}
+            sync={state.sync}
+          >
+            {actions}
+          </SyncHero>
+        ) : state.sync.status !== 'none' ? (
+          <SyncHero change="none" stats={null} sync={state.sync}>
+            {actions}
+          </SyncHero>
         ) : (
-          <>
-            <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-dashed border-border px-3 py-2.5 text-[11.5px] text-muted-foreground">
-              <CloudOff size={13} className="flex-none opacity-70" />
-              Nothing on this PC — the game may not be installed here.
-            </div>
-            {state.sync.status !== 'none' && (
-              <div className="mt-2">
-                <SyncHero change="none" stats={null} sync={state.sync} />
-              </div>
-            )}
-          </>
+          <div className="flex items-center gap-3 rounded-md border border-dashed border-line-strong px-5 py-4 text-body text-dust">
+            <CloudOff size={16} className="flex-none" />
+            Nothing on this PC — the game may not be installed here.
+          </div>
         )}
 
-        {state.local?.steamIdInPath && (
-          <Warning>
-            The path has your Steam account ID in it — it only carries over to a PC on the same
-            account.
-          </Warning>
-        )}
+        {/* La copia automática que dispara el cierre de sesión ocurre entera
+            en el main: sin este aviso, la ficha se quedaba con la foto de
+            antes y no había forma de saber que algo estaba subiendo. */}
+        {activity && <ActivityBanner activity={activity} />}
+      </div>
 
-        <FoldersBlock
+      <div className="min-w-0">
+        <VersionList
           gameId={gameId}
-          detectedLocations={state.local?.locations ?? []}
-          ownPaths={state.customPaths}
-          adding={addingFolder}
-          isAuto={state.detectionSource === 'auto'}
-          onAdd={onAddFolder}
-          onAddFile={onAddFile}
+          versions={state.cloud}
+          blockedReason={state.running ? 'The game is running — close it before restoring.' : null}
+          onRestore={onRestore}
         />
       </div>
 
-      <SyncActions
-        sync={state.sync}
-        versions={state.cloud}
-        blocked={state.running}
-        onRestore={onRestore}
-      />
+      <aside className="flex min-w-0 flex-col gap-7">
+        <section>
+          <h2 className="mb-3 text-lead font-semibold text-bone">Cloud backup</h2>
+          {/* Opt-in explícito, juego a juego (§10.5): subir partidas a un
+              bucket es mover datos personales a un servicio externo y eso no
+              se hace por defecto. */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={state.enabled}
+            onClick={() => setEnabled.mutate({ gameId, enabled: !state.enabled })}
+            className="group/switch flex w-full items-center gap-3 rounded-sm text-left outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'relative h-5.5 w-10 flex-none rounded-full border transition-colors duration-150',
+                state.enabled ? 'border-phosphor bg-phosphor' : 'border-line-strong bg-inset',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 size-4 rounded-full transition-[left,background-color] duration-150 motion-reduce:transition-none',
+                  state.enabled ? 'left-5 bg-ink' : 'left-0.5 bg-dust',
+                )}
+              />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-body font-semibold text-bone">
+                {state.enabled ? 'On' : 'Off'}
+              </span>
+              <span className="block text-small text-dust">
+                {state.enabled ? 'Runs when you close a session' : 'Off — nothing leaves this PC'}
+              </span>
+            </span>
+          </button>
 
-      {/* Opt-in explícito, juego a juego (§10.5): subir partidas a un bucket
-          es mover datos personales a un servicio externo y eso no se hace por
-          defecto. */}
-      <button
-        type="button"
-        onClick={() => setEnabled.mutate({ gameId, enabled: !state.enabled })}
-        className="flex items-center gap-2 rounded-[9px] border px-2.75 py-2 text-left transition-colors duration-150"
-        style={{
-          borderColor: state.enabled ? `${BLUE}66` : 'var(--input)',
-          background: state.enabled ? `${BLUE}12` : 'rgba(233,228,216,.02)',
-        }}
-      >
-        <CloudUpload
-          size={13}
-          className="flex-none"
-          style={{ color: state.enabled ? BLUE : 'var(--muted-foreground)' }}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[12px] font-semibold text-foreground">Cloud backup</span>
-          <span className="block text-micro text-muted-foreground">
-            {state.enabled ? 'Runs when you close a session' : 'Off — nothing leaves this PC'}
-          </span>
-        </span>
-        <span
-          className="flex-none text-micro font-bold"
-          style={{ color: state.enabled ? BLUE : 'var(--muted-foreground)' }}
-        >
-          {state.enabled ? 'ON' : 'OFF'}
-        </span>
-      </button>
+          <div className="mt-3.5">
+            <SidebarButton
+              onClick={handleBackupNow}
+              disabled={backupNow.isPending || !state.enabled}
+              icon={backupNow.isPending ? Loader2 : CloudUpload}
+              wide
+            >
+              {backupNow.isPending ? 'Backing up…' : 'Back up now'}
+            </SidebarButton>
+          </div>
+          {/* Pulsar el botón y que no pase NADA visible es peor que un error:
+              cuando la partida no ha cambiado desde la última copia, ludusavi
+              no genera versión nueva y sin este mensaje parece roto. */}
+          {flash && <div className={cn('mt-2 text-small', flash.tone)}>{flash.text}</div>}
+          {backupNow.isError && (
+            <div className="mt-2 text-small text-live">{backupNow.error.message}</div>
+          )}
+        </section>
 
-      {/* La copia automática que dispara el cierre de sesión ocurre entera en
-          el main: sin este aviso, la ficha que tienes delante se quedaba con
-          la foto de antes y no había forma de saber que algo estaba
-          subiendo. */}
-      {activity && <ActivityBanner activity={activity} />}
+        <section className="border-t border-line pt-6">
+          <h2 className="text-lead font-semibold text-bone">Where it saves on this PC</h2>
+          <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 text-small text-dust">
+            <span className="min-w-0 [overflow-wrap:anywhere]">{state.ludusaviName}</span>
+            <span className="flex-none">
+              {state.detectionSource === 'manual' ? 'Set by you' : 'Found automatically'}
+            </span>
+          </div>
 
-      <SidebarButton
-        onClick={handleBackupNow}
-        disabled={backupNow.isPending || !state.enabled}
-        icon={backupNow.isPending ? Loader2 : CloudUpload}
-      >
-        {backupNow.isPending ? 'Backing up…' : 'Back up now'}
-      </SidebarButton>
-      {/* Pulsar el botón y que no pase NADA visible es peor que un error:
-          cuando la partida no ha cambiado desde la última copia, ludusavi no
-          genera versión nueva y sin este mensaje parece que el botón está
-          roto. */}
-      {flash && (
-        <div className="text-[11px]" style={{ color: flash.color }}>
-          {flash.text}
-        </div>
-      )}
-      {backupNow.isError && (
-        <div className="text-[11px] text-destructive">{backupNow.error.message}</div>
-      )}
+          {state.local?.steamIdInPath && (
+            <Warning>
+              The path has your Steam account ID in it — it only carries over to a PC on the same
+              account.
+            </Warning>
+          )}
 
-      <RestoreTargetRow gameId={gameId} target={state.restoreTarget} />
+          <FoldersBlock
+            gameId={gameId}
+            detectedLocations={state.local?.locations ?? []}
+            ownPaths={state.customPaths}
+            adding={addingFolder}
+            isAuto={state.detectionSource === 'auto'}
+            onAdd={onAddFolder}
+            onAddFile={onAddFile}
+          />
 
-      <VersionList
-        gameId={gameId}
-        versions={state.cloud}
-        blockedReason={state.running ? 'The game is running — close it before restoring.' : null}
-        onRestore={onRestore}
-      />
+          {/* Vía de escape de un emparejado automático equivocado: sin esto
+              no había forma de volver a "sin detectar". */}
+          {state.detectionSource === 'auto' && (
+            <>
+              <button
+                type="button"
+                onClick={() => clearDetection.mutate(gameId)}
+                disabled={clearDetection.isPending}
+                className={cn(textLinkClass, 'mt-3 disabled:opacity-50')}
+              >
+                {clearDetection.isPending ? 'Resetting…' : 'Not the right game? Reset detection'}
+              </button>
+              {/* Es la vía de escape de un atasco: si falla en silencio, el
+                  usuario se queda atrapado sin saber que lo intentó. */}
+              {clearDetection.isError && (
+                <div className="mt-1 text-small font-semibold text-live">
+                  Couldn&apos;t reset it — {clearDetection.error.message}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        <RestoreTargetRow gameId={gameId} target={state.restoreTarget} />
+      </aside>
     </div>
   );
 };
 
 // TODAS las carpetas que se respaldan, en un solo bloque: las detectadas por
-// el manifest (chapa AUTO) y las añadidas a mano (teal, con su X). Antes iban
+// el manifest ("Found automatically") y las añadidas a mano (con su X). Antes iban
 // en dos listas separadas y una carpeta que fuera las dos cosas —detectada y
 // elegida— salía DOS veces, una debajo de la otra. Aquí se deduplica: si
 // coincide, manda la fila "tuya", que es la que se puede quitar.
@@ -686,58 +706,44 @@ const FoldersBlock = ({
 
   // Se compara por CONTENENCIA, no por igualdad. La ubicación que deriva
   // ludusavi es la carpeta común de los archivos que encuentra, y esa suele
-  // colgar por debajo de la que eligió el usuario: con "GSE Saves/3768760"
-  // elegida a mano, lo detectado era "GSE Saves/3768760/remote". Comparando
-  // strings salían dos filas para lo mismo, y la de abajo etiquetada AUTO —
-  // una etiqueta falsa, porque esos archivos aparecen precisamente GRACIAS a
-  // la carpeta que añadió él.
+  // colgar por debajo de la que eligió el usuario: comparando strings salían
+  // dos filas para lo mismo, y la de abajo etiquetada como automática.
   const detectedOnly = detectedLocations.filter(
     (detected) => !ownPaths.some((own) => isWithin(detected, own)),
   );
-  const hasAny = detectedOnly.length > 0 || ownPaths.length > 0;
 
   return (
-    <div className="mt-3 flex flex-col gap-1.5">
-      {hasAny && (
-        <div className="text-micro font-bold tracking-[.12em] text-muted-foreground">
-          WHERE IT SAVES
-        </div>
-      )}
-
+    <div className="mt-3 flex flex-col">
       {detectedOnly.map((path) => (
-        <FolderRow key={path} path={path} tone={BLUE} tag="AUTO" />
+        <FolderRow key={path} path={path} tag="Found automatically" />
       ))}
 
       {ownPaths.map((path) => (
         <FolderRow
           key={path}
           path={path}
-          tone={TEAL}
-          tag="YOURS"
+          tag="Added by you"
           onRemove={
             removeFolder.isPending ? undefined : () => removeFolder.mutate({ gameId, folder: path })
           }
         />
       ))}
 
-      {/* Botón de verdad, no un enlace de 10px: es la única salida cuando la
-          detección automática no cubre dónde guarda un juego, y escondido
-          equivale a no existir. */}
-      <SidebarButton onClick={onAdd} disabled={adding} icon={adding ? Loader2 : FolderPlus}>
-        {adding ? 'Adding…' : ownPaths.length > 0 ? 'Add another folder' : 'Add a folder of my own'}
-      </SidebarButton>
-
-      {/* Un fichero suelto, no una carpeta. Es lo que hace falta con las
-          memory cards de emulador: el Mcd001.ps2 de PCSX2 o los .mcd de
-          DuckStation comparten carpeta con los de otros juegos, así que
-          señalar el directorio respaldaría —y al restaurar, sobrescribiría—
-          partidas que no son de este juego. */}
-      <SidebarButton onClick={onAddFile} disabled={adding} icon={adding ? Loader2 : FilePlus2}>
-        {adding ? 'Adding…' : 'Add a single file'}
-      </SidebarButton>
+      {/* Botones de verdad, no un enlace diminuto: son la única salida cuando
+          la detección automática no cubre dónde guarda un juego. El fichero
+          suelto es para las memory cards de emulador, que comparten carpeta
+          con las de otros juegos. */}
+      <div className="mt-3 flex flex-wrap gap-2.5">
+        <SidebarButton onClick={onAdd} disabled={adding} icon={adding ? Loader2 : FolderPlus}>
+          {adding ? 'Adding…' : ownPaths.length > 0 ? 'Add another folder' : 'Add a folder'}
+        </SidebarButton>
+        <SidebarButton onClick={onAddFile} disabled={adding} icon={adding ? Loader2 : FilePlus2}>
+          {adding ? 'Adding…' : 'Add a single file'}
+        </SidebarButton>
+      </div>
 
       {ownPaths.length > 0 && isAuto && (
-        <div className="text-micro leading-relaxed text-muted-foreground/80">
+        <div className="mt-2 text-small text-dust">
           Backed up on top of what Afterplay detects, registry included.
         </div>
       )}
@@ -753,66 +759,41 @@ const isWithin = (path: string, parent: string): boolean => {
   return a === b || a.startsWith(`${b}/`);
 };
 
-// Una carpeta respaldada. El nombre de la carpeta manda (foreground, primero)
-// y la ruta completa queda de contexto — en un sidebar de 368px lo único
-// legible de una ruta larga truncada por la derecha era justo lo que menos
-// distingue ("C:/Users/Lara/AppData/…").
+// Una carpeta respaldada: la ruta en monoespaciada (envuelve, no se corta) y
+// de dónde salió. Pulsarla la abre en el Explorador — es LA pregunta que uno
+// se hace mirando esta lista ("¿qué hay ahí dentro?").
 const FolderRow = ({
   path,
-  tone,
   tag,
   onRemove,
 }: {
   path: string;
-  tone: string;
   tag: string;
   onRemove?: () => void;
 }): React.JSX.Element => {
   const name = path.slice(path.lastIndexOf('/') + 1) || path;
-  const parent = path.slice(0, path.lastIndexOf('/'));
-  // Estas filas ya no son solo carpetas: desde "Add a single file" también
-  // pueden ser un archivo (una memory card de emulador). Se distingue por la
-  // extensión y no preguntándole al disco porque esto es solo el icono — y
-  // una ruta que ya no existe (justo el caso que hay que poder ver) daría
-  // error en un stat.
+  // Estas filas también pueden ser un archivo (una memory card). Se distingue
+  // por la extensión: una ruta que ya no existe daría error en un stat.
   const isFile = /\.[a-z0-9]{1,6}$/i.test(name);
 
   return (
-    <div
-      className="group/folder flex items-center gap-2 rounded-[9px] border px-2.5 py-1.75 transition-colors duration-150"
-      style={{ borderColor: `${tone}2e`, background: `${tone}0d` }}
-    >
+    <div className="group/folder flex items-start gap-2 border-b border-line py-2.5">
       <button
         type="button"
         onClick={() => window.api.saves.openPath(path)}
         title={`${path} — open in Explorer`}
-        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        className="flex min-w-0 flex-1 items-start gap-2.5 rounded-xs text-left outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
       >
-        <span
-          className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-[7px]"
-          style={{ background: `${tone}1f` }}
-        >
-          {isFile ? (
-            <FileText size={12} style={{ color: tone }} />
-          ) : (
-            <FolderOpen size={12} style={{ color: tone }} />
-          )}
-        </span>
+        {isFile ? (
+          <FileText size={15} className="mt-0.5 flex-none text-dust" />
+        ) : (
+          <FolderOpen size={15} className="mt-0.5 flex-none text-dust" />
+        )}
         <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[11.5px] font-semibold text-foreground group-hover/folder:underline">
-              {name}
-            </span>
-            <span
-              className="flex-none rounded-full px-1.5 py-px text-micro font-bold tracking-[.08em]"
-              style={{ background: `${tone}26`, color: tone }}
-            >
-              {tag}
-            </span>
+          <span className="block font-mono text-small text-bone [overflow-wrap:anywhere] group-hover/folder:underline">
+            {path}
           </span>
-          <span className="block truncate font-mono text-micro text-muted-foreground/80">
-            {parent}
-          </span>
+          <span className="block text-small text-dust">{tag}</span>
         </span>
       </button>
       {onRemove && (
@@ -820,9 +801,10 @@ const FolderRow = ({
           type="button"
           onClick={onRemove}
           title="Stop backing up this folder"
-          className="flex-none rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/folder:opacity-100 hover:text-destructive focus-visible:opacity-100"
+          aria-label="Stop backing up this folder"
+          className="flex size-7 flex-none items-center justify-center rounded-sm text-dust opacity-0 transition-[opacity,color,background-color] duration-150 group-hover/folder:opacity-100 hover:bg-live/12 hover:text-live focus-visible:opacity-100"
         >
-          <X size={12} />
+          <X size={14} />
         </button>
       )}
     </div>
@@ -833,14 +815,26 @@ const FolderRow = ({
 // una persona: qué está pasando y si tiene que hacer algo.
 const ACTIVITY_META: Record<
   SavesActivityEvent['phase'],
-  { label: string; color: string; spinning: boolean }
+  { label: string; tone: string; spinning: boolean }
 > = {
-  scheduled: { label: 'Session closed — backing up shortly', color: BLUE, spinning: true },
-  uploading: { label: 'Uploading this save…', color: BLUE, spinning: true },
-  done: { label: 'Backed up just now', color: GREEN, spinning: false },
+  scheduled: {
+    label: 'Session closed — backing up shortly',
+    tone: 'border-tube/35 bg-tube/6 text-tube',
+    spinning: true,
+  },
+  uploading: {
+    label: 'Uploading this save…',
+    tone: 'border-tube/35 bg-tube/6 text-tube',
+    spinning: true,
+  },
+  done: {
+    label: 'Backed up just now',
+    tone: 'border-success/35 bg-success/6 text-success',
+    spinning: false,
+  },
   failed: {
     label: "Couldn't back up — it'll retry after your next session",
-    color: AMBER,
+    tone: 'border-phosphor/40 bg-phosphor/6 text-phosphor',
     spinning: false,
   },
 };
@@ -848,39 +842,37 @@ const ACTIVITY_META: Record<
 const ActivityBanner = ({ activity }: { activity: SavesActivityEvent }): React.JSX.Element => {
   // Una copia automática que termina SIN haber encontrado nada no es un
   // "listo": es el aviso de que las partidas de este juego llevan sin
-  // copiarse desde que la carpeta dejó de estar donde estaba. Se pinta como
-  // advertencia, no como éxito, porque es el único momento en que el usuario
-  // se va a enterar sin ir a buscarlo.
+  // copiarse desde que la carpeta dejó de estar donde estaba.
   const foundNothing = activity.phase === 'done' && activity.foundFiles === false;
   const meta = foundNothing
     ? {
         label: 'No save files found where Afterplay is looking',
-        color: AMBER,
+        tone: 'border-phosphor/40 bg-phosphor/6 text-phosphor',
         spinning: false,
       }
     : ACTIVITY_META[activity.phase];
 
   return (
     <div
-      className="flex items-start gap-1.75 rounded-[9px] border px-2.75 py-2 text-[11px] font-semibold"
-      style={{ borderColor: `${meta.color}2e`, background: `${meta.color}0f`, color: meta.color }}
+      className={cn(
+        'flex items-start gap-2 rounded-sm border px-3.5 py-2.5 text-body font-semibold',
+        meta.tone,
+      )}
     >
       {meta.spinning ? (
-        <Loader2 size={12} className="mt-0.5 flex-none animate-spin" />
+        <Loader2 size={15} className="mt-0.5 flex-none animate-spin motion-reduce:animate-none" />
       ) : activity.phase === 'done' && !foundNothing ? (
-        <Check size={12} className="mt-0.5 flex-none" />
+        <Check size={15} className="mt-0.5 flex-none" />
       ) : (
-        <TriangleAlert size={12} className="mt-0.5 flex-none" />
+        <TriangleAlert size={15} className="mt-0.5 flex-none" />
       )}
       <span className="min-w-0">
         {meta.label}
-        {/* El motivo, en crudo. "No se pudo" a secas no permite arreglar
-            nada: puede ser la red, las claves o el propio motor, y cada uno
-            se resuelve de forma distinta. */}
+        {/* El motivo, en crudo: puede ser la red, las claves o el propio
+            motor, y cada uno se resuelve de forma distinta. */}
         {activity.message && (
           <span
-            className="mt-0.5 block font-normal opacity-80"
-            style={{ overflowWrap: 'anywhere' }}
+            className="mt-0.5 block text-small font-normal opacity-80 [overflow-wrap:anywhere]"
             title={activity.message}
           >
             {activity.message}
@@ -895,30 +887,32 @@ const SidebarButton = ({
   onClick,
   disabled,
   icon: Icon,
+  wide,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   icon: typeof CloudUpload;
+  wide?: boolean;
   children: React.ReactNode;
 }): React.JSX.Element => (
   <button
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex w-full items-center justify-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3 py-2 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
+    className={cn(secondaryButtonClass, 'h-9 px-3.5 text-body', wide && 'w-full')}
   >
-    <Icon size={13} className={Icon === Loader2 ? 'animate-spin' : undefined} />
+    <Icon
+      size={15}
+      className={Icon === Loader2 ? 'animate-spin motion-reduce:animate-none' : undefined}
+    />
     {children}
   </button>
 );
 
 const Warning = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <div
-    className="mt-1.5 flex items-start gap-1.5 text-micro leading-relaxed"
-    style={{ color: AMBER }}
-  >
-    <TriangleAlert size={11} className="mt-0.5 flex-none" />
+  <div className="mt-2 flex items-start gap-1.5 text-small text-phosphor">
+    <TriangleAlert size={13} className="mt-0.5 flex-none" />
     <span>{children}</span>
   </div>
 );
@@ -931,39 +925,50 @@ const RestoreTargetRow = ({
 }: {
   gameId: GameId;
   target: string | null;
-}): React.JSX.Element | null => {
+}): React.JSX.Element => {
   const setRestoreTarget = useSetRestoreTarget();
-  if (!target) return null;
 
   return (
-    <div
-      className="flex items-center gap-2 rounded-[9px] border px-2.5 py-2"
-      style={{ borderColor: `${TEAL}2e`, background: `${TEAL}0f` }}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="text-micro font-bold tracking-[.12em]" style={{ color: `${TEAL}b3` }}>
-          RESTORES TO
-        </div>
-        <div className="truncate font-mono text-micro text-foreground" title={target}>
-          {target}
-        </div>
+    <section className="border-t border-line pt-6">
+      <h2 className="mb-3 text-lead font-semibold text-bone">Restores to</h2>
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 flex-none items-center justify-center rounded-sm bg-raised text-dust">
+          <FolderOpen size={16} />
+        </span>
+        {target ? (
+          <>
+            <div className="min-w-0 flex-1">
+              <div className="text-body font-semibold text-bone">A folder of your choice</div>
+              <div className="font-mono text-small text-dust [overflow-wrap:anywhere]">
+                {target}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRestoreTarget.mutate({ gameId, target: null })}
+              className="flex size-8 flex-none items-center justify-center rounded-sm text-dust hover:bg-bone/6 hover:text-bone"
+              title="Use the original paths again"
+              aria-label="Use the original paths again"
+            >
+              <RotateCcw size={14} />
+            </button>
+          </>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <div className="text-body font-semibold text-bone">The original paths</div>
+            <div className="text-small text-dust">
+              Or pick another folder on this PC when you restore
+            </div>
+          </div>
+        )}
       </div>
-      <button
-        type="button"
-        onClick={() => setRestoreTarget.mutate({ gameId, target: null })}
-        className="flex-none rounded-md p-1 text-muted-foreground hover:bg-bone/6 hover:text-foreground"
-        title="Use the original paths again"
-      >
-        <RotateCcw size={12} />
-      </button>
-    </div>
+    </section>
   );
 };
 
 // Cuántas versiones se ven sin desplegar. La retención son 3 completas + 5
-// diferenciales POR MÁQUINA, así que con dos PCs la lista se va a dieciséis:
-// demasiado para una columna lateral, y las de abajo casi nunca se miran.
-const VISIBLE_VERSIONS = 4;
+// diferenciales POR MÁQUINA, así que con dos PCs la lista se va a dieciséis.
+const VISIBLE_VERSIONS = 6;
 
 const VersionList = ({
   gameId,
@@ -981,111 +986,104 @@ const VersionList = ({
   const { data: timeFormat = '24h' } = useTimeFormat();
   const [expanded, setExpanded] = useState(false);
   // Borrar una versión pasa por confirmación como todo lo destructivo de la
-  // app. Y aquí hace más falta que en otros sitios: si de la copia elegida
-  // cuelgan diferenciales, se van con ella — el diálogo lo dice antes.
+  // app: si de la copia elegida cuelgan diferenciales, se van con ella.
   const [deleting, setDeleting] = useState<SaveBackupRow | null>(null);
 
   if (versions.length === 0) {
     return (
-      <div className="rounded-[9px] border border-dashed border-border px-2.75 py-2 text-[11.5px] text-muted-foreground">
-        Nothing in the cloud yet.
-      </div>
+      <section>
+        <h2 className="mb-3 text-lead font-semibold text-bone">Versions</h2>
+        <div className="rounded-md border border-dashed border-line-strong px-5 py-4 text-body text-dust">
+          Nothing in the cloud yet.
+        </div>
+      </section>
     );
   }
 
   const visible = expanded ? versions : versions.slice(0, VISIBLE_VERSIONS);
 
   return (
-    <div className="border-t border-line pt-3.5">
-      <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-        VERSIONS
-      </div>
+    <section>
+      <h2 className="mb-1 flex items-center gap-2 text-lead font-semibold text-bone">
+        Versions
+        <span className="rounded-xs bg-inset px-1.5 py-px text-micro font-medium text-dust tabular-nums">
+          {versions.length}
+        </span>
+      </h2>
 
       {blockedReason && <Warning>{blockedReason}</Warning>}
 
-      {/* Carril de tiempo: un raíl vertical con un punto por versión, como
-          las tiras de viaje de PlaythroughPanel — la lista se lee como
-          historia (de arriba/reciente a abajo/antigua), no como tabla. */}
-      <div className="relative flex flex-col gap-1 pl-3.5">
-        <span
-          className="absolute top-3 bottom-3 left-[4.5px] w-px"
-          style={{ background: 'var(--border)' }}
-        />
+      {/* Carril de tiempo: un raíl vertical con un punto por versión, de
+          arriba (reciente) a abajo (antigua); la más reciente con aro. */}
+      <ol className="relative mt-2">
+        <span aria-hidden className="absolute top-6 bottom-6 left-2 w-px bg-line-strong" />
         {visible.map((version, index) => (
-          <div key={version.id} className="relative">
+          <li
+            key={version.id}
+            className="group/version relative flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line py-3 pl-8"
+          >
             <span
-              className="absolute top-1/2 -left-3.5 h-2 w-2 -translate-y-1/2 rounded-full border"
-              style={
+              aria-hidden
+              className={cn(
+                'absolute top-1/2 left-0.75 size-2.5 -translate-y-1/2 rounded-full',
                 index === 0
-                  ? { background: BLUE, borderColor: BLUE }
-                  : { background: 'var(--card)', borderColor: 'var(--muted-foreground)' }
-              }
+                  ? 'bg-phosphor ring-3 ring-phosphor/30'
+                  : 'border-2 border-dust bg-cabinet',
+              )}
             />
-            <div
-              className="group/version flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.75 transition-colors duration-150"
-              // La más reciente va teñida: en una lista de fechas parecidas
-              // es la que se busca el 90% de las veces, y así se encuentra
-              // sin leer ninguna.
-              style={
-                index === 0
-                  ? { borderColor: `${BLUE}2e`, background: `${BLUE}0f` }
-                  : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
-              }
-            >
-              <div className="min-w-0 flex-1">
-                {/* Con hora, no solo fecha: dos copias del mismo día es el
-                    caso NORMAL —una por sesión— así que sin la hora la lista
-                    es una columna de fechas repetidas donde no se distingue
-                    cuál es cuál. 'datetime' da "Jul 25, 2026 · 10:42". */}
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-[11.5px] font-semibold text-foreground">
-                    {formatByPrecision(version.createdAt, 'datetime', timeFormat)}
+            {/* Con hora, no solo fecha: dos copias del mismo día es el caso
+                NORMAL —una por sesión—. */}
+            <div className="min-w-44 flex-[1_1_180px]">
+              <div className="flex items-center gap-2 text-body font-semibold text-bone">
+                {formatByPrecision(version.createdAt, 'datetime', timeFormat)}
+                {index === 0 && (
+                  <span className="rounded-xs border border-tube/50 px-1.5 text-micro font-semibold text-tube">
+                    Latest
                   </span>
-                  {index === 0 && (
-                    <span
-                      className="flex-none rounded-full px-1.5 py-px text-micro font-bold tracking-[.08em]"
-                      style={{ background: `${BLUE}26`, color: BLUE }}
-                    >
-                      LATEST
-                    </span>
-                  )}
-                </div>
-                <div className="truncate text-micro text-muted-foreground">
-                  {formatBytes(version.sizeBytes)} · {version.machineName}
-                  {version.differential && ' · incremental'}
-                </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => onRestore(version)}
-                disabled={blockedReason !== null}
-                title="Restore this version…"
-                className="flex-none rounded-md p-1.25 transition-colors duration-150 hover:bg-bone/6 disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ color: blockedReason ? 'var(--muted-foreground)' : BLUE }}
-              >
-                <HardDriveDownload size={13} />
-              </button>
-              {/* La papelera solo asoma al pasar por la fila: borrar de la
-                  nube es lo que menos veces se hace aquí, y quieta a la vista
-                  en cada fila convertía la lista en una hilera de papeleras. */}
-              <button
-                type="button"
-                onClick={() => setDeleting(version)}
-                title="Delete this version from the cloud"
-                className="flex-none rounded-md p-1.25 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/version:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
-              >
-                <Trash2 size={12} />
-              </button>
+              <div className="text-small text-dust">
+                {version.machineName}
+                {version.differential && ' · incremental'}
+              </div>
             </div>
-          </div>
+            <span className="flex-none text-small text-dust tabular-nums">
+              {formatBytes(version.sizeBytes)}
+            </span>
+            <button
+              type="button"
+              onClick={() => onRestore(version)}
+              disabled={blockedReason !== null}
+              title="Restore this version…"
+              className={cn(
+                index === 0 ? secondaryButtonClass : ghostButtonClass,
+                'h-8.5 px-3 text-body',
+                index === 0 && 'border-phosphor/55 text-phosphor hover:border-phosphor',
+              )}
+            >
+              <HardDriveDownload size={15} />
+              Restore
+            </button>
+            {/* La papelera solo asoma al pasar por la fila: borrar de la nube
+                es lo que menos veces se hace aquí. */}
+            <button
+              type="button"
+              onClick={() => setDeleting(version)}
+              title="Delete this version from the cloud"
+              aria-label="Delete this version from the cloud"
+              className="flex size-8 flex-none items-center justify-center rounded-sm text-dust opacity-0 transition-[opacity,color,background-color] duration-150 group-hover/version:opacity-100 hover:bg-live/12 hover:text-live focus-visible:opacity-100"
+            >
+              <Trash2 size={14} />
+            </button>
+          </li>
         ))}
-      </div>
+      </ol>
 
       {versions.length > VISIBLE_VERSIONS && (
         <button
           type="button"
           onClick={() => setExpanded((current) => !current)}
-          className="mt-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+          className={cn(textLinkClass, 'mt-3')}
         >
           {expanded ? 'Show fewer' : `Show ${versions.length - VISIBLE_VERSIONS} older`}
         </button>
@@ -1097,6 +1095,6 @@ const VersionList = ({
         versions={versions}
         onClose={() => setDeleting(null)}
       />
-    </div>
+    </section>
   );
 };

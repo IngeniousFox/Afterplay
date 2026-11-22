@@ -3,268 +3,258 @@ import {
   BookmarkPlus,
   FolderOpen,
   ImagePlus,
-  Pause,
+  Link2,
   Pencil,
   Play,
   RefreshCw,
+  Square,
   Trash2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import type { GameDetail, Session } from '../../../../../shared/types';
-import { useDeviceContext } from '../../../hooks/devices';
-import { useRefreshGame } from '../../../hooks/useRefreshGame';
-import { useLaunchExecutable, useOpenInstallDirectory } from '../../../hooks/games';
-import { useCloseSession, useStartGameSession } from '../../../hooks/sessions';
-import {
-  accentGradientStyle,
-  destructiveIconButtonClass,
-  heroCtaButtonClass,
-  squareIconButtonClass,
-} from '../../../lib/styles';
-import { canStopLiveSession } from '../../../../../shared/liveSession';
-import { PlayingOnNotice } from '../../sessions/RemoteLive';
+import { useLiveTimer } from '../../../hooks/useLiveTimer';
+import { useNoSignalText } from '../../../hooks/sessionDevice';
+import { formatElapsed } from '../../../lib/format';
+import { liveButtonClass, primaryButtonClass, secondaryButtonClass } from '../../shell/controls';
 import { AddSpendPopover } from './AddSpendPopover';
-import { InstallNotice } from './InstallNotice';
-import type { SessionId } from '../../../../../shared/entityIds';
+import { HeaderUtilityButton } from './DetailHeader';
+import type { GameActionsState } from './useGameActions';
 
-type ActionBarProps = {
+// Los botones de la cabecera de la ficha. El estado vive en useGameActions.
+
+type GameHeaderActionsProps = {
   game: GameDetail;
-  // La sesión abierta de ESTE PC: la que Stop cierra y la que apaga Play.
-  ownLiveSessionId: SessionId | null;
-  // Una sesión abierta de OTRO dispositivo (§10.8): "Playing on PC-A", sin
-  // Stop (solo su dueño la cierra) salvo que sea un cronómetro. No impide
-  // Play: dos PCs pueden jugar el mismo juego, una sesión por PC (§10.4).
-  remoteLiveSession: Session | null;
+  state: GameActionsState;
+  compact: boolean;
+  notInstalledHere: boolean;
   onEdit: () => void;
-  onChangeCover: () => void;
-  onDelete: () => void;
   movingToPlan: boolean;
   onMoveToPlan: () => void;
 };
 
-// Nombre propio (no "outlineButtonClass"): ese nombre ya lo exporta
-// lib/styles.ts con un estilo distinto (Sessions/GameStats) — tenerlos
-// iguales de nombre pero distintos de contenido hacía que el botón Edit de
-// aquí se viera distinto a cualquier otro "outline" de la app sin que se
-// notara por qué (colisión de nombre real, encontrada en auditoría).
-const editButtonClass =
-  'flex items-center gap-2 rounded-[11px] border border-line-strong bg-raised px-4.5 text-[14px] font-semibold text-foreground hover:bg-raised-hover';
-
-// describeRefresh y el gesto entero viven en components/RefreshGameButton.tsx
-// desde que las filas del Plan ofrecen el mismo botón: los planeados no
-// tienen ficha, así que no pueden llegar a esta barra.
-
-// SPEC 10.7 — Play/Stop (según haya sesión activa), Edit, Añadir gasto,
-// Cambiar carátula/hero, Delete. El prototipo solo tiene Play/Edit/Delete —
-// Add spend y Change cover se añaden con el mismo lenguaje visual (Edit =
-// outline neutro, Delete = cuadrado rojo) por indicación explícita, ya que
-// no existían todavía cuando se hizo el prototipo.
-export const ActionBar = ({
+// Play (o Stop en Live con la sesión de este PC), Link installation si toca,
+// Edit, Move to Plan y Add spend.
+export const GameHeaderActions = ({
   game,
-  ownLiveSessionId,
-  remoteLiveSession,
+  state,
+  compact,
+  notInstalledHere,
   onEdit,
-  onChangeCover,
-  onDelete,
   movingToPlan,
   onMoveToPlan,
-}: ActionBarProps): React.JSX.Element => {
-  const closeSession = useCloseSession();
-  const startGameSession = useStartGameSession();
-  const launchExecutable = useLaunchExecutable();
-  const openInstallDirectory = useOpenInstallDirectory();
-  const { refresh: handleRefreshEverything, refreshing } = useRefreshGame(game.id, game.title);
-  const [launchError, setLaunchError] = useState<string | null>(null);
-  const [dirError, setDirError] = useState<string | null>(null);
-  const { thisDeviceId, nameOf } = useDeviceContext();
-  const isLive = ownLiveSessionId !== null;
-  const isBusy = closeSession.isPending || startGameSession.isPending || launchExecutable.isPending;
-  // "Play" solo con instalación en ESTE dispositivo (§11.4): game.executablePath
-  // es el de la instalación local, sin ella es null.
-  const canPlay = isLive || game.executablePath !== null;
-  const remoteStop =
-    remoteLiveSession !== null && canStopLiveSession(remoteLiveSession, thisDeviceId);
-
-  const handleOpenInstallDirectory = async (): Promise<void> => {
-    if (!game.installDirectory) return;
-    setDirError(null);
-    const result = await openInstallDirectory.mutateAsync(game.id);
-    if (!result.ok) {
-      setDirError(
-        result.reason === 'missing'
-          ? 'Couldn’t find the install folder — it may have been moved or deleted. Check the path in Edit.'
-          : result.reason === 'not_installed'
-            ? 'This game isn’t installed on this PC.'
-            : `Couldn't open the folder — ${result.message}`,
-      );
-    }
-  };
-
-  const handleTogglePlay = async (): Promise<void> => {
-    if (isLive && ownLiveSessionId !== null) {
-      await closeSession.mutateAsync({ id: ownLiveSessionId, endedAt: new Date() });
-      return;
-    }
-
-    // El botón ya está deshabilitado sin instalación local (ver canPlay) — esto
-    // es cinturón y tirantes por si acaso. El main resuelve la ruta por gameId.
-    if (!game.executablePath) return;
-
-    setLaunchError(null);
-    const result = await launchExecutable.mutateAsync(game.id);
-    if (!result.ok) {
-      // Si el .exe no arranca no hay nada que trackear — abortar ANTES de
-      // abrir sesión, o quedaría una sesión "Playing" abierta para un juego
-      // que en realidad no se ha abierto.
-      setLaunchError(
-        result.reason === 'missing'
-          ? 'Couldn’t find the executable — it may have been moved or uninstalled. Check the path in Edit.'
-          : result.reason === 'not_installed'
-            ? 'Not installed on this PC.'
-            : `Couldn't launch the game — ${result.message}`,
-      );
-      return;
-    }
-
-    // startGameSession (misma función que usa el watcher al detectar un
-    // arranque él solo) decide qué playthrough usar/crear y ancla su inicio
-    // — toda la lógica que antes vivía aquí a mano, repartida en 2-3
-    // mutations sueltas (no atómicas entre sí, y que además marcaban la
-    // sesión como manual: un Play que lanza el .exe de verdad es tan
-    // automático como lo que detecta el watcher, y debe contar igual).
-    await startGameSession.mutateAsync(game.id);
-  };
-
+}: GameHeaderActionsProps): React.JSX.Element => {
+  const size = compact ? 'h-9 px-4 text-body' : 'h-11 px-5 text-lead';
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <button
-          type="button"
-          onClick={handleTogglePlay}
-          disabled={isBusy || !canPlay}
-          title={
-            canPlay
-              ? undefined
-              : game.isEmulated
-                ? 'Emulated games start from their emulator'
-                : 'Not installed on this PC'
-          }
-          className={`${heroCtaButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
-          style={
-            isLive
-              ? {
-                  background: 'rgba(255,179,71,.14)',
-                  color: '#ffb347',
-                  border: '1px solid rgba(255,179,71,.5)',
-                }
-              : {
-                  ...accentGradientStyle,
-                  border: '1px solid transparent',
-                }
-          }
-        >
-          {isLive ? <Pause size={16} fill="#ffb347" /> : <Play size={16} fill="#1a1100" />}
-          <span>{isLive ? 'Stop' : launchExecutable.isPending ? 'Launching…' : 'Play'}</span>
-        </button>
-
-        <button type="button" onClick={onEdit} className={`${editButtonClass} py-3`}>
-          <Pencil size={16} />
-          Edit
-        </button>
-
-        {game.canMoveToPlan && (
-          <button
-            type="button"
-            onClick={onMoveToPlan}
-            disabled={movingToPlan}
-            className={`${editButtonClass} py-3 disabled:cursor-wait disabled:opacity-60`}
-          >
-            <BookmarkPlus size={16} />
-            {movingToPlan ? 'Moving…' : 'Move to Plan'}
-          </button>
+    <>
+      <button
+        type="button"
+        onClick={() => void state.togglePlay()}
+        disabled={state.isBusy || !state.canPlay}
+        title={
+          state.canPlay
+            ? undefined
+            : game.isEmulated
+              ? 'Emulated games start from their emulator'
+              : 'Not installed on this PC'
+        }
+        className={cn(
+          state.isLive ? liveButtonClass : primaryButtonClass,
+          size,
+          compact ? 'min-w-24' : 'min-w-28',
+          // Sin instalación: gris y sin hover, no un ámbar apagado.
+          'disabled:border disabled:border-line-strong disabled:bg-raised disabled:text-dust disabled:opacity-100 disabled:hover:bg-raised',
         )}
+      >
+        {state.isLive ? (
+          <Square size={compact ? 13 : 15} fill="currentColor" />
+        ) : (
+          <Play size={compact ? 14 : 16} fill="currentColor" />
+        )}
+        <span>{state.isLive ? 'Stop' : state.launching ? 'Launching…' : 'Play'}</span>
+      </button>
 
-        <AddSpendPopover gameId={game.id} />
-
+      {notInstalledHere && (
         <button
           type="button"
-          onClick={onChangeCover}
-          title="Change cover / hero"
-          className={squareIconButtonClass}
+          onClick={() => void state.linkInstallation()}
+          disabled={state.linking}
+          title="Pick this game's executable on this PC"
+          className={cn(
+            secondaryButtonClass,
+            size,
+            'border-phosphor/55 bg-phosphor-tint text-phosphor hover:border-phosphor hover:bg-phosphor/16',
+          )}
         >
-          <ImagePlus size={17} />
+          <Link2 size={compact ? 14 : 16} />
+          Link installation
         </button>
+      )}
 
+      <button type="button" onClick={onEdit} className={cn(secondaryButtonClass, size)}>
+        <Pencil size={compact ? 14 : 16} />
+        Edit
+      </button>
+
+      {game.canMoveToPlan && (
         <button
           type="button"
-          onClick={handleOpenInstallDirectory}
-          disabled={!game.installDirectory || openInstallDirectory.isPending}
-          title={game.installDirectory ? 'Open install folder' : 'No install folder set (Edit)'}
-          className={`${squareIconButtonClass} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-raised`}
+          onClick={onMoveToPlan}
+          disabled={movingToPlan}
+          className={cn(secondaryButtonClass, size, 'disabled:cursor-wait')}
         >
-          <FolderOpen size={17} />
+          <BookmarkPlus size={compact ? 14 : 16} />
+          {movingToPlan ? 'Moving…' : 'Move to Plan'}
         </button>
+      )}
 
-        {/* Actualizar este juego ENTERO — lo que cada card refresca por su
-            cuenta (notas de IGDB, HowLongToBeat, logros) más lo que hasta
-            ahora no tenía botón por juego en ninguna parte: el appid de Steam
-            y, con él, sus etiquetas y sus reseñas. Aquí y no dentro de una
-            card porque no es de ninguna: es del juego. */}
-        <button
-          type="button"
-          onClick={handleRefreshEverything}
-          disabled={refreshing}
-          title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
-          aria-label="Refresh everything for this game"
-          className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-raised`}
-        >
-          <RefreshCw size={17} className={refreshing ? 'animate-spin' : undefined} />
-        </button>
+      <AddSpendPopover gameId={game.id} triggerClassName={cn(secondaryButtonClass, size)} />
+    </>
+  );
+};
 
-        <button
-          type="button"
-          onClick={onDelete}
-          title="Delete game"
-          className={destructiveIconButtonClass}
-        >
-          <Trash2 size={17} className="text-destructive" />
-        </button>
-      </div>
+type GameUtilitiesProps = {
+  game: GameDetail;
+  state: GameActionsState;
+  onChangeCover: () => void;
+  onDelete: () => void;
+};
 
-      {remoteLiveSession !== null && (
-        <PlayingOnNotice
-          deviceName={nameOf(remoteLiveSession.deviceId)}
-          session={remoteLiveSession}
-          // Solo un cronómetro se para desde otro PC; sessions:close cierra con
-          // closedBy 'user', que es lo que la regla de la puerta admite.
-          onStop={
-            remoteStop
-              ? () =>
-                  void closeSession.mutateAsync({
-                    id: remoteLiveSession.id,
-                    endedAt: new Date(),
-                  })
-              : undefined
-          }
-          stopping={closeSession.isPending}
+// Las cuatro utilidades de icono: carátula/banner, carpeta de instalación,
+// refrescar todo y borrar (que se tiñe de Live al pasar el ratón).
+export const GameUtilities = ({
+  game,
+  state,
+  onChangeCover,
+  onDelete,
+}: GameUtilitiesProps): React.JSX.Element => (
+  <>
+    <HeaderUtilityButton icon={ImagePlus} label="Change cover / hero" onClick={onChangeCover} />
+    <HeaderUtilityButton
+      icon={FolderOpen}
+      label="Open install folder"
+      title={game.installDirectory ? 'Open install folder' : 'No install folder set (Edit)'}
+      onClick={() => void state.openInstallFolder()}
+      disabled={!game.installDirectory || state.openingFolder}
+    />
+    {/* Actualizar este juego ENTERO — lo que cada card refresca por su
+        cuenta (notas de IGDB, HowLongToBeat, logros) más el appid de Steam
+        y, con él, sus etiquetas y sus reseñas. */}
+    <HeaderUtilityButton
+      icon={RefreshCw}
+      label="Refresh everything for this game"
+      title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
+      onClick={state.refresh}
+      disabled={state.refreshing}
+      spinning={state.refreshing}
+    />
+    <HeaderUtilityButton icon={Trash2} label="Delete game" onClick={onDelete} danger />
+  </>
+);
+
+// "Playing on Living room PC · 0:42:10" (§10.8): la sesión abierta en OTRO PC.
+// No es un botón; solo un cronómetro se puede parar desde aquí ("Stop timer").
+export const RemoteLivePill = ({
+  session,
+  deviceName,
+  compact,
+  onStop,
+  stopping,
+}: {
+  session: Session;
+  deviceName: string;
+  compact: boolean;
+  onStop?: () => void;
+  stopping: boolean;
+}): React.JSX.Element => {
+  const elapsed = useLiveTimer(session.startedAt);
+  const noSignal = useNoSignalText(session);
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-live/40 bg-live/10 pr-2 pl-3.5',
+        compact ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
+      )}
+    >
+      <span className="flex items-center gap-2 text-body font-semibold text-bone">
+        <span
+          aria-hidden
+          className={cn(
+            'size-2 flex-none rounded-full',
+            noSignal === null
+              ? 'animate-led-live bg-live motion-reduce:animate-none'
+              : 'bg-st-dropped',
+          )}
         />
+        Playing on {deviceName}
+      </span>
+      <span
+        className={cn(
+          'font-display leading-none font-bold text-live tabular-nums',
+          compact ? 'text-[20px]' : 'text-[24px]',
+        )}
+      >
+        {formatElapsed(elapsed)}
+      </span>
+      {noSignal !== null && <span className="text-small text-dust">{noSignal}</span>}
+      {onStop && (
+        <button
+          type="button"
+          onClick={onStop}
+          disabled={stopping}
+          title="Stop this timer"
+          className="flex h-7 items-center gap-1.5 rounded-sm border border-line-strong bg-raised px-2.5 text-small font-semibold text-bone transition-colors duration-150 enabled:hover:border-live/60 enabled:hover:text-live disabled:opacity-50"
+        >
+          <Square size={11} fill="currentColor" />
+          {stopping ? 'Stopping…' : 'Stop timer'}
+        </button>
       )}
+    </div>
+  );
+};
 
-      <InstallNotice gameId={game.id} />
+// La sesión de ESTE PC en marcha: LED rojo y el cronómetro junto a Stop.
+export const OwnLivePill = ({
+  since,
+  compact,
+}: {
+  since: Date;
+  compact: boolean;
+}): React.JSX.Element => {
+  const elapsed = useLiveTimer(since);
+  return (
+    <div className="flex items-center gap-2.5 pr-1">
+      <span
+        aria-hidden
+        className="size-2 flex-none animate-led-live rounded-full bg-live motion-reduce:animate-none"
+      />
+      <span className="sr-only">Playing now for</span>
+      <span
+        className={cn(
+          'font-display leading-none font-bold text-phosphor tabular-nums',
+          compact ? 'text-[24px]' : 'text-[34px]',
+        )}
+      >
+        {formatElapsed(elapsed)}
+      </span>
+    </div>
+  );
+};
 
-      {launchError && (
-        <div className="flex items-center gap-2 text-[12.5px] text-destructive">
-          <AlertTriangle size={13} className="flex-none" />
-          {launchError}
+// Los errores de lanzar o de abrir la carpeta, bajo la cabecera.
+export const GameActionErrors = ({
+  state,
+}: {
+  state: GameActionsState;
+}): React.JSX.Element | null => {
+  if (!state.launchError && !state.dirError) return null;
+  return (
+    <div className="mb-5 flex flex-col gap-1.5">
+      {[state.launchError, state.dirError].filter(Boolean).map((message) => (
+        <div key={message} className="flex items-center gap-2 text-small text-live">
+          <AlertTriangle size={14} className="flex-none" />
+          {message}
         </div>
-      )}
-
-      {dirError && (
-        <div className="flex items-center gap-2 text-[12.5px] text-destructive">
-          <AlertTriangle size={13} className="flex-none" />
-          {dirError}
-        </div>
-      )}
+      ))}
     </div>
   );
 };

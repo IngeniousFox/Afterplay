@@ -16,7 +16,7 @@ export const StatusSummaryLine = (): React.JSX.Element => {
   // chip) — es el resumen de todo el formulario, merece destacar del gris.
   return (
     <div
-      className="flex items-center gap-2.5 rounded-[10px] border px-3.25 py-2.5 transition-colors duration-300"
+      className="flex items-center gap-2.5 rounded-sm border px-3.25 py-2.5 transition-colors duration-300"
       style={{ borderColor: `${meta.color}2e`, background: `${meta.color}0d` }}
     >
       <span

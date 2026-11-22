@@ -32,7 +32,7 @@ export const SelectedGameSummary = ({
       : null;
 
   return (
-    <div className="relative mt-3.5 animate-in overflow-hidden rounded-xl border border-line-strong bg-raised fade-in-0 zoom-in-95 duration-300">
+    <div className="relative mt-3.5 animate-in overflow-hidden rounded-md border border-line-strong bg-raised fade-in-0 zoom-in-95 duration-300">
       {heroUrl && (
         <>
           <CoverThumb

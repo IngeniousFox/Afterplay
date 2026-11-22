@@ -29,7 +29,7 @@ export const PlannedPanel = ({ game }: PlannedPanelProps): React.JSX.Element => 
 
   return (
     <div
-      className="rounded-[14px] border px-5 py-4.5"
+      className="rounded-md border px-5 py-4.5"
       style={{
         borderColor: `${PLAN_COLOR}2e`,
         background: `linear-gradient(135deg, ${PLAN_COLOR}1a, ${PLAN_COLOR}08 60%, transparent)`,
@@ -37,7 +37,7 @@ export const PlannedPanel = ({ game }: PlannedPanelProps): React.JSX.Element => 
     >
       <div className="flex items-center gap-3">
         <div
-          className="flex h-11 w-11 flex-none items-center justify-center rounded-[12px]"
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-md"
           style={{ background: `${PLAN_COLOR}24`, border: `1px solid ${PLAN_COLOR}3d` }}
         >
           <Bookmark size={19} color={PLAN_COLOR} />

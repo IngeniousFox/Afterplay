@@ -54,7 +54,7 @@ export const ExecutablePicker = ({
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
-            className="flex flex-none items-center gap-1 rounded-[7px] border border-input px-2 py-0.75 text-[11px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground"
+            className="flex flex-none items-center gap-1 rounded-sm border border-input px-2 py-0.75 text-micro font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground"
           >
             <ChevronDown
               size={11}
@@ -68,7 +68,7 @@ export const ExecutablePicker = ({
 
       {open && (
         <div className={`border-t border-border bg-inset/20 px-2 py-2 ${expandClass}`}>
-          <div className="mb-1.5 px-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
+          <div className="mb-1.5 px-2 text-micro font-semibold text-muted-foreground">
             WHICH ONE LAUNCHES THE GAME?
           </div>
           <div className="flex flex-col gap-1">
@@ -88,7 +88,7 @@ export const ExecutablePicker = ({
                     setOpen(false);
                   }}
                   title={candidate}
-                  className={`flex w-full items-center gap-2 rounded-[7px] px-2 py-1.75 text-left transition-colors duration-150 ${
+                  className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.75 text-left transition-colors duration-150 ${
                     active ? 'bg-bone/[0.06]' : 'hover:bg-bone/[0.035]'
                   }`}
                 >

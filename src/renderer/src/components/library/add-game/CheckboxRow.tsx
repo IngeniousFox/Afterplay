@@ -54,7 +54,7 @@ export const CheckboxRow = ({
   return (
     <div
       onClick={onToggle}
-      className="flex cursor-pointer items-start gap-2.75 rounded-[10px] bg-bone/[0.02] px-3.25 py-2.75 transition-[border-color,background-color] duration-150 hover:bg-bone/[0.035]"
+      className="flex cursor-pointer items-start gap-2.75 rounded-sm bg-bone/[0.02] px-3.25 py-2.75 transition-[border-color,background-color] duration-150 hover:bg-bone/[0.035]"
       style={{
         border: `1px solid ${rowBorderFollowsChecked && checked ? borderColorChecked : 'var(--border)'}`,
       }}

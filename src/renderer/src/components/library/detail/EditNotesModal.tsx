@@ -83,7 +83,7 @@ export const EditNotesModal = ({
       <NotesEditor key={open ? 'open' : 'closed'} value={notes} onChange={setNotes} />
 
       {updateGame.error && !updateGame.isPending && (
-        <div className="mt-4 rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+        <div className="mt-4 rounded-sm border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
           Couldn&apos;t save your notes — {updateGame.error.message}
         </div>
       )}

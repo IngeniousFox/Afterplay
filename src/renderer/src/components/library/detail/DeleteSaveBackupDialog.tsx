@@ -1,4 +1,5 @@
 import { Trash2, TriangleAlert } from 'lucide-react';
+import { secondaryButtonClass } from '../../../lib/styles';
 import type { SaveBackupRow } from '../../../../../shared/types';
 import { useDeleteSaveBackup } from '../../../hooks/saves';
 import { useTimeFormat } from '../../../hooks/settings';
@@ -69,7 +70,7 @@ export const DeleteSaveBackupDialog = ({
             }}
           />
           <div className="relative flex items-center gap-3 px-5.5 py-5">
-            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
+            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-destructive/12">
               <Trash2 size={16} className="text-destructive" />
             </div>
             <AlertDialogTitle>Delete cloud version</AlertDialogTitle>
@@ -113,7 +114,7 @@ export const DeleteSaveBackupDialog = ({
             type="button"
             onClick={() => handleClose(false)}
             disabled={deleteBackup.isPending}
-            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
+            className={secondaryButtonClass}
           >
             Cancel
           </button>
@@ -138,7 +139,7 @@ export const DeleteSaveBackupDialog = ({
 
 const Notice = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
   <div
-    className="mt-3 flex items-start gap-1.75 rounded-[9px] px-3 py-2 text-[12px] leading-relaxed"
+    className="mt-3 flex items-start gap-1.75 rounded-sm px-3 py-2 text-[12px] leading-relaxed"
     style={{ background: 'rgba(255,179,71,.1)', color: '#ffb347' }}
   >
     <TriangleAlert size={13} className="mt-0.5 flex-none" />

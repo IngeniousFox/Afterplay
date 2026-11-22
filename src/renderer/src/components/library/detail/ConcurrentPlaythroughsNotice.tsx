@@ -1,4 +1,5 @@
 import { GitMerge, Layers } from 'lucide-react';
+import { primaryButtonClass, secondaryButtonClass } from '../../../lib/styles';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useConcurrentPlaythroughs, useMergePlaythroughs } from '../../../hooks/iterations';
@@ -58,7 +59,7 @@ export const ConcurrentPlaythroughsNotice = ({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[11px] border border-phosphor/35 bg-phosphor/[0.06] px-3.5 py-2.5 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-phosphor/35 bg-phosphor/[0.06] px-3.5 py-2.5 text-[13px]">
         <span className="flex items-center gap-2 font-semibold text-foreground">
           <Layers size={14} className="flex-none text-phosphor" />
           {COUNT_WORDS[active.length] ?? active.length} playthroughs are in progress
@@ -69,7 +70,7 @@ export const ConcurrentPlaythroughsNotice = ({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="ml-auto flex items-center gap-1.75 rounded-[8px] border border-input bg-bone/[0.04] px-3 py-1.5 text-[12.5px] font-bold text-foreground transition-colors duration-150 hover:bg-bone/[0.08] focus-visible:outline-2 focus-visible:outline-primary"
+          className={`ml-auto ${secondaryButtonClass} px-3 py-1.5 text-small`}
         >
           <GitMerge size={13} />
           Merge into {keep.label}
@@ -79,7 +80,7 @@ export const ConcurrentPlaythroughsNotice = ({
       <AlertDialog open={open} onOpenChange={handleOpenChange}>
         <AlertDialogContent className="w-full max-w-[460px] gap-0 border border-border bg-overlay p-0">
           <div className="flex items-center gap-3 border-b border-border px-5.5 py-5">
-            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-bone/[0.06]">
+            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-bone/[0.06]">
               <GitMerge size={16} className="text-foreground" />
             </div>
             <AlertDialogTitle>Merge playthroughs</AlertDialogTitle>
@@ -108,7 +109,7 @@ export const ConcurrentPlaythroughsNotice = ({
               type="button"
               onClick={() => handleOpenChange(false)}
               disabled={merge.isPending}
-              className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -116,7 +117,7 @@ export const ConcurrentPlaythroughsNotice = ({
               type="button"
               onClick={() => void handleMerge()}
               disabled={merge.isPending}
-              className="flex items-center gap-2 rounded-[10px] bg-primary px-5 py-2.5 text-[13.5px] font-bold text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className={primaryButtonClass}
             >
               <GitMerge size={15} />
               {merge.isPending ? 'Merging…' : 'Merge'}

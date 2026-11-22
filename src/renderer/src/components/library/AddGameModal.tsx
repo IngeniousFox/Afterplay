@@ -32,7 +32,13 @@ import { useAssignSession } from '../../hooks/sessions';
 import { useAddStateEvent } from '../../hooks/stateEvents';
 import { ENDLESS_STATUS_OPTIONS, NORMAL_STATUS_OPTIONS } from '../../lib/gameStatus';
 import { BLUE, GRAY, GREEN, TEAL, VIOLET } from '../../lib/colors';
-import { accentGradientStyle, expandClass, revealClass, revealStyle } from '../../lib/styles';
+import {
+  expandClass,
+  primaryButtonClass,
+  revealClass,
+  revealStyle,
+  secondaryButtonClass,
+} from '../../lib/styles';
 import { ModalShell } from '../ui/modal-shell';
 import { AddGameImagesField } from './add-game/AddGameImagesField';
 import { CheckboxRow } from './add-game/CheckboxRow';
@@ -369,7 +375,7 @@ const AddGameModalBody = ({
     return {
       gameId,
       where: 'library',
-      label: 'IN YOUR LIBRARY',
+      label: 'In your library',
       color: GREEN,
       hint: reachable
         ? 'Already in your library — pick it to open its page.'
@@ -388,7 +394,7 @@ const AddGameModalBody = ({
     return {
       gameId,
       where: 'plan',
-      label: 'IN YOUR PLAN',
+      label: 'In your plan',
       color: BLUE,
       hint: reachable
         ? 'Already in your plan — pick it to move it into your library.'
@@ -546,22 +552,19 @@ const AddGameModalBody = ({
       }
       footer={
         <>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
-          >
+          <button type="button" onClick={handleClose} className={secondaryButtonClass}>
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
             disabled={!selected || isSaving || !steamAppIdValid}
-            className="flex items-center gap-2 rounded-sm px-5.5 py-2.5 text-[13.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed"
-            style={
+            // Sin juego elegido el botón se queda gris (no un ámbar apagado):
+            // todavía no hay nada que añadir.
+            className={
               selected
-                ? accentGradientStyle
-                : { background: 'rgba(233,228,216,.06)', color: '#8a9496', opacity: 0.6 }
+                ? primaryButtonClass
+                : `${secondaryButtonClass} disabled:bg-raised disabled:text-dust`
             }
           >
             <Plus size={16} />
@@ -579,14 +582,14 @@ const AddGameModalBody = ({
       }
     >
       {selected === null && !igdbReady ? (
-        <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-border px-6 py-10 text-center">
+        <div className="flex flex-col items-center gap-2.5 rounded-md border border-dashed border-border px-6 py-10 text-center">
           <p className="text-[13.5px] font-semibold text-foreground">
             Game search needs your IGDB keys.
           </p>
           <p className="max-w-90 text-[12.5px] leading-relaxed text-muted-foreground">
-            Add your Twitch/IGDB credentials in Settings (the green button at the top of the
-            sidebar) under API &amp; Sync — takes a minute and it&apos;s free. Until then the
-            catalog can&apos;t be searched.
+            Add your Twitch/IGDB credentials in Settings (the gear at the top right), under
+            Integrations — takes a minute and it&apos;s free. Until then the catalog can&apos;t be
+            searched.
           </p>
         </div>
       ) : selected === null && scanning ? (
@@ -815,7 +818,7 @@ const AddGameModalBody = ({
                           render={({ field }) => (
                             <MoneyAmountField
                               {...field}
-                              label="MONEY SPENT (€)"
+                              label="Money spent (€)"
                               hint="· saved as a purchase"
                             />
                           )}
@@ -992,7 +995,7 @@ const AddGameModalBody = ({
               {!isPlan && <StatusSummaryLine />}
 
               {saveError && (
-                <div className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+                <div className="rounded-sm border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
                   Couldn&apos;t {isPromote ? 'move' : 'add'} the game — {saveError.message}
                 </div>
               )}
