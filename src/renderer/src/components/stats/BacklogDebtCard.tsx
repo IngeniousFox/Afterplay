@@ -3,7 +3,6 @@ import { Hourglass, Info, TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { PACE_WINDOW_DAYS, type SessionStats } from '../../../../shared/domain/sessionStats';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
-import { BLUE, GRAY, GREEN, VIOLET } from '../../lib/colors';
 import { DAY_MS } from '../../lib/dateMath';
 import { formatHours, pluralize } from '../../lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
@@ -277,39 +276,28 @@ const MovementCard = ({
 }: Extract<BacklogDebtCardProps, { mode: 'year' }> & { now: number }): React.JSX.Element => {
   const stats = computeMovement(games, plannedGames, stateEvents, year, now);
   const grew = stats.netHours > 0;
-  // Crecer viste el violeta de la deuda; encoger, el verde de la casa — es
-  // LA lectura de la tarjeta y tiene que verse antes de leer el número.
-  const netColor = grew ? VIOLET : GREEN;
   const moved = stats.addedCount > 0 || stats.clearedCount > 0;
   const maxSide = Math.max(stats.addedHours, stats.clearedHours, 1);
 
   return (
-    <StatCard
-      className={cn(
-        'afterplay-debt-card afterplay-movement-card flex h-full flex-col relative overflow-hidden',
-        '[background:radial-gradient(circle_at_16%_120%,_rgba(185,_166,_255,_0.1),_transparent_34%),_radial-gradient(circle_at_88%_-45%,_rgba(255,_179,_71,_0.045),_transparent_36%),_var(--card)]',
-        "[&::before]:content-[''] [&::before]:absolute [&::before]:inset-0 [&::before]:pointer-events-none",
-        '[&::before]:opacity-[0.22]',
-        '[&::before]:[background-image:linear-gradient(rgba(233,_228,_216,_0.018)_1px,_transparent_1px)]',
-        '[&::before]:[background-size:100%_34px]',
-        '[&::before]:[mask-image:linear-gradient(90deg,_transparent,_#000_38%,_#000)]',
-        '[&_>_*]:relative [&_>_*]:z-1',
-      )}
-    >
+    <StatCard className="afterplay-debt-card afterplay-movement-card relative flex h-full flex-col overflow-hidden">
       <div className="afterplay-debt-header flex items-start justify-between gap-4">
         <div>
-          <div className="text-[14px] font-bold text-foreground">Backlog movement</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            What you took on versus what you cleared in {year}
+          <div className="text-[16px] leading-tight font-semibold text-bone">Backlog movement</div>
+          <div className="text-small text-dust">
+            What you took on versus what you cleared in {year}, in HowLongToBeat hours
           </div>
         </div>
         <Tooltip>
-          <TooltipTrigger className="flex-none text-muted-foreground/60 hover:text-foreground">
-            <Info size={13} />
+          <TooltipTrigger
+            className="flex-none text-dust hover:text-bone"
+            aria-label="About this card"
+          >
+            <Info size={14} />
           </TooltipTrigger>
           <TooltipContent>
             Main Story times from HowLongToBeat. A game joins your backlog when it enters Afterplay
-            and leaves it the moment you start, finish or drop it — games added already played never
+            and leaves it the moment you start, finish or drop it. Games added already played never
             count. Endless games are left out, and these are today&apos;s HowLongToBeat estimates,
             not the ones from back then.
           </TooltipContent>
@@ -318,48 +306,43 @@ const MovementCard = ({
 
       {!moved ? (
         <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
-          <Hourglass size={26} className="text-muted-foreground/40" />
-          <div className="mt-2.5 text-[13px] font-semibold text-foreground">
+          <Hourglass size={26} className="text-dust" />
+          <div className="mt-2.5 text-body font-semibold text-bone">
             Your backlog didn&apos;t move in {year}.
           </div>
-          <div className="mt-1 max-w-64 text-[11.5px] text-muted-foreground">
+          <div className="mt-1 max-w-64 text-small text-dust">
             Nothing new took it on, nothing came off it.
           </div>
         </div>
       ) : (
-        <div className="afterplay-movement-stage grid grid-cols-[minmax(230px,_0.75fr)_minmax(0,_1.6fr)] gap-4.5 mt-[15px] [@media(max-width:_1040px)]:grid-cols-1">
-          <div
-            className={cn(
-              'afterplay-movement-hero py-3.5 px-4 rounded-[12px]',
-              '[border:1px_solid_color-mix(in_srgb,_var(--movement-accent)_20%,_rgba(233,_228,_216,_0.05))]',
-              '[background:linear-gradient(_135deg,_color-mix(in_srgb,_var(--movement-accent)_9%,_transparent),_rgba(3,_6,_7,_0.11)_)]',
-            )}
-            style={{ '--movement-accent': netColor } as React.CSSProperties}
-          >
-            <div className="flex items-baseline gap-2.5">
+        <div className="afterplay-movement-stage mt-4 grid gap-8 min-[1040px]:grid-cols-[minmax(230px,0.7fr)_minmax(0,1.6fr)]">
+          <div className="afterplay-movement-hero">
+            <div className="flex items-center gap-2.5">
               {grew ? (
-                <TrendingUp size={26} color={netColor} className="self-center" />
+                <TrendingUp size={26} className="text-phosphor" />
               ) : (
-                <TrendingDown size={26} color={netColor} className="self-center" />
+                <TrendingDown size={26} className="text-tube" />
               )}
               <span
-                className="text-[42px] font-display font-bold tabular-nums"
-                style={{ color: netColor }}
+                className={cn(
+                  'font-display text-[56px] leading-none font-bold tabular-nums',
+                  grew ? 'text-phosphor' : 'text-tube',
+                )}
               >
                 {grew ? '+' : '−'}
                 {Math.abs(Math.round(stats.netHours))}
               </span>
-              <span className="text-[14px] text-muted-foreground">hours</span>
+              <span className="text-body text-dust">hours</span>
             </div>
-            <div className="mt-0.5 text-[12.5px] font-semibold text-muted-foreground">
+            <div className="mt-1 text-body text-bone">
               {stats.netHours === 0
-                ? 'you broke even'
+                ? 'You broke even'
                 : grew
-                  ? 'your backlog grew'
-                  : 'you gained ground on it'}
+                  ? 'Your backlog grew'
+                  : 'You gained ground on it'}
             </div>
             {stats.withoutEstimate > 0 && (
-              <div className="mt-1.5 text-[11px] text-muted-foreground/70">
+              <div className="mt-1.5 text-small text-dust">
                 + {pluralize(stats.withoutEstimate, 'game')} with no HowLongToBeat estimate
               </div>
             )}
@@ -367,37 +350,35 @@ const MovementCard = ({
                 que empezaste a usar Afterplay se lleva de golpe todo lo que
                 importaste hacia atrás y sigue pendiente. */}
             {stats.isFirstYear && (
-              <div className="mt-1.5 text-[11px] text-muted-foreground/70">
-                Your first year here — everything you imported counts as taken on now
+              <div className="mt-1.5 text-small text-dust">
+                Your first year here: everything you imported counts as taken on now
               </div>
             )}
+            <div className="mt-3 text-small text-dust">Information, never a guilt counter.</div>
           </div>
 
-          <div
-            className={cn(
-              'afterplay-movement-comparison py-3.5 px-4 rounded-[12px] flex min-w-0 flex-col justify-center gap-[5px]',
-              '[border:1px_solid_rgba(233,_228,_216,_0.055)] [background:rgba(3,_6,_7,_0.1)]',
-            )}
-          >
+          <div className="afterplay-movement-comparison flex min-w-0 flex-col justify-center gap-4">
             <MovementSide
-              label="Took on"
+              label="Entered the backlog"
               hours={stats.addedHours}
               count={stats.addedCount}
+              countLabel="added"
               max={maxSide}
-              color={VIOLET}
+              barClass="bg-phosphor"
             />
             <MovementSide
-              label="Cleared"
+              label="Left it (started, completed or dropped)"
               hours={stats.clearedHours}
               count={stats.clearedCount}
+              countLabel="cleared"
               max={maxSide}
-              color={GREEN}
+              barClass="bg-tube"
             />
-            <div className="mt-0.5 flex items-center justify-between text-[11.5px]">
-              <span className="text-muted-foreground">
-                {stats.balanceIsNow ? `${year} so far` : `Ended ${year} owing`}
+            <div className="flex items-center justify-between border-t border-line pt-2.5 text-body">
+              <span className="text-dust">
+                {stats.balanceIsNow ? `Balance, ${year} so far` : `Ended ${year} owing`}
               </span>
-              <span className="font-semibold tabular-nums" style={{ color: GRAY }}>
+              <span className="font-semibold text-bone tabular-nums">
                 {formatHours(stats.endBalanceHours)}
               </span>
             </div>
@@ -414,38 +395,37 @@ const MovementSide = ({
   label,
   hours,
   count,
+  countLabel,
   max,
-  color,
+  barClass,
 }: {
   label: string;
   hours: number;
   count: number;
+  countLabel: string;
   max: number;
-  color: string;
+  barClass: string;
 }): React.JSX.Element => (
-  <div
-    className={cn(
-      'afterplay-movement-side flex items-center gap-2.5 py-1.5 px-[7px] rounded-[8px]',
-      '[transition:background-color_200ms_ease,_transform_240ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-      '[&:hover]:[background:rgba(233,_228,_216,_0.025)] [&:hover]:[transform:translateX(2px)]',
-      'motion-reduce:animate-none motion-reduce:transition-none',
-    )}
-  >
-    <span className="w-27 flex-none text-[12px] text-muted-foreground">{label}</span>
-    <div className="afterplay-movement-track h-1.5 flex-1 overflow-hidden rounded-[99px] [background:rgba(233,_228,_216,_0.055)]">
+  <div className="afterplay-movement-side">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+      <span className="text-small text-dust">{label}</span>
+      <span className="text-small text-dust">
+        {pluralize(count, 'game')} {countLabel}
+      </span>
+    </div>
+    <div className="font-display text-[36px] leading-none font-bold text-bone tabular-nums">
+      {formatHours(hours)}
+    </div>
+    <div className="afterplay-movement-track mt-1.5 h-2.5 overflow-hidden rounded-[2px] bg-inset">
       <div
         className={cn(
-          'afterplay-movement-fill h-full rounded-[inherit] origin-left',
-          'animate-[afterplay-grow-x_650ms_cubic-bezier(0.22,_1,_0.36,_1)_backwards]',
-          'motion-reduce:animate-none motion-reduce:transition-none',
+          'afterplay-movement-fill h-full origin-left rounded-[2px]',
+          'animate-[afterplay-grow-x_600ms_var(--ease-out)_backwards] motion-reduce:animate-none',
+          barClass,
         )}
-        style={{ width: `${(hours / max) * 100}%`, background: color }}
+        style={{ width: `${(hours / max) * 100}%` }}
       />
     </div>
-    <span className="w-30 flex-none text-right text-[12px] font-bold tabular-nums text-foreground">
-      {formatHours(hours)}
-      <span className="ml-1 font-normal text-muted-foreground">· {count}</span>
-    </span>
   </div>
 );
 
@@ -461,282 +441,164 @@ const BalanceCard = ({
   const halfwayDate = stats.weeks !== null ? new Date(now + (stats.weeks / 2) * 7 * DAY_MS) : null;
 
   return (
-    <StatCard
-      className={cn(
-        'afterplay-debt-card flex h-full flex-col relative overflow-hidden',
-        '[background:radial-gradient(circle_at_16%_120%,_rgba(185,_166,_255,_0.1),_transparent_34%),_radial-gradient(circle_at_88%_-45%,_rgba(255,_179,_71,_0.045),_transparent_36%),_var(--card)]',
-        "[&::before]:content-[''] [&::before]:absolute [&::before]:inset-0 [&::before]:pointer-events-none",
-        '[&::before]:opacity-[0.22]',
-        '[&::before]:[background-image:linear-gradient(rgba(233,_228,_216,_0.018)_1px,_transparent_1px)]',
-        '[&::before]:[background-size:100%_34px]',
-        '[&::before]:[mask-image:linear-gradient(90deg,_transparent,_#000_38%,_#000)]',
-        '[&_>_*]:relative [&_>_*]:z-1',
-      )}
-    >
+    <StatCard className="afterplay-debt-card relative flex h-full flex-col overflow-hidden">
       <div className="afterplay-debt-header flex items-start justify-between gap-4">
         <div className="flex items-start gap-2.5">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-[14px] font-bold text-foreground">Backlog debt</div>
-              <span
-                className={cn(
-                  'afterplay-debt-mode py-[3px] px-1.5 rounded-[99px] text-micro font-black tracking-[0.1em] leading-none',
-                  '[border:1px_solid_rgba(185,_166,_255,_0.2)] text-[rgba(167,_175,_231,_0.82)]',
-                  '[background:rgba(185,_166,_255,_0.07)]',
-                )}
-              >
-                PACE FORECAST
+              <div className="text-[16px] leading-tight font-semibold text-bone">Backlog debt</div>
+              <span className="afterplay-debt-mode rounded-sm border border-line-strong px-1.5 py-0.5 text-micro text-dust">
+                Pace forecast
               </span>
             </div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
+            <div className="text-small text-dust">
               Everything you want to play plus everything you haven&apos;t touched
             </div>
           </div>
         </div>
         <Tooltip>
-          <TooltipTrigger className="flex-none text-muted-foreground/60 hover:text-foreground">
-            <Info size={13} />
+          <TooltipTrigger
+            className="flex-none text-dust hover:text-bone"
+            aria-label="About this card"
+          >
+            <Info size={14} />
           </TooltipTrigger>
           <TooltipContent>
             Main Story times from HowLongToBeat, divided by how much you&apos;ve actually played
             recently (up to the last {PACE_WINDOW_DAYS} days, or since tracking began). Games
-            you&apos;ve already started don&apos;t count — neither do endless ones.
+            you&apos;ve already started don&apos;t count, and neither do endless ones.
           </TooltipContent>
         </Tooltip>
       </div>
 
       {stats.pendingCount === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
-          <Hourglass size={26} className="text-muted-foreground/40" />
-          <div className="mt-2.5 text-[13px] font-semibold text-foreground">
-            Nothing waiting for you.
-          </div>
-          <div className="mt-1 max-w-64 text-[11.5px] text-muted-foreground">
+          <Hourglass size={26} className="text-dust" />
+          <div className="mt-2.5 text-body font-semibold text-bone">Nothing waiting for you.</div>
+          <div className="mt-1 max-w-64 text-small text-dust">
             Every game in your library is either started or finished.
           </div>
         </div>
       ) : (
-        <div className="afterplay-debt-stage grid grid-cols-[minmax(245px,_0.78fr)_minmax(0,_1.75fr)] gap-4.5 mt-[15px] [@media(max-width:_1040px)]:grid-cols-1">
-          <div
-            className={cn(
-              'afterplay-debt-hero relative flex min-w-0 items-center gap-[15px] overflow-hidden py-[15px] px-4 rounded-[12px]',
-              '[border:1px_solid_rgba(185,_166,_255,_0.15)]',
-              '[background:linear-gradient(135deg,_rgba(185,_166,_255,_0.09),_rgba(3,_6,_7,_0.11))]',
-              '[box-shadow:inset_0_1px_0_rgba(233,_228,_216,_0.025)]',
-              '[transition:border-color_240ms_ease,_box-shadow_260ms_ease,_transform_300ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-              "[&::after]:content-[''] [&::after]:absolute [&::after]:-right-12 [&::after]:-bottom-17 [&::after]:w-37.5",
-              '[&::after]:h-37.5 [&::after]:rounded-[50%] [&::after]:pointer-events-none [&::after]:[background:#b9a6ff]',
-              '[&::after]:opacity-[0.05] [&::after]:[filter:blur(18px)]',
-              '[&:hover]:[border-color:rgba(185,_166,_255,_0.28)]',
-              '[&:hover]:[box-shadow:inset_0_1px_0_rgba(233,_228,_216,_0.04),_0_12px_30px_rgba(3,_6,_7,_0.18)]',
-              '[&:hover]:[transform:translateY(-2px)]',
-              '[&:hover_.afterplay-debt-hourglass_svg]:[transform:rotate(180deg)]',
-              'motion-reduce:animate-none motion-reduce:transition-none',
-            )}
-          >
-            <div
-              className={cn(
-                'afterplay-debt-hourglass relative flex w-14.5 h-14.5 flex-none items-center justify-center rounded-[50%]',
-                '[border:1px_solid_rgba(185,_166,_255,_0.24)] text-[#9ba5ec] [background:rgba(185,_166,_255,_0.075)]',
-                '[box-shadow:inset_0_0_18px_rgba(185,_166,_255,_0.06),_0_0_25px_rgba(185,_166,_255,_0.06)]',
-                '[&_span]:absolute [&_span]:inset-1.75 [&_span]:[border:1px_dashed_rgba(155,_165,_236,_0.2)]',
-                '[&_span]:rounded-[50%] [&_span]:animate-spin [&_span]:[animation-duration:14s]',
-                '[&_svg]:relative [&_svg]:z-1 [&_svg]:[filter:drop-shadow(0_0_8px_rgba(155,_165,_236,_0.24))]',
-                '[&_svg]:[transition:transform_680ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-                'motion-reduce:[&_span]:animate-none motion-reduce:[&_span]:transition-none motion-reduce:[&_svg]:animate-none',
-                'motion-reduce:[&_svg]:transition-none',
-              )}
-              aria-hidden="true"
-            >
-              <span />
-              <Hourglass size={30} strokeWidth={1.7} />
+        <div className="afterplay-debt-stage mt-4 grid gap-8 min-[1040px]:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.75fr)]">
+          <div className="afterplay-debt-hero relative min-w-0">
+            <div className="afterplay-debt-kicker text-small text-dust">Estimated playtime</div>
+            <div className="afterplay-debt-total flex items-baseline gap-1.5">
+              <strong
+                className="font-display text-[clamp(48px,5vw,64px)] leading-none font-bold text-bone tabular-nums"
+                data-debt-hours
+              >
+                {Math.round(stats.totalHours).toLocaleString('en-US')}
+              </strong>
+              <span className="font-display text-[24px] leading-none font-bold text-dust">h</span>
             </div>
-            <div className="min-w-0">
-              <div className="afterplay-debt-kicker text-dust text-micro font-black tracking-[0.12em] uppercase">
-                ESTIMATED PLAYTIME
-              </div>
-              <div className="afterplay-debt-total flex items-baseline gap-[7px] mt-px">
-                <strong
-                  className="text-foreground text-[clamp(34px,_3.5vw,_50px)] font-black tracking-[-0.05em] leading-none [tab-size:4]"
-                  data-debt-hours
-                >
-                  {Math.round(stats.totalHours).toLocaleString('en-US')}
-                </strong>
-                <span className="text-muted-foreground text-[11px]">hours</span>
-              </div>
-              <div className="afterplay-debt-human mt-1.5 text-[11px] font-semibold text-muted-foreground">
-                {stats.weeks !== null ? (
-                  <>
-                    <span className="text-[#9ba5ec] font-[850]">
-                      ≈ {humanizeWeeks(stats.weeks)}
-                    </span>{' '}
-                    at your current pace
-                  </>
-                ) : stats.trackedDays < MIN_TRACKED_DAYS ? (
-                  'Play for a week and Afterplay can estimate how long it will take'
-                ) : (
-                  'Not enough recent playtime to estimate a pace'
-                )}
-              </div>
-              <div className="afterplay-debt-coverage flex flex-wrap gap-y-1 gap-x-2 mt-2 text-[11px] text-dust">
-                <span>
-                  {stats.estimatedCount}/{stats.pendingCount} games estimated
-                </span>
-                {stats.withoutEstimate > 0 && (
-                  <span className="text-[rgba(255,_179,_71,_0.8)]">
-                    + {pluralize(stats.withoutEstimate, 'game')} outside the forecast
-                  </span>
-                )}
-              </div>
+            <div className="afterplay-debt-human mt-1.5 text-small text-dust">
+              {stats.weeks !== null ? (
+                <>
+                  <span className="font-semibold text-bone">≈ {humanizeWeeks(stats.weeks)}</span> at
+                  your current pace
+                </>
+              ) : stats.trackedDays < MIN_TRACKED_DAYS ? (
+                'Play for a week and Afterplay can estimate how long it will take'
+              ) : (
+                'Not enough recent playtime to estimate a pace'
+              )}
+            </div>
+            <div className="afterplay-debt-coverage mt-2 flex flex-wrap gap-x-2 gap-y-1 text-small text-dust">
+              <span>
+                {stats.estimatedCount}/{stats.pendingCount} games estimated
+              </span>
+              {stats.withoutEstimate > 0 && (
+                <span>+ {pluralize(stats.withoutEstimate, 'game')} outside the forecast</span>
+              )}
             </div>
           </div>
 
-          <div className="afterplay-debt-forecast min-w-0 pt-3 px-3.5 pb-[11px] rounded-[12px] [border:1px_solid_rgba(233,_228,_216,_0.055)] [background:rgba(3,_6,_7,_0.1)]">
-            <div
-              className={cn(
-                'afterplay-debt-forecast-head flex items-start justify-between gap-3.5',
-                '[&_span]:text-dust [&_span]:text-micro [&_span]:font-black [&_span]:tracking-[0.12em]',
-                '[&_span]:uppercase',
-                '[&_>_div_>_strong]:block [&_>_div_>_strong]:mt-0.75 [&_>_div_>_strong]:text-foreground',
-                '[&_>_div_>_strong]:text-[16px] [&_>_div_>_strong]:font-[850]',
-              )}
-            >
+          <div className="afterplay-debt-forecast min-w-0">
+            <div className="afterplay-debt-forecast-head flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
               <div>
-                <span>PROJECTED HORIZON</span>
-                <strong>
+                <span className="block text-small text-dust">Projected horizon</span>
+                <strong
+                  className={cn(
+                    'block font-display text-[30px] leading-tight font-bold',
+                    stats.finishDate ? 'text-phosphor' : 'text-bone',
+                  )}
+                >
                   {stats.finishDate ? monthYear(stats.finishDate) : 'Not enough signal'}
                 </strong>
               </div>
-              <div
-                className={cn(
-                  'afterplay-debt-pace py-[5px] px-2 rounded-[8px] text-right',
-                  '[&_span]:text-dust [&_span]:text-micro [&_span]:font-black [&_span]:tracking-[0.12em]',
-                  '[&_span]:uppercase',
-                  '[&_strong]:block [&_strong]:mt-0.75',
-                  '[border:1px_solid_rgba(185,_166,_255,_0.14)] [background:rgba(185,_166,_255,_0.055)]',
-                  '[&_strong]:text-[#a4ade9] [&_strong]:text-[11.5px] [&_strong]:font-extrabold',
-                )}
-              >
-                <span>RECENT PACE</span>
-                <strong>
+              <div className="afterplay-debt-pace text-right">
+                <span className="block text-small text-dust">Recent pace</span>
+                <strong className="block font-display text-[30px] leading-tight font-bold text-bone">
                   {stats.hoursPerWeek >= HOURS_PER_WEEK_MIN
-                    ? `${formatHours(stats.hoursPerWeek)} / week`
-                    : 'Below 30m / week'}
+                    ? `${formatHours(stats.hoursPerWeek)} a week`
+                    : 'Below 30m a week'}
                 </strong>
               </div>
             </div>
 
             {stats.finishDate && halfwayDate ? (
-              <div className="afterplay-debt-horizon mt-4 mx-1 mb-[13px]">
-                <div
-                  className={cn(
-                    'afterplay-debt-horizon-rail relative h-1 rounded-[99px]',
-                    '[background:linear-gradient(90deg,_rgba(185,_166,_255,_0.28),_#b9a6ff_70%,_#b9a6ff)]',
-                    '[box-shadow:0_0_15px_rgba(185,_166,_255,_0.12)]',
-                    "[&::after]:content-[''] [&::after]:absolute [&::after]:[inset:-5px_0]",
-                    '[&::after]:[background:repeating-linear-gradient(_90deg,_transparent_0,_transparent_calc(12.5%_-_1px),_rgba(233,_228,_216,_0.09)_calc(12.5%_-_1px),_rgba(233,_228,_216,_0.09)_12.5%_)]',
-                    '[&::after]:[mask-image:linear-gradient(#0000,_#000_40%,_#000_60%,_#0000)]',
-                  )}
-                >
+              <div className="afterplay-debt-horizon mx-1 mt-4 mb-4">
+                <div className="afterplay-debt-horizon-rail relative h-1.5 rounded-full bg-[linear-gradient(90deg,var(--color-phosphor),rgb(255_179_71/0.25))]">
                   <span
                     className={cn(
-                      'afterplay-debt-horizon-beam absolute z-2 -top-0.5 left-0 w-[16%] h-2 rounded-[99px]',
-                      '[background:linear-gradient(90deg,_transparent,_rgba(205,_211,_255,_0.95),_transparent)] [filter:blur(1px)]',
-                      'animate-[afterplay-debt-beam_3.8s_ease-in-out_infinite]',
-                      'motion-reduce:animate-none motion-reduce:transition-none',
+                      'afterplay-debt-horizon-beam absolute -top-px left-0 z-2 h-2 w-[16%] rounded-full',
+                      'bg-[linear-gradient(90deg,transparent,rgb(255_194_102/0.9),transparent)] blur-[1px]',
+                      'animate-[afterplay-debt-beam_3.8s_ease-in-out_infinite] motion-reduce:hidden',
                     )}
                   />
-                  <i
-                    className={cn(
-                      'afterplay-debt-horizon-dot afterplay-debt-horizon-dot--start absolute z-3 top-1/2 w-2 h-2 rounded-[50%]',
-                      '[border:2px_solid_#171d20] [background:#b9a6ff] [box-shadow:0_0_9px_rgba(185,_166,_255,_0.45)]',
-                      '[transform:translate(-50%,_-50%)] left-0',
-                    )}
-                  />
-                  <i
-                    className={cn(
-                      'afterplay-debt-horizon-dot afterplay-debt-horizon-dot--middle absolute z-3 top-1/2 w-2 h-2 rounded-[50%]',
-                      '[border:2px_solid_#171d20] [background:#b9a6ff] [box-shadow:0_0_9px_rgba(185,_166,_255,_0.45)]',
-                      '[transform:translate(-50%,_-50%)] left-1/2',
-                    )}
-                  />
-                  <i
-                    className={cn(
-                      'afterplay-debt-horizon-dot afterplay-debt-horizon-dot--end absolute z-3 top-1/2 w-2 h-2 rounded-[50%]',
-                      '[border:2px_solid_#171d20] [box-shadow:0_0_9px_rgba(185,_166,_255,_0.45)] [transform:translate(-50%,_-50%)]',
-                      'left-full [background:#d2d7ff]',
-                    )}
-                  />
+                  <i className="afterplay-debt-horizon-dot afterplay-debt-horizon-dot--start absolute top-1/2 left-0 z-3 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-panel bg-phosphor" />
+                  <i className="afterplay-debt-horizon-dot afterplay-debt-horizon-dot--middle absolute top-1/2 left-1/2 z-3 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-phosphor bg-panel" />
+                  <i className="afterplay-debt-horizon-dot afterplay-debt-horizon-dot--end absolute top-1/2 left-full z-3 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-panel bg-phosphor shadow-glow-bar" />
                 </div>
-                <div
-                  className={cn(
-                    'afterplay-debt-horizon-labels grid grid-cols-[repeat(3,_1fr)] mt-[7px] text-[11px] font-bold text-dust',
-                    '[&_span]:flex [&_span]:flex-col [&_span]:gap-0.25',
-                    '[&_span:nth-child(2)]:items-center',
-                    '[&_span:last-child]:items-end',
-                    '[&_small]:text-dust [&_small]:text-micro [&_small]:font-black [&_small]:tracking-[0.11em]',
-                  )}
-                >
+                <div className="afterplay-debt-horizon-labels mt-2 grid grid-cols-3 gap-2 text-small font-semibold text-bone [&>span]:flex [&>span]:min-w-0 [&>span]:flex-col [&>span:last-child]:items-end [&>span:nth-child(2)]:items-center">
                   <span>
-                    <small>NOW</small>
+                    <small className="text-micro font-normal text-dust">Now</small>
                     Today
                   </span>
                   <span>
-                    <small>HALFWAY</small>
+                    <small className="text-micro font-normal text-dust">Halfway</small>
                     {monthYear(halfwayDate)}
                   </span>
                   <span>
-                    <small>FINISH LINE</small>
+                    <small className="text-micro font-normal text-dust">Finish line</small>
                     {monthYear(stats.finishDate)}
                   </span>
                 </div>
               </div>
             ) : (
-              <div
-                className={cn(
-                  'afterplay-debt-horizon afterplay-debt-horizon--quiet mt-4 mx-1 mb-[13px] min-h-10.5 p-3.25',
-                  '[border:1px_dashed_rgba(233,_228,_216,_0.08)] rounded-[9px] text-muted-foreground text-micro text-center',
-                )}
-              >
+              <div className="afterplay-debt-horizon afterplay-debt-horizon--quiet mx-1 mt-4 mb-4 min-h-10.5 rounded-sm border border-dashed border-line-strong p-3 text-center text-small text-dust">
                 Keep tracking recent sessions and the horizon will appear here.
               </div>
             )}
 
-            <div
-              className={cn(
-                'afterplay-debt-composition flex h-[5px] gap-0.5 overflow-hidden rounded-[99px]',
-                '[background:rgba(233,_228,_216,_0.045)]',
-                '[&_span]:min-w-0 [&_span]:rounded-[inherit] [&_span]:[box-shadow:0_0_9px_currentColor] [&_span]:origin-left',
-                '[&_span]:animate-[afterplay-grow-x_700ms_cubic-bezier(0.22,_1,_0.36,_1)_backwards]',
-                'motion-reduce:[&_span]:animate-none motion-reduce:[&_span]:transition-none',
-              )}
-            >
+            <div className="afterplay-debt-composition flex h-2 gap-0.5 overflow-hidden rounded-[2px] bg-inset [&_span]:min-w-0 [&_span]:origin-left [&_span]:animate-[afterplay-grow-x_600ms_var(--ease-out)_backwards] motion-reduce:[&_span]:animate-none">
               <span
+                className="bg-tube"
                 style={{
                   width: `${stats.totalHours > 0 ? (stats.unplayedHours / stats.totalHours) * 100 : 0}%`,
-                  background: BLUE,
                 }}
               />
               <span
+                className="bg-phosphor"
                 style={{
                   width: `${stats.totalHours > 0 ? (stats.plannedHours / stats.totalHours) * 100 : 0}%`,
-                  background: VIOLET,
                 }}
               />
             </div>
 
-            <div className="afterplay-debt-sources grid grid-cols-2 gap-[7px] mt-[7px]">
+            <div className="afterplay-debt-sources mt-2 grid grid-cols-2 gap-4">
               <DebtSource
                 label="Never touched"
                 count={stats.unplayedCount}
                 hours={stats.unplayedHours}
-                color={BLUE}
+                dotClass="bg-tube"
               />
               <DebtSource
                 label="Plan to play"
                 count={stats.plannedCount}
                 hours={stats.plannedHours}
-                color={VIOLET}
+                dotClass="bg-phosphor"
               />
             </div>
           </div>
@@ -746,44 +608,29 @@ const BalanceCard = ({
   );
 };
 
-// Una de las dos mitades del backlog, con su barra proporcional — el reparto
-// entre "lo que ya tienes" y "lo que quieres" es la lectura interesante: dos
-// backlogs de 340h no son iguales si uno es todo intención y el otro todo
-// juegos ya comprados.
+// Una de las dos mitades del backlog — el reparto entre "lo que ya tienes" y
+// "lo que quieres" es la lectura interesante: dos backlogs de 340h no son
+// iguales si uno es todo intención y el otro todo juegos ya comprados.
 const DebtSource = ({
   label,
   count,
   hours,
-  color,
+  dotClass,
 }: {
   label: string;
   count: number;
   hours: number;
-  color: string;
+  dotClass: string;
 }): React.JSX.Element => (
   <div
-    className={cn(
-      'afterplay-debt-source relative grid grid-cols-[minmax(0,_1fr)_auto] grid-rows-[auto_auto] gap-y-px gap-x-2.5',
-      'overflow-hidden pt-2 pr-2.5 pb-2 pl-[13px] rounded-[9px] [border:1px_solid_rgba(233,_228,_216,_0.055)]',
-      '[background:rgba(233,_228,_216,_0.018)]',
-      '[transition:border-color_200ms_ease,_background-color_200ms_ease,_transform_260ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-      '[&:hover]:[border-color:color-mix(in_srgb,_var(--debt-source)_28%,_rgba(233,_228,_216,_0.06))]',
-      '[&:hover]:[background:color-mix(in_srgb,_var(--debt-source)_6%,_rgba(233,_228,_216,_0.018))]',
-      '[&:hover]:[transform:translateY(-2px)]',
-      'motion-reduce:animate-none motion-reduce:transition-none',
-    )}
+    className="afterplay-debt-source relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 border-t border-line pt-2 pl-4"
     data-debt-source={label}
-    style={{ '--debt-source': color } as React.CSSProperties}
   >
-    <span className="overflow-hidden text-dust text-[11.5px] font-[750] text-ellipsis whitespace-nowrap">
-      {label}
-    </span>
-    <small className="overflow-hidden text-muted-foreground text-[11px] text-ellipsis whitespace-nowrap">
-      {formatHours(hours)} estimated
-    </small>
-    <i className="absolute top-2 bottom-2 left-0 w-0.75 rounded-[0_99px_99px_0] [background:var(--debt-source)] opacity-[0.72]" />
+    <span className="truncate text-body font-semibold text-bone">{label}</span>
+    <small className="truncate text-small text-dust">{formatHours(hours)} estimated</small>
+    <i className={cn('absolute top-3.5 left-0 size-2 rounded-full', dotClass)} />
     <strong
-      className="[grid-row:1_/_3] [grid-column:2] self-center text-(--debt-source) text-[20px] font-black leading-none [tab-size:3]"
+      className="col-start-2 row-span-2 row-start-1 self-center font-display text-[32px] leading-none font-bold text-bone tabular-nums"
       data-debt-count
     >
       {count}

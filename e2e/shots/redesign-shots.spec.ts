@@ -405,3 +405,61 @@ test('capturas de sesiones pendientes', async () => {
     sandbox.cleanup();
   }
 });
+
+// Stats (tanda 5): la página global entera por tramos de scroll, un año
+// concreto, la ficha de un juego por tramos y el Journey.
+test('capturas de Stats', async () => {
+  test.setTimeout(240_000);
+  mkdirSync(OUT, { recursive: true });
+  const { app, window, sandbox } = await launchAfterplay();
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await window.emulateMedia({ reducedMotion: 'reduce' });
+    const scrollShots = async (prefix: string, selector: string): Promise<void> => {
+      const scroller = window.locator(selector).first();
+      await scroller.waitFor();
+      await window.waitForTimeout(1200);
+      const { height, client } = await scroller.evaluate((el) => ({
+        height: el.scrollHeight,
+        client: el.clientHeight,
+      }));
+      const steps = Math.min(9, Math.ceil(height / (client * 0.85)));
+      for (let index = 0; index < steps; index++) {
+        await scroller.evaluate(
+          (el, top) => el.scrollTo({ top, behavior: 'instant' as ScrollBehavior }),
+          Math.round(index * client * 0.85),
+        );
+        await window.waitForTimeout(400);
+        await window.screenshot({ path: join(OUT, `${prefix}-${index + 1}.png`) });
+      }
+    };
+
+    await goTo(window, '/stats');
+    await scrollShots('stats-all', '.afterplay-stats-screen');
+
+    const year = window.getByRole('button', { name: '2026', exact: true }).first();
+    if (await year.isVisible().catch(() => false)) {
+      await year.click();
+      await scrollShots('stats-year', '.afterplay-stats-screen');
+    }
+
+    for (const [prefix, title] of [
+      ['stats-game', '007 First Light'],
+      ['stats-game-runs', "Assassin's Creed II"],
+    ]) {
+      await goTo(window, `/stats?game=${gameIdOf(sandbox, title)}` as Route);
+      await scrollShots(prefix, '.afterplay-game-stats-screen');
+    }
+
+    await goTo(window, '/stats');
+    await window.getByRole('button', { name: 'Journey', exact: true }).click();
+    await scrollShots('stats-journey', '.afterplay-stats-screen');
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});

@@ -1,49 +1,39 @@
 import { cn } from '../../lib/utils';
-import type { LucideIcon } from 'lucide-react';
 import { type CSSProperties, useState } from 'react';
-import { StatCard } from './StatCard';
+import { ChartHeading, StatCard } from './StatCard';
 
 export type CategoryBar = { label: string; value: number };
 
 type CategoryBarChartProps = {
   title: string;
   subtitle: string;
-  Icon: LucideIcon;
-  // Texto de la cabecera derecha — varía en FORMA entre los tres charts que
+  // Texto de la cabecera derecha — varía en FORMA entre los charts que
   // comparten este componente (un total con la ventana de tiempo en Hours/
   // Spent per month, un "X is your day" condicional en When do you play?),
-  // así que no es un simple string: recibe el pico ya calculado (por si el
-  // caller lo necesita, como WhenDoYouPlayChart) sin tener que recalcularlo
-  // por su cuenta.
+  // así que recibe el pico ya calculado.
   headerRight?: (peakIndex: number, peakValue: number) => React.ReactNode;
   bars: CategoryBar[];
   formatValue: (value: number) => string;
-  barGradient: string;
-  labelColor: string;
-  glowColor: string;
-  // max-w-8 (meses, 12 barras) o max-w-9 (días, 7 barras) — el resto de la
-  // geometría y el panel de lectura activa es igual en los tres.
+  // Color de la serie: Phosphor para horas (la serie principal), Tube para
+  // euros (la secundaria) y el color del juego en su página.
+  accent?: string;
+  // max-w-8 (meses, 12 barras) o max-w-9 (días, 7 barras).
   maxBarWidthClass?: string;
 };
 
-const BAR_AREA_PX = 122;
+const BAR_AREA_PX = 140;
 
-// Barras con pista de fondo, pico persistente y panel de lectura al pasar el
-// ratón — compartido por Hours per month, Spent per month y When do you
-// play?, que eran la misma card con solo el color/formato/nº de barras
-// distintos. Cada caller sigue resolviendo SU PROPIA regla de ventana de
-// tiempo y bucketing (año vs "últimos 12 meses", isManual, día de la
-// semana…) antes de pasar aquí los {label, value} ya listos.
+// Barras con pico persistente y lectura al pasar el ratón — compartido por
+// Hours per month, Spent per month y When do you play?. Fósforo: la serie a
+// media intensidad y la barra activa (el pico, o la que estás mirando) a
+// opacidad total con su valor encima en Bone.
 export const CategoryBarChart = ({
   title,
   subtitle,
-  Icon,
   headerRight,
   bars,
   formatValue,
-  barGradient,
-  labelColor,
-  glowColor,
+  accent = 'var(--color-phosphor)',
   maxBarWidthClass = 'max-w-8',
 }: CategoryBarChartProps): React.JSX.Element => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -57,88 +47,37 @@ export const CategoryBarChart = ({
     activeBar !== undefined && totalValue > 0
       ? Math.round((activeBar.value / totalValue) * 100)
       : 0;
-  // Sin div envolvente cuando no hay nada que enseñar (ej. WhenDoYouPlayChart
-  // sin ningún día jugado todavía) — igual que el `peakIndex >= 0 && (...)`
-  // que tenía cada chart antes de compartir este componente.
   const headerRightContent = headerRight?.(peakIndex, maxValue);
 
   return (
     <StatCard
-      className={cn(
-        'afterplay-category-card flex h-full flex-col relative overflow-hidden',
-        "after:content-[''] after:absolute after:top-0 after:left-5.5 after:w-14.5 after:h-px after:pointer-events-none",
-        'after:[background:linear-gradient(90deg,transparent,var(--chart-accent,#ffb347),transparent)] after:opacity-50',
-      )}
-      style={
-        {
-          '--chart-accent': labelColor,
-          '--chart-glow': glowColor,
-        } as CSSProperties
-      }
+      className="afterplay-category-card relative flex h-full flex-col overflow-hidden"
+      style={{ '--chart-accent': accent } as CSSProperties}
     >
-      <div className="afterplay-chart-heading grid grid-cols-[32px_minmax(0,_1fr)_auto] items-center gap-2.5 min-w-0">
-        <span
-          className={cn(
-            'afterplay-chart-heading-icon flex w-8 h-8 items-center justify-center rounded-[9px] border',
-            'border-[color-mix(in_srgb,var(--chart-accent,#ffb347)_22%,transparent)]',
-            'text-[color:var(--chart-accent,#ffb347)]',
-            'bg-[color-mix(in_srgb,var(--chart-accent,#ffb347)_7%,rgba(233,228,216,0.01))]',
-            '[.afterplay-category-card_&]:[transition:color_200ms_ease,border-color_200ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
-            '[.afterplay-category-card:hover_&]:border-[color-mix(in_srgb,var(--chart-accent)_38%,transparent)]',
-            '[.afterplay-category-card:hover_&]:[transform:translateY(-1px)_rotate(-3deg)]',
-            'motion-reduce:animate-none motion-reduce:transition-none',
-          )}
-        >
-          <Icon size={15} />
-        </span>
-        <div className="afterplay-chart-heading-copy min-w-0">
-          <strong className="block text-foreground text-[14px] font-[850] leading-[1.2] whitespace-normal">
-            {title}
-          </strong>
-          <small className="block mt-0.75 text-muted-foreground text-[11.5px] leading-[1.2] whitespace-normal">
-            {subtitle}
-          </small>
-        </div>
-        {headerRightContent != null && (
-          <div
-            className={cn(
-              'afterplay-chart-total min-w-17.5 text-right [&_strong]:block [&_strong]:text-foreground [&_strong]:text-[12px]',
-              '[&_strong]:font-[850] [&_strong]:leading-[1.2] [&_strong]:tabular-nums [&_small]:block [&_small]:mt-0.75',
-              '[&_small]:text-dust [&_small]:text-[11px] [&_small]:font-[650] [&_small]:leading-[1.2]',
-              '[&_em]:text-[color:var(--session-accent,var(--chart-accent,#ffb347))] [&_em]:not-italic [&_em]:font-extrabold',
-            )}
-          >
-            {headerRightContent}
-          </div>
-        )}
-      </div>
+      <ChartHeading title={title} subtitle={subtitle} right={headerRightContent} />
 
       <div
         className={cn(
-          'afterplay-category-focus flex min-h-[49px] items-center justify-between gap-4 mt-[13px] py-2 px-[11px]',
-          'rounded-[10px] border',
-          'border-[color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_18%,rgba(233,228,216,0.05))]',
-          '[background:linear-gradient(115deg,color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_7%,transparent),rgba(233,228,216,0.012))]',
-          '[&_>_div:last-child]:flex-none [&_>_div:last-child]:text-right',
-          '[&_>_div:last-child_strong]:text-[color:var(--chart-accent,var(--session-accent,#ffb347))]',
+          'afterplay-category-focus mt-3 flex min-h-10 items-end justify-between gap-4 border-b border-line pb-2.5',
+          '[&>div:last-child]:flex-none [&>div:last-child]:text-right',
         )}
         aria-live="polite"
       >
         {activeBar ? (
           <>
             <div>
-              <span className="block text-dust text-[11px] font-black tracking-[0.14em] leading-[1]">
-                {hoveredIndex === null ? 'PEAK' : 'INSPECTING'}
+              <span className="block text-micro font-semibold text-dust">
+                {hoveredIndex === null ? 'Peak' : 'Inspecting'}
               </span>
-              <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
+              <strong className="block text-small font-semibold text-bone tabular-nums">
                 {activeBar.label}
               </strong>
             </div>
             <div>
-              <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
+              <strong className="block font-display text-[20px] leading-none font-bold text-(--chart-accent) tabular-nums">
                 {formatValue(activeBar.value)}
               </strong>
-              <small className="block mt-0.75 text-dust text-[11px] font-semibold leading-[1.05]">
+              <small className="mt-0.5 block text-micro text-dust">
                 {activeShare}% of this view
               </small>
             </div>
@@ -146,31 +85,25 @@ export const CategoryBarChart = ({
         ) : (
           <>
             <div>
-              <span className="block text-dust text-[11px] font-black tracking-[0.14em] leading-[1]">
-                NO ACTIVITY
-              </span>
-              <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
-                —
-              </strong>
+              <span className="block text-micro font-semibold text-dust">No activity</span>
+              <strong className="block text-small font-semibold text-bone">—</strong>
             </div>
-            <small className="block mt-0.75 text-dust text-[11px] font-semibold leading-[1.05]">
-              Nothing tracked in this view
-            </small>
+            <small className="block text-micro text-dust">Nothing tracked in this view</small>
           </>
         )}
       </div>
 
       <div
-        className="afterplay-category-stage relative flex flex-none items-stretch gap-[9px] mt-3 border-b border-b-[rgba(233,228,216,0.075)]"
+        className="afterplay-category-stage relative mt-7 flex flex-none items-stretch gap-2 border-b border-line-strong"
         style={{ height: BAR_AREA_PX }}
       >
         <span
-          className="afterplay-category-grid absolute -z-1 inset-0 grid grid-rows-[repeat(3,_1fr)] pointer-events-none"
+          className="afterplay-category-grid pointer-events-none absolute inset-0 -z-1 grid grid-rows-[repeat(3,_1fr)]"
           aria-hidden="true"
         >
-          <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
-          <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
-          <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
+          <i className="border-t border-line" />
+          <i className="border-t border-line" />
+          <i className="border-t border-line" />
         </span>
         {bars.map((bar, index) => {
           const isHovered = hoveredIndex === index;
@@ -192,47 +125,40 @@ export const CategoryBarChart = ({
               onFocus={() => setHoveredIndex(index)}
               onBlur={() => setHoveredIndex(null)}
               className={cn(
-                'afterplay-category-column relative min-w-0 h-full flex-1 rounded-[7px_7px_0_0] outline-none',
-                '[transition:opacity_180ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
-                '[&.is-active]:[transform:translateY(-2px)] [&.is-dimmed]:opacity-43',
-                'focus-visible:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_45%,transparent)]',
-                'motion-reduce:animate-none motion-reduce:transition-none',
+                'afterplay-category-column relative h-full min-w-0 flex-1 rounded-t-sm outline-hidden',
+                'transition-[background-color,opacity] duration-150 hover:bg-raised/60',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
+                '[&.is-dimmed]:opacity-60',
                 isActive ? 'is-active' : '',
                 hoveredIndex !== null && !isHovered ? 'is-dimmed' : '',
                 bar.value === 0 ? 'is-empty' : '',
               )}
             >
-              <span
-                className={cn(
-                  'afterplay-category-track absolute bottom-0 left-1/2 w-[74%] h-full rounded-[6px_6px_3px_3px]',
-                  '[transform:translateX(-50%)] border border-line border-b-0',
-                  '[background:linear-gradient(180deg,rgba(233,228,216,0.032),rgba(233,228,216,0.018))]',
-                  maxBarWidthClass,
-                )}
-              />
               {bar.value > 0 && (
                 <span
                   className={cn(
-                    'afterplay-category-fill absolute bottom-0 left-1/2 w-[74%] h-[var(--bar-height)] min-h-[3px] overflow-hidden',
-                    'rounded-[6px_6px_3px_3px] [transform:translateX(-50%)] origin-bottom',
-                    'animate-[afterplay-category-rise_620ms_cubic-bezier(0.22,1,0.36,1)_var(--bar-delay)_backwards]',
-                    '[transition:filter_180ms_ease,box-shadow_200ms_ease] [background:var(--bar-gradient)]',
-                    "after:content-[''] after:absolute after:inset-0 after:pointer-events-none",
-                    'after:[background:linear-gradient(90deg,rgba(233,228,216,0.09),transparent_36%_72%,rgba(3,6,7,0.08))]',
-                    '[.afterplay-category-column.is-active_&]:[filter:saturate(1.06)_brightness(1.07)]',
-                    '[.afterplay-category-column.is-active_&]:[box-shadow:0_0_11px_var(--chart-glow)]',
+                    'afterplay-category-fill absolute bottom-0 left-1/2 h-(--bar-height) min-h-0.75 w-[74%] -translate-x-1/2',
+                    'origin-bottom rounded-t-[2px]',
+                    'bg-[color-mix(in_srgb,var(--chart-accent)_55%,transparent)]',
+                    'animate-[afterplay-category-rise_520ms_var(--ease-out)_var(--bar-delay)_backwards]',
+                    'transition-[background-color,box-shadow] duration-150',
+                    '[.afterplay-category-column.is-active_&]:bg-(--chart-accent)',
+                    '[.afterplay-category-column.is-active_&]:shadow-[0_0_12px_color-mix(in_srgb,var(--chart-accent)_45%,transparent)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                     maxBarWidthClass,
                   )}
                   style={
                     {
                       '--bar-height': `${fillPct}%`,
-                      '--bar-gradient': barGradient,
-                      '--bar-delay': `${index * 45}ms`,
+                      '--bar-delay': `${index * 35}ms`,
                     } as CSSProperties
                   }
                 >
-                  <i className="absolute z-1 top-0 right-1.25 left-1.25 h-px bg-bone/38 opacity-50" />
+                  {isActive && (
+                    <span className="absolute -top-5.5 left-1/2 -translate-x-1/2 text-micro font-semibold whitespace-nowrap text-bone tabular-nums">
+                      {formatValue(bar.value)}
+                    </span>
+                  )}
                 </span>
               )}
             </div>
@@ -240,15 +166,14 @@ export const CategoryBarChart = ({
         })}
       </div>
 
-      <div className="afterplay-category-axis flex gap-[9px] mt-[7px]">
+      <div className="afterplay-category-axis mt-2 flex gap-2">
         {bars.map((bar, index) => (
           <div
             key={index}
             className={cn(
               activeIndex === index ? 'is-active' : '',
-              'min-w-0 flex-1 text-dust text-[11px] font-semibold leading-[1.25] text-center',
-              'whitespace-normal break-words [transition:color_180ms_ease,font-weight_180ms_ease]',
-              '[&.is-active]:text-[color:var(--chart-accent,var(--session-accent,#ffb347))] [&.is-active]:font-[850]',
+              'min-w-0 flex-1 text-center text-micro break-words whitespace-normal text-dust',
+              '[&.is-active]:font-semibold [&.is-active]:text-bone',
             )}
           >
             {bar.label}

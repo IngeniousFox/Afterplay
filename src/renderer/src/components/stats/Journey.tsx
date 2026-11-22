@@ -1,4 +1,4 @@
-import { BookOpen, CalendarRange, Clock3, Gamepad2, Route } from 'lucide-react';
+import { BookOpen, CalendarRange, Gamepad2, Route } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -13,7 +13,8 @@ import { useImageSrc } from '../../hooks/useImageSrc';
 import { formatHours } from '../../lib/format';
 import { getGameStatusMeta } from '../../lib/gameStatus';
 import { revealClass, revealStyle } from '../../lib/styles';
-import { BLUE, GREEN, VIOLET } from '../../lib/colors';
+import { BLUE } from '../../lib/colors';
+import { cn } from '../../lib/utils';
 import type { GameId } from '../../../../shared/entityIds';
 
 // La otra vista de Stats: no cifras, sino el recorrido. Una línea temporal de
@@ -31,24 +32,24 @@ import type { GameId } from '../../../../shared/entityIds';
 
 // Las dos cifras del panel flotante (horas y sesiones), teñidas de su color.
 const JourneyStatTile = ({
-  color,
   label,
   value,
+  accent = false,
 }: {
-  color: string;
   label: string;
   value: string;
+  accent?: boolean;
 }): React.JSX.Element => (
-  <div
-    className="flex-1 rounded-[9px] border px-2.5 py-2"
-    style={{ borderColor: `${color}2e`, background: `${color}0f` }}
-  >
-    <div className="text-[11px] font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
-      {label}
-    </div>
-    <div className="mt-0.5 text-[14px] font-extrabold tabular-nums" style={{ color }}>
+  <div className="flex-1">
+    <div
+      className={cn(
+        'font-display text-[30px] leading-none font-bold tabular-nums',
+        accent ? 'text-phosphor' : 'text-bone',
+      )}
+    >
       {value}
     </div>
+    <div className="mt-0.5 text-micro text-dust">{label}</div>
   </div>
 );
 
@@ -58,51 +59,28 @@ const JourneyStatTile = ({
 // otra tarjeta de datos. Sin recap, el mes queda exactamente como siempre:
 // las carátulas ya cuentan lo factual.
 const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Element => (
-  <div
-    className="relative mb-3.5 overflow-hidden rounded-[12px] border border-line px-4 py-3.5"
-    style={{
-      background:
-        'linear-gradient(125deg, rgba(185,166,255,.13), rgba(185,166,255,.05) 45%, rgba(185,166,255,.02))',
-    }}
-  >
-    <span
-      aria-hidden
-      className="absolute inset-y-0 left-0 w-0.75"
-      style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)` }}
-    />
-    <div
-      className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[.18em]"
-      style={{ color: `${VIOLET}d9` }}
-    >
-      <BookOpen size={10} strokeWidth={2.5} />
-      THE STORY
+  <div className="relative mb-3.5 overflow-hidden rounded-md border border-line bg-panel px-5 py-3.5">
+    <span aria-hidden className="absolute inset-y-0 left-0 w-0.75 bg-phosphor" />
+    <div className="flex items-center gap-1.5 text-small font-semibold text-phosphor">
+      <BookOpen size={13} />
+      The story
     </div>
-    <div className="mt-1.5 text-[15px] font-extrabold tracking-[-.01em] text-foreground">
+    <div className="mt-1 font-display text-[24px] leading-tight font-bold text-bone">
       {recap.payload.headline}
     </div>
-    <p className="mt-1.25 max-w-150 text-[12px] leading-relaxed text-muted-foreground">
-      {recap.payload.narrative}
-    </p>
+    <p className="mt-1 max-w-170 text-body text-dust">{recap.payload.narrative}</p>
     {recap.payload.highlights.length > 0 && (
       <div className="mt-2.5 flex flex-col gap-1">
         {recap.payload.highlights.map((line) => (
-          <div
-            key={line}
-            className="flex items-start gap-2 text-[11px] font-semibold text-foreground/75"
-          >
-            <span
-              className="mt-1.25 h-1 w-1 flex-none rounded-full"
-              style={{ background: `${VIOLET}b3` }}
-            />
+          <div key={line} className="flex items-start gap-2 text-small text-bone">
+            <span className="mt-1.5 size-1.5 flex-none rounded-full bg-phosphor" />
             {line}
           </div>
         ))}
       </div>
     )}
     {recap.payload.closingLine.length > 0 && (
-      <p className="mt-2.5 text-[11px] italic" style={{ color: `${VIOLET}a6` }}>
-        {recap.payload.closingLine}
-      </p>
+      <p className="mt-2.5 text-small text-dust italic">{recap.payload.closingLine}</p>
     )}
   </div>
 );
@@ -120,58 +98,29 @@ const YearStory = ({
   recap: GeneratedMemorySummary;
   year: number;
 }): React.JSX.Element => (
-  <div
-    className="relative mb-5 overflow-hidden rounded-[14px] border border-line px-5 py-4"
-    style={{
-      background:
-        'linear-gradient(120deg, rgba(185,166,255,.15), rgba(185,166,255,.06) 45%, rgba(185,166,255,.02))',
-    }}
-  >
-    <span
-      aria-hidden
-      className="absolute inset-y-0 left-0 w-1"
-      style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}22)` }}
-    />
-    <span
-      aria-hidden
-      className="pointer-events-none absolute -top-4 right-3 text-[92px] leading-none font-display font-bold text-bone/[0.035] tabular-nums select-none"
-    >
-      {year}
-    </span>
+  <div className="relative mb-6 overflow-hidden rounded-md border border-line bg-panel px-6 py-4.5">
+    <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-phosphor shadow-glow-bar" />
     <div className="relative">
-      <div
-        className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[.18em]"
-        style={{ color: `${VIOLET}d9` }}
-      >
-        <BookOpen size={11} strokeWidth={2.5} />
-        THE STORY OF {year}
+      <div className="flex items-center gap-1.5 text-small font-semibold text-phosphor">
+        <BookOpen size={14} />
+        The story of {year}
       </div>
-      <div className="mt-2 text-[19px] font-extrabold tracking-[-.015em] text-foreground">
+      <div className="mt-1 font-display text-[34px] leading-tight font-bold text-bone">
         {recap.payload.headline}
       </div>
-      <p className="mt-1.5 max-w-170 text-[12.5px] leading-relaxed text-muted-foreground">
-        {recap.payload.narrative}
-      </p>
+      <p className="mt-1.5 max-w-200 text-body text-dust">{recap.payload.narrative}</p>
       {recap.payload.highlights.length > 0 && (
         <div className="mt-3 flex flex-col gap-1.25">
           {recap.payload.highlights.map((line) => (
-            <div
-              key={line}
-              className="flex items-start gap-2 text-[11.5px] font-semibold text-foreground/80"
-            >
-              <span
-                className="mt-1.5 h-1 w-1 flex-none rounded-full"
-                style={{ background: `${VIOLET}b3` }}
-              />
+            <div key={line} className="flex items-start gap-2 text-small text-bone">
+              <span className="mt-1.5 size-1.5 flex-none rounded-full bg-phosphor" />
               {line}
             </div>
           ))}
         </div>
       )}
       {recap.payload.closingLine.length > 0 && (
-        <p className="mt-3 text-[11.5px] italic" style={{ color: `${VIOLET}a6` }}>
-          {recap.payload.closingLine}
-        </p>
+        <p className="mt-3 text-small text-dust italic">{recap.payload.closingLine}</p>
       )}
     </div>
   </div>
@@ -179,6 +128,8 @@ const YearStory = ({
 
 type JourneyProps = {
   onOpenGame: (gameId: GameId) => void;
+  // Hueco de la cabecera fija de Stats donde van las tres cifras globales.
+  headerSlot?: HTMLElement | null;
 };
 
 // Sin año: se usa dentro del panel flotante, donde el año ya se ha dicho
@@ -229,7 +180,7 @@ const monthIntrinsicHeight = (entryCount: number): number => {
 };
 
 const monthLabel = (month: number): string =>
-  new Date(2020, month, 1).toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+  new Date(2020, month, 1).toLocaleDateString('en-US', { month: 'long' });
 
 const monthShortLabel = (month: number): string =>
   new Date(2020, month, 1).toLocaleDateString('en-US', { month: 'short' });
@@ -255,7 +206,7 @@ const SessionTrail = ({ entry }: { entry: JourneyEntrySummary }): React.JSX.Elem
 
   if (entry.sessionCount === 0) {
     return (
-      <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex items-center gap-2 text-micro text-dust">
         <span className="h-px flex-1 bg-bone/[0.08]" />
         Manually logged playthrough
         <span className="h-px flex-1 bg-bone/[0.08]" />
@@ -287,13 +238,13 @@ const SessionTrail = ({ entry }: { entry: JourneyEntrySummary }): React.JSX.Elem
               title={`${shortDate(session.startedAt, session.datePrecision)} · ${formatHours(
                 (session.durationSec ?? 0) / 3600,
               )}`}
-              className="absolute top-0.25 h-2.25 w-2.25 -translate-x-1/2 rounded-full border-2 border-overlay"
-              style={{ left: `${left}%`, background: GREEN }}
+              className="absolute top-0.25 h-2.25 w-2.25 -translate-x-1/2 rounded-full border-2 border-overlay bg-phosphor"
+              style={{ left: `${left}%` }}
             />
           );
         })}
       </div>
-      <div className="mt-0.5 flex justify-between text-[11px] font-semibold text-muted-foreground">
+      <div className="mt-1 flex justify-between text-micro text-dust">
         <span>{shortDate(entry.firstAt, entry.firstPrecision)}</span>
         <span>{shortDate(entry.lastAt, entry.lastPrecision)}</span>
       </div>
@@ -343,7 +294,7 @@ const HoverPanel = ({
       }}
     >
       <div
-        className={`overflow-hidden rounded-[12px] border border-line-strong bg-overlay shadow-[0_22px_65px_rgba(3,6,7,.68)] animate-in fade-in-0 zoom-in-95 duration-250 ${
+        className={`overflow-hidden rounded-md border border-line-strong bg-overlay shadow-float animate-in fade-in-0 zoom-in-95 duration-200 motion-reduce:animate-none ${
           showAbove ? 'origin-bottom' : 'origin-top'
         }`}
       >
@@ -353,23 +304,16 @@ const HoverPanel = ({
           ) : (
             <div className="h-full w-full bg-bone/[0.025]" />
           )}
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,12,11,.18),rgba(23,25,24,.98))]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(36_44_49/0.1),var(--color-overlay))]" />
           <div className="absolute right-4 bottom-3 left-4">
             <div className="flex items-end justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-[17px] font-extrabold text-foreground">
-                  {entry.title}
-                </div>
-                <div className="mt-0.5 truncate text-[11px] font-semibold text-muted-foreground">
-                  {entry.iterationLabel}
-                </div>
+                <div className="truncate text-lead font-semibold text-bone">{entry.title}</div>
+                <div className="mt-0.5 truncate text-micro text-dust">{entry.iterationLabel}</div>
               </div>
               {status && (
-                <div
-                  className="flex flex-none items-center gap-1.25 text-[11.5px] font-extrabold uppercase"
-                  style={{ color: status.color }}
-                >
-                  <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
+                <div className="flex flex-none items-center gap-1.5 text-micro font-semibold text-bone">
+                  <span className="size-2 rounded-full" style={{ background: status.color }} />
                   {status.label}
                 </div>
               )}
@@ -379,26 +323,26 @@ const HoverPanel = ({
 
         <div className="px-4 pb-3.5">
           <div className="py-3">
-            <div className="text-[11px] font-extrabold tracking-[.14em] text-muted-foreground/80">
-              {entry.kind === 'endless' ? 'ACTIVITY DATES' : 'PLAYTHROUGH DATES'}
+            <div className="text-micro text-dust">
+              {entry.kind === 'endless' ? 'Activity dates' : 'Playthrough dates'}
             </div>
-            <div className="mt-1.25 flex items-center gap-2.25">
-              <CalendarRange size={16} strokeWidth={2} style={{ color: BLUE }} />
-              <span className="text-[14.5px] font-extrabold text-foreground tabular-nums">
+            <div className="mt-0.5 flex items-center gap-2">
+              <CalendarRange size={15} className="text-dust" />
+              <span className="text-body font-semibold text-bone tabular-nums">
                 {dateRange(entry)}
               </span>
             </div>
           </div>
 
           <div className="flex gap-1.5">
-            <JourneyStatTile color={GREEN} label="PLAYED" value={formatHours(entry.hours)} />
-            <JourneyStatTile color={BLUE} label="SESSIONS" value={String(entry.sessionCount)} />
+            <JourneyStatTile accent label="played" value={formatHours(entry.hours)} />
+            <JourneyStatTile label="sessions" value={String(entry.sessionCount)} />
           </div>
 
           <SessionTrail entry={entry} />
 
           {entry.note && (
-            <div className="mt-2.5 line-clamp-2 border-t border-line pt-2 text-[11px] leading-relaxed italic text-muted-foreground">
+            <div className="mt-2.5 line-clamp-2 border-t border-line pt-2 text-small text-bone">
               “{entry.note}”
             </div>
           )}
@@ -434,40 +378,25 @@ const JourneyCover = ({
       onMouseLeave={() => setAnchor(null)}
       onFocus={(event) => setAnchor(event.currentTarget.getBoundingClientRect())}
       onBlur={() => setAnchor(null)}
-      className="group/cover relative h-42 w-30 flex-none cursor-pointer transition-transform duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform hover:z-5 hover:-translate-y-2 focus-visible:z-5 focus-visible:-translate-y-2 focus-visible:outline-none"
+      className="group/cover relative h-42 w-30 flex-none cursor-pointer transition-[translate] duration-200 ease-out hover:z-5 hover:-translate-y-1 focus-visible:z-5 focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:transition-none"
     >
       {/* Halo del color de estado que se enciende al hover — primero en el
           DOM para quedar DEBAJO de la carátula y que solo asome el borde
           difuminado. */}
-      <span
-        aria-hidden
-        className="absolute -inset-1.5 rounded-[13px] opacity-0 blur-md transition-opacity duration-250 group-hover/cover:opacity-45"
-        style={{ background: accent }}
-      />
-      <div
-        className="absolute inset-0 overflow-hidden rounded-[9px] border bg-card shadow-[0_5px_16px_rgba(3,6,7,.26)] transition-[border-color,box-shadow] duration-250 group-hover/cover:shadow-[0_12px_28px_rgba(3,6,7,.48)]"
-        style={{ borderColor: 'var(--border)' }}
-      >
+      <div className="absolute inset-0 overflow-hidden rounded-sm border border-line bg-panel transition-[border-color,box-shadow] duration-200 group-hover/cover:border-line-hover group-hover/cover:shadow-lift">
         {coverSrc ? (
-          <img
-            src={coverSrc}
-            loading="lazy"
-            alt=""
-            className="h-full w-full object-cover brightness-90 transition-[filter] duration-250 group-hover/cover:brightness-105"
-          />
+          <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-muted px-1.5 text-center">
-            <Gamepad2 size={20} className="text-muted-foreground/35" />
-            <span className="line-clamp-3 text-[11px] font-semibold text-muted-foreground">
-              {entry.title}
-            </span>
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-raised px-1.5 text-center">
+            <Gamepad2 size={20} className="text-dust" />
+            <span className="line-clamp-3 text-micro font-semibold text-dust">{entry.title}</span>
           </div>
         )}
         {/* Las horas al pie, siempre visibles sobre su velo — mismo patrón
             que el rótulo de MatchCardGrid: la carátula sigue siendo carátula
             de esquina a esquina y aun así cuenta algo. */}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-inset/80 via-inset/35 to-transparent px-2 pt-6 pb-2 text-right">
-          <span className="text-[11.5px] font-extrabold text-bone tabular-nums drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
+          <span className="text-micro font-semibold text-bone tabular-nums drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
             {formatHours(entry.hours)}
           </span>
         </span>
@@ -475,13 +404,13 @@ const JourneyCover = ({
             transform, nada que repintar. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 -translate-x-[140%] bg-[linear-gradient(105deg,transparent_42%,rgba(233,228,216,.16)_50%,transparent_58%)] transition-transform duration-700 ease-out group-hover/cover:translate-x-[140%]"
+          className="absolute top-1.5 right-1.5 size-2.5 rounded-full border border-cabinet"
+          style={{ background: accent, boxShadow: `0 0 6px ${accent}` }}
         />
-        <div className="absolute right-0 bottom-0 left-0 h-0.75" style={{ background: accent }} />
       </div>
 
       {badge && (
-        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-line-strong bg-overlay px-1 text-[11px] font-extrabold text-foreground shadow-md">
+        <span className="absolute top-1.5 left-1.5 flex h-5 min-w-5 items-center justify-center rounded-sm bg-cabinet/90 px-1 text-micro font-semibold text-bone">
           {badge}
         </span>
       )}
@@ -508,7 +437,7 @@ const JourneyCover = ({
 // ve borrosa todo el trayecto y solo se enfoca al terminar. La elevación la
 // dan el desplazamiento y la sombra, que no tocan la rasterización.
 const FEATURED_CARD_CLASS =
-  'group/feat relative w-full cursor-pointer overflow-hidden rounded-[13px] border border-border text-left shadow-[0_8px_24px_rgba(3,6,7,.3)] transition-[translate,border-color,box-shadow] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-1.5 hover:border-line-strong hover:shadow-[0_14px_34px_rgba(3,6,7,.46)] focus-visible:border-line-hover focus-visible:outline-none';
+  'group/feat relative w-full cursor-pointer overflow-hidden rounded-md border border-line bg-panel text-left transition-[translate,border-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:transition-none';
 
 const FeaturedEntry = ({
   entry,
@@ -537,7 +466,7 @@ const FeaturedEntry = ({
           src={heroSrc}
           loading="lazy"
           alt=""
-          className="absolute inset-0 h-full w-full object-cover brightness-[.55] transition-[filter] duration-400 ease-[cubic-bezier(.16,1,.3,1)] group-hover/feat:brightness-[.68]"
+          className="absolute inset-y-0 right-0 h-full w-[70%] object-cover opacity-45 [mask-image:linear-gradient(90deg,transparent,black_60%)]"
         />
       ) : (
         <div
@@ -547,71 +476,75 @@ const FeaturedEntry = ({
       )}
       {/* De izquierda (legible) a derecha (arte visible) — el mismo velo
           lateral que GameBanner, no el vertical del panel flotante. */}
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,12,11,.94)_0%,rgba(10,12,11,.72)_38%,rgba(10,12,11,.28)_70%,rgba(10,12,11,.12)_100%)]" />
+      <div className="absolute inset-0 bg-(image:--scan) opacity-50" />
 
-      <div className="relative flex items-center gap-3.5 px-4 py-3.5">
+      <div className="relative flex items-center gap-5 px-6 py-4">
         <div className="relative h-25 w-18 flex-none">
-          <div className="h-full w-full overflow-hidden rounded-[8px] border border-line-strong shadow-[0_6px_18px_rgba(3,6,7,.5)]">
+          <div className="h-full w-full overflow-hidden rounded-sm border border-line-strong">
             {coverSrc ? (
               <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center bg-muted">
-                <Gamepad2 size={16} className="text-muted-foreground/35" />
+              <div className="flex h-full items-center justify-center bg-raised">
+                <Gamepad2 size={16} className="text-dust" />
               </div>
             )}
           </div>
           {badge && (
-            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-line-strong bg-overlay px-1 text-[11px] font-extrabold text-foreground shadow-md">
+            <span className="absolute top-1.5 left-1.5 flex h-5 min-w-5 items-center justify-center rounded-sm bg-cabinet/90 px-1 text-micro font-semibold text-bone">
               {badge}
             </span>
           )}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div
-            className="text-[11px] font-extrabold tracking-[.16em]"
-            style={{ color: `${accent}d0` }}
-          >
-            MOST PLAYED
+          <div className="text-small text-dust">Most played this month</div>
+          <div className="truncate font-display text-[40px] leading-[1.05] font-bold text-bone">
+            {entry.title}
           </div>
-          <div className="mt-0.75 truncate text-[17px] font-extrabold text-bone">{entry.title}</div>
-          <div className="mt-0.5 truncate text-[11px] font-semibold text-dust">
+          <div className="mt-0.5 truncate text-small text-dust">
             {entry.iterationLabel}
             <span className="mx-1.5 text-dust">·</span>
             {dateRange(entry)}
           </div>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1">
-            <span className="flex items-center gap-1.5 text-[12px] font-bold text-bone tabular-nums">
-              <Clock3 size={12.5} style={{ color: GREEN }} />
-              {formatHours(entry.hours)}
-            </span>
-            {entry.sessionCount > 0 && (
-              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-dust tabular-nums">
-                <CalendarRange size={12.5} style={{ color: BLUE }} />
-                {entry.sessionCount} {entry.sessionCount === 1 ? 'session' : 'sessions'}
-              </span>
-            )}
             {status && (
-              <span
-                className="flex items-center gap-1.25 text-[11.5px] font-extrabold uppercase"
-                style={{ color: status.color }}
-              >
-                <status.Icon size={11} fill={status.filled ? status.color : 'none'} />
+              <span className="flex items-center gap-1.5 text-small font-semibold text-bone">
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: status.color, boxShadow: `0 0 6px ${status.color}` }}
+                />
                 {status.label}
               </span>
             )}
           </div>
 
           {entry.note && (
-            <div className="mt-2 line-clamp-1 max-w-130 text-[11px] leading-relaxed italic text-dust">
+            <div className="mt-2 line-clamp-1 max-w-130 text-small text-dust italic">
               “{entry.note}”
             </div>
           )}
         </div>
       </div>
 
-      <div className="absolute right-0 bottom-0 left-0 h-0.75" style={{ background: accent }} />
+      <div className="absolute top-1/2 right-6 hidden -translate-y-1/2 items-end gap-8 text-right min-[900px]:flex">
+        <div>
+          <div className="font-display text-[48px] leading-none font-bold text-phosphor tabular-nums">
+            {formatHours(entry.hours)}
+          </div>
+          <div className="text-small text-dust">played</div>
+        </div>
+        {entry.sessionCount > 0 && (
+          <div>
+            <div className="font-display text-[48px] leading-none font-bold text-bone tabular-nums">
+              {entry.sessionCount}
+            </div>
+            <div className="text-small text-dust">
+              {entry.sessionCount === 1 ? 'session' : 'sessions'}
+            </div>
+          </div>
+        )}
+      </div>
     </button>
   );
 };
@@ -622,6 +555,7 @@ const FeaturedEntry = ({
 const JourneyLoaded = ({
   entries,
   onOpenGame,
+  headerSlot,
 }: JourneyProps & { entries: JourneyEntrySummary[] }): React.JSX.Element => {
   // Los nodos del DOM de cada año y cada mes, para poder hacerles scroll y
   // para observarlos. En refs y no en estado: cambiarlos no repinta nada.
@@ -708,7 +642,7 @@ const JourneyLoaded = ({
           if (activatingDate) return;
           const visible = byYear.find(({ year: candidate }) => {
             const rect = yearRefs.current.get(candidate)?.getBoundingClientRect();
-            return rect && rect.bottom > 72 && rect.top < window.innerHeight * 0.38;
+            return rect && rect.bottom > 140 && rect.top < window.innerHeight * 0.38;
           });
           if (!visible) return;
           setActiveYear(visible.year);
@@ -716,7 +650,7 @@ const JourneyLoaded = ({
             const rect = monthRefs.current
               .get(`${visible.year}-${candidate}`)
               ?.getBoundingClientRect();
-            return rect && rect.bottom > 72 && rect.top < window.innerHeight * 0.28;
+            return rect && rect.bottom > 140 && rect.top < window.innerHeight * 0.28;
           });
           if (visibleMonth) setActiveMonth(`${visible.year}-${visibleMonth[0]}`);
         },
@@ -754,7 +688,7 @@ const JourneyLoaded = ({
         const visibleYear = byYear.find(({ year }) => visibleYears.has(year))?.year;
         if (visibleYear !== undefined) setActiveYear(visibleYear);
       },
-      { rootMargin: '-72px 0px -62% 0px' },
+      { rootMargin: '-140px 0px -62% 0px' },
     );
     for (const element of yearRefs.current.values()) observer.observe(element);
     return () => observer.disconnect();
@@ -800,7 +734,7 @@ const JourneyLoaded = ({
           .find((key) => visibleMonths.has(key));
         if (visibleMonth) setActiveMonth(visibleMonth);
       },
-      { rootMargin: '-72px 0px -72% 0px' },
+      { rootMargin: '-140px 0px -72% 0px' },
     );
     for (const element of monthRefs.current.values()) observer.observe(element);
     return () => observer.disconnect();
@@ -859,11 +793,11 @@ const JourneyLoaded = ({
   if (visibleEntries.length === 0) {
     return (
       <div className="flex min-h-80 flex-col items-center justify-center text-center">
-        <div className="flex h-13 w-13 items-center justify-center rounded-full bg-bone/[0.04]">
-          <Route size={23} strokeWidth={1.5} className="text-muted-foreground/75" />
+        <div className="flex h-13 w-13 items-center justify-center rounded-full bg-raised">
+          <Route size={23} strokeWidth={1.5} className="text-dust" />
         </div>
-        <div className="mt-3 text-sm font-semibold text-foreground">Your journey starts here</div>
-        <div className="mt-1 text-xs text-muted-foreground">
+        <div className="mt-3 text-lead font-semibold text-bone">Your journey starts here</div>
+        <div className="mt-1 text-small text-dust">
           Played and logged games will become part of it.
         </div>
       </div>
@@ -872,32 +806,33 @@ const JourneyLoaded = ({
 
   return (
     <div className="scroll-mt-6">
-      <div className={`mb-7 flex items-center gap-4 ${revealClass}`} style={revealStyle(0)}>
-        <div className="flex items-center gap-2 text-[12px] font-semibold text-muted-foreground">
-          <Gamepad2 size={13} color={BLUE} />
-          <span>
-            <strong className="font-extrabold text-foreground tabular-nums">{gamesTouched}</strong>{' '}
-            games played
-          </span>
-        </div>
-        <span className="h-3 w-px bg-border" />
-        <div className="flex items-center gap-2 text-[12px] font-semibold text-muted-foreground">
-          <Clock3 size={13} color={GREEN} />
-          <span>
-            <strong className="font-extrabold text-foreground tabular-nums">
-              {formatHours(totalHours)}
-            </strong>{' '}
-            played
-          </span>
-        </div>
-        <span className="h-3 w-px bg-border" />
-        <span className="text-[12px] font-semibold text-muted-foreground">
-          <strong className="font-extrabold text-foreground tabular-nums">{totalSessions}</strong>{' '}
-          sessions
-        </span>
-      </div>
+      {/* Las tres cifras globales viven en la cabecera fija de Stats. */}
+      {headerSlot &&
+        createPortal(
+          <>
+            <span className="text-small text-dust">
+              <strong className="mr-1.5 font-display text-[34px] leading-none font-bold text-phosphor tabular-nums">
+                {gamesTouched}
+              </strong>
+              games played
+            </span>
+            <span className="text-small text-dust">
+              <strong className="mr-1.5 font-display text-[34px] leading-none font-bold text-bone tabular-nums">
+                {formatHours(totalHours)}
+              </strong>
+              played
+            </span>
+            <span className="text-small text-dust">
+              <strong className="mr-1.5 font-display text-[34px] leading-none font-bold text-bone tabular-nums">
+                {totalSessions}
+              </strong>
+              sessions
+            </span>
+          </>,
+          headerSlot,
+        )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-start gap-10">
+      <div className="grid grid-cols-[minmax(0,1fr)_9rem] items-start gap-10">
         <div className="flex min-w-0 flex-col gap-4">
           {byYear.map(({ year, months }, yearIndex) => {
             // Los totales del año, para su cabecera — de las entradas del
@@ -917,21 +852,22 @@ const JourneyLoaded = ({
                   if (element) yearRefs.current.set(year, element);
                   else yearRefs.current.delete(year);
                 }}
-                className="scroll-mt-6"
+                className="scroll-mt-4"
               >
                 {/* El año como hito, no como rótulo: número grande, sus
                     totales al lado y una regla que se desvanece — la línea
                     temporal respira entre año y año. */}
-                <div className="mb-4 flex items-baseline gap-3.5">
-                  <span className="text-[30px] leading-none font-display font-bold text-foreground tabular-nums">
+                <div className="mb-4 flex items-baseline gap-4">
+                  <span className="font-display text-[84px] leading-[0.9] font-bold text-bone tabular-nums">
                     {year}
                   </span>
-                  <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-                    {yearGames} {yearGames === 1 ? 'game' : 'games'}
-                    <span className="mx-1.5 text-muted-foreground/40">·</span>
-                    {formatHours(yearHours)}
+                  <span className="text-small text-dust tabular-nums">
+                    <strong className="font-semibold text-bone">
+                      {yearGames} {yearGames === 1 ? 'game' : 'games'}
+                    </strong>
+                    , {formatHours(yearHours)}
                   </span>
-                  <span className="h-px min-w-8 flex-1 self-center bg-gradient-to-r from-border to-transparent" />
+                  <span className="h-px min-w-8 flex-1 self-center bg-line" />
                 </div>
                 {/* La historia del año completa, antes del primer mes. El
                     titular vive AQUÍ dentro y ya no se repite en cursiva
@@ -984,24 +920,24 @@ const JourneyLoaded = ({
                       // suelo durante el viaje. Quien paga ese precio ahora
                       // es navigateJourney: materializa los meses antes del
                       // viaje y guarda su alto real como fallback local.
-                      className={`group/month grid grid-cols-[5.5rem_1fr] gap-x-4 [content-visibility:auto] motion-reduce:animate-none ${revealClass}`}
+                      className={`group/month grid grid-cols-[8.5rem_1fr] gap-x-5 [content-visibility:auto] motion-reduce:animate-none ${revealClass}`}
                       style={{
                         ...revealStyle(yearIndex + monthIndex + 1),
                         containIntrinsicSize: `auto var(--journey-measured-height, ${monthIntrinsicHeight(monthEntries.length)}px)`,
                       }}
                     >
-                      <div className="relative border-r border-border/80 pr-4 text-right">
-                        <div className="sticky top-3 pt-1">
-                          <div className="text-[11.5px] font-extrabold tracking-[.14em] text-muted-foreground transition-colors duration-200 group-hover/month:text-foreground">
+                      <div className="relative border-r border-line-strong pr-5 text-right">
+                        <div className="sticky top-21 pt-1">
+                          <div className="font-display text-[26px] leading-none font-bold text-bone">
                             {monthLabel(month)}
                           </div>
-                          <div className="mt-0.75 text-[11px] font-bold text-muted-foreground/75 tabular-nums">
+                          <div className="mt-1 text-small text-dust tabular-nums">
                             {formatHours(monthHours)}
                           </div>
                         </div>
                         <span
-                          className="absolute top-2 -right-1.25 h-2.5 w-2.5 rounded-full border-2 border-inset transition-[box-shadow,scale] duration-200 group-hover/month:scale-125"
-                          style={{ background: nodeColor, boxShadow: `0 0 9px ${nodeColor}59` }}
+                          className="absolute top-2.5 -right-[7px] size-3 rounded-full border-2 bg-cabinet transition-[scale] duration-200 group-hover/month:scale-125 motion-reduce:transition-none"
+                          style={{ borderColor: nodeColor, boxShadow: `0 0 8px ${nodeColor}80` }}
                         />
                       </div>
 
@@ -1011,9 +947,9 @@ const JourneyLoaded = ({
                       parejo y se nota mejor cuánto tuvo cada mes. */}
                       <div className="min-h-45 pb-8">
                         <div className="mb-2.5 flex items-center gap-2">
-                          <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-bone/[0.11]" />
+                          <span className="h-px flex-1 bg-line transition-colors duration-200 group-hover/month:bg-line-strong" />
                           {monthEntries.length > 1 && (
-                            <span className="text-[11px] font-bold text-muted-foreground/75 tabular-nums">
+                            <span className="text-small text-dust tabular-nums">
                               {monthEntries.length} playthroughs
                             </span>
                           )}
@@ -1054,22 +990,17 @@ const JourneyLoaded = ({
           {/* El remate del recorrido: bajar hasta el final tiene premio.
               Está DESPUÉS del último año, así que solo lo ve quien llega. */}
           <div className="mb-4 flex flex-col items-center gap-2 pt-2">
-            <span className="h-10 w-px bg-gradient-to-b from-border/80 to-transparent" />
-            <span className="h-2 w-2 rounded-full bg-bone/25" />
-            <span className="text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
-              WHERE IT ALL BEGAN
-            </span>
+            <span className="h-10 w-px bg-gradient-to-b from-line-strong to-transparent" />
+            <span className="size-2 rounded-full bg-edge" />
+            <span className="text-small font-semibold text-dust">Where it all began</span>
           </div>
         </div>
 
         {/* El índice. Solo despliega los meses del año resaltado: con diez
             años abiertos a la vez la columna se convertía en una lista de
             120 entradas y dejaba de servir para orientarse. */}
-        <nav aria-label="Journey date navigation" className="sticky top-5 py-1">
-          <div className="mb-3 pl-4 text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
-            JOURNEY
-          </div>
-          <div className="relative flex flex-col gap-1 border-l border-border/70 pl-4">
+        <nav aria-label="Journey date navigation" className="sticky top-21 py-1">
+          <div className="relative flex flex-col gap-1 border-l border-line-strong">
             {byYear.map(({ year, months }) => {
               const active = highlightedYear === year;
               return (
@@ -1080,21 +1011,20 @@ const JourneyLoaded = ({
                     onClick={() => {
                       navigateTo(year);
                     }}
-                    className="group/year relative w-full py-1.25 text-left text-[12px] font-extrabold tabular-nums transition-colors duration-150"
-                    style={{ color: active ? BLUE : 'var(--muted-foreground)' }}
+                    className={cn(
+                      'group/year relative w-full py-0.5 pl-3.5 text-left font-display text-[30px] leading-tight font-bold tabular-nums',
+                      'transition-colors duration-150 outline-hidden focus-visible:outline-2 focus-visible:outline-phosphor',
+                      'before:absolute before:inset-y-1 before:-left-px before:w-0.75 before:transition-colors',
+                      active
+                        ? 'text-bone before:bg-phosphor'
+                        : 'text-dust before:bg-transparent hover:text-bone',
+                    )}
                   >
-                    <span
-                      className="absolute top-1/2 -left-[1.19rem] h-2.25 w-2.25 -translate-y-1/2 rounded-full border-2 border-inset transition-[background,box-shadow,scale] duration-150 group-hover/year:scale-125"
-                      style={{
-                        background: active ? BLUE : 'var(--muted-foreground)',
-                        boxShadow: active ? `0 0 10px ${BLUE}80` : 'none',
-                      }}
-                    />
                     {year}
                   </button>
 
                   {active && (
-                    <div className="mb-2 flex flex-col border-l border-line pl-2">
+                    <div className="mb-2 flex flex-col pl-3.5">
                       {months.map(([month, monthEntries]) => {
                         const key = `${year}-${month}`;
                         const monthActive = highlightedMonth === key;
@@ -1106,14 +1036,17 @@ const JourneyLoaded = ({
                             onClick={() => {
                               navigateTo(year, key);
                             }}
-                            className="flex items-center justify-between gap-2 py-1 text-left text-[11.5px] font-semibold transition-colors duration-150"
-                            style={{
-                              color: monthActive ? 'var(--foreground)' : 'var(--muted-foreground)',
-                            }}
+                            className={cn(
+                              'flex items-center justify-between gap-2 rounded-sm px-1.5 py-1 text-left text-small transition-colors duration-150',
+                              'outline-hidden focus-visible:outline-2 focus-visible:outline-phosphor',
+                              monthActive
+                                ? 'bg-raised font-semibold text-bone'
+                                : 'text-dust hover:text-bone',
+                            )}
                           >
                             <span>{monthShortLabel(month)}</span>
                             {monthEntries.length > 0 && (
-                              <span className="text-[11px] text-muted-foreground/75 tabular-nums">
+                              <span className="text-micro text-dust tabular-nums">
                                 {monthEntries.length}
                               </span>
                             )}
@@ -1136,7 +1069,9 @@ const JourneyLoaded = ({
 // La pantalla solo se monta cuando han llegado: así arranca con todos sus meses
 // (como cuando las calculaba el renderer) y la navegación por scroll no se
 // encuentra con un archivo que crece a mitad de viaje.
-export const Journey = ({ onOpenGame }: JourneyProps): React.JSX.Element | null => {
+export const Journey = ({ onOpenGame, headerSlot }: JourneyProps): React.JSX.Element | null => {
   const { data: entries } = useJourneyEntries();
-  return entries ? <JourneyLoaded entries={entries} onOpenGame={onOpenGame} /> : null;
+  return entries ? (
+    <JourneyLoaded entries={entries} onOpenGame={onOpenGame} headerSlot={headerSlot} />
+  ) : null;
 };

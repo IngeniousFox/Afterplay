@@ -1,12 +1,12 @@
 import { cn } from '../../lib/utils';
-import { ArrowDownRight, ArrowUpRight, Gauge, Info, Minus } from 'lucide-react';
-import { type CSSProperties, useMemo } from 'react';
+import { ArrowDownRight, ArrowUpRight, Info, Minus } from 'lucide-react';
+import { useMemo } from 'react';
 import type { SessionStats } from '../../../../shared/domain/sessionStats';
 import type { GameListItem, StateEventSummary } from '../../../../shared/types';
-import { formatHours } from '../../lib/format';
+import { formatHours, pluralize } from '../../lib/format';
 import { GameCover } from '../GameCover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-import { StatCard } from './StatCard';
+import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import { StatsPager } from './StatsPager';
 import { usePagedYear } from './usePagedYear';
@@ -27,8 +27,6 @@ const MAX_ENTRIES = 6;
 const BAR_SCALE = 2;
 const ROW_HEIGHT_PX = 50;
 const ROW_GAP_PX = 8;
-const FAST_COLOR = '#ffb347';
-const SAVOR_COLOR = '#ffb347';
 
 export const HltbCompareList = ({
   games,
@@ -110,7 +108,6 @@ export const HltbCompareList = ({
     return sorted[Math.floor(sorted.length / 2)];
   }, [entries]);
 
-  const medianColor = medianRatio !== null && medianRatio <= 1 ? FAST_COLOR : SAVOR_COLOR;
   const medianDelta = medianRatio === null ? 0 : Math.round(Math.abs(medianRatio - 1) * 100);
   const medianLabel =
     medianRatio === null
@@ -129,87 +126,65 @@ export const HltbCompareList = ({
 
   return (
     <StatCard className="afterplay-hltb-card flex h-full flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[14px] font-bold text-foreground">You vs HowLongToBeat</span>
+      <ChartHeading
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            You vs HowLongToBeat
             <Tooltip>
-              <TooltipTrigger>
-                <Info size={12} className="text-muted-foreground" />
+              <TooltipTrigger aria-label="About this comparison">
+                <Info size={13} className="text-dust" />
               </TooltipTrigger>
               <TooltipContent>
                 Compares each game&apos;s last beaten playthrough against HLTB&apos;s Main Story
-                time. The centre marker is the official estimate.
+                time. The marker is the official estimate.
               </TooltipContent>
             </Tooltip>
+          </span>
+        }
+        subtitle="Last completed playthroughs only"
+        right={
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <i className="size-2.5 rounded-[2px] bg-phosphor" aria-hidden="true" /> Your time
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <i className="h-3 w-0.5 bg-tube" aria-hidden="true" /> Main Story
+            </span>
+            <StatsPager
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+              prevLabel="Previous games"
+              nextLabel="Next games"
+            />
           </div>
-          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-            Last completed playthroughs only
-          </div>
-        </div>
-        <StatsPager
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={goToPage}
-          prevLabel="Previous games"
-          nextLabel="Next games"
-        />
-      </div>
+        }
+      />
 
       {medianRatio !== null && (
-        <div
-          className={cn(
-            'afterplay-hltb-summary mt-4 flex items-center gap-[11px] min-h-15 py-2.5 px-3 rounded-[11px] border',
-            'border-[color-mix(in_srgb,var(--hltb-accent)_22%,rgba(233,228,216,0.06))]',
-            '[background:linear-gradient(120deg,color-mix(in_srgb,var(--hltb-accent)_10%,transparent),rgba(233,228,216,0.015))]',
-          )}
-          style={{ '--hltb-accent': medianColor } as CSSProperties}
-        >
-          <span
-            className={cn(
-              'afterplay-hltb-summary-icon flex w-8.5 h-8.5 flex-none items-center justify-center rounded-[9px] border',
-              'border-[color-mix(in_srgb,var(--hltb-accent)_28%,transparent)]',
-              'text-[color:var(--hltb-accent)]',
-              'bg-[color-mix(in_srgb,var(--hltb-accent)_9%,transparent)]',
-            )}
-          >
-            <Gauge size={16} />
+        <div className="afterplay-hltb-summary mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line pb-3">
+          <span className="text-small text-dust">Your typical finish</span>
+          <strong className="font-display text-[34px] leading-none font-bold text-phosphor tabular-nums">
+            {medianRatio.toFixed(1)}×
+          </strong>
+          <span className="inline-flex items-center gap-1 text-small text-dust">
+            <MedianIcon size={14} className="afterplay-hltb-direction text-phosphor" />
+            {medianLabel}, median of {pluralize(entries.length, 'finished game')}
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-black tracking-[.16em] text-dust uppercase">
-              Your typical finish
-            </div>
-            <div className="mt-0.5 flex items-baseline gap-2">
-              <strong
-                className={cn(
-                  'font-display text-[26px] leading-none font-bold tabular-nums',
-                  'text-[color:var(--hltb-accent)]',
-                )}
-              >
-                {medianRatio.toFixed(1)}×
-              </strong>
-              <span className="truncate text-[11px] font-semibold text-muted-foreground">
-                {medianLabel}
-              </span>
-            </div>
-          </div>
-          <MedianIcon
-            size={17}
-            className="afterplay-hltb-direction text-[color:var(--hltb-accent)]"
-          />
         </div>
       )}
 
       <div
-        className={cn(
-          'afterplay-hltb-scale mt-3.5 flex justify-between ml-12 py-0 px-px text-[11px] font-extrabold tracking-[0.08em]',
-          'uppercase text-dust [&_span:nth-child(2)]:text-dust [&_span:nth-child(2)]:[transform:translateX(5px)]',
-        )}
+        className="afterplay-hltb-scale mt-3 grid grid-cols-[minmax(0,180px)_minmax(0,1fr)_150px] gap-4 text-micro text-dust"
         aria-hidden="true"
       >
-        <span>0×</span>
-        <span>Main Story</span>
-        <span>2×+</span>
+        <span />
+        <span className="relative flex justify-between">
+          <span>0×</span>
+          <span className="absolute left-1/2 -translate-x-1/2 text-tube">Main Story</span>
+          <span>2×+</span>
+        </span>
+        <span />
       </div>
 
       <div className="flex flex-1 flex-col" style={{ minHeight: listMinHeight }}>
@@ -220,88 +195,60 @@ export const HltbCompareList = ({
         ) : (
           <div
             key={currentPage}
-            className={`flex flex-col justify-start gap-2 duration-300 animate-in fade-in-0 ${
+            className={`flex flex-col justify-start gap-2 duration-300 animate-in fade-in-0 motion-reduce:animate-none ${
               direction > 0 ? 'slide-in-from-right-3' : 'slide-in-from-left-3'
             }`}
           >
             {shown.map((entry) => {
-              const color = entry.ratio <= 1 ? FAST_COLOR : SAVOR_COLOR;
               const fillPercent = Math.min(1, entry.ratio / BAR_SCALE) * 100;
+              const delta = Math.round(Math.abs(entry.ratio - 1) * 100);
+              const verdict =
+                entry.ratio < 0.95
+                  ? `${delta}% under Main Story`
+                  : entry.ratio > 1.05
+                    ? `${delta}% beyond Main Story`
+                    : 'Right on Main Story';
               return (
                 <button
                   key={entry.id}
                   type="button"
                   onClick={() => onOpenGame(entry.id)}
                   className={cn(
-                    'afterplay-hltb-row group flex h-[50px] w-full items-center gap-3 text-left pt-px pr-1 pb-px pl-0 rounded-[9px]',
-                    'outline-none [transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),background-color_200ms_ease]',
-                    '[&:is(:hover,:focus-visible)]:bg-bone/[0.025] [&:is(:hover,:focus-visible)]:[transform:translateX(3px)]',
-                    'motion-reduce:animate-none motion-reduce:transition-none',
+                    'afterplay-hltb-row group grid h-[50px] w-full grid-cols-[minmax(0,180px)_minmax(0,1fr)_150px] items-center gap-4 rounded-sm px-1 text-left',
+                    'transition-colors duration-150 hover:bg-raised',
+                    'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-phosphor',
                   )}
-                  style={{ '--hltb-accent': color } as CSSProperties}
                   aria-label={`Open ${entry.title}`}
                 >
-                  <GameCover
-                    url={entry.coverUrl}
-                    className={cn(
-                      'afterplay-hltb-cover h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border',
-                      '[transition:border-color_200ms_ease,box-shadow_240ms_ease,transform_280ms_cubic-bezier(0.22,1,0.36,1)]',
-                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:border-[color-mix(in_srgb,var(--hltb-accent)_44%,transparent)]',
-                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_7px_16px_rgba(3,6,7,0.3)]',
-                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[transform:translateY(-1px)]',
-                      'motion-reduce:animate-none motion-reduce:transition-none',
-                    )}
-                    iconSize={15}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-[12.5px] font-bold text-foreground">
-                          {entry.title}
-                        </div>
-                        <div className="mt-0.25 text-[11px] text-muted-foreground tabular-nums">
-                          You {formatHours(entry.hours)} · HLTB {formatHours(entry.hltbMain)}
-                        </div>
-                      </div>
-                      <span
-                        className={cn(
-                          'afterplay-hltb-ratio flex-none min-w-[39px] py-0.5 px-[5px] rounded-[6px] text-[11.5px] font-[850] text-center',
-                          'border border-[color-mix(in_srgb,var(--hltb-accent)_20%,rgba(233,228,216,0.06))]',
-                          'text-[color:var(--hltb-accent)]',
-                          'bg-[color-mix(in_srgb,var(--hltb-accent)_7%,rgba(3,6,7,0.22))]',
-                          '[transition:border-color_180ms_ease,background-color_180ms_ease]',
-                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:border-[color-mix(in_srgb,var(--hltb-accent)_42%,transparent)]',
-                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:bg-[color-mix(in_srgb,var(--hltb-accent)_12%,rgba(3,6,7,0.22))]',
-                          'motion-reduce:animate-none motion-reduce:transition-none',
-                        )}
-                      >
-                        {entry.ratio.toFixed(1)}×
-                      </span>
-                    </div>
-                    <div className="afterplay-hltb-track mt-1.5 relative h-[5px] rounded-[99px] bg-bone/[0.055]">
-                      <span
-                        className={cn(
-                          'afterplay-hltb-fill absolute [inset:0_auto_0_0] rounded-[inherit]',
-                          '[background:linear-gradient(90deg,color-mix(in_srgb,var(--hltb-accent)_45%,transparent),var(--hltb-accent))]',
-                          '[box-shadow:0_0_9px_color-mix(in_srgb,var(--hltb-accent)_22%,transparent)] origin-left',
-                          'animate-[afterplay-grow-x_650ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
-                          'motion-reduce:animate-none motion-reduce:transition-none',
-                        )}
-                        style={{ width: `${fillPercent}%` }}
-                      />
-                      <span className="afterplay-hltb-marker absolute top-[-3px] bottom-[-3px] left-1/2 w-px bg-bone/72 [box-shadow:0_0_5px_rgba(233,228,216,0.25)]" />
-                      <span
-                        className={cn(
-                          'afterplay-hltb-point absolute top-1/2 w-2 h-2 rounded-[50%] border-2 border-panel bg-[var(--hltb-accent)]',
-                          '[box-shadow:0_0_9px_color-mix(in_srgb,var(--hltb-accent)_45%,transparent)] [transform:translate(-50%,-50%)]',
-                          '[transition:box-shadow_200ms_ease]',
-                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_0_14px_color-mix(in_srgb,var(--hltb-accent)_65%,transparent)]',
-                          'motion-reduce:animate-none motion-reduce:transition-none',
-                        )}
-                        style={{ left: `${fillPercent}%` }}
-                      />
-                    </div>
-                  </div>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <GameCover
+                      url={entry.coverUrl}
+                      className="afterplay-hltb-cover h-11 w-8 flex-none overflow-hidden rounded-sm border border-line"
+                      iconSize={14}
+                    />
+                    <span className="truncate text-body font-semibold text-bone">
+                      {entry.title}
+                    </span>
+                  </span>
+                  <span className="afterplay-hltb-track relative h-3 rounded-[2px] bg-inset">
+                    <span
+                      className={cn(
+                        'afterplay-hltb-fill absolute inset-y-0 left-0 origin-left rounded-[2px] bg-phosphor',
+                        'animate-[afterplay-grow-x_600ms_var(--ease-out)_backwards] motion-reduce:animate-none',
+                      )}
+                      style={{ width: `${fillPercent}%` }}
+                    />
+                    <span className="afterplay-hltb-marker absolute -top-1.5 -bottom-1.5 left-1/2 w-0.5 -translate-x-1/2 bg-tube shadow-[0_0_6px_var(--color-tube)]" />
+                  </span>
+                  <span className="min-w-0 text-right">
+                    <span className="afterplay-hltb-ratio block text-small text-dust tabular-nums">
+                      <strong className="font-semibold text-bone">
+                        {formatHours(entry.hours)}
+                      </strong>{' '}
+                      vs {formatHours(entry.hltbMain)}
+                    </span>
+                    <span className="block text-micro text-dust">{verdict}</span>
+                  </span>
                 </button>
               );
             })}

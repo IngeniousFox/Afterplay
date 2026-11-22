@@ -125,16 +125,16 @@ export const GameJourneyCard = ({
     >
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[14px] font-extrabold text-foreground">Your journey</span>
+          <span className="text-[16px] font-semibold text-bone">Your journey</span>
           <small className="text-micro text-bone/[0.34]">
             Every turn this game has taken with you
           </small>
         </div>
         <strong
-          className="rounded-[99px] px-2 py-1.25 text-micro font-black tracking-[0.1em] whitespace-nowrap"
+          className="rounded-[99px] px-2 py-1.25 text-micro font-semibold whitespace-nowrap"
           style={{ color: latestNode.meta.color }}
         >
-          {nodes.length} MILESTONES
+          {nodes.length} milestones
         </strong>
       </div>
 
@@ -194,7 +194,7 @@ export const GameJourneyCard = ({
               >
                 <StatusIcon meta={node.meta} size={14} />
               </span>
-              <span className="afterplay-game-journey-label mt-1.75 text-micro font-extrabold whitespace-nowrap text-(--journey-color)">
+              <span className="afterplay-game-journey-label mt-1.75 text-micro font-semibold whitespace-nowrap text-(--journey-color)">
                 {node.label}
               </span>
               <span className="afterplay-game-journey-date mt-0.5 text-micro whitespace-nowrap text-bone/[0.35]">
@@ -221,10 +221,10 @@ export const GameJourneyCard = ({
         >
           {chips.map((chip, index) => (
             <span
-              className="flex min-w-0 items-center gap-2 rounded-[9px] px-2.5 py-2 text-micro font-[650] text-dust"
+              className="flex min-w-0 items-center gap-2 rounded-md px-2.5 py-2 text-micro font-semibold text-dust"
               key={chip}
             >
-              <i className="text-micro font-black tracking-[0.06em] text-primary not-italic">
+              <i className="text-micro font-semibold text-phosphor not-italic">
                 {String(index + 1).padStart(2, '0')}
               </i>
               {chip}

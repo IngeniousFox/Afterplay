@@ -45,7 +45,7 @@ test.describe('Estadísticas de un juego', () => {
     for (const daypart of emptyDayparts) expect(renderedDayparts).not.toContain(daypart);
 
     await expect(window.locator('.afterplay-game-hltb-milestone')).toHaveCount(3);
-    await expect(window.getByText('THE RUN', { exact: true })).toBeVisible();
+    await expect(window.getByText('Your journey', { exact: true })).toBeVisible();
 
     const readableType = await window.evaluate(() => ({
       timeLabel: Number.parseFloat(
@@ -91,7 +91,7 @@ test.describe('Estadísticas de un juego', () => {
       fullPage: false,
     });
 
-    const signature = window.getByText('YOUR SIGNATURE', { exact: true });
+    const signature = window.getByText('Your signature', { exact: true });
     await signature.evaluate((element) => element.scrollIntoView({ block: 'start' }));
     await expect(signature).toBeInViewport();
     await window.waitForTimeout(350);
@@ -113,7 +113,7 @@ test.describe('Estadísticas de un juego', () => {
       has: window.getByText('Afternoon', { exact: true }),
     });
     await afternoon.hover();
-    await expect(window.locator('.afterplay-game-daypart-center')).toContainText('AFTERNOON');
+    await expect(window.locator('.afterplay-game-daypart-center')).toContainText('Afternoon');
 
     const hltb = window.locator('.afterplay-game-hltb-dossier');
     await hltb.scrollIntoViewIfNeeded();
@@ -127,7 +127,7 @@ test.describe('Estadísticas de un juego', () => {
       fullPage: false,
     });
 
-    const rhythm = window.getByText('PLAY RHYTHM', { exact: true });
+    const rhythm = window.getByText('Play rhythm', { exact: true });
     await rhythm.evaluate((element) => element.scrollIntoView({ block: 'start' }));
     await expect(rhythm).toBeInViewport();
     await window.waitForTimeout(350);

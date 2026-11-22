@@ -1,6 +1,4 @@
-import { CalendarDays } from 'lucide-react';
 import { useMemo } from 'react';
-import { GREEN } from '../../lib/colors';
 import { formatHours } from '../../lib/format';
 import { secondsByWeekdayOf, type SessionStats } from '../../../../shared/domain/sessionStats';
 import { CategoryBarChart } from './CategoryBarChart';
@@ -40,7 +38,6 @@ export const WhenDoYouPlayChart = ({
     <CategoryBarChart
       title={title}
       subtitle="The week in your playtime"
-      Icon={CalendarDays}
       headerRight={(peakIndex) =>
         peakIndex >= 0 ? (
           <>
@@ -51,9 +48,6 @@ export const WhenDoYouPlayChart = ({
       }
       bars={bars}
       formatValue={(seconds) => formatHours(seconds / 3600)}
-      barGradient="linear-gradient(180deg,var(--ac),var(--ac2))"
-      labelColor={GREEN}
-      glowColor="rgba(255,179,71,.18)"
       maxBarWidthClass="max-w-9"
     />
   );

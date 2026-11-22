@@ -32,7 +32,7 @@ const DAYPARTS: {
   color: string;
   Icon: LucideIcon;
 }[] = [
-  { label: 'Morning', range: '06–12', fromHour: 6, toHour: 12, color: '#ffb347', Icon: Sunrise },
+  { label: 'Morning', range: '06–12', fromHour: 6, toHour: 12, color: '#c48a3c', Icon: Sunrise },
   {
     label: 'Afternoon',
     range: '12–18',
@@ -46,10 +46,10 @@ const DAYPARTS: {
     range: '18–24',
     fromHour: 18,
     toHour: 24,
-    color: '#5fd3e0',
+    color: '#ffd28f',
     Icon: Sunset,
   },
-  { label: 'Night', range: '00–06', fromHour: 0, toHour: 6, color: '#b9a6ff', Icon: Moon },
+  { label: 'Night', range: '00–06', fromHour: 0, toHour: 6, color: '#7d6440', Icon: Moon },
 ];
 
 const DIAL_SIZE = 158;
@@ -115,14 +115,14 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
     >
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[14px] font-extrabold text-foreground">Time of day</span>
-          <small className="text-[11.5px] text-dust">Your playtime across the cycle of a day</small>
+          <span className="text-[16px] font-semibold text-bone">Time of day</span>
+          <small className="text-micro text-dust">Your playtime across the cycle of a day</small>
         </div>
         {peakIndex !== null && (
           <strong
             className={cn(
               'afterplay-game-daypart-peak',
-              'rounded-[99px] px-2 py-1.25 text-micro font-black tracking-[0.065em] whitespace-nowrap',
+              'rounded-[99px] px-2 py-1.25 text-micro font-semibold whitespace-nowrap',
               'text-(--daypart-color)',
               '[--daypart-color:var(--primary)] border',
               'border-[color-mix(in_srgb,var(--daypart-color)_26%,transparent)]',
@@ -130,7 +130,7 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
             )}
             style={{ '--daypart-color': DAYPARTS[peakIndex].color } as CSSProperties}
           >
-            MOSTLY {DAYPARTS[peakIndex].label.toUpperCase()}
+            Mostly {DAYPARTS[peakIndex].label.toLowerCase()}
           </strong>
         )}
       </div>
@@ -230,8 +230,8 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                 >
                   {Math.round((seconds[activeIndex ?? 0] / total) * 100)}%
                 </strong>
-                <small className="mt-1.25 text-micro font-black tracking-[0.1em] text-dust">
-                  {DAYPARTS[activeIndex ?? 0].label.toUpperCase()}
+                <small className="mt-1.25 text-micro font-semibold text-dust">
+                  {DAYPARTS[activeIndex ?? 0].label}
                 </small>
               </span>
             </div>
@@ -254,9 +254,9 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                   onBlur={() => setHoveredIndex(null)}
                   className={cn(
                     'afterplay-game-daypart',
-                    'grid min-w-0 grid-cols-[30px_minmax(0,_1fr)] grid-rows-[auto_auto] items-center gap-2 rounded-[9px]',
+                    'grid min-w-0 grid-cols-[30px_minmax(0,_1fr)] grid-rows-[auto_auto] items-center gap-2 rounded-md',
                     'p-2.25',
-                    '[--daypart-color:var(--primary)] border border-line outline-none bg-bone/[0.018]',
+                    '[--daypart-color:var(--primary)] border border-line outline-hidden bg-bone/[0.018]',
                     '[&.is-active]:border-[color-mix(in_srgb,var(--daypart-color)_28%,rgba(233,228,216,0.04))]',
                     '[&.is-active]:bg-[color-mix(in_srgb,var(--daypart-color)_7%,rgba(233,228,216,0.015))]',
                     '[&.is-active]:transform-[translateY(-2px)]',
@@ -277,7 +277,7 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                   <span
                     className={cn(
                       'afterplay-game-daypart-icon',
-                      'row-[1/3] flex size-7.5 items-center justify-center rounded-[8px] text-(--daypart-color)',
+                      'row-[1/3] flex size-7.5 items-center justify-center rounded-md text-(--daypart-color)',
                       'border border-[color-mix(in_srgb,var(--daypart-color)_25%,transparent)]',
                       'bg-[color-mix(in_srgb,var(--daypart-color)_8%,transparent)]',
                     )}
@@ -285,14 +285,12 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                     <part.Icon size={13} />
                   </span>
                   <span className="afterplay-game-daypart-copy flex min-w-0 flex-col">
-                    <strong className="overflow-hidden text-[11.5px] font-extrabold text-ellipsis text-foreground">
+                    <strong className="overflow-hidden text-micro font-semibold text-ellipsis text-bone">
                       {part.label}
                     </strong>
-                    <small className="text-[11px] font-semibold tracking-[0.04em] text-dust">
-                      {part.range}
-                    </small>
+                    <small className="text-micro font-semibold text-dust">{part.range}</small>
                   </span>
-                  <span className="afterplay-game-daypart-value col-start-2 text-[11.5px] font-[850] whitespace-nowrap text-(--daypart-color)">
+                  <span className="afterplay-game-daypart-value col-start-2 text-micro font-semibold whitespace-nowrap text-(--daypart-color)">
                     {formatHours(seconds[index] / 3600)}
                   </span>
                   <span className="afterplay-game-daypart-pct [clip:rect(0_0_0_0)] [clip-path:inset(50%)] absolute size-0.25 overflow-hidden whitespace-nowrap">

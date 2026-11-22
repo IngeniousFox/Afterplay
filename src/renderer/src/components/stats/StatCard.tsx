@@ -2,23 +2,20 @@ import { cn } from '../../lib/utils';
 import type { CSSProperties } from 'react';
 
 type StatCardProps = {
-  // Título estándar de card ('text-[14px] font-bold text-foreground') — cada
-  // sitio aporta su propio margen inferior (o ninguno) vía titleClassName,
-  // así que no se fuerza un mb único para todos.
+  // Título estándar de card (Barlow semibold 16 px, Bone) — cada sitio aporta
+  // su propio margen inferior (o ninguno) vía titleClassName.
   title?: string;
   titleClassName?: string;
-  // Extras del wrapper por sitio: 'flex h-full flex-col' (GenreRadar,
-  // StreakCard, HoursByMonthChart — estirarse a la altura de la grid) o el
-  // overflow de HistoryList.
+  // Extras del wrapper por sitio: 'flex h-full flex-col' (estirarse a la
+  // altura de la rejilla) o el overflow de cada card.
   className?: string;
   style?: CSSProperties;
   children: React.ReactNode;
 };
 
-// Wrapper repetido 12 veces: 'rounded-[14px] border border-border bg-card
-// px-5.5 py-5'. Algunas cards (ActivityHeatmap, GameAgeDonut,
-// HoursByMonthChart) llevan cabecera compuesta y la mantienen como children,
-// sin usar el prop `title`.
+// Panel de Fósforo para Stats: Panel sobre Cabinet, borde Line, radio de
+// panel (8 px). Al pasar el ratón solo se aviva el borde: el énfasis lo ponen
+// las cifras y la serie activa, no la caja.
 export const StatCard = ({
   title,
   titleClassName = '',
@@ -28,30 +25,55 @@ export const StatCard = ({
 }: StatCardProps): React.JSX.Element => (
   <div
     className={cn(
-      'afterplay-stat-card rounded-[14px] border border-border bg-card px-5.5 py-5',
-      '[.afterplay-stats-screen_&]:relative [.afterplay-stats-screen_&]:isolate',
-      '[.afterplay-stats-screen_&]:[background:linear-gradient(145deg,rgba(233,228,216,0.038),rgba(233,228,216,0.012)),rgba(12,14,13,0.76)]',
-      '[.afterplay-stats-screen_&]:border-line',
-      '[.afterplay-stats-screen_&]:[box-shadow:inset_0_1px_0_rgba(233,228,216,0.025),0_15px_42px_rgba(3,6,7,0.13)]',
-      '[.afterplay-stats-screen_&]:[transition:border-color_240ms_ease,background-color_240ms_ease,box-shadow_260ms_ease]',
-      "[.afterplay-stats-screen_&::before]:content-[''] [.afterplay-stats-screen_&::before]:absolute",
-      '[.afterplay-stats-screen_&::before]:-z-1 [.afterplay-stats-screen_&::before]:inset-0',
-      '[.afterplay-stats-screen_&::before]:rounded-[inherit] [.afterplay-stats-screen_&::before]:pointer-events-none',
-      '[.afterplay-stats-screen_&::before]:opacity-0',
-      '[.afterplay-stats-screen_&::before]:[background:radial-gradient(circle_at_88%_0%,rgba(255,179,71,0.075),transparent_34%)]',
-      '[.afterplay-stats-screen_&::before]:[transition:opacity_240ms_ease]',
-      '[.afterplay-stats-screen_&:hover]:border-line-strong',
-      '[.afterplay-stats-screen_&:hover]:[box-shadow:inset_0_1px_0_rgba(233,228,216,0.035),0_22px_52px_rgba(3,6,7,0.2)]',
-      '[.afterplay-stats-screen_&:hover::before]:opacity-100',
+      'afterplay-stat-card relative isolate rounded-md border border-line bg-panel px-5.5 py-5',
+      'transition-[border-color] duration-200 hover:border-line-strong',
       className,
     )}
     style={style}
   >
     {title !== undefined && (
-      <div className={`text-[14px] font-bold text-foreground ${titleClassName}`.trim()}>
+      <div className={cn('text-[16px] leading-tight font-semibold text-bone', titleClassName)}>
         {title}
       </div>
     )}
     {children}
+  </div>
+);
+
+// Cabecera común de las gráficas: título a la izquierda y, a la derecha, el
+// subtítulo o el dato que resume la card. Sin iconos ni eyebrows: el título
+// basta. Los nombres de clase son contrato de los e2e de legibilidad.
+export const ChartHeading = ({
+  title,
+  subtitle,
+  right,
+  className,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  right?: React.ReactNode;
+  className?: string;
+}): React.JSX.Element => (
+  <div
+    className={cn(
+      'afterplay-chart-heading flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1',
+      className,
+    )}
+  >
+    <div className="afterplay-chart-heading-copy flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+      <strong className="block text-[16px] leading-tight font-semibold text-bone">{title}</strong>
+      {subtitle != null && <small className="block text-small text-dust">{subtitle}</small>}
+    </div>
+    {right != null && (
+      <div
+        className={cn(
+          'afterplay-chart-total text-right text-small text-dust tabular-nums',
+          '[&_strong]:font-semibold [&_strong]:text-bone [&_small]:ml-1 [&_small]:text-small [&_small]:text-dust',
+          '[&_em]:font-semibold [&_em]:text-phosphor [&_em]:not-italic',
+        )}
+      >
+        {right}
+      </div>
+    )}
   </div>
 );

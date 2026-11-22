@@ -119,7 +119,7 @@ export const GameBadges = ({
       label: 'Marathoner',
       criteria: 'Play a single session of 4 hours or more.',
       Icon: Flame,
-      color: '#ff5e57',
+      color: '#ffb347',
       earned: longestSessionSec >= 4 * 3600,
     },
     {
@@ -135,7 +135,7 @@ export const GameBadges = ({
       label: 'Regular',
       criteria: 'Log 50 tracked sessions.',
       Icon: Repeat,
-      color: '#5fd3e0',
+      color: '#ffb347',
       earned: sessionCount >= 50,
     },
     {
@@ -151,7 +151,7 @@ export const GameBadges = ({
       label: 'Night Owl',
       criteria: 'Play 35% or more of your time starting between 22:00 and 06:00.',
       Icon: Moon,
-      color: '#b9a6ff',
+      color: '#ffb347',
       earned: totalSec > 0 && nightSec / totalSec >= 0.35,
     },
     {
@@ -167,7 +167,7 @@ export const GameBadges = ({
       label: 'Free Ride',
       criteria: 'Play 20+ hours without spending a cent.',
       Icon: Gift,
-      color: '#5fd3e0',
+      color: '#ffb347',
       earned: totalHours >= 20 && totalSpent === 0,
     },
   ];
@@ -186,7 +186,7 @@ export const GameBadges = ({
     >
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[14px] font-extrabold text-foreground">Trophy cabinet</span>
+          <span className="text-[16px] font-semibold text-bone">Trophy cabinet</span>
           <small className="text-micro text-bone/[0.34]">
             Milestones from your relationship with this game
           </small>
@@ -231,8 +231,8 @@ export const GameBadges = ({
             className={cn(
               'afterplay-game-badge group/badge',
               'relative grid min-h-15 min-w-0 grid-cols-[34px_minmax(0,_1fr)] items-center gap-2.25 overflow-visible',
-              'rounded-[10px] p-2.25',
-              '[--badge-color:var(--primary)] border border-line outline-none bg-bone/[0.02]',
+              'rounded-md p-2.25',
+              '[--badge-color:var(--primary)] border border-line outline-hidden bg-bone/[0.02]',
               '[&.is-earned:not(:where(:hover,:focus-visible))]:border-[color-mix(in_srgb,var(--badge-color)_22%,rgba(233,228,216,0.045))]',
               '[&.is-earned:not(:where(:hover,:focus-visible))]:[background:linear-gradient(135deg,color-mix(in_srgb,var(--badge-color)_7%,transparent),rgba(233,228,216,0.017))]',
               '[&.is-locked:not(:where(:hover,:focus-visible))]:opacity-[0.44]',
@@ -265,11 +265,9 @@ export const GameBadges = ({
               <badge.Icon size={16} />
             </span>
             <div className="afterplay-game-badge-copy flex min-w-0 flex-col gap-0.5">
-              <strong className="truncate text-micro font-extrabold text-foreground">
-                {badge.label}
-              </strong>
-              <small className="text-[7px] font-black tracking-[0.09em] text-(--badge-color)">
-                {badge.earned ? 'UNLOCKED' : 'LOCKED'}
+              <strong className="truncate text-micro font-semibold text-bone">{badge.label}</strong>
+              <small className="text-micro font-semibold text-(--badge-color)">
+                {badge.earned ? 'Unlocked' : 'Locked'}
               </small>
             </div>
             <i
@@ -287,7 +285,7 @@ export const GameBadges = ({
               aria-hidden="true"
             />
             <div
-              className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-max max-w-54 -translate-x-1/2 rounded-[9px] border ${floatingPanelClass} px-2.75 py-1.75 text-center text-[11.5px] text-muted-foreground group-hover/badge:block group-focus/badge:block`}
+              className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-max max-w-54 -translate-x-1/2 rounded-md border ${floatingPanelClass} px-2.75 py-1.75 text-center text-micro text-dust group-hover/badge:block group-focus/badge:block`}
             >
               {badge.criteria}
             </div>

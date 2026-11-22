@@ -6,7 +6,7 @@ import { formatByPrecision, formatHours } from '../../lib/format';
 import { STATUS_META } from '../../lib/gameStatus';
 import { floatingPanelClass } from '../../lib/styles';
 import { GameCover } from '../GameCover';
-import { StatCard } from './StatCard';
+import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import { StatsPager } from './StatsPager';
 import { usePagedYear } from './usePagedYear';
@@ -67,26 +67,27 @@ export const CompletedGallery = ({
 
   return (
     <StatCard>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-[14px] font-bold text-foreground">Completed</div>
-        <div className="flex items-center gap-2.5">
-          {completions.length > 0 && (
-            <div
-              className="text-[11.5px] font-semibold tabular-nums"
-              style={{ color: beatenColor }}
-            >
-              {completions.length} {year === 'all' ? 'all time' : `in ${year}`}
-            </div>
-          )}
-          <StatsPager
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-            prevLabel="Newer completions"
-            nextLabel="Older completions"
-          />
-        </div>
-      </div>
+      <ChartHeading
+        className="mb-4"
+        title="Completed"
+        right={
+          <div className="flex items-center gap-2.5">
+            {completions.length > 0 && (
+              <span>
+                <strong>{completions.length}</strong>{' '}
+                {year === 'all' ? 'all time, newest first' : `in ${year}`}
+              </span>
+            )}
+            <StatsPager
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+              prevLabel="Newer completions"
+              nextLabel="Older completions"
+            />
+          </div>
+        }
+      />
 
       {shown.length === 0 ? (
         <StatCardEmpty>
@@ -100,7 +101,7 @@ export const CompletedGallery = ({
         // `direction`, puesto por goToPage.
         <div
           key={currentPage}
-          className={`grid grid-cols-8 gap-3 duration-300 animate-in fade-in-0 ${
+          className={`grid grid-cols-8 gap-3 duration-300 motion-reduce:animate-none animate-in fade-in-0 ${
             direction > 0 ? 'slide-in-from-right-3' : 'slide-in-from-left-3'
           }`}
         >
@@ -113,9 +114,10 @@ export const CompletedGallery = ({
                   type="button"
                   onClick={() => onOpenGame(game.id)}
                   className={cn(
-                    'afterplay-completed-button block w-full relative overflow-hidden rounded-[8px] outline-none',
+                    'afterplay-completed-button relative block w-full overflow-hidden rounded-sm outline-hidden',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
                     '[transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),box-shadow_220ms_ease]',
-                    '[&:is(:hover,:focus-visible)]:[box-shadow:0_10px_22px_rgba(3,6,7,0.34)]',
+                    '[&:is(:hover,:focus-visible)]:shadow-lift',
                     '[&:is(:hover,:focus-visible)]:[transform:translateY(-2px)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
@@ -124,9 +126,9 @@ export const CompletedGallery = ({
                   <GameCover
                     url={game.coverUrl}
                     className={cn(
-                      'afterplay-completed-cover aspect-[2/3] w-full overflow-hidden rounded-[8px] border border-border',
+                      'afterplay-completed-cover aspect-[2/3] w-full overflow-hidden rounded-sm border border-line',
                       '[transition:border-color_180ms_ease,filter_220ms_ease]',
-                      '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:border-[rgba(216,180,91,0.45)]',
+                      '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:border-line-hover',
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:[filter:saturate(1.12)_brightness(1.05)]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
@@ -134,8 +136,8 @@ export const CompletedGallery = ({
                   />
                   <span
                     className={cn(
-                      'afterplay-completed-wash absolute inset-0 rounded-[8px] pointer-events-none opacity-58',
-                      '[background:linear-gradient(180deg,transparent_58%,rgba(216,180,91,0.2))] [transition:opacity_220ms_ease]',
+                      'afterplay-completed-wash pointer-events-none absolute inset-0 rounded-sm opacity-0',
+                      'bg-[linear-gradient(180deg,transparent_58%,rgb(3_6_7/0.45))] [transition:opacity_220ms_ease]',
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:opacity-100',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
@@ -145,33 +147,40 @@ export const CompletedGallery = ({
                     size={12}
                     aria-hidden="true"
                     className={cn(
-                      'afterplay-completed-mark absolute right-1.25 bottom-1.25 drop-shadow-[0_1px_3px_rgba(3,6,7,.8)] opacity-78',
-                      '[transform:translateY(1px)] [transition:opacity_200ms_ease,transform_240ms_cubic-bezier(0.22,1,0.36,1)]',
-                      '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:opacity-100',
-                      '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:[transform:translateY(0)]',
+                      'afterplay-completed-mark absolute top-1.5 right-1.5 rounded-full bg-cabinet/80 p-px',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
                     style={{ color: beatenColor }}
                   />
                 </button>
+                <div className="mt-2 min-w-0">
+                  <span className="block truncate text-small font-semibold text-bone">
+                    {game.title}
+                  </span>
+                  <span className="block text-micro text-dust">
+                    {event.occurredAt.toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: year === 'all' ? 'numeric' : undefined,
+                    })}
+                  </span>
+                </div>
                 <div
                   className={cn(
                     'pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-48 -translate-x-1/2 flex-col gap-0.5',
-                    'rounded-[10px] border',
+                    'rounded-md border',
                     floatingPanelClass,
-                    'px-3.25 py-2.75 text-[11.5px]',
+                    'px-3.25 py-2.75 text-micro',
                     'group-hover/completed:flex',
                   )}
                 >
-                  <span className="truncate text-[12px] font-bold text-foreground">
-                    {game.title}
-                  </span>
+                  <span className="truncate text-small font-semibold text-bone">{game.title}</span>
                   <span style={{ color: beatenColor }}>
                     {event.iterationLabel} —{' '}
                     {formatByPrecision(event.occurredAt, event.datePrecision, timeFormat)}
                   </span>
                   {game.totalHours > 0 && (
-                    <span className="text-muted-foreground">
+                    <span className="text-dust">
                       {formatHours(game.totalHours)} played in total
                     </span>
                   )}

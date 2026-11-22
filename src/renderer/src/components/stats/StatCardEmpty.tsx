@@ -6,5 +6,5 @@ type StatCardEmptyProps = {
 // con solo el texto cambiando (a veces según el año elegido). El texto se
 // queda a medida de cada card, solo el envoltorio se comparte.
 export const StatCardEmpty = ({ children }: StatCardEmptyProps): React.JSX.Element => (
-  <p className="text-xs text-muted-foreground">{children}</p>
+  <p className="text-small text-dust">{children}</p>
 );
