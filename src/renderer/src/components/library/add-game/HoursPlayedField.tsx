@@ -17,7 +17,7 @@ export const HoursPlayedField = (props: React.ComponentProps<'input'>): React.JS
     style={{ borderColor: `${GREEN}2e`, background: `${GREEN}0f` }}
   >
     <div className="text-micro font-semibold" style={{ color: `${GREEN}c4` }}>
-      HOURS PLAYED{' '}
+      Hours played{' '}
       <span className="font-medium tracking-normal normal-case opacity-80">· outside the app</span>
     </div>
     <div
@@ -26,6 +26,7 @@ export const HoursPlayedField = (props: React.ComponentProps<'input'>): React.JS
     >
       <Clock size={13} className="flex-none" style={{ color: `${GREEN}99` }} />
       <NumberInput
+        aria-label="Hours played outside the app"
         {...props}
         min={0}
         placeholder="e.g. 42"

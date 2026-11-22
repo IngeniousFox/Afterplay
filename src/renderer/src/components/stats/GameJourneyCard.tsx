@@ -126,9 +126,7 @@ export const GameJourneyCard = ({
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[16px] font-semibold text-bone">Your journey</span>
-          <small className="text-micro text-bone/[0.34]">
-            Every turn this game has taken with you
-          </small>
+          <small className="text-micro text-dust">Every turn this game has taken with you</small>
         </div>
         <strong
           className="rounded-[99px] px-2 py-1.25 text-micro font-semibold whitespace-nowrap"
@@ -197,7 +195,7 @@ export const GameJourneyCard = ({
               <span className="afterplay-game-journey-label mt-1.75 text-micro font-semibold whitespace-nowrap text-(--journey-color)">
                 {node.label}
               </span>
-              <span className="afterplay-game-journey-date mt-0.5 text-micro whitespace-nowrap text-bone/[0.35]">
+              <span className="afterplay-game-journey-date mt-0.5 text-micro whitespace-nowrap text-dust">
                 {formatByPrecision(node.date, node.precision, timeFormat)}
               </span>
             </div>

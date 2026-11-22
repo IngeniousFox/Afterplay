@@ -119,7 +119,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
           message('Type at least two letters.')
         ) : results.isPending ? (
           <div className="flex justify-center py-16" role="status" aria-label="Searching">
-            <Loader2 size={22} className="animate-spin text-phosphor" />
+            <Loader2 size={22} className="animate-spin motion-reduce:animate-none text-phosphor" />
           </div>
         ) : results.isError ? (
           message(
@@ -196,7 +196,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
                       )}
                     >
                       {busy ? (
-                        <Loader2 size={16} className="animate-spin" />
+                        <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
                       ) : done ? (
                         <Check size={16} />
                       ) : (

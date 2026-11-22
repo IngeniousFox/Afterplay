@@ -141,7 +141,7 @@ export const AssignSessionModal = ({
               placeholder="Search emulated games…"
               aria-label="Search emulated games"
               autoFocus
-              className="h-10 w-full rounded-sm border border-edge bg-inset pr-3 pl-9.5 text-body text-bone outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
+              className="h-10 w-full rounded-sm border border-edge bg-inset pr-3 pl-9.5 text-body text-bone outline-hidden transition-[border-color,box-shadow] duration-150 placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
             />
           </div>
 

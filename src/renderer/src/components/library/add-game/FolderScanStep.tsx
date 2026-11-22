@@ -133,7 +133,11 @@ export const FolderScanStep = ({
         disabled={folders.length === 0 || isRescanning}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-sm border border-input bg-bone/[0.04] px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-bone/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isRescanning ? <Loader2 size={15} className="animate-spin" /> : <FolderSearch size={15} />}
+        {isRescanning ? (
+          <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <FolderSearch size={15} />
+        )}
         {/* "Rescan" cuando ya hay algo: el botón dejó de ser la única forma
             de llegar a la lista (la app la mantiene sola) y pasó a ser la vía
             de escape — rehacerlo TODO ignorando lo que ya se sabía. */}
@@ -189,7 +193,7 @@ export const FolderScanStep = ({
             Point at the folders where your games live. Each subfolder is looked up in IGDB by its
             name, and the game&apos;s executable is found for you — you pick which ones to add.
           </p>
-          <p className="max-w-72 text-micro leading-relaxed text-muted-foreground/70">
+          <p className="max-w-72 text-micro leading-relaxed text-muted-foreground">
             Afterplay keeps watching them afterwards, so anything you install later shows up here on
             its own.
           </p>
@@ -390,7 +394,7 @@ const CandidateRow = ({
           <div className="flex items-baseline gap-2">
             <span className="truncate text-sm font-bold text-foreground">{proposed.title}</span>
             {proposed.releaseYear !== null && (
-              <span className="flex-none text-[12px] font-semibold text-muted-foreground/80 tabular-nums">
+              <span className="flex-none text-[12px] font-semibold text-muted-foreground tabular-nums">
                 {proposed.releaseYear}
               </span>
             )}
@@ -505,9 +509,7 @@ const CandidateRow = ({
                   <span className="text-micro font-semibold text-muted-foreground">
                     Other matches
                   </span>
-                  <span className="text-micro text-muted-foreground/60">
-                    Click a cover to use it
-                  </span>
+                  <span className="text-micro text-muted-foreground">Click a cover to use it</span>
                 </div>
                 <MatchCardGrid
                   matches={alternatives}
@@ -607,6 +609,7 @@ const FixMatchRow = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search the catalog…"
+              aria-label="Search the catalog"
               className="w-full rounded-sm border border-edge bg-inset py-2 pr-3 pl-8.5 text-[12.5px] text-foreground outline-hidden transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
             />
           </div>
@@ -614,7 +617,7 @@ const FixMatchRow = ({
           <div className="mt-2 max-h-80 overflow-y-auto">
             {search.isLoading && query.trim() ? (
               <div className="flex items-center gap-2 px-1 py-2 text-micro text-muted-foreground">
-                <Loader2 size={12} className="animate-spin" />
+                <Loader2 size={12} className="animate-spin motion-reduce:animate-none" />
                 Searching…
               </div>
             ) : search.data?.length === 0 ? (
@@ -793,7 +796,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
                   Linked on this PC
                 </span>
               )}
-              <span className="flex-none text-micro text-muted-foreground/60 tabular-nums">
+              <span className="flex-none text-micro text-muted-foreground tabular-nums">
                 {formatBytes(entry.sizeBytes)}
               </span>
             </div>

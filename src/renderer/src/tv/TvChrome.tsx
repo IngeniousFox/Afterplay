@@ -97,6 +97,7 @@ export const TvHeader = ({
               data-tv-sound="none"
               className={cn(
                 'relative h-[1.9em] rounded-sm px-[0.85em] text-[1.04em] font-medium outline-hidden transition-colors duration-150',
+                'focus-visible:outline-[0.12em] focus-visible:outline-offset-[0.12em] focus-visible:outline-phosphor',
                 active
                   ? 'bg-raised text-bone after:absolute after:inset-x-0 after:-bottom-[0.1em] after:h-[0.12em] after:rounded-full after:bg-phosphor after:shadow-glow-bar'
                   : 'text-dust hover:text-bone',

@@ -85,18 +85,21 @@ export const CalendarDropdown = ({
           {options.map((option) => {
             const isSelected = String(option.value) === String(value);
             return (
-              <div
+              <button
+                type="button"
                 key={option.value}
                 data-selected={isSelected}
+                aria-pressed={isSelected}
+                disabled={option.disabled}
                 onClick={() => !option.disabled && emitChange(option.value)}
-                className={`rounded-lg px-2.5 py-1.75 text-[13px] text-foreground ${
+                className={`block w-full rounded-sm px-2.5 py-1.75 text-left text-[13px] text-foreground outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor ${
                   option.disabled
                     ? 'pointer-events-none opacity-40'
                     : 'cursor-pointer hover:bg-bone/[0.06]'
                 } ${isSelected ? 'bg-bone/[0.06] font-semibold' : ''}`}
               >
                 {option.label}
-              </div>
+              </button>
             );
           })}
         </div>

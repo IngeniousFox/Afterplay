@@ -152,7 +152,7 @@ export const HowLongToBeatCard = ({
         )}
       >
         <div className="flex items-center gap-2.5">
-          <span className="flex size-8 flex-none items-center justify-center rounded-full bg-bone/[0.04] text-muted-foreground/50">
+          <span className="flex size-8 flex-none items-center justify-center rounded-full bg-bone/[0.04] text-muted-foreground">
             <Hourglass size={14} />
           </span>
           <div className="min-w-0 flex-1">
@@ -173,9 +173,12 @@ export const HowLongToBeatCard = ({
             }}
             title="Fetch times from HowLongToBeat"
             aria-label="Fetch times from HowLongToBeat"
-            className="flex size-7 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex size-7 flex-none items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
-            <RefreshCw size={13} className={refresh.isPending ? 'animate-spin' : undefined} />
+            <RefreshCw
+              size={13}
+              className={refresh.isPending ? 'animate-spin motion-reduce:animate-none' : undefined}
+            />
           </button>
         </div>
       </div>
@@ -265,8 +268,8 @@ export const HowLongToBeatCard = ({
       >
         <div className="afterplay-game-hltb-header flex items-start justify-between gap-4.5">
           <div className="flex flex-col">
-            <span className="afterplay-game-hltb-kicker flex items-center gap-1.25 text-micro font-black tracking-[0.14em] text-tube">
-              <Hourglass size={11} /> PACE COMPARISON
+            <span className="afterplay-game-hltb-kicker flex items-center gap-1.25 text-small font-semibold text-tube">
+              <Hourglass aria-hidden size={12} /> Pace comparison
             </span>
             <strong className="mt-1 text-[18px] font-black tracking-[-0.02em] text-foreground">
               You vs HowLongToBeat
@@ -316,8 +319,8 @@ export const HowLongToBeatCard = ({
               '[@media(width<=760px)]:border-b-line',
             )}
           >
-            <span className="afterplay-game-hltb-you-label [&_i]:bg-(--primary) [&_i]:shadow-[0_0_5px_rgba(255,179,71,0.28)] flex items-center gap-1.5 text-micro font-black tracking-[0.13em] text-bone/[0.39]">
-              <i className="size-1.5 rounded-[50%]" /> YOUR TIME
+            <span className="afterplay-game-hltb-you-label [&_i]:bg-(--primary) [&_i]:shadow-[0_0_5px_rgba(255,179,71,0.28)] flex items-center gap-1.5 text-small font-semibold text-dust">
+              <i className="size-1.5 rounded-[50%]" /> Your time
             </span>
             <strong className="mt-1.25 text-[41px] leading-none font-display font-bold text-foreground tabular-nums">
               {hasOwnHours ? formatHours(markerHours) : '—'}
@@ -369,9 +372,7 @@ export const HowLongToBeatCard = ({
               <span className="text-micro font-black tracking-[0.13em] text-dust">
                 The pace line
               </span>
-              <small className="text-micro text-bone/[0.39]">
-                {formatHours(scale)} community ceiling
-              </small>
+              <small className="text-micro text-dust">{formatHours(scale)} community ceiling</small>
             </div>
 
             <div className="afterplay-game-hltb-track-wrap relative mx-1.75 mt-11.75 mb-0">
@@ -538,9 +539,12 @@ export const HowLongToBeatCard = ({
             }}
             title="Re-fetch times from HowLongToBeat"
             aria-label="Refresh times"
-            className="flex size-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex size-5.5 items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
-            <RefreshCw size={11} className={refresh.isPending ? 'animate-spin' : undefined} />
+            <RefreshCw
+              size={11}
+              className={refresh.isPending ? 'animate-spin motion-reduce:animate-none' : undefined}
+            />
           </button>
         </div>
 
@@ -608,7 +612,7 @@ export const HowLongToBeatCard = ({
                 pero el dato propio —lo único que es TUYO en esta card—
                 aparece ya puesto. */}
             <div
-              className="absolute -top-5 rounded-md border border-input px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
+              className="absolute -top-6.5 rounded-md border border-input px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
               style={{
                 left: `${markerPct}%`,
                 background: '#1f272b',
@@ -624,11 +628,11 @@ export const HowLongToBeatCard = ({
               {formatHours(markerHours)}
             </div>
             <div
-              className="absolute -top-1 rounded-sm bg-bone"
+              className="absolute -top-0.5 rounded-sm bg-bone"
               style={{
                 left: `${markerPct}%`,
                 width: 3,
-                height: 22,
+                height: 18,
                 // Halo blanco además del contorno oscuro: separa el marcador
                 // del tramo que tenga debajo, sea del color que sea.
                 boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',

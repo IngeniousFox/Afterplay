@@ -95,6 +95,7 @@ export const AddSpendPopover = ({
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder="e.g. Winter sale, season pass…"
+              aria-label="Note"
               className={`${textInputClass} ${textInputFocusClass}`}
             />
           </div>

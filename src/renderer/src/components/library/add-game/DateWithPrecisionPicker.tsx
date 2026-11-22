@@ -88,7 +88,7 @@ export const DateWithPrecisionPicker = ({
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger className="flex w-full min-w-0 items-center gap-2 rounded-sm border border-line-strong bg-raised px-3.25 py-2.5 text-left text-[13px] text-foreground">
             <CalendarIcon size={14} className="flex-none text-muted-foreground" />
-            <span className={`truncate ${value ? '' : 'text-muted-foreground/70'}`}>
+            <span className={`truncate ${value ? '' : 'text-muted-foreground'}`}>
               {value ? formatDisplay(value) : 'Not set'}
             </span>
           </PopoverTrigger>

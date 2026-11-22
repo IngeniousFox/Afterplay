@@ -40,7 +40,10 @@ import { BigPictureLayout, TvGameDetail, TvHome, TvJourney, TvLibrary } from './
 // que un componente propio viva en su propio fichero para no perder el HMR.
 const tvFallback = (
   <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#070908]">
-    <Loader2 className="animate-spin text-muted-foreground/60" size={28} />
+    <Loader2
+      className="animate-spin motion-reduce:animate-none text-muted-foreground/60"
+      size={28}
+    />
   </div>
 );
 

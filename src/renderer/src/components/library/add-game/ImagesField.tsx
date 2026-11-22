@@ -113,6 +113,7 @@ export const ImagesField = ({
               min={0}
               step="1"
               placeholder="e.g. 5219 — from steamgriddb.com/game/5219"
+              aria-label="SteamGridDB game ID"
               onChange={(event) => {
                 const raw = event.target.value.trim();
                 onSteamGridDbIdChange(raw === '' ? null : Number(raw));

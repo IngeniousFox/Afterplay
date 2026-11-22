@@ -319,7 +319,7 @@ const TrophyCase = ({
                 </span>
               )}
               {star.unlockedAt && star.dateReliable && (
-                <span className="text-micro text-muted-foreground/70">
+                <span className="text-micro text-muted-foreground">
                   {formatByPrecision(star.unlockedAt, 'day', timeFormat)}
                 </span>
               )}
@@ -331,7 +331,7 @@ const TrophyCase = ({
               huérfanos custodiando el vacío. */}
           {alsoRare.length > 0 && (
             <div className="hidden flex-none flex-col items-center justify-center gap-2.75 self-stretch border-l border-line pl-5.5 min-[900px]:flex">
-              <span className="text-micro font-semibold text-muted-foreground/50">Also rare</span>
+              <span className="text-micro font-semibold text-muted-foreground">Also rare</span>
               <div className="flex gap-3.5">
                 {alsoRare.map((entry) => (
                   <RarestMedal key={entry.id} entry={entry} />
@@ -385,7 +385,7 @@ const TrophyCase = ({
             estrecha de la ficha el zócalo envuelve, y sueltos el botón se
             descolgaba solo a una segunda línea, huérfano. */}
         <span className="ml-auto flex items-center gap-2">
-          <span className="text-micro text-muted-foreground/60 tabular-nums">
+          <span className="text-micro text-muted-foreground tabular-nums">
             {unlockedCount === 0
               ? 'none unlocked yet'
               : complete
@@ -405,9 +405,12 @@ const TrophyCase = ({
                 : 'Re-fetch this game’s achievements from Steam'
             }
             aria-label="Refresh achievements"
-            className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
-            <RefreshCw size={11} className={refreshing ? 'animate-spin' : undefined} />
+            <RefreshCw
+              size={11}
+              className={refreshing ? 'animate-spin motion-reduce:animate-none' : undefined}
+            />
           </button>
         </span>
       </div>
@@ -444,7 +447,7 @@ const SourceCompletionRow = ({
         {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
             desbloqueos de esta fuente. */}
         {!source.known ? (
-          <span className="text-muted-foreground/60">not synced yet</span>
+          <span className="text-muted-foreground">not synced yet</span>
         ) : (
           <span
             className={cn('font-extrabold', !source.complete && 'text-foreground')}
@@ -536,16 +539,14 @@ const RowDescription = ({
   if (!entry.hidden || unlocked || revealed) {
     if (!entry.description) {
       return entry.hidden && !unlocked ? (
-        <span className="min-w-0 flex-1 truncate text-micro text-muted-foreground/45 italic">
+        <span className="min-w-0 flex-1 truncate text-micro text-muted-foreground italic">
           Hidden achievement
         </span>
       ) : null;
     }
     return (
       <span
-        className={`min-w-0 flex-1 truncate text-micro ${
-          unlocked ? 'text-muted-foreground/75' : 'text-muted-foreground/45'
-        }`}
+        className="min-w-0 flex-1 truncate text-micro text-muted-foreground"
         title={entry.description}
       >
         {entry.description}
@@ -557,7 +558,7 @@ const RowDescription = ({
     <button
       type="button"
       onClick={() => setRevealed(true)}
-      className="group/reveal flex min-w-0 flex-1 items-center gap-1.5 truncate text-micro text-muted-foreground/45 italic transition-colors duration-150 hover:text-muted-foreground"
+      className="group/reveal flex min-w-0 flex-1 items-center gap-1.5 truncate text-micro text-muted-foreground italic transition-colors duration-150 hover:text-bone"
     >
       <span className="grid flex-none place-items-center">
         <EyeOff
@@ -638,7 +639,7 @@ const AchievementRow = ({
         <div className="flex items-center gap-1.75">
           <span
             className={`min-w-0 truncate text-[13px] font-bold ${
-              unlocked ? 'text-foreground' : 'text-muted-foreground/75'
+              unlocked ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
             {entry.displayName}
@@ -649,7 +650,7 @@ const AchievementRow = ({
           {unlocked &&
             !entry.sources.includes('steam') &&
             (entry.sources.includes('emu') || entry.sources.includes('ra')) && (
-              <span className="flex-none rounded px-1 py-0.25 text-micro font-semibold text-muted-foreground/60">
+              <span className="flex-none rounded px-1 py-0.25 text-micro font-semibold text-muted-foreground">
                 {entry.sources.includes('emu') ? 'local' : 'RA'}
               </span>
             )}
@@ -659,7 +660,7 @@ const AchievementRow = ({
           {/* La fecha comparte línea con la descripción: es lo que baja la
               fila de tres líneas a dos. Solo como fecha si es de fiar. */}
           {entry.unlockedAt && (
-            <span className="flex-none text-micro font-semibold text-muted-foreground/65 tabular-nums">
+            <span className="flex-none text-micro font-semibold text-muted-foreground tabular-nums">
               {entry.dateReliable
                 ? formatByPrecision(entry.unlockedAt, 'day', timeFormat)
                 : 'date unknown'}
@@ -726,7 +727,7 @@ const GroupHeader = ({
     >
       {label}
     </span>
-    <span className="text-micro font-bold text-muted-foreground/60 tabular-nums">{count}</span>
+    <span className="text-micro font-bold text-muted-foreground tabular-nums">{count}</span>
     <span aria-hidden className="h-px flex-1 bg-bone/[0.06]" />
   </div>
 );
@@ -862,6 +863,7 @@ export const AchievementsSection = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search achievements…"
+              aria-label="Search achievements"
               className="w-full rounded-sm border border-line-strong bg-bone/[0.03] py-2.25 pr-8 pl-8.5 text-[13px] text-foreground outline-hidden placeholder:text-muted-foreground/60 focus:border-primary/45"
             />
             {searching && (

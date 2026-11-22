@@ -147,6 +147,7 @@ export const SearchStep = ({
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search a game… (e.g. Sekiro)"
+          aria-label="Search a game"
           className="w-full rounded-sm border border-edge bg-inset py-2.75 pr-9.5 pl-9.5 text-sm text-foreground outline-hidden transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
         />
         {trimmed !== '' && (
@@ -166,7 +167,7 @@ export const SearchStep = ({
           <span className="text-micro font-semibold text-muted-foreground">
             {results.length} {results.length === 1 ? 'result' : 'results'}
           </span>
-          <span className="text-micro text-muted-foreground/60">↑ ↓ to browse · ↵ to pick</span>
+          <span className="text-micro text-muted-foreground">↑ ↓ to browse · ↵ to pick</span>
         </div>
       )}
 
@@ -175,7 +176,7 @@ export const SearchStep = ({
           Array.from({ length: 4 }, (_, index) => (
             <div
               key={index}
-              className="flex animate-pulse items-center gap-3.25 rounded-md border border-border p-2.75"
+              className="flex animate-pulse motion-reduce:animate-none items-center gap-3.25 rounded-md border border-border p-2.75"
             >
               {/* Mismo tamaño que CoverFrame, para que al llegar los
                   resultados la fila no cambie de alto ni dé el salto. */}
@@ -266,7 +267,7 @@ export const SearchStep = ({
                       {result.title}
                     </span>
                     {result.releaseYear !== null && (
-                      <span className="flex-none text-[12px] font-semibold text-muted-foreground/80 tabular-nums">
+                      <span className="flex-none text-[12px] font-semibold text-muted-foreground tabular-nums">
                         {result.releaseYear}
                       </span>
                     )}
@@ -290,7 +291,7 @@ export const SearchStep = ({
                       </span>
                     ))}
                     {result.platforms.length > 0 && (
-                      <span className="truncate text-micro text-muted-foreground/70">
+                      <span className="truncate text-micro text-muted-foreground">
                         {result.platforms.slice(0, 3).join(' · ')}
                       </span>
                     )}
@@ -306,7 +307,7 @@ export const SearchStep = ({
                     </p>
                   ) : (
                     result.summary && (
-                      <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground/75">
+                      <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground">
                         {result.summary}
                       </p>
                     )

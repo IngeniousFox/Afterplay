@@ -50,6 +50,7 @@ export const PlaythroughEntryCard = ({
         value={entry.label}
         onChange={(event) => onChange({ ...entry, label: event.target.value })}
         placeholder={`Playthrough ${number}`}
+        aria-label="Playthrough label"
         className={`${textInputClass} ${textInputFocusClass}`}
       />
     </div>

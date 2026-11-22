@@ -147,7 +147,7 @@ const SagaSlide = ({
         {title}
       </div>
       {releaseYear !== null && (
-        <div className="text-micro text-muted-foreground/60 tabular-nums">{releaseYear}</div>
+        <div className="text-micro text-muted-foreground tabular-nums">{releaseYear}</div>
       )}
     </button>
   );
@@ -250,7 +250,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
         <div className="flex items-start gap-3">
           {Array.from({ length: SKELETON_COUNT }, (_, i) => (
             <div key={i} className={slideShellClass}>
-              <div className="aspect-3/4 animate-pulse rounded-sm bg-bone/[0.06]" />
+              <div className="aspect-3/4 animate-pulse motion-reduce:animate-none rounded-sm bg-bone/[0.06]" />
               {/* El mismo hueco que reserva el slide de verdad (dos líneas de
                   título + el año): sin él la sección crecía de golpe al
                   terminar de cargar y empujaba todo lo que tiene debajo. */}
@@ -305,7 +305,7 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           {/* El nombre de la colección de IGDB: es lo que da sentido a que
               estos juegos estén juntos, y en un Mario o un Pokémon distingue
               "Super Mario" de "Mario Kart" sin tener que deducirlo. */}
-          <span className="truncate text-micro font-semibold text-muted-foreground/60">
+          <span className="truncate text-micro font-semibold text-muted-foreground">
             {game.igdbCollections?.map((collection) => collection.name).join(' · ')}
           </span>
         </div>

@@ -6,7 +6,8 @@ import { requestEnterBigPicture } from '../hooks/useBigPicture';
 import { cn } from '@/lib/utils';
 
 const controlButtonClass = cn(
-  'flex h-full w-11 items-center justify-center text-dust outline-none transition-colors duration-150',
+  'flex h-full w-11 items-center justify-center text-dust outline-hidden transition-colors duration-150',
+  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
   'hover:bg-raised hover:text-bone focus-visible:bg-raised focus-visible:text-bone',
 );
 

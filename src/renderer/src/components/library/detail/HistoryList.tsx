@@ -302,7 +302,7 @@ export const HistoryList = ({
                     <span className="w-px" style={{ background: 'var(--border)' }} />
                   </div>
                   <div className="flex flex-1 items-center gap-2 pb-2.5">
-                    <span className="text-micro font-semibold text-muted-foreground/55 tabular-nums">
+                    <span className="text-micro font-semibold text-muted-foreground tabular-nums">
                       {entry.date.getFullYear()}
                     </span>
                     <span className="h-px flex-1 bg-bone/5" />
@@ -377,6 +377,7 @@ export const HistoryList = ({
                                 }}
                                 min={0}
                                 step="0.01"
+                                aria-label="Amount (€)"
                                 className={textInputClass}
                               />
                             </div>
@@ -403,7 +404,8 @@ export const HistoryList = ({
                               if (event.key === 'Escape') setEditingKey(null);
                             }}
                             placeholder="Note…"
-                            className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1.5 text-[12.5px] text-foreground outline-hidden"
+                            aria-label="Note"
+                            className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1.5 text-[12.5px] text-foreground outline-hidden transition-[border-color,box-shadow] duration-150 focus:border-phosphor focus:shadow-focus-field"
                           />
                           <button
                             type="button"

@@ -69,7 +69,11 @@ export const ScanAutofillRow = ({
         disabled={searching}
         className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-input bg-bone/[0.02] px-3.5 py-2.25 text-[12.5px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground disabled:opacity-60"
       >
-        {searching ? <Loader2 size={14} className="animate-spin" /> : <FolderSearch size={14} />}
+        {searching ? (
+          <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <FolderSearch size={14} />
+        )}
         Find in my game folders
       </button>
 

@@ -141,7 +141,7 @@ export const SteamFallback = ({
     <div className="flex flex-col">
       <div className="px-3.5 pt-3 pb-2">
         <div className="text-micro font-semibold" style={{ color: BLUE }}>
-          NOT IN IGDB YET — FOUND ON STEAM
+          Not in IGDB yet — found on Steam
         </div>
         <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
           Newly announced games take a while to reach IGDB. Add it from Steam and it comes with its

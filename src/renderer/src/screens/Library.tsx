@@ -139,7 +139,7 @@ export const Library = (): React.JSX.Element => {
                   }}
                   aria-label="Filter the library by title"
                   placeholder="Filter by title…"
-                  className="h-8.5 w-full rounded-sm border border-edge bg-inset pr-9 pl-9 text-body text-bone outline-none placeholder:text-dust focus:border-phosphor focus:shadow-focus-field [&::-webkit-search-cancel-button]:hidden"
+                  className="h-8.5 w-full rounded-sm border border-edge bg-inset pr-9 pl-9 text-body text-bone outline-hidden placeholder:text-dust focus:border-phosphor focus:shadow-focus-field [&::-webkit-search-cancel-button]:hidden"
                 />
                 {search !== '' && (
                   <button

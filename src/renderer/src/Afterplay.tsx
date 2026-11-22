@@ -50,7 +50,7 @@ const toastClassNames = {
   icon: 'flex-none',
   content: 'flex min-w-0 flex-1 flex-col justify-center gap-0.5',
   title: 'text-[13px] font-bold leading-snug text-foreground',
-  description: 'text-[11.5px] font-semibold text-muted-foreground',
+  description: 'text-micro font-semibold text-muted-foreground',
 };
 
 // Los avisos salen abajo a la derecha, justo donde se acopla la barra "Now

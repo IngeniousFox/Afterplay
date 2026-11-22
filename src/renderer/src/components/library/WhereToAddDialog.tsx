@@ -128,7 +128,7 @@ export const WhereToAddDialog = ({
             type="button"
             onClick={startClose}
             aria-label="Cancel"
-            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground/70 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground"
+            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground"
           >
             <X size={15} />
           </button>

@@ -201,7 +201,7 @@ export const RestoreSaveDialog = ({
                 className={mode === 'in-place' ? dangerButtonClass : primaryButtonClass}
               >
                 {restore.isPending ? (
-                  <Loader2 size={15} className="animate-spin" />
+                  <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />
                 ) : (
                   <HardDriveDownload size={15} />
                 )}
@@ -218,7 +218,9 @@ export const RestoreSaveDialog = ({
                 disabled={!canRun || restore.isPending}
                 className={secondaryButtonClass}
               >
-                {restore.isPending && <Loader2 size={15} className="animate-spin" />}
+                {restore.isPending && (
+                  <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />
+                )}
                 Show me what will happen
               </button>
             ))}
@@ -449,10 +451,7 @@ const PlanGroupRow = ({
       {group.from && (
         <div className="mt-1 mb-0.5 flex min-w-0 items-center gap-1.25 px-2">
           <span className="flex-none text-micro font-semibold text-muted-foreground">From</span>
-          <span
-            className="truncate font-mono text-micro text-muted-foreground/80"
-            title={group.from}
-          >
+          <span className="truncate font-mono text-micro text-muted-foreground" title={group.from}>
             {group.from}
           </span>
         </div>
@@ -499,13 +498,13 @@ const PlanGroupRow = ({
               >
                 {file.name}
               </span>
-              <span className="flex-none text-micro text-muted-foreground/60 tabular-nums">
+              <span className="flex-none text-micro text-muted-foreground tabular-nums">
                 {formatBytes(file.bytes)}
               </span>
             </div>
           ))}
           {group.files.length > visible.length && (
-            <span className="text-micro text-muted-foreground/70">
+            <span className="text-micro text-muted-foreground">
               and {group.files.length - visible.length} more in this folder
             </span>
           )}
@@ -538,7 +537,7 @@ const RemovedFiles = ({ files }: { files: string[] }): React.JSX.Element => {
           </span>
         ))}
         {files.length > visible.length && (
-          <span className="text-micro text-muted-foreground/70">
+          <span className="text-micro text-muted-foreground">
             and {files.length - visible.length} more
           </span>
         )}

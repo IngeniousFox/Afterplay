@@ -64,20 +64,22 @@ export const Dropdown = <T extends string>({
   const optionRows = visibleOptions.map((option) => {
     const isSelected = option === value;
     return (
-      <div
+      <button
+        type="button"
         key={option}
+        aria-pressed={isSelected}
         onClick={() => {
           onChange(option);
           close();
         }}
-        className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.75 py-2.25 text-[13.5px] transition-colors duration-100 hover:bg-bone/[0.07] ${
+        className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-sm px-2.75 py-2.25 text-left text-[13.5px] transition-colors duration-100 hover:bg-bone/[0.07] outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor ${
           isSelected ? 'text-primary' : 'text-foreground'
         }`}
         style={isSelected ? { background: 'rgba(255,179,71,.08)' } : undefined}
       >
         {renderOption(option)}
         {isSelected && <Check size={14} className="flex-none text-primary" />}
-      </div>
+      </button>
     );
   });
 
@@ -127,6 +129,7 @@ export const Dropdown = <T extends string>({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Type to filter…"
+            aria-label="Filter options"
             className="mb-1.5 w-full rounded-lg border border-edge bg-inset px-2.75 py-2 text-[13px] text-foreground outline-hidden transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
           />
           <div className="flex max-h-52 flex-col gap-0.75 overflow-y-auto">

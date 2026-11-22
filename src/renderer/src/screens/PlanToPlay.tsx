@@ -402,7 +402,7 @@ export const PlanToPlay = (): React.JSX.Element => {
             className="flex animate-screen-in flex-col items-center justify-center gap-4 rounded-md border border-dashed border-line-strong px-6 py-20 text-center"
             style={enter(1)}
           >
-            <span className="font-display text-stat font-bold text-dust/60">0</span>
+            <span className="font-display text-stat font-bold text-dust/70">0</span>
             <div>
               <p className="text-lead font-semibold text-bone">Nothing planned yet</p>
               <p className="mt-1 text-small text-dust">

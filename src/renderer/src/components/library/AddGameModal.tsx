@@ -980,6 +980,7 @@ const AddGameModalBody = ({
                     render={({ field }) => (
                       <input
                         {...field}
+                        aria-label="Note"
                         placeholder={
                           isPlan
                             ? 'e.g. Recommended by Marta · looks like Hades…'

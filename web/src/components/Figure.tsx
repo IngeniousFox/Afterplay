@@ -26,7 +26,10 @@ export const Figure = ({
         ) : (
           <span
             key={index}
-            className={cn('ml-px text-[0.45em] font-semibold whitespace-pre', unitClassName)}
+            className={cn(
+              'ml-px text-[length:max(12px,0.45em)] font-semibold whitespace-pre',
+              unitClassName,
+            )}
           >
             {part}
           </span>

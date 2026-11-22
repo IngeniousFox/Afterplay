@@ -187,11 +187,11 @@ export const GameBadges = ({
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[16px] font-semibold text-bone">Trophy cabinet</span>
-          <small className="text-micro text-bone/[0.34]">
+          <small className="text-micro text-dust">
             Milestones from your relationship with this game
           </small>
         </div>
-        <div className="afterplay-game-badges-score flex items-baseline text-micro font-bold text-bone/[0.32]">
+        <div className="afterplay-game-badges-score flex items-baseline text-micro font-bold text-dust">
           <strong className="text-[24px] leading-none font-display font-bold text-phosphor tabular-nums">
             {earnedCount}
           </strong>

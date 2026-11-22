@@ -30,11 +30,15 @@ export const RefreshGameButton = ({
       disabled={refreshing}
       title="Refresh everything for this game"
       aria-label="Refresh everything for this game"
-      className={`flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-transparent bg-transparent text-muted-foreground/70 transition-[opacity,background-color,border-color] duration-150 hover:border-input hover:bg-bone/[0.06] hover:text-foreground focus-visible:opacity-100 ${
+      className={`flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-transparent bg-transparent text-muted-foreground transition-[opacity,background-color,border-color] duration-150 hover:border-input hover:bg-bone/[0.06] hover:text-foreground focus-visible:opacity-100 ${
         refreshing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
       }`}
     >
-      {refreshing ? <Loader2 size={12.5} className="animate-spin" /> : <RefreshCw size={12.5} />}
+      {refreshing ? (
+        <Loader2 size={12.5} className="animate-spin motion-reduce:animate-none" />
+      ) : (
+        <RefreshCw size={12.5} />
+      )}
     </button>
   );
 };

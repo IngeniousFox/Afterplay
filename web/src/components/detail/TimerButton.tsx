@@ -130,7 +130,7 @@ export const TimerButton = ({
             className={cn(primaryButtonClass, 'mt-4 w-full')}
           >
             {start.isPending ? (
-              <Loader2 size={16} className="animate-spin" />
+              <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
             ) : (
               !start.isError && <Play size={15} fill="currentColor" aria-hidden="true" />
             )}

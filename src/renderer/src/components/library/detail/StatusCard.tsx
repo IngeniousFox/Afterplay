@@ -207,7 +207,8 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="Add a note (e.g. Chapter 3)…"
-            className="mt-2.5 w-full rounded-sm border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-foreground outline-hidden placeholder:text-muted-foreground"
+            aria-label="Status note"
+            className="mt-2.5 w-full rounded-sm border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-foreground outline-hidden transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor focus:shadow-focus-field"
           />
 
           <button

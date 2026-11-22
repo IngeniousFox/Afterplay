@@ -38,7 +38,7 @@ export const AboutCard = ({ game }: AboutCardProps): React.JSX.Element | null =>
       <div className="flex items-center gap-1.75">
         <BookOpen size={13} className="flex-none text-muted-foreground" />
         <span className="text-[13.5px] font-bold text-foreground">About</span>
-        <span className="ml-auto flex-none text-micro font-semibold text-muted-foreground/70">
+        <span className="ml-auto flex-none text-micro font-semibold text-muted-foreground">
           via IGDB
         </span>
       </div>
@@ -82,7 +82,7 @@ export const AboutCard = ({ game }: AboutCardProps): React.JSX.Element | null =>
         <button
           type="button"
           onClick={() => setExpanded((previous) => !previous)}
-          className="mt-2 flex items-center gap-1 text-micro font-semibold text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
+          className="mt-2 flex items-center gap-1 text-micro font-semibold text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
           {expanded ? 'Show less' : 'Read more'}
           <ChevronDown

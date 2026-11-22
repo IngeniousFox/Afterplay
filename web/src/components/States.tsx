@@ -22,7 +22,11 @@ export const Loading = ({
 }): React.JSX.Element => (
   <div aria-busy="true" className="animate-fade-in">
     <div className="flex flex-col items-center gap-2 pt-6 pb-4 text-dust" role="status">
-      <Loader2 size={22} className="animate-spin text-phosphor" aria-hidden="true" />
+      <Loader2
+        size={22}
+        className="animate-spin motion-reduce:animate-none text-phosphor"
+        aria-hidden="true"
+      />
       <span className="text-micro font-semibold">{label}</span>
     </div>
     <div aria-hidden="true">

@@ -22,7 +22,7 @@ const SKELETON_COUNT = 3;
 const slideShellClass = 'h-42.5 w-75 flex-none rounded-md border border-border';
 
 const pagerButtonClass =
-  'flex h-7 w-7 items-center justify-center rounded-sm border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-7 w-7 items-center justify-center rounded-sm border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground outline-hidden focus-visible:outline-2 focus-visible:outline-phosphor';
 
 const ScreenshotSlide = ({
   url,
@@ -36,10 +36,11 @@ const ScreenshotSlide = ({
     <button
       type="button"
       onClick={onClick}
+      aria-label="View screenshot"
       // group + hover:-translate-y — mismo lenguaje que las carátulas de
       // Completed (Stats): la fila entera "levanta" al pasar el ratón, no
       // solo cambia de color, para que se sienta clicable de verdad.
-      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
     >
       {/* useImageSrc resuelve por IPC (caché local o descarga) — mientras no
           hay src, un esqueleto propio con el tamaño exacto de la miniatura,
@@ -68,7 +69,7 @@ const ScreenshotSlide = ({
           </div>
         </>
       ) : (
-        <div className="h-full w-full animate-pulse bg-bone/[0.06]" />
+        <div className="h-full w-full animate-pulse motion-reduce:animate-none bg-bone/[0.06]" />
       )}
     </button>
   );
@@ -99,7 +100,7 @@ const TrailerSlide = ({
       type="button"
       onClick={onClick}
       title={slide.name ?? 'Trailer'}
-      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
     >
       {src ? (
         <img
@@ -111,7 +112,7 @@ const TrailerSlide = ({
           className="block h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/shot:scale-107"
         />
       ) : (
-        <div className="h-full w-full animate-pulse bg-bone/[0.06]" />
+        <div className="h-full w-full animate-pulse motion-reduce:animate-none bg-bone/[0.06]" />
       )}
       {/* Velo constante y no solo en hover, a diferencia de las capturas: por
           debajo hay una miniatura de YouTube, más clara y ruidosa que una
@@ -199,7 +200,10 @@ export const ScreenshotsCarousel = ({
         </div>
         <div className="flex gap-3.5">
           {Array.from({ length: SKELETON_COUNT }, (_, i) => (
-            <div key={i} className={`animate-pulse bg-bone/[0.06] ${slideShellClass}`} />
+            <div
+              key={i}
+              className={`animate-pulse motion-reduce:animate-none bg-bone/[0.06] ${slideShellClass}`}
+            />
           ))}
         </div>
       </div>

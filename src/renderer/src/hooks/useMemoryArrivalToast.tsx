@@ -65,7 +65,7 @@ export const useMemoryArrivalToast = (): void => {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[13.5px] font-extrabold text-foreground">{label}</span>
-              <span className="mt-0.5 block text-[11.5px] font-semibold text-muted-foreground">
+              <span className="mt-0.5 block text-micro font-semibold text-muted-foreground">
                 Read it in your Journey
               </span>
             </span>

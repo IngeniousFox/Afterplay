@@ -124,7 +124,11 @@ const AddDevice = (): React.JSX.Element => {
         aria-busy={create.isPending}
         className={cn(primaryButtonClass, 'mt-4 w-full')}
       >
-        {create.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={17} />}
+        {create.isPending ? (
+          <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <Plus size={17} />
+        )}
         {issued === null ? 'Generate a code' : 'Generate a new code'}
       </button>
     </section>
@@ -197,7 +201,7 @@ const DeviceRow = ({
             aria-busy={pending}
             className={cn(dangerButtonClass, 'flex-1')}
           >
-            {pending && <Loader2 size={15} className="animate-spin" />}
+            {pending && <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />}
             Revoke device
           </button>
         </div>
@@ -314,7 +318,11 @@ const Invite = (): React.JSX.Element => {
         aria-busy={invite.isPending}
         className={cn(primaryButtonClass, 'mt-3 w-full')}
       >
-        {invite.isPending ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={17} />}
+        {invite.isPending ? (
+          <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <UserPlus size={17} />
+        )}
         Invite
       </button>
     </form>

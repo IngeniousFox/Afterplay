@@ -292,7 +292,8 @@ const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
               }
             }}
             placeholder={state.hasSelection ? 'Link the selection to…' : 'Paste a URL…'}
-            className="min-w-0 flex-1 rounded-md border border-edge bg-inset px-2.5 py-1.5 text-[12.5px] text-foreground outline-hidden placeholder:text-muted-foreground"
+            aria-label="Link URL"
+            className="min-w-0 flex-1 rounded-md border border-edge bg-inset px-2.5 py-1.5 text-[12.5px] text-foreground outline-hidden transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor focus:shadow-focus-field"
           />
           <button
             type="button"

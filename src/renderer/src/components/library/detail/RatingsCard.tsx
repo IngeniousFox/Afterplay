@@ -149,14 +149,15 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
             }}
             title="Re-fetch ratings from IGDB and Steam"
             aria-label="Refresh ratings"
-            className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
-            <RefreshCw size={11} className={refresh.isPending ? 'animate-spin' : undefined} />
+            <RefreshCw
+              size={11}
+              className={refresh.isPending ? 'animate-spin motion-reduce:animate-none' : undefined}
+            />
           </button>
         </div>
-        <span className="flex-none text-micro font-semibold text-muted-foreground/70">
-          out of 100
-        </span>
+        <span className="flex-none text-micro font-semibold text-muted-foreground">out of 100</span>
       </div>
 
       <div className="mt-0.5 mb-3.5 text-xs text-muted-foreground">

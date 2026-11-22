@@ -80,7 +80,7 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
           }}
           placeholder="Where did you leave off?"
           aria-label="Session note"
-          className="h-8 min-w-0 flex-1 rounded-sm border border-edge bg-inset px-2.5 text-small text-bone outline-none placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
+          className="h-8 min-w-0 flex-1 rounded-sm border border-edge bg-inset px-2.5 text-small text-bone outline-hidden placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
         />
         <button
           type="button"

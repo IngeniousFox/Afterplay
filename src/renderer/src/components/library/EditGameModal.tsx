@@ -258,7 +258,11 @@ export const EditGameModal = ({
                   control={control}
                   name="title"
                   render={({ field }) => (
-                    <input {...field} className={`${textInputClass} ${textInputFocusClass}`} />
+                    <input
+                      {...field}
+                      aria-label="Title"
+                      className={`${textInputClass} ${textInputFocusClass}`}
+                    />
                   )}
                 />
               </div>

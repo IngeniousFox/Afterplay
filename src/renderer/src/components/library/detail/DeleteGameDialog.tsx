@@ -81,6 +81,7 @@ export const DeleteGameDialog = ({
             value={confirmText}
             onChange={(event) => setConfirmText(event.target.value)}
             placeholder={game.title}
+            aria-label="Type the game name to confirm"
             autoFocus
             className={`${textInputClass} ${textInputFocusClass}`}
           />

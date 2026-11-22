@@ -60,6 +60,7 @@ export const InstallDirectoryField = ({
             <input
               {...field}
               placeholder="C:\Games\…"
+              aria-label="Install folder"
               className={`${textInputClass} min-w-0 flex-1 font-mono text-[12.5px]`}
             />
           )}

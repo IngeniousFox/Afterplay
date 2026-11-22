@@ -116,7 +116,7 @@ export const SyncLed = ({
         >
           <PopoverPrimitive.Popup
             className={cn(
-              'w-97 origin-(--transform-origin) rounded-md border border-line bg-overlay text-bone shadow-float outline-none',
+              'w-97 origin-(--transform-origin) rounded-md border border-line bg-overlay text-bone shadow-float outline-hidden',
               'animate-pop-in',
             )}
           >

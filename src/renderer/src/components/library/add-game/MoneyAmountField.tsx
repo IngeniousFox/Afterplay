@@ -35,6 +35,7 @@ export const MoneyAmountField = ({
         €
       </span>
       <NumberInput
+        aria-label={label}
         {...props}
         min={0}
         step="0.01"

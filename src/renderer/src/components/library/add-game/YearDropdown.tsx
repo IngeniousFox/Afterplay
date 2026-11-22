@@ -48,20 +48,23 @@ export const YearDropdown = ({ year, onSelectYear }: YearDropdownProps): React.J
           {years.map((option) => {
             const isSelected = option === year;
             return (
-              <div
+              <button
+                type="button"
                 key={option}
                 data-selected={isSelected}
+                aria-pressed={isSelected}
                 onClick={() => {
                   onSelectYear(option);
                   setOpen(false);
                 }}
                 className={cn(
-                  'cursor-pointer rounded-lg px-2.5 py-1.75 text-center text-[13px] text-foreground hover:bg-bone/[0.06]',
+                  'block w-full cursor-pointer rounded-sm px-2.5 py-1.75 text-center text-[13px] text-foreground hover:bg-bone/[0.06]',
+                  'outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
                   isSelected && 'bg-bone/[0.06] font-semibold',
                 )}
               >
                 {option}
-              </div>
+              </button>
             );
           })}
         </div>

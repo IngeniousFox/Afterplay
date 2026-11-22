@@ -628,7 +628,7 @@ const AlmostThereRow = ({
         )}
       </div>
       <div className="relative z-1 min-w-0 flex-1 self-stretch py-0.5">
-        <div className="text-micro font-semibold text-phosphor/60">
+        <div className="text-micro font-semibold text-phosphor/85">
           Final stretch · #{String(index + 1).padStart(2, '0')} ·{' '}
           {ACHIEVEMENT_SOURCE_LABEL[game.source]}
         </div>

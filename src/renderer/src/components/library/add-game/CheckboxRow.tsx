@@ -52,9 +52,12 @@ export const CheckboxRow = ({
 }: CheckboxRowProps): React.JSX.Element => {
   const { borderColorChecked, fillColorChecked, checkIconColor } = ACCENT_COLORS[accent];
   return (
-    <div
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
       onClick={onToggle}
-      className="flex cursor-pointer items-start gap-2.75 rounded-sm bg-bone/[0.02] px-3.25 py-2.75 transition-[border-color,background-color] duration-150 hover:bg-bone/[0.035]"
+      className="flex w-full cursor-pointer items-start gap-2.75 rounded-sm bg-bone/[0.02] px-3.25 py-2.75 text-left transition-[border-color,background-color] duration-150 hover:bg-bone/[0.035] outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor"
       style={{
         border: `1px solid ${rowBorderFollowsChecked && checked ? borderColorChecked : 'var(--border)'}`,
       }}
@@ -82,6 +85,6 @@ export const CheckboxRow = ({
         </div>
         <div className="mt-0.25 text-xs text-muted-foreground">{description}</div>
       </div>
-    </div>
+    </button>
   );
 };

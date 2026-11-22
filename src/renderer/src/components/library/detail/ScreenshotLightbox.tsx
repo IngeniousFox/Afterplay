@@ -91,7 +91,9 @@ const Thumb = ({
       ref={ref}
       type="button"
       onClick={onClick}
-      className="relative h-12.5 w-21 flex-none cursor-pointer overflow-hidden rounded-lg border-2 transition-[opacity,box-shadow] duration-150 hover:opacity-100"
+      aria-label={slide.kind === 'trailer' ? 'Show trailer' : 'Show screenshot'}
+      aria-current={active ? 'true' : undefined}
+      className="relative h-12.5 w-21 flex-none cursor-pointer overflow-hidden rounded-sm border-2 transition-[opacity,box-shadow] duration-150 hover:opacity-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
       style={{
         borderColor: active ? GREEN : 'transparent',
         opacity: active ? 1 : 0.5,
@@ -137,6 +139,9 @@ export const ScreenshotLightbox = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Screenshots"
       onClick={startClose}
       className={`fixed inset-0 z-220 flex flex-col items-center justify-center px-17.5 py-10 backdrop-blur-md duration-200 ${
         closing ? `${CLOSING_ANIM} fade-out-0` : 'animate-in fade-in-0'
@@ -146,13 +151,14 @@ export const ScreenshotLightbox = ({
       <button
         type="button"
         onClick={startClose}
+        aria-label="Close"
         // El fondo va en clase, no en `style` inline: un style inline SIEMPRE
         // gana sobre cualquier clase (por mucho hover: que le pongas), así que
         // hover:bg-bone/10 sería letra muerta si el fondo base siguiera en
         // `style`.
-        className="absolute top-5.5 right-6.5 z-10 flex h-10 w-10 items-center justify-center rounded-sm border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10"
+        className="absolute top-5.5 right-6.5 z-10 flex h-10 w-10 items-center justify-center rounded-sm border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
       >
-        <X size={18} />
+        <X aria-hidden size={18} />
       </button>
       <button
         type="button"
@@ -161,7 +167,8 @@ export const ScreenshotLightbox = ({
           onIndexChange(Math.max(0, index - 1));
         }}
         disabled={index <= 0}
-        className="absolute top-1/2 left-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:bg-[rgba(36,44,49,.7)]"
+        aria-label="Previous"
+        className="absolute top-1/2 left-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:bg-[rgba(36,44,49,.7)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
       >
         <ChevronLeft size={24} />
       </button>
@@ -172,7 +179,8 @@ export const ScreenshotLightbox = ({
           onIndexChange(Math.min(slides.length - 1, index + 1));
         }}
         disabled={index >= slides.length - 1}
-        className="absolute top-1/2 right-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:bg-[rgba(36,44,49,.7)]"
+        aria-label="Next"
+        className="absolute top-1/2 right-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:bg-[rgba(36,44,49,.7)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
       >
         <ChevronRight size={24} />
       </button>

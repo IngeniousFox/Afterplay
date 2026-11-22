@@ -22,7 +22,7 @@ export const Figure = ({
         <span
           key={index}
           className={cn(
-            'ml-[0.1em] mr-[0.6em] text-[0.45em] font-semibold text-dust last:mr-0',
+            'ml-[0.1em] mr-[0.6em] text-[length:max(12px,0.45em)] font-semibold text-dust last:mr-0',
             unitClassName,
           )}
         >

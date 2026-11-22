@@ -555,7 +555,7 @@ const TvShell = (): React.JSX.Element => {
                 // suena por el ciclo de capa (pushLayer/popLayer) — sin esto
                 // el click apilaba confirmar + apertura.
                 data-tv-sound="none"
-                className="ml-auto flex items-center gap-[0.5em] rounded-sm outline-hidden transition-colors duration-150 hover:text-bone"
+                className="ml-auto flex items-center gap-[0.5em] rounded-sm outline-hidden transition-colors duration-150 hover:text-bone focus-visible:outline-[0.12em] focus-visible:outline-offset-[0.12em] focus-visible:outline-phosphor"
               >
                 <PadGlyph label={glyphs.start} />
                 Start menu

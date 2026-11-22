@@ -35,7 +35,8 @@ export const ExecutablePathField = (): React.JSX.Element => {
             <input
               {...field}
               placeholder="C:\Games\…\game.exe"
-              className="min-w-0 flex-1 rounded-sm border border-edge bg-inset px-3.25 py-2.5 font-mono text-[12.5px] text-foreground outline-hidden placeholder:text-muted-foreground/70"
+              aria-label="Executable path"
+              className="min-w-0 flex-1 rounded-sm border border-edge bg-inset px-3.25 py-2.5 font-mono text-[12.5px] text-foreground outline-hidden transition-[border-color,box-shadow] duration-150 placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
             />
           )}
         />

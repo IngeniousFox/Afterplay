@@ -32,7 +32,7 @@ export const ExecutablePicker = ({
     return (
       <div className="flex items-center gap-2 px-3 py-2.25">
         <MonitorPlay size={13} className="flex-none text-muted-foreground/50" />
-        <span className="text-[12px] text-muted-foreground/60">
+        <span className="text-[12px] text-muted-foreground">
           No executable found — set it later if you want the watcher.
         </span>
       </div>
@@ -69,7 +69,7 @@ export const ExecutablePicker = ({
       {open && (
         <div className={`border-t border-border bg-inset/20 px-2 py-2 ${expandClass}`}>
           <div className="mb-1.5 px-2 text-micro font-semibold text-muted-foreground">
-            WHICH ONE LAUNCHES THE GAME?
+            Which one launches the game?
           </div>
           <div className="flex flex-col gap-1">
             {candidates.map((candidate, position) => {
@@ -99,7 +99,7 @@ export const ExecutablePicker = ({
                     style={{ color: active ? GREEN : 'transparent' }}
                   />
                   <span className="min-w-0 flex-1 truncate font-mono text-[12px]">
-                    <span className="text-muted-foreground/45">{folder}</span>
+                    <span className="text-muted-foreground">{folder}</span>
                     <span className={active ? 'text-foreground' : 'text-muted-foreground'}>
                       {fileName(relative)}
                     </span>

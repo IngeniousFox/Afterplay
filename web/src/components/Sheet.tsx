@@ -55,7 +55,7 @@ export const Sheet = ({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative mx-auto max-h-[90dvh] w-full max-w-lg animate-np-in overflow-y-auto rounded-t-md border-t border-line-strong bg-overlay px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-modal outline-none"
+        className="relative mx-auto max-h-[90dvh] w-full max-w-lg animate-np-in overflow-y-auto rounded-t-md border-t border-line-strong bg-overlay px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-modal outline-hidden"
       >
         <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-bone/20" />
         <h2

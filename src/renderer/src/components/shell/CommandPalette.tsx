@@ -61,7 +61,7 @@ export const CommandPalette = ({
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-scrim" />
         <DialogPrimitive.Popup
           initialFocus={inputRef}
-          className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[min(640px,calc(100vw-48px))] -translate-x-1/2 flex-col overflow-hidden rounded-md border border-line bg-overlay text-bone shadow-modal outline-none"
+          className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[min(640px,calc(100vw-48px))] -translate-x-1/2 flex-col overflow-hidden rounded-md border border-line bg-overlay text-bone shadow-modal outline-hidden"
         >
           <DialogPrimitive.Title className="sr-only">Jump to a game</DialogPrimitive.Title>
           <PaletteBody
@@ -172,8 +172,9 @@ const PaletteBody = ({
           aria-controls="palette-results"
           aria-activedescendant={shown.length > 0 ? optionId(activeIndex) : undefined}
           aria-autocomplete="list"
+          aria-label="Search"
           placeholder={scope ? `Filter ${SCOPE_LABEL[scope]} by game…` : 'Jump to a game…'}
-          className="h-14 min-w-0 flex-1 bg-transparent text-lead text-bone outline-none placeholder:text-dust"
+          className="h-14 min-w-0 flex-1 bg-transparent text-lead text-bone outline-hidden placeholder:text-dust"
         />
         <kbd className={kbdClass}>Esc</kbd>
       </div>
