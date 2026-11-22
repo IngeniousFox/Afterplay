@@ -351,7 +351,7 @@ export const UpNextList = ({
         zIndex: 30,
         position: 'relative',
         transition: drag.settling ? `transform ${SETTLE_MS}ms ${EASE}` : 'none',
-        boxShadow: '0 18px 44px rgba(0,0,0,.55)',
+        boxShadow: '0 18px 44px rgba(3,6,7,.55)',
         borderRadius: 15,
       };
     }

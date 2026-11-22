@@ -9,7 +9,7 @@ type StatsPagerProps = {
 };
 
 const pagerButtonClass =
-  'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-input bg-white/[0.03] text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
 
 // Flechas + contador de página — compartido por CompletedGallery y
 // HltbCompareList (mismo pagerButtonClass, mismo layout). Se pinta a sí

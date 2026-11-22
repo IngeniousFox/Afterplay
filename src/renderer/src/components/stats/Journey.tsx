@@ -59,10 +59,10 @@ const JourneyStatTile = ({
 // las carátulas ya cuentan lo factual.
 const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Element => (
   <div
-    className="relative mb-3.5 overflow-hidden rounded-[12px] border border-white/[0.08] px-4 py-3.5"
+    className="relative mb-3.5 overflow-hidden rounded-[12px] border border-line px-4 py-3.5"
     style={{
       background:
-        'linear-gradient(125deg, rgba(124,134,200,.13), rgba(124,134,200,.05) 45%, rgba(124,134,200,.02))',
+        'linear-gradient(125deg, rgba(185,166,255,.13), rgba(185,166,255,.05) 45%, rgba(185,166,255,.02))',
     }}
   >
     <span
@@ -121,10 +121,10 @@ const YearStory = ({
   year: number;
 }): React.JSX.Element => (
   <div
-    className="relative mb-5 overflow-hidden rounded-[14px] border border-white/[0.09] px-5 py-4"
+    className="relative mb-5 overflow-hidden rounded-[14px] border border-line px-5 py-4"
     style={{
       background:
-        'linear-gradient(120deg, rgba(124,134,200,.15), rgba(124,134,200,.06) 45%, rgba(124,134,200,.02))',
+        'linear-gradient(120deg, rgba(185,166,255,.15), rgba(185,166,255,.06) 45%, rgba(185,166,255,.02))',
     }}
   >
     <span
@@ -134,7 +134,7 @@ const YearStory = ({
     />
     <span
       aria-hidden
-      className="pointer-events-none absolute -top-4 right-3 text-[92px] leading-none font-extrabold tracking-[-.045em] text-white/[0.035] tabular-nums select-none"
+      className="pointer-events-none absolute -top-4 right-3 text-[92px] leading-none font-display font-bold text-bone/[0.035] tabular-nums select-none"
     >
       {year}
     </span>
@@ -256,9 +256,9 @@ const SessionTrail = ({ entry }: { entry: JourneyEntrySummary }): React.JSX.Elem
   if (entry.sessionCount === 0) {
     return (
       <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className="h-px flex-1 bg-white/[0.08]" />
+        <span className="h-px flex-1 bg-bone/[0.08]" />
         Manually logged playthrough
-        <span className="h-px flex-1 bg-white/[0.08]" />
+        <span className="h-px flex-1 bg-bone/[0.08]" />
       </div>
     );
   }
@@ -276,7 +276,7 @@ const SessionTrail = ({ entry }: { entry: JourneyEntrySummary }): React.JSX.Elem
   return (
     <div className="mt-3">
       <div className="relative h-3">
-        <div className="absolute top-1.25 right-0 left-0 h-px bg-white/[0.1]" />
+        <div className="absolute top-1.25 right-0 left-0 h-px bg-bone/[0.1]" />
         {trail.map((session, index) => {
           const temporalPosition = ((session.startedAt.getTime() - first) / span) * 100;
           const evenPosition = trail.length === 1 ? 50 : (index / (trail.length - 1)) * 100;
@@ -287,7 +287,7 @@ const SessionTrail = ({ entry }: { entry: JourneyEntrySummary }): React.JSX.Elem
               title={`${shortDate(session.startedAt, session.datePrecision)} · ${formatHours(
                 (session.durationSec ?? 0) / 3600,
               )}`}
-              className="absolute top-0.25 h-2.25 w-2.25 -translate-x-1/2 rounded-full border-2 border-[#171918]"
+              className="absolute top-0.25 h-2.25 w-2.25 -translate-x-1/2 rounded-full border-2 border-overlay"
               style={{ left: `${left}%`, background: GREEN }}
             />
           );
@@ -343,7 +343,7 @@ const HoverPanel = ({
       }}
     >
       <div
-        className={`overflow-hidden rounded-[12px] border border-white/14 bg-[#171918] shadow-[0_22px_65px_rgba(0,0,0,.68)] animate-in fade-in-0 zoom-in-95 duration-250 ${
+        className={`overflow-hidden rounded-[12px] border border-line-strong bg-overlay shadow-[0_22px_65px_rgba(3,6,7,.68)] animate-in fade-in-0 zoom-in-95 duration-250 ${
           showAbove ? 'origin-bottom' : 'origin-top'
         }`}
       >
@@ -351,7 +351,7 @@ const HoverPanel = ({
           {heroSrc ? (
             <img src={heroSrc} alt="" className="h-full w-full object-cover" />
           ) : (
-            <div className="h-full w-full bg-white/[0.025]" />
+            <div className="h-full w-full bg-bone/[0.025]" />
           )}
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,12,11,.18),rgba(23,25,24,.98))]" />
           <div className="absolute right-4 bottom-3 left-4">
@@ -398,7 +398,7 @@ const HoverPanel = ({
           <SessionTrail entry={entry} />
 
           {entry.note && (
-            <div className="mt-2.5 line-clamp-2 border-t border-white/[0.07] pt-2 text-[11px] leading-relaxed italic text-muted-foreground">
+            <div className="mt-2.5 line-clamp-2 border-t border-line pt-2 text-[11px] leading-relaxed italic text-muted-foreground">
               “{entry.note}”
             </div>
           )}
@@ -445,7 +445,7 @@ const JourneyCover = ({
         style={{ background: accent }}
       />
       <div
-        className="absolute inset-0 overflow-hidden rounded-[9px] border bg-card shadow-[0_5px_16px_rgba(0,0,0,.26)] transition-[border-color,box-shadow] duration-250 group-hover/cover:shadow-[0_12px_28px_rgba(0,0,0,.48)]"
+        className="absolute inset-0 overflow-hidden rounded-[9px] border bg-card shadow-[0_5px_16px_rgba(3,6,7,.26)] transition-[border-color,box-shadow] duration-250 group-hover/cover:shadow-[0_12px_28px_rgba(3,6,7,.48)]"
         style={{ borderColor: 'var(--border)' }}
       >
         {coverSrc ? (
@@ -466,8 +466,8 @@ const JourneyCover = ({
         {/* Las horas al pie, siempre visibles sobre su velo — mismo patrón
             que el rótulo de MatchCardGrid: la carátula sigue siendo carátula
             de esquina a esquina y aun así cuenta algo. */}
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-2 pt-6 pb-2 text-right">
-          <span className="text-[11.5px] font-extrabold text-white/90 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-inset/80 via-inset/35 to-transparent px-2 pt-6 pb-2 text-right">
+          <span className="text-[11.5px] font-extrabold text-bone tabular-nums drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
             {formatHours(entry.hours)}
           </span>
         </span>
@@ -475,13 +475,13 @@ const JourneyCover = ({
             transform, nada que repintar. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 -translate-x-[140%] bg-[linear-gradient(105deg,transparent_42%,rgba(255,255,255,.16)_50%,transparent_58%)] transition-transform duration-700 ease-out group-hover/cover:translate-x-[140%]"
+          className="pointer-events-none absolute inset-0 -translate-x-[140%] bg-[linear-gradient(105deg,transparent_42%,rgba(233,228,216,.16)_50%,transparent_58%)] transition-transform duration-700 ease-out group-hover/cover:translate-x-[140%]"
         />
         <div className="absolute right-0 bottom-0 left-0 h-0.75" style={{ background: accent }} />
       </div>
 
       {badge && (
-        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[11px] font-extrabold text-foreground shadow-md">
+        <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-line-strong bg-overlay px-1 text-[11px] font-extrabold text-foreground shadow-md">
           {badge}
         </span>
       )}
@@ -508,7 +508,7 @@ const JourneyCover = ({
 // ve borrosa todo el trayecto y solo se enfoca al terminar. La elevación la
 // dan el desplazamiento y la sombra, que no tocan la rasterización.
 const FEATURED_CARD_CLASS =
-  'group/feat relative w-full cursor-pointer overflow-hidden rounded-[13px] border border-border text-left shadow-[0_8px_24px_rgba(0,0,0,.3)] transition-[translate,border-color,box-shadow] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-[0_14px_34px_rgba(0,0,0,.46)] focus-visible:border-white/25 focus-visible:outline-none';
+  'group/feat relative w-full cursor-pointer overflow-hidden rounded-[13px] border border-border text-left shadow-[0_8px_24px_rgba(3,6,7,.3)] transition-[translate,border-color,box-shadow] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-1.5 hover:border-line-strong hover:shadow-[0_14px_34px_rgba(3,6,7,.46)] focus-visible:border-line-hover focus-visible:outline-none';
 
 const FeaturedEntry = ({
   entry,
@@ -551,7 +551,7 @@ const FeaturedEntry = ({
 
       <div className="relative flex items-center gap-3.5 px-4 py-3.5">
         <div className="relative h-25 w-18 flex-none">
-          <div className="h-full w-full overflow-hidden rounded-[8px] border border-white/12 shadow-[0_6px_18px_rgba(0,0,0,.5)]">
+          <div className="h-full w-full overflow-hidden rounded-[8px] border border-line-strong shadow-[0_6px_18px_rgba(3,6,7,.5)]">
             {coverSrc ? (
               <img src={coverSrc} loading="lazy" alt="" className="h-full w-full object-cover" />
             ) : (
@@ -561,7 +561,7 @@ const FeaturedEntry = ({
             )}
           </div>
           {badge && (
-            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/15 bg-[#171918] px-1 text-[11px] font-extrabold text-foreground shadow-md">
+            <span className="absolute -top-1.25 -right-1.25 flex h-4 min-w-4 items-center justify-center rounded-full border border-line-strong bg-overlay px-1 text-[11px] font-extrabold text-foreground shadow-md">
               {badge}
             </span>
           )}
@@ -574,22 +574,20 @@ const FeaturedEntry = ({
           >
             MOST PLAYED
           </div>
-          <div className="mt-0.75 truncate text-[17px] font-extrabold text-white">
-            {entry.title}
-          </div>
-          <div className="mt-0.5 truncate text-[11px] font-semibold text-white/55">
+          <div className="mt-0.75 truncate text-[17px] font-extrabold text-bone">{entry.title}</div>
+          <div className="mt-0.5 truncate text-[11px] font-semibold text-dust">
             {entry.iterationLabel}
-            <span className="mx-1.5 text-white/45">·</span>
+            <span className="mx-1.5 text-dust">·</span>
             {dateRange(entry)}
           </div>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1">
-            <span className="flex items-center gap-1.5 text-[12px] font-bold text-white/90 tabular-nums">
+            <span className="flex items-center gap-1.5 text-[12px] font-bold text-bone tabular-nums">
               <Clock3 size={12.5} style={{ color: GREEN }} />
               {formatHours(entry.hours)}
             </span>
             {entry.sessionCount > 0 && (
-              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-white/70 tabular-nums">
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-dust tabular-nums">
                 <CalendarRange size={12.5} style={{ color: BLUE }} />
                 {entry.sessionCount} {entry.sessionCount === 1 ? 'session' : 'sessions'}
               </span>
@@ -606,7 +604,7 @@ const FeaturedEntry = ({
           </div>
 
           {entry.note && (
-            <div className="mt-2 line-clamp-1 max-w-130 text-[11px] leading-relaxed italic text-white/50">
+            <div className="mt-2 line-clamp-1 max-w-130 text-[11px] leading-relaxed italic text-dust">
               “{entry.note}”
             </div>
           )}
@@ -861,7 +859,7 @@ const JourneyLoaded = ({
   if (visibleEntries.length === 0) {
     return (
       <div className="flex min-h-80 flex-col items-center justify-center text-center">
-        <div className="flex h-13 w-13 items-center justify-center rounded-full bg-white/[0.04]">
+        <div className="flex h-13 w-13 items-center justify-center rounded-full bg-bone/[0.04]">
           <Route size={23} strokeWidth={1.5} className="text-muted-foreground/75" />
         </div>
         <div className="mt-3 text-sm font-semibold text-foreground">Your journey starts here</div>
@@ -925,7 +923,7 @@ const JourneyLoaded = ({
                     totales al lado y una regla que se desvanece — la línea
                     temporal respira entre año y año. */}
                 <div className="mb-4 flex items-baseline gap-3.5">
-                  <span className="text-[30px] leading-none font-extrabold tracking-[-.02em] text-foreground tabular-nums">
+                  <span className="text-[30px] leading-none font-display font-bold text-foreground tabular-nums">
                     {year}
                   </span>
                   <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
@@ -957,7 +955,7 @@ const JourneyLoaded = ({
                   // — bajando la página, la vértebra cuenta el viaje en color.
                   const nodeColor = featured.state
                     ? getGameStatusMeta(featured.state).color
-                    : 'rgba(255,255,255,.22)';
+                    : 'rgba(233,228,216,.22)';
                   return (
                     <div
                       key={month}
@@ -1002,7 +1000,7 @@ const JourneyLoaded = ({
                           </div>
                         </div>
                         <span
-                          className="absolute top-2 -right-1.25 h-2.5 w-2.5 rounded-full border-2 border-[#0d0f0e] transition-[box-shadow,scale] duration-200 group-hover/month:scale-125"
+                          className="absolute top-2 -right-1.25 h-2.5 w-2.5 rounded-full border-2 border-inset transition-[box-shadow,scale] duration-200 group-hover/month:scale-125"
                           style={{ background: nodeColor, boxShadow: `0 0 9px ${nodeColor}59` }}
                         />
                       </div>
@@ -1013,7 +1011,7 @@ const JourneyLoaded = ({
                       parejo y se nota mejor cuánto tuvo cada mes. */}
                       <div className="min-h-45 pb-8">
                         <div className="mb-2.5 flex items-center gap-2">
-                          <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-white/[0.11]" />
+                          <span className="h-px flex-1 bg-border/55 transition-colors duration-200 group-hover/month:bg-bone/[0.11]" />
                           {monthEntries.length > 1 && (
                             <span className="text-[11px] font-bold text-muted-foreground/75 tabular-nums">
                               {monthEntries.length} playthroughs
@@ -1057,7 +1055,7 @@ const JourneyLoaded = ({
               Está DESPUÉS del último año, así que solo lo ve quien llega. */}
           <div className="mb-4 flex flex-col items-center gap-2 pt-2">
             <span className="h-10 w-px bg-gradient-to-b from-border/80 to-transparent" />
-            <span className="h-2 w-2 rounded-full bg-white/25" />
+            <span className="h-2 w-2 rounded-full bg-bone/25" />
             <span className="text-[11px] font-extrabold tracking-[.16em] text-muted-foreground/75">
               WHERE IT ALL BEGAN
             </span>
@@ -1086,7 +1084,7 @@ const JourneyLoaded = ({
                     style={{ color: active ? BLUE : 'var(--muted-foreground)' }}
                   >
                     <span
-                      className="absolute top-1/2 -left-[1.19rem] h-2.25 w-2.25 -translate-y-1/2 rounded-full border-2 border-[#0d0f0e] transition-[background,box-shadow,scale] duration-150 group-hover/year:scale-125"
+                      className="absolute top-1/2 -left-[1.19rem] h-2.25 w-2.25 -translate-y-1/2 rounded-full border-2 border-inset transition-[background,box-shadow,scale] duration-150 group-hover/year:scale-125"
                       style={{
                         background: active ? BLUE : 'var(--muted-foreground)',
                         boxShadow: active ? `0 0 10px ${BLUE}80` : 'none',
@@ -1096,7 +1094,7 @@ const JourneyLoaded = ({
                   </button>
 
                   {active && (
-                    <div className="mb-2 flex flex-col border-l border-white/[0.07] pl-2">
+                    <div className="mb-2 flex flex-col border-l border-line pl-2">
                       {months.map(([month, monthEntries]) => {
                         const key = `${year}-${month}`;
                         const monthActive = highlightedMonth === key;

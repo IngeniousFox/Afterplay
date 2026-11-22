@@ -20,7 +20,7 @@ const ProgressRing = ({
   percent: number;
   complete: boolean;
 }): React.JSX.Element => {
-  const color = complete ? '#e3b24a' : '#2fdc7e';
+  const color = complete ? '#ffb347' : '#ffb347';
   return (
     <div className="relative flex-none" style={{ width: RING_SIZE, height: RING_SIZE }}>
       <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90">
@@ -29,7 +29,7 @@ const ProgressRing = ({
           cy={RING_SIZE / 2}
           r={RING_RADIUS}
           fill="none"
-          stroke="rgba(255,255,255,.08)"
+          stroke="rgba(233,228,216,.08)"
           strokeWidth={RING_STROKE}
         />
         {percent > 0 && (
@@ -68,10 +68,10 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
       style={
         rare
           ? { borderColor: `${accent}3d`, background: `${accent}0f` }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
       }
     >
-      <div className="relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-white/5">
+      <div className="relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-bone/5">
         {/* El icono GRIS para los pendientes: es el propio Steam quien
             distingue las dos versiones del arte, y usar el de color apagado
             con CSS no es lo mismo — muchos logros tienen un gris dibujado
@@ -91,8 +91,8 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
           </div>
         )}
         {!unlocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-            <Lock size={11} className="text-white/60" />
+          <div className="absolute inset-0 flex items-center justify-center bg-inset/45">
+            <Lock size={11} className="text-dust" />
           </div>
         )}
       </div>
@@ -105,14 +105,14 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
           {entry.displayName}
         </div>
         {entry.description ? (
-          <div className="truncate text-[10.5px] text-muted-foreground">{entry.description}</div>
+          <div className="truncate text-micro text-muted-foreground">{entry.description}</div>
         ) : (
           entry.hidden && (
-            <div className="text-[10.5px] text-muted-foreground/60 italic">Hidden achievement</div>
+            <div className="text-micro text-muted-foreground/60 italic">Hidden achievement</div>
           )
         )}
         {unlocked && entry.unlockedAt !== null && (
-          <div className="mt-0.5 text-[10px] font-semibold text-muted-foreground/80 tabular-nums">
+          <div className="mt-0.5 text-micro font-semibold text-muted-foreground/80 tabular-nums">
             {/* Una fecha no fiable se dice, no se esconde: es la del rescate
                 (el emulador que selló de golpe logros viejos), no la de la
                 hazaña. Sigue siendo cierto que lo tienes. */}
@@ -123,7 +123,7 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
 
       {entry.globalPercent !== null && (
         <span
-          className="flex flex-none items-center gap-1 text-[10.5px] font-bold tabular-nums"
+          className="flex flex-none items-center gap-1 text-micro font-bold tabular-nums"
           style={{ color: rare ? accent : 'var(--muted-foreground)' }}
           title={`${entry.globalPercent.toFixed(1)}% of players have this`}
         >
@@ -159,7 +159,7 @@ const SourceCompletionRow = ({
             : undefined
         }
       >
-        <span className="text-[10px] font-bold tracking-[.12em] text-muted-foreground uppercase">
+        <span className="text-micro font-bold tracking-[.12em] text-muted-foreground uppercase">
           {SOURCE_LABEL[source.source]}
         </span>
         {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
@@ -169,7 +169,7 @@ const SourceCompletionRow = ({
         ) : (
           <span
             className={source.complete ? 'font-extrabold' : 'font-extrabold text-foreground'}
-            style={source.complete ? { color: '#e3b24a' } : undefined}
+            style={source.complete ? { color: '#ffb347' } : undefined}
           >
             {source.complete ? '100%' : `${source.unlocked} of ${source.total}`}
           </span>
@@ -205,7 +205,7 @@ export const AchievementsSection = ({
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">ACHIEVEMENTS</SectionLabel>
+      <SectionLabel className="mb-2.5">Achievements</SectionLabel>
 
       <div className="mb-2.5 flex items-center gap-4 rounded-[14px] border border-border bg-card px-4 py-3.5">
         <ProgressRing percent={percent} complete={percent === 100} />
@@ -219,7 +219,7 @@ export const AchievementsSection = ({
           </div>
           {rareCount > 0 && (
             <div
-              className="mt-1.5 flex items-center gap-1 text-[10.5px] font-bold"
+              className="mt-1.5 flex items-center gap-1 text-micro font-bold"
               style={{ color: '#e0a3ff' }}
             >
               <Sparkles size={10} />

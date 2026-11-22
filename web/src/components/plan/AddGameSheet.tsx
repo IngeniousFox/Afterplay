@@ -62,7 +62,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0b0a]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-cabinet">
       <div className="flex flex-none items-center gap-2 border-b border-border px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
         <div className="relative flex-1">
           <Search
@@ -85,7 +85,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-white/14"
+          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-line-strong"
         >
           <X size={17} />
         </button>
@@ -138,13 +138,13 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
                     </div>
                     <div className="mt-0.5 flex items-center gap-2">
                       {game.releaseYear !== null && (
-                        <span className="text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+                        <span className="text-micro font-semibold text-muted-foreground tabular-nums">
                           {game.releaseYear}
                         </span>
                       )}
                       {game.owned && (
                         <span
-                          className="text-[10px] font-bold tracking-wide"
+                          className="text-micro font-bold tracking-wide"
                           style={{
                             color: game.owned === 'library' ? 'var(--muted-foreground)' : BLUE,
                           }}
@@ -168,7 +168,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
                       style={
                         done
                           ? { borderColor: `${BLUE}4d`, background: `${BLUE}1f`, color: BLUE }
-                          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.04)' }
+                          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.04)' }
                       }
                     >
                       {busy ? (

@@ -92,8 +92,8 @@ export const CalendarDropdown = ({
                 className={`rounded-lg px-2.5 py-1.75 text-[13px] text-foreground ${
                   option.disabled
                     ? 'pointer-events-none opacity-40'
-                    : 'cursor-pointer hover:bg-white/[0.06]'
-                } ${isSelected ? 'bg-white/[0.06] font-semibold' : ''}`}
+                    : 'cursor-pointer hover:bg-bone/[0.06]'
+                } ${isSelected ? 'bg-bone/[0.06] font-semibold' : ''}`}
               >
                 {option.label}
               </div>

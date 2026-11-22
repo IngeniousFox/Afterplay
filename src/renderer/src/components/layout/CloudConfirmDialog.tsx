@@ -40,16 +40,14 @@ export const CloudConfirmDialog = ({
       if (!next && !busy) onCancel();
     }}
   >
-    <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-[#121413] p-0">
+    <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-overlay p-0">
       <div className="flex items-center gap-3 border-b border-border px-5.5 py-5">
         <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
           <TriangleAlert size={16} className="text-destructive" />
         </div>
-        <AlertDialogTitle className="text-base font-extrabold text-foreground">
-          {title}
-        </AlertDialogTitle>
+        <AlertDialogTitle>{title}</AlertDialogTitle>
       </div>
-      <div className="px-5.5 py-5 text-[13.5px] leading-relaxed text-[#c4cac6]">
+      <div className="px-5.5 py-5 text-[13.5px] leading-relaxed text-bone">
         {message}
         {error && <div className="mt-3 text-[12px] text-destructive">{error}</div>}
       </div>
@@ -58,7 +56,7 @@ export const CloudConfirmDialog = ({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-white/6 disabled:opacity-50"
+          className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover disabled:opacity-50"
         >
           Cancel
         </button>
@@ -66,8 +64,8 @@ export const CloudConfirmDialog = ({
           type="button"
           onClick={onConfirm}
           disabled={busy}
-          className="rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: destructive ? '#dc2626' : BLUE }}
+          className="rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-bone disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: destructive ? '#ff5e57' : BLUE }}
         >
           {busy ? 'Working…' : confirmLabel}
         </button>

@@ -8,16 +8,16 @@ export const LiveBadge = (): React.JSX.Element => (
   <span
     className="inline-flex items-center gap-1.25 rounded-[7px] border px-2 py-0.75"
     style={{
-      background: 'rgba(8,20,13,.78)',
-      borderColor: 'rgba(47,220,126,.55)',
+      background: 'rgba(8,11,12,.78)',
+      borderColor: 'rgba(255,179,71,.55)',
       animation: 'afterplay-pulse-badge 2.4s infinite',
     }}
   >
     <span
-      className="h-1.5 w-1.5 rounded-full bg-primary"
+      className="h-1.5 w-1.5 rounded-full bg-live"
       style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
     />
-    <span className="text-[9.5px] font-extrabold tracking-widest text-primary">LIVE</span>
+    <span className="text-micro font-extrabold tracking-widest text-primary">LIVE</span>
   </span>
 );
 

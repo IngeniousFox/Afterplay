@@ -53,8 +53,8 @@ const SyncHero = ({ local }: { local: SavesLocalState }): React.JSX.Element => {
   const registryKeys = local.registryKeys.length;
   return (
     <div
-      className="relative flex items-center gap-[0.8em] overflow-hidden rounded-[0.6em] border border-white/[0.08] bg-black/70 px-[1em] py-[0.8em]"
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+      className="relative flex items-center gap-[0.8em] overflow-hidden rounded-[0.6em] border border-line bg-inset/70 px-[1em] py-[0.8em]"
+      style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
     >
       {/* El aliento del color del estado, desde la esquina del chip: el
           banner ES su color antes de ser su texto. */}
@@ -160,8 +160,8 @@ const VersionRowTv = ({
         ...tvRevealStyle(index),
         ...(focused
           ? {
-              background: 'rgba(133,163,214,.09)',
-              boxShadow: 'inset 0 0 0 1px rgba(133,163,214,.32)',
+              background: 'rgba(95,211,224,.09)',
+              boxShadow: 'inset 0 0 0 1px rgba(95,211,224,.32)',
             }
           : undefined),
       }}
@@ -211,7 +211,7 @@ const VersionsBlock = ({
       VERSIONS
     </div>
     {versions.length === 0 ? (
-      <div className="mt-[0.4em] rounded-[0.45em] border border-dashed border-white/[0.14] px-[0.8em] py-[0.6em] text-[0.65em] text-muted-foreground">
+      <div className="mt-[0.4em] rounded-[0.45em] border border-dashed border-line-strong px-[0.8em] py-[0.6em] text-[0.65em] text-muted-foreground">
         Nothing in the cloud yet.
       </div>
     ) : (
@@ -233,7 +233,7 @@ const VersionsBlock = ({
         {/* La lista se funde contra el borde: pista de que hay más abajo. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[0.9em] bg-gradient-to-t from-black/50 to-transparent"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[0.9em] bg-gradient-to-t from-inset/50 to-transparent"
         />
       </div>
     )}
@@ -279,7 +279,7 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
         >
           <CloudUpload
             className="h-[0.85em] w-[0.85em]"
-            style={{ color: BLUE, filter: 'drop-shadow(0 0 0.45em rgba(133,163,214,.55))' }}
+            style={{ color: BLUE, filter: 'drop-shadow(0 0 0.45em rgba(95,211,224,.55))' }}
           />
         </span>
         <span className="text-[0.62em] font-extrabold tracking-[.18em] text-muted-foreground">
@@ -291,7 +291,7 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
             style={{
               background: `${BLUE}1f`,
               color: BLUE,
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.10)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.10)',
             }}
           >
             {cloudCount} in cloud
@@ -309,8 +309,8 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
               deshabilitada con el motivo, no se esconde — y las versiones que
               ya están en la nube se pintan igual (índice local, cero red). */}
           <div
-            className={`flex flex-none items-start gap-[0.6em] rounded-[0.6em] border border-white/[0.08] bg-black/70 px-[1em] py-[0.8em] ${tvRevealClass}`}
-            style={{ ...tvRevealStyle(1), boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+            className={`flex flex-none items-start gap-[0.6em] rounded-[0.6em] border border-line bg-inset/70 px-[1em] py-[0.8em] ${tvRevealClass}`}
+            style={{ ...tvRevealStyle(1), boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
           >
             <TriangleAlert
               className="mt-[0.15em] h-[1em] w-[1em] flex-none"
@@ -332,7 +332,7 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
         // Sin detección no hay nada que vigilar — y arreglarlo (detectar,
         // elegir carpeta) son gestos de escritorio, así que se dice claro.
         <div
-          className={`flex-none rounded-[0.6em] border border-dashed border-white/[0.16] px-[1em] py-[0.9em] text-[0.7em] leading-relaxed text-muted-foreground ${tvRevealClass}`}
+          className={`flex-none rounded-[0.6em] border border-dashed border-line-strong px-[1em] py-[0.9em] text-[0.7em] leading-relaxed text-muted-foreground ${tvRevealClass}`}
           style={tvRevealStyle(1)}
         >
           Afterplay doesn’t know where this game keeps its saves yet. Set it up from your desk.
@@ -347,7 +347,7 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
             // Sin nada local no hay comparación posible: se dice tal cual
             // (mismo texto que el escritorio), sin fingir un estado.
             <div
-              className={`flex flex-none items-center gap-[0.6em] rounded-[0.6em] border border-dashed border-white/[0.14] px-[1em] py-[0.8em] text-[0.68em] text-muted-foreground ${tvRevealClass}`}
+              className={`flex flex-none items-center gap-[0.6em] rounded-[0.6em] border border-dashed border-line-strong px-[1em] py-[0.8em] text-[0.68em] text-muted-foreground ${tvRevealClass}`}
               style={tvRevealStyle(1)}
             >
               <CloudOff className="h-[1.1em] w-[1.1em] flex-none opacity-70" />
@@ -359,8 +359,8 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
               una decisión de datos personales (§10.5) y se toma en el
               escritorio, no desde el sofá. */}
           <div
-            className={`flex flex-none items-center gap-[0.6em] rounded-[0.6em] border border-white/[0.08] bg-black/70 px-[1em] py-[0.6em] ${tvRevealClass}`}
-            style={{ ...tvRevealStyle(2), boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+            className={`flex flex-none items-center gap-[0.6em] rounded-[0.6em] border border-line bg-inset/70 px-[1em] py-[0.6em] ${tvRevealClass}`}
+            style={{ ...tvRevealStyle(2), boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
           >
             <CloudUpload
               className="h-[0.9em] w-[0.9em] flex-none"
@@ -389,7 +389,7 @@ export const TvDetailSaves = ({ gameId }: { gameId: GameId }): React.JSX.Element
                   <PathRowTv key={path} path={path} tone={tone} tag={tag} />
                 ))}
                 {hiddenPaths > 0 && (
-                  <div className="text-[0.58em] font-semibold text-white/30">
+                  <div className="text-[0.58em] font-semibold text-bone/30">
                     +{hiddenPaths} more
                   </div>
                 )}

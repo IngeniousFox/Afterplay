@@ -42,9 +42,9 @@ export const YearPicker = ({
         disabled={disabled}
         className={`${
           compact
-            ? 'flex flex-none items-center gap-1.25 rounded-[7px] border border-input bg-white/[0.03] px-2.25 py-1 text-[11.5px] font-bold text-foreground hover:bg-white/[0.06]'
-            : 'flex flex-none items-center gap-2.25 rounded-[10px] border border-input bg-white/[0.03] px-3.75 py-2.25 text-[13.5px] font-bold text-foreground hover:bg-white/[0.06]'
-        }${disabled ? ' cursor-default opacity-55 hover:bg-white/[0.03]' : ''}`}
+            ? 'flex flex-none items-center gap-1.25 rounded-[7px] border border-line-strong bg-raised px-2.25 py-1 text-[11.5px] font-bold text-foreground hover:bg-raised-hover'
+            : 'flex flex-none items-center gap-2.25 rounded-[10px] border border-line-strong bg-raised px-3.75 py-2.25 text-[13.5px] font-bold text-foreground hover:bg-raised-hover'
+        }${disabled ? ' cursor-default opacity-55 hover:bg-bone/[0.03]' : ''}`}
       >
         <Calendar size={compact ? 11 : 15} />
         <span>{label}</span>
@@ -62,7 +62,7 @@ export const YearPicker = ({
               onChange(year);
               setOpen(false);
             }}
-            className="flex w-full items-center justify-between rounded-[8px] px-2.75 py-2.25 text-left text-[13.5px] font-semibold text-foreground hover:bg-white/[0.06]"
+            className="flex w-full items-center justify-between rounded-[8px] px-2.75 py-2.25 text-left text-[13.5px] font-semibold text-foreground hover:bg-bone/[0.06]"
           >
             <span>{year === 'all' ? 'All Time' : year}</span>
             {year === value && <Check size={14} className="text-primary" />}

@@ -53,16 +53,16 @@ export const PlannedPanel = ({ game }: PlannedPanelProps): React.JSX.Element => 
       </div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-2">
-        <StatTile color={PLAN_COLOR} label="WAITING" value={waiting} size="sm" />
+        <StatTile color={PLAN_COLOR} label="Waiting" value={waiting} size="sm" />
         {/* Solo si HLTB trae el dato: un "0h para terminarlo" es mentira, no
             es un cero de verdad (mismo criterio que HowLongToBeatCard). */}
         {game.hltbMain ? (
-          <StatTile color="#2bb6a6" label="TO BEAT" value={formatHours(game.hltbMain)} size="sm" />
+          <StatTile color="#5fd3e0" label="To beat" value={formatHours(game.hltbMain)} size="sm" />
         ) : null}
         {game.totalSpend > 0 && (
           <StatTile
             color={AMBER}
-            label="ALREADY SPENT"
+            label="Already spent"
             value={formatMoney(game.totalSpend)}
             size="sm"
           />

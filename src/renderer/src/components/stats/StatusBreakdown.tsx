@@ -147,7 +147,7 @@ export const StatusBreakdown = (props: StatusBreakdownProps): React.JSX.Element 
                   >
                     {bar.label}
                   </span>
-                  <div className="h-1.75 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div className="h-1.75 flex-1 overflow-hidden rounded-full bg-bone/[0.06]">
                     <div
                       className="h-full rounded-full transition-[width] duration-500"
                       style={{

@@ -99,14 +99,14 @@ const DuplicateIdentityCard = (): React.JSX.Element | null => {
         <button
           type="button"
           onClick={() => setPending('keep-this-pc')}
-          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06]"
+          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover"
         >
           This PC is the original
         </button>
         <button
           type="button"
           onClick={() => setPending('new-identity')}
-          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06]"
+          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover"
         >
           This PC is a different one
         </button>
@@ -184,7 +184,7 @@ const BucketIdentityCheck = (): React.JSX.Element | null => {
           type="button"
           onClick={handleCheck}
           disabled={busy}
-          className="flex w-fit flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-fit flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {check.isPending ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
           {check.isPending ? 'Looking…' : 'Check the cloud'}
@@ -299,30 +299,30 @@ const MachineRow = ({
       style={
         likely
           ? { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
       }
     >
       <MonitorSmartphone
         size={13}
         className="flex-none"
-        style={{ color: likely ? BLUE : 'rgba(255,255,255,.25)' }}
+        style={{ color: likely ? BLUE : 'rgba(233,228,216,.25)' }}
       />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12px] font-semibold text-foreground">
           {machine.machineName}
           {likely && (
-            <span className="ml-1.5 text-[10.5px] font-bold" style={{ color: BLUE }}>
+            <span className="ml-1.5 text-micro font-bold" style={{ color: BLUE }}>
               probably this PC
             </span>
           )}
         </div>
-        <div className="truncate font-mono text-[10.5px] text-muted-foreground">{machine.home}</div>
+        <div className="truncate font-mono text-micro text-muted-foreground">{machine.home}</div>
       </div>
       <button
         type="button"
         onClick={onAdopt}
         disabled={busy}
-        className="flex-none rounded-[7px] border border-input px-2.25 py-1 text-[11px] font-bold text-muted-foreground transition-colors duration-150 enabled:hover:border-primary/45 enabled:hover:bg-white/[0.06] enabled:hover:text-foreground disabled:opacity-50"
+        className="flex-none rounded-[7px] border border-input px-2.25 py-1 text-[11px] font-bold text-muted-foreground transition-colors duration-150 enabled:hover:border-primary/45 enabled:hover:bg-bone/[0.06] enabled:hover:text-foreground disabled:opacity-50"
       >
         That&apos;s me
       </button>
@@ -343,7 +343,7 @@ const ConfirmButton = ({
     type="button"
     onClick={onClick}
     disabled={busy}
-    className="flex w-fit items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+    className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
   >
     {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
     {label}

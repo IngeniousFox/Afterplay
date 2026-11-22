@@ -129,7 +129,7 @@ export const SessionClosedToast = ({
   };
 
   return (
-    <div className="afterplay-toast group/toast animate-[afterplay-toast-in_0.42s_cubic-bezier(0.16,1,0.3,1)_backwards] relative w-full overflow-hidden rounded-[14px] border border-input bg-[#141614] shadow-[0_20px_55px_rgba(0,0,0,.6)]">
+    <div className="afterplay-toast group/toast animate-[afterplay-toast-in_0.42s_cubic-bezier(0.16,1,0.3,1)_backwards] relative w-full overflow-hidden rounded-[14px] border border-input bg-overlay shadow-[0_20px_55px_rgba(3,6,7,.6)]">
       {/* Hero del juego de fondo, con el mismo velo de izquierda a derecha de
           la ficha: da identidad al aviso sin comerse la legibilidad. */}
       {heroSrc && (
@@ -139,7 +139,7 @@ export const SessionClosedToast = ({
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.93) 45%, rgba(18,20,19,.68) 100%)',
+                'linear-gradient(90deg, rgba(36,44,49,.97) 0%, rgba(36,44,49,.93) 45%, rgba(36,44,49,.68) 100%)',
             }}
           />
         </>
@@ -155,13 +155,13 @@ export const SessionClosedToast = ({
           >
             <GameCover
               url={event.coverUrl}
-              className="h-16 w-11.5 overflow-hidden rounded-[8px] border border-white/15 shadow-[0_8px_20px_rgba(0,0,0,.45)]"
+              className="h-16 w-11.5 overflow-hidden rounded-[8px] border border-line-strong shadow-[0_8px_20px_rgba(3,6,7,.45)]"
               iconSize={15}
             />
           </button>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.25 text-[10px] font-bold tracking-[.09em] text-muted-foreground/80">
+            <div className="flex items-center gap-1.25 text-micro font-bold tracking-[.09em] text-muted-foreground/80">
               <Timer size={11} />
               SESSION ENDED
             </div>
@@ -173,7 +173,7 @@ export const SessionClosedToast = ({
               {event.gameTitle}
             </button>
             <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-[24px] leading-none font-extrabold text-primary tabular-nums">
+              <span className="text-[24px] leading-none font-display font-bold text-primary tabular-nums">
                 {duration.value}
               </span>
               <span className="text-[13px] font-bold text-primary/80">{duration.unit}</span>
@@ -266,7 +266,7 @@ export const SessionClosedToast = ({
                 if (keyEvent.key === 'Escape') toast.dismiss(toastId);
               }}
               placeholder="Where did you leave off?"
-              className="min-w-0 flex-1 rounded-[7px] border border-input bg-black/35 px-2.5 py-1.5 text-[12px] text-foreground outline-none backdrop-blur-sm placeholder:text-muted-foreground/70 focus:border-primary/50"
+              className="min-w-0 flex-1 rounded-[7px] border border-input bg-inset/35 px-2.5 py-1.5 text-[12px] text-foreground outline-none backdrop-blur-sm placeholder:text-muted-foreground/70 focus:border-primary/50"
             />
             <button
               type="button"
@@ -305,7 +305,7 @@ export const SessionClosedToast = ({
                   type="button"
                   onClick={() => void markState(key)}
                   disabled={addStateEvent.isPending}
-                  className="flex items-center gap-1.5 rounded-full border border-white/12 bg-black/30 px-2.75 py-1.25 text-[11.5px] font-bold text-foreground/90 backdrop-blur-sm transition-colors duration-150 hover:border-white/28 hover:bg-white/[0.07] disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-full border border-line-strong bg-inset/30 px-2.75 py-1.25 text-[11.5px] font-bold text-foreground/90 backdrop-blur-sm transition-colors duration-150 hover:border-line-hover hover:bg-bone/[0.07] disabled:opacity-50"
                 >
                   <meta.Icon size={12} className="flex-none" style={{ color: meta.color }} />
                   {meta.label}
@@ -320,7 +320,7 @@ export const SessionClosedToast = ({
           guardar, el cierre lo controla el propio guardado y una barra
           corriendo ahí sería mentira. */}
       {!saved && (
-        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-white/8">
+        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-bone/8">
           <div
             className="afterplay-toast-countdown origin-left animate-[afterplay-grow-x_var(--afterplay-toast-duration,15s)_linear_reverse_forwards] group-hover/toast:[animation-play-state:paused] group-focus-within/toast:[animation-play-state:paused] h-full bg-primary/75"
             style={{ '--afterplay-toast-duration': `${durationMs}ms` } as React.CSSProperties}

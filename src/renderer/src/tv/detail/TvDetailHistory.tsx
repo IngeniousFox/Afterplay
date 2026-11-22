@@ -107,14 +107,14 @@ const YearMarkTv = ({
       <span
         aria-hidden
         className="w-px self-stretch"
-        style={{ background: 'rgba(255,255,255,.07)' }}
+        style={{ background: 'rgba(233,228,216,.07)' }}
       />
     </div>
     <div className="flex flex-1 items-center gap-[0.5em] py-[0.3em]">
       <span className="text-[0.5em] font-extrabold tracking-[.18em] text-muted-foreground/55 tabular-nums">
         {year}
       </span>
-      <span aria-hidden className="h-px flex-1 bg-white/5" />
+      <span aria-hidden className="h-px flex-1 bg-bone/5" />
     </div>
   </div>
 );
@@ -225,7 +225,7 @@ const HistoryRowTv = ({
                 cursiva. */}
             {entry.note && (
               <div
-                className="mt-[0.25em] pl-[0.55em] text-[0.62em] leading-snug text-[#b7bdb8]"
+                className="mt-[0.25em] pl-[0.55em] text-[0.62em] leading-snug text-bone"
                 style={{ boxShadow: `inset 2px 0 0 ${color}40` }}
               >
                 {entry.note}
@@ -292,8 +292,8 @@ export const TvDetailHistory = ({ game }: { game: GameDetail }): React.JSX.Eleme
 
   return (
     <div
-      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[0.6em] border border-white/[0.08] bg-black/70"
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[0.6em] border border-line bg-inset/70"
+      style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
     >
       {/* Un aliento violeta en la esquina: el historial es memoria, y la
           memoria en esta casa es violeta. */}
@@ -302,18 +302,18 @@ export const TvDetailHistory = ({ game }: { game: GameDetail }): React.JSX.Eleme
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(120% 130% at 100% 0%, rgba(124,134,200,.10), transparent 55%)',
+            'radial-gradient(120% 130% at 100% 0%, rgba(185,166,255,.10), transparent 55%)',
         }}
       />
-      <div className="relative flex flex-none items-center gap-[0.5em] border-b border-white/[0.07] px-[1em] py-[0.6em]">
+      <div className="relative flex flex-none items-center gap-[0.5em] border-b border-line px-[1em] py-[0.6em]">
         <History
           className="h-[0.95em] w-[0.95em] flex-none"
-          style={{ color: VIOLET, filter: 'drop-shadow(0 0 0.45em rgba(124,134,200,.55))' }}
+          style={{ color: VIOLET, filter: 'drop-shadow(0 0 0.45em rgba(185,166,255,.55))' }}
         />
         <span className="text-[0.55em] font-extrabold tracking-[.18em] text-muted-foreground">
           HISTORY
         </span>
-        <span className="ml-auto text-[0.55em] font-bold text-[#a3abd8]/80 tabular-nums">
+        <span className="ml-auto text-[0.55em] font-bold text-st-resting/80 tabular-nums">
           {entries.length}
         </span>
       </div>
@@ -342,7 +342,7 @@ export const TvDetailHistory = ({ game }: { game: GameDetail }): React.JSX.Eleme
       {/* La lista se funde contra el borde inferior: pista de que hay más. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1em] rounded-b-[0.6em] bg-gradient-to-t from-black/60 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1em] rounded-b-[0.6em] bg-gradient-to-t from-inset/60 to-transparent"
       />
     </div>
   );

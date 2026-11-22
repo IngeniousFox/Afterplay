@@ -87,17 +87,17 @@ const StatsRecordDeck = ({ records }: { records: StatsRecord[] }): React.JSX.Ele
         key={key}
         className={cn(
           'afterplay-stats-record-card relative isolate min-w-0 overflow-hidden pt-3.5 px-[15px] pb-[15px] rounded-[14px]',
-          '[--record-accent:#2fdc7e] border border-white/[0.085]',
-          '[background:linear-gradient(145deg,rgba(255,255,255,0.038),rgba(255,255,255,0.009)),#0e100f]',
-          '[box-shadow:inset_0_1px_0_rgba(255,255,255,0.025),0_12px_32px_rgba(0,0,0,0.16)]',
+          '[--record-accent:#ffb347] border border-line',
+          '[background:linear-gradient(145deg,rgba(233,228,216,0.038),rgba(233,228,216,0.009)),#0e100f]',
+          '[box-shadow:inset_0_1px_0_rgba(233,228,216,0.025),0_12px_32px_rgba(3,6,7,0.16)]',
           '[transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),border-color_220ms_ease,box-shadow_220ms_ease]',
           "before:content-[''] before:absolute before:-z-1 before:-top-15 before:-right-13.75 before:w-37.5 before:h-37.5",
           'before:rounded-full before:opacity-14 before:bg-[var(--record-accent)] before:[filter:blur(34px)]',
           'before:[transition:opacity_220ms_ease,transform_350ms_cubic-bezier(0.22,1,0.36,1)]',
           "after:content-[''] after:absolute after:-top-0.25 after:right-3.5 after:left-3.5 after:h-px after:opacity-35",
           'after:[background:linear-gradient(90deg,transparent,var(--record-accent),transparent)]',
-          'hover:border-[color-mix(in_srgb,var(--record-accent)_34%,rgba(255,255,255,0.09))]',
-          'hover:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.04),0_20px_42px_rgba(0,0,0,0.27)]',
+          'hover:border-[color-mix(in_srgb,var(--record-accent)_34%,rgba(233,228,216,0.09))]',
+          'hover:[box-shadow:inset_0_1px_0_rgba(233,228,216,0.04),0_20px_42px_rgba(3,6,7,0.27)]',
           'hover:[transform:translateY(-4px)]',
           'hover:before:opacity-25 hover:before:[transform:scale(1.18)]',
           'motion-reduce:animate-none motion-reduce:transition-none motion-reduce:before:animate-none',
@@ -105,7 +105,7 @@ const StatsRecordDeck = ({ records }: { records: StatsRecord[] }): React.JSX.Ele
         )}
         style={{ '--record-accent': accent } as React.CSSProperties}
       >
-        <div className="afterplay-stats-record-index absolute top-[13px] right-[13px] text-[11px] font-black tracking-[0.13em] text-white/12">
+        <div className="afterplay-stats-record-index absolute top-[13px] right-[13px] text-[11px] font-black tracking-[0.13em] text-bone/12">
           R{String(index + 1).padStart(2, '0')}
         </div>
         <div
@@ -121,13 +121,13 @@ const StatsRecordDeck = ({ records }: { records: StatsRecord[] }): React.JSX.Ele
         >
           <Icon size={15} />
         </div>
-        <div className="mt-4 text-[11px] font-black tracking-[.18em] text-white/45 uppercase">
+        <div className="mt-4 text-[11px] font-black tracking-[.18em] text-dust uppercase">
           {label}
         </div>
-        <div className="mt-1 truncate text-[21px] font-black tracking-[-.035em] text-white tabular-nums">
+        <div className="mt-1 truncate font-display text-[26px] leading-[1.1] font-bold text-bone tabular-nums">
           {value}
         </div>
-        <div className="mt-1 truncate text-[11.5px] text-white/48">{detail}</div>
+        <div className="mt-1 truncate text-[11.5px] text-dust">{detail}</div>
       </div>
     ))}
   </section>
@@ -152,11 +152,11 @@ const HeadlineMetric = ({
       'first:pl-0 last:pr-0',
       'relative [transition:background-color_190ms_ease,transform_220ms_cubic-bezier(0.22,1,0.36,1)]',
       "before:content-[''] before:absolute before:-top-0.25 before:right-[20%] before:left-[20%] before:h-px",
-      'before:opacity-0 before:[background:linear-gradient(90deg,transparent,rgba(47,220,126,0.72),transparent)]',
+      'before:opacity-0 before:[background:linear-gradient(90deg,transparent,rgba(255,179,71,0.72),transparent)]',
       'before:[transition:opacity_180ms_ease]',
-      'hover:bg-white/[0.025] hover:[transform:translateY(-2px)]',
+      'hover:bg-bone/[0.025] hover:[transform:translateY(-2px)]',
       'hover:before:opacity-100',
-      '[.afterplay-stats-metric_+_&]:border-l [.afterplay-stats-metric_+_&]:border-l-[rgba(255,255,255,0.075)]',
+      '[.afterplay-stats-metric_+_&]:border-l [.afterplay-stats-metric_+_&]:border-l-[rgba(233,228,216,0.075)]',
       'motion-reduce:animate-none motion-reduce:transition-none',
     )}
   >
@@ -164,11 +164,11 @@ const HeadlineMetric = ({
         como contrato accesible para las pruebas de cifras derivadas. */}
     <div className="flex items-center gap-1.75">
       <Icon size={12} style={{ color: accent }} />
-      <span className="truncate text-[11px] font-extrabold tracking-[.17em] text-white/48 uppercase">
+      <span className="truncate text-[11px] font-extrabold tracking-[.17em] text-dust uppercase">
         {label}
       </span>
     </div>
-    <div className="mt-1.25 truncate text-[20px] font-black tracking-[-.025em] text-white tabular-nums">
+    <div className="mt-1.25 truncate font-display text-[26px] leading-[1.1] font-bold text-bone tabular-nums">
       {value}
     </div>
     {comparison}
@@ -223,8 +223,8 @@ const HeaderMetrics = ({
       className={cn(
         'afterplay-stats-records -mx-6 grid grid-cols-2 px-6',
         'sm:grid-cols-4',
-        'border-t border-t-[rgba(255,255,255,0.09)]',
-        '[background:linear-gradient(90deg,rgba(0,0,0,0.3),rgba(255,255,255,0.025))] [backdrop-filter:blur(15px)]',
+        'border-t border-t-[rgba(233,228,216,0.09)]',
+        '[background:linear-gradient(90deg,rgba(3,6,7,0.3),rgba(233,228,216,0.025))] [backdrop-filter:blur(15px)]',
         revealClass,
       )}
       style={revealStyle(0)}
@@ -351,18 +351,18 @@ const StatsHero = ({
   return (
     <section
       className={cn(
-        'afterplay-stats-hero overflow-hidden rounded-[18px] border border-white/[0.1] relative isolate',
-        '[background:radial-gradient(circle_at_78%_25%,rgba(47,220,126,0.12),transparent_30%),linear-gradient(135deg,#101511,#090b0a_72%)]',
-        '[box-shadow:inset_0_1px_0_rgba(255,255,255,0.055),0_26px_70px_rgba(0,0,0,0.28)]',
+        'afterplay-stats-hero overflow-hidden rounded-[18px] border border-line relative isolate',
+        '[background:radial-gradient(circle_at_78%_25%,rgba(255,179,71,0.12),transparent_30%),linear-gradient(135deg,#101511,#090b0a_72%)]',
+        '[box-shadow:inset_0_1px_0_rgba(233,228,216,0.055),0_26px_70px_rgba(3,6,7,0.28)]',
         '[transition:border-color_300ms_ease,box-shadow_300ms_ease]',
         "before:content-[''] before:absolute before:z-0 before:inset-0 before:pointer-events-none before:opacity-36",
-        'before:[background:repeating-radial-gradient(circle_at_83%_39%,transparent_0_36px,rgba(47,220,126,0.075)_37px,transparent_38px_66px),linear-gradient(115deg,transparent_58%,rgba(255,255,255,0.025)_58.2%,transparent_58.5%)]',
+        'before:[background:repeating-radial-gradient(circle_at_83%_39%,transparent_0_36px,rgba(255,179,71,0.075)_37px,transparent_38px_66px),linear-gradient(115deg,transparent_58%,rgba(233,228,216,0.025)_58.2%,transparent_58.5%)]',
         "after:content-[''] after:absolute after:z-2 after:top-[-35%] after:bottom-[-35%] after:left-[-36%] after:w-[22%]",
         'after:pointer-events-none after:opacity-0',
-        'after:[background:linear-gradient(90deg,transparent,rgba(255,255,255,0.075),transparent)]',
+        'after:[background:linear-gradient(90deg,transparent,rgba(233,228,216,0.075),transparent)]',
         'after:[transform:skewX(-15deg)] after:[transition:left_900ms_cubic-bezier(0.2,0.8,0.2,1),opacity_250ms_ease]',
-        'hover:border-[rgba(47,220,126,0.2)]',
-        'hover:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.075),0_28px_80px_rgba(0,0,0,0.34),0_0_50px_rgba(47,220,126,0.04)]',
+        'hover:border-[rgba(255,179,71,0.2)]',
+        'hover:[box-shadow:inset_0_1px_0_rgba(233,228,216,0.075),0_28px_80px_rgba(3,6,7,0.34),0_0_50px_rgba(255,179,71,0.04)]',
         'hover:after:left-[116%] hover:after:opacity-100',
         'motion-reduce:after:animate-none motion-reduce:after:transition-none',
       )}
@@ -383,11 +383,11 @@ const StatsHero = ({
       <div
         className={cn(
           'afterplay-stats-hero-scrim absolute inset-0',
-          '[background:linear-gradient(90deg,rgba(8,10,9,0.97),rgba(8,10,9,0.78)_45%,rgba(8,10,9,0.18)_82%),linear-gradient(0deg,rgba(8,10,9,0.93),transparent_62%)]',
+          '[background:linear-gradient(90deg,rgba(8,11,12,0.97),rgba(8,11,12,0.78)_45%,rgba(8,11,12,0.18)_82%),linear-gradient(0deg,rgba(8,11,12,0.93),transparent_62%)]',
         )}
       />
       <div
-        className="afterplay-stats-hero-watermark absolute z-1 right-[19px] bottom-8 text-[154px] font-[950] leading-[0.75] tracking-[-0.12em] pointer-events-none select-none text-white/[0.025]"
+        className="afterplay-stats-hero-watermark absolute z-1 right-[19px] bottom-8 text-[154px] font-[950] leading-[0.75] tracking-[-0.12em] pointer-events-none select-none text-bone/[0.025]"
         aria-hidden="true"
       >
         01
@@ -404,10 +404,10 @@ const StatsHero = ({
               <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_9px_var(--primary)]" />
               {periodLabel}
             </div>
-            <h2 className="mt-3 max-w-[760px] text-[clamp(30px,3.3vw,48px)] leading-[1.01] font-black tracking-[-.055em] text-white">
+            <h2 className="mt-3 max-w-[760px] font-display text-[clamp(34px,3.6vw,52px)] leading-[1.01] font-bold text-bone">
               {headline}
             </h2>
-            <p className="mt-3 max-w-[650px] text-[12.5px] leading-relaxed text-white/62">
+            <p className="mt-3 max-w-[650px] text-[12.5px] leading-relaxed text-dust">
               {supporting}
             </p>
           </div>
@@ -417,18 +417,18 @@ const StatsHero = ({
               type="button"
               onClick={() => onOpenGame(headlineGame.id)}
               className={cn(
-                'afterplay-stats-leader group/leader relative overflow-hidden rounded-[15px] border border-white/[0.11]',
-                'bg-black/30 p-3 text-left backdrop-blur-md',
-                '[box-shadow:inset_0_1px_0_rgba(255,255,255,0.035),0_18px_35px_rgba(0,0,0,0.22)]',
+                'afterplay-stats-leader group/leader relative overflow-hidden rounded-[15px] border border-line',
+                'bg-inset/30 p-3 text-left backdrop-blur-md',
+                '[box-shadow:inset_0_1px_0_rgba(233,228,216,0.035),0_18px_35px_rgba(3,6,7,0.22)]',
                 '[transition:transform_280ms_cubic-bezier(0.22,1,0.36,1),border-color_220ms_ease,background-color_220ms_ease,box-shadow_220ms_ease]',
-                '[&:is(button):hover]:border-[rgba(47,220,126,0.32)] [&:is(button):hover]:bg-[rgba(10,18,13,0.58)]',
-                '[&:is(button):hover]:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.055),0_20px_44px_rgba(0,0,0,0.34),0_0_28px_rgba(47,220,126,0.07)]',
+                '[&:is(button):hover]:border-[rgba(255,179,71,0.32)] [&:is(button):hover]:bg-[rgba(10,18,13,0.58)]',
+                '[&:is(button):hover]:[box-shadow:inset_0_1px_0_rgba(233,228,216,0.055),0_20px_44px_rgba(3,6,7,0.34),0_0_28px_rgba(255,179,71,0.07)]',
                 '[&:is(button):hover]:[transform:translateY(-4px)_rotate(0.35deg)]',
                 'motion-reduce:animate-none motion-reduce:transition-none',
               )}
               aria-label={`Open ${headlineGame.title}`}
             >
-              <div className="flex items-center justify-between gap-2 text-[11px] font-black tracking-[.17em] text-white/45 uppercase">
+              <div className="flex items-center justify-between gap-2 text-[11px] font-black tracking-[.17em] text-dust uppercase">
                 <span>#01 · Most played</span>
                 <ArrowUpRight
                   size={13}
@@ -439,31 +439,31 @@ const StatsHero = ({
                 <GameCover
                   url={headlineGame.coverUrl}
                   className={cn(
-                    'afterplay-stats-leader-cover h-24 w-18 flex-none overflow-hidden rounded-[9px] border border-white/12',
-                    'shadow-[0_12px_28px_rgba(0,0,0,.5)] [transition:transform_360ms_cubic-bezier(0.22,1,0.36,1)]',
+                    'afterplay-stats-leader-cover h-24 w-18 flex-none overflow-hidden rounded-[9px] border border-line-strong',
+                    'shadow-[0_12px_28px_rgba(3,6,7,.5)] [transition:transform_360ms_cubic-bezier(0.22,1,0.36,1)]',
                     '[button.afterplay-stats-leader:hover_&]:[transform:scale(1.045)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
                   iconSize={22}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="line-clamp-2 text-[12px] leading-tight font-extrabold text-white">
+                  <div className="line-clamp-2 text-[12px] leading-tight font-extrabold text-bone">
                     {headlineGame.title}
                   </div>
-                  <div className="mt-1.5 text-[11.5px] font-bold text-white/48 tabular-nums">
+                  <div className="mt-1.5 text-[11.5px] font-bold text-dust tabular-nums">
                     {formatHours(headlineGame.hours)}
                   </div>
                   <div
                     className={cn(
                       'afterplay-stats-share-ring mt-3 relative flex w-10.5 h-10.5 items-center justify-center rounded-[50%]',
-                      '[box-shadow:0_0_20px_rgba(47,220,126,0.08)]',
-                      "before:content-[''] before:absolute before:w-8.5 before:h-8.5 before:rounded-full before:bg-[#111512]",
+                      '[box-shadow:0_0_20px_rgba(255,179,71,0.08)]',
+                      "before:content-[''] before:absolute before:w-8.5 before:h-8.5 before:rounded-full before:bg-panel",
                     )}
                     style={{
-                      background: `conic-gradient(${GREEN} ${sharePercent * 3.6}deg, rgba(255,255,255,.075) 0deg)`,
+                      background: `conic-gradient(${GREEN} ${sharePercent * 3.6}deg, rgba(233,228,216,.075) 0deg)`,
                     }}
                   >
-                    <span className="relative z-1 text-white/78 text-[11px] font-black tracking-[-0.02em]">
+                    <span className="relative z-1 text-dust text-[11px] font-black tracking-[-0.02em]">
                       {sharePercent}%
                     </span>
                   </div>
@@ -474,18 +474,18 @@ const StatsHero = ({
             <div
               className={cn(
                 'afterplay-stats-leader flex min-h-35 items-center justify-center rounded-[15px] border border-dashed',
-                'border-white/[0.1] bg-black/20 p-5 text-center',
-                '[box-shadow:inset_0_1px_0_rgba(255,255,255,0.035),0_18px_35px_rgba(0,0,0,0.22)]',
+                'border-line bg-inset/20 p-5 text-center',
+                '[box-shadow:inset_0_1px_0_rgba(233,228,216,0.035),0_18px_35px_rgba(3,6,7,0.22)]',
                 '[transition:transform_280ms_cubic-bezier(0.22,1,0.36,1),border-color_220ms_ease,background-color_220ms_ease,box-shadow_220ms_ease]',
-                '[&:is(button):hover]:border-[rgba(47,220,126,0.32)] [&:is(button):hover]:bg-[rgba(10,18,13,0.58)]',
-                '[&:is(button):hover]:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.055),0_20px_44px_rgba(0,0,0,0.34),0_0_28px_rgba(47,220,126,0.07)]',
+                '[&:is(button):hover]:border-[rgba(255,179,71,0.32)] [&:is(button):hover]:bg-[rgba(10,18,13,0.58)]',
+                '[&:is(button):hover]:[box-shadow:inset_0_1px_0_rgba(233,228,216,0.055),0_20px_44px_rgba(3,6,7,0.34),0_0_28px_rgba(255,179,71,0.07)]',
                 '[&:is(button):hover]:[transform:translateY(-4px)_rotate(0.35deg)]',
                 'motion-reduce:animate-none motion-reduce:transition-none',
               )}
             >
               <div>
-                <Gamepad2 size={22} className="mx-auto text-white/20" />
-                <div className="mt-2 text-[11px] font-black tracking-[.15em] text-white/45 uppercase">
+                <Gamepad2 size={22} className="mx-auto text-bone/20" />
+                <div className="mt-2 text-[11px] font-black tracking-[.15em] text-dust uppercase">
                   No leader yet
                 </div>
               </div>
@@ -527,12 +527,12 @@ const StatsChapterHeading = ({
   >
     <div
       className={cn(
-        'afterplay-stats-chapter-number w-13.5 min-w-13.5 text-[43px] font-[950] leading-none tracking-[-0.045em]',
+        'afterplay-stats-chapter-number w-13.5 min-w-13.5 text-[43px] font-display font-bold leading-none tabular-nums',
         'text-left',
-        'text-[color:rgba(47,220,126,0.12)]',
-        '[text-shadow:0_0_24px_rgba(47,220,126,0.05)]',
+        'text-[color:rgba(255,179,71,0.12)]',
+        '[text-shadow:0_0_24px_rgba(255,179,71,0.05)]',
         '[transition:color_220ms_ease,transform_280ms_cubic-bezier(0.22,1,0.36,1)]',
-        '[.afterplay-stats-chapter-heading:hover_&]:text-[color:rgba(47,220,126,0.24)]',
+        '[.afterplay-stats-chapter-heading:hover_&]:text-[color:rgba(255,179,71,0.24)]',
         '[.afterplay-stats-chapter-heading:hover_&]:[transform:translateX(3px)]',
         'motion-reduce:animate-none motion-reduce:transition-none',
       )}
@@ -549,7 +549,7 @@ const StatsChapterHeading = ({
       </h2>
       <p className="mt-0.75 text-[12px] text-muted-foreground">{description}</p>
     </div>
-    <span className="mb-1 hidden h-px min-w-12 flex-1 bg-gradient-to-r from-primary/25 via-white/8 to-transparent sm:block" />
+    <span className="mb-1 hidden h-px min-w-12 flex-1 bg-gradient-to-r from-primary/25 via-bone/8 to-transparent sm:block" />
   </div>
 );
 
@@ -771,13 +771,13 @@ export const Stats = (): React.JSX.Element => {
       className={cn(
         'afterplay-stats-screen h-full overflow-y-auto px-7.5 pt-6.5 pb-16 relative isolate overflow-x-hidden',
         'scroll-smooth',
-        '[background:radial-gradient(circle_at_76%_-8%,rgba(47,220,126,0.085),transparent_34%),radial-gradient(circle_at_8%_45%,rgba(124,134,200,0.05),transparent_28%),#090b0a]',
+        '[background:radial-gradient(circle_at_76%_-8%,rgba(255,179,71,0.085),transparent_34%),radial-gradient(circle_at_8%_45%,rgba(185,166,255,0.05),transparent_28%),#090b0a]',
         "before:content-[''] before:absolute before:z-0 before:inset-0 before:pointer-events-none before:opacity-22",
-        'before:[background-image:linear-gradient(rgba(255,255,255,0.017)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.017)_1px,transparent_1px)]',
+        'before:[background-image:linear-gradient(rgba(233,228,216,0.017)_1px,transparent_1px),linear-gradient(90deg,rgba(233,228,216,0.017)_1px,transparent_1px)]',
         'before:[background-size:42px_42px] before:[mask-image:linear-gradient(to_bottom,black,transparent_52%)]',
         "after:content-[''] after:absolute after:z-0 after:top-107.5 after:-right-30 after:w-90 after:h-90",
         'after:rounded-full after:pointer-events-none after:opacity-22',
-        'after:[background:radial-gradient(circle,rgba(47,220,126,0.18),transparent_67%)] after:[filter:blur(18px)]',
+        'after:[background:radial-gradient(circle,rgba(255,179,71,0.18),transparent_67%)] after:[filter:blur(18px)]',
         'after:animate-[afterplay-stats-ambient_12s_ease-in-out_infinite_alternate]',
         'motion-reduce:after:animate-none motion-reduce:after:transition-none',
       )}
@@ -793,7 +793,7 @@ export const Stats = (): React.JSX.Element => {
             <div className="text-[11px] font-black tracking-[.24em] text-primary/72 uppercase">
               The long game
             </div>
-            <h1 className="mt-0.5 text-[28px] font-black tracking-[-.04em] text-foreground">
+            <h1 className="mt-0.5 font-display text-[34px] leading-none font-bold text-bone">
               {view === 'overview' ? 'Stats' : 'Your gaming journey'}
             </h1>
             <p className="mt-1 text-[12.5px] text-muted-foreground">
@@ -806,9 +806,9 @@ export const Stats = (): React.JSX.Element => {
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <div
               className={cn(
-                'afterplay-stats-view-switch flex rounded-[10px] border border-input bg-black/15 p-1 backdrop-blur-md',
+                'afterplay-stats-view-switch flex rounded-[10px] border border-input bg-inset/15 p-1 backdrop-blur-md',
                 '[transition:border-color_180ms_ease,background-color_180ms_ease,color_180ms_ease,box-shadow_180ms_ease,transform_180ms_cubic-bezier(0.22,1,0.36,1)]',
-                'hover:border-white/14 hover:bg-white/[0.025]',
+                'hover:border-line-strong hover:bg-bone/[0.025]',
               )}
             >
               <button
@@ -823,9 +823,9 @@ export const Stats = (): React.JSX.Element => {
                 style={
                   view === 'overview'
                     ? {
-                        background: 'rgba(47,220,126,.12)',
+                        background: 'rgba(255,179,71,.12)',
                         color: GREEN,
-                        boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.32)',
+                        boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.32)',
                       }
                     : { color: 'var(--muted-foreground)' }
                 }
@@ -845,9 +845,9 @@ export const Stats = (): React.JSX.Element => {
                 style={
                   view === 'journey'
                     ? {
-                        background: 'rgba(133,163,214,.13)',
+                        background: 'rgba(95,211,224,.13)',
                         color: BLUE,
-                        boxShadow: 'inset 0 0 0 1px rgba(133,163,214,.34)',
+                        boxShadow: 'inset 0 0 0 1px rgba(95,211,224,.34)',
                       }
                     : { color: 'var(--muted-foreground)' }
                 }

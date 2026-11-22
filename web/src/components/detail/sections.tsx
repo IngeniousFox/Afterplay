@@ -32,28 +32,28 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
       <CardTitle>Details</CardTitle>
 
       <div className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3.5">
-        <Cell label="DEVELOPER" value={game.developer ?? '—'} />
-        <Cell label="PUBLISHER" value={game.publisher ?? '—'} />
+        <Cell label="Developer" value={game.developer ?? '—'} />
+        <Cell label="Publisher" value={game.publisher ?? '—'} />
         {/* La fecha COMPLETA cuando de verdad se sabe: "March 17, 2017" si
             IGDB conoce el día, "March 1995" si solo el mes, "1995" si solo el
             año — nunca un día inventado. */}
-        <Cell label="RELEASED" value={formatRelease(game) ?? '—'} />
+        <Cell label="Released" value={formatRelease(game) ?? '—'} />
         {/* Un endless nunca llega a "Beaten", así que "replayed" no significa
             nada para él: su única forma de generar una iteración nueva es
             Dropped -> empezar de cero, que no es volver a jugarlo entero. */}
         {game.endless ? (
-          <Cell label="LAST PLAYED" value={recentActivity} />
+          <Cell label="Last played" value={recentActivity} />
         ) : (
           <>
-            <Cell label="REPLAYED" value={replaysLabel} />
-            <Cell label="LAST PLAYED" value={recentActivity} />
+            <Cell label="Replayed" value={replaysLabel} />
+            <Cell label="Last played" value={recentActivity} />
           </>
         )}
       </div>
 
       {game.officialPlatforms && game.officialPlatforms.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="mt-4 border-t border-line pt-3.5">
+          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
             PLATFORMS
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -65,8 +65,8 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
       )}
 
       {game.genres && game.genres.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="mt-4 border-t border-line pt-3.5">
+          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
             GENRES
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -83,8 +83,8 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
           Vocabulario de jugadores, no de catálogo, y por eso van pegadas y no
           sustituyen a los géneros: las dos cosas son ciertas. */}
       {game.steamTags && game.steamTags.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 flex items-center gap-1.25 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="mt-4 border-t border-line pt-3.5">
+          <div className="mb-2 flex items-center gap-1.25 text-micro font-bold tracking-[.12em] text-muted-foreground">
             <Tag size={10} />
             STEAM TAGS
           </div>
@@ -103,8 +103,8 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
 
       {/* Dónde está instalado: el dispositivo, nunca su ruta (F-31). */}
       {game.installedOn.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="mt-4 border-t border-line pt-3.5">
+          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
             INSTALLED ON
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -145,7 +145,7 @@ export const AboutCard = ({ game }: { game: GameDetail }): React.JSX.Element | n
       <div className="flex items-center gap-1.75">
         <BookOpen size={13} className="flex-none text-muted-foreground" />
         <span className="text-[13.5px] font-bold text-foreground">About</span>
-        <span className="ml-auto flex-none text-[10.5px] font-semibold text-muted-foreground/70">
+        <span className="ml-auto flex-none text-micro font-semibold text-muted-foreground/70">
           via IGDB
         </span>
       </div>
@@ -203,13 +203,13 @@ const ScoreTile = ({
       style={
         active
           ? { borderColor: `${color}5c`, background: `${color}17` }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
       }
     >
       <div className="mb-1.25 flex items-center justify-center gap-1">
         <Icon size={11} style={{ color: active ? color : 'var(--muted-foreground)' }} />
         <span
-          className="text-[9px] font-bold tracking-[.04em]"
+          className="text-micro font-bold tracking-[.04em]"
           style={{ color: active ? color : 'var(--muted-foreground)' }}
         >
           {label}
@@ -221,7 +221,7 @@ const ScoreTile = ({
       >
         {active ? `${score}${suffix ?? ''}` : '—'}
       </div>
-      <div className="mt-1.25 truncate text-[9.5px] text-muted-foreground">{countLabel}</div>
+      <div className="mt-1.25 truncate text-micro text-muted-foreground">{countLabel}</div>
     </div>
   );
 };
@@ -240,7 +240,7 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
     <DetailCard>
       <CardTitle
         aside={
-          <span className="flex-none text-[10.5px] font-semibold text-muted-foreground/70">
+          <span className="flex-none text-micro font-semibold text-muted-foreground/70">
             out of 100
           </span>
         }
@@ -255,7 +255,7 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
         <div className="flex gap-2">
           <ScoreTile
             icon={Newspaper}
-            label="CRITICS"
+            label="Critics"
             color={CRITICS_COLOR}
             score={ratings.critics}
             countLabel={
@@ -266,7 +266,7 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
           />
           <ScoreTile
             icon={Users}
-            label="PLAYERS"
+            label="Players"
             color={PLAYERS_COLOR}
             score={ratings.players}
             countLabel={
@@ -280,7 +280,7 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
           {ratings.steam !== null && (
             <ScoreTile
               icon={ThumbsUp}
-              label="STEAM"
+              label="Steam"
               color={STEAM_BLUE}
               score={ratings.steam}
               suffix="%"
@@ -311,7 +311,7 @@ export const NotesSection = ({ notes }: { notes: string | null }): React.JSX.Ele
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">NOTES</SectionLabel>
+      <SectionLabel className="mb-2.5">Notes</SectionLabel>
       <div className="rounded-[14px] border border-border bg-card px-4 py-3.5">
         <div className="prose-afterplay text-[12.5px] leading-relaxed text-muted-foreground">
           <ReactMarkdown>{notes}</ReactMarkdown>
@@ -332,7 +332,7 @@ export const CuriositiesSection = ({
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">DID YOU KNOW</SectionLabel>
+      <SectionLabel className="mb-2.5">Did you know</SectionLabel>
       <div className="flex flex-col gap-2">
         {curiosities.map((text, index) => (
           <div

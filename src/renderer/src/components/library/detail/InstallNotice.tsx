@@ -43,7 +43,7 @@ export const InstallNotice = ({ gameId }: InstallNoticeProps): React.JSX.Element
   return (
     <div className="flex flex-col gap-1.5">
       {info.executable === 'missing' && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-[#e3b24a]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-phosphor">
           <span className="flex items-center gap-2">
             <AlertTriangle size={13} className="flex-none" />
             The executable is no longer at this path
@@ -52,7 +52,7 @@ export const InstallNotice = ({ gameId }: InstallNoticeProps): React.JSX.Element
             type="button"
             onClick={() => void handleChooseAnother()}
             disabled={updateGame.isPending}
-            className="rounded-[8px] border border-input bg-white/[0.04] px-2.5 py-1 text-[12px] font-bold text-foreground transition-colors duration-150 hover:bg-white/[0.08] focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
+            className="rounded-[8px] border border-input bg-bone/[0.04] px-2.5 py-1 text-[12px] font-bold text-foreground transition-colors duration-150 hover:bg-bone/[0.08] focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
           >
             Choose another…
           </button>

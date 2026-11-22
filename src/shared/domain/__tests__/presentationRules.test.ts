@@ -262,11 +262,11 @@ describe('notas: las tres muestras y sus umbrales', () => {
   it('la paleta compartida de acentos de identidad', () => {
     // Antes vigilaba una copia a mano de los hex en web/src/lib/status.ts; hoy
     // las dos apps re-exportan shared/colors.ts, así que se fija el valor.
-    assert.equal(GREEN, '#2fdc7e');
-    assert.equal(AMBER, '#e3b24a');
-    assert.equal(BLUE, '#85a3d6');
-    assert.equal(TEAL, '#2bb6a6');
-    assert.equal(VIOLET, '#7c86c8');
+    assert.equal(GREEN, '#ffb347');
+    assert.equal(AMBER, '#ffb347');
+    assert.equal(BLUE, '#5fd3e0');
+    assert.equal(TEAL, '#5fd3e0');
+    assert.equal(VIOLET, '#b9a6ff');
   });
 });
 

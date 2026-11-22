@@ -35,7 +35,7 @@ export const PlanLensChips = ({ value, onChange }: PlanLensChipsProps): React.JS
               : {
                   color: 'var(--muted-foreground)',
                   borderColor: 'var(--border)',
-                  background: 'rgba(255,255,255,.028)',
+                  background: 'rgba(233,228,216,.028)',
                 }
           }
         >

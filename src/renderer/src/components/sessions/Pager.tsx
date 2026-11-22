@@ -7,7 +7,7 @@ type PagerProps = {
 };
 
 const pagerButtonClass =
-  'flex items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3.5 py-2 text-[13px] font-semibold text-foreground hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.03]';
+  'flex items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3.5 py-2 text-[13px] font-semibold text-foreground hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-bone/[0.03]';
 
 // Paginador simple (Bloque 5A) — nada que pintar si todo cabe en una sola
 // página. El número de página vive en el propio Sessions.tsx (no aquí):

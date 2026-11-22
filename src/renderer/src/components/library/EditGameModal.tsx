@@ -256,7 +256,7 @@ export const EditGameModal = ({
             style={revealStyle(1)}
           >
             <div>
-              <div className={fieldLabelClass}>TITLE</div>
+              <div className={fieldLabelClass}>Title</div>
               <Controller
                 control={control}
                 name="title"
@@ -266,9 +266,9 @@ export const EditGameModal = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-x-3 gap-y-3.5 rounded-[10px] border border-border bg-white/[0.015] px-3.25 py-3">
-              <Cell label="DEVELOPER" value={game.developer ?? '—'} />
-              <Cell label="PUBLISHER" value={game.publisher ?? '—'} />
+            <div className="grid grid-cols-2 gap-x-3 gap-y-3.5 rounded-[10px] border border-border bg-bone/[0.015] px-3.25 py-3">
+              <Cell label="Developer" value={game.developer ?? '—'} />
+              <Cell label="Publisher" value={game.publisher ?? '—'} />
             </div>
           </FormSection>
 
@@ -334,7 +334,7 @@ export const EditGameModal = ({
                 {!game.endless && (game.iterations.length > 0 || newPlaythroughs.length > 0) && (
                   <div
                     className="flex items-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
-                    style={{ background: 'rgba(133,163,214,.1)', color: BLUE }}
+                    style={{ background: 'rgba(95,211,224,.1)', color: BLUE }}
                   >
                     <Info size={13} className="flex-none" />
                     Saving clears its status history and playthrough outcomes — tracked sessions and
@@ -424,7 +424,7 @@ const GameBanner = ({ game }: { game: GameDetail }): React.JSX.Element => {
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-input bg-white/[0.03] ${revealClass}`}
+      className={`relative overflow-hidden rounded-xl border border-line-strong bg-raised ${revealClass}`}
       style={revealStyle(0)}
     >
       {game.heroUrl && (
@@ -439,14 +439,14 @@ const GameBanner = ({ game }: { game: GameDetail }): React.JSX.Element => {
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.92) 40%, rgba(18,20,19,.55) 100%)',
+                'linear-gradient(90deg, rgba(36,44,49,.97) 0%, rgba(36,44,49,.92) 40%, rgba(36,44,49,.55) 100%)',
             }}
           />
         </>
       )}
 
       <div className="relative flex items-center gap-3.5 p-3.5">
-        <div className="h-19 w-14 flex-none overflow-hidden rounded-lg border border-white/15 bg-muted shadow-[0_8px_20px_rgba(0,0,0,.45)]">
+        <div className="h-19 w-14 flex-none overflow-hidden rounded-lg border border-line-strong bg-muted shadow-[0_8px_20px_rgba(3,6,7,.45)]">
           <CoverThumb url={game.coverUrl} alt="" className="h-full w-full object-cover" />
         </div>
 

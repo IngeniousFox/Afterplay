@@ -108,7 +108,7 @@ export const SavesSection = ({ gameId, gameTitle }: SavesSectionProps): React.JS
         <div className="flex-1 text-[13.5px] font-bold text-foreground">Saves</div>
         {state?.cloud.length ? (
           <span
-            className="flex-none rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+            className="flex-none rounded-full px-2 py-0.5 text-micro font-bold tabular-nums"
             style={{ background: `${BLUE}1f`, color: BLUE }}
           >
             {state.cloud.length} in cloud
@@ -300,7 +300,7 @@ const SyncHero = ({
           {meta.label}
         </div>
         {stats && (
-          <div className="mt-0.25 truncate text-[10.5px] text-muted-foreground">
+          <div className="mt-0.25 truncate text-micro text-muted-foreground">
             {pluralize(stats.files, 'file')} · {formatBytes(stats.bytes)}
             {stats.registryKeys > 0 && ` · ${pluralize(stats.registryKeys, 'registry key')}`}
           </div>
@@ -423,7 +423,7 @@ const SyncActions = ({
                 data-testid="saves-sync-restore"
                 onClick={() => onRestore(backup)}
                 disabled={blocked}
-                className="flex w-full items-center justify-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-bold text-white transition-colors duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-bold text-bone transition-colors duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ background: BLUE }}
               >
                 <HardDriveDownload size={13} />
@@ -443,7 +443,7 @@ const SyncActions = ({
         </div>
       )}
       {showUnverified && (
-        <div className="text-[10.5px] leading-relaxed text-muted-foreground">
+        <div className="text-micro leading-relaxed text-muted-foreground">
           The save on this disk couldn&apos;t be checked, so local changes aren&apos;t taken into
           account.
         </div>
@@ -505,7 +505,7 @@ const Detected = ({
           <span className="min-w-0 truncate text-[12.5px] font-semibold text-foreground">
             {state.ludusaviName}
           </span>
-          <span className="flex-none text-[10px] text-muted-foreground">
+          <span className="flex-none text-micro text-muted-foreground">
             {state.detectionSource === 'manual' ? 'manual' : 'auto'}
           </span>
         </div>
@@ -522,7 +522,7 @@ const Detected = ({
               type="button"
               onClick={() => clearDetection.mutate(gameId)}
               disabled={clearDetection.isPending}
-              className="mt-1 text-[10.5px] font-semibold text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground disabled:opacity-50"
+              className="mt-1 text-micro font-semibold text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground disabled:opacity-50"
             >
               {clearDetection.isPending ? 'Resetting…' : 'Not the right game? Reset detection'}
             </button>
@@ -530,7 +530,7 @@ const Detected = ({
                 el usuario se queda atrapado en el mismo sitio del que
                 intentaba salir, sin saber siquiera que lo intentó. */}
             {clearDetection.isError && (
-              <div className="mt-1 text-[10.5px] font-semibold text-destructive">
+              <div className="mt-1 text-micro font-semibold text-destructive">
                 Couldn&apos;t reset it — {clearDetection.error.message}
               </div>
             )}
@@ -597,7 +597,7 @@ const Detected = ({
         className="flex items-center gap-2 rounded-[9px] border px-2.75 py-2 text-left transition-colors duration-150"
         style={{
           borderColor: state.enabled ? `${BLUE}66` : 'var(--input)',
-          background: state.enabled ? `${BLUE}12` : 'rgba(255,255,255,.02)',
+          background: state.enabled ? `${BLUE}12` : 'rgba(233,228,216,.02)',
         }}
       >
         <CloudUpload
@@ -607,12 +607,12 @@ const Detected = ({
         />
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] font-semibold text-foreground">Cloud backup</span>
-          <span className="block text-[10.5px] text-muted-foreground">
+          <span className="block text-micro text-muted-foreground">
             {state.enabled ? 'Runs when you close a session' : 'Off — nothing leaves this PC'}
           </span>
         </span>
         <span
-          className="flex-none text-[10px] font-bold"
+          className="flex-none text-micro font-bold"
           style={{ color: state.enabled ? BLUE : 'var(--muted-foreground)' }}
         >
           {state.enabled ? 'ON' : 'OFF'}
@@ -699,7 +699,7 @@ const FoldersBlock = ({
   return (
     <div className="mt-3 flex flex-col gap-1.5">
       {hasAny && (
-        <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="text-micro font-bold tracking-[.12em] text-muted-foreground">
           WHERE IT SAVES
         </div>
       )}
@@ -737,7 +737,7 @@ const FoldersBlock = ({
       </SidebarButton>
 
       {ownPaths.length > 0 && isAuto && (
-        <div className="text-[10px] leading-relaxed text-muted-foreground/80">
+        <div className="text-micro leading-relaxed text-muted-foreground/80">
           Backed up on top of what Afterplay detects, registry included.
         </div>
       )}
@@ -804,13 +804,13 @@ const FolderRow = ({
               {name}
             </span>
             <span
-              className="flex-none rounded-full px-1.5 py-px text-[8.5px] font-bold tracking-[.08em]"
+              className="flex-none rounded-full px-1.5 py-px text-micro font-bold tracking-[.08em]"
               style={{ background: `${tone}26`, color: tone }}
             >
               {tag}
             </span>
           </span>
-          <span className="block truncate font-mono text-[9.5px] text-muted-foreground/80">
+          <span className="block truncate font-mono text-micro text-muted-foreground/80">
             {parent}
           </span>
         </span>
@@ -906,7 +906,7 @@ const SidebarButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex w-full items-center justify-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3 py-2 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+    className="flex w-full items-center justify-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3 py-2 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
   >
     <Icon size={13} className={Icon === Loader2 ? 'animate-spin' : undefined} />
     {children}
@@ -915,7 +915,7 @@ const SidebarButton = ({
 
 const Warning = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
   <div
-    className="mt-1.5 flex items-start gap-1.5 text-[10.5px] leading-relaxed"
+    className="mt-1.5 flex items-start gap-1.5 text-micro leading-relaxed"
     style={{ color: AMBER }}
   >
     <TriangleAlert size={11} className="mt-0.5 flex-none" />
@@ -941,17 +941,17 @@ const RestoreTargetRow = ({
       style={{ borderColor: `${TEAL}2e`, background: `${TEAL}0f` }}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[9.5px] font-bold tracking-[.12em]" style={{ color: `${TEAL}b3` }}>
+        <div className="text-micro font-bold tracking-[.12em]" style={{ color: `${TEAL}b3` }}>
           RESTORES TO
         </div>
-        <div className="truncate font-mono text-[10.5px] text-foreground" title={target}>
+        <div className="truncate font-mono text-micro text-foreground" title={target}>
           {target}
         </div>
       </div>
       <button
         type="button"
         onClick={() => setRestoreTarget.mutate({ gameId, target: null })}
-        className="flex-none rounded-md p-1 text-muted-foreground hover:bg-white/6 hover:text-foreground"
+        className="flex-none rounded-md p-1 text-muted-foreground hover:bg-bone/6 hover:text-foreground"
         title="Use the original paths again"
       >
         <RotateCcw size={12} />
@@ -996,8 +996,8 @@ const VersionList = ({
   const visible = expanded ? versions : versions.slice(0, VISIBLE_VERSIONS);
 
   return (
-    <div className="border-t border-white/5 pt-3.5">
-      <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+    <div className="border-t border-line pt-3.5">
+      <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
         VERSIONS
       </div>
 
@@ -1029,7 +1029,7 @@ const VersionList = ({
               style={
                 index === 0
                   ? { borderColor: `${BLUE}2e`, background: `${BLUE}0f` }
-                  : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+                  : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
               }
             >
               <div className="min-w-0 flex-1">
@@ -1043,14 +1043,14 @@ const VersionList = ({
                   </span>
                   {index === 0 && (
                     <span
-                      className="flex-none rounded-full px-1.5 py-px text-[8.5px] font-bold tracking-[.08em]"
+                      className="flex-none rounded-full px-1.5 py-px text-micro font-bold tracking-[.08em]"
                       style={{ background: `${BLUE}26`, color: BLUE }}
                     >
                       LATEST
                     </span>
                   )}
                 </div>
-                <div className="truncate text-[10px] text-muted-foreground">
+                <div className="truncate text-micro text-muted-foreground">
                   {formatBytes(version.sizeBytes)} · {version.machineName}
                   {version.differential && ' · incremental'}
                 </div>
@@ -1060,7 +1060,7 @@ const VersionList = ({
                 onClick={() => onRestore(version)}
                 disabled={blockedReason !== null}
                 title="Restore this version…"
-                className="flex-none rounded-md p-1.25 transition-colors duration-150 hover:bg-white/6 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex-none rounded-md p-1.25 transition-colors duration-150 hover:bg-bone/6 disabled:cursor-not-allowed disabled:opacity-40"
                 style={{ color: blockedReason ? 'var(--muted-foreground)' : BLUE }}
               >
                 <HardDriveDownload size={13} />

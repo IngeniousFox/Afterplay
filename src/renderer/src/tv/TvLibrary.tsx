@@ -90,20 +90,20 @@ const FilterPill = ({
       style={{
         ...(active
           ? {
-              background: 'linear-gradient(180deg, rgba(47,220,126,.22), rgba(47,220,126,.1))',
-              color: '#2fdc7e',
-              boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.35)',
+              background: 'linear-gradient(180deg, rgba(255,179,71,.22), rgba(255,179,71,.1))',
+              color: '#ffb347',
+              boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.35)',
             }
           : {
               color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.06)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.06)',
             }),
         ...(focused
           ? {
-              background: 'rgba(47,220,126,.14)',
-              color: '#2fdc7e',
+              background: 'rgba(255,179,71,.14)',
+              color: '#ffb347',
               translate: '0 -0.1em',
-              boxShadow: '0 0.2em 1em rgba(47,220,126,.25), 0 0.3em 0.8em rgba(0,0,0,.3)',
+              boxShadow: '0 0.2em 1em rgba(255,179,71,.25), 0 0.3em 0.8em rgba(3,6,7,.3)',
             }
           : {}),
       }}
@@ -113,7 +113,7 @@ const FilterPill = ({
           <span
             aria-hidden
             className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-            style={{ boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.8)' }}
+            style={{ boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.8)' }}
           />
           <span
             aria-hidden
@@ -123,7 +123,7 @@ const FilterPill = ({
               className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
-                  'linear-gradient(105deg, transparent, rgba(255,255,255,.25), transparent)',
+                  'linear-gradient(105deg, transparent, rgba(233,228,216,.25), transparent)',
               }}
             />
           </span>
@@ -167,21 +167,21 @@ const SearchChip = ({
       style={{
         ...(active
           ? {
-              background: 'linear-gradient(180deg, rgba(124,134,200,.22), rgba(124,134,200,.11))',
+              background: 'linear-gradient(180deg, rgba(185,166,255,.22), rgba(185,166,255,.11))',
               color: '#a9b3e8',
-              boxShadow: 'inset 0 0 0 1px rgba(124,134,200,.35)',
+              boxShadow: 'inset 0 0 0 1px rgba(185,166,255,.35)',
             }
           : {
-              background: 'rgba(255,255,255,.05)',
+              background: 'rgba(233,228,216,.05)',
               color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.06)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.06)',
             }),
         ...(focused
           ? {
-              background: 'rgba(124,134,200,.16)',
+              background: 'rgba(185,166,255,.16)',
               color: '#c3cbf2',
               translate: '0 -0.1em',
-              boxShadow: '0 0.2em 1em rgba(124,134,200,.28), 0 0.3em 0.8em rgba(0,0,0,.3)',
+              boxShadow: '0 0.2em 1em rgba(185,166,255,.28), 0 0.3em 0.8em rgba(3,6,7,.3)',
             }
           : {}),
       }}
@@ -191,7 +191,7 @@ const SearchChip = ({
           <span
             aria-hidden
             className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-            style={{ boxShadow: 'inset 0 0 0 2px rgba(124,134,200,.75)' }}
+            style={{ boxShadow: 'inset 0 0 0 2px rgba(185,166,255,.75)' }}
           />
           <span
             aria-hidden
@@ -201,7 +201,7 @@ const SearchChip = ({
               className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
-                  'linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent)',
+                  'linear-gradient(105deg, transparent, rgba(233,228,216,.22), transparent)',
               }}
             />
           </span>
@@ -209,7 +209,7 @@ const SearchChip = ({
       )}
       <Search
         className="relative h-[1.05em] w-[1.05em] flex-none"
-        style={active || focused ? { filter: 'drop-shadow(0 0 0.35em rgba(124,134,200,.6))' } : {}}
+        style={active || focused ? { filter: 'drop-shadow(0 0 0.35em rgba(185,166,255,.6))' } : {}}
       />
       <span className="relative flex items-center gap-[0.45em]">
         {active ? (
@@ -385,7 +385,7 @@ export const TvLibrary = (): React.JSX.Element => {
 
   // El acento del estado vacío cuenta el PORQUÉ está vacío: violeta si fue la
   // búsqueda, verde si fue el filtro.
-  const emptyAccent = needle ? '#7c86c8' : '#2fdc7e';
+  const emptyAccent = needle ? '#b9a6ff' : '#ffb347';
 
   // SOLO SE REGISTRA EN EL MOTOR DE FOCO LO QUE ESTÁ CERCA DEL VIEWPORT, y
   // esto arregla el peor parón medido de todo el modo TV: 600 ms.
@@ -677,8 +677,8 @@ export const TvLibrary = (): React.JSX.Element => {
             <div
               className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative mb-[0.9em] flex h-[3.4em] w-[3.4em] items-center justify-center rounded-full"
               style={{
-                background: 'rgba(255,255,255,.04)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)',
+                background: 'rgba(233,228,216,.04)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.08)',
               }}
             >
               <span

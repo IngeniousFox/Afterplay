@@ -59,9 +59,9 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
         <span
           className={cn(
             'afterplay-chart-heading-icon flex w-8 h-8 items-center justify-center rounded-[9px] border',
-            'border-[color-mix(in_srgb,var(--chart-accent,#2fdc7e)_22%,transparent)]',
-            'text-[color:var(--chart-accent,#2fdc7e)]',
-            'bg-[color-mix(in_srgb,var(--chart-accent,#2fdc7e)_7%,rgba(255,255,255,0.01))]',
+            'border-[color-mix(in_srgb,var(--chart-accent,#ffb347)_22%,transparent)]',
+            'text-[color:var(--chart-accent,#ffb347)]',
+            'bg-[color-mix(in_srgb,var(--chart-accent,#ffb347)_7%,rgba(233,228,216,0.01))]',
             '[.afterplay-category-card_&]:[transition:color_200ms_ease,border-color_200ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
             '[.afterplay-category-card:hover_&]:border-[color-mix(in_srgb,var(--chart-accent)_38%,transparent)]',
             '[.afterplay-category-card:hover_&]:[transform:translateY(-1px)_rotate(-3deg)]',
@@ -84,8 +84,8 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
             'tracking-[0.09em] whitespace-nowrap border border-[color-mix(in_srgb,var(--streak-accent)_25%,transparent)]',
             'text-[color:var(--streak-accent)]',
             'bg-[color-mix(in_srgb,var(--streak-accent)_7%,transparent)]',
-            '[.afterplay-streak-card.is-empty_&]:text-white/45 [.afterplay-streak-card.is-empty_&]:border-white/9',
-            '[.afterplay-streak-card.is-empty_&]:bg-white/[0.025]',
+            '[.afterplay-streak-card.is-empty_&]:text-dust [.afterplay-streak-card.is-empty_&]:border-line',
+            '[.afterplay-streak-card.is-empty_&]:bg-bone/[0.025]',
           )}
         >
           <i
@@ -103,13 +103,13 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
         <div
           className={cn(
             'afterplay-streak-orbit relative flex w-28.5 h-28.5 flex-none items-center justify-center p-[7px] rounded-[50%]',
-            '[background:conic-gradient(var(--streak-accent)_0deg_var(--streak-progress),rgba(255,255,255,0.055)_var(--streak-progress)_360deg)]',
-            '[box-shadow:0_10px_25px_rgba(0,0,0,0.2),0_0_13px_color-mix(in_srgb,var(--streak-accent)_11%,transparent)]',
+            '[background:conic-gradient(var(--streak-accent)_0deg_var(--streak-progress),rgba(233,228,216,0.055)_var(--streak-progress)_360deg)]',
+            '[box-shadow:0_10px_25px_rgba(3,6,7,0.2),0_0_13px_color-mix(in_srgb,var(--streak-accent)_11%,transparent)]',
             '[transition:box-shadow_240ms_ease,transform_320ms_cubic-bezier(0.22,1,0.36,1)]',
             "before:content-[''] before:absolute before:-inset-1.75 before:rounded-full before:opacity-32",
-            'before:[background:repeating-conic-gradient(from_-1deg,rgba(255,255,255,0.28)_0deg_1deg,transparent_1deg_15deg)]',
+            'before:[background:repeating-conic-gradient(from_-1deg,rgba(233,228,216,0.28)_0deg_1deg,transparent_1deg_15deg)]',
             'before:[mask:radial-gradient(circle,transparent_68%,#000_69%_71%,transparent_72%)]',
-            '[.afterplay-streak-card:hover_&]:[box-shadow:0_12px_28px_rgba(0,0,0,0.24),0_0_15px_color-mix(in_srgb,var(--streak-accent)_15%,transparent)]',
+            '[.afterplay-streak-card:hover_&]:[box-shadow:0_12px_28px_rgba(3,6,7,0.24),0_0_15px_color-mix(in_srgb,var(--streak-accent)_15%,transparent)]',
             '[.afterplay-streak-card:hover_&]:[transform:translateY(-2px)_rotate(-1deg)]',
             'motion-reduce:animate-none motion-reduce:transition-none',
           )}
@@ -118,17 +118,17 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
           <div
             className={cn(
               'afterplay-streak-orbit-inner flex w-full h-full flex-col items-center justify-center rounded-[50%] border',
-              'border-white/[0.055]',
+              'border-line',
               'text-[color:var(--streak-accent)]',
               '[background:radial-gradient(circle_at_50%_34%,color-mix(in_srgb,var(--streak-accent)_9%,transparent),transparent_43%),#101310]',
-              '[box-shadow:inset_0_0_18px_rgba(0,0,0,0.28)]',
+              '[box-shadow:inset_0_0_18px_rgba(3,6,7,0.28)]',
             )}
           >
             <Flame size={20} fill={hasStreak ? AMBER : 'none'} />
-            <strong className="mt-0.5 text-foreground text-[34px] font-[950] leading-[0.92] tracking-[-0.05em] tabular-nums">
+            <strong className="mt-0.5 text-foreground text-[34px] font-display font-bold leading-[0.92] tabular-nums">
               {mainValue}
             </strong>
-            <small className="mt-1.25 text-white/45 text-[11px] font-extrabold tracking-[0.1em] uppercase">
+            <small className="mt-1.25 text-dust text-[11px] font-extrabold tracking-[0.1em] uppercase">
               {mainValue === 1 ? 'day' : 'days'}
             </small>
           </div>
@@ -154,7 +154,7 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
             {supportingCopy}
           </small>
           <div className="afterplay-streak-progress mt-[13px]">
-            <span className="block h-1 overflow-hidden rounded-[99px] bg-white/[0.055]">
+            <span className="block h-1 overflow-hidden rounded-[99px] bg-bone/[0.055]">
               <i
                 className={cn(
                   'block h-full rounded-[inherit]',
@@ -165,16 +165,16 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
                 style={{ width: `${progressPercent}%` }}
               />
             </span>
-            <em className="block mt-1.25 text-white/45 text-[11px] not-italic font-bold text-right">
+            <em className="block mt-1.25 text-dust text-[11px] not-italic font-bold text-right">
               {progressPercent}% of record
             </em>
           </div>
         </div>
       </div>
 
-      <div className="afterplay-streak-footer grid grid-cols-2 gap-[9px] pt-2.5 border-t border-t-[rgba(255,255,255,0.055)]">
-        <div className="min-w-0 p-[7px_9px] border border-white/[0.055] rounded-[8px] bg-white/[0.018]">
-          <span className="block min-h-7 whitespace-normal text-white/45 text-[11px] leading-[1.25] font-bold tracking-[0.04em]">
+      <div className="afterplay-streak-footer grid grid-cols-2 gap-[9px] pt-2.5 border-t border-t-[rgba(233,228,216,0.055)]">
+        <div className="min-w-0 p-[7px_9px] border border-line rounded-[8px] bg-bone/[0.018]">
+          <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.04em]">
             LONGEST EVER
           </span>
           <strong
@@ -186,8 +186,8 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
             {pluralize(longestEver, 'day')}
           </strong>
         </div>
-        <div className="min-w-0 p-[7px_9px] border border-white/[0.055] rounded-[8px] bg-white/[0.018]">
-          <span className="block min-h-7 whitespace-normal text-white/45 text-[11px] leading-[1.25] font-bold tracking-[0.04em]">
+        <div className="min-w-0 p-[7px_9px] border border-line rounded-[8px] bg-bone/[0.018]">
+          <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.04em]">
             {gapToRecord > 0 ? 'TO MATCH IT' : 'STATUS'}
           </span>
           <strong

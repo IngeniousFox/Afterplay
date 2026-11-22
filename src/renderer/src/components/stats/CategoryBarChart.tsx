@@ -67,7 +67,7 @@ export const CategoryBarChart = ({
       className={cn(
         'afterplay-category-card flex h-full flex-col relative overflow-hidden',
         "after:content-[''] after:absolute after:top-0 after:left-5.5 after:w-14.5 after:h-px after:pointer-events-none",
-        'after:[background:linear-gradient(90deg,transparent,var(--chart-accent,#2fdc7e),transparent)] after:opacity-50',
+        'after:[background:linear-gradient(90deg,transparent,var(--chart-accent,#ffb347),transparent)] after:opacity-50',
       )}
       style={
         {
@@ -80,9 +80,9 @@ export const CategoryBarChart = ({
         <span
           className={cn(
             'afterplay-chart-heading-icon flex w-8 h-8 items-center justify-center rounded-[9px] border',
-            'border-[color-mix(in_srgb,var(--chart-accent,#2fdc7e)_22%,transparent)]',
-            'text-[color:var(--chart-accent,#2fdc7e)]',
-            'bg-[color-mix(in_srgb,var(--chart-accent,#2fdc7e)_7%,rgba(255,255,255,0.01))]',
+            'border-[color-mix(in_srgb,var(--chart-accent,#ffb347)_22%,transparent)]',
+            'text-[color:var(--chart-accent,#ffb347)]',
+            'bg-[color-mix(in_srgb,var(--chart-accent,#ffb347)_7%,rgba(233,228,216,0.01))]',
             '[.afterplay-category-card_&]:[transition:color_200ms_ease,border-color_200ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
             '[.afterplay-category-card:hover_&]:border-[color-mix(in_srgb,var(--chart-accent)_38%,transparent)]',
             '[.afterplay-category-card:hover_&]:[transform:translateY(-1px)_rotate(-3deg)]',
@@ -104,8 +104,8 @@ export const CategoryBarChart = ({
             className={cn(
               'afterplay-chart-total min-w-17.5 text-right [&_strong]:block [&_strong]:text-foreground [&_strong]:text-[12px]',
               '[&_strong]:font-[850] [&_strong]:leading-[1.2] [&_strong]:tabular-nums [&_small]:block [&_small]:mt-0.75',
-              '[&_small]:text-white/45 [&_small]:text-[11px] [&_small]:font-[650] [&_small]:leading-[1.2]',
-              '[&_em]:text-[color:var(--session-accent,var(--chart-accent,#2fdc7e))] [&_em]:not-italic [&_em]:font-extrabold',
+              '[&_small]:text-dust [&_small]:text-[11px] [&_small]:font-[650] [&_small]:leading-[1.2]',
+              '[&_em]:text-[color:var(--session-accent,var(--chart-accent,#ffb347))] [&_em]:not-italic [&_em]:font-extrabold',
             )}
           >
             {headerRightContent}
@@ -117,17 +117,17 @@ export const CategoryBarChart = ({
         className={cn(
           'afterplay-category-focus flex min-h-[49px] items-center justify-between gap-4 mt-[13px] py-2 px-[11px]',
           'rounded-[10px] border',
-          'border-[color-mix(in_srgb,var(--chart-accent,var(--session-accent,#2fdc7e))_18%,rgba(255,255,255,0.05))]',
-          '[background:linear-gradient(115deg,color-mix(in_srgb,var(--chart-accent,var(--session-accent,#2fdc7e))_7%,transparent),rgba(255,255,255,0.012))]',
+          'border-[color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_18%,rgba(233,228,216,0.05))]',
+          '[background:linear-gradient(115deg,color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_7%,transparent),rgba(233,228,216,0.012))]',
           '[&_>_div:last-child]:flex-none [&_>_div:last-child]:text-right',
-          '[&_>_div:last-child_strong]:text-[color:var(--chart-accent,var(--session-accent,#2fdc7e))]',
+          '[&_>_div:last-child_strong]:text-[color:var(--chart-accent,var(--session-accent,#ffb347))]',
         )}
         aria-live="polite"
       >
         {activeBar ? (
           <>
             <div>
-              <span className="block text-white/45 text-[11px] font-black tracking-[0.14em] leading-[1]">
+              <span className="block text-dust text-[11px] font-black tracking-[0.14em] leading-[1]">
                 {hoveredIndex === null ? 'PEAK' : 'INSPECTING'}
               </span>
               <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
@@ -138,7 +138,7 @@ export const CategoryBarChart = ({
               <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
                 {formatValue(activeBar.value)}
               </strong>
-              <small className="block mt-0.75 text-white/45 text-[11px] font-semibold leading-[1.05]">
+              <small className="block mt-0.75 text-dust text-[11px] font-semibold leading-[1.05]">
                 {activeShare}% of this view
               </small>
             </div>
@@ -146,14 +146,14 @@ export const CategoryBarChart = ({
         ) : (
           <>
             <div>
-              <span className="block text-white/45 text-[11px] font-black tracking-[0.14em] leading-[1]">
+              <span className="block text-dust text-[11px] font-black tracking-[0.14em] leading-[1]">
                 NO ACTIVITY
               </span>
               <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
                 —
               </strong>
             </div>
-            <small className="block mt-0.75 text-white/45 text-[11px] font-semibold leading-[1.05]">
+            <small className="block mt-0.75 text-dust text-[11px] font-semibold leading-[1.05]">
               Nothing tracked in this view
             </small>
           </>
@@ -161,16 +161,16 @@ export const CategoryBarChart = ({
       </div>
 
       <div
-        className="afterplay-category-stage relative flex flex-none items-stretch gap-[9px] mt-3 border-b border-b-[rgba(255,255,255,0.075)]"
+        className="afterplay-category-stage relative flex flex-none items-stretch gap-[9px] mt-3 border-b border-b-[rgba(233,228,216,0.075)]"
         style={{ height: BAR_AREA_PX }}
       >
         <span
           className="afterplay-category-grid absolute -z-1 inset-0 grid grid-rows-[repeat(3,_1fr)] pointer-events-none"
           aria-hidden="true"
         >
-          <i className="border-t border-dashed border-t-[rgba(255,255,255,0.035)]" />
-          <i className="border-t border-dashed border-t-[rgba(255,255,255,0.035)]" />
-          <i className="border-t border-dashed border-t-[rgba(255,255,255,0.035)]" />
+          <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
+          <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
+          <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
         </span>
         {bars.map((bar, index) => {
           const isHovered = hoveredIndex === index;
@@ -195,7 +195,7 @@ export const CategoryBarChart = ({
                 'afterplay-category-column relative min-w-0 h-full flex-1 rounded-[7px_7px_0_0] outline-none',
                 '[transition:opacity_180ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
                 '[&.is-active]:[transform:translateY(-2px)] [&.is-dimmed]:opacity-43',
-                'focus-visible:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--chart-accent,var(--session-accent,#2fdc7e))_45%,transparent)]',
+                'focus-visible:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_45%,transparent)]',
                 'motion-reduce:animate-none motion-reduce:transition-none',
                 isActive ? 'is-active' : '',
                 hoveredIndex !== null && !isHovered ? 'is-dimmed' : '',
@@ -205,8 +205,8 @@ export const CategoryBarChart = ({
               <span
                 className={cn(
                   'afterplay-category-track absolute bottom-0 left-1/2 w-[74%] h-full rounded-[6px_6px_3px_3px]',
-                  '[transform:translateX(-50%)] border border-white/[0.025] border-b-0',
-                  '[background:linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.018))]',
+                  '[transform:translateX(-50%)] border border-line border-b-0',
+                  '[background:linear-gradient(180deg,rgba(233,228,216,0.032),rgba(233,228,216,0.018))]',
                   maxBarWidthClass,
                 )}
               />
@@ -218,7 +218,7 @@ export const CategoryBarChart = ({
                     'animate-[afterplay-category-rise_620ms_cubic-bezier(0.22,1,0.36,1)_var(--bar-delay)_backwards]',
                     '[transition:filter_180ms_ease,box-shadow_200ms_ease] [background:var(--bar-gradient)]',
                     "after:content-[''] after:absolute after:inset-0 after:pointer-events-none",
-                    'after:[background:linear-gradient(90deg,rgba(255,255,255,0.09),transparent_36%_72%,rgba(0,0,0,0.08))]',
+                    'after:[background:linear-gradient(90deg,rgba(233,228,216,0.09),transparent_36%_72%,rgba(3,6,7,0.08))]',
                     '[.afterplay-category-column.is-active_&]:[filter:saturate(1.06)_brightness(1.07)]',
                     '[.afterplay-category-column.is-active_&]:[box-shadow:0_0_11px_var(--chart-glow)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
@@ -232,7 +232,7 @@ export const CategoryBarChart = ({
                     } as CSSProperties
                   }
                 >
-                  <i className="absolute z-1 top-0 right-1.25 left-1.25 h-px bg-white/38 opacity-50" />
+                  <i className="absolute z-1 top-0 right-1.25 left-1.25 h-px bg-bone/38 opacity-50" />
                 </span>
               )}
             </div>
@@ -246,9 +246,9 @@ export const CategoryBarChart = ({
             key={index}
             className={cn(
               activeIndex === index ? 'is-active' : '',
-              'min-w-0 flex-1 text-white/45 text-[11px] font-semibold leading-[1.25] text-center',
+              'min-w-0 flex-1 text-dust text-[11px] font-semibold leading-[1.25] text-center',
               'whitespace-normal break-words [transition:color_180ms_ease,font-weight_180ms_ease]',
-              '[&.is-active]:text-[color:var(--chart-accent,var(--session-accent,#2fdc7e))] [&.is-active]:font-[850]',
+              '[&.is-active]:text-[color:var(--chart-accent,var(--session-accent,#ffb347))] [&.is-active]:font-[850]',
             )}
           >
             {bar.label}

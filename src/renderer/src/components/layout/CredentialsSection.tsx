@@ -201,7 +201,7 @@ const destinationLabel = (provider: SaveStorageProvider, values: CredentialsValu
 // Mismo botón de contorno que el "Back up now" de Data backups, que es el
 // gesto hermano — escribir/leer un fichero fuera de la app.
 const transferButtonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 // Credenciales de APIs externas, editables sin .env (main/config/credentials
 // las guarda cifradas en userData). Vive en su propia pestaña de Ajustes
@@ -327,7 +327,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
   };
 
   return (
-    <div className="rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.75">
+    <div className="rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.75">
       {/* Cabecera estática (esta sección ya no se pliega — vive en su propia
           pestaña): título + qué servicios están listos, de un vistazo. */}
       <div className="flex items-start justify-between gap-3">
@@ -365,13 +365,13 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                 // whitespace-nowrap: cada etiqueta es una unidad
                 // ("Cloud saves" son dos palabras) — sin esto el texto
                 // se parte a mitad en vez de saltar la etiqueta entera.
-                className="flex items-center gap-1.5 whitespace-nowrap text-[10.5px] font-bold"
-                style={{ color: service.ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
+                className="flex items-center gap-1.5 whitespace-nowrap text-micro font-bold"
+                style={{ color: service.ready ? '#ffb347' : 'var(--muted-foreground)' }}
               >
                 <span
                   className="h-1.5 w-1.5 flex-none rounded-full"
                   style={{
-                    background: service.ready ? '#2fdc7e' : 'rgba(255,255,255,.22)',
+                    background: service.ready ? '#ffb347' : 'rgba(233,228,216,.22)',
                   }}
                 />
                 {service.label}
@@ -413,7 +413,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                   ? 'Your changes are still uploading to Turso, but nothing from your other devices can download. Retrying will not fix it — the local copy has to be rebuilt from Turso once.'
                   : 'Your data is safe locally and will upload once the connection recovers.'}
             </div>
-            <div className="mt-1 font-mono text-[10px] break-all text-muted-foreground/60">
+            <div className="mt-1 font-mono text-micro break-all text-muted-foreground/60">
               {syncFailure.message}
             </div>
           </div>
@@ -447,12 +447,12 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
           return (
             <div
               key={service.id}
-              className="overflow-hidden rounded-[9px] border border-border bg-white/[0.02]"
+              className="overflow-hidden rounded-[9px] border border-border bg-bone/[0.02]"
             >
               <button
                 type="button"
                 onClick={() => setOpenService(isOpen ? null : service.id)}
-                className="flex w-full items-center gap-2 px-2.75 py-2.25 text-left transition-colors duration-150 hover:bg-white/[0.03]"
+                className="flex w-full items-center gap-2 px-2.75 py-2.25 text-left transition-colors duration-150 hover:bg-bone/[0.03]"
               >
                 <ChevronDown
                   size={13}
@@ -461,7 +461,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                 />
                 <span
                   className="h-1.5 w-1.5 flex-none rounded-full"
-                  style={{ background: ready ? '#2fdc7e' : 'rgba(255,255,255,.22)' }}
+                  style={{ background: ready ? '#ffb347' : 'rgba(233,228,216,.22)' }}
                 />
                 <span className="text-[12.5px] font-semibold text-foreground">{service.label}</span>
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
@@ -470,8 +470,8 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                     : service.detail}
                 </span>
                 <span
-                  className="flex-none text-[10.5px] font-bold"
-                  style={{ color: ready ? '#2fdc7e' : 'var(--muted-foreground)' }}
+                  className="flex-none text-micro font-bold"
+                  style={{ color: ready ? '#ffb347' : 'var(--muted-foreground)' }}
                 >
                   {ready ? 'Configured' : 'Not set'}
                 </span>
@@ -496,7 +496,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                           className={`rounded-[8px] border px-3 py-1.75 text-[12px] font-semibold transition-colors ${
                             selectedProvider === provider
                               ? 'border-primary/50 bg-primary/10 text-primary'
-                              : 'border-border bg-white/[0.02] text-muted-foreground hover:text-foreground'
+                              : 'border-border bg-bone/[0.02] text-muted-foreground hover:text-foreground'
                           }`}
                         >
                           {provider === 'cloudflare' ? 'Cloudflare R2' : 'S3 compatible'}
@@ -537,7 +537,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                               setSavedFlash(false);
                             }}
                           >
-                            <Select.Label className={fieldLabelClass}>ADDRESSING</Select.Label>
+                            <Select.Label className={fieldLabelClass}>Addressing</Select.Label>
                             <Select.Trigger
                               className={cn(
                                 textInputClass,
@@ -564,7 +564,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                                       <Select.Item
                                         key={option.value}
                                         value={option.value}
-                                        className="flex cursor-default items-center justify-between rounded-[7px] px-2.75 py-2 text-[12px] text-foreground outline-none data-highlighted:bg-white/[0.07] data-selected:text-primary"
+                                        className="flex cursor-default items-center justify-between rounded-[7px] px-2.75 py-2 text-[12px] text-foreground outline-none data-highlighted:bg-bone/[0.07] data-selected:text-primary"
                                       >
                                         <Select.ItemText>{option.label}</Select.ItemText>
                                         <Select.ItemIndicator>
@@ -636,7 +636,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             type="button"
             onClick={handleSave}
             disabled={setCredentials.isPending}
-            className="[will-change:transform] flex w-fit items-center gap-1.75 rounded-[9px] px-3.5 py-2 text-[12.5px] font-bold transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(47,220,126,.32)]"
+            className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
             style={accentGradientStyle}
           >
             <Save size={14} />
@@ -706,10 +706,10 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
         <div className="flex flex-col gap-2 border-t border-border pt-3">
           <div className="text-[11px] leading-relaxed text-muted-foreground">
             Moving to another PC? Export puts every key above into a single{' '}
-            <span className="font-mono text-[10.5px] text-foreground/70">afterplay-keys.json</span>.
-            On the other one, import it here — or just drop it into the app folder and it loads
-            itself on the next start. That file is readable, so keep it somewhere safe and delete it
-            when you&apos;re done.
+            <span className="font-mono text-micro text-foreground/70">afterplay-keys.json</span>. On
+            the other one, import it here — or just drop it into the app folder and it loads itself
+            on the next start. That file is readable, so keep it somewhere safe and delete it when
+            you&apos;re done.
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

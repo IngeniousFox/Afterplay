@@ -73,7 +73,7 @@ export const PlaythroughDatesHoursStatus = ({
       <div className="flex items-end gap-2.5">
         <HoursPlayedField value={hoursPlayed} onChange={onHoursPlayedChange} />
         <div className="flex-1">
-          <div className={fieldLabelClass}>STATUS</div>
+          <div className={fieldLabelClass}>Status</div>
           <Dropdown<PastStatusKey>
             value={status}
             options={statusOptions}

@@ -20,12 +20,12 @@ const HIT_RADIUS = 103;
 const RING_FRACTIONS = [0.25, 0.5, 0.75, 1];
 
 const AXIS_COLORS: Record<(typeof GENRE_AXES)[number], string> = {
-  RPG: '#2fdc7e',
-  Action: '#e3b24a',
-  Adventure: '#85a3d6',
-  Strategy: '#c28bd8',
-  Sim: '#65d3d1',
-  Puzzle: '#e88d9b',
+  RPG: '#ffb347',
+  Action: '#ffb347',
+  Adventure: '#ffb347',
+  Strategy: '#ffb347',
+  Sim: '#ffb347',
+  Puzzle: '#ffb347',
 };
 
 const angleOf = (index: number, axisCount: number): number =>
@@ -68,7 +68,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
     pointAt(entry.index, OUTER_RADIUS * (entry.minutes / maxMinutes), axes.length),
   );
   const polygonPoints = dataPoints.map((point) => point.join(',')).join(' ');
-  const activeColor = activeEntry?.color ?? '#2fdc7e';
+  const activeColor = activeEntry?.color ?? '#ffb347';
 
   return (
     <StatCard className="afterplay-genre-card flex h-full flex-col overflow-hidden">
@@ -81,7 +81,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
         </div>
         {dominantIndex !== null && (
           <div className="afterplay-genre-dominant flex flex-col items-end gap-px">
-            <span className="text-white/45 text-[11px] font-black tracking-[0.14em] uppercase">
+            <span className="text-dust text-[11px] font-black tracking-[0.14em] uppercase">
               Dominant
             </span>
             <strong
@@ -128,7 +128,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                 <path
                   key={outer}
                   d={`M ${ringPoints(outer, axes.length).replaceAll(' ', ' L ')} Z M ${ringPoints(inner, axes.length).replaceAll(' ', ' L ')} Z`}
-                  fill="rgba(255,255,255,.022)"
+                  fill="rgba(233,228,216,.022)"
                   fillRule="evenodd"
                 />
               );
@@ -139,7 +139,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                 key={fraction}
                 points={ringPoints(fraction, axes.length)}
                 fill="none"
-                stroke="rgba(255,255,255,.085)"
+                stroke="rgba(233,228,216,.085)"
                 strokeWidth={1}
               />
             ))}
@@ -154,7 +154,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                   y1={CENTER_Y}
                   x2={x}
                   y2={y}
-                  stroke={isActive ? entry.color : 'rgba(255,255,255,.075)'}
+                  stroke={isActive ? entry.color : 'rgba(233,228,216,.075)'}
                   strokeWidth={isActive ? 1.8 : 1}
                   opacity={hoveredIndex !== null && !isActive ? 0.5 : 1}
                   className={cn(
@@ -253,8 +253,8 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
           <div
             className={cn(
               'afterplay-genre-core absolute top-1/2 left-1/2 flex w-[37px] h-[37px] items-center justify-center rounded-[50%]',
-              'text-[11px] font-black pointer-events-none border border-white/10 text-white/85 bg-[rgba(11,14,12,0.88)]',
-              '[box-shadow:inset_0_1px_0_rgba(255,255,255,0.06),0_7px_18px_rgba(0,0,0,0.36)] [transform:translate(-50%,-50%)]',
+              'text-[11px] font-black pointer-events-none border border-line text-bone bg-[rgba(11,14,12,0.88)]',
+              '[box-shadow:inset_0_1px_0_rgba(233,228,216,0.06),0_7px_18px_rgba(3,6,7,0.36)] [transform:translate(-50%,-50%)]',
             )}
             aria-hidden="true"
           >
@@ -266,15 +266,15 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
           <div
             className={cn(
               'afterplay-genre-focus relative overflow-hidden py-2.5 px-[11px] rounded-[10px] border',
-              'border-[color-mix(in_srgb,var(--genre-accent)_22%,rgba(255,255,255,0.06))]',
-              '[background:linear-gradient(135deg,color-mix(in_srgb,var(--genre-accent)_11%,transparent),rgba(255,255,255,0.018))]',
+              'border-[color-mix(in_srgb,var(--genre-accent)_22%,rgba(233,228,216,0.06))]',
+              '[background:linear-gradient(135deg,color-mix(in_srgb,var(--genre-accent)_11%,transparent),rgba(233,228,216,0.018))]',
               '[transition:border-color_200ms_ease,background-color_200ms_ease]',
               "after:content-[''] after:absolute after:-right-5.5 after:-bottom-6.75 after:w-15.5 after:h-15.5",
               'after:rounded-full after:bg-[var(--genre-accent)] after:opacity-8 after:[filter:blur(10px)]',
             )}
             style={{ '--genre-accent': activeColor } as React.CSSProperties}
           >
-            <span className="text-white/45 text-[11px] font-black tracking-[0.14em] uppercase">
+            <span className="text-dust text-[11px] font-black tracking-[0.14em] uppercase">
               {hoveredIndex === null ? 'Your centre' : 'Inspecting'}
             </span>
             <strong
@@ -298,7 +298,7 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                 <div
                   key={entry.axis}
                   className={cn(
-                    'afterplay-genre-row py-0.5 px-px rounded-[5px] text-[11px] font-[650] text-white/45',
+                    'afterplay-genre-row py-0.5 px-px rounded-[5px] text-[11px] font-[650] text-dust',
                     '[transition:color_180ms_ease,opacity_180ms_ease,transform_220ms_cubic-bezier(0.22,1,0.36,1)]',
                     '[&.afterplay-genre-row--active]:text-foreground [&.afterplay-genre-row--active]:[transform:translateX(2px)]',
                     '[&.afterplay-genre-row--active_strong]:text-[color:var(--genre-accent)]',
@@ -311,13 +311,13 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span>{entry.axis}</span>
-                    <strong className="text-white/50 text-[11px] font-[850] [tab-size:2]">
+                    <strong className="text-dust text-[11px] font-[850] [tab-size:2]">
                       {entry.share}%
                     </strong>
                   </div>
                   <div
                     className={cn(
-                      'afterplay-genre-track h-0.5 mt-[3px] overflow-hidden rounded-[99px] bg-white/[0.055]',
+                      'afterplay-genre-track h-0.5 mt-[3px] overflow-hidden rounded-[99px] bg-bone/[0.055]',
                       '[.afterplay-genre-row--active_&_span]:opacity-100',
                     )}
                   >

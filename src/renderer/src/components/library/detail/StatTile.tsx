@@ -18,14 +18,12 @@ export const StatTile = ({
   size = 'lg',
 }: StatTileProps): React.JSX.Element => (
   <div
-    className="rounded-[11px] border px-3 py-2.5"
+    className="rounded-sm border px-3 py-2.5"
     style={{ borderColor: `${color}2e`, background: `${color}0f` }}
   >
-    <div className="text-[10px] font-bold tracking-[.11em]" style={{ color: `${color}b3` }}>
-      {label}
-    </div>
+    <div className="text-micro font-semibold text-dust">{label}</div>
     <div
-      className={`mt-1 font-extrabold tabular-nums ${size === 'sm' ? 'text-[17px]' : 'text-[19px]'}`}
+      className={`mt-1 font-display leading-none font-bold tabular-nums ${size === 'sm' ? 'text-[22px]' : 'text-[24px]'}`}
       style={{ color }}
     >
       {value}

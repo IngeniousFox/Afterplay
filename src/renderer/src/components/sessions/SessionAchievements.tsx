@@ -61,7 +61,7 @@ export const AchievementMiniIcon = ({
 
   // El aro de color solo en los raros — el mismo "se gana, no se regala"
   // de la vitrina.
-  const ring = `inset 0 0 0 1px ${rare ? `${accent}99` : 'rgba(255,255,255,.12)'}`;
+  const ring = `inset 0 0 0 1px ${rare ? `${accent}99` : 'rgba(233,228,216,.12)'}`;
 
   if (!canOpen) {
     return (
@@ -88,7 +88,7 @@ export const AchievementMiniIcon = ({
       onMouseEnter={(event) => {
         // El aro sube a pleno color bajo el ratón — también en los comunes,
         // que en reposo van neutros: la invitación es del gesto, no del rango.
-        event.currentTarget.style.boxShadow = `inset 0 0 0 1px ${accent}, 0 5px 12px rgba(0,0,0,.5)`;
+        event.currentTarget.style.boxShadow = `inset 0 0 0 1px ${accent}, 0 5px 12px rgba(3,6,7,.5)`;
       }}
       onMouseLeave={(event) => {
         event.currentTarget.style.boxShadow = ring;
@@ -120,7 +120,7 @@ export const SessionAchievements = ({
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
       <span
-        className="flex items-center gap-1 rounded-full px-2 py-0.75 text-[9.5px] font-bold tracking-[.02em]"
+        className="flex items-center gap-1 rounded-full px-2 py-0.75 text-micro font-bold tracking-[.02em]"
         style={{
           color: accent,
           background: `${accent}14`,
@@ -135,7 +135,7 @@ export const SessionAchievements = ({
         <AchievementMiniIcon key={entry.displayName} entry={entry} onOpen={onOpen} />
       ))}
       {hidden > 0 && (
-        <span className="text-[9.5px] font-bold text-muted-foreground/60 tabular-nums">
+        <span className="text-micro font-bold text-muted-foreground/60 tabular-nums">
           +{hidden}
         </span>
       )}

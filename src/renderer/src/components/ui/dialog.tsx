@@ -26,7 +26,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0',
+        'fixed inset-0 isolate z-50 bg-scrim data-open:animate-fade-in data-closed:animate-out data-closed:fade-out-0 data-closed:duration-140',
         className,
       )}
       {...props}
@@ -45,15 +45,16 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
-      {/* Sin bg-popover aquí: compite con el fondo sólido que cada
-          consumidor pasa por className (mismo grupo de clase de Tailwind,
-          cuál gana depende del orden en que compile el CSS, no de esto) —
-          los 6 modales de la app ya traen el suyo propio, ninguno depende
-          del de aquí. Mismo motivo que popover.tsx. */}
+      {/* Fósforo: Overlay + Line strong + radio 8 + shadow-modal. Un
+          consumidor que pase otro fondo lo sustituye vía cn (tailwind-merge
+          quita el de aquí). */}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-md border border-line-strong bg-overlay p-4 text-body text-bone shadow-modal outline-none sm:max-w-sm',
+          // translate va en las propias clases; la animación escala desde el
+          // centro con scale, así que no pisa el centrado.
+          'data-open:animate-dialog-in data-closed:animate-dialog-out',
           className,
         )}
         {...props}
@@ -91,7 +92,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end',
+        '-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-md border-t border-line p-4 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}
@@ -108,7 +109,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('font-heading text-base leading-none font-medium', className)}
+      className={cn('font-display text-title font-bold text-bone', className)}
       {...props}
     />
   );
@@ -119,7 +120,7 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        'text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground',
+        'text-body text-dust *:[a]:text-tube *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-tube-hi',
         className,
       )}
       {...props}

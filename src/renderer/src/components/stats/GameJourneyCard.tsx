@@ -114,24 +114,24 @@ export const GameJourneyCard = ({
       className={cn(
         'afterplay-game-journey',
         'relative overflow-hidden',
-        '[background:radial-gradient(circle_at_0%_50%,rgba(47,220,126,0.055),transparent_37%),var(--card)]',
+        '[background:radial-gradient(circle_at_0%_50%,rgba(255,179,71,0.055),transparent_37%),var(--card)]',
         'before:absolute before:top-[0] before:bottom-[0] before:left-[0] before:w-[2px]',
         'before:[background:linear-gradient(180deg,transparent,var(--primary),transparent)]',
         "before:content-[''] before:opacity-[0.6]",
         '[&_.afterplay-game-card-heading>strong]:border',
         '[&_.afterplay-game-card-heading>strong]:border-[color-mix(in_srgb,currentColor_25%,transparent)]',
-        '[&_.afterplay-game-card-heading>strong]:bg-white/[0.025]',
+        '[&_.afterplay-game-card-heading>strong]:bg-bone/[0.025]',
       )}
     >
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[14px] font-extrabold text-foreground">Your journey</span>
-          <small className="text-[10.5px] text-white/[0.34]">
+          <small className="text-micro text-bone/[0.34]">
             Every turn this game has taken with you
           </small>
         </div>
         <strong
-          className="rounded-[99px] px-2 py-1.25 text-[8.5px] font-black tracking-[0.1em] whitespace-nowrap"
+          className="rounded-[99px] px-2 py-1.25 text-micro font-black tracking-[0.1em] whitespace-nowrap"
           style={{ color: latestNode.meta.color }}
         >
           {nodes.length} MILESTONES
@@ -153,7 +153,7 @@ export const GameJourneyCard = ({
                   'afterplay-game-journey-connector',
                   'relative h-9.5 w-11.75 flex-none',
                   'before:absolute before:top-[18px] before:right-[4px] before:left-[4px] before:h-[1px]',
-                  'before:[background:linear-gradient(90deg,rgba(255,255,255,0.09),var(--journey-color))]',
+                  'before:[background:linear-gradient(90deg,rgba(233,228,216,0.09),var(--journey-color))]',
                   "before:content-['']",
                   '[&_i]:bg-(--journey-color) [&_i]:shadow-[0_0_10px_var(--journey-color)]',
                 )}
@@ -177,7 +177,7 @@ export const GameJourneyCard = ({
                   'relative flex size-9.5 items-center justify-center rounded-[50%] text-(--journey-color)',
                   'border border-[color-mix(in_srgb,var(--journey-color)_42%,transparent)]',
                   'bg-[color-mix(in_srgb,var(--journey-color)_13%,rgba(12,14,13,0.9))]',
-                  'shadow-[0_0_0_4px_rgba(255,255,255,0.018)]',
+                  'shadow-[0_0_0_4px_rgba(233,228,216,0.018)]',
                   'group-[&.is-current]/journey-step:after:absolute group-[&.is-current]/journey-step:after:inset-[-5px]',
                   'group-[&.is-current]/journey-step:after:border',
                   'group-[&.is-current]/journey-step:after:border-(--journey-color)',
@@ -194,10 +194,10 @@ export const GameJourneyCard = ({
               >
                 <StatusIcon meta={node.meta} size={14} />
               </span>
-              <span className="afterplay-game-journey-label mt-1.75 text-[10.5px] font-extrabold whitespace-nowrap text-(--journey-color)">
+              <span className="afterplay-game-journey-label mt-1.75 text-micro font-extrabold whitespace-nowrap text-(--journey-color)">
                 {node.label}
               </span>
-              <span className="afterplay-game-journey-date mt-0.5 text-[9.5px] whitespace-nowrap text-white/[0.35]">
+              <span className="afterplay-game-journey-date mt-0.5 text-micro whitespace-nowrap text-bone/[0.35]">
                 {formatByPrecision(node.date, node.precision, timeFormat)}
               </span>
             </div>
@@ -210,10 +210,10 @@ export const GameJourneyCard = ({
           className={cn(
             'afterplay-game-journey-insights',
             'mt-4.5 grid grid-cols-3 gap-2 pt-3.5',
-            'border-t border-t-white/[0.055]',
-            '[&>span]:border [&>span]:border-white/[0.06] [&>span]:bg-white/[0.022]',
+            'border-t border-t-line',
+            '[&>span]:border [&>span]:border-line [&>span]:bg-bone/[0.022]',
             '[&>span]:[transition:border-color_180ms_ease,background-color_180ms_ease,transform_220ms_cubic-bezier(0.22,1,0.36,1)]',
-            '[&>span:hover]:border-[rgba(47,220,126,0.18)] [&>span:hover]:bg-[rgba(47,220,126,0.04)]',
+            '[&>span:hover]:border-[rgba(255,179,71,0.18)] [&>span:hover]:bg-[rgba(255,179,71,0.04)]',
             '[&>span:hover]:transform-[translateY(-2px)]',
             '[@media(width<=760px)]:grid-cols-[minmax(0,1fr)]',
             'motion-reduce:[&>span]:animate-none motion-reduce:[&>span]:transition-none',
@@ -221,10 +221,10 @@ export const GameJourneyCard = ({
         >
           {chips.map((chip, index) => (
             <span
-              className="flex min-w-0 items-center gap-2 rounded-[9px] px-2.5 py-2 text-[10.5px] font-[650] text-white/[0.68]"
+              className="flex min-w-0 items-center gap-2 rounded-[9px] px-2.5 py-2 text-micro font-[650] text-dust"
               key={chip}
             >
-              <i className="text-[8px] font-black tracking-[0.06em] text-primary not-italic">
+              <i className="text-micro font-black tracking-[0.06em] text-primary not-italic">
                 {String(index + 1).padStart(2, '0')}
               </i>
               {chip}

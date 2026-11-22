@@ -38,11 +38,11 @@ const DAY_LABEL_WIDTH_PX = 26;
 // Mismos 5 colores que el prototipo (Backlog.html, heatColor) — del blanco
 // casi transparente al verde de acento sólido.
 const LEVEL_COLORS = [
-  'rgba(255,255,255,.045)',
-  'rgba(47,220,126,.28)',
-  'rgba(47,220,126,.48)',
-  'rgba(47,220,126,.72)',
-  'rgba(47,220,126,1)',
+  'rgba(233,228,216,.045)',
+  'rgba(255,179,71,.28)',
+  'rgba(255,179,71,.48)',
+  'rgba(255,179,71,.72)',
+  'rgba(255,179,71,1)',
 ];
 
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
@@ -273,7 +273,7 @@ export const ActivityHeatmap = ({
               'afterplay-heat-cell rounded-[3px] origin-center',
               '[transition:transform_110ms_ease,filter_110ms_ease,box-shadow_110ms_ease]',
               'hover:z-2 hover:[filter:brightness(1.18)_saturate(1.15)] hover:[transform:scale(1.32)]',
-              'hover:[box-shadow:0_0_10px_rgba(47,220,126,0.25)]',
+              'hover:[box-shadow:0_0_10px_rgba(255,179,71,0.25)]',
               'motion-reduce:animate-none motion-reduce:transition-none',
             )}
             style={{ background: LEVEL_COLORS[cell.level] }}
@@ -356,7 +356,7 @@ export const ActivityHeatmap = ({
                   top: hovered.y,
                   width: cellPx,
                   height: cellPx,
-                  boxShadow: '0 0 0 1.5px rgba(255,255,255,.55)',
+                  boxShadow: '0 0 0 1.5px rgba(233,228,216,.55)',
                 }}
               />
             )}

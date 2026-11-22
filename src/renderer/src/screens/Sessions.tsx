@@ -138,14 +138,14 @@ export const Sessions = (): React.JSX.Element => {
                 GameListScreen: centrar por caja contra un H1 tan grande deja
                 la píldora flotando en vez de asentada junto al texto. */}
             <div className="flex items-baseline gap-2.75">
-              <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
+              <h1 className="font-display text-[34px] leading-none font-bold text-bone">
                 {selectedGame ? selectedGame.title : 'All Sessions'}
               </h1>
               {/* Mismo patrón que el conteo de juegos en GameListScreen —
                   contextual: cuenta lo que se está viendo ahora mismo
                   (filtered), no siempre el total de la biblioteca entera. */}
               {!isLoading && !isError && total > 0 && (
-                <span className="flex-none rounded-full border border-input bg-white/[0.03] px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
+                <span className="flex-none rounded-full border border-line-strong bg-raised px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
                   {total}
                   <span className="ml-1 font-semibold text-muted-foreground">
                     {total === 1 ? 'session' : 'sessions'}
@@ -169,7 +169,7 @@ export const Sessions = (): React.JSX.Element => {
               <button
                 type="button"
                 onClick={() => navigate('/sessions')}
-                className={`${outlineButtonClass} border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]`}
+                className={`${outlineButtonClass} border-line-strong bg-raised text-foreground hover:bg-raised-hover`}
               >
                 All sessions
               </button>
@@ -192,7 +192,7 @@ export const Sessions = (): React.JSX.Element => {
             <button
               type="button"
               onClick={() => void refetch()}
-              className={`${outlineButtonClass} border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]`}
+              className={`${outlineButtonClass} border-line-strong bg-raised text-foreground hover:bg-raised-hover`}
             >
               <RefreshCw size={14} />
               <span>Try again</span>
@@ -215,27 +215,27 @@ export const Sessions = (): React.JSX.Element => {
             >
               <MetricCard
                 Icon={Clock}
-                label="TOTAL HOURS"
+                label="Total hours"
                 value={formatHours(animatedHours)}
-                accent="#2fdc7e"
+                accent="#ffb347"
               />
               <MetricCard
                 Icon={Calendar}
-                label="SESSIONS"
+                label="Sessions"
                 value={String(Math.round(animatedCount))}
-                accent="#85a3d6"
+                accent="#5fd3e0"
               />
               <MetricCard
                 Icon={Flame}
-                label="LONGEST SESSION"
+                label="Longest session"
                 value={formatHours(animatedLongestSec / 3600)}
-                accent="#e85d72"
+                accent="#ff5e57"
               />
               <MetricCard
                 Icon={Activity}
-                label="AVG SESSION"
+                label="Avg session"
                 value={formatHours(animatedAvgSec / 3600)}
-                accent="#7c86c8"
+                accent="#b9a6ff"
               />
             </div>
 
@@ -271,7 +271,7 @@ export const Sessions = (): React.JSX.Element => {
                       <span className="text-[11px] font-bold tracking-[.13em] text-muted-foreground uppercase">
                         {group.label}
                       </span>
-                      <span className="h-px flex-1 self-center bg-white/5" />
+                      <span className="h-px flex-1 self-center bg-bone/5" />
                       <span className="text-[11px] text-muted-foreground/70 tabular-nums">
                         {pluralize(group.sessions.length, 'session')}
                         {groupSeconds > 0 && ` · ${formatHours(groupSeconds / 3600)}`}

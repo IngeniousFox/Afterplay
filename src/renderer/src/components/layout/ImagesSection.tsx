@@ -36,7 +36,7 @@ const FOLDERS: { type: ImageCacheType; label: string; color: string }[] = [
 ];
 
 const buttonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 const BAR_CLASS = 'flex h-2.5 gap-0.5 overflow-hidden rounded-full';
 
@@ -60,7 +60,7 @@ const segmentsOf = (usage: ImageCacheUsage): UsageSegment[] =>
 // es el mismo hueco y la misma forma, así que la tarjeta no da un salto al
 // empezar ni al terminar.
 const RedownloadBar = ({ done, total }: { done: number; total: number }): React.JSX.Element => (
-  <div className={`${BAR_CLASS} bg-white/[0.06]`}>
+  <div className={`${BAR_CLASS} bg-bone/[0.06]`}>
     {/* transform y no width: la redescarga emite un evento cada 25 imágenes
         (decenas de miles entre carátulas, heroes y los dos iconos de cada uno
         de los 39.808 logros) y cada evento redirige esta transición de 500ms,
@@ -221,7 +221,7 @@ export const ImagesSection = (): React.JSX.Element => {
             ANTES de que lo pulses. Las capturas se van siempre porque no
             salen de la base de datos: no hay forma de saber cuáles siguen
             valiendo, y vuelven solas al abrir la ficha del juego. */}
-        <div className="text-[10.5px] leading-[1.45] text-muted-foreground/70">
+        <div className="text-micro leading-[1.45] text-muted-foreground/70">
           These are copies of things still online — cleaning up never loses anything. It removes
           what no game or achievement points to anymore, plus every screenshot.
         </div>

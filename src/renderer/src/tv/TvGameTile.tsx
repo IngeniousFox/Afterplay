@@ -75,7 +75,7 @@ export const TvGameTile = ({
           // sobre el backdrop claro la sombra negra difuminada se veía como
           // una mancha grisácea detrás de la carátula. La elevación la dan
           // el translate y el brightness; el color, el anillo interior.
-          boxShadow: focused ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.09)',
+          boxShadow: focused ? 'none' : 'inset 0 0 0 1px rgba(233,228,216,.09)',
           filter: focused ? 'brightness(1.12)' : undefined,
         }}
       >
@@ -104,7 +104,7 @@ export const TvGameTile = ({
                 className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
                 style={{
                   background:
-                    'linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent)',
+                    'linear-gradient(105deg, transparent, rgba(233,228,216,.22), transparent)',
                 }}
               />
             </span>
@@ -120,7 +120,7 @@ export const TvGameTile = ({
         </div>
         <div
           className="text-[0.62em] font-semibold tabular-nums transition-colors duration-150"
-          style={{ color: focused ? status.color : 'rgba(136,143,138,.7)' }}
+          style={{ color: focused ? status.color : 'rgba(138,148,150,.7)' }}
         >
           {game.totalHours > 0 ? formatHours(game.totalHours) : status.label}
         </div>

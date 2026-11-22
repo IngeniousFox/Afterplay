@@ -32,13 +32,13 @@ const DAYPARTS: {
   color: string;
   Icon: LucideIcon;
 }[] = [
-  { label: 'Morning', range: '06–12', fromHour: 6, toHour: 12, color: '#e3b24a', Icon: Sunrise },
+  { label: 'Morning', range: '06–12', fromHour: 6, toHour: 12, color: '#ffb347', Icon: Sunrise },
   {
     label: 'Afternoon',
     range: '12–18',
     fromHour: 12,
     toHour: 18,
-    color: '#2fdc7e',
+    color: '#ffb347',
     Icon: Sun,
   },
   {
@@ -46,10 +46,10 @@ const DAYPARTS: {
     range: '18–24',
     fromHour: 18,
     toHour: 24,
-    color: '#85a3d6',
+    color: '#5fd3e0',
     Icon: Sunset,
   },
-  { label: 'Night', range: '00–06', fromHour: 0, toHour: 6, color: '#7c86c8', Icon: Moon },
+  { label: 'Night', range: '00–06', fromHour: 0, toHour: 6, color: '#b9a6ff', Icon: Moon },
 ];
 
 const DIAL_SIZE = 158;
@@ -101,9 +101,9 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
       className={cn(
         'afterplay-game-time-of-day',
         'relative flex h-full flex-col overflow-hidden',
-        '[background:radial-gradient(circle_at_50%_31%,rgba(133,163,214,0.035),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(124,134,200,0.025),transparent_35%),var(--card)]!',
+        '[background:radial-gradient(circle_at_50%_31%,rgba(95,211,224,0.035),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(185,166,255,0.025),transparent_35%),var(--card)]!',
         'before:absolute before:top-[0] before:right-[13%] before:left-[13%] before:h-[1px]',
-        'before:[background:linear-gradient(90deg,transparent,rgba(133,163,214,0.34),transparent)]',
+        'before:[background:linear-gradient(90deg,transparent,rgba(95,211,224,0.34),transparent)]',
         "before:content-[''] before:opacity-[0.35]",
         '[@media(760px<width<=1040px)]:grid! [@media(760px<width<=1040px)]:grid-cols-[190px_minmax(0,1fr)]',
         '[@media(760px<width<=1040px)]:items-center [@media(760px<width<=1040px)]:gap-x-[20px]',
@@ -116,15 +116,13 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
       <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[14px] font-extrabold text-foreground">Time of day</span>
-          <small className="text-[11.5px] text-white/[0.42]">
-            Your playtime across the cycle of a day
-          </small>
+          <small className="text-[11.5px] text-dust">Your playtime across the cycle of a day</small>
         </div>
         {peakIndex !== null && (
           <strong
             className={cn(
               'afterplay-game-daypart-peak',
-              'rounded-[99px] px-2 py-1.25 text-[10px] font-black tracking-[0.065em] whitespace-nowrap',
+              'rounded-[99px] px-2 py-1.25 text-micro font-black tracking-[0.065em] whitespace-nowrap',
               'text-(--daypart-color)',
               '[--daypart-color:var(--primary)] border',
               'border-[color-mix(in_srgb,var(--daypart-color)_26%,transparent)]',
@@ -146,7 +144,7 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
               className={cn(
                 'afterplay-game-daypart-dial',
                 'relative grid size-41.5 place-items-center',
-                '[&_svg]:filter-[drop-shadow(0_5px_10px_rgba(0,0,0,0.18))]',
+                '[&_svg]:filter-[drop-shadow(0_5px_10px_rgba(3,6,7,0.18))]',
               )}
             >
               <svg
@@ -162,13 +160,13 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                   cy={DIAL_SIZE / 2}
                   r={74}
                   fill="none"
-                  stroke="rgba(255,255,255,.12)"
+                  stroke="rgba(233,228,216,.12)"
                   strokeWidth={1}
                   strokeDasharray="1 7"
                   strokeLinecap="round"
                 />
                 <circle
-                  className="afterplay-game-daypart-track stroke-white/[0.045]"
+                  className="afterplay-game-daypart-track stroke-bone/[0.045]"
                   cx={DIAL_SIZE / 2}
                   cy={DIAL_SIZE / 2}
                   r={DIAL_RADIUS}
@@ -219,20 +217,20 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                 className={cn(
                   'afterplay-game-daypart-center',
                   'pointer-events-none absolute flex size-20 flex-col items-center justify-center rounded-full',
-                  'border border-[color-mix(in_srgb,var(--daypart-color)_20%,rgba(255,255,255,0.06))]',
-                  'bg-[rgba(12,15,13,0.88)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_20px_rgba(0,0,0,0.34)]',
+                  'border border-[color-mix(in_srgb,var(--daypart-color)_20%,rgba(233,228,216,0.06))]',
+                  'bg-[rgba(12,15,13,0.88)] shadow-[inset_0_1px_0_rgba(233,228,216,0.04),0_8px_20px_rgba(3,6,7,0.34)]',
                   '[&_strong]:[transition:color_180ms_ease]',
                   'motion-reduce:[&_strong]:animate-none motion-reduce:[&_strong]:transition-none',
                 )}
                 style={{ '--daypart-color': DAYPARTS[activeIndex ?? 0].color } as CSSProperties}
               >
                 <strong
-                  className="text-[29px] leading-none font-[950] tracking-[-0.05em]"
+                  className="text-[29px] leading-none font-display font-bold tabular-nums"
                   style={{ color: DAYPARTS[activeIndex ?? 0].color }}
                 >
                   {Math.round((seconds[activeIndex ?? 0] / total) * 100)}%
                 </strong>
-                <small className="mt-1.25 text-[10px] font-black tracking-[0.1em] text-white/70">
+                <small className="mt-1.25 text-micro font-black tracking-[0.1em] text-dust">
                   {DAYPARTS[activeIndex ?? 0].label.toUpperCase()}
                 </small>
               </span>
@@ -258,12 +256,12 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                     'afterplay-game-daypart',
                     'grid min-w-0 grid-cols-[30px_minmax(0,_1fr)] grid-rows-[auto_auto] items-center gap-2 rounded-[9px]',
                     'p-2.25',
-                    '[--daypart-color:var(--primary)] border border-white/[0.05] outline-none bg-white/[0.018]',
-                    '[&.is-active]:border-[color-mix(in_srgb,var(--daypart-color)_28%,rgba(255,255,255,0.04))]',
-                    '[&.is-active]:bg-[color-mix(in_srgb,var(--daypart-color)_7%,rgba(255,255,255,0.015))]',
+                    '[--daypart-color:var(--primary)] border border-line outline-none bg-bone/[0.018]',
+                    '[&.is-active]:border-[color-mix(in_srgb,var(--daypart-color)_28%,rgba(233,228,216,0.04))]',
+                    '[&.is-active]:bg-[color-mix(in_srgb,var(--daypart-color)_7%,rgba(233,228,216,0.015))]',
                     '[&.is-active]:transform-[translateY(-2px)]',
-                    '[&:is(:hover,:focus-visible)]:border-[color-mix(in_srgb,var(--daypart-color)_28%,rgba(255,255,255,0.04))]',
-                    '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--daypart-color)_7%,rgba(255,255,255,0.015))]',
+                    '[&:is(:hover,:focus-visible)]:border-[color-mix(in_srgb,var(--daypart-color)_28%,rgba(233,228,216,0.04))]',
+                    '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--daypart-color)_7%,rgba(233,228,216,0.015))]',
                     '[&:is(:hover,:focus-visible)]:transform-[translateY(-2px)]',
                     '[transition:opacity_180ms_ease,transform_240ms_cubic-bezier(0.22,1,0.36,1),border-color_180ms_ease,background-color_180ms_ease]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
@@ -290,7 +288,7 @@ export const TimeOfDayCard = ({ sessions }: TimeOfDayCardProps): React.JSX.Eleme
                     <strong className="overflow-hidden text-[11.5px] font-extrabold text-ellipsis text-foreground">
                       {part.label}
                     </strong>
-                    <small className="text-[11px] font-semibold tracking-[0.04em] text-white/50">
+                    <small className="text-[11px] font-semibold tracking-[0.04em] text-dust">
                       {part.range}
                     </small>
                   </span>

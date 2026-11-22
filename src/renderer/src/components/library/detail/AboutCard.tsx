@@ -38,7 +38,7 @@ export const AboutCard = ({ game }: AboutCardProps): React.JSX.Element | null =>
       <div className="flex items-center gap-1.75">
         <BookOpen size={13} className="flex-none text-muted-foreground" />
         <span className="text-[13.5px] font-bold text-foreground">About</span>
-        <span className="ml-auto flex-none text-[10.5px] font-semibold text-muted-foreground/70">
+        <span className="ml-auto flex-none text-micro font-semibold text-muted-foreground/70">
           via IGDB
         </span>
       </div>

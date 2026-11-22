@@ -295,11 +295,11 @@ export const PlanToPlay = (): React.JSX.Element => {
               con el H1 tan grande junto a una píldora pequeña, centrar por
               CAJA deja la píldora flotando en vez de asentada. */}
           <div className="flex items-baseline gap-2.75">
-            <h1 className="text-[26px] font-extrabold tracking-[-.01em] text-foreground">
+            <h1 className="font-display text-[34px] leading-none font-bold text-bone">
               Plan to play
             </h1>
             {!isLoading && !isError && games.length > 0 && (
-              <span className="flex-none rounded-full border border-input bg-white/[0.03] px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
+              <span className="flex-none rounded-full border border-line-strong bg-raised px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
                 {games.length}
                 <span className="ml-1 font-semibold text-muted-foreground">
                   {games.length === 1 ? 'game' : 'games'}
@@ -325,7 +325,7 @@ export const PlanToPlay = (): React.JSX.Element => {
               onClick={runRefresh}
               disabled={refreshing}
               title="Re-fetch ratings, summaries, release dates and Steam tags for your plan"
-              className={`${outlineButtonClass} relative overflow-hidden border-input bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:cursor-default disabled:opacity-100`}
+              className={`${outlineButtonClass} relative overflow-hidden border-line-strong bg-raised text-muted-foreground hover:bg-raised-hover hover:text-foreground disabled:cursor-default disabled:opacity-100`}
             >
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : undefined} />
               <span className="tabular-nums">{refreshLabel}</span>
@@ -336,7 +336,7 @@ export const PlanToPlay = (): React.JSX.Element => {
                   cuánto queda de un vistazo. En las fases sin porcentaje
                   medible late a lo ancho en vez de mentir con un avance. */}
               {refreshing && (
-                <span className="absolute inset-x-0 bottom-0 h-[2px] bg-white/[0.07]">
+                <span className="absolute inset-x-0 bottom-0 h-[2px] bg-bone/[0.07]">
                   <span
                     className={`block h-full transition-[width] duration-500 ease-out ${
                       measurable ? '' : 'animate-pulse'
@@ -353,7 +353,7 @@ export const PlanToPlay = (): React.JSX.Element => {
           <Button
             type="button"
             onClick={() => setAddModalOpen(true)}
-            className="flex flex-none items-center gap-2 rounded-[10px] px-4.5 py-4.5 text-sm font-bold text-[#08120c] shadow-[0_4px_14px_rgba(47,220,126,0.22)]"
+            className="flex flex-none items-center gap-2 rounded-[10px] px-4.5 py-4.5 text-sm font-bold text-ink shadow-[0_4px_14px_rgba(255,179,71,0.22)]"
             style={{ background: accentGradientStyle.background }}
           >
             <Plus size={16} />
@@ -390,7 +390,7 @@ export const PlanToPlay = (): React.JSX.Element => {
           <button
             type="button"
             onClick={() => void refetch()}
-            className={`${outlineButtonClass} border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]`}
+            className={`${outlineButtonClass} border-line-strong bg-raised text-foreground hover:bg-raised-hover`}
           >
             <RefreshCw size={14} />
             <span>Try again</span>
@@ -401,7 +401,7 @@ export const PlanToPlay = (): React.JSX.Element => {
           className={`flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-24 text-center ${revealClass}`}
           style={revealStyle(1)}
         >
-          <div className="flex h-13 w-13 items-center justify-center rounded-full bg-white/[0.04]">
+          <div className="flex h-13 w-13 items-center justify-center rounded-full bg-bone/[0.04]">
             <Gamepad2 size={24} strokeWidth={1.5} className="text-muted-foreground/50" />
           </div>
           <div>

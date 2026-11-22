@@ -18,7 +18,7 @@ import { SettingsCard } from './SettingsCard';
 // histórico y regenerar lo que corregiste (§7.2). Nada se paga por sorpresa.
 
 const buttonClass =
-  'flex flex-none items-center justify-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex flex-none items-center justify-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 export const MemoriesSection = (): React.JSX.Element => {
   const { data: creds } = useCredentials();

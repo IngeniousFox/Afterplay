@@ -55,7 +55,7 @@ export const useMemoryArrivalToast = (): void => {
               navigate(target);
               toast.dismiss(id);
             }}
-            className="group flex w-full items-center gap-3 rounded-[14px] border border-input bg-[#141614] px-3.5 py-3 text-left shadow-[0_20px_55px_rgba(0,0,0,.6)] transition-colors duration-150 hover:border-white/25"
+            className="group flex w-full items-center gap-3 rounded-[14px] border border-input bg-overlay px-3.5 py-3 text-left shadow-[0_20px_55px_rgba(3,6,7,.6)] transition-colors duration-150 hover:border-line-hover"
           >
             <span
               className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]"

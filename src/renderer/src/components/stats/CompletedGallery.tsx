@@ -115,7 +115,7 @@ export const CompletedGallery = ({
                   className={cn(
                     'afterplay-completed-button block w-full relative overflow-hidden rounded-[8px] outline-none',
                     '[transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),box-shadow_220ms_ease]',
-                    '[&:is(:hover,:focus-visible)]:[box-shadow:0_10px_22px_rgba(0,0,0,0.34)]',
+                    '[&:is(:hover,:focus-visible)]:[box-shadow:0_10px_22px_rgba(3,6,7,0.34)]',
                     '[&:is(:hover,:focus-visible)]:[transform:translateY(-2px)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
@@ -145,7 +145,7 @@ export const CompletedGallery = ({
                     size={12}
                     aria-hidden="true"
                     className={cn(
-                      'afterplay-completed-mark absolute right-1.25 bottom-1.25 drop-shadow-[0_1px_3px_rgba(0,0,0,.8)] opacity-78',
+                      'afterplay-completed-mark absolute right-1.25 bottom-1.25 drop-shadow-[0_1px_3px_rgba(3,6,7,.8)] opacity-78',
                       '[transform:translateY(1px)] [transition:opacity_200ms_ease,transform_240ms_cubic-bezier(0.22,1,0.36,1)]',
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:opacity-100',
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:[transform:translateY(0)]',

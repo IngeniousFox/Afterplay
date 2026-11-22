@@ -109,7 +109,7 @@ const JourneyCoverTv = ({
           // NADA fuera del marco (misma regla que TvGameTile): la sombra
           // negra difuminada se veía como mancha gris sobre el backdrop —
           // la elevación la dan translate + brightness, el color el anillo.
-          boxShadow: focused ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.09)',
+          boxShadow: focused ? 'none' : 'inset 0 0 0 1px rgba(233,228,216,.09)',
           filter: focused ? 'brightness(1.12)' : undefined,
         }}
       >
@@ -138,7 +138,7 @@ const JourneyCoverTv = ({
                 className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
                 style={{
                   background:
-                    'linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent)',
+                    'linear-gradient(105deg, transparent, rgba(233,228,216,.22), transparent)',
                 }}
               />
             </span>
@@ -153,7 +153,7 @@ const JourneyCoverTv = ({
       </div>
       <div
         className="text-[0.55em] font-semibold tabular-nums transition-colors duration-150"
-        style={{ color: focused ? status.color : 'rgba(136,143,138,.7)' }}
+        style={{ color: focused ? status.color : 'rgba(138,148,150,.7)' }}
       >
         {entry.hours > 0 ? formatHours(entry.hours) : status.label}
       </div>
@@ -184,8 +184,8 @@ const RecapPanel = ({
       // pasan por detrás — con solo el degradado translúcido el texto
       // competía con el enjambre.
       background:
-        'linear-gradient(125deg, rgba(124,134,200,.14), rgba(124,134,200,.05) 50%, transparent), rgba(13,15,17,.88)',
-      boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.07), 0 0.6em 1.6em rgba(0,0,0,.4)',
+        'linear-gradient(125deg, rgba(185,166,255,.14), rgba(185,166,255,.05) 50%, transparent), rgba(13,15,17,.88)',
+      boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.07), 0 0.6em 1.6em rgba(3,6,7,.4)',
     }}
   >
     {/* Hairline de luz en el canto superior — el border plano, jubilado. */}
@@ -252,7 +252,7 @@ const RecapPanel = ({
       <span
         className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[38%]"
         style={{
-          background: 'linear-gradient(105deg, transparent, rgba(255,255,255,.06), transparent)',
+          background: 'linear-gradient(105deg, transparent, rgba(233,228,216,.06), transparent)',
         }}
       />
     </span>
@@ -313,13 +313,13 @@ const PageArrow = ({
         style={
           focused
             ? {
-                background: 'rgba(124,134,200,.22)',
-                boxShadow: `inset 0 0 0 1px ${VIOLET}59, 0 0 1.6em ${VIOLET}66, 0 0.4em 1em rgba(0,0,0,.4)`,
+                background: 'rgba(185,166,255,.22)',
+                boxShadow: `inset 0 0 0 1px ${VIOLET}59, 0 0 1.6em ${VIOLET}66, 0 0.4em 1em rgba(3,6,7,.4)`,
                 opacity: 1,
               }
             : {
-                background: 'rgba(0,0,0,.45)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)',
+                background: 'rgba(3,6,7,.45)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.14)',
                 opacity: 0.7,
               }
         }
@@ -339,7 +339,7 @@ const PageArrow = ({
                 className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
                 style={{
                   background:
-                    'linear-gradient(105deg, transparent, rgba(255,255,255,.25), transparent)',
+                    'linear-gradient(105deg, transparent, rgba(233,228,216,.25), transparent)',
                 }}
               />
             </span>
@@ -363,7 +363,7 @@ const PageArrow = ({
 // que el relleno se dibuja de nuevo en cada paso — feedback del gesto.
 const PageRibbon = ({ current, total }: { current: number; total: number }): React.JSX.Element => (
   <span className="flex items-center gap-[0.55em]">
-    <span className="relative h-[0.16em] w-[5.5em] overflow-hidden rounded-full bg-white/[0.08]">
+    <span className="relative h-[0.16em] w-[5.5em] overflow-hidden rounded-full bg-bone/[0.08]">
       <span
         className="animate-in fade-in-0 slide-in-from-left-96 absolute inset-y-0 left-0 rounded-full duration-700"
         style={{
@@ -539,20 +539,20 @@ export const TvJourney = (): React.JSX.Element => {
           className="pointer-events-none absolute inset-y-[0.9em] left-[1.15em] w-px"
           style={{
             background:
-              'linear-gradient(180deg, transparent, rgba(255,255,255,.12) 18%, rgba(255,255,255,.12) 82%, transparent)',
-            boxShadow: '-0.4em 0 1.2em rgba(0,0,0,.35)',
+              'linear-gradient(180deg, transparent, rgba(233,228,216,.12) 18%, rgba(233,228,216,.12) 82%, transparent)',
+            boxShadow: '-0.4em 0 1.2em rgba(3,6,7,.35)',
           }}
         />
         {clamp(pageIndex) < pages.length - 1 && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-[1.5em] right-[1.05em] w-px bg-gradient-to-b from-transparent via-white/10 to-transparent"
+            className="pointer-events-none absolute inset-y-[1.5em] right-[1.05em] w-px bg-gradient-to-b from-transparent via-bone/10 to-transparent"
           />
         )}
         {clamp(pageIndex) < pages.length - 2 && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-[2.1em] right-[0.85em] w-px bg-gradient-to-b from-transparent via-white/[0.06] to-transparent"
+            className="pointer-events-none absolute inset-y-[2.1em] right-[0.85em] w-px bg-gradient-to-b from-transparent via-bone/[0.06] to-transparent"
           />
         )}
 
@@ -575,7 +575,7 @@ export const TvJourney = (): React.JSX.Element => {
                 ? `${page.games} ${page.games === 1 ? 'game' : 'games'} · ${formatHours(page.hours)}`
                 : `${page.entries.length} ${page.entries.length === 1 ? 'playthrough' : 'playthroughs'} · ${formatHours(page.hours)}`}
             </span>
-            <span className="h-px min-w-[2em] flex-1 self-center bg-gradient-to-r from-white/15 to-transparent" />
+            <span className="h-px min-w-[2em] flex-1 self-center bg-gradient-to-r from-bone/15 to-transparent" />
             <PageRibbon current={clamp(pageIndex) + 1} total={pages.length} />
           </div>
         )}
@@ -602,7 +602,7 @@ export const TvJourney = (): React.JSX.Element => {
               className="pointer-events-none absolute -inset-y-[1.2em] -right-[2.6em] -left-[calc(2.6em+4vw)]"
               style={{
                 background:
-                  'radial-gradient(ellipse 75% 58% at 28% 52%, rgba(8,10,9,.92), rgba(8,10,9,.6) 45%, transparent 80%)',
+                  'radial-gradient(ellipse 75% 58% at 28% 52%, rgba(8,11,12,.92), rgba(8,11,12,.6) 45%, transparent 80%)',
               }}
             />
             <span
@@ -610,7 +610,7 @@ export const TvJourney = (): React.JSX.Element => {
               className="pointer-events-none absolute right-[0.5em] bottom-[0.3em] select-none"
             >
               <span className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] block">
-                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-white/[0.05]">
+                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-bone/[0.05]">
                   <BookOpen className="h-[9em] w-[9em]" strokeWidth={1} />
                 </span>
               </span>
@@ -700,7 +700,7 @@ export const TvJourney = (): React.JSX.Element => {
               className="pointer-events-none absolute right-[0.2em] bottom-[0.1em] select-none"
             >
               <span className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] block">
-                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-[7em] leading-none font-extrabold tracking-[-.05em] text-white/[0.06]">
+                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-[7em] leading-none font-extrabold tracking-[-.05em] text-bone/[0.06]">
                   {page.year}
                 </span>
               </span>
@@ -748,11 +748,11 @@ export const TvJourney = (): React.JSX.Element => {
               className={`flex flex-none flex-wrap items-baseline gap-x-[1.6em] gap-y-[0.2em] ${tvRevealClass}`}
               style={tvRevealStyle(2)}
             >
-              <YearFigure value={formatHours(page.hours)} label="played" color="#2fdc7e" />
+              <YearFigure value={formatHours(page.hours)} label="played" color="#ffb347" />
               <YearFigure
                 value={String(page.games)}
                 label={page.games === 1 ? 'game' : 'games'}
-                color="#85a3d6"
+                color="#5fd3e0"
               />
               <YearFigure
                 value={String(page.sessionCount)}
@@ -760,9 +760,9 @@ export const TvJourney = (): React.JSX.Element => {
                 color={VIOLET}
               />
               {page.topGame && (
-                <span className="text-[0.68em] font-semibold text-white/45">
-                  most played · <span className="text-white/80">{page.topGame.title}</span>{' '}
-                  <span className="text-[#2fdc7e]">{formatHours(page.topGame.hours)}</span>
+                <span className="text-[0.68em] font-semibold text-dust">
+                  most played · <span className="text-bone">{page.topGame.title}</span>{' '}
+                  <span className="text-phosphor">{formatHours(page.topGame.hours)}</span>
                 </span>
               )}
             </div>
@@ -791,10 +791,10 @@ export const TvJourney = (): React.JSX.Element => {
                 pide (los porcentajes y los desgloses se quedan en el
                 escritorio, que es donde se estudian). */}
             <div
-              className={`relative flex h-[11em] flex-none flex-col overflow-hidden rounded-[0.6em] bg-black/55 px-[0.9em] py-[0.65em] ${tvRevealClass}`}
+              className={`relative flex h-[11em] flex-none flex-col overflow-hidden rounded-[0.6em] bg-inset/55 px-[0.9em] py-[0.65em] ${tvRevealClass}`}
               style={{
                 ...tvRevealStyle(3),
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.07)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.07)',
               }}
             >
               <TvActivityHeatmap year={page.year} />

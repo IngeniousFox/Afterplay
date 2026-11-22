@@ -72,10 +72,10 @@ export const DateWithPrecisionPicker = ({
                   setPendingPrecision(option.value);
                   if (value) onChange({ ...value, precision: option.value });
                 }}
-                className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                className="rounded px-1.5 py-0.5 text-micro font-bold"
                 style={
                   isActive
-                    ? { background: 'rgba(47,220,126,.15)', color: '#2fdc7e' }
+                    ? { background: 'rgba(255,179,71,.15)', color: '#ffb347' }
                     : { color: 'var(--muted-foreground)' }
                 }
               >
@@ -88,7 +88,7 @@ export const DateWithPrecisionPicker = ({
 
       <div className="flex gap-1.5">
         <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger className="flex w-full min-w-0 items-center gap-2 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2.5 text-left text-[13px] text-foreground">
+          <PopoverTrigger className="flex w-full min-w-0 items-center gap-2 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2.5 text-left text-[13px] text-foreground">
             <CalendarIcon size={14} className="flex-none text-muted-foreground" />
             <span className={`truncate ${value ? '' : 'text-muted-foreground/70'}`}>
               {value ? formatDisplay(value) : 'Not set'}
@@ -165,7 +165,7 @@ export const DateWithPrecisionPicker = ({
             type="button"
             onClick={() => onChange(null)}
             aria-label={`Clear ${label.toLowerCase()}`}
-            className="flex flex-none items-center justify-center rounded-[9px] border border-input bg-white/[0.03] px-2.5 text-muted-foreground hover:text-foreground"
+            className="flex flex-none items-center justify-center rounded-[9px] border border-line-strong bg-raised px-2.5 text-muted-foreground hover:text-foreground"
           >
             <X size={14} />
           </button>

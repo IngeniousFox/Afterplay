@@ -13,7 +13,7 @@ export const TimeFormatSlider = ({ value, onChange }: TimeFormatSliderProps): Re
   const is24h = value === '24h';
 
   return (
-    <div className="relative flex h-8 w-31 flex-none rounded-full border border-input bg-white/[0.03] p-0.5">
+    <div className="relative flex h-8 w-31 flex-none rounded-full border border-line-strong bg-raised p-0.5">
       <div
         // transform y no left: animar `left` corre en el hilo principal
         // (layout + paint en cada frame de los 200ms); translateX corre en el
@@ -31,7 +31,7 @@ export const TimeFormatSlider = ({ value, onChange }: TimeFormatSliderProps): Re
         type="button"
         onClick={() => onChange('12h')}
         className="relative z-1 flex-1 rounded-full text-[12px] font-bold transition-colors"
-        style={{ color: is24h ? 'var(--muted-foreground)' : '#08120c' }}
+        style={{ color: is24h ? 'var(--muted-foreground)' : '#1a1100' }}
       >
         12h
       </button>
@@ -39,7 +39,7 @@ export const TimeFormatSlider = ({ value, onChange }: TimeFormatSliderProps): Re
         type="button"
         onClick={() => onChange('24h')}
         className="relative z-1 flex-1 rounded-full text-[12px] font-bold transition-colors"
-        style={{ color: is24h ? '#08120c' : 'var(--muted-foreground)' }}
+        style={{ color: is24h ? '#1a1100' : 'var(--muted-foreground)' }}
       >
         24h
       </button>

@@ -33,10 +33,10 @@ import { SettingsCard } from './SettingsCard';
 // de texto para contarlo se queda corta — hace falta el ancho entero para una
 // barra, igual que en Images.
 
-const BAR_CLASS = 'h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.07]';
+const BAR_CLASS = 'h-1.5 flex-1 overflow-hidden rounded-full bg-bone/[0.07]';
 
 const buttonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 // Un renglón de cobertura: cuánta biblioteca tiene YA cada dato. Mismo
 // lenguaje que los Split de la card de Backlog debt (etiqueta, barra
@@ -281,7 +281,7 @@ export const ExternalDataSection = (): React.JSX.Element => {
         {status && (
           // Con la pasada en marcha, una línea separa lo que está pasando
           // AHORA (arriba, en color) de lo que ya hay (abajo, en reposo).
-          <div className={running ? 'border-t border-white/5 pt-2.5' : undefined}>
+          <div className={running ? 'border-t border-line pt-2.5' : undefined}>
             <Coverage status={status} />
           </div>
         )}

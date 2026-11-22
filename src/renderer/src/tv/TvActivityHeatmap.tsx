@@ -26,11 +26,11 @@ const ROLLING_WEEKS = 52;
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'];
 // Los mismos cinco tonos del prototipo (Backlog.html, heatColor).
 const LEVEL_COLORS = [
-  'rgba(255,255,255,.045)',
-  'rgba(47,220,126,.28)',
-  'rgba(47,220,126,.48)',
-  'rgba(47,220,126,.72)',
-  'rgba(47,220,126,1)',
+  'rgba(233,228,216,.045)',
+  'rgba(255,179,71,.28)',
+  'rgba(255,179,71,.48)',
+  'rgba(255,179,71,.72)',
+  'rgba(255,179,71,1)',
 ];
 
 const mondayOf = (date: Date): Date => {
@@ -139,7 +139,7 @@ export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element =
         <span className="text-[0.55em] font-extrabold tracking-[.18em] text-muted-foreground">
           ACTIVITY
         </span>
-        <span className="text-[0.6em] font-bold text-[#2fdc7e] tabular-nums">
+        <span className="text-[0.6em] font-bold text-phosphor tabular-nums">
           {activeDays} days played
         </span>
         {bestHours > 0 && (
@@ -204,7 +204,7 @@ export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element =
                   background: LEVEL_COLORS[cell.level],
                   // Un puntito de brillo solo en los días fuertes: el mapa
                   // respira sin que ningún día pida turno.
-                  boxShadow: cell.level >= 3 ? '0 0 0.35em rgba(47,220,126,.45)' : undefined,
+                  boxShadow: cell.level >= 3 ? '0 0 0.35em rgba(255,179,71,.45)' : undefined,
                 }}
               />
             ))}

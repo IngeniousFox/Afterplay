@@ -1,33 +1,15 @@
-// Acento ámbar de la SPEC para gasto/pendientes/rachas — coincide con el
-// color de 'beaten' (ver gameStatus.ts) pero es un token aparte a propósito:
-// uno es el color de un estado de juego, el otro es un acento de UI que no
-// debe cambiar si el color de 'beaten' cambiara el día de mañana.
-export const AMBER = '#e3b24a';
-
-// Resto de la paleta de identidad de sección (FormSection/SettingsCard/
-// ModalShell/CheckboxRow). Mismo motivo que AMBER: tokens de UI aparte de
-// cualquier color de estado, aunque algunos coincidan de casualidad.
+// Fósforo accents for code that needs the value in JS (an icon colour, an
+// inline gradient, a `${color}1f` alpha suffix) instead of a Tailwind class.
+// The values mirror src/shared/theme/fosforo.css; in JSX classes use the
+// tokens (`text-phosphor`, `bg-tube`, `text-live`...) instead of these.
 //
-// Estos hex estaban copiados byte a byte en dos docenas de componentes, cada
-// uno con su `const GREEN = '#2fdc7e'` arriba del archivo. Este fichero es
-// donde vive el token para JS y el destino al que hay que ir llevándolos.
-//
-// PERO OJO, PORQUE AQUÍ ANTES SE PROMETÍA LO QUE NO SE CUMPLE: cambiar GREEN
-// aquí NO cambia el verde de la app. Hoy el literal `#2fdc7e` sigue escrito a
-// mano en una treintena de ficheros del renderer (styles.ts, NavRail,
-// GameCard, ActionBar, media Stats, el árbol de tv/ entero…) más `--primary`
-// en main.css. Y no son ficheros que ignoren este sitio: NavRail y GameCard
-// importan GREEN de aquí y unas líneas más abajo escriben el hex a mano, y
-// CredentialsSection importa AMBER y BLUE mientras se teclea el verde cuatro
-// veces. Cambiar el verde es cambiarlo aquí Y buscar el literal — hasta que
-// el último se haya mudado, tocar solo esta línea deja la app a dos verdes.
-export const GREEN = '#2fdc7e';
-export const VIOLET = '#7c86c8';
-export const BLUE = '#85a3d6';
-export const TEAL = '#2bb6a6';
-export const GRAY = '#8b93a3';
-// Mismo hex que --destructive de main.css: un acento aparte para cuando hace
-// falta el valor en JS (p.ej. un icono a color) en vez de una clase de
-// Tailwind. Coincide de casualidad con el 'dropped' de gameStatus.ts —
-// tokens distintos que hoy pintan igual, no una referencia al mismo sitio.
-export const RED = '#e85d72';
+// The names are the 1.x ones so the callers did not have to move in the same
+// change. Fósforo has a single accent, so the old green (brand) and the old
+// gold (spend, pending, streaks) both became Phosphor.
+export const AMBER = '#ffb347'; // --color-phosphor
+export const GREEN = '#ffb347'; // --color-phosphor
+export const VIOLET = '#b9a6ff'; // --color-st-resting
+export const BLUE = '#5fd3e0'; // --color-tube
+export const TEAL = '#5fd3e0'; // --color-tube
+export const GRAY = '#8a9496'; // --color-dust
+export const RED = '#ff5e57'; // --color-live

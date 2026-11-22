@@ -44,7 +44,7 @@ export const InstallDirectoryField = ({
   return (
     <div>
       <div className={fieldLabelClass}>
-        INSTALL DIRECTORY (THIS PC)
+        Install directory (this PC)
         {showOptionalHint && (
           <>
             {' '}
@@ -68,7 +68,7 @@ export const InstallDirectoryField = ({
           type="button"
           onClick={handleBrowse}
           disabled={calculating}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/3 px-3.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-white/6 disabled:opacity-60"
+          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-raised-hover disabled:opacity-60"
         >
           <Folder size={15} />
           <span>{calculating ? 'Calculating…' : 'Browse'}</span>

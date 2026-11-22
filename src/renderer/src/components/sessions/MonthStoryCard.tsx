@@ -20,10 +20,10 @@ export const MonthStoryCard = ({
   <button
     type="button"
     onClick={onOpen}
-    className="group/story relative mb-2.5 flex w-full items-center gap-3 overflow-hidden rounded-[13px] border border-white/[0.08] px-4 py-3 text-left transition-colors duration-150 hover:border-white/[0.16]"
+    className="group/story relative mb-2.5 flex w-full items-center gap-3 overflow-hidden rounded-[13px] border border-line px-4 py-3 text-left transition-colors duration-150 hover:border-line-strong"
     style={{
       background:
-        'linear-gradient(125deg, rgba(124,134,200,.12), rgba(124,134,200,.04) 55%, transparent)',
+        'linear-gradient(125deg, rgba(185,166,255,.12), rgba(185,166,255,.04) 55%, transparent)',
     }}
   >
     <span
@@ -39,7 +39,7 @@ export const MonthStoryCard = ({
     </span>
     <span className="min-w-0 flex-1">
       <span
-        className="block text-[9px] font-extrabold tracking-[.16em]"
+        className="block text-micro font-extrabold tracking-[.16em]"
         style={{ color: `${VIOLET}c9` }}
       >
         THE STORY OF THIS MONTH
@@ -48,7 +48,7 @@ export const MonthStoryCard = ({
         {recap.payload.headline}
       </span>
     </span>
-    <span className="flex flex-none items-center gap-1 text-[10.5px] font-bold text-muted-foreground">
+    <span className="flex flex-none items-center gap-1 text-micro font-bold text-muted-foreground">
       Read it in your Journey
       <ArrowRight
         size={12}

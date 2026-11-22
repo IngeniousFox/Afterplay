@@ -10,16 +10,19 @@ export type StatusMeta<Icon> = {
   filled: boolean;
 };
 
-// SPEC 10.2: fixed status colors, independent from the semantic UI accents.
+// Fósforo status LEDs: the same values as --color-st-* in
+// src/shared/theme/fosforo.css. They stay as hex here because callers append
+// alpha suffixes (`${color}1f`). The design has five LED tones, so On Hold
+// shares Resting's and Unplayed and Plan to play share Backlog's.
 // Icon names keep this module free of React and of either app's dependencies.
 const STATUS_DEFINITIONS = {
-  playing: { label: 'Playing', color: '#2fdc7e', icon: 'Play', filled: true },
-  beaten: { label: 'Beaten', color: '#e3b24a', icon: 'Trophy', filled: false },
-  dropped: { label: 'Dropped', color: '#e85d72', icon: 'XCircle', filled: false },
-  on_hold: { label: 'On Hold', color: '#8b93a3', icon: 'Pause', filled: false },
-  resting: { label: 'Resting', color: '#7c86c8', icon: 'Moon', filled: false },
-  unplayed: { label: 'Unplayed', color: '#888f8a', icon: 'Circle', filled: false },
-  plan: { label: 'Plan to play', color: '#85a3d6', icon: 'Bookmark', filled: false },
+  playing: { label: 'Playing', color: '#ffb347', icon: 'Play', filled: true },
+  beaten: { label: 'Beaten', color: '#9bd67a', icon: 'Trophy', filled: false },
+  dropped: { label: 'Dropped', color: '#8a9496', icon: 'XCircle', filled: false },
+  on_hold: { label: 'On Hold', color: '#b9a6ff', icon: 'Pause', filled: false },
+  resting: { label: 'Resting', color: '#b9a6ff', icon: 'Moon', filled: false },
+  unplayed: { label: 'Unplayed', color: '#5fd3e0', icon: 'Circle', filled: false },
+  plan: { label: 'Plan to play', color: '#5fd3e0', icon: 'Bookmark', filled: false },
 } satisfies Record<
   StatusKey,
   { label: string; color: string; icon: StatusIconName; filled: boolean }

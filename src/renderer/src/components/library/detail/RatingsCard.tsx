@@ -42,25 +42,25 @@ const ScoreTile = ({
       style={
         active
           ? { borderColor: `${color}5c`, background: `${color}17` }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
       }
     >
       <div className="mb-1.25 flex items-center justify-center gap-1.25">
         <Icon size={11} style={{ color: active ? color : 'var(--muted-foreground)' }} />
         <span
-          className="text-[9.5px] font-bold tracking-[.06em]"
+          className="text-micro font-bold tracking-[.06em]"
           style={{ color: active ? color : 'var(--muted-foreground)' }}
         >
           {label}
         </span>
       </div>
       <div
-        className="text-[24px] leading-none font-extrabold tabular-nums"
+        className="text-[24px] leading-none font-display font-bold tabular-nums"
         style={{ color: active ? color : 'var(--muted-foreground)' }}
       >
         {active ? `${score}${suffix ?? ''}` : '—'}
       </div>
-      <div className="mt-1.25 truncate text-[10px] text-muted-foreground" title={countTitle}>
+      <div className="mt-1.25 truncate text-micro text-muted-foreground" title={countTitle}>
         {countLabel}
       </div>
     </div>
@@ -149,12 +149,12 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
             }}
             title="Re-fetch ratings from IGDB and Steam"
             aria-label="Refresh ratings"
-            className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex h-5.5 w-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
             <RefreshCw size={11} className={refresh.isPending ? 'animate-spin' : undefined} />
           </button>
         </div>
-        <span className="flex-none text-[10.5px] font-semibold text-muted-foreground/70">
+        <span className="flex-none text-micro font-semibold text-muted-foreground/70">
           out of 100
         </span>
       </div>

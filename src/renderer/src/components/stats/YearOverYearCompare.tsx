@@ -32,7 +32,7 @@ export const YearMetricComparison = ({
   const favorable = delta !== null && (inverse ? delta < 0 : delta > 0);
   const neutral = delta === null || unchanged;
   const Icon = neutral ? Minus : favorable ? TrendingUp : TrendingDown;
-  const color = neutral ? 'var(--muted-foreground)' : favorable ? '#2fdc7e' : '#e85d72';
+  const color = neutral ? 'var(--muted-foreground)' : favorable ? '#ffb347' : '#ff5e57';
   let label: string;
   if (delta === null) label = `No comparison for ${previousYear}`;
   else if (unchanged) label = `Same as ${previousYear}`;
@@ -52,7 +52,7 @@ export const YearMetricComparison = ({
       data-year-comparison={metric}
     >
       <Icon size={12} className="mt-0.5 flex-none" style={{ color }} />
-      <span className="min-w-0 font-semibold text-white/65">{label}</span>
+      <span className="min-w-0 font-semibold text-dust">{label}</span>
     </div>
   );
 };

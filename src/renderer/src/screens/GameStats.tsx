@@ -51,13 +51,13 @@ const GameDataCard = ({ children }: { children: React.ReactNode }): React.JSX.El
     className={cn(
       'afterplay-game-data-card',
       'min-w-0 h-full',
-      '[&>.afterplay-stat-card]:border-white/[0.075]',
-      '[&>.afterplay-stat-card]:shadow-[inset_0_1px_rgba(255,255,255,0.025)]',
+      '[&>.afterplay-stat-card]:border-line',
+      '[&>.afterplay-stat-card]:shadow-[inset_0_1px_rgba(233,228,216,0.025)]',
       '[&>.afterplay-stat-card]:min-w-0 [&>.afterplay-stat-card]:h-full',
-      '[&>.afterplay-stat-card]:[background:radial-gradient(circle_at_100%_0%,rgba(133,163,214,0.035),transparent_34%),var(--card)]',
+      '[&>.afterplay-stat-card]:[background:radial-gradient(circle_at_100%_0%,rgba(95,211,224,0.035),transparent_34%),var(--card)]',
       '[&>.afterplay-stat-card]:[transition:border-color_220ms_ease,box-shadow_260ms_ease]',
-      '[&>.afterplay-stat-card:hover]:border-white/[0.105]',
-      '[&>.afterplay-stat-card:hover]:shadow-[inset_0_1px_rgba(255,255,255,0.035),0_18px_42px_rgba(0,0,0,0.13)]',
+      '[&>.afterplay-stat-card:hover]:border-line',
+      '[&>.afterplay-stat-card:hover]:shadow-[inset_0_1px_rgba(233,228,216,0.035),0_18px_42px_rgba(3,6,7,0.13)]',
       'motion-reduce:[&>.afterplay-stat-card]:animate-none',
       'motion-reduce:[&>.afterplay-stat-card]:transition-none',
     )}
@@ -98,15 +98,15 @@ const GameMetric = ({ Icon, label, value, detail, accent }: GameMetricProps): Re
       'afterplay-game-metric group/metric',
       'relative grid min-h-28 min-w-0 grid-cols-[30px_minmax(0,_1fr)] items-start gap-2.75 overflow-hidden',
       'rounded-[13px] px-3.25 py-3.75',
-      '[--game-accent:var(--primary)] border border-white/[0.085]',
+      '[--game-accent:var(--primary)] border border-line',
       '[background:radial-gradient(circle_at_0%_0%,color-mix(in_srgb,var(--game-accent)_12%,transparent),transparent_52%),rgba(17,20,18,0.96)]',
-      'shadow-[0_14px_30px_rgba(0,0,0,0.28),inset_0_1px_rgba(255,255,255,0.035)]',
+      'shadow-[0_14px_30px_rgba(3,6,7,0.28),inset_0_1px_rgba(233,228,216,0.035)]',
       'after:absolute after:right-[14px] after:bottom-[0] after:left-[14px] after:h-[1px]',
       'after:[background:linear-gradient(90deg,transparent,var(--game-accent),transparent)]',
       "after:content-[''] after:opacity-[0.32] after:transform-[scaleX(0.32)]",
       'after:[transition:opacity_240ms_ease,transform_360ms_cubic-bezier(0.22,1,0.36,1)]',
-      'hover:z-[2] hover:border-[color-mix(in_srgb,var(--game-accent)_30%,rgba(255,255,255,0.08))]',
-      'hover:shadow-[0_18px_38px_rgba(0,0,0,0.35),0_0_28px_color-mix(in_srgb,var(--game-accent)_8%,transparent)]',
+      'hover:z-[2] hover:border-[color-mix(in_srgb,var(--game-accent)_30%,rgba(233,228,216,0.08))]',
+      'hover:shadow-[0_18px_38px_rgba(3,6,7,0.35),0_0_28px_color-mix(in_srgb,var(--game-accent)_8%,transparent)]',
       'hover:transform-[translateY(-4px)] [&:hover::after]:opacity-[0.75]',
       '[&:hover::after]:transform-[scaleX(1)]',
       '[transition:transform_300ms_cubic-bezier(0.22,1,0.36,1),border-color_220ms_ease,box-shadow_260ms_ease]',
@@ -130,13 +130,13 @@ const GameMetric = ({ Icon, label, value, detail, accent }: GameMetricProps): Re
       <Icon size={15} />
     </span>
     <span className="afterplay-game-metric-copy flex min-w-0 flex-col">
-      <span className="afterplay-game-metric-label truncate text-[8.5px] font-black tracking-[0.11em] text-white/[0.39]">
+      <span className="afterplay-game-metric-label truncate text-micro font-black tracking-[0.11em] text-bone/[0.39]">
         {label}
       </span>
-      <strong className="afterplay-game-metric-value mt-1 truncate text-[24px] leading-[1.05] font-black tracking-[-0.035em] text-foreground">
+      <strong className="afterplay-game-metric-value mt-1 truncate text-[24px] leading-[1.05] font-display font-bold text-foreground tabular-nums">
         {value}
       </strong>
-      <span className="afterplay-game-metric-detail text-[color-mix(in_srgb,var(--game-accent)_72%,rgba(255,255,255,0.45))] mt-1.25 truncate text-[9.5px] font-[650]">
+      <span className="afterplay-game-metric-detail text-[color-mix(in_srgb,var(--game-accent)_72%,rgba(233,228,216,0.45))] mt-1.25 truncate text-micro font-[650]">
         {detail}
       </span>
     </span>
@@ -157,12 +157,12 @@ const RecordTile = ({ Icon, label, value, detail, accent }: RecordTileProps): Re
       'afterplay-game-record',
       'relative grid min-h-19.5 min-w-0 grid-cols-[26px_minmax(0,_1fr)] items-start gap-2.25 overflow-hidden',
       'rounded-[10px] p-2.5',
-      '[--record-accent:var(--primary)] border border-white/[0.055] bg-white/[0.022]',
+      '[--record-accent:var(--primary)] border border-line bg-bone/[0.022]',
       'after:absolute after:right-[-18px] after:bottom-[-22px] after:w-[50px] after:h-[50px]',
       "after:rounded-[50%] after:bg-(--record-accent) after:content-[''] after:opacity-[0.06]",
       'after:filter-[blur(14px)]',
-      'hover:border-[color-mix(in_srgb,var(--record-accent)_24%,rgba(255,255,255,0.05))]',
-      'hover:bg-white/[0.032] hover:transform-[translateY(-2px)]',
+      'hover:border-[color-mix(in_srgb,var(--record-accent)_24%,rgba(233,228,216,0.05))]',
+      'hover:bg-bone/[0.032] hover:transform-[translateY(-2px)]',
       '[transition:border-color_180ms_ease,background-color_180ms_ease,transform_250ms_cubic-bezier(0.22,1,0.36,1)]',
       'motion-reduce:animate-none motion-reduce:transition-none',
     )}
@@ -179,14 +179,14 @@ const RecordTile = ({ Icon, label, value, detail, accent }: RecordTileProps): Re
       <Icon size={14} />
     </span>
     <span className="afterplay-game-record-copy flex min-w-0 flex-col">
-      <span className="afterplay-game-record-label truncate text-[8.5px] font-[750] text-white/[0.32]">
+      <span className="afterplay-game-record-label truncate text-micro font-[750] text-bone/[0.32]">
         {label}
       </span>
       <strong className="afterplay-game-record-value mt-0.75 truncate text-[14px] leading-[1.05] font-[850] text-foreground">
         {value}
       </strong>
       {detail && (
-        <span className="afterplay-game-record-detail text-[color-mix(in_srgb,var(--record-accent)_68%,rgba(255,255,255,0.4))] mt-0.75 truncate text-[8.5px] font-[650]">
+        <span className="afterplay-game-record-detail text-[color-mix(in_srgb,var(--record-accent)_68%,rgba(233,228,216,0.4))] mt-0.75 truncate text-micro font-[650]">
           {detail}
         </span>
       )}
@@ -204,16 +204,14 @@ const GameChapter = ({
   description: string;
 }): React.JSX.Element => (
   <div
-    className="afterplay-game-chapter [&>i]:[background:linear-gradient(90deg,rgba(255,255,255,0.09),transparent)] [@media(width<=760px)]:[&_small]:hidden mx-0.75 mt-7.25 mb-2.75 flex items-center gap-2.75"
+    className="afterplay-game-chapter [&>i]:[background:linear-gradient(90deg,rgba(233,228,216,0.09),transparent)] [@media(width<=760px)]:[&_small]:hidden mx-0.75 mt-7.25 mb-2.75 flex items-center gap-2.75"
     role="heading"
     aria-level={2}
   >
-    <span className="text-[10px] font-black tracking-[0.12em] text-primary">{number}</span>
+    <span className="text-micro font-black tracking-[0.12em] text-primary">{number}</span>
     <div className="flex min-w-max items-baseline gap-2.25">
-      <strong className="text-[10px] font-black tracking-[0.13em] text-white/[0.75]">
-        {title}
-      </strong>
-      <small className="text-[10px] text-white/[0.29]">{description}</small>
+      <strong className="text-micro font-black tracking-[0.13em] text-dust">{title}</strong>
+      <small className="text-micro text-bone/[0.29]">{description}</small>
     </div>
     <i className="h-0.25 w-full" />
   </div>
@@ -234,11 +232,11 @@ const ShareRing = ({ pct }: { pct: number }): React.JSX.Element => {
       className={cn(
         'afterplay-game-share-ring',
         'relative grid size-31 flex-none place-items-center',
-        "before:absolute before:border before:border-white/[0.035] before:rounded-[50%] before:content-['']",
+        "before:absolute before:border before:border-line before:rounded-[50%] before:content-['']",
         'before:inset-[8px]',
-        "after:absolute after:border after:border-white/[0.035] after:rounded-[50%] after:content-['']",
+        "after:absolute after:border after:border-line after:rounded-[50%] after:content-['']",
         'after:inset-[19px]',
-        '[&_svg]:filter-[drop-shadow(0_0_10px_rgba(47,220,126,0.22))]',
+        '[&_svg]:filter-[drop-shadow(0_0_10px_rgba(255,179,71,0.22))]',
       )}
       role="img"
       aria-label={`${pct.toFixed(1)}% of all playtime`}
@@ -255,7 +253,7 @@ const ShareRing = ({ pct }: { pct: number }): React.JSX.Element => {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,.055)"
+          stroke="rgba(233,228,216,.055)"
           strokeWidth={stroke}
         />
         <circle
@@ -495,7 +493,7 @@ export const GameStats = ({
       className={cn(
         'afterplay-game-stats-screen',
         'relative h-full overflow-y-auto px-6 pt-6 pb-16',
-        '[background:radial-gradient(circle_at_48%_-12%,rgba(47,220,126,0.055),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.008),transparent_24%)]',
+        '[background:radial-gradient(circle_at_48%_-12%,rgba(255,179,71,0.055),transparent_34%),linear-gradient(180deg,rgba(233,228,216,0.008),transparent_24%)]',
       )}
     >
       {/* key={game.id}: cambiar de juego remonta el árbol — la entrada
@@ -505,9 +503,9 @@ export const GameStats = ({
           className={cn(
             'afterplay-game-stats-hero group/stats-hero',
             'relative min-h-[238px] overflow-hidden rounded-[19px] isolate',
-            '[--status-color:var(--primary)] border border-white/[0.09]',
-            '[background:radial-gradient(circle_at_20%_0%,color-mix(in_srgb,var(--status-color)_18%,transparent),transparent_44%),#101311]',
-            'shadow-[0_28px_70px_rgba(0,0,0,0.28),inset_0_1px_rgba(255,255,255,0.035)]',
+            '[--status-color:var(--primary)] border border-line',
+            '[background:radial-gradient(circle_at_20%_0%,color-mix(in_srgb,var(--status-color)_18%,transparent),transparent_44%),#171d20]',
+            'shadow-[0_28px_70px_rgba(3,6,7,0.28),inset_0_1px_rgba(233,228,216,0.035)]',
             'before:absolute before:z-[-1] before:inset-[0]',
             'before:[background:linear-gradient(90deg,rgba(10,12,11,0.97)_0%,rgba(10,12,11,0.84)_42%,rgba(10,12,11,0.58)_72%,rgba(10,12,11,0.9)_100%),linear-gradient(0deg,rgba(10,12,11,0.74),transparent_62%)]',
             "before:content-['']",
@@ -537,7 +535,7 @@ export const GameStats = ({
             className={cn(
               'afterplay-game-stats-hero-grid',
               'absolute inset-0 -z-1',
-              'bg-[linear-gradient(rgba(255,255,255,0.017)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.017)_1px,transparent_1px)]',
+              'bg-[linear-gradient(rgba(233,228,216,0.017)_1px,transparent_1px),linear-gradient(90deg,rgba(233,228,216,0.017)_1px,transparent_1px)]',
               'bg-size-[31px_31px] [mask-image:linear-gradient(90deg,black,transparent_72%)]',
             )}
             aria-hidden="true"
@@ -565,9 +563,9 @@ export const GameStats = ({
                 className={cn(
                   'afterplay-game-stats-cover',
                   'aspect-[2/3] h-39 overflow-hidden rounded-[11px]',
-                  'shadow-[0_22px_34px_rgba(0,0,0,0.52),0_0_0_1px_rgba(255,255,255,0.035)] border border-white/15',
+                  'shadow-[0_22px_34px_rgba(3,6,7,0.52),0_0_0_1px_rgba(233,228,216,0.035)] border border-line-strong',
                   'group-hover/stats-hero:transform-[translateY(-3px)_rotateY(2deg)_rotateZ(-0.6deg)]',
-                  'group-hover/stats-hero:shadow-[0_29px_42px_rgba(0,0,0,0.58),0_0_28px_color-mix(in_srgb,var(--status-color)_14%,transparent)]',
+                  'group-hover/stats-hero:shadow-[0_29px_42px_rgba(3,6,7,0.58),0_0_28px_color-mix(in_srgb,var(--status-color)_14%,transparent)]',
                   'group-hover/stats-hero:filter-[saturate(1.08)_brightness(1.035)]',
                   '[transition:transform_420ms_cubic-bezier(0.22,1,0.36,1),box-shadow_320ms_ease,filter_320ms_ease]',
                   '[@media(1040px<width<=1120px)]:h-[144px] [@media(760px<width<=1040px)]:h-[144px]',
@@ -582,20 +580,20 @@ export const GameStats = ({
               />
             </div>
 
-            <div className="afterplay-game-stats-identity [&_h1]:text-shadow-[0_7px_26px_rgba(0,0,0,0.44)] min-w-0">
-              <div className="afterplay-game-stats-kicker [&_i]:[background:linear-gradient(90deg,var(--status-color),transparent)] flex items-center gap-1.75 text-[9px] font-black tracking-[0.16em] text-(--status-color)">
+            <div className="afterplay-game-stats-identity [&_h1]:text-shadow-[0_7px_26px_rgba(3,6,7,0.44)] min-w-0">
+              <div className="afterplay-game-stats-kicker [&_i]:[background:linear-gradient(90deg,var(--status-color),transparent)] flex items-center gap-1.75 text-micro font-black tracking-[0.16em] text-(--status-color)">
                 <Sparkles size={12} />
                 <span>PERSONAL DOSSIER</span>
                 <i className="h-0.25 w-9.5 opacity-[0.7]" />
               </div>
-              <h1 className="mt-1.75 truncate text-[clamp(28px,_3.2vw,_38px)] leading-[1.04] font-black tracking-[-0.035em] text-foreground">
+              <h1 className="mt-1.75 truncate font-display text-[clamp(32px,_3.4vw,_44px)] leading-[1.04] font-bold text-bone">
                 {game.title}
               </h1>
               <div
                 className={cn(
                   'afterplay-game-stats-status',
-                  'mt-2.25 flex items-center gap-2.25 text-[12px] text-white/[0.46]',
-                  '[&>span+span::before]:mr-[9px] [&>span+span::before]:text-white/[0.18]',
+                  'mt-2.25 flex items-center gap-2.25 text-[12px] text-dust',
+                  '[&>span+span::before]:mr-[9px] [&>span+span::before]:text-bone/[0.18]',
                   "[&>span+span::before]:[content:'/']",
                   '[@media(width<=760px)]:[&>span+span]:hidden',
                 )}
@@ -614,18 +612,18 @@ export const GameStats = ({
                 className={cn(
                   'afterplay-game-stats-facts',
                   'mt-4.25 flex flex-wrap gap-1.75',
-                  '[&_span]:border [&_span]:border-white/[0.075] [&_span]:bg-[rgba(5,7,6,0.4)]',
+                  '[&_span]:border [&_span]:border-line [&_span]:bg-[rgba(5,7,6,0.4)]',
                   '[&_span]:[backdrop-filter:blur(10px)]',
                   '[@media(width<=760px)]:[&_span:nth-child(3)]:hidden',
                 )}
               >
-                <span className="inline-flex items-center gap-1.25 rounded-[7px] px-2 py-1.25 text-[10.5px] font-[650] text-white/[0.64]">
+                <span className="inline-flex items-center gap-1.25 rounded-[7px] px-2 py-1.25 text-micro font-[650] text-dust">
                   <Medal size={12} /> {rankLabel} in playtime
                 </span>
-                <span className="inline-flex items-center gap-1.25 rounded-[7px] px-2 py-1.25 text-[10.5px] font-[650] text-white/[0.64]">
+                <span className="inline-flex items-center gap-1.25 rounded-[7px] px-2 py-1.25 text-micro font-[650] text-dust">
                   <Layers3 size={12} /> {pluralize(game.iterations.length, 'playthrough')}
                 </span>
-                <span className="inline-flex items-center gap-1.25 rounded-[7px] px-2 py-1.25 text-[10.5px] font-[650] text-white/[0.64]">
+                <span className="inline-flex items-center gap-1.25 rounded-[7px] px-2 py-1.25 text-micro font-[650] text-dust">
                   <SessionsIcon size={12} /> {pluralize(realSessions.length, 'session')}
                 </span>
               </div>
@@ -639,9 +637,9 @@ export const GameStats = ({
                     'afterplay-game-stats-primary-action',
                     'text-(--status-color)',
                     'border-[color-mix(in_srgb,var(--status-color)_48%,transparent)]',
-                    'bg-[color-mix(in_srgb,var(--status-color)_13%,rgba(0,0,0,0.25))]',
+                    'bg-[color-mix(in_srgb,var(--status-color)_13%,rgba(3,6,7,0.25))]',
                     '[&:is(:hover,:focus-visible)]:transform-[translateY(-2px)]',
-                    '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--status-color)_18%,rgba(0,0,0,0.2))]',
+                    '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--status-color)_18%,rgba(3,6,7,0.2))]',
                     '[&:is(:hover,:focus-visible)]:shadow-[0_9px_26px_color-mix(in_srgb,var(--status-color)_14%,transparent)]',
                     '[transition:transform_240ms_cubic-bezier(0.22,1,0.36,1),border-color_180ms_ease,background-color_180ms_ease,box-shadow_220ms_ease]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
@@ -656,10 +654,10 @@ export const GameStats = ({
                   className={cn(
                     outlineButtonClass,
                     'afterplay-game-stats-secondary-action',
-                    'text-white/[0.72]',
-                    'border-white/[0.1] bg-white/[0.035]',
+                    'text-dust',
+                    'border-line bg-bone/[0.035]',
                     '[&:is(:hover,:focus-visible)]:transform-[translateY(-2px)]',
-                    '[&:is(:hover,:focus-visible)]:border-white/[0.17] [&:is(:hover,:focus-visible)]:bg-white/[0.06]',
+                    '[&:is(:hover,:focus-visible)]:border-line-strong [&:is(:hover,:focus-visible)]:bg-bone/[0.06]',
                     '[transition:transform_240ms_cubic-bezier(0.22,1,0.36,1),border-color_180ms_ease,background-color_180ms_ease,box-shadow_220ms_ease]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
@@ -674,9 +672,9 @@ export const GameStats = ({
                 'afterplay-game-stats-rank',
                 'relative flex min-h-36.25 flex-col items-center justify-center overflow-hidden rounded-[14px]',
                 'text-center',
-                'border border-white/[0.085]',
-                '[background:linear-gradient(145deg,rgba(255,255,255,0.065),rgba(0,0,0,0.22))]',
-                'shadow-[inset_0_1px_rgba(255,255,255,0.04)] [backdrop-filter:blur(14px)]',
+                'border border-line',
+                '[background:linear-gradient(145deg,rgba(233,228,216,0.065),rgba(3,6,7,0.22))]',
+                'shadow-[inset_0_1px_rgba(233,228,216,0.04)] [backdrop-filter:blur(14px)]',
                 'before:absolute before:top-[-30px] before:w-[100px] before:h-[70px] before:rounded-[50%]',
                 "before:bg-(--status-color) before:content-[''] before:opacity-[0.12] before:filter-[blur(30px)]",
                 '[&_strong]:text-shadow-[0_0_26px_color-mix(in_srgb,var(--status-color)_22%,transparent)]',
@@ -685,15 +683,15 @@ export const GameStats = ({
               )}
               aria-label={`${rankLabel} by playtime`}
             >
-              <span className="text-[8.5px] font-black tracking-[0.14em] text-white/[0.36]">
+              <span className="text-micro font-black tracking-[0.14em] text-bone/[0.36]">
                 LIBRARY RANK
               </span>
-              <strong className="mt-0.75 text-[45px] leading-none font-[950] tracking-[-0.06em] text-foreground">
+              <strong className="mt-0.75 text-[45px] leading-none font-display font-bold text-foreground tabular-nums">
                 {rankLabel}
               </strong>
-              <small className="mt-0.25 text-[10px] text-white/[0.42]">of {allGames.length}</small>
+              <small className="mt-0.25 text-micro text-dust">of {allGames.length}</small>
               <i className="mx-0 mt-2.5 mb-2 h-0.25 w-12.5" />
-              <em className="text-[9.5px] font-bold text-(--status-color) not-italic">
+              <em className="text-micro font-bold text-(--status-color) not-italic">
                 {sharePct.toFixed(1)}% of all your hours
               </em>
             </aside>
@@ -761,11 +759,11 @@ export const GameStats = ({
             <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-[14px] font-extrabold text-foreground">Every run</span>
-                <small className="text-[10.5px] text-white/[0.34]">
+                <small className="text-micro text-bone/[0.34]">
                   How each playthrough stacks up
                 </small>
               </div>
-              <strong className="text-[32px] leading-[0.8] font-[950] text-white/[0.18]">
+              <strong className="text-[32px] leading-[0.8] font-display font-bold text-bone/[0.18] tabular-nums">
                 {game.iterations.length}
               </strong>
             </div>
@@ -781,15 +779,15 @@ export const GameStats = ({
                     className={cn(
                       'afterplay-game-playthrough',
                       'relative grid min-h-14.5 grid-cols-[45px_minmax(0,_1fr)] items-center overflow-hidden rounded-[10px]',
-                      '[--run-color:var(--primary)] border border-white/[0.055] bg-white/[0.022]',
-                      'hover:border-[color-mix(in_srgb,var(--run-color)_24%,rgba(255,255,255,0.05))] hover:bg-white/[0.032]',
+                      '[--run-color:var(--primary)] border border-line bg-bone/[0.022]',
+                      'hover:border-[color-mix(in_srgb,var(--run-color)_24%,rgba(233,228,216,0.05))] hover:bg-bone/[0.032]',
                       'hover:transform-[translateX(3px)]',
                       '[transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),border-color_200ms_ease,background-color_200ms_ease]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
                     style={{ '--run-color': iterationStatus.color } as CSSProperties}
                   >
-                    <span className="afterplay-game-playthrough-index border-r border-r-white/[0.055] z-2 self-stretch pt-5 text-center text-[9px] font-black text-white/[0.22]">
+                    <span className="afterplay-game-playthrough-index border-r border-r-line z-2 self-stretch pt-5 text-center text-micro font-black text-bone/[0.22]">
                       {String(index + 1).padStart(2, '0')}
                     </span>
                     <span
@@ -811,13 +809,11 @@ export const GameStats = ({
                         <span className="truncate text-[12px] font-[750] text-foreground">
                           {iteration.label}
                         </span>
-                        <small className="col-start-2 text-[9.5px] text-white/[0.34]">
-                          {dates}
-                        </small>
+                        <small className="col-start-2 text-micro text-bone/[0.34]">{dates}</small>
                       </div>
                       <strong className="flex-none text-[11px] font-extrabold text-(--run-color)">
                         {formatHours(iteration.hours)}{' '}
-                        <i className="text-white/[0.22] not-italic">·</i>{' '}
+                        <i className="text-bone/[0.22] not-italic">·</i>{' '}
                         {formatMoney(iteration.spend)}
                       </strong>
                     </div>
@@ -839,8 +835,8 @@ export const GameStats = ({
               className={cn(
                 'afterplay-game-library-card',
                 'relative flex h-full flex-col overflow-hidden',
-                'border-white/[0.075] shadow-[inset_0_1px_rgba(255,255,255,0.025)]',
-                '[background:radial-gradient(circle_at_14%_22%,rgba(47,220,126,0.07),transparent_35%),var(--card)]',
+                'border-line shadow-[inset_0_1px_rgba(233,228,216,0.025)]',
+                '[background:radial-gradient(circle_at_14%_22%,rgba(255,179,71,0.07),transparent_35%),var(--card)]',
               )}
             >
               <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
@@ -848,7 +844,7 @@ export const GameStats = ({
                   <span className="text-[14px] font-extrabold text-foreground">
                     Vs your library
                   </span>
-                  <small className="text-[10.5px] text-white/[0.34]">
+                  <small className="text-micro text-bone/[0.34]">
                     The weight this game carries
                   </small>
                 </div>
@@ -858,13 +854,13 @@ export const GameStats = ({
               <div className="afterplay-game-library-stage grid grid-cols-[124px_minmax(0,_1fr)] items-center gap-5.5 px-0.75 pt-1.25 pb-4.25">
                 <ShareRing pct={sharePct} />
                 <div className="afterplay-game-library-rank flex min-w-0 flex-col">
-                  <span className="text-[8px] font-black tracking-[0.13em] text-white/[0.32]">
+                  <span className="text-micro font-black tracking-[0.13em] text-bone/[0.32]">
                     PLAYTIME POSITION
                   </span>
-                  <strong className="mt-0.5 text-[41px] leading-none font-[950] tracking-[-0.06em] text-foreground">
+                  <strong className="mt-0.5 text-[41px] leading-none font-display font-bold text-foreground tabular-nums">
                     {rankLabel}
                   </strong>
-                  <small className="mt-1 text-[10.5px] text-white/[0.39]">
+                  <small className="mt-1 text-micro text-bone/[0.39]">
                     out of {allGames.length} games
                   </small>
                 </div>
@@ -875,16 +871,16 @@ export const GameStats = ({
                   className={cn(
                     'afterplay-game-comparisons',
                     'mt-auto flex flex-col gap-1.75 pt-3.25',
-                    'border-t border-t-white/[0.055]',
-                    '[&>div]:border [&>div]:border-white/[0.045] [&>div]:bg-white/[0.018]',
+                    'border-t border-t-line',
+                    '[&>div]:border [&>div]:border-line [&>div]:bg-bone/[0.018]',
                     '[&>div]:[transition:border-color_180ms_ease,transform_220ms_cubic-bezier(0.22,1,0.36,1)]',
-                    '[&>div:hover]:border-[rgba(47,220,126,0.16)] [&>div:hover]:transform-[translateX(3px)]',
+                    '[&>div:hover]:border-[rgba(255,179,71,0.16)] [&>div:hover]:transform-[translateX(3px)]',
                     'motion-reduce:[&>div]:animate-none motion-reduce:[&>div]:transition-none',
                   )}
                 >
                   {compareLines.map((line) => (
                     <div
-                      className="flex items-center gap-2 rounded-[8px] px-2.25 py-1.75 text-[10.5px] text-white/[0.65]"
+                      className="flex items-center gap-2 rounded-[8px] px-2.25 py-1.75 text-micro text-dust"
                       key={line.key}
                     >
                       <Sparkles className="flex-none text-primary opacity-[0.72]" size={12} />
@@ -895,17 +891,17 @@ export const GameStats = ({
               )}
             </StatCard>
 
-            <StatCard className="afterplay-game-records-card border-white/[0.075] shadow-[inset_0_1px_rgba(255,255,255,0.025)] [background:radial-gradient(circle_at_100%_0%,rgba(232,93,114,0.055),transparent_37%),var(--card)]">
+            <StatCard className="afterplay-game-records-card border-line shadow-[inset_0_1px_rgba(233,228,216,0.025)] [background:radial-gradient(circle_at_100%_0%,rgba(255,94,87,0.055),transparent_37%),var(--card)]">
               <div className="afterplay-game-card-heading mb-4.25 flex items-start justify-between gap-4">
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-[14px] font-extrabold text-foreground">
                     Session records
                   </span>
-                  <small className="text-[10.5px] text-white/[0.34]">
+                  <small className="text-micro text-bone/[0.34]">
                     The peaks hidden in your playtime
                   </small>
                 </div>
-                <Flame className="mt-0.5 text-[#e85d72] opacity-[0.72]" size={17} />
+                <Flame className="mt-0.5 text-live opacity-[0.72]" size={17} />
               </div>
               <div className="afterplay-game-record-grid grid grid-cols-2 gap-2">
                 <RecordTile
@@ -918,7 +914,7 @@ export const GameStats = ({
                   Icon={Flame}
                   label="Longest session"
                   value={formatElapsed(longestSessionSec)}
-                  accent="#e85d72"
+                  accent="#ff5e57"
                 />
                 <RecordTile
                   Icon={Trophy}

@@ -87,7 +87,7 @@ const Header = (): React.JSX.Element | null => {
   if (pathname.startsWith('/game/')) return null;
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-[#0a0b0a]/90 px-4 py-3 backdrop-blur-lg">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-cabinet/90 px-4 py-3 backdrop-blur-lg">
       <span className="text-[15px] font-extrabold tracking-tight">
         After<span className="text-primary">play</span>
       </span>

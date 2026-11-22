@@ -14,14 +14,14 @@ const ACCENT_COLORS: Record<
   { borderColorChecked: string; fillColorChecked: string; checkIconColor: string }
 > = {
   green: {
-    borderColorChecked: 'rgba(47,220,126,.7)',
+    borderColorChecked: 'rgba(255,179,71,.7)',
     fillColorChecked: GREEN,
-    checkIconColor: '#08120c',
+    checkIconColor: '#1a1100',
   },
   blue: {
-    borderColorChecked: 'rgba(133,163,214,.6)',
+    borderColorChecked: 'rgba(95,211,224,.6)',
     fillColorChecked: BLUE,
-    checkIconColor: '#0a0b0a',
+    checkIconColor: '#101416',
   },
 };
 
@@ -54,7 +54,7 @@ export const CheckboxRow = ({
   return (
     <div
       onClick={onToggle}
-      className="flex cursor-pointer items-start gap-2.75 rounded-[10px] bg-white/[0.02] px-3.25 py-2.75 transition-[border-color,background-color] duration-150 hover:bg-white/[0.035]"
+      className="flex cursor-pointer items-start gap-2.75 rounded-[10px] bg-bone/[0.02] px-3.25 py-2.75 transition-[border-color,background-color] duration-150 hover:bg-bone/[0.035]"
       style={{
         border: `1px solid ${rowBorderFollowsChecked && checked ? borderColorChecked : 'var(--border)'}`,
       }}

@@ -38,7 +38,7 @@ type SettingsCardProps =
       children: React.ReactNode;
     });
 
-const CARD_CLASS = 'rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.75';
+const CARD_CLASS = 'rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.75';
 
 // Card de sección de Ajustes — el wrapper con borde/fondo + título/descripción
 // que hoy repiten Time format, Emulators y Backups. El borde va en clase

@@ -39,7 +39,7 @@ export const SessionsScreen = (): React.JSX.Element => {
 
   return (
     <div className="px-4 pt-4">
-      <div className="mb-3.5 text-[10px] font-bold tracking-[.13em] text-muted-foreground uppercase">
+      <div className="mb-3.5 text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
         {total} sessions
       </div>
 
@@ -55,7 +55,7 @@ export const SessionsScreen = (): React.JSX.Element => {
               style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}
             >
               <div className="mb-2.5 flex items-baseline justify-between">
-                <h2 className="text-[10px] font-bold tracking-[.13em] text-muted-foreground uppercase">
+                <h2 className="text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
                   {group.label}
                 </h2>
                 {groupHours > 0 && (
@@ -75,7 +75,7 @@ export const SessionsScreen = (): React.JSX.Element => {
                     <Cover url={session.coverUrl} title={session.gameTitle} className="w-10" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold">{session.gameTitle}</div>
-                      <div className="mt-0.5 text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+                      <div className="mt-0.5 text-micro font-semibold text-muted-foreground tabular-nums">
                         {formatTime(session.startedAt)}
                         {session.endedAt !== null && ` – ${formatTime(session.endedAt)}`}
                       </div>

@@ -83,7 +83,7 @@ const ToolbarButton = ({
 // verticales sueltas: en vez de separar con líneas, se agrupa por color de
 // fondo, que es más limpio y más "app moderna".
 const Group = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <div className="flex items-center gap-0.5 rounded-[10px] bg-white/[0.02] p-0.5">{children}</div>
+  <div className="flex items-center gap-0.5 rounded-[10px] bg-bone/[0.02] p-0.5">{children}</div>
 );
 
 const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
@@ -155,7 +155,7 @@ const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
   };
 
   return (
-    <div className="border-b border-input bg-white/[0.015]">
+    <div className="border-b border-input bg-bone/[0.015]">
       <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-2">
         <Group>
           <ToolbarButton
@@ -275,7 +275,7 @@ const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
       </div>
 
       {linkOpen && (
-        <div className="flex items-center gap-2 border-t border-input bg-white/[0.02] px-2.5 py-2">
+        <div className="flex items-center gap-2 border-t border-input bg-bone/[0.02] px-2.5 py-2">
           <Link2 size={14} className="flex-none text-muted-foreground" />
           <input
             autoFocus
@@ -292,7 +292,7 @@ const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
               }
             }}
             placeholder={state.hasSelection ? 'Link the selection to…' : 'Paste a URL…'}
-            className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2.5 py-1.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 rounded-md border border-edge bg-inset px-2.5 py-1.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
           />
           <button
             type="button"
@@ -335,7 +335,7 @@ export const RichNotesEditor = ({
       // enlazar. Con className propio para no chocar con ningún `.selection`
       // global.
       Selection.configure({
-        className: 'afterplay-note-selection rounded-[2px] bg-[rgba(47,220,126,0.26)]',
+        className: 'afterplay-note-selection rounded-[2px] bg-[rgba(255,179,71,0.26)]',
       }),
       // html:false — las notas son markdown puro; permitir HTML crudo abriría
       // la puerta a pegar marcado que luego react-markdown no pinta igual.
@@ -359,7 +359,7 @@ export const RichNotesEditor = ({
   if (!editor) return <div className="min-h-80 rounded-[12px] border border-input" />;
 
   return (
-    <div className="overflow-hidden rounded-[12px] border border-input bg-white/[0.02] focus-within:border-input/80">
+    <div className="overflow-hidden rounded-[12px] border border-input bg-bone/[0.02] focus-within:border-input/80">
       <Toolbar editor={editor} />
       <div className="max-h-125 overflow-y-auto">
         <EditorContent editor={editor} />

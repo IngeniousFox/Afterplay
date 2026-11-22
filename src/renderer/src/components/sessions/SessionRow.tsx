@@ -52,7 +52,7 @@ const momentBadge = (moment: Moment): { Icon: LucideIcon; color: string; label: 
     case 'return':
       return { Icon: Undo2, color: BLUE, label: `Back after ${humanizeSpan(moment.awayDays)}` };
     case 'longest_session':
-      return { Icon: Flame, color: '#e85d72', label: 'Longest session yet' };
+      return { Icon: Flame, color: '#ff5e57', label: 'Longest session yet' };
     case 'hours_milestone':
       return { Icon: Hourglass, color: AMBER, label: `Crossed ${moment.hours}h total` };
     case 'sessions_milestone':
@@ -96,8 +96,8 @@ export const SessionRow = ({
       className="group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
       style={
         isLive
-          ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.05)' }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
+          ? { borderColor: 'rgba(255,179,71,.4)', background: 'rgba(255,179,71,.05)' }
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
       }
     >
       {fillPct > 0 && (
@@ -105,8 +105,8 @@ export const SessionRow = ({
           className="pointer-events-none absolute inset-y-0 left-0"
           style={{
             width: `${fillPct}%`,
-            background: 'linear-gradient(90deg, rgba(47,220,126,.08), rgba(47,220,126,.02))',
-            borderRight: '1.5px solid rgba(47,220,126,.28)',
+            background: 'linear-gradient(90deg, rgba(255,179,71,.08), rgba(255,179,71,.02))',
+            borderRight: '1.5px solid rgba(255,179,71,.28)',
           }}
         />
       )}
@@ -120,7 +120,7 @@ export const SessionRow = ({
         <div className="mt-0.75 flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
           <span>{formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}</span>
           {session.isManual && (
-            <span className="rounded border border-input bg-white/[0.04] px-1.25 py-0.25 text-[9px] font-bold tracking-[.08em] text-muted-foreground">
+            <span className="rounded border border-input bg-bone/[0.04] px-1.25 py-0.25 text-micro font-bold tracking-[.08em] text-muted-foreground">
               MANUAL
             </span>
           )}
@@ -129,7 +129,7 @@ export const SessionRow = ({
         {device.remote && (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-[12.5px] font-semibold">
             <span className="text-primary">Playing on {device.deviceName}</span>
-            {device.noSignal !== null && <span className="text-[#e3b24a]">{device.noSignal}</span>}
+            {device.noSignal !== null && <span className="text-phosphor">{device.noSignal}</span>}
           </div>
         )}
         {endTime && (
@@ -144,7 +144,7 @@ export const SessionRow = ({
               return (
                 <span
                   key={`${moment.type}-${moment.sessionId}`}
-                  className="flex items-center gap-1 rounded-full px-2 py-0.75 text-[9.5px] font-bold tracking-[.02em]"
+                  className="flex items-center gap-1 rounded-full px-2 py-0.75 text-micro font-bold tracking-[.02em]"
                   style={{
                     color,
                     background: `${color}14`,
@@ -168,10 +168,10 @@ export const SessionRow = ({
       {isLive ? (
         <div
           className="relative z-1 flex flex-none items-center gap-1.75 rounded-[9px] border px-3 py-1.5"
-          style={{ borderColor: 'rgba(47,220,126,.5)' }}
+          style={{ borderColor: 'rgba(255,179,71,.5)' }}
         >
           <span
-            className="h-1.5 w-1.5 rounded-full bg-primary"
+            className="h-1.5 w-1.5 rounded-full bg-live"
             style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
           />
           <span className="text-xs font-bold text-primary tabular-nums">
@@ -182,7 +182,7 @@ export const SessionRow = ({
         <div className="relative z-1 flex flex-none items-center gap-1.5">
           {/* La más larga del filtro activo — misma llama (y rojo) que la
               métrica LONGEST SESSION de arriba. */}
-          {isRecord && <Flame size={14} color="#e85d72" />}
+          {isRecord && <Flame size={14} color="#ff5e57" />}
           <span className="text-[15px] font-bold text-foreground tabular-nums">
             {formatHours((session.durationSec ?? 0) / 3600)}
           </span>

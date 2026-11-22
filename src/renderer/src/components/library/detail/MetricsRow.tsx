@@ -48,11 +48,9 @@ export const MetricCard = ({
       >
         <Icon size={13} color={accent} />
       </span>
-      <span className="text-[10.5px] font-bold tracking-[.09em] text-muted-foreground">
-        {label}
-      </span>
+      <span className="text-small font-semibold text-dust">{label}</span>
     </div>
-    <div className="relative mt-2.25 text-[25px] font-extrabold text-foreground tabular-nums">
+    <div className="relative mt-2.25 font-display text-[30px] leading-none font-bold text-bone tabular-nums">
       {value}
     </div>
     {liveHint && (
@@ -74,21 +72,21 @@ export const MetricsRow = ({ game, liveSince }: MetricsRowProps): React.JSX.Elem
     <div className="flex flex-wrap gap-3.5">
       <MetricCard
         Icon={Clock}
-        label="TOTAL HOURS"
+        label="Total hours"
         value={formatHours(game.totalHours)}
         liveHint={liveSince ? `+${liveMinutes}m this session` : undefined}
         accent={GREEN}
       />
       <MetricCard
         Icon={Gauge}
-        label="COST / HOUR"
+        label="Cost / hour"
         value={game.costPerHour !== null ? formatMoney(game.costPerHour) : '—'}
         accent={VIOLET}
       />
-      <MetricCard Icon={Calendar} label="SESSIONS" value={String(sessionCount)} accent={BLUE} />
+      <MetricCard Icon={Calendar} label="Sessions" value={String(sessionCount)} accent={BLUE} />
       <MetricCard
         Icon={DollarSign}
-        label="TOTAL SPENT"
+        label="Total spent"
         value={formatMoney(game.totalSpend)}
         accent={AMBER}
       />

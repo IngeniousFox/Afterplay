@@ -50,7 +50,7 @@ const GameTile = ({ game, order }: { game: LibraryGame; order: number }): React.
       </div>
       <div className="line-clamp-2 text-[11.5px] leading-tight font-bold">{game.title}</div>
       {game.totalHours > 0 && (
-        <div className="text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+        <div className="text-micro font-semibold text-muted-foreground tabular-nums">
           {formatHours(game.totalHours)}
         </div>
       )}
@@ -103,7 +103,7 @@ export const Library = (): React.JSX.Element => {
         )}
       </div>
 
-      <div className="mb-3 text-[10px] font-bold tracking-[.13em] text-muted-foreground uppercase">
+      <div className="mb-3 text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
         {pluralize(filtered.length, 'game')}
       </div>
 

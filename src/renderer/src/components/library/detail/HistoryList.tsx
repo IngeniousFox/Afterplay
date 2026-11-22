@@ -262,7 +262,7 @@ export const HistoryList = ({
 
   return (
     <div>
-      <SectionLabel className="mb-3.25">HISTORY</SectionLabel>
+      <SectionLabel className="mb-3.25">History</SectionLabel>
       <StatCard className="max-h-96 overflow-x-hidden overflow-y-auto">
         {entries.map((entry, index) => {
           const isLast = index === entries.length - 1;
@@ -302,14 +302,14 @@ export const HistoryList = ({
                     <span className="w-px" style={{ background: 'var(--border)' }} />
                   </div>
                   <div className="flex flex-1 items-center gap-2 pb-2.5">
-                    <span className="text-[10px] font-bold tracking-[.1em] text-muted-foreground/55 tabular-nums">
+                    <span className="text-micro font-bold tracking-[.1em] text-muted-foreground/55 tabular-nums">
                       {entry.date.getFullYear()}
                     </span>
-                    <span className="h-px flex-1 bg-white/5" />
+                    <span className="h-px flex-1 bg-bone/5" />
                   </div>
                 </div>
               )}
-              <div className="group/row relative -mx-2 flex gap-3.5 rounded-[10px] px-2 py-1.5 hover:bg-white/[0.022]">
+              <div className="group/row relative -mx-2 flex gap-3.5 rounded-[10px] px-2 py-1.5 hover:bg-bone/[0.022]">
                 <div className="relative flex flex-none flex-col items-center">
                   <div
                     className="z-1 flex h-8 w-8 items-center justify-center rounded-full border"
@@ -362,11 +362,11 @@ export const HistoryList = ({
                       // Editor multi-campo: sin auto-guardar en blur (el foco
                       // salta legítimamente de un campo a otro) — se confirma
                       // con el check o con Enter en cualquier input.
-                      <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-input bg-white/[0.02] p-2.5">
+                      <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-input bg-bone/[0.02] p-2.5">
                         <div className="flex items-end gap-2">
                           {entry.kind === 'spend' && (
                             <div className="w-24 flex-none">
-                              <div className={fieldLabelClass}>AMOUNT (€)</div>
+                              <div className={fieldLabelClass}>Amount (€)</div>
                               <NumberInput
                                 autoFocus
                                 value={draftAmount}
@@ -403,7 +403,7 @@ export const HistoryList = ({
                               if (event.key === 'Escape') setEditingKey(null);
                             }}
                             placeholder="Note…"
-                            className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2 py-1.5 text-[12.5px] text-foreground outline-none"
+                            className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1.5 text-[12.5px] text-foreground outline-none"
                           />
                           <button
                             type="button"
@@ -416,7 +416,7 @@ export const HistoryList = ({
                           <button
                             type="button"
                             onClick={() => setEditingKey(null)}
-                            className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-white/6"
+                            className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-bone/6"
                             aria-label="Cancel"
                           >
                             <X size={14} />
@@ -434,7 +434,7 @@ export const HistoryList = ({
                         // tuyo) del hecho registrado sin necesidad de comillas
                         // ni cursiva.
                         <div
-                          className="mt-1.25 border-l-2 pl-2.5 text-[12.5px] text-[#b7bdb8]"
+                          className="mt-1.25 border-l-2 pl-2.5 text-[12.5px] text-bone"
                           style={{ borderColor: `${color}40` }}
                         >
                           {entry.note}
@@ -463,7 +463,7 @@ export const HistoryList = ({
                         <button
                           type="button"
                           onClick={() => startEditing(entry)}
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-white/6 hover:text-foreground"
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-bone/6 hover:text-foreground"
                           aria-label="Edit note"
                         >
                           <Pencil size={13} />

@@ -29,9 +29,7 @@ export const Cover = ({ url, title, className = '' }: CoverProps): React.JSX.Ele
       // Sin arte, el título en texto: es lo único que identifica al juego.
       <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-muted px-2 text-center">
         <Gamepad2 size={22} strokeWidth={1.5} className="text-muted-foreground/40" />
-        <span className="line-clamp-3 text-[10px] font-semibold text-muted-foreground">
-          {title}
-        </span>
+        <span className="line-clamp-3 text-micro font-semibold text-muted-foreground">{title}</span>
       </div>
     )}
   </div>

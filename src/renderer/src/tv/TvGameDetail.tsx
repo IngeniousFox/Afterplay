@@ -114,20 +114,20 @@ const TabPill = ({
         ...(active
           ? {
               background:
-                'linear-gradient(180deg, rgba(47,220,126,.26), rgba(47,220,126,.12)), rgba(8,12,10,.6)',
-              color: '#2fdc7e',
-              boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.4)',
+                'linear-gradient(180deg, rgba(255,179,71,.26), rgba(255,179,71,.12)), rgba(8,11,12,.6)',
+              color: '#ffb347',
+              boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.4)',
             }
           : {
-              background: 'rgba(8,12,10,.5)',
+              background: 'rgba(8,11,12,.5)',
               color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.1)',
             }),
         ...(focused
           ? {
               background:
-                'linear-gradient(180deg, rgba(47,220,126,.18), rgba(47,220,126,.1)), rgba(8,12,10,.6)',
-              color: '#2fdc7e',
+                'linear-gradient(180deg, rgba(255,179,71,.18), rgba(255,179,71,.1)), rgba(8,11,12,.6)',
+              color: '#ffb347',
               translate: '0 -0.1em',
             }
           : {}),
@@ -137,7 +137,7 @@ const TabPill = ({
         <span
           aria-hidden
           className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.8)' }}
+          style={{ boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.8)' }}
         />
       )}
       <span className="relative">{label}</span>
@@ -148,7 +148,7 @@ const TabPill = ({
 const ActionButton = ({
   label,
   icon,
-  color = '#2fdc7e',
+  color = '#ffb347',
   solid = false,
   autoFocus = false,
   silent = false,
@@ -182,8 +182,8 @@ const ActionButton = ({
           ? solid
             ? {
                 background: color,
-                color: '#08240f',
-                boxShadow: `0 0.6em 1.8em ${color}59, 0 0 0 3px ${color}40, inset 0 1px 0 rgba(255,255,255,.35)`,
+                color: '#1a1100',
+                boxShadow: `0 0.6em 1.8em ${color}59, 0 0 0 3px ${color}40, inset 0 1px 0 rgba(233,228,216,.35)`,
               }
             : {
                 background: `${color}1f`,
@@ -196,7 +196,7 @@ const ActionButton = ({
               background: 'rgba(12,16,14,.62)',
               color: 'var(--foreground)',
               boxShadow:
-                'inset 0 0 0 1px rgba(255,255,255,.13), inset 0 1px 0 rgba(255,255,255,.09)',
+                'inset 0 0 0 1px rgba(233,228,216,.13), inset 0 1px 0 rgba(233,228,216,.09)',
             }
       }
     >
@@ -204,7 +204,7 @@ const ActionButton = ({
       {focused && (
         <span
           aria-hidden
-          className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-white/30 to-transparent"
+          className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-bone/30 to-transparent"
         />
       )}
       {icon}
@@ -239,13 +239,13 @@ const BackButton = ({
       style={
         focused
           ? {
-              background: 'rgba(255,255,255,.14)',
-              boxShadow: '0 0 1.2em rgba(255,255,255,.14)',
+              background: 'rgba(233,228,216,.14)',
+              boxShadow: '0 0 1.2em rgba(233,228,216,.14)',
             }
           : {
               background: 'rgba(12,16,14,.6)',
               boxShadow:
-                'inset 0 0 0 1px rgba(255,255,255,.14), inset 0 1px 0 rgba(255,255,255,.08)',
+                'inset 0 0 0 1px rgba(233,228,216,.14), inset 0 1px 0 rgba(233,228,216,.08)',
             }
       }
     >
@@ -254,7 +254,7 @@ const BackButton = ({
         <span
           aria-hidden
           className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.55)' }}
+          style={{ boxShadow: 'inset 0 0 0 2px rgba(233,228,216,.55)' }}
         />
       )}
       <ChevronLeft
@@ -341,13 +341,13 @@ const StatusPicker = ({
     <TvFocusLayer>
       <div className="absolute inset-0 z-30 flex items-center justify-center">
         <div
-          className="animate-in fade-in-0 absolute inset-0 bg-black/65 duration-200"
+          className="animate-in fade-in-0 absolute inset-0 bg-inset/65 duration-200"
           onClick={onClose}
         />
         {/* El panel nace con el pop de la casa: pequeño y subiendo, con su
             hairline de luz arriba — cristal que llega, no que aparece. */}
-        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[16em] rounded-[0.7em] border border-white/[0.12] bg-[#121413]/95 px-[1em] py-[1em] shadow-[inset_0_1px_0_rgba(255,255,255,.10),0_2em_4em_rgba(0,0,0,.6)]">
-          <div className="mb-[0.6em] border-b border-white/[0.07] px-[0.4em] pb-[0.55em] text-[0.68em] font-extrabold tracking-[.18em] text-muted-foreground">
+        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[16em] rounded-[0.7em] border border-line-strong bg-overlay/95 px-[1em] py-[1em] shadow-[inset_0_1px_0_rgba(233,228,216,.10),0_2em_4em_rgba(3,6,7,.6)]">
+          <div className="mb-[0.6em] border-b border-line px-[0.4em] pb-[0.55em] text-[0.68em] font-extrabold tracking-[.18em] text-muted-foreground">
             SET STATUS
           </div>
           <div className="flex flex-col gap-[0.35em]">
@@ -576,11 +576,11 @@ export const TvGameDetail = (): React.JSX.Element | null => {
         <div
           className="flex h-[3.2em] w-[3.2em] items-center justify-center rounded-full"
           style={{
-            background: 'rgba(232,93,114,.12)',
-            boxShadow: 'inset 0 0 0 1px rgba(232,93,114,.3)',
+            background: 'rgba(255,94,87,.12)',
+            boxShadow: 'inset 0 0 0 1px rgba(255,94,87,.3)',
           }}
         >
-          <TriangleAlert className="h-[1.4em] w-[1.4em]" style={{ color: '#e85d72' }} />
+          <TriangleAlert className="h-[1.4em] w-[1.4em]" style={{ color: '#ff5e57' }} />
         </div>
         <div className="text-[1.1em] font-extrabold text-foreground">
           {gameFailed ? 'Couldn’t load this game' : 'This game is no longer in your library'}
@@ -620,15 +620,15 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   // El último tramo se calcula como RESTO para que la suma cierre exacta.
   const segComp = hltbComp > 0 ? Math.max(0, (hltbComp / hltbScale) * 100 - segMain - segExtra) : 0;
   const hltbSegments = [
-    { key: 'main', pct: segMain, color: '#2bb6a6' },
-    { key: 'extra', pct: segExtra, color: '#3f7fe0' },
-    { key: 'comp', pct: segComp, color: '#2fdc7e' },
+    { key: 'main', pct: segMain, color: '#5fd3e0' },
+    { key: 'extra', pct: segExtra, color: '#8ce4ee' },
+    { key: 'comp', pct: segComp, color: '#ffb347' },
   ].filter((segment) => segment.pct > 0);
   const hltbMarkerPct = Math.min(100, (game.totalHours / hltbScale) * 100);
   const hltbTiers = [
-    { label: 'STORY', hours: hltbMain, color: '#2bb6a6' },
-    { label: '+ EXTRAS', hours: hltbExtra, color: '#3f7fe0' },
-    { label: '100%', hours: hltbComp, color: '#2fdc7e' },
+    { label: 'STORY', hours: hltbMain, color: '#5fd3e0' },
+    { label: '+ EXTRAS', hours: hltbExtra, color: '#5fd3e0' },
+    { label: '100%', hours: hltbComp, color: '#ffb347' },
   ].filter((tier) => tier.hours > 0);
 
   const launch = async (): Promise<void> => {
@@ -677,14 +677,14 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(90deg, rgba(8,10,9,.92) 0%, rgba(8,10,9,.58) 38%, rgba(8,10,9,.2) 68%, rgba(8,10,9,.5) 100%)',
+                'linear-gradient(90deg, rgba(8,11,12,.92) 0%, rgba(8,11,12,.58) 38%, rgba(8,11,12,.2) 68%, rgba(8,11,12,.5) 100%)',
             }}
           />
           <div
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(180deg, rgba(8,10,9,.32) 0%, rgba(8,10,9,.12) 22%, rgba(9,11,10,.55) 52%, rgba(10,12,11,.84) 74%, rgba(11,13,12,.93) 100%)',
+                'linear-gradient(180deg, rgba(8,11,12,.32) 0%, rgba(8,11,12,.12) 22%, rgba(8,11,12,.55) 52%, rgba(10,12,11,.84) 74%, rgba(11,13,12,.93) 100%)',
             }}
           />
         </div>
@@ -718,8 +718,8 @@ export const TvGameDetail = (): React.JSX.Element | null => {
               className="rounded-full px-[0.55em] py-[0.08em] text-[0.8em]"
               style={{
                 color: '#a9b3e8',
-                background: 'rgba(124,134,200,.12)',
-                boxShadow: 'inset 0 0 0 1px rgba(124,134,200,.35)',
+                background: 'rgba(185,166,255,.12)',
+                boxShadow: 'inset 0 0 0 1px rgba(185,166,255,.35)',
               }}
             >
               ∞ ENDLESS
@@ -730,8 +730,8 @@ export const TvGameDetail = (): React.JSX.Element | null => {
               className="rounded-full px-[0.55em] py-[0.08em] text-[0.8em]"
               style={{
                 color: '#a6c1e8',
-                background: 'rgba(133,163,214,.12)',
-                boxShadow: 'inset 0 0 0 1px rgba(133,163,214,.35)',
+                background: 'rgba(95,211,224,.12)',
+                boxShadow: 'inset 0 0 0 1px rgba(95,211,224,.35)',
               }}
             >
               EMULATED
@@ -740,7 +740,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
         </div>
 
         <h1
-          className={`max-w-[95%] text-[2em] leading-[1.06] font-extrabold tracking-[-.018em] drop-shadow-[0_2px_20px_rgba(0,0,0,.6)] ${tvRevealClass}`}
+          className={`max-w-[95%] text-[2em] leading-[1.06] font-extrabold tracking-[-.018em] drop-shadow-[0_2px_20px_rgba(3,6,7,.6)] ${tvRevealClass}`}
           style={tvRevealStyle(2)}
         >
           {game.title}
@@ -751,17 +751,17 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             (es identidad, no contenido de sección) y así el Overview respira. */}
         {(game.developer || game.publisher || (game.genres?.length ?? 0) > 0) && (
           <div
-            className={`flex max-w-[70%] flex-wrap items-center gap-x-[0.55em] gap-y-[0.3em] text-[0.68em] font-semibold text-white/60 ${tvRevealClass}`}
+            className={`flex max-w-[70%] flex-wrap items-center gap-x-[0.55em] gap-y-[0.3em] text-[0.68em] font-semibold text-dust ${tvRevealClass}`}
             style={tvRevealStyle(3)}
           >
             {game.developer && <span>{game.developer}</span>}
             {game.publisher && game.publisher !== game.developer && (
-              <span className="text-white/35">· {game.publisher}</span>
+              <span className="text-bone/35">· {game.publisher}</span>
             )}
             {(game.genres ?? []).slice(0, 3).map((genre) => (
               <span
                 key={genre}
-                className="rounded-full bg-black/55 px-[0.6em] py-[0.1em] text-[0.85em] text-white/75 shadow-[inset_0_0_0_1px_rgba(255,255,255,.12)]"
+                className="rounded-full bg-inset/55 px-[0.6em] py-[0.1em] text-[0.85em] text-dust shadow-[inset_0_0_0_1px_rgba(233,228,216,.12)]"
               >
                 {genre}
               </span>
@@ -787,17 +787,17 @@ export const TvGameDetail = (): React.JSX.Element | null => {
               <div
                 className="relative flex items-center gap-[0.5em] rounded-full px-[1.3em] py-[0.55em] text-[0.9em] font-extrabold"
                 style={{
-                  background: 'rgba(47,220,126,.16)',
-                  color: '#2fdc7e',
-                  boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.55), 0 0 1.4em rgba(47,220,126,.18)',
+                  background: 'rgba(255,179,71,.16)',
+                  color: '#ffb347',
+                  boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.55), 0 0 1.4em rgba(255,179,71,.18)',
                 }}
               >
                 <span className="relative flex h-[0.55em] w-[0.55em] flex-none">
-                  <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.6em_#2fdc7e]" />
+                  <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-phosphor shadow-[0_0_0.6em_#ffb347]" />
                 </span>
                 Playing
                 {liveSince && (
-                  <span className="text-[0.85em] font-bold text-[#a7f3c9] tabular-nums">
+                  <span className="text-[0.85em] font-bold text-phosphor-hi tabular-nums">
                     · {formatElapsed(liveSeconds)}
                   </span>
                 )}
@@ -817,23 +817,21 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 Play. Con "No signal for X" si lleva más de 3 minutos callada. */}
             {remoteLive !== null && (
               <div
-                className="flex items-center gap-[0.5em] rounded-full px-[1.1em] py-[0.5em] text-[0.8em] font-bold text-white/80"
-                style={{ boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.18)' }}
+                className="flex items-center gap-[0.5em] rounded-full px-[1.1em] py-[0.5em] text-[0.8em] font-bold text-bone"
+                style={{ boxShadow: 'inset 0 0 0 2px rgba(233,228,216,.18)' }}
               >
                 <span
                   className="h-[0.55em] w-[0.55em] flex-none rounded-full"
-                  style={{ background: remoteNoSignal === null ? '#2fdc7e' : '#e3b24a' }}
+                  style={{ background: remoteNoSignal === null ? '#ffb347' : '#ffb347' }}
                 />
                 Playing on {nameOf(remoteLive.deviceId)}
                 {remoteNoSignal !== null && (
-                  <span className="text-[0.9em] text-[#e3b24a]">· {remoteNoSignal}</span>
+                  <span className="text-[0.9em] text-phosphor">· {remoteNoSignal}</span>
                 )}
               </div>
             )}
             {ownLive === null && !game.executablePath && !game.isEmulated && (
-              <span className="text-[0.8em] font-semibold text-white/55">
-                Not installed on this PC
-              </span>
+              <span className="text-[0.8em] font-semibold text-dust">Not installed on this PC</span>
             )}
             <ActionButton
               label="Set status"
@@ -859,9 +857,9 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             ))}
             {/* El recordatorio del atajo, con cuerpo de chapa (sobre el arte
                 un texto suelto se evaporaba). */}
-            <span className="ml-[0.4em] flex items-center gap-[0.3em] rounded-full bg-black/55 px-[0.55em] py-[0.18em] text-[0.5em] font-extrabold tracking-[.08em] text-white/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,.1)]">
+            <span className="ml-[0.4em] flex items-center gap-[0.3em] rounded-full bg-inset/55 px-[0.55em] py-[0.18em] text-[0.5em] font-extrabold tracking-[.08em] text-dust shadow-[inset_0_0_0_1px_rgba(233,228,216,.1)]">
               LB
-              <span className="text-white/25">·</span>
+              <span className="text-bone/25">·</span>
               RB
             </span>
           </div>
@@ -889,13 +887,13 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                       {
                         label: 'HOURS',
                         value: formatHours(game.totalHours),
-                        accent: '#2fdc7e',
+                        accent: '#ffb347',
                         Icon: Clock3,
                       },
                       {
                         label: 'SESSIONS',
                         value: String(sessionCount),
-                        accent: '#85a3d6',
+                        accent: '#5fd3e0',
                         Icon: CalendarRange,
                       },
                       // Los trofeos entre los vitales: el "cuánto es tuyo" en
@@ -907,7 +905,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                               label: 'TROPHIES',
                               value: `${achievementsUnlocked}/${achievementsTotal}`,
                               sub: `${Math.round((achievementsUnlocked / achievementsTotal) * 100)}%`,
-                              accent: '#e3b24a',
+                              accent: '#ffb347',
                               Icon: Trophy,
                             },
                           ]
@@ -917,7 +915,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                             {
                               label: 'LAST PLAYED',
                               value: humanizeAgoDays(lastPlayed),
-                              accent: '#7c86c8',
+                              accent: '#b9a6ff',
                               Icon: History,
                             },
                           ]
@@ -931,7 +929,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                                 game.costPerHour !== null
                                   ? `${formatMoney(game.costPerHour)}/h`
                                   : undefined,
-                              accent: '#e3b24a',
+                              accent: '#ffb347',
                               Icon: Coins,
                             },
                           ]
@@ -939,7 +937,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                       {
                         label: 'IN LIBRARY',
                         value: `since ${game.addedAt.getFullYear()}`,
-                        accent: '#8b93a3',
+                        accent: '#8a9496',
                         Icon: CalendarPlus,
                       },
                     ] as {
@@ -952,10 +950,10 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   ).map((stat) => (
                     <div
                       key={stat.label}
-                      className="relative min-w-[7.2em] overflow-hidden rounded-[0.55em] bg-black/70 px-[0.75em] py-[0.5em]"
+                      className="relative min-w-[7.2em] overflow-hidden rounded-[0.55em] bg-inset/70 px-[0.75em] py-[0.5em]"
                       style={{
                         boxShadow:
-                          'inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.07)',
+                          'inset 0 0 0 1px rgba(233,228,216,.07), inset 0 1px 0 rgba(233,228,216,.07)',
                       }}
                     >
                       {/* El brillo del acento en la esquina, tan tenue que
@@ -976,7 +974,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                         {stat.value}
                       </div>
                       {stat.sub && (
-                        <div className="relative text-[0.55em] font-semibold text-white/45 tabular-nums">
+                        <div className="relative text-[0.55em] font-semibold text-dust tabular-nums">
                           {stat.sub}
                         </div>
                       )}
@@ -990,18 +988,18 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                     encendidos con su check. */}
                 {hasHltb && (
                   <div
-                    className={`relative max-w-[94%] overflow-hidden rounded-[0.6em] bg-black/70 px-[0.9em] pt-[0.65em] pb-[0.7em] ${tvRevealClass}`}
+                    className={`relative max-w-[94%] overflow-hidden rounded-[0.6em] bg-inset/70 px-[0.9em] pt-[0.65em] pb-[0.7em] ${tvRevealClass}`}
                     style={{
                       ...tvRevealStyle(2),
                       boxShadow:
-                        'inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.06)',
+                        'inset 0 0 0 1px rgba(233,228,216,.07), inset 0 1px 0 rgba(233,228,216,.06)',
                     }}
                   >
-                    <div className="flex items-center gap-[0.4em] text-[0.55em] font-extrabold tracking-[.18em] text-white/45">
-                      <Hourglass className="h-[1.2em] w-[1.2em] text-[#2bb6a6]" />
+                    <div className="flex items-center gap-[0.4em] text-[0.55em] font-extrabold tracking-[.18em] text-dust">
+                      <Hourglass className="h-[1.2em] w-[1.2em] text-tube" />
                       HOW LONG TO BEAT
                       {game.totalHours > 0 && (
-                        <span className="ml-auto font-bold tracking-[.04em] text-white/55 tabular-nums">
+                        <span className="ml-auto font-bold tracking-[.04em] text-dust tabular-nums">
                           you · {formatHours(game.totalHours)}
                         </span>
                       )}
@@ -1016,14 +1014,14 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                               'afterplay-drop-in 420ms cubic-bezier(.22,1,.36,1) 620ms both',
                           }}
                         >
-                          <span className="rounded-[0.3em] bg-[#1d211f] px-[0.4em] py-[0.12em] text-[0.5em] font-extrabold tabular-nums shadow-[0_0.2em_0.6em_rgba(0,0,0,.55),inset_0_0_0_1px_rgba(255,255,255,.16)]">
+                          <span className="rounded-[0.3em] bg-raised px-[0.4em] py-[0.12em] text-[0.5em] font-extrabold tabular-nums shadow-[0_0.2em_0.6em_rgba(3,6,7,.55),inset_0_0_0_1px_rgba(233,228,216,.16)]">
                             {formatHours(game.totalHours)}
                           </span>
                         </div>
                       )}
                       <div
-                        className="flex h-[0.5em] w-full gap-[2px] overflow-hidden rounded-[0.25em] bg-white/[0.06]"
-                        style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,.5)' }}
+                        className="flex h-[0.5em] w-full gap-[2px] overflow-hidden rounded-[0.25em] bg-bone/[0.06]"
+                        style={{ boxShadow: 'inset 0 1px 2px rgba(3,6,7,.5)' }}
                       >
                         {hltbSegments.map((segment, index) => (
                           <div
@@ -1039,11 +1037,11 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                       </div>
                       {game.totalHours > 0 && (
                         <div
-                          className="absolute top-0 h-[0.5em] w-[3px] -translate-x-1/2 rounded-full bg-white"
+                          className="absolute top-0 h-[0.5em] w-[3px] -translate-x-1/2 rounded-full bg-bone"
                           style={{
                             left: `${hltbMarkerPct}%`,
                             boxShadow:
-                              '0 0 0.4em rgba(255,255,255,.8), 0 0 0 2px rgba(11,13,12,.7)',
+                              '0 0 0.4em rgba(233,228,216,.8), 0 0 0 2px rgba(11,13,12,.7)',
                           }}
                         />
                       )}
@@ -1064,8 +1062,8 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                                   }
                                 : {
                                     color: 'var(--muted-foreground)',
-                                    background: 'rgba(255,255,255,.03)',
-                                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.06)',
+                                    background: 'rgba(233,228,216,.03)',
+                                    boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.06)',
                                   }
                             }
                           >
@@ -1092,11 +1090,11 @@ export const TvGameDetail = (): React.JSX.Element | null => {
 
                 {noteText && (
                   <div
-                    className={`relative mt-[0.4em] max-w-[85%] overflow-hidden rounded-[0.55em] border border-white/[0.08] bg-black/70 px-[1em] py-[0.75em] ${tvRevealClass}`}
+                    className={`relative mt-[0.4em] max-w-[85%] overflow-hidden rounded-[0.55em] border border-line bg-inset/70 px-[1em] py-[0.75em] ${tvRevealClass}`}
                     style={{
                       ...tvRevealStyle(3),
                       boxShadow:
-                        'inset 0 1px 0 rgba(255,255,255,.10), 0 0.9em 2.2em rgba(0,0,0,.35)',
+                        'inset 0 1px 0 rgba(233,228,216,.10), 0 0.9em 2.2em rgba(3,6,7,.35)',
                     }}
                   >
                     {/* El aliento violeta del panel: la nota es memoria, y la
@@ -1106,7 +1104,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                       className="pointer-events-none absolute inset-0"
                       style={{
                         background:
-                          'radial-gradient(120% 170% at 0% 0%, rgba(124,134,200,.14), transparent 55%)',
+                          'radial-gradient(120% 170% at 0% 0%, rgba(185,166,255,.14), transparent 55%)',
                       }}
                     />
                     {/* El lomo del cuaderno, respirando despacio; su luz sangra
@@ -1115,22 +1113,22 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                       aria-hidden
                       className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
                       style={{
-                        background: 'linear-gradient(180deg, #7c86c8, #7c86c826)',
-                        boxShadow: '0 0 0.8em rgba(124,134,200,.55)',
+                        background: 'linear-gradient(180deg, #b9a6ff, #b9a6ff26)',
+                        boxShadow: '0 0 0.8em rgba(185,166,255,.55)',
                       }}
                     />
                     {/* Unas comillas de agua como marca del panel, medio recortadas
                   a propósito — filigrana, no rótulo. */}
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute -top-[0.12em] right-[0.3em] text-[2.3em] leading-none font-extrabold text-[#7c86c8]/15"
+                      className="pointer-events-none absolute -top-[0.12em] right-[0.3em] text-[2.3em] leading-none font-extrabold text-st-resting/15"
                     >
                       ”
                     </span>
-                    <div className="relative text-[0.6em] font-extrabold tracking-[.18em] text-[#a3abd8]/85">
+                    <div className="relative text-[0.6em] font-extrabold tracking-[.18em] text-st-resting/85">
                       {noteLabel}
                     </div>
-                    <p className="relative mt-[0.25em] line-clamp-3 text-[0.95em] leading-snug font-medium text-white/85 italic">
+                    <p className="relative mt-[0.25em] line-clamp-3 text-[0.95em] leading-snug font-medium text-bone italic">
                       “{noteText}”
                     </p>
                   </div>
@@ -1143,7 +1141,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 {curiosity && (
                   <p
                     key={curiosity}
-                    className="animate-in fade-in-0 slide-in-from-bottom-2 mt-auto flex max-w-[80%] items-start gap-[0.5em] pt-[0.8em] pb-[0.3em] text-[0.7em] leading-relaxed text-white/55 transition-[opacity,translate] duration-500 ease-out"
+                    className="animate-in fade-in-0 slide-in-from-bottom-2 mt-auto flex max-w-[80%] items-start gap-[0.5em] pt-[0.8em] pb-[0.3em] text-[0.7em] leading-relaxed text-dust transition-[opacity,translate] duration-500 ease-out"
                     style={
                       curiosityLeaving
                         ? { opacity: 0, translate: '0 0.35em', transitionDuration: '340ms' }
@@ -1152,7 +1150,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   >
                     {/* La bombilla parpadea despacio: una idea que se le ocurre a
                   la pantalla, no un bullet point. */}
-                    <Lightbulb className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] mt-[0.15em] h-[1.1em] w-[1.1em] flex-none text-[#2bb6a6]/80" />
+                    <Lightbulb className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] mt-[0.15em] h-[1.1em] w-[1.1em] flex-none text-tube/80" />
                     {curiosity}
                   </p>
                 )}
@@ -1160,15 +1158,15 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             ) : activeTab === 'achievements' ? (
               // El cristal se lo pone el shell: la pestaña trae contenido.
               <div
-                className="relative h-full overflow-hidden rounded-[0.7em] border border-white/[0.09] bg-black/75 px-[1em] py-[0.8em]"
-                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.10)' }}
+                className="relative h-full overflow-hidden rounded-[0.7em] border border-line bg-inset/75 px-[1em] py-[0.8em]"
+                style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.10)' }}
               >
                 <TvDetailAchievements gameId={game.id} />
               </div>
             ) : activeTab === 'sessions' ? (
               <div
-                className="relative h-full overflow-hidden rounded-[0.7em] border border-white/[0.09] bg-black/75 px-[1em] py-[0.8em]"
-                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.10)' }}
+                className="relative h-full overflow-hidden rounded-[0.7em] border border-line bg-inset/75 px-[1em] py-[0.8em]"
+                style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.10)' }}
               >
                 <TvDetailSessions game={game} />
               </div>
@@ -1203,7 +1201,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
             />
             <div
               className="relative"
-              style={{ filter: 'drop-shadow(0 1.6em 3em rgba(0,0,0,.65))' }}
+              style={{ filter: 'drop-shadow(0 1.6em 3em rgba(3,6,7,.65))' }}
             >
               <GameCover
                 url={game.coverUrl}
@@ -1217,7 +1215,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 className="pointer-events-none absolute inset-0 rounded-[0.6em]"
                 style={{
                   boxShadow:
-                    'inset 0 0 0 1px rgba(255,255,255,.16), inset 0 1px 0 rgba(255,255,255,.26)',
+                    'inset 0 0 0 1px rgba(233,228,216,.16), inset 0 1px 0 rgba(233,228,216,.26)',
                 }}
               />
             </div>
@@ -1228,26 +1226,26 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                 el arco de fechas de cada una. */}
           {playthroughs.length > 0 && (
             <div
-              className="relative overflow-hidden rounded-[0.6em] border border-white/[0.08] bg-black/70"
-              style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+              className="relative overflow-hidden rounded-[0.6em] border border-line bg-inset/70"
+              style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
             >
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0"
                 style={{
                   background:
-                    'radial-gradient(120% 130% at 0% 0%, rgba(124,134,200,.1), transparent 55%)',
+                    'radial-gradient(120% 130% at 0% 0%, rgba(185,166,255,.1), transparent 55%)',
                 }}
               />
-              <div className="relative flex items-center gap-[0.4em] border-b border-white/[0.07] px-[0.7em] py-[0.4em]">
+              <div className="relative flex items-center gap-[0.4em] border-b border-line px-[0.7em] py-[0.4em]">
                 <Repeat
-                  className="h-[0.85em] w-[0.85em] flex-none text-[#7c86c8]"
-                  style={{ filter: 'drop-shadow(0 0 0.4em rgba(124,134,200,.5))' }}
+                  className="h-[0.85em] w-[0.85em] flex-none text-st-resting"
+                  style={{ filter: 'drop-shadow(0 0 0.4em rgba(185,166,255,.5))' }}
                 />
                 <span className="text-[0.52em] font-extrabold tracking-[.18em] text-muted-foreground">
                   PLAYTHROUGHS
                 </span>
-                <span className="ml-auto text-[0.55em] font-bold text-[#a3abd8]/80 tabular-nums">
+                <span className="ml-auto text-[0.55em] font-bold text-st-resting/80 tabular-nums">
                   {playthroughs.length}
                 </span>
               </div>
@@ -1266,7 +1264,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   return (
                     <div key={iteration.id} className="py-[0.15em]">
                       <div className="flex items-center gap-[0.4em] text-[0.58em] font-bold">
-                        <span className="text-white/35 tabular-nums">#{ordinal}</span>
+                        <span className="text-bone/35 tabular-nums">#{ordinal}</span>
                         <meta.Icon
                           className="h-[1.05em] w-[1.05em] flex-none"
                           style={{ color: meta.color }}
@@ -1275,13 +1273,13 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                           {meta.label}
                         </span>
                         {iteration.hours > 0 && (
-                          <span className="ml-auto flex-none text-white/60 tabular-nums">
+                          <span className="ml-auto flex-none text-dust tabular-nums">
                             {formatHours(iteration.hours)}
                           </span>
                         )}
                       </div>
                       {range && (
-                        <div className="pl-[1.6em] text-[0.5em] font-semibold text-white/40 tabular-nums">
+                        <div className="pl-[1.6em] text-[0.5em] font-semibold text-dust tabular-nums">
                           {range}
                         </div>
                       )}
@@ -1289,7 +1287,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
                   );
                 })}
                 {playthroughs.length > 3 && (
-                  <div className="text-[0.5em] font-semibold text-white/30">
+                  <div className="text-[0.5em] font-semibold text-bone/30">
                     +{playthroughs.length - 3} earlier
                   </div>
                 )}

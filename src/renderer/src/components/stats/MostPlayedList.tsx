@@ -52,7 +52,7 @@ export const MostPlayedList = ({ entries, onOpenGame }: MostPlayedListProps): Re
                     'afterplay-most-played-cover h-16 w-12 overflow-hidden rounded-[7px] border border-border',
                     '[transition:transform_280ms_cubic-bezier(0.22,1,0.36,1),border-color_180ms_ease,box-shadow_220ms_ease]',
                     '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:border-[rgba(216,180,91,0.44)]',
-                    '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:[box-shadow:0_10px_24px_rgba(0,0,0,0.36)]',
+                    '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:[box-shadow:0_10px_24px_rgba(3,6,7,0.36)]',
                     '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:[transform:scale(1.045)_rotate(-0.8deg)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
@@ -69,9 +69,9 @@ export const MostPlayedList = ({ entries, onOpenGame }: MostPlayedListProps): Re
                   que la carátula, para que las dos casen en la fila. */}
               <div
                 className={cn(
-                  'afterplay-most-played-track relative h-16 flex-1 overflow-hidden rounded-[9px] bg-white/[0.03]',
+                  'afterplay-most-played-track relative h-16 flex-1 overflow-hidden rounded-[9px] bg-bone/[0.03]',
                   '[transition:background-color_180ms_ease,box-shadow_220ms_ease]',
-                  '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:bg-white/[0.052]',
+                  '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:bg-bone/[0.052]',
                   '[.afterplay-most-played-row:is(:hover,:focus-visible)_&]:[box-shadow:inset_0_0_0_1px_rgba(216,180,91,0.12)]',
                 )}
               >
@@ -93,7 +93,7 @@ export const MostPlayedList = ({ entries, onOpenGame }: MostPlayedListProps): Re
                     </span>
                     <ArrowUpRight
                       size={13}
-                      className="text-white/20 transition-[transform,color] group-hover/played:-translate-y-0.5 group-hover/played:translate-x-0.5 group-hover/played:text-[#d8b45b]"
+                      className="text-bone/20 transition-[transform,color] group-hover/played:-translate-y-0.5 group-hover/played:translate-x-0.5 group-hover/played:text-[#d8b45b]"
                     />
                   </div>
                 </div>

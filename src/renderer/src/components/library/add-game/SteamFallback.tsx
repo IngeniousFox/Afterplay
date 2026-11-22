@@ -44,10 +44,10 @@ const SteamResultRow = ({
       disabled={isLocked}
       onClick={() => onPick(result)}
       className={`flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-100 ${
-        isLocked ? 'cursor-default opacity-55' : 'hover:bg-white/[0.05]'
+        isLocked ? 'cursor-default opacity-55' : 'hover:bg-bone/[0.05]'
       }`}
     >
-      <div className="h-11.5 w-23 flex-none overflow-hidden rounded-[7px] border border-white/10 bg-white/[0.03]">
+      <div className="h-11.5 w-23 flex-none overflow-hidden rounded-[7px] border border-line bg-bone/[0.03]">
         {src && <img src={src} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="min-w-0 flex-1">
@@ -57,7 +57,7 @@ const SteamResultRow = ({
           </span>
           {owned && (
             <span
-              className="flex-none rounded-md px-1.75 py-0.5 text-[10px] font-bold tracking-[.08em]"
+              className="flex-none rounded-md px-1.75 py-0.5 text-micro font-bold tracking-[.08em]"
               style={{ background: `${owned.color}22`, color: owned.color }}
             >
               {owned.label}
@@ -127,7 +127,7 @@ export const SteamFallback = ({
   if (!results || results.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2.5 px-4 py-8 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.04]">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-bone/[0.04]">
           <Search size={18} strokeWidth={1.5} className="text-muted-foreground/50" />
         </div>
         <p className="text-[13px] text-muted-foreground">
@@ -140,7 +140,7 @@ export const SteamFallback = ({
   return (
     <div className="flex flex-col">
       <div className="px-3.5 pt-3 pb-2">
-        <div className="text-[10px] font-bold tracking-[.09em]" style={{ color: BLUE }}>
+        <div className="text-micro font-bold tracking-[.09em]" style={{ color: BLUE }}>
           NOT IN IGDB YET — FOUND ON STEAM
         </div>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">

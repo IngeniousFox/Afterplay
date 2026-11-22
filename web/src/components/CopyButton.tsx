@@ -31,7 +31,7 @@ export const CopyButton = ({
       type="button"
       onClick={copy}
       aria-label={`Copy ${label}`}
-      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12px] font-bold text-foreground transition-colors active:bg-white/8"
+      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12px] font-bold text-foreground transition-colors active:bg-bone/8"
     >
       {state === 'copied' ? (
         <Check size={14} className="text-primary" />

@@ -43,7 +43,7 @@ const ToastIconChip = ({
 // que uno luzca y el otro parezca un aviso del sistema operativo.
 const toastClassNames = {
   toast:
-    'flex w-full items-center gap-3 rounded-[14px] border border-input bg-[#141614] px-3.5 py-3 shadow-[0_20px_55px_rgba(0,0,0,.6)]',
+    'flex w-full items-center gap-3 rounded-[14px] border border-input bg-overlay px-3.5 py-3 shadow-[0_20px_55px_rgba(3,6,7,.6)]',
   icon: 'flex-none',
   content: 'flex min-w-0 flex-1 flex-col justify-center gap-0.5',
   title: 'text-[13px] font-bold leading-snug text-foreground',

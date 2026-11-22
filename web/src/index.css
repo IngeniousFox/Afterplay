@@ -80,7 +80,7 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.14);
+    background-color: rgba(233, 228, 216, 0.14);
     border-radius: 9999px;
     border: 3px solid transparent;
     background-clip: padding-box;
@@ -104,11 +104,11 @@
 @keyframes afterplay-pulse-badge {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(47, 220, 126, 0.55);
+    box-shadow: 0 0 0 0 rgba(255, 179, 71, 0.55);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 6px rgba(47, 220, 126, 0);
+    box-shadow: 0 0 0 6px rgba(255, 179, 71, 0);
   }
 }
 
@@ -116,13 +116,13 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 1.5px rgba(47, 220, 126, 0.85),
-      0 0 24px rgba(47, 220, 126, 0.25);
+      0 0 0 1.5px rgba(255, 179, 71, 0.85),
+      0 0 24px rgba(255, 179, 71, 0.25);
   }
   50% {
     box-shadow:
-      0 0 0 1.5px rgba(47, 220, 126, 0.65),
-      0 0 40px rgba(47, 220, 126, 0.42);
+      0 0 0 1.5px rgba(255, 179, 71, 0.65),
+      0 0 40px rgba(255, 179, 71, 0.42);
   }
 }
 

@@ -95,7 +95,7 @@ export const OverlaySection = (): React.JSX.Element => {
             className={`rounded-[9px] border px-3 py-1.5 text-[12.5px] font-bold tabular-nums transition-colors duration-150 ${
               recording
                 ? 'border-primary/60 bg-primary/10 text-primary'
-                : 'border-input bg-white/[0.03] text-foreground hover:bg-white/[0.06]'
+                : 'border-line-strong bg-raised text-foreground hover:bg-raised-hover'
             }`}
           >
             {recording ? 'Press a combo…' : humanize(shortcut)}

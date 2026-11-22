@@ -81,7 +81,7 @@ export const SettingsContent = ({
           {credentialsSpotlight && (
             <div
               className={`flex items-center gap-1.75 rounded-[9px] px-3 py-2 text-[12px] font-semibold ${revealClass}`}
-              style={{ background: 'rgba(227,178,74,.1)', color: AMBER, ...revealStyle(1) }}
+              style={{ background: 'rgba(255,179,71,.1)', color: AMBER, ...revealStyle(1) }}
             >
               <Info size={13} className="flex-none" />
               Welcome! To search games and fetch artwork, Afterplay needs your own API keys — add

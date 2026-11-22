@@ -38,7 +38,7 @@ export const ImagesField = ({
 
   return (
     <div>
-      <div className={fieldLabelClass}>COVER & HERO IMAGE</div>
+      <div className={fieldLabelClass}>Cover & hero image</div>
       <div className="flex gap-2.5">
         <button
           type="button"
@@ -51,7 +51,7 @@ export const ImagesField = ({
             alt=""
             className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover:scale-105"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-[11px] font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:bg-black/55 group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-inset/0 text-[11px] font-semibold text-bone opacity-0 transition-opacity duration-150 group-hover:bg-inset/55 group-hover:opacity-100">
             Change
           </div>
         </button>
@@ -74,7 +74,7 @@ export const ImagesField = ({
               <span className="text-[11.5px]">No hero image</span>
             </div>
           )}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-[11px] font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:bg-black/55 group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-inset/0 text-[11px] font-semibold text-bone opacity-0 transition-opacity duration-150 group-hover:bg-inset/55 group-hover:opacity-100">
             {heroUrl ? 'Change' : 'Choose hero'}
           </div>
         </button>
@@ -93,7 +93,7 @@ export const ImagesField = ({
             className="transition-transform duration-150"
             style={idOpen ? undefined : { transform: 'rotate(-90deg)' }}
           />
-          <span>STEAMGRIDDB ID</span>
+          <span>SteamGridDB ID</span>
           {/* Con el grupo cerrado y un id puesto, el valor se ve igualmente —
               si no, parecería que no hay nada configurado ahí debajo. */}
           {!idOpen && steamGridDbId !== null && (

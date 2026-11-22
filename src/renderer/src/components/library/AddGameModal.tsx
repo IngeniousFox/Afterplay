@@ -549,7 +549,7 @@ const AddGameModalBody = ({
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-white/6"
+            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
           >
             Cancel
           </button>
@@ -557,11 +557,11 @@ const AddGameModalBody = ({
             type="button"
             onClick={handleSave}
             disabled={!selected || isSaving || !steamAppIdValid}
-            className="[will-change:transform] flex items-center gap-2 rounded-[10px] px-5.5 py-2.5 text-[13.5px] font-bold transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(47,220,126,.32)]"
+            className="flex items-center gap-2 rounded-sm px-5.5 py-2.5 text-[13.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed"
             style={
               selected
                 ? accentGradientStyle
-                : { background: 'rgba(255,255,255,.06)', color: '#888f8a', opacity: 0.6 }
+                : { background: 'rgba(233,228,216,.06)', color: '#8a9496', opacity: 0.6 }
             }
           >
             <Plus size={16} />
@@ -717,7 +717,7 @@ const AddGameModalBody = ({
                   style={revealStyle(0)}
                 >
                   <label htmlFor="add-game-steam-app-id" className={fieldLabelClass}>
-                    OVERRIDE STEAM APP ID
+                    Override Steam app ID
                   </label>
                   <Controller
                     control={control}
@@ -760,7 +760,7 @@ const AddGameModalBody = ({
                     style={revealStyle(0)}
                   >
                     <div>
-                      <div className={fieldLabelClass}>PLATFORM YOU PLAY ON</div>
+                      <div className={fieldLabelClass}>Platform you play on</div>
                       <Controller
                         control={control}
                         name="platform"
@@ -777,7 +777,7 @@ const AddGameModalBody = ({
                     </div>
 
                     <div>
-                      <div className={fieldLabelClass}>ORIGIN</div>
+                      <div className={fieldLabelClass}>Origin</div>
                       <Controller
                         control={control}
                         name="origin"
@@ -793,7 +793,7 @@ const AddGameModalBody = ({
                     </div>
 
                     <div>
-                      <div className={fieldLabelClass}>FORMAT</div>
+                      <div className={fieldLabelClass}>Format</div>
                       <Controller
                         control={control}
                         name="format"
@@ -966,7 +966,7 @@ const AddGameModalBody = ({
 
                 <div>
                   <div className={fieldLabelClass}>
-                    NOTE{' '}
+                    Note{' '}
                     <span className="font-medium tracking-normal normal-case">
                       · saved to status history
                     </span>

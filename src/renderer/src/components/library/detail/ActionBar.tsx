@@ -48,7 +48,7 @@ type ActionBarProps = {
 // aquí se viera distinto a cualquier otro "outline" de la app sin que se
 // notara por qué (colisión de nombre real, encontrada en auditoría).
 const editButtonClass =
-  'flex items-center gap-2 rounded-[11px] border border-input bg-white/[0.03] px-4.5 text-[14px] font-semibold text-foreground hover:bg-white/[0.06]';
+  'flex items-center gap-2 rounded-[11px] border border-line-strong bg-raised px-4.5 text-[14px] font-semibold text-foreground hover:bg-raised-hover';
 
 // describeRefresh y el gesto entero viven en components/RefreshGameButton.tsx
 // desde que las filas del Plan ofrecen el mismo botón: los planeados no
@@ -153,9 +153,9 @@ export const ActionBar = ({
           style={
             isLive
               ? {
-                  background: 'rgba(47,220,126,.14)',
-                  color: '#2fdc7e',
-                  border: '1px solid rgba(47,220,126,.5)',
+                  background: 'rgba(255,179,71,.14)',
+                  color: '#ffb347',
+                  border: '1px solid rgba(255,179,71,.5)',
                 }
               : {
                   ...accentGradientStyle,
@@ -163,7 +163,7 @@ export const ActionBar = ({
                 }
           }
         >
-          {isLive ? <Pause size={16} fill="#2fdc7e" /> : <Play size={16} fill="#08120c" />}
+          {isLive ? <Pause size={16} fill="#ffb347" /> : <Play size={16} fill="#1a1100" />}
           <span>{isLive ? 'Stop' : launchExecutable.isPending ? 'Launching…' : 'Play'}</span>
         </button>
 
@@ -200,7 +200,7 @@ export const ActionBar = ({
           onClick={handleOpenInstallDirectory}
           disabled={!game.installDirectory || openInstallDirectory.isPending}
           title={game.installDirectory ? 'Open install folder' : 'No install folder set (Edit)'}
-          className={`${squareIconButtonClass} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.03]`}
+          className={`${squareIconButtonClass} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-raised`}
         >
           <FolderOpen size={17} />
         </button>
@@ -216,7 +216,7 @@ export const ActionBar = ({
           disabled={refreshing}
           title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
           aria-label="Refresh everything for this game"
-          className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-white/[0.03]`}
+          className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-raised`}
         >
           <RefreshCw size={17} className={refreshing ? 'animate-spin' : undefined} />
         </button>

@@ -14,9 +14,7 @@ export const SectionLabel = ({
   children: React.ReactNode;
   className?: string;
 }): React.JSX.Element => (
-  <div className={`text-[11px] font-bold tracking-[.13em] text-muted-foreground ${className}`}>
-    {children}
-  </div>
+  <div className={`text-lead font-semibold text-bone ${className}`}>{children}</div>
 );
 
 // Píldora de dato secundario (plataforma, formato, origen, géneros). Sin
@@ -42,7 +40,7 @@ export const InfoChip = ({
         : {
             color: 'var(--muted-foreground)',
             borderColor: 'var(--border)',
-            background: 'rgba(255,255,255,.028)',
+            background: 'rgba(233,228,216,.028)',
           }
     }
   >
@@ -66,10 +64,11 @@ export const StatTile = ({
     className="rounded-[11px] border px-3 py-2.5"
     style={{ borderColor: `${color}2e`, background: `${color}0f` }}
   >
-    <div className="text-[10px] font-bold tracking-[.11em]" style={{ color: `${color}b3` }}>
-      {label}
-    </div>
-    <div className="mt-1 text-[19px] font-extrabold tabular-nums" style={{ color }}>
+    <div className="text-micro font-semibold text-dust">{label}</div>
+    <div
+      className="mt-1 font-display text-[24px] leading-none font-bold tabular-nums"
+      style={{ color }}
+    >
       {value}
     </div>
   </div>
@@ -86,7 +85,7 @@ export const Cell = ({
   value: React.ReactNode;
 }): React.JSX.Element => (
   <div className="min-w-0">
-    <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">{label}</div>
+    <div className="text-micro font-semibold text-dust">{label}</div>
     <div
       className="mt-0.75 truncate text-[12.5px] font-semibold text-foreground"
       title={typeof value === 'string' ? value : undefined}
@@ -107,7 +106,7 @@ export const MetricCard = ({
   label,
   value,
   liveHint,
-  accent = '#2fdc7e',
+  accent = '#ffb347',
 }: {
   Icon: LucideIcon;
   label: string;
@@ -127,11 +126,9 @@ export const MetricCard = ({
       >
         <Icon size={11} color={accent} />
       </span>
-      <span className="truncate text-[9.5px] font-bold tracking-[.09em] text-muted-foreground">
-        {label}
-      </span>
+      <span className="truncate text-micro font-semibold text-dust">{label}</span>
     </div>
-    <div className="relative mt-2 text-[19px] leading-none font-extrabold text-foreground tabular-nums">
+    <div className="relative mt-2 font-display text-[24px] leading-none font-bold text-bone tabular-nums">
       {value}
     </div>
     {liveHint && (
@@ -164,7 +161,7 @@ export const CardTitle = ({
   aside?: React.ReactNode;
 }): React.JSX.Element => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-[13.5px] font-bold text-foreground">{children}</span>
+    <span className="text-lead font-semibold text-bone">{children}</span>
     {aside}
   </div>
 );

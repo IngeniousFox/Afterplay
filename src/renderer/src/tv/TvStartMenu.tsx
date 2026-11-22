@@ -16,7 +16,7 @@ import { tvRevealClass, tvRevealStyle } from './styles';
 
 // El rojo de peligro de la casa (mismo hex que usa 'dropped') — aquí como
 // acento de "Quit", no como estado de juego.
-const DANGER = '#e85d72';
+const DANGER = '#ff5e57';
 
 const MenuItem = ({
   icon: Icon,
@@ -67,8 +67,8 @@ const MenuItem = ({
                 boxShadow: `inset 0 0 0 1px ${accent}66, 0 0 0.9em ${accent}40`,
               }
             : {
-                background: 'rgba(255,255,255,.05)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.09)',
+                background: 'rgba(233,228,216,.05)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.09)',
               }
         }
       >
@@ -92,7 +92,7 @@ const MenuItem = ({
               className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
-                  'linear-gradient(105deg, transparent, rgba(255,255,255,.13), transparent)',
+                  'linear-gradient(105deg, transparent, rgba(233,228,216,.13), transparent)',
               }}
             />
           </span>
@@ -120,7 +120,7 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
       <div className="absolute inset-0 z-30 flex" onClick={onClose}>
         {/* Sin backdrop-blur: el velo entra con fade y el blur no muestrea
             hasta acabar la animación — el fondo "se oscurecía de golpe". */}
-        <div className="animate-in fade-in-0 absolute inset-0 bg-black/65 duration-250" />
+        <div className="animate-in fade-in-0 absolute inset-0 bg-inset/65 duration-250" />
         <div
           className="animate-in slide-in-from-left-8 fade-in-0 relative flex h-full w-[19em] flex-col gap-[0.35em] bg-[#0f1110]/95 px-[1.2em] pt-[3em] duration-300"
           onClick={(event) => event.stopPropagation()}
@@ -137,7 +137,7 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
             className="absolute inset-y-0 right-0 w-px"
             style={{
               background:
-                'linear-gradient(180deg, transparent, rgba(255,255,255,.16) 30%, rgba(255,255,255,.16) 70%, transparent)',
+                'linear-gradient(180deg, transparent, rgba(233,228,216,.16) 30%, rgba(233,228,216,.16) 70%, transparent)',
             }}
           />
           <div className="mb-[1.2em] flex items-center gap-[0.6em] px-[0.7em]">
@@ -177,7 +177,7 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
           <div
             className="my-[0.6em] h-px"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(233,228,216,.14), transparent)',
             }}
           />
           <MenuItem
@@ -204,7 +204,7 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
               className="mx-[0.7em] h-px"
               style={{
                 background:
-                  'linear-gradient(90deg, transparent, rgba(255,255,255,.1), transparent)',
+                  'linear-gradient(90deg, transparent, rgba(233,228,216,.1), transparent)',
               }}
             />
             <div className="mt-[0.95em] flex items-center justify-center gap-[0.55em]">

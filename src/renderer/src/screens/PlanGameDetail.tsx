@@ -173,7 +173,7 @@ export const PlanGameDetail = ({
                 disabled={refreshGame.refreshing}
                 title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
                 aria-label="Refresh everything for this game"
-                className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-white/[0.03]`}
+                className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-raised`}
               >
                 <RefreshCw
                   size={17}

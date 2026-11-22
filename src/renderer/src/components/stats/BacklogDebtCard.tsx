@@ -287,10 +287,10 @@ const MovementCard = ({
     <StatCard
       className={cn(
         'afterplay-debt-card afterplay-movement-card flex h-full flex-col relative overflow-hidden',
-        '[background:radial-gradient(circle_at_16%_120%,_rgba(124,_134,_200,_0.1),_transparent_34%),_radial-gradient(circle_at_88%_-45%,_rgba(47,_220,_126,_0.045),_transparent_36%),_var(--card)]',
+        '[background:radial-gradient(circle_at_16%_120%,_rgba(185,_166,_255,_0.1),_transparent_34%),_radial-gradient(circle_at_88%_-45%,_rgba(255,_179,_71,_0.045),_transparent_36%),_var(--card)]',
         "[&::before]:content-[''] [&::before]:absolute [&::before]:inset-0 [&::before]:pointer-events-none",
         '[&::before]:opacity-[0.22]',
-        '[&::before]:[background-image:linear-gradient(rgba(255,_255,_255,_0.018)_1px,_transparent_1px)]',
+        '[&::before]:[background-image:linear-gradient(rgba(233,_228,_216,_0.018)_1px,_transparent_1px)]',
         '[&::before]:[background-size:100%_34px]',
         '[&::before]:[mask-image:linear-gradient(90deg,_transparent,_#000_38%,_#000)]',
         '[&_>_*]:relative [&_>_*]:z-1',
@@ -331,8 +331,8 @@ const MovementCard = ({
           <div
             className={cn(
               'afterplay-movement-hero py-3.5 px-4 rounded-[12px]',
-              '[border:1px_solid_color-mix(in_srgb,_var(--movement-accent)_20%,_rgba(255,_255,_255,_0.05))]',
-              '[background:linear-gradient(_135deg,_color-mix(in_srgb,_var(--movement-accent)_9%,_transparent),_rgba(0,_0,_0,_0.11)_)]',
+              '[border:1px_solid_color-mix(in_srgb,_var(--movement-accent)_20%,_rgba(233,_228,_216,_0.05))]',
+              '[background:linear-gradient(_135deg,_color-mix(in_srgb,_var(--movement-accent)_9%,_transparent),_rgba(3,_6,_7,_0.11)_)]',
             )}
             style={{ '--movement-accent': netColor } as React.CSSProperties}
           >
@@ -342,7 +342,10 @@ const MovementCard = ({
               ) : (
                 <TrendingDown size={26} color={netColor} className="self-center" />
               )}
-              <span className="text-[42px] font-extrabold tabular-nums" style={{ color: netColor }}>
+              <span
+                className="text-[42px] font-display font-bold tabular-nums"
+                style={{ color: netColor }}
+              >
                 {grew ? '+' : '−'}
                 {Math.abs(Math.round(stats.netHours))}
               </span>
@@ -373,7 +376,7 @@ const MovementCard = ({
           <div
             className={cn(
               'afterplay-movement-comparison py-3.5 px-4 rounded-[12px] flex min-w-0 flex-col justify-center gap-[5px]',
-              '[border:1px_solid_rgba(255,_255,_255,_0.055)] [background:rgba(0,_0,_0,_0.1)]',
+              '[border:1px_solid_rgba(233,_228,_216,_0.055)] [background:rgba(3,_6,_7,_0.1)]',
             )}
           >
             <MovementSide
@@ -424,12 +427,12 @@ const MovementSide = ({
     className={cn(
       'afterplay-movement-side flex items-center gap-2.5 py-1.5 px-[7px] rounded-[8px]',
       '[transition:background-color_200ms_ease,_transform_240ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-      '[&:hover]:[background:rgba(255,_255,_255,_0.025)] [&:hover]:[transform:translateX(2px)]',
+      '[&:hover]:[background:rgba(233,_228,_216,_0.025)] [&:hover]:[transform:translateX(2px)]',
       'motion-reduce:animate-none motion-reduce:transition-none',
     )}
   >
     <span className="w-27 flex-none text-[12px] text-muted-foreground">{label}</span>
-    <div className="afterplay-movement-track h-1.5 flex-1 overflow-hidden rounded-[99px] [background:rgba(255,_255,_255,_0.055)]">
+    <div className="afterplay-movement-track h-1.5 flex-1 overflow-hidden rounded-[99px] [background:rgba(233,_228,_216,_0.055)]">
       <div
         className={cn(
           'afterplay-movement-fill h-full rounded-[inherit] origin-left',
@@ -461,10 +464,10 @@ const BalanceCard = ({
     <StatCard
       className={cn(
         'afterplay-debt-card flex h-full flex-col relative overflow-hidden',
-        '[background:radial-gradient(circle_at_16%_120%,_rgba(124,_134,_200,_0.1),_transparent_34%),_radial-gradient(circle_at_88%_-45%,_rgba(47,_220,_126,_0.045),_transparent_36%),_var(--card)]',
+        '[background:radial-gradient(circle_at_16%_120%,_rgba(185,_166,_255,_0.1),_transparent_34%),_radial-gradient(circle_at_88%_-45%,_rgba(255,_179,_71,_0.045),_transparent_36%),_var(--card)]',
         "[&::before]:content-[''] [&::before]:absolute [&::before]:inset-0 [&::before]:pointer-events-none",
         '[&::before]:opacity-[0.22]',
-        '[&::before]:[background-image:linear-gradient(rgba(255,_255,_255,_0.018)_1px,_transparent_1px)]',
+        '[&::before]:[background-image:linear-gradient(rgba(233,_228,_216,_0.018)_1px,_transparent_1px)]',
         '[&::before]:[background-size:100%_34px]',
         '[&::before]:[mask-image:linear-gradient(90deg,_transparent,_#000_38%,_#000)]',
         '[&_>_*]:relative [&_>_*]:z-1',
@@ -477,9 +480,9 @@ const BalanceCard = ({
               <div className="text-[14px] font-bold text-foreground">Backlog debt</div>
               <span
                 className={cn(
-                  'afterplay-debt-mode py-[3px] px-1.5 rounded-[99px] text-[10px] font-black tracking-[0.1em] leading-none',
-                  '[border:1px_solid_rgba(124,_134,_200,_0.2)] text-[rgba(167,_175,_231,_0.82)]',
-                  '[background:rgba(124,_134,_200,_0.07)]',
+                  'afterplay-debt-mode py-[3px] px-1.5 rounded-[99px] text-micro font-black tracking-[0.1em] leading-none',
+                  '[border:1px_solid_rgba(185,_166,_255,_0.2)] text-[rgba(167,_175,_231,_0.82)]',
+                  '[background:rgba(185,_166,_255,_0.07)]',
                 )}
               >
                 PACE FORECAST
@@ -517,15 +520,15 @@ const BalanceCard = ({
           <div
             className={cn(
               'afterplay-debt-hero relative flex min-w-0 items-center gap-[15px] overflow-hidden py-[15px] px-4 rounded-[12px]',
-              '[border:1px_solid_rgba(124,_134,_200,_0.15)]',
-              '[background:linear-gradient(135deg,_rgba(124,_134,_200,_0.09),_rgba(0,_0,_0,_0.11))]',
-              '[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025)]',
+              '[border:1px_solid_rgba(185,_166,_255,_0.15)]',
+              '[background:linear-gradient(135deg,_rgba(185,_166,_255,_0.09),_rgba(3,_6,_7,_0.11))]',
+              '[box-shadow:inset_0_1px_0_rgba(233,_228,_216,_0.025)]',
               '[transition:border-color_240ms_ease,_box-shadow_260ms_ease,_transform_300ms_cubic-bezier(0.22,_1,_0.36,_1)]',
               "[&::after]:content-[''] [&::after]:absolute [&::after]:-right-12 [&::after]:-bottom-17 [&::after]:w-37.5",
-              '[&::after]:h-37.5 [&::after]:rounded-[50%] [&::after]:pointer-events-none [&::after]:[background:#7c86c8]',
+              '[&::after]:h-37.5 [&::after]:rounded-[50%] [&::after]:pointer-events-none [&::after]:[background:#b9a6ff]',
               '[&::after]:opacity-[0.05] [&::after]:[filter:blur(18px)]',
-              '[&:hover]:[border-color:rgba(124,_134,_200,_0.28)]',
-              '[&:hover]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.04),_0_12px_30px_rgba(0,_0,_0,_0.18)]',
+              '[&:hover]:[border-color:rgba(185,_166,_255,_0.28)]',
+              '[&:hover]:[box-shadow:inset_0_1px_0_rgba(233,_228,_216,_0.04),_0_12px_30px_rgba(3,_6,_7,_0.18)]',
               '[&:hover]:[transform:translateY(-2px)]',
               '[&:hover_.afterplay-debt-hourglass_svg]:[transform:rotate(180deg)]',
               'motion-reduce:animate-none motion-reduce:transition-none',
@@ -534,8 +537,8 @@ const BalanceCard = ({
             <div
               className={cn(
                 'afterplay-debt-hourglass relative flex w-14.5 h-14.5 flex-none items-center justify-center rounded-[50%]',
-                '[border:1px_solid_rgba(124,_134,_200,_0.24)] text-[#9ba5ec] [background:rgba(124,_134,_200,_0.075)]',
-                '[box-shadow:inset_0_0_18px_rgba(124,_134,_200,_0.06),_0_0_25px_rgba(124,_134,_200,_0.06)]',
+                '[border:1px_solid_rgba(185,_166,_255,_0.24)] text-[#9ba5ec] [background:rgba(185,_166,_255,_0.075)]',
+                '[box-shadow:inset_0_0_18px_rgba(185,_166,_255,_0.06),_0_0_25px_rgba(185,_166,_255,_0.06)]',
                 '[&_span]:absolute [&_span]:inset-1.75 [&_span]:[border:1px_dashed_rgba(155,_165,_236,_0.2)]',
                 '[&_span]:rounded-[50%] [&_span]:animate-spin [&_span]:[animation-duration:14s]',
                 '[&_svg]:relative [&_svg]:z-1 [&_svg]:[filter:drop-shadow(0_0_8px_rgba(155,_165,_236,_0.24))]',
@@ -549,7 +552,7 @@ const BalanceCard = ({
               <Hourglass size={30} strokeWidth={1.7} />
             </div>
             <div className="min-w-0">
-              <div className="afterplay-debt-kicker text-white/45 text-[10px] font-black tracking-[0.12em] uppercase">
+              <div className="afterplay-debt-kicker text-dust text-micro font-black tracking-[0.12em] uppercase">
                 ESTIMATED PLAYTIME
               </div>
               <div className="afterplay-debt-total flex items-baseline gap-[7px] mt-px">
@@ -575,12 +578,12 @@ const BalanceCard = ({
                   'Not enough recent playtime to estimate a pace'
                 )}
               </div>
-              <div className="afterplay-debt-coverage flex flex-wrap gap-y-1 gap-x-2 mt-2 text-[11px] text-white/50">
+              <div className="afterplay-debt-coverage flex flex-wrap gap-y-1 gap-x-2 mt-2 text-[11px] text-dust">
                 <span>
                   {stats.estimatedCount}/{stats.pendingCount} games estimated
                 </span>
                 {stats.withoutEstimate > 0 && (
-                  <span className="text-[rgba(227,_178,_74,_0.8)]">
+                  <span className="text-[rgba(255,_179,_71,_0.8)]">
                     + {pluralize(stats.withoutEstimate, 'game')} outside the forecast
                   </span>
                 )}
@@ -588,11 +591,11 @@ const BalanceCard = ({
             </div>
           </div>
 
-          <div className="afterplay-debt-forecast min-w-0 pt-3 px-3.5 pb-[11px] rounded-[12px] [border:1px_solid_rgba(255,_255,_255,_0.055)] [background:rgba(0,_0,_0,_0.1)]">
+          <div className="afterplay-debt-forecast min-w-0 pt-3 px-3.5 pb-[11px] rounded-[12px] [border:1px_solid_rgba(233,_228,_216,_0.055)] [background:rgba(3,_6,_7,_0.1)]">
             <div
               className={cn(
                 'afterplay-debt-forecast-head flex items-start justify-between gap-3.5',
-                '[&_span]:text-white/45 [&_span]:text-[10px] [&_span]:font-black [&_span]:tracking-[0.12em]',
+                '[&_span]:text-dust [&_span]:text-micro [&_span]:font-black [&_span]:tracking-[0.12em]',
                 '[&_span]:uppercase',
                 '[&_>_div_>_strong]:block [&_>_div_>_strong]:mt-0.75 [&_>_div_>_strong]:text-foreground',
                 '[&_>_div_>_strong]:text-[16px] [&_>_div_>_strong]:font-[850]',
@@ -607,10 +610,10 @@ const BalanceCard = ({
               <div
                 className={cn(
                   'afterplay-debt-pace py-[5px] px-2 rounded-[8px] text-right',
-                  '[&_span]:text-white/45 [&_span]:text-[10px] [&_span]:font-black [&_span]:tracking-[0.12em]',
+                  '[&_span]:text-dust [&_span]:text-micro [&_span]:font-black [&_span]:tracking-[0.12em]',
                   '[&_span]:uppercase',
                   '[&_strong]:block [&_strong]:mt-0.75',
-                  '[border:1px_solid_rgba(124,_134,_200,_0.14)] [background:rgba(124,_134,_200,_0.055)]',
+                  '[border:1px_solid_rgba(185,_166,_255,_0.14)] [background:rgba(185,_166,_255,_0.055)]',
                   '[&_strong]:text-[#a4ade9] [&_strong]:text-[11.5px] [&_strong]:font-extrabold',
                 )}
               >
@@ -628,10 +631,10 @@ const BalanceCard = ({
                 <div
                   className={cn(
                     'afterplay-debt-horizon-rail relative h-1 rounded-[99px]',
-                    '[background:linear-gradient(90deg,_rgba(124,_134,_200,_0.28),_#7c86c8_70%,_#b1b9f1)]',
-                    '[box-shadow:0_0_15px_rgba(124,_134,_200,_0.12)]',
+                    '[background:linear-gradient(90deg,_rgba(185,_166,_255,_0.28),_#b9a6ff_70%,_#b9a6ff)]',
+                    '[box-shadow:0_0_15px_rgba(185,_166,_255,_0.12)]',
                     "[&::after]:content-[''] [&::after]:absolute [&::after]:[inset:-5px_0]",
-                    '[&::after]:[background:repeating-linear-gradient(_90deg,_transparent_0,_transparent_calc(12.5%_-_1px),_rgba(255,_255,_255,_0.09)_calc(12.5%_-_1px),_rgba(255,_255,_255,_0.09)_12.5%_)]',
+                    '[&::after]:[background:repeating-linear-gradient(_90deg,_transparent_0,_transparent_calc(12.5%_-_1px),_rgba(233,_228,_216,_0.09)_calc(12.5%_-_1px),_rgba(233,_228,_216,_0.09)_12.5%_)]',
                     '[&::after]:[mask-image:linear-gradient(#0000,_#000_40%,_#000_60%,_#0000)]',
                   )}
                 >
@@ -646,32 +649,32 @@ const BalanceCard = ({
                   <i
                     className={cn(
                       'afterplay-debt-horizon-dot afterplay-debt-horizon-dot--start absolute z-3 top-1/2 w-2 h-2 rounded-[50%]',
-                      '[border:2px_solid_#111512] [background:#a5aeea] [box-shadow:0_0_9px_rgba(124,_134,_200,_0.45)]',
+                      '[border:2px_solid_#171d20] [background:#b9a6ff] [box-shadow:0_0_9px_rgba(185,_166,_255,_0.45)]',
                       '[transform:translate(-50%,_-50%)] left-0',
                     )}
                   />
                   <i
                     className={cn(
                       'afterplay-debt-horizon-dot afterplay-debt-horizon-dot--middle absolute z-3 top-1/2 w-2 h-2 rounded-[50%]',
-                      '[border:2px_solid_#111512] [background:#a5aeea] [box-shadow:0_0_9px_rgba(124,_134,_200,_0.45)]',
+                      '[border:2px_solid_#171d20] [background:#b9a6ff] [box-shadow:0_0_9px_rgba(185,_166,_255,_0.45)]',
                       '[transform:translate(-50%,_-50%)] left-1/2',
                     )}
                   />
                   <i
                     className={cn(
                       'afterplay-debt-horizon-dot afterplay-debt-horizon-dot--end absolute z-3 top-1/2 w-2 h-2 rounded-[50%]',
-                      '[border:2px_solid_#111512] [box-shadow:0_0_9px_rgba(124,_134,_200,_0.45)] [transform:translate(-50%,_-50%)]',
+                      '[border:2px_solid_#171d20] [box-shadow:0_0_9px_rgba(185,_166,_255,_0.45)] [transform:translate(-50%,_-50%)]',
                       'left-full [background:#d2d7ff]',
                     )}
                   />
                 </div>
                 <div
                   className={cn(
-                    'afterplay-debt-horizon-labels grid grid-cols-[repeat(3,_1fr)] mt-[7px] text-[11px] font-bold text-white/[0.52]',
+                    'afterplay-debt-horizon-labels grid grid-cols-[repeat(3,_1fr)] mt-[7px] text-[11px] font-bold text-dust',
                     '[&_span]:flex [&_span]:flex-col [&_span]:gap-0.25',
                     '[&_span:nth-child(2)]:items-center',
                     '[&_span:last-child]:items-end',
-                    '[&_small]:text-white/45 [&_small]:text-[10px] [&_small]:font-black [&_small]:tracking-[0.11em]',
+                    '[&_small]:text-dust [&_small]:text-micro [&_small]:font-black [&_small]:tracking-[0.11em]',
                   )}
                 >
                   <span>
@@ -692,7 +695,7 @@ const BalanceCard = ({
               <div
                 className={cn(
                   'afterplay-debt-horizon afterplay-debt-horizon--quiet mt-4 mx-1 mb-[13px] min-h-10.5 p-3.25',
-                  '[border:1px_dashed_rgba(255,_255,_255,_0.08)] rounded-[9px] text-muted-foreground text-[10px] text-center',
+                  '[border:1px_dashed_rgba(233,_228,_216,_0.08)] rounded-[9px] text-muted-foreground text-micro text-center',
                 )}
               >
                 Keep tracking recent sessions and the horizon will appear here.
@@ -702,7 +705,7 @@ const BalanceCard = ({
             <div
               className={cn(
                 'afterplay-debt-composition flex h-[5px] gap-0.5 overflow-hidden rounded-[99px]',
-                '[background:rgba(255,_255,_255,_0.045)]',
+                '[background:rgba(233,_228,_216,_0.045)]',
                 '[&_span]:min-w-0 [&_span]:rounded-[inherit] [&_span]:[box-shadow:0_0_9px_currentColor] [&_span]:origin-left',
                 '[&_span]:animate-[afterplay-grow-x_700ms_cubic-bezier(0.22,_1,_0.36,_1)_backwards]',
                 'motion-reduce:[&_span]:animate-none motion-reduce:[&_span]:transition-none',
@@ -761,18 +764,18 @@ const DebtSource = ({
   <div
     className={cn(
       'afterplay-debt-source relative grid grid-cols-[minmax(0,_1fr)_auto] grid-rows-[auto_auto] gap-y-px gap-x-2.5',
-      'overflow-hidden pt-2 pr-2.5 pb-2 pl-[13px] rounded-[9px] [border:1px_solid_rgba(255,_255,_255,_0.055)]',
-      '[background:rgba(255,_255,_255,_0.018)]',
+      'overflow-hidden pt-2 pr-2.5 pb-2 pl-[13px] rounded-[9px] [border:1px_solid_rgba(233,_228,_216,_0.055)]',
+      '[background:rgba(233,_228,_216,_0.018)]',
       '[transition:border-color_200ms_ease,_background-color_200ms_ease,_transform_260ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-      '[&:hover]:[border-color:color-mix(in_srgb,_var(--debt-source)_28%,_rgba(255,_255,_255,_0.06))]',
-      '[&:hover]:[background:color-mix(in_srgb,_var(--debt-source)_6%,_rgba(255,_255,_255,_0.018))]',
+      '[&:hover]:[border-color:color-mix(in_srgb,_var(--debt-source)_28%,_rgba(233,_228,_216,_0.06))]',
+      '[&:hover]:[background:color-mix(in_srgb,_var(--debt-source)_6%,_rgba(233,_228,_216,_0.018))]',
       '[&:hover]:[transform:translateY(-2px)]',
       'motion-reduce:animate-none motion-reduce:transition-none',
     )}
     data-debt-source={label}
     style={{ '--debt-source': color } as React.CSSProperties}
   >
-    <span className="overflow-hidden text-white/[0.72] text-[11.5px] font-[750] text-ellipsis whitespace-nowrap">
+    <span className="overflow-hidden text-dust text-[11.5px] font-[750] text-ellipsis whitespace-nowrap">
       {label}
     </span>
     <small className="overflow-hidden text-muted-foreground text-[11px] text-ellipsis whitespace-nowrap">

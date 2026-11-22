@@ -33,10 +33,10 @@ export const TvScreenTitle = ({
     <h1
       className="pb-[0.1em] text-[1.5em] leading-[1.18] font-extrabold tracking-[-.015em]"
       style={{
-        backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(255,255,255,.66))',
+        backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(233,228,216,.66))',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
-        filter: 'drop-shadow(0 2px 14px rgba(0,0,0,.5))',
+        filter: 'drop-shadow(0 2px 14px rgba(3,6,7,.5))',
       }}
     >
       {label}

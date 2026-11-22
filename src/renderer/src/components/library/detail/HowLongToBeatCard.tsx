@@ -23,9 +23,9 @@ type HowLongToBeatCardProps = {
 
 type TierKey = 'main' | 'extra' | 'completionist';
 
-const MAIN = '#2bb6a6';
-const EXTRA = '#3f7fe0';
-const COMPLETIONIST = '#2fdc7e';
+const MAIN = '#5fd3e0';
+const EXTRA = '#8ce4ee'; // --color-tube-hi: distinto de MAIN
+const COMPLETIONIST = '#ffb347';
 // Cortas a propósito: es el texto que aparece en la cabecera al pasar el
 // ratón por un tramo, y esta card vive en un sidebar estrecho. "100%
 // Completionist" era la más larga de las tres y, junto al resto del texto de
@@ -78,7 +78,7 @@ const TierTile = ({
       opacity: dimmed ? 0.4 : 1,
       ...(reached || hovered
         ? { borderColor: `${color}5c`, background: `${color}17` }
-        : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }),
+        : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }),
       ...(hovered ? { boxShadow: `0 0 0 1px ${color}59, 0 0 14px ${color}33` } : {}),
     }}
   >
@@ -89,7 +89,7 @@ const TierTile = ({
         <span className="size-2 flex-none rounded-[2px]" style={{ background: color }} />
       )}
       <span
-        className="text-[9.5px] font-bold tracking-[.06em]"
+        className="text-micro font-bold tracking-[.06em]"
         style={{ color: reached || hovered ? color : 'var(--muted-foreground)' }}
       >
         {label}
@@ -144,15 +144,15 @@ export const HowLongToBeatCard = ({
             ? cn(
                 'afterplay-game-hltb-empty',
                 'rounded-[15px] relative overflow-hidden',
-                'border border-white/[0.08]',
-                '[background:radial-gradient(circle_at_0%_0%,rgba(43,182,166,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(63,127,224,0.035),transparent_37%),var(--card)]',
-                'shadow-[inset_0_1px_rgba(255,255,255,0.03)]',
+                'border border-line',
+                '[background:radial-gradient(circle_at_0%_0%,rgba(95,211,224,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(95,211,224,0.035),transparent_37%),var(--card)]',
+                'shadow-[inset_0_1px_rgba(233,228,216,0.03)]',
               )
             : '',
         )}
       >
         <div className="flex items-center gap-2.5">
-          <span className="flex size-8 flex-none items-center justify-center rounded-full bg-white/[0.04] text-muted-foreground/50">
+          <span className="flex size-8 flex-none items-center justify-center rounded-full bg-bone/[0.04] text-muted-foreground/50">
             <Hourglass size={14} />
           </span>
           <div className="min-w-0 flex-1">
@@ -173,7 +173,7 @@ export const HowLongToBeatCard = ({
             }}
             title="Fetch times from HowLongToBeat"
             aria-label="Fetch times from HowLongToBeat"
-            className="flex size-7 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex size-7 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
             <RefreshCw size={13} className={refresh.isPending ? 'animate-spin' : undefined} />
           </button>
@@ -255,23 +255,23 @@ export const HowLongToBeatCard = ({
         className={cn(
           'afterplay-game-hltb-dossier',
           'rounded-[15px] relative overflow-hidden px-5.5 py-5.25',
-          'border border-white/[0.08]',
-          '[background:radial-gradient(circle_at_0%_0%,rgba(43,182,166,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(63,127,224,0.035),transparent_37%),var(--card)]',
-          'shadow-[inset_0_1px_rgba(255,255,255,0.03)]',
+          'border border-line',
+          '[background:radial-gradient(circle_at_0%_0%,rgba(95,211,224,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(95,211,224,0.035),transparent_37%),var(--card)]',
+          'shadow-[inset_0_1px_rgba(233,228,216,0.03)]',
           'before:absolute before:top-[0] before:right-[8%] before:left-[8%] before:h-[1px]',
-          'before:[background:linear-gradient(90deg,transparent,#2bb6a6,#3f7fe0,#2fdc7e,transparent)]',
+          'before:[background:linear-gradient(90deg,transparent,#5fd3e0,#5fd3e0,#ffb347,transparent)]',
           "before:content-[''] before:opacity-[0.4]",
         )}
       >
         <div className="afterplay-game-hltb-header flex items-start justify-between gap-4.5">
           <div className="flex flex-col">
-            <span className="afterplay-game-hltb-kicker flex items-center gap-1.25 text-[10px] font-black tracking-[0.14em] text-[#2bb6a6]">
+            <span className="afterplay-game-hltb-kicker flex items-center gap-1.25 text-micro font-black tracking-[0.14em] text-tube">
               <Hourglass size={11} /> PACE COMPARISON
             </span>
             <strong className="mt-1 text-[18px] font-black tracking-[-0.02em] text-foreground">
               You vs HowLongToBeat
             </strong>
-            <small className="mt-0.5 text-[11.5px] text-white/[0.43]">
+            <small className="mt-0.5 text-[11.5px] text-dust">
               Your real playtime against the community&apos;s landmarks
             </small>
           </div>
@@ -292,10 +292,10 @@ export const HowLongToBeatCard = ({
             aria-label="Refresh times"
             className={cn(
               'afterplay-game-hltb-refresh',
-              'flex size-7 flex-none items-center justify-center rounded-[8px] text-white/[0.42]',
-              'border border-white/[0.075] bg-white/[0.025]',
-              '[&:is(:hover,:focus-visible)]:border-[rgba(43,182,166,0.3)]',
-              '[&:is(:hover,:focus-visible)]:bg-[rgba(43,182,166,0.07)] [&:is(:hover,:focus-visible)]:text-[#2bb6a6]',
+              'flex size-7 flex-none items-center justify-center rounded-[8px] text-dust',
+              'border border-line bg-bone/[0.025]',
+              '[&:is(:hover,:focus-visible)]:border-[rgba(95,211,224,0.3)]',
+              '[&:is(:hover,:focus-visible)]:bg-[rgba(95,211,224,0.07)] [&:is(:hover,:focus-visible)]:text-tube',
               '[&:is(:hover,:focus-visible)]:transform-[rotate(14deg)]',
               '[transition:color_180ms_ease,border-color_180ms_ease,background-color_180ms_ease,transform_240ms_cubic-bezier(0.22,1,0.36,1)]',
               'motion-reduce:animate-none motion-reduce:transition-none',
@@ -310,19 +310,19 @@ export const HowLongToBeatCard = ({
             className={cn(
               'afterplay-game-hltb-you',
               'relative flex min-w-0 flex-col justify-center pt-2.25 pr-5.5 pb-2.25 pl-0.5',
-              'border-r border-r-white/[0.065]',
+              'border-r border-r-line',
               '[@media(width<=760px)]:pt-[5px] [@media(width<=760px)]:pr-[0] [@media(width<=760px)]:pb-[17px]',
               '[@media(width<=760px)]:pl-[0] [@media(width<=760px)]:border-r-0 [@media(width<=760px)]:border-b',
-              '[@media(width<=760px)]:border-b-white/[0.065]',
+              '[@media(width<=760px)]:border-b-line',
             )}
           >
-            <span className="afterplay-game-hltb-you-label [&_i]:bg-(--primary) [&_i]:shadow-[0_0_5px_rgba(47,220,126,0.28)] flex items-center gap-1.5 text-[10px] font-black tracking-[0.13em] text-white/[0.39]">
+            <span className="afterplay-game-hltb-you-label [&_i]:bg-(--primary) [&_i]:shadow-[0_0_5px_rgba(255,179,71,0.28)] flex items-center gap-1.5 text-micro font-black tracking-[0.13em] text-bone/[0.39]">
               <i className="size-1.5 rounded-[50%]" /> YOUR TIME
             </span>
-            <strong className="mt-1.25 text-[41px] leading-none font-[950] tracking-[-0.055em] text-foreground">
+            <strong className="mt-1.25 text-[41px] leading-none font-display font-bold text-foreground tabular-nums">
               {hasOwnHours ? formatHours(markerHours) : '—'}
             </strong>
-            <small className="mt-1 text-[11px] text-white/[0.43]">
+            <small className="mt-1 text-[11px] text-dust">
               {markerScope === 'total' ? 'across every playthrough' : 'in this playthrough'}
             </small>
 
@@ -330,8 +330,8 @@ export const HowLongToBeatCard = ({
               className={cn(
                 'afterplay-game-hltb-verdict',
                 'mt-3.25 flex min-h-10 flex-col justify-center rounded-[8px] px-2.25 py-2',
-                'border border-white/[0.055] bg-white/[0.02]',
-                '[&>span]:text-[10.5px] [&>span]:font-black [&>span]:leading-[1.25] [&>span]:tracking-[0.09em]',
+                'border border-line bg-bone/[0.02]',
+                '[&>span]:text-micro [&>span]:font-black [&>span]:leading-[1.25] [&>span]:tracking-[0.09em]',
                 '[&>span]:whitespace-normal',
               )}
             >
@@ -347,31 +347,29 @@ export const HowLongToBeatCard = ({
                   <span style={{ color: TIER_COLOR[nextTier.key] }}>
                     {formatHours(nextTier.threshold - markerHours)} TO GO
                   </span>
-                  <small className="mt-0.25 text-[10.5px] text-white/[0.44]">
+                  <small className="mt-0.25 text-micro text-dust">
                     until {TIER_LABEL[nextTier.key]}
                   </small>
                 </>
               ) : hasOwnHours && reachedTier === 'completionist' ? (
                 <>
                   <span style={{ color: COMPLETIONIST }}>ALL TARGETS CLEARED</span>
-                  <small className="mt-0.25 text-[10.5px] text-white/[0.44]">
+                  <small className="mt-0.25 text-micro text-dust">
                     {formatHours(markerHours - completionist)} beyond 100%
                   </small>
                 </>
               ) : (
-                <small className="mt-0.25 text-[10.5px] text-white/[0.44]">
-                  Community targets ready
-                </small>
+                <small className="mt-0.25 text-micro text-dust">Community targets ready</small>
               )}
             </div>
           </div>
 
           <div className="afterplay-game-hltb-race min-w-0">
             <div className="afterplay-game-hltb-race-head flex items-baseline justify-between gap-2.5">
-              <span className="text-[10px] font-black tracking-[0.13em] text-white/[0.46]">
+              <span className="text-micro font-black tracking-[0.13em] text-dust">
                 THE PACE LINE
               </span>
-              <small className="text-[10px] text-white/[0.39]">
+              <small className="text-micro text-bone/[0.39]">
                 {formatHours(scale)} community ceiling
               </small>
             </div>
@@ -382,12 +380,12 @@ export const HowLongToBeatCard = ({
                   className={cn(
                     'afterplay-game-hltb-marker',
                     'absolute -top-5 z-3 h-8.75 w-0.5',
-                    'bg-(--foreground) shadow-[0_0_0_2px_rgba(12,14,13,0.78),0_0_6px_rgba(255,255,255,0.24)]',
+                    'bg-(--foreground) shadow-[0_0_0_2px_rgba(12,14,13,0.78),0_0_6px_rgba(233,228,216,0.24)]',
                     'transform-[translateX(-1px)]',
-                    '[&_em]:border [&_em]:border-white/[0.11] [&_em]:bg-[#202421]',
-                    '[&_em]:shadow-[0_4px_9px_rgba(0,0,0,0.27)] [&_em]:transform-[translate(-50%,-100%)] [&_i]:border',
+                    '[&_em]:border [&_em]:border-line [&_em]:bg-[#202421]',
+                    '[&_em]:shadow-[0_4px_9px_rgba(3,6,7,0.27)] [&_em]:transform-[translate(-50%,-100%)] [&_i]:border',
                     '[&_i]:border-[rgba(12,14,13,0.85)] [&_i]:bg-(--foreground)',
-                    '[&_i]:shadow-[0_0_4px_rgba(255,255,255,0.28)]',
+                    '[&_i]:shadow-[0_0_4px_rgba(233,228,216,0.28)]',
                     '[&.is-beyond_em]:right-[0] [&.is-beyond_em]:left-[auto] [&.is-beyond_em]:text-(--primary)',
                     '[&.is-beyond_em]:transform-[translate(1px,-100%)]',
                     'animate-[afterplay-game-hltb-marker-in_560ms_cubic-bezier(0.22,1,0.36,1)_520ms_backwards]',
@@ -396,7 +394,7 @@ export const HowLongToBeatCard = ({
                   )}
                   style={{ left: `${markerPct}%` }}
                 >
-                  <em className="absolute -top-0.25 left-[50%] rounded-[5px] px-1.5 py-1 text-[8.5px] font-[950] tracking-[0.09em] text-foreground not-italic">
+                  <em className="absolute -top-0.25 left-[50%] rounded-[5px] px-1.5 py-1 text-micro font-[950] tracking-[0.09em] text-foreground not-italic">
                     {markerHours > scale ? 'BEYOND' : 'YOU'}
                   </em>
                   <i className="absolute -right-0.5 -bottom-0.25 size-1.5 rounded-[50%]" />
@@ -406,7 +404,7 @@ export const HowLongToBeatCard = ({
                 className={cn(
                   'afterplay-game-hltb-track',
                   'flex h-3.5 overflow-hidden rounded-[99px]',
-                  'bg-white/[0.035] shadow-[inset_0_2px_5px_rgba(0,0,0,0.42),0_0_0_1px_rgba(255,255,255,0.025)]',
+                  'bg-bone/[0.035] shadow-[inset_0_2px_5px_rgba(3,6,7,0.42),0_0_0_1px_rgba(233,228,216,0.025)]',
                   '[&>span]:[--tier-color:var(--primary)]',
                   '[&>span]:[background:linear-gradient(180deg,color-mix(in_srgb,var(--tier-color)_88%,white),var(--tier-color))]',
                   '[&>span]:shadow-[inset_-1px_0_rgba(10,12,11,0.45)] [&>span]:origin-left',
@@ -458,18 +456,18 @@ export const HowLongToBeatCard = ({
                       'afterplay-game-hltb-milestone',
                       'relative grid min-h-17.5 min-w-0 grid-cols-[30px_minmax(0,_1fr)] items-center gap-2 rounded-[9px]',
                       'p-2.25',
-                      '[--tier-color:var(--primary)] border border-white/[0.055] outline-none bg-white/[0.018]',
-                      '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:border-[color-mix(in_srgb,var(--tier-color)_23%,rgba(255,255,255,0.04))]',
-                      '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:bg-[color-mix(in_srgb,var(--tier-color)_6%,rgba(255,255,255,0.015))]',
+                      '[--tier-color:var(--primary)] border border-line outline-none bg-bone/[0.018]',
+                      '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:border-[color-mix(in_srgb,var(--tier-color)_23%,rgba(233,228,216,0.04))]',
+                      '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:bg-[color-mix(in_srgb,var(--tier-color)_6%,rgba(233,228,216,0.015))]',
                       '[&.is-hovered]:z-[2]',
-                      '[&.is-hovered]:border-[color-mix(in_srgb,var(--tier-color)_40%,rgba(255,255,255,0.06))]',
-                      '[&.is-hovered]:bg-[color-mix(in_srgb,var(--tier-color)_10%,rgba(255,255,255,0.015))]',
-                      '[&.is-hovered]:shadow-[0_8px_18px_rgba(0,0,0,0.16)] [&.is-hovered]:transform-[translateY(-2px)]',
+                      '[&.is-hovered]:border-[color-mix(in_srgb,var(--tier-color)_40%,rgba(233,228,216,0.06))]',
+                      '[&.is-hovered]:bg-[color-mix(in_srgb,var(--tier-color)_10%,rgba(233,228,216,0.015))]',
+                      '[&.is-hovered]:shadow-[0_8px_18px_rgba(3,6,7,0.16)] [&.is-hovered]:transform-[translateY(-2px)]',
                       '[&.is-missing]:pointer-events-none [&.is-missing]:opacity-[0.48] [&.is-missing]:filter-[grayscale(1)]',
                       '[&:is(:hover,:focus-visible)]:z-[2]',
-                      '[&:is(:hover,:focus-visible)]:border-[color-mix(in_srgb,var(--tier-color)_40%,rgba(255,255,255,0.06))]',
-                      '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--tier-color)_10%,rgba(255,255,255,0.015))]',
-                      '[&:is(:hover,:focus-visible)]:shadow-[0_8px_18px_rgba(0,0,0,0.16)]',
+                      '[&:is(:hover,:focus-visible)]:border-[color-mix(in_srgb,var(--tier-color)_40%,rgba(233,228,216,0.06))]',
+                      '[&:is(:hover,:focus-visible)]:bg-[color-mix(in_srgb,var(--tier-color)_10%,rgba(233,228,216,0.015))]',
+                      '[&:is(:hover,:focus-visible)]:shadow-[0_8px_18px_rgba(3,6,7,0.16)]',
                       '[&:is(:hover,:focus-visible)]:transform-[translateY(-2px)]',
                       '[transition:opacity_180ms_ease,transform_250ms_cubic-bezier(0.22,1,0.36,1),border-color_180ms_ease,background-color_180ms_ease,box-shadow_220ms_ease]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
@@ -495,14 +493,14 @@ export const HowLongToBeatCard = ({
                       )}
                     </span>
                     <span className="flex min-w-0 flex-col">
-                      <small className="truncate text-[9.5px] font-[850] text-white/[0.45]">
+                      <small className="truncate text-micro font-[850] text-dust">
                         {TIER_LABEL[tier.key]}
                       </small>
                       <strong className="mt-0.5 text-[14px] font-black text-foreground">
                         {available ? formatHours(tier.threshold) : '—'}
                       </strong>
                     </span>
-                    <em className="absolute right-2 bottom-1.5 text-[8px] font-[950] tracking-[0.08em] text-(--tier-color) not-italic opacity-[0.72]">
+                    <em className="absolute right-2 bottom-1.5 text-micro font-[950] tracking-[0.08em] text-(--tier-color) not-italic opacity-[0.72]">
                       {reached ? 'CLEARED' : available ? 'TARGET' : 'NO DATA'}
                     </em>
                   </div>
@@ -540,7 +538,7 @@ export const HowLongToBeatCard = ({
             }}
             title="Re-fetch times from HowLongToBeat"
             aria-label="Refresh times"
-            className="flex size-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex size-5.5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
             <RefreshCw size={11} className={refresh.isPending ? 'animate-spin' : undefined} />
           </button>
@@ -566,7 +564,7 @@ export const HowLongToBeatCard = ({
           </span>
         ) : hasOwnHours && reachedTier === 'completionist' ? (
           <span
-            className="flex flex-none items-center gap-1 rounded-lg border px-2 py-0.75 text-[10.5px] font-bold whitespace-nowrap"
+            className="flex flex-none items-center gap-1 rounded-lg border px-2 py-0.75 text-micro font-bold whitespace-nowrap"
             style={{
               color: COMPLETIONIST,
               borderColor: `${COMPLETIONIST}3d`,
@@ -610,10 +608,10 @@ export const HowLongToBeatCard = ({
                 pero el dato propio —lo único que es TUYO en esta card—
                 aparece ya puesto. */}
             <div
-              className="absolute -top-5 rounded-md border border-input px-1.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(0,0,0,.4)]"
+              className="absolute -top-5 rounded-md border border-input px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
               style={{
                 left: `${markerPct}%`,
-                background: '#1d211f',
+                background: '#1f272b',
                 animation: 'afterplay-drop-in 420ms ease-out 620ms both',
                 // Los tramos de la barra llevan `transform` para su animación
                 // de crecido, y un transform crea contexto de apilado propio:
@@ -626,14 +624,14 @@ export const HowLongToBeatCard = ({
               {formatHours(markerHours)}
             </div>
             <div
-              className="absolute -top-1 rounded-sm bg-white"
+              className="absolute -top-1 rounded-sm bg-bone"
               style={{
                 left: `${markerPct}%`,
                 width: 3,
                 height: 22,
                 // Halo blanco además del contorno oscuro: separa el marcador
                 // del tramo que tenga debajo, sea del color que sea.
-                boxShadow: '0 0 0 2px rgba(13,15,14,.85), 0 0 12px rgba(255,255,255,.5)',
+                boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',
                 animation: 'afterplay-drop-in 420ms ease-out 620ms both',
                 zIndex: 2,
               }}
@@ -641,8 +639,8 @@ export const HowLongToBeatCard = ({
           </>
         )}
         <div
-          className="flex h-3.5 overflow-hidden rounded-[5px] bg-white/5"
-          style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)' }}
+          className="flex h-3.5 overflow-hidden rounded-[5px] bg-bone/5"
+          style={{ boxShadow: 'inset 0 1px 3px rgba(3,6,7,.4)' }}
         >
           {(
             [

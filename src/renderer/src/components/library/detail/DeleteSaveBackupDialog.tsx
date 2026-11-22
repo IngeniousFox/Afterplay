@@ -60,26 +60,24 @@ export const DeleteSaveBackupDialog = ({
 
   return (
     <AlertDialog open={backup !== null} onOpenChange={handleClose}>
-      <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-[#121413] p-0">
+      <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-overlay p-0">
         <div className="relative overflow-hidden border-b border-border">
           <div
             className="pointer-events-none absolute inset-0"
             style={{
-              background: 'linear-gradient(120deg, rgba(232,93,114,.14) 0%, transparent 60%)',
+              background: 'linear-gradient(120deg, rgba(255,94,87,.14) 0%, transparent 60%)',
             }}
           />
           <div className="relative flex items-center gap-3 px-5.5 py-5">
             <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
               <Trash2 size={16} className="text-destructive" />
             </div>
-            <AlertDialogTitle className="text-base font-extrabold text-foreground">
-              Delete cloud version
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete cloud version</AlertDialogTitle>
           </div>
         </div>
 
         <div className="px-5.5 py-5">
-          <div className="text-[13.5px] leading-relaxed text-[#c4cac6]">
+          <div className="text-[13.5px] leading-relaxed text-bone">
             This permanently removes the save backed up on{' '}
             <span className="font-bold text-foreground">
               {backup && formatByPrecision(backup.createdAt, 'datetime', timeFormat)}
@@ -115,7 +113,7 @@ export const DeleteSaveBackupDialog = ({
             type="button"
             onClick={() => handleClose(false)}
             disabled={deleteBackup.isPending}
-            className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-white/6"
+            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
           >
             Cancel
           </button>
@@ -123,8 +121,7 @@ export const DeleteSaveBackupDialog = ({
             type="button"
             onClick={handleDelete}
             disabled={deleteBackup.isPending}
-            className="[will-change:transform] flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-white transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(220,38,38,.4)]"
-            style={{ background: '#dc2626' }}
+            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={15} />
             {deleteBackup.isPending
@@ -142,7 +139,7 @@ export const DeleteSaveBackupDialog = ({
 const Notice = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
   <div
     className="mt-3 flex items-start gap-1.75 rounded-[9px] px-3 py-2 text-[12px] leading-relaxed"
-    style={{ background: 'rgba(227,178,74,.1)', color: '#e3b24a' }}
+    style={{ background: 'rgba(255,179,71,.1)', color: '#ffb347' }}
   >
     <TriangleAlert size={13} className="mt-0.5 flex-none" />
     <span>{children}</span>

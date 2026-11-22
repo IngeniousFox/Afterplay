@@ -13,7 +13,7 @@ export const Pager = ({ page, totalPages, onChange }: PagerProps): React.JSX.Ele
   if (totalPages <= 1) return null;
 
   const buttonClass =
-    'flex items-center gap-1.5 rounded-[9px] border border-white/14 bg-white/[0.03] px-3.5 py-2.5 text-[12.5px] font-semibold text-foreground disabled:opacity-40';
+    'flex items-center gap-1.5 rounded-[9px] border border-line-strong bg-bone/[0.03] px-3.5 py-2.5 text-[12.5px] font-semibold text-foreground disabled:opacity-40';
 
   return (
     <div className="mt-5 flex items-center justify-between gap-3">

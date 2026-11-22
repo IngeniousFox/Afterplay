@@ -80,15 +80,15 @@ export const SessionLengthHistogram = ({
         variant === 'overview' ? 'is-overview' : 'is-compact',
         'flex h-full flex-col',
       )}
-      style={{ '--session-accent': '#2fdc7e' } as CSSProperties}
+      style={{ '--session-accent': '#ffb347' } as CSSProperties}
     >
       <div className="afterplay-chart-heading grid grid-cols-[32px_minmax(0,_1fr)_auto] items-center gap-2.5 min-w-0">
         <span
           className={cn(
             'afterplay-chart-heading-icon flex w-8 h-8 items-center justify-center rounded-[9px] border',
-            'border-[color-mix(in_srgb,var(--chart-accent,#2fdc7e)_22%,transparent)]',
-            'text-[color:var(--chart-accent,#2fdc7e)]',
-            'bg-[color-mix(in_srgb,var(--chart-accent,#2fdc7e)_7%,rgba(255,255,255,0.01))]',
+            'border-[color-mix(in_srgb,var(--chart-accent,#ffb347)_22%,transparent)]',
+            'text-[color:var(--chart-accent,#ffb347)]',
+            'bg-[color-mix(in_srgb,var(--chart-accent,#ffb347)_7%,rgba(233,228,216,0.01))]',
             '[.afterplay-category-card_&]:[transition:color_200ms_ease,border-color_200ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
             '[.afterplay-category-card:hover_&]:border-[color-mix(in_srgb,var(--chart-accent)_38%,transparent)]',
             '[.afterplay-category-card:hover_&]:[transform:translateY(-1px)_rotate(-3deg)]',
@@ -110,11 +110,11 @@ export const SessionLengthHistogram = ({
             <strong className="block text-foreground text-[12px] font-[850] leading-[1.2] tabular-nums">
               {pluralize(total, 'session')}
             </strong>
-            <small className="block mt-0.75 text-white/45 text-[11px] font-[650] leading-[1.2]">
+            <small className="block mt-0.75 text-dust text-[11px] font-[650] leading-[1.2]">
               usually{' '}
               <em
                 className={cn(
-                  'text-[color:var(--session-accent,var(--chart-accent,#2fdc7e))]',
+                  'text-[color:var(--session-accent,var(--chart-accent,#ffb347))]',
                   'not-italic font-extrabold',
                 )}
               >
@@ -133,15 +133,15 @@ export const SessionLengthHistogram = ({
             className={cn(
               'afterplay-session-focus flex min-h-[49px] items-center justify-between gap-4 mt-[13px] py-2 px-[11px]',
               'rounded-[10px] border',
-              'border-[color-mix(in_srgb,var(--chart-accent,var(--session-accent,#2fdc7e))_18%,rgba(255,255,255,0.05))]',
-              '[background:linear-gradient(115deg,color-mix(in_srgb,var(--chart-accent,var(--session-accent,#2fdc7e))_7%,transparent),rgba(255,255,255,0.012))]',
+              'border-[color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_18%,rgba(233,228,216,0.05))]',
+              '[background:linear-gradient(115deg,color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_7%,transparent),rgba(233,228,216,0.012))]',
               '[--chart-accent:var(--session-accent)] [&_>_div:last-child]:flex-none [&_>_div:last-child]:text-right',
-              '[&_>_div:last-child_strong]:text-[color:var(--chart-accent,var(--session-accent,#2fdc7e))]',
+              '[&_>_div:last-child_strong]:text-[color:var(--chart-accent,var(--session-accent,#ffb347))]',
             )}
             aria-live="polite"
           >
             <div>
-              <span className="block text-white/45 text-[11px] font-black tracking-[0.08em] leading-[1]">
+              <span className="block text-dust text-[11px] font-black tracking-[0.08em] leading-[1]">
                 {hoveredIndex === null ? profile.eyebrow : 'INSPECTING'}
               </span>
               <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
@@ -152,7 +152,7 @@ export const SessionLengthHistogram = ({
               <strong className="block mt-1 text-foreground text-[13px] font-[850] leading-[1.05] tabular-nums">
                 {activeCount}
               </strong>
-              <small className="block mt-0.75 text-white/45 text-[11px] font-semibold leading-[1.05]">
+              <small className="block mt-0.75 text-dust text-[11px] font-semibold leading-[1.05]">
                 {activeShare}% of sessions
               </small>
             </div>
@@ -162,7 +162,7 @@ export const SessionLengthHistogram = ({
             <div
               className={cn(
                 'afterplay-session-stage relative flex flex-none items-stretch gap-[9px] mt-2 w-full h-34 border-b',
-                'border-b-[rgba(255,255,255,0.075)]',
+                'border-b-[rgba(233,228,216,0.075)]',
                 '[.afterplay-session-length-card.is-overview_&]:h-37.5 [.afterplay-session-length-card.is-overview_&]:max-h-37.5',
               )}
             >
@@ -170,9 +170,9 @@ export const SessionLengthHistogram = ({
                 className="afterplay-session-grid absolute -z-1 inset-0 grid grid-rows-[repeat(3,_1fr)] pointer-events-none"
                 aria-hidden="true"
               >
-                <i className="border-t border-dashed border-t-[rgba(255,255,255,0.035)]" />
-                <i className="border-t border-dashed border-t-[rgba(255,255,255,0.035)]" />
-                <i className="border-t border-dashed border-t-[rgba(255,255,255,0.035)]" />
+                <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
+                <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
+                <i className="border-t border-dashed border-t-[rgba(233,228,216,0.035)]" />
               </span>
               {BUCKETS.map((bucket, index) => {
                 const count = counts[index];
@@ -190,7 +190,7 @@ export const SessionLengthHistogram = ({
                       'afterplay-session-column relative min-w-0 h-full flex-1 rounded-[7px_7px_0_0] outline-none',
                       '[transition:opacity_180ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
                       '[&.is-active]:[transform:translateY(-2px)] [&.is-dimmed]:opacity-43',
-                      'focus-visible:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--chart-accent,var(--session-accent,#2fdc7e))_45%,transparent)]',
+                      'focus-visible:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--chart-accent,var(--session-accent,#ffb347))_45%,transparent)]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                       isActive ? 'is-active' : '',
                       isDimmed ? 'is-dimmed' : '',
@@ -206,8 +206,8 @@ export const SessionLengthHistogram = ({
                     <span
                       className={cn(
                         'afterplay-session-track absolute bottom-0 left-1/2 w-[min(66%,_48px)] h-full rounded-[6px_6px_3px_3px]',
-                        '[transform:translateX(-50%)] border border-white/[0.025] border-b-0',
-                        '[background:linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.018))]',
+                        '[transform:translateX(-50%)] border border-line border-b-0',
+                        '[background:linear-gradient(180deg,rgba(233,228,216,0.032),rgba(233,228,216,0.018))]',
                       )}
                     />
                     {count > 0 && (
@@ -216,11 +216,11 @@ export const SessionLengthHistogram = ({
                           'afterplay-session-fill absolute bottom-0 left-1/2 w-[min(66%,_48px)] h-[var(--bar-height)] min-h-[3px]',
                           'overflow-hidden rounded-[6px_6px_3px_3px] [transform:translateX(-50%)] origin-bottom',
                           'animate-[afterplay-category-rise_620ms_cubic-bezier(0.22,1,0.36,1)_var(--bar-delay)_backwards]',
-                          '[transition:filter_180ms_ease,box-shadow_200ms_ease] [background:linear-gradient(180deg,#35df84,#218f58)]',
+                          '[transition:filter_180ms_ease,box-shadow_200ms_ease] [background:linear-gradient(180deg,#ffc266,#e39a2e)]',
                           "after:content-[''] after:absolute after:inset-0 after:pointer-events-none",
-                          'after:[background:linear-gradient(90deg,rgba(255,255,255,0.09),transparent_36%_72%,rgba(0,0,0,0.08))]',
+                          'after:[background:linear-gradient(90deg,rgba(233,228,216,0.09),transparent_36%_72%,rgba(3,6,7,0.08))]',
                           '[.afterplay-session-column.is-active_&]:[filter:saturate(1.05)_brightness(1.06)]',
-                          '[.afterplay-session-column.is-active_&]:[box-shadow:0_0_11px_rgba(47,220,126,0.17)]',
+                          '[.afterplay-session-column.is-active_&]:[box-shadow:0_0_11px_rgba(255,179,71,0.17)]',
                           'motion-reduce:animate-none motion-reduce:transition-none',
                         )}
                         style={
@@ -230,7 +230,7 @@ export const SessionLengthHistogram = ({
                           } as CSSProperties
                         }
                       >
-                        <i className="absolute z-1 top-0 right-1.25 left-1.25 h-px bg-white/38 opacity-50" />
+                        <i className="absolute z-1 top-0 right-1.25 left-1.25 h-px bg-bone/38 opacity-50" />
                       </span>
                     )}
                   </div>
@@ -244,9 +244,9 @@ export const SessionLengthHistogram = ({
                   key={bucket.label}
                   className={cn(
                     activeIndex === index ? 'is-active' : '',
-                    'min-w-0 flex-1 text-white/45 text-[11px] font-semibold leading-[1.25] text-center',
+                    'min-w-0 flex-1 text-dust text-[11px] font-semibold leading-[1.25] text-center',
                     'whitespace-normal break-words [transition:color_180ms_ease,font-weight_180ms_ease]',
-                    '[&.is-active]:text-[color:var(--chart-accent,var(--session-accent,#2fdc7e))] [&.is-active]:font-[850]',
+                    '[&.is-active]:text-[color:var(--chart-accent,var(--session-accent,#ffb347))] [&.is-active]:font-[850]',
                   )}
                 >
                   {bucket.label}
@@ -256,25 +256,25 @@ export const SessionLengthHistogram = ({
           </div>
 
           {variant === 'overview' && (
-            <div className="afterplay-session-insights grid grid-cols-3 gap-[7px] mt-3 pt-[11px] border-t border-t-[rgba(255,255,255,0.055)]">
-              <div className="min-w-0 px-1.25 py-2 border border-white/[0.055] rounded-[8px] bg-white/[0.018]">
-                <span className="block min-h-7 whitespace-normal text-white/45 text-[11px] leading-[1.25] font-bold tracking-[0.02em]">
+            <div className="afterplay-session-insights grid grid-cols-3 gap-[7px] mt-3 pt-[11px] border-t border-t-[rgba(233,228,216,0.055)]">
+              <div className="min-w-0 px-1.25 py-2 border border-line rounded-[8px] bg-bone/[0.018]">
+                <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.02em]">
                   MEDIAN
                 </span>
                 <strong className="block overflow-hidden text-ellipsis whitespace-nowrap mt-1.25 text-foreground text-[12px] font-[850] tabular-nums">
                   {formatHours(medianSeconds / 3600)}
                 </strong>
               </div>
-              <div className="min-w-0 px-1.25 py-2 border border-white/[0.055] rounded-[8px] bg-white/[0.018]">
-                <span className="block min-h-7 whitespace-normal text-white/45 text-[11px] leading-[1.25] font-bold tracking-[0.02em]">
+              <div className="min-w-0 px-1.25 py-2 border border-line rounded-[8px] bg-bone/[0.018]">
+                <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.02em]">
                   UNDER 1 HOUR
                 </span>
                 <strong className="block overflow-hidden text-ellipsis whitespace-nowrap mt-1.25 text-foreground text-[12px] font-[850] tabular-nums">
                   {underHourShare}%
                 </strong>
               </div>
-              <div className="min-w-0 px-1.25 py-2 border border-white/[0.055] rounded-[8px] bg-white/[0.018]">
-                <span className="block min-h-7 whitespace-normal text-white/45 text-[11px] leading-[1.25] font-bold tracking-[0.02em]">
+              <div className="min-w-0 px-1.25 py-2 border border-line rounded-[8px] bg-bone/[0.018]">
+                <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.02em]">
                   LONGEST
                 </span>
                 <strong className="block overflow-hidden text-ellipsis whitespace-nowrap mt-1.25 text-foreground text-[12px] font-[850] tabular-nums">

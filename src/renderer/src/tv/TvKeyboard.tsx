@@ -133,28 +133,28 @@ const Key = ({
         width: width ?? '2.1em',
         ...(focused
           ? {
-              background: 'linear-gradient(180deg, rgba(47,220,126,.3), rgba(47,220,126,.12))',
-              color: '#eafff3',
-              textShadow: '0 0 0.6em rgba(47,220,126,.8)',
+              background: 'linear-gradient(180deg, rgba(255,179,71,.3), rgba(255,179,71,.12))',
+              color: '#e9e4d8',
+              textShadow: '0 0 0.6em rgba(255,179,71,.8)',
               translate: '0 -0.12em',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,.16), 0 0.16em 0 rgba(10,52,28,.5), 0 0.45em 1.1em rgba(47,220,126,.24), 0 0.35em 0.9em rgba(0,0,0,.3)',
+                'inset 0 1px 0 rgba(233,228,216,.16), 0 0.16em 0 rgba(10,52,28,.5), 0 0.45em 1.1em rgba(255,179,71,.24), 0 0.35em 0.9em rgba(3,6,7,.3)',
             }
           : accent
             ? {
-                background: 'linear-gradient(180deg, rgba(47,220,126,.13), rgba(47,220,126,.05))',
-                color: '#8fe8b8',
+                background: 'linear-gradient(180deg, rgba(255,179,71,.13), rgba(255,179,71,.05))',
+                color: '#ffc266',
                 boxShadow:
-                  'inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(47,220,126,.24), 0 0.09em 0 rgba(10,42,24,.4), 0 0.16em 0.4em rgba(0,0,0,.2)',
+                  'inset 0 1px 0 rgba(233,228,216,.08), inset 0 0 0 1px rgba(255,179,71,.24), 0 0.09em 0 rgba(10,42,24,.4), 0 0.16em 0.4em rgba(3,6,7,.2)',
               }
             : {
                 // Cristal ligero, no baldosa: luz cenital tenue y un canto
                 // FINO — la tecla insinúa grosor sin parecer de granito.
                 background:
-                  'linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.022))',
+                  'linear-gradient(180deg, rgba(233,228,216,.06), rgba(233,228,216,.022))',
                 color: 'var(--foreground)',
                 boxShadow:
-                  'inset 0 1px 0 rgba(255,255,255,.07), inset 0 0 0 1px rgba(255,255,255,.045), 0 0.09em 0 rgba(0,0,0,.26), 0 0.16em 0.4em rgba(0,0,0,.16)',
+                  'inset 0 1px 0 rgba(233,228,216,.07), inset 0 0 0 1px rgba(233,228,216,.045), 0 0.09em 0 rgba(3,6,7,.26), 0 0.16em 0.4em rgba(3,6,7,.16)',
               }),
       }}
     >
@@ -162,7 +162,7 @@ const Key = ({
         <span
           aria-hidden
           className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.42em]"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(47,220,126,.9)' }}
+          style={{ boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.9)' }}
         />
       )}
       {/* El flash de pulsación: nace encendido y se apaga (animate-out +
@@ -174,7 +174,7 @@ const Key = ({
           aria-hidden
           className="animate-out fade-out-0 fill-mode-forwards pointer-events-none absolute inset-0 rounded-[0.42em] duration-300"
           style={{
-            background: 'radial-gradient(circle, rgba(47,220,126,.55), rgba(47,220,126,.12) 75%)',
+            background: 'radial-gradient(circle, rgba(255,179,71,.55), rgba(255,179,71,.12) 75%)',
           }}
         />
       )}
@@ -212,16 +212,16 @@ const SuggestionChip = ({
       style={
         focused
           ? {
-              background: 'linear-gradient(180deg, rgba(124,134,200,.28), rgba(124,134,200,.12))',
+              background: 'linear-gradient(180deg, rgba(185,166,255,.28), rgba(185,166,255,.12))',
               color: '#e6eaff',
               translate: '0 -0.12em',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,.14), 0 0.3em 1em rgba(124,134,200,.3), 0 0.3em 0.8em rgba(0,0,0,.35)',
+                'inset 0 1px 0 rgba(233,228,216,.14), 0 0.3em 1em rgba(185,166,255,.3), 0 0.3em 0.8em rgba(3,6,7,.35)',
             }
           : {
-              background: 'rgba(255,255,255,.05)',
+              background: 'rgba(233,228,216,.05)',
               color: 'var(--foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.08)',
             }
       }
     >
@@ -229,7 +229,7 @@ const SuggestionChip = ({
         <span
           aria-hidden
           className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.5em]"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(124,134,200,.85)' }}
+          style={{ boxShadow: 'inset 0 0 0 2px rgba(185,166,255,.85)' }}
         />
       )}
       <GameCover
@@ -411,7 +411,7 @@ const KeyboardSurface = ({
         style={{
           background: 'linear-gradient(180deg, rgba(19,22,20,.94), rgba(10,12,11,.97))',
           boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(255,255,255,.06), 0 1.6em 4em rgba(0,0,0,.6), 0 0 2.5em rgba(47,220,126,.06)',
+            'inset 0 1px 0 rgba(233,228,216,.08), inset 0 0 0 1px rgba(233,228,216,.06), 0 1.6em 4em rgba(3,6,7,.6), 0 0 2.5em rgba(255,179,71,.06)',
         }}
       >
         {/* El campo: barra oscura de escritura DE VERDAD — fondo hundido,
@@ -421,25 +421,25 @@ const KeyboardSurface = ({
         <div
           className="mb-[0.75em] flex w-full items-center gap-[0.55em] rounded-[0.55em] px-[0.85em] py-[0.55em] text-[1.05em] font-bold transition-[box-shadow] duration-200"
           style={{
-            background: 'rgba(0,0,0,.45)',
+            background: 'rgba(3,6,7,.45)',
             boxShadow:
               value.length > 0
-                ? 'inset 0 0 0 1px rgba(47,220,126,.45), inset 0 0.15em 0.5em rgba(0,0,0,.5), 0 0 1.2em rgba(47,220,126,.1)'
-                : 'inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0.15em 0.5em rgba(0,0,0,.5)',
+                ? 'inset 0 0 0 1px rgba(255,179,71,.45), inset 0 0.15em 0.5em rgba(3,6,7,.5), 0 0 1.2em rgba(255,179,71,.1)'
+                : 'inset 0 0 0 1px rgba(233,228,216,.12), inset 0 0.15em 0.5em rgba(3,6,7,.5)',
           }}
         >
           <Search
             className="h-[0.85em] w-[0.85em] flex-none"
-            style={{ color: '#2fdc7e', filter: 'drop-shadow(0 0 0.4em rgba(47,220,126,.55))' }}
+            style={{ color: '#ffb347', filter: 'drop-shadow(0 0 0.4em rgba(255,179,71,.55))' }}
           />
           {value.length > 0 ? (
-            <span className="min-w-0 truncate text-white">{value}</span>
+            <span className="min-w-0 truncate text-bone">{value}</span>
           ) : (
             <span className="min-w-0 truncate text-muted-foreground/60">{placeholder}</span>
           )}
           <span
-            className="afterplay-tv-caret animate-[afterplay-tv-caret-blink_1.06s_step-end_infinite] -ml-[0.15em] h-[1.15em] w-[3px] flex-none rounded-[1px] bg-[#7dffb5]"
-            style={{ boxShadow: '0 0 0.5em rgba(47,220,126,.9)' }}
+            className="afterplay-tv-caret animate-[afterplay-tv-caret-blink_1.06s_step-end_infinite] -ml-[0.15em] h-[1.15em] w-[3px] flex-none rounded-[1px] bg-phosphor"
+            style={{ boxShadow: '0 0 0.5em rgba(255,179,71,.9)' }}
           />
           {hint !== undefined && (
             <span className="ml-auto flex-none pl-[0.6em] text-[0.58em] font-semibold text-muted-foreground/70 tabular-nums">

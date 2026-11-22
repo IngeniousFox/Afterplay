@@ -28,9 +28,9 @@ type BacklogFlowChartProps = {
   year: Year;
 };
 
-const LIBRARY_COLOR = '#2fdc7e';
-const PLAN_COLOR = '#85a3d6';
-const COMPLETED_COLOR = '#e3b24a';
+const LIBRARY_COLOR = '#ffb347';
+const PLAN_COLOR = '#5fd3e0';
+const COMPLETED_COLOR = '#ffb347';
 
 const INITIAL_WIDTH = 720;
 const HEIGHT = 246;
@@ -208,7 +208,7 @@ export const BacklogFlowChart = ({
             <span
               className={cn(
                 'afterplay-backlog-scale-note py-[3px] px-1.5 rounded-[99px] text-[11px] font-extrabold tracking-[0.09em]',
-                'leading-none border border-[rgba(133,163,214,0.16)] bg-[rgba(133,163,214,0.06)]',
+                'leading-none border border-[rgba(95,211,224,0.16)] bg-[rgba(95,211,224,0.06)]',
                 'text-[color:rgba(178,199,234,0.78)]',
               )}
             >
@@ -228,9 +228,9 @@ export const BacklogFlowChart = ({
                   key={line.key}
                   className={cn(
                     'afterplay-backlog-flow-stat flex min-w-18.5 items-center gap-[7px] py-1.5 px-2 rounded-[8px] border',
-                    'border-white/6 bg-white/[0.018]',
+                    'border-line bg-bone/[0.018]',
                     '[transition:opacity_180ms_ease,border-color_180ms_ease,background-color_180ms_ease,transform_220ms_cubic-bezier(0.22,1,0.36,1)]',
-                    'hover:border-white/12 hover:bg-white/[0.035] hover:[transform:translateY(-1px)]',
+                    'hover:border-line-strong hover:bg-bone/[0.035] hover:[transform:translateY(-1px)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
                   style={{ opacity: isDimmed ? 0.38 : 1 }}
@@ -265,8 +265,8 @@ export const BacklogFlowChart = ({
         <div
           className={cn(
             'afterplay-backlog-chart-shell relative mt-4 overflow-hidden pt-[7px] px-2 pb-0.5 rounded-[12px] border',
-            'border-white/[0.055]',
-            '[background:radial-gradient(circle_at_82%_0%,rgba(47,220,126,0.045),transparent_31%),rgba(0,0,0,0.08)]',
+            'border-line',
+            '[background:radial-gradient(circle_at_82%_0%,rgba(255,179,71,0.045),transparent_31%),rgba(3,6,7,0.08)]',
           )}
           onMouseLeave={() => {
             setHoveredIndex(null);
@@ -317,15 +317,15 @@ export const BacklogFlowChart = ({
                     width={innerWidth}
                     height={LANE_HEIGHT}
                     rx={9}
-                    fill="rgba(255,255,255,.013)"
-                    stroke="rgba(255,255,255,.045)"
+                    fill="rgba(233,228,216,.013)"
+                    stroke="rgba(233,228,216,.045)"
                   />
                   <line
                     x1={PAD_LEFT}
                     x2={WIDTH - PAD_RIGHT}
                     y1={yAt(lineIndex, total / 2, total)}
                     y2={yAt(lineIndex, total / 2, total)}
-                    stroke="rgba(255,255,255,.045)"
+                    stroke="rgba(233,228,216,.045)"
                     strokeDasharray="2 5"
                   />
 
@@ -427,7 +427,7 @@ export const BacklogFlowChart = ({
                     cy={yAt(lineIndex, total, total)}
                     r={3}
                     fill={line.color}
-                    stroke="#0d100e"
+                    stroke="#171d20"
                     strokeWidth={1.5}
                   />
                 </g>
@@ -455,7 +455,7 @@ export const BacklogFlowChart = ({
                   x2={xAt(hoveredIndex)}
                   y1={PAD_TOP}
                   y2={laneBaseline(LINES.length - 1)}
-                  stroke="rgba(255,255,255,.24)"
+                  stroke="rgba(233,228,216,.24)"
                   strokeWidth={1}
                   strokeDasharray="3 4"
                 />
@@ -467,7 +467,7 @@ export const BacklogFlowChart = ({
                       cx={xAt(hoveredIndex)}
                       cy={yAt(lineIndex, line.valueOf(points[hoveredIndex]), total)}
                       r={3.5}
-                      fill="#0d100e"
+                      fill="#171d20"
                       stroke={line.color}
                       strokeWidth={2}
                     />
@@ -498,7 +498,7 @@ export const BacklogFlowChart = ({
             <div
               className={cn(
                 'afterplay-backlog-tooltip pointer-events-none absolute top-2 z-10 w-48 rounded-[10px] border',
-                '[box-shadow:0_14px_34px_rgba(0,0,0,0.42)] animate-[afterplay-fade-in_130ms_ease-out]',
+                '[box-shadow:0_14px_34px_rgba(3,6,7,0.42)] animate-[afterplay-fade-in_130ms_ease-out]',
                 'motion-reduce:animate-none motion-reduce:transition-none',
                 floatingPanelClass,
                 'px-3 py-2.5 text-[11px]',

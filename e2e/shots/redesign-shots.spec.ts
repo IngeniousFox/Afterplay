@@ -51,6 +51,22 @@ test('capturas de escritorio', async () => {
       await shot(name);
     }
 
+    // Diálogos: el alert dialog de borrar (components/ui/alert-dialog) y el
+    // modal de editar notas (ModalShell), para ver Overlay, botones y foco.
+    await goTo(window, `/games/${detailId}` as Route);
+    const del = window.getByTitle('Delete game', { exact: true });
+    if (await del.isVisible().catch(() => false)) {
+      await del.click();
+      await shot('dialog-delete');
+      await window.keyboard.press('Escape');
+    }
+    const cover = window.getByTitle('Change cover / hero', { exact: true });
+    if (await cover.isVisible().catch(() => false)) {
+      await cover.click();
+      await shot('dialog-modal');
+      await window.keyboard.press('Escape');
+    }
+
     // Ajustes: hoy un modal que abre el engranaje; en 2.0, una página.
     await goTo(window, '/games');
     const gear = window.getByRole('button', { name: 'Settings' }).first();

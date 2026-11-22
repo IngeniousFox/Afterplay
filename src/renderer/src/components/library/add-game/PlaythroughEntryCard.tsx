@@ -30,7 +30,7 @@ export const PlaythroughEntryCard = ({
   onRemove,
 }: PlaythroughEntryCardProps): React.JSX.Element => (
   <div
-    className={`flex flex-col gap-3 rounded-[11px] border border-border bg-white/[0.02] p-3.5 ${expandClass}`}
+    className={`flex flex-col gap-3 rounded-[11px] border border-border bg-bone/[0.02] p-3.5 ${expandClass}`}
   >
     <div className="flex items-center justify-between gap-2.5">
       <PlaythroughLabel number={number} />
@@ -45,7 +45,7 @@ export const PlaythroughEntryCard = ({
     </div>
 
     <div>
-      <div className={fieldLabelClass}>LABEL</div>
+      <div className={fieldLabelClass}>Label</div>
       <input
         value={entry.label}
         onChange={(event) => onChange({ ...entry, label: event.target.value })}

@@ -134,7 +134,7 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
           type="button"
           onClick={() => (running ? stop.mutate() : sync.mutate(true))}
           disabled={!hasKey && !hasRa}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw size={14} className={running ? 'animate-spin' : undefined} />
           {running ? 'Stop' : 'Sync now'}

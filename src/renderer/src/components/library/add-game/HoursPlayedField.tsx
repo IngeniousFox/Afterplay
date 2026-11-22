@@ -16,13 +16,13 @@ export const HoursPlayedField = (props: React.ComponentProps<'input'>): React.JS
     className="flex-1 rounded-[9px] border px-3 py-2"
     style={{ borderColor: `${GREEN}2e`, background: `${GREEN}0f` }}
   >
-    <div className="text-[9.5px] font-bold tracking-[.11em]" style={{ color: `${GREEN}c4` }}>
+    <div className="text-micro font-bold tracking-[.11em]" style={{ color: `${GREEN}c4` }}>
       HOURS PLAYED{' '}
       <span className="font-medium tracking-normal normal-case opacity-80">· outside the app</span>
     </div>
     <div
       className="mt-1 flex items-center gap-1.5 rounded-[7px] border px-2.25 py-1.5"
-      style={{ borderColor: `${GREEN}26`, background: 'rgba(0,0,0,.22)' }}
+      style={{ borderColor: `${GREEN}26`, background: 'rgba(3,6,7,.22)' }}
     >
       <Clock size={13} className="flex-none" style={{ color: `${GREEN}99` }} />
       <NumberInput

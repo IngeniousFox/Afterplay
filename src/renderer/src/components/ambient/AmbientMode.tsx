@@ -563,9 +563,9 @@ const AmbientSlide = ({
             // interior dibuja el borde sin la dureza de un `border`, y la
             // grande de fuera despega el panel de la app.
             boxShadow: [
-              'inset 0 1px 0 rgba(255,255,255,.18)',
-              'inset 0 0 0 1px rgba(255,255,255,.07)',
-              '0 44px 110px -24px rgba(0,0,0,.8)',
+              'inset 0 1px 0 rgba(233,228,216,.18)',
+              'inset 0 0 0 1px rgba(233,228,216,.07)',
+              '0 44px 110px -24px rgba(3,6,7,.8)',
             ].join(', '),
           }}
         >
@@ -591,7 +591,7 @@ const AmbientSlide = ({
             className="absolute inset-0"
             style={{
               background: [
-                'linear-gradient(160deg, rgba(255,255,255,.10), transparent 38%)',
+                'linear-gradient(160deg, rgba(233,228,216,.10), transparent 38%)',
                 'linear-gradient(115deg, rgba(6,7,6,.58), rgba(6,7,6,.22) 45%, rgba(6,7,6,.62))',
               ].join(', '),
             }}
@@ -622,8 +622,8 @@ const AmbientSlide = ({
                   className="relative w-full rounded-[16px]"
                   style={{
                     boxShadow: [
-                      'inset 0 0 0 1px rgba(255,255,255,.14)',
-                      '0 28px 60px -12px rgba(0,0,0,.8)',
+                      'inset 0 0 0 1px rgba(233,228,216,.14)',
+                      '0 28px 60px -12px rgba(3,6,7,.8)',
                     ].join(', '),
                   }}
                 />
@@ -667,9 +667,9 @@ const AmbientSlide = ({
                   // glifo entero pero la CAJA de línea era más baja que la
                   // letra. 1.2 le da aire de sobra sin que se note más
                   // separado.
-                  className="text-[46px] leading-[1.2] font-extrabold tracking-[-.02em] drop-shadow-[0_2px_20px_rgba(0,0,0,.6)]"
+                  className="text-[46px] leading-[1.2] font-display font-bold drop-shadow-[0_2px_20px_rgba(3,6,7,.6)] tabular-nums"
                   style={{
-                    backgroundImage: 'linear-gradient(180deg, #ffffff 25%, rgba(255,255,255,.72))',
+                    backgroundImage: 'linear-gradient(180deg, #ffffff 25%, rgba(233,228,216,.72))',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
@@ -689,7 +689,7 @@ const AmbientSlide = ({
                     className="mb-4 h-px w-16"
                     style={{ background: `linear-gradient(90deg, ${GREEN}, transparent)` }}
                   />
-                  <p className="text-[17.5px] leading-relaxed font-medium text-white/72">{line}</p>
+                  <p className="text-[17.5px] leading-relaxed font-medium text-dust">{line}</p>
                 </div>
               )}
             </div>

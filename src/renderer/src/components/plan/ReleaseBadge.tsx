@@ -54,7 +54,7 @@ export const ReleaseBadge = ({ game }: ReleaseBadgeProps): React.JSX.Element | n
         </span>
       )}
       <span
-        className="flex items-center gap-1 rounded-lg border px-1.75 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap tabular-nums"
+        className="flex items-center gap-1 rounded-lg border px-1.75 py-0.5 text-micro font-extrabold whitespace-nowrap tabular-nums"
         style={{ color, borderColor: `${color}47`, background: `${color}17` }}
       >
         {isOut && <Sparkles size={10} className="flex-none" />}

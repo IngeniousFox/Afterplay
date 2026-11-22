@@ -27,8 +27,8 @@ const MAX_ENTRIES = 6;
 const BAR_SCALE = 2;
 const ROW_HEIGHT_PX = 50;
 const ROW_GAP_PX = 8;
-const FAST_COLOR = '#2fdc7e';
-const SAVOR_COLOR = '#e3b24a';
+const FAST_COLOR = '#ffb347';
+const SAVOR_COLOR = '#ffb347';
 
 export const HltbCompareList = ({
   games,
@@ -160,8 +160,8 @@ export const HltbCompareList = ({
         <div
           className={cn(
             'afterplay-hltb-summary mt-4 flex items-center gap-[11px] min-h-15 py-2.5 px-3 rounded-[11px] border',
-            'border-[color-mix(in_srgb,var(--hltb-accent)_22%,rgba(255,255,255,0.06))]',
-            '[background:linear-gradient(120deg,color-mix(in_srgb,var(--hltb-accent)_10%,transparent),rgba(255,255,255,0.015))]',
+            'border-[color-mix(in_srgb,var(--hltb-accent)_22%,rgba(233,228,216,0.06))]',
+            '[background:linear-gradient(120deg,color-mix(in_srgb,var(--hltb-accent)_10%,transparent),rgba(233,228,216,0.015))]',
           )}
           style={{ '--hltb-accent': medianColor } as CSSProperties}
         >
@@ -176,13 +176,13 @@ export const HltbCompareList = ({
             <Gauge size={16} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-black tracking-[.16em] text-white/45 uppercase">
+            <div className="text-[11px] font-black tracking-[.16em] text-dust uppercase">
               Your typical finish
             </div>
             <div className="mt-0.5 flex items-baseline gap-2">
               <strong
                 className={cn(
-                  'text-[23px] leading-none font-black tracking-[-.04em] tabular-nums',
+                  'font-display text-[26px] leading-none font-bold tabular-nums',
                   'text-[color:var(--hltb-accent)]',
                 )}
               >
@@ -203,7 +203,7 @@ export const HltbCompareList = ({
       <div
         className={cn(
           'afterplay-hltb-scale mt-3.5 flex justify-between ml-12 py-0 px-px text-[11px] font-extrabold tracking-[0.08em]',
-          'uppercase text-white/45 [&_span:nth-child(2)]:text-white/52 [&_span:nth-child(2)]:[transform:translateX(5px)]',
+          'uppercase text-dust [&_span:nth-child(2)]:text-dust [&_span:nth-child(2)]:[transform:translateX(5px)]',
         )}
         aria-hidden="true"
       >
@@ -235,7 +235,7 @@ export const HltbCompareList = ({
                   className={cn(
                     'afterplay-hltb-row group flex h-[50px] w-full items-center gap-3 text-left pt-px pr-1 pb-px pl-0 rounded-[9px]',
                     'outline-none [transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),background-color_200ms_ease]',
-                    '[&:is(:hover,:focus-visible)]:bg-white/[0.025] [&:is(:hover,:focus-visible)]:[transform:translateX(3px)]',
+                    '[&:is(:hover,:focus-visible)]:bg-bone/[0.025] [&:is(:hover,:focus-visible)]:[transform:translateX(3px)]',
                     'motion-reduce:animate-none motion-reduce:transition-none',
                   )}
                   style={{ '--hltb-accent': color } as CSSProperties}
@@ -247,7 +247,7 @@ export const HltbCompareList = ({
                       'afterplay-hltb-cover h-12 w-9 flex-none overflow-hidden rounded-[6px] border border-border',
                       '[transition:border-color_200ms_ease,box-shadow_240ms_ease,transform_280ms_cubic-bezier(0.22,1,0.36,1)]',
                       '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:border-[color-mix(in_srgb,var(--hltb-accent)_44%,transparent)]',
-                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_7px_16px_rgba(0,0,0,0.3)]',
+                      '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_7px_16px_rgba(3,6,7,0.3)]',
                       '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[transform:translateY(-1px)]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
@@ -266,19 +266,19 @@ export const HltbCompareList = ({
                       <span
                         className={cn(
                           'afterplay-hltb-ratio flex-none min-w-[39px] py-0.5 px-[5px] rounded-[6px] text-[11.5px] font-[850] text-center',
-                          'border border-[color-mix(in_srgb,var(--hltb-accent)_20%,rgba(255,255,255,0.06))]',
+                          'border border-[color-mix(in_srgb,var(--hltb-accent)_20%,rgba(233,228,216,0.06))]',
                           'text-[color:var(--hltb-accent)]',
-                          'bg-[color-mix(in_srgb,var(--hltb-accent)_7%,rgba(0,0,0,0.22))]',
+                          'bg-[color-mix(in_srgb,var(--hltb-accent)_7%,rgba(3,6,7,0.22))]',
                           '[transition:border-color_180ms_ease,background-color_180ms_ease]',
                           '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:border-[color-mix(in_srgb,var(--hltb-accent)_42%,transparent)]',
-                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:bg-[color-mix(in_srgb,var(--hltb-accent)_12%,rgba(0,0,0,0.22))]',
+                          '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:bg-[color-mix(in_srgb,var(--hltb-accent)_12%,rgba(3,6,7,0.22))]',
                           'motion-reduce:animate-none motion-reduce:transition-none',
                         )}
                       >
                         {entry.ratio.toFixed(1)}×
                       </span>
                     </div>
-                    <div className="afterplay-hltb-track mt-1.5 relative h-[5px] rounded-[99px] bg-white/[0.055]">
+                    <div className="afterplay-hltb-track mt-1.5 relative h-[5px] rounded-[99px] bg-bone/[0.055]">
                       <span
                         className={cn(
                           'afterplay-hltb-fill absolute [inset:0_auto_0_0] rounded-[inherit]',
@@ -289,10 +289,10 @@ export const HltbCompareList = ({
                         )}
                         style={{ width: `${fillPercent}%` }}
                       />
-                      <span className="afterplay-hltb-marker absolute top-[-3px] bottom-[-3px] left-1/2 w-px bg-white/72 [box-shadow:0_0_5px_rgba(255,255,255,0.25)]" />
+                      <span className="afterplay-hltb-marker absolute top-[-3px] bottom-[-3px] left-1/2 w-px bg-bone/72 [box-shadow:0_0_5px_rgba(233,228,216,0.25)]" />
                       <span
                         className={cn(
-                          'afterplay-hltb-point absolute top-1/2 w-2 h-2 rounded-[50%] border-2 border-[#111512] bg-[var(--hltb-accent)]',
+                          'afterplay-hltb-point absolute top-1/2 w-2 h-2 rounded-[50%] border-2 border-panel bg-[var(--hltb-accent)]',
                           '[box-shadow:0_0_9px_color-mix(in_srgb,var(--hltb-accent)_45%,transparent)] [transform:translate(-50%,-50%)]',
                           '[transition:box-shadow_200ms_ease]',
                           '[.afterplay-hltb-row:is(:hover,:focus-visible)_&]:[box-shadow:0_0_14px_color-mix(in_srgb,var(--hltb-accent)_65%,transparent)]',

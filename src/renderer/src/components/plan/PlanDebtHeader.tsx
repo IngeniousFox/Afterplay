@@ -49,7 +49,7 @@ export const PlanDebtHeader = ({
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
             <span
-              className="text-[32px] leading-none font-extrabold tabular-nums"
+              className="text-[32px] leading-none font-display font-bold tabular-nums"
               style={{ color: VIOLET }}
             >
               {Math.round(debt.totalHours).toLocaleString()}
@@ -102,7 +102,7 @@ const DebtTile = ({
   >
     <div className="flex items-center gap-1.25">
       <Icon size={10} style={{ color: `${color}c4` }} />
-      <span className="text-[9.5px] font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
+      <span className="text-micro font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
         {label}
       </span>
     </div>

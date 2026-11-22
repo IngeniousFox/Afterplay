@@ -17,7 +17,7 @@ const TABS = [
 // y no se puede tocar.
 export const TabBar = (): React.JSX.Element => (
   <nav
-    className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-[#0a0b0a]/95 backdrop-blur-lg"
+    className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-cabinet/95 backdrop-blur-lg"
     style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
   >
     <div className="mx-auto flex max-w-lg">
@@ -35,7 +35,7 @@ export const TabBar = (): React.JSX.Element => (
           {({ isActive }) => (
             <>
               <Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} />
-              <span className="text-[10px] font-bold tracking-wide">{label}</span>
+              <span className="text-micro font-bold tracking-wide">{label}</span>
             </>
           )}
         </NavLink>

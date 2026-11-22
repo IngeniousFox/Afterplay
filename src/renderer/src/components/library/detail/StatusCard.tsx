@@ -152,7 +152,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
 
   return (
     <div>
-      <SectionLabel className="mb-3.25">STATUS</SectionLabel>
+      <SectionLabel className="mb-3.25">Status</SectionLabel>
       {/* Sin overflow-hidden en la card: recortaba el panel del dropdown de
           "change status" cuando se despliega hacia abajo saliéndose de ella.
           El redondeo del degradado se consigue redondeando el propio banner
@@ -187,8 +187,8 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
         </div>
 
         <div className="px-4.5 py-4">
-          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
-            CHANGE STATUS
+          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
+            Change status
           </div>
           <Dropdown
             value={pending}
@@ -209,7 +209,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="Add a note (e.g. Chapter 3)…"
-            className="mt-2.5 w-full rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            className="mt-2.5 w-full rounded-[9px] border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
           />
 
           <button

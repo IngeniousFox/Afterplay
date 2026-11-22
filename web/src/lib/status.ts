@@ -15,4 +15,4 @@ const STATUS_META = createStatusMeta({ Bookmark, Circle, Moon, Pause, Play, Trop
 export const statusOf = (state: StateType | null): StatusMeta =>
   STATUS_META[state === null ? 'unplayed' : STATE_TO_STATUS_KEY[state]];
 
-export { GREEN, AMBER, BLUE, TEAL, VIOLET } from '../../../src/shared/colors';
+export { GREEN, AMBER, BLUE, TEAL, VIOLET, RED } from '../../../src/shared/colors';

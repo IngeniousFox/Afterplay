@@ -158,13 +158,13 @@ describe('shared presentation contracts', () => {
     const metadata = createStatusMeta(icons);
     assert.deepEqual(metadata.playing, {
       label: 'Playing',
-      color: '#2fdc7e',
+      color: '#ffb347',
       filled: true,
       Icon: icons.Play,
     });
     assert.deepEqual(metadata.unplayed, {
       label: 'Unplayed',
-      color: '#888f8a',
+      color: '#5fd3e0',
       filled: false,
       Icon: icons.Circle,
     });

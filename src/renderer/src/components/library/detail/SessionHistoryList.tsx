@@ -90,8 +90,8 @@ const SessionRow = ({
       className={`group/session relative flex items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5 ${flashClass}`}
       style={
         isLive
-          ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
+          ? { borderColor: 'rgba(255,179,71,.4)', background: 'rgba(255,179,71,.06)' }
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
       }
     >
       {fillPct > 0 && (
@@ -99,12 +99,12 @@ const SessionRow = ({
           className="pointer-events-none absolute inset-y-0 left-0"
           style={{
             width: `${fillPct}%`,
-            background: 'linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.01))',
-            borderRight: '1.5px solid rgba(255,255,255,.14)',
+            background: 'linear-gradient(90deg, rgba(233,228,216,.05), rgba(233,228,216,.01))',
+            borderRight: '1.5px solid rgba(233,228,216,.14)',
           }}
         />
       )}
-      <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-white/5">
+      <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-bone/5">
         <Timer size={15} className="text-muted-foreground" />
       </div>
       <div className="relative z-1 min-w-0 flex-1">
@@ -116,7 +116,7 @@ const SessionRow = ({
         )}
         <div
           className="mt-0.5 text-xs"
-          style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
+          style={{ color: isLive ? '#ffb347' : 'var(--muted-foreground)' }}
         >
           {isLive
             ? device.remote
@@ -127,7 +127,7 @@ const SessionRow = ({
               : 'Tracked'}
           {!isLive && device.deviceTag !== null && ` · ${device.deviceTag}`}
           {device.noSignal !== null && (
-            <span className="ml-2 font-semibold text-[#e3b24a]">{device.noSignal}</span>
+            <span className="ml-2 font-semibold text-phosphor">{device.noSignal}</span>
           )}
         </div>
 
@@ -140,10 +140,10 @@ const SessionRow = ({
         <SessionNote sessionId={session.id} note={session.note} />
       </div>
       <div className="relative z-1 flex flex-none items-center gap-1.5">
-        {isRecord && <Flame size={13} color="#e85d72" />}
+        {isRecord && <Flame size={13} color="#ff5e57" />}
         <span
           className="text-[13px] font-semibold tabular-nums"
-          style={{ color: isLive ? '#2fdc7e' : 'var(--foreground)' }}
+          style={{ color: isLive ? '#ffb347' : 'var(--foreground)' }}
         >
           {formatElapsed(durationSec)}
         </span>
@@ -211,7 +211,7 @@ export const SessionHistoryList = ({
 
   return (
     <div className="mt-7.5">
-      <SectionLabel className="mb-3.25">SESSION HISTORY</SectionLabel>
+      <SectionLabel className="mb-3.25">Session history</SectionLabel>
       <div className="flex flex-col gap-2.25">
         {visible.map((session, index) => (
           <div key={session.id} className={revealClass} style={revealStyle(index)}>
@@ -238,7 +238,7 @@ export const SessionHistoryList = ({
           <button
             type="button"
             onClick={() => navigate(`/sessions?game=${gameId}`)}
-            className="flex w-fit items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-4 py-2.25 text-[13px] font-semibold text-foreground hover:bg-white/[0.06]"
+            className="flex w-fit items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-4 py-2.25 text-[13px] font-semibold text-foreground hover:bg-raised-hover"
           >
             <span>View all {realSessionsCount} sessions</span>
             <ArrowRight size={14} />

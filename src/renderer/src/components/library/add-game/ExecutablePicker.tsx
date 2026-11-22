@@ -67,8 +67,8 @@ export const ExecutablePicker = ({
       </div>
 
       {open && (
-        <div className={`border-t border-border bg-black/20 px-2 py-2 ${expandClass}`}>
-          <div className="mb-1.5 px-2 text-[10.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className={`border-t border-border bg-inset/20 px-2 py-2 ${expandClass}`}>
+          <div className="mb-1.5 px-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
             WHICH ONE LAUNCHES THE GAME?
           </div>
           <div className="flex flex-col gap-1">
@@ -89,7 +89,7 @@ export const ExecutablePicker = ({
                   }}
                   title={candidate}
                   className={`flex w-full items-center gap-2 rounded-[7px] px-2 py-1.75 text-left transition-colors duration-150 ${
-                    active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.035]'
+                    active ? 'bg-bone/[0.06]' : 'hover:bg-bone/[0.035]'
                   }`}
                 >
                   <Check
@@ -105,7 +105,7 @@ export const ExecutablePicker = ({
                     </span>
                   </span>
                   {position === 0 && (
-                    <span className="flex-none rounded-full bg-white/[0.06] px-1.75 py-0.75 text-[10px] font-semibold text-muted-foreground">
+                    <span className="flex-none rounded-full bg-bone/[0.06] px-1.75 py-0.75 text-micro font-semibold text-muted-foreground">
                       best guess
                     </span>
                   )}

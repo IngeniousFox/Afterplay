@@ -73,12 +73,12 @@ const HeroButton = ({
       style={
         focused
           ? {
-              background: '#2fdc7e',
-              color: '#08240f',
+              background: '#ffb347',
+              color: '#1a1100',
               // El hairline interior superior es lo que hace el botón "mojado"
               // — cristal encendido, no plástico plano.
               boxShadow:
-                '0 0.6em 2em rgba(47,220,126,.45), 0 0 0 3px rgba(47,220,126,.35), inset 0 1px 0 rgba(255,255,255,.4)',
+                '0 0.6em 2em rgba(255,179,71,.45), 0 0 0 3px rgba(255,179,71,.35), inset 0 1px 0 rgba(233,228,216,.4)',
               translate: '0 -0.18em',
             }
           : primary
@@ -86,14 +86,14 @@ const HeroButton = ({
                 // Base oscura bajo el tinte (sin blur — la fila entra con la
                 // cascada de reveal y el blur no muestrea hasta el final).
                 background:
-                  'linear-gradient(180deg, rgba(47,220,126,.16), rgba(47,220,126,.1)), rgba(8,14,11,.6)',
-                color: '#a7f3c9',
-                boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.4)',
+                  'linear-gradient(180deg, rgba(255,179,71,.16), rgba(255,179,71,.1)), rgba(8,14,11,.6)',
+                color: '#ffc266',
+                boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.4)',
               }
             : {
                 background: 'rgba(12,16,14,.6)',
                 color: 'var(--foreground)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.14)',
               }
       }
     >
@@ -112,14 +112,14 @@ const HeroButton = ({
               className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
               style={{
                 background:
-                  'linear-gradient(105deg, transparent, rgba(255,255,255,.5), transparent)',
+                  'linear-gradient(105deg, transparent, rgba(233,228,216,.5), transparent)',
               }}
             />
           </span>
           <span
             aria-hidden
             className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute -inset-[2px] rounded-full"
-            style={{ boxShadow: '0 0 1.6em rgba(47,220,126,.5)' }}
+            style={{ boxShadow: '0 0 1.6em rgba(255,179,71,.5)' }}
           />
         </>
       )}
@@ -254,19 +254,19 @@ const SeeAllTile = ({
       style={
         focused
           ? {
-              background: 'rgba(47,220,126,.1)',
-              color: '#2fdc7e',
+              background: 'rgba(255,179,71,.1)',
+              color: '#ffb347',
               // Nada fuera del marco — como las carátulas vecinas: ni halo
               // de color ni sombra de elevación (mancha gris en el backdrop).
-              boxShadow: 'inset 0 0 0 3px rgba(47,220,126,.8)',
+              boxShadow: 'inset 0 0 0 3px rgba(255,179,71,.8)',
               // La misma elevación que las carátulas vecinas: la fila entera
               // habla el mismo idioma al recibir el foco.
               translate: '0 -0.22em',
             }
           : {
-              background: 'linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.02))',
+              background: 'linear-gradient(160deg, rgba(233,228,216,.05), rgba(233,228,216,.02))',
               color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.1)',
             }
       }
     >
@@ -277,13 +277,13 @@ const SeeAllTile = ({
         style={
           focused
             ? {
-                background: 'rgba(47,220,126,.16)',
-                boxShadow: 'inset 0 0 0 1px rgba(47,220,126,.5)',
+                background: 'rgba(255,179,71,.16)',
+                boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.5)',
                 translate: '0.18em 0',
               }
             : {
-                background: 'rgba(255,255,255,.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12)',
+                background: 'rgba(233,228,216,.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.12)',
               }
         }
       >
@@ -292,7 +292,7 @@ const SeeAllTile = ({
       See all
       <span
         className="text-[0.72em] font-semibold tabular-nums transition-colors duration-200"
-        style={{ color: focused ? 'rgba(47,220,126,.8)' : 'rgba(136,143,138,.7)' }}
+        style={{ color: focused ? 'rgba(255,179,71,.8)' : 'rgba(138,148,150,.7)' }}
       >
         {count} {count === 1 ? 'game' : 'games'}
       </span>
@@ -303,7 +303,7 @@ const SeeAllTile = ({
           aria-hidden
           className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%]"
           style={{
-            background: 'linear-gradient(105deg, transparent, rgba(255,255,255,.14), transparent)',
+            background: 'linear-gradient(105deg, transparent, rgba(233,228,216,.14), transparent)',
           }}
         />
       )}
@@ -349,11 +349,11 @@ const RecapDoor = ({
       style={{
         ...tvRevealStyle(7),
         background: focused
-          ? 'linear-gradient(125deg, rgba(124,134,200,.22), rgba(124,134,200,.08) 55%, rgba(11,13,12,.85))'
-          : 'linear-gradient(125deg, rgba(124,134,200,.12), rgba(124,134,200,.04) 55%, rgba(11,13,12,.8))',
+          ? 'linear-gradient(125deg, rgba(185,166,255,.22), rgba(185,166,255,.08) 55%, rgba(11,13,12,.85))'
+          : 'linear-gradient(125deg, rgba(185,166,255,.12), rgba(185,166,255,.04) 55%, rgba(11,13,12,.8))',
         boxShadow: focused
-          ? 'inset 0 0 0 2px rgba(124,134,200,.7), 0 0.5em 1.6em rgba(0,0,0,.4)'
-          : 'inset 0 0 0 1px rgba(255,255,255,.08)',
+          ? 'inset 0 0 0 2px rgba(185,166,255,.7), 0 0.5em 1.6em rgba(3,6,7,.4)'
+          : 'inset 0 0 0 1px rgba(233,228,216,.08)',
         translate: focused ? '0 -0.15em' : undefined,
       }}
     >
@@ -362,20 +362,20 @@ const RecapDoor = ({
           <span
             aria-hidden
             className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.7em]"
-            style={{ boxShadow: 'inset 0 0 0 2px rgba(124,134,200,.85)' }}
+            style={{ boxShadow: 'inset 0 0 0 2px rgba(185,166,255,.85)' }}
           />
           <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
             <span
               className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[40%]"
               style={{
                 background:
-                  'linear-gradient(105deg, transparent, rgba(255,255,255,.1), transparent)',
+                  'linear-gradient(105deg, transparent, rgba(233,228,216,.1), transparent)',
               }}
             />
           </span>
         </>
       )}
-      <div className="relative flex items-center gap-[0.45em] text-[0.55em] font-extrabold tracking-[.2em] text-[#a3abd8]/90">
+      <div className="relative flex items-center gap-[0.45em] text-[0.55em] font-extrabold tracking-[.2em] text-st-resting/90">
         <BookOpen className="h-[1.2em] w-[1.2em]" />
         YOUR STORY · {label}
       </div>
@@ -646,18 +646,18 @@ export const TvHome = (): React.JSX.Element => {
             aria-hidden
             className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -bottom-[0.8em] left-1/2 h-[1.1em] w-[5em] -translate-x-1/2 rounded-[50%]"
             style={{
-              background: 'radial-gradient(closest-side, rgba(47,220,126,.35), transparent 72%)',
+              background: 'radial-gradient(closest-side, rgba(255,179,71,.35), transparent 72%)',
               filter: 'blur(5px)',
             }}
           />
           <div
             className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] flex h-[3.8em] w-[3.8em] items-center justify-center rounded-full"
             style={{
-              background: 'rgba(255,255,255,.05)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12), 0 0.9em 2em rgba(0,0,0,.45)',
+              background: 'rgba(233,228,216,.05)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.12), 0 0.9em 2em rgba(3,6,7,.45)',
             }}
           >
-            <Gamepad2 className="h-[1.7em] w-[1.7em] text-[#2fdc7e]" />
+            <Gamepad2 className="h-[1.7em] w-[1.7em] text-phosphor" />
           </div>
         </div>
         <div className={`text-[1.15em] font-extrabold ${tvRevealClass}`} style={tvRevealStyle(1)}>
@@ -693,7 +693,7 @@ export const TvHome = (): React.JSX.Element => {
     >
       {hero && heroStatus && (
         <section
-          className={`relative min-h-[18em] flex-none overflow-hidden rounded-[0.85em] border border-white/[0.09] ${tvRevealClass}`}
+          className={`relative min-h-[18em] flex-none overflow-hidden rounded-[0.85em] border border-line ${tvRevealClass}`}
           style={{
             ...tvRevealStyle(0),
             // Solo el hairline de luz de arriba. La sombra de elevación
@@ -701,7 +701,7 @@ export const TvHome = (): React.JSX.Element => {
             // aprendieron las carátulas — una sombra negra muy difuminada
             // sobre el backdrop no se lee como profundidad, se lee como una
             // mancha gris rodeando la card. Fuera del marco, nada.
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)',
+            boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)',
           }}
         >
           {/* Hero art con deriva Ken Burns; sin él, la carátula ampliada y
@@ -734,7 +734,7 @@ export const TvHome = (): React.JSX.Element => {
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(90deg, rgba(9,11,10,.94) 0%, rgba(9,11,10,.66) 42%, rgba(9,11,10,0) 70%, rgba(9,11,10,.55) 100%)',
+                'linear-gradient(90deg, rgba(8,11,12,.94) 0%, rgba(8,11,12,.66) 42%, rgba(8,11,12,0) 70%, rgba(8,11,12,.55) 100%)',
             }}
           />
           {/* Vignette vertical suave: asienta el titular arriba y los botones
@@ -786,11 +786,11 @@ export const TvHome = (): React.JSX.Element => {
               />
               <div
                 className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative"
-                style={{ filter: 'drop-shadow(0 1.2em 2.4em rgba(0,0,0,.6))' }}
+                style={{ filter: 'drop-shadow(0 1.2em 2.4em rgba(3,6,7,.6))' }}
               >
                 <GameCover
                   url={hero.coverUrl}
-                  className="aspect-[264/374] w-full overflow-hidden rounded-[0.5em] border border-white/20"
+                  className="aspect-[264/374] w-full overflow-hidden rounded-[0.5em] border border-line-strong"
                   iconSize={30}
                 />
               </div>
@@ -801,12 +801,12 @@ export const TvHome = (): React.JSX.Element => {
             <div className="flex min-w-0 flex-1 flex-col gap-[0.55em]">
               {hero.isLive ? (
                 <div
-                  className={`flex items-center gap-[0.55em] self-start rounded-full px-[0.9em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] text-[#2fdc7e] ${tvRevealClass}`}
+                  className={`flex items-center gap-[0.55em] self-start rounded-full px-[0.9em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] text-phosphor ${tvRevealClass}`}
                   style={{
                     ...tvRevealStyle(1),
-                    background: 'rgba(47,220,126,.12)',
+                    background: 'rgba(255,179,71,.12)',
                     boxShadow:
-                      'inset 0 0 0 1px rgba(47,220,126,.4), 0 0 1.6em rgba(47,220,126,.15)',
+                      'inset 0 0 0 1px rgba(255,179,71,.4), 0 0 1.6em rgba(255,179,71,.15)',
                   }}
                 >
                   {/* El punto late con DOS ritmos: el anillo (2.2s) y un halo
@@ -818,15 +818,15 @@ export const TvHome = (): React.JSX.Element => {
                       className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.4em] rounded-full"
                       style={{
                         background:
-                          'radial-gradient(closest-side, rgba(47,220,126,.6), transparent)',
+                          'radial-gradient(closest-side, rgba(255,179,71,.6), transparent)',
                       }}
                     />
-                    <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-[#2fdc7e] shadow-[0_0_0.7em_#2fdc7e]" />
+                    <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-phosphor shadow-[0_0_0.7em_#ffb347]" />
                   </span>
                   {heroElsewhere && hero.liveDeviceId
                     ? `PLAYING ON ${nameOf(hero.liveDeviceId).toUpperCase()}`
                     : 'PLAYING NOW'}
-                  <span aria-hidden className="h-[0.9em] w-px bg-[#2fdc7e]/30" />
+                  <span aria-hidden className="h-[0.9em] w-px bg-phosphor/30" />
                   <HeroLiveClock since={hero.liveSince ?? null} />
                 </div>
               ) : (
@@ -858,28 +858,28 @@ export const TvHome = (): React.JSX.Element => {
                 className={`max-w-[80%] pb-[0.14em] text-[2.35em] leading-[1.16] font-extrabold tracking-[-.02em] ${tvRevealClass}`}
                 style={{
                   ...tvRevealStyle(1),
-                  backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(255,255,255,.66))',
+                  backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(233,228,216,.66))',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
-                  filter: 'drop-shadow(0 2px 18px rgba(0,0,0,.55))',
+                  filter: 'drop-shadow(0 2px 18px rgba(3,6,7,.55))',
                 }}
               >
                 {hero.title}
               </h1>
 
               <div
-                className={`flex items-center gap-[1.1em] text-[0.74em] font-semibold text-white/70 ${tvRevealClass}`}
+                className={`flex items-center gap-[1.1em] text-[0.74em] font-semibold text-dust ${tvRevealClass}`}
                 style={tvRevealStyle(2)}
               >
                 {hero.totalHours > 0 && (
                   <span className="flex items-center gap-[0.4em] tabular-nums">
-                    <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#2fdc7e' }} />
+                    <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#ffb347' }} />
                     {formatHours(hero.totalHours)}
                   </span>
                 )}
                 {hero.sessionCount > 0 && (
                   <span className="flex items-center gap-[0.4em] tabular-nums">
-                    <CalendarRange className="h-[1.05em] w-[1.05em]" style={{ color: '#85a3d6' }} />
+                    <CalendarRange className="h-[1.05em] w-[1.05em]" style={{ color: '#5fd3e0' }} />
                     {hero.sessionCount} sessions
                   </span>
                 )}
@@ -889,7 +889,7 @@ export const TvHome = (): React.JSX.Element => {
                   teñido de dónde está ese juego en tu vida. */}
               {heroNote && (
                 <p
-                  className={`max-w-[60%] border-l-2 pl-[0.85em] text-[0.85em] leading-relaxed text-white/80 italic ${tvRevealClass}`}
+                  className={`max-w-[60%] border-l-2 pl-[0.85em] text-[0.85em] leading-relaxed text-bone italic ${tvRevealClass}`}
                   style={{ ...tvRevealStyle(2), borderColor: `${heroStatus.color}59` }}
                 >
                   “{heroNote}”
@@ -932,24 +932,24 @@ export const TvHome = (): React.JSX.Element => {
           solo aparece cuando el mes ya cuenta algo. */}
       {monthStats.count > 0 && (
         <div
-          className={`flex flex-none flex-wrap items-baseline gap-x-[0.9em] gap-y-[0.2em] px-[0.2em] text-[0.7em] font-semibold text-white/45 ${tvRevealClass}`}
+          className={`flex flex-none flex-wrap items-baseline gap-x-[0.9em] gap-y-[0.2em] px-[0.2em] text-[0.7em] font-semibold text-dust ${tvRevealClass}`}
           style={tvRevealStyle(2)}
         >
-          <span className="font-extrabold tracking-[.2em] text-white/35">
+          <span className="font-extrabold tracking-[.2em] text-bone/35">
             {monthStats.label} SO FAR
           </span>
           <span>
-            <span className="font-extrabold text-[#2fdc7e]">{formatHours(monthStats.hours)}</span>{' '}
+            <span className="font-extrabold text-phosphor">{formatHours(monthStats.hours)}</span>{' '}
             played
           </span>
-          <span className="text-white/25">·</span>
+          <span className="text-bone/25">·</span>
           <span>
-            <span className="font-extrabold text-[#85a3d6] tabular-nums">{monthStats.count}</span>{' '}
+            <span className="font-extrabold text-tube tabular-nums">{monthStats.count}</span>{' '}
             {monthStats.count === 1 ? 'session' : 'sessions'}
           </span>
-          <span className="text-white/25">·</span>
+          <span className="text-bone/25">·</span>
           <span>
-            <span className="font-extrabold text-[#7c86c8] tabular-nums">{monthStats.games}</span>{' '}
+            <span className="font-extrabold text-st-resting tabular-nums">{monthStats.games}</span>{' '}
             {monthStats.games === 1 ? 'game' : 'games'}
           </span>
         </div>
@@ -957,7 +957,7 @@ export const TvHome = (): React.JSX.Element => {
 
       <Shelf
         title="PLAYING NOW"
-        accent="#2fdc7e"
+        accent="#ffb347"
         live
         games={playing}
         onOpen={openGame}
@@ -967,7 +967,7 @@ export const TvHome = (): React.JSX.Element => {
       />
       <Shelf
         title="RECENTLY PLAYED"
-        accent="#85a3d6"
+        accent="#5fd3e0"
         games={recent}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
@@ -976,7 +976,7 @@ export const TvHome = (): React.JSX.Element => {
       />
       <Shelf
         title="RECENTLY FINISHED"
-        accent="#e3b24a"
+        accent="#ffb347"
         games={finished}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
@@ -985,7 +985,7 @@ export const TvHome = (): React.JSX.Element => {
       />
       <Shelf
         title="YOUR LIBRARY"
-        accent="#7c86c8"
+        accent="#b9a6ff"
         games={shelf}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}

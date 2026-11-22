@@ -51,7 +51,7 @@ const ProgressBar = ({
     aria-valuemin={0}
     aria-valuemax={100}
     aria-valuenow={fraction === null ? undefined : Math.round(fraction * 100)}
-    className="h-1.5 w-full overflow-hidden rounded-full bg-white/8"
+    className="h-1.5 w-full overflow-hidden rounded-full bg-bone/8"
   >
     <div
       className={cn(
@@ -81,10 +81,10 @@ const Steps = ({ current }: { current: number }): React.JSX.Element => (
           <span
             aria-hidden
             className={cn(
-              'flex size-4.5 items-center justify-center rounded-full border text-[10px]',
+              'flex size-4.5 items-center justify-center rounded-full border text-micro',
               active && 'border-primary bg-primary/15 text-primary',
               done && 'border-primary/50 bg-primary/10',
-              !active && !done && 'border-white/12',
+              !active && !done && 'border-line-strong',
             )}
           >
             {done ? <Check className="size-3" strokeWidth={3} /> : index + 1}
@@ -115,7 +115,7 @@ const LaggingQuestion = ({
             key={device.deviceId}
             className={cn(
               'flex items-start gap-3 rounded-[12px] border px-3.5 py-3',
-              device.self ? 'border-destructive/40 bg-destructive/6' : 'border-border bg-white/3',
+              device.self ? 'border-destructive/40 bg-destructive/6' : 'border-border bg-bone/3',
             )}
           >
             <MonitorSmartphone
@@ -185,7 +185,7 @@ const PairingForm = ({
         </div>
       )}
       <label className="block">
-        <div className={fieldLabelClass}>SYNC SERVICE ADDRESS</div>
+        <div className={fieldLabelClass}>Sync service address</div>
         <input
           type="text"
           value={hubUrl}
@@ -203,7 +203,7 @@ const PairingForm = ({
         )}
       </label>
       <label className="block">
-        <div className={fieldLabelClass}>ONE-TIME CODE</div>
+        <div className={fieldLabelClass}>One-time code</div>
         <input
           type="text"
           value={code}
@@ -252,7 +252,7 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
             </div>
           )}
           {state.problem && (
-            <div className="rounded-[10px] border border-white/10 bg-white/4 px-3 py-2 text-[12.5px] leading-snug text-foreground">
+            <div className="rounded-[10px] border border-line bg-bone/4 px-3 py-2 text-[12.5px] leading-snug text-foreground">
               {state.problem} The upload picks up again by itself.
             </div>
           )}
@@ -270,7 +270,7 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
             </div>
           )}
           {state.problem && (
-            <div className="rounded-[10px] border border-white/10 bg-white/4 px-3 py-2 text-[12.5px] leading-snug text-foreground">
+            <div className="rounded-[10px] border border-line bg-bone/4 px-3 py-2 text-[12.5px] leading-snug text-foreground">
               {state.problem} The download picks up again by itself.
             </div>
           )}

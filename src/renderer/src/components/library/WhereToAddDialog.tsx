@@ -42,7 +42,7 @@ const DoorButton = ({
     onMouseEnter={(event) => {
       event.currentTarget.style.borderColor = `${color}6b`;
       event.currentTarget.style.background = `${color}1a`;
-      event.currentTarget.style.boxShadow = `0 8px 24px rgba(0,0,0,.35), 0 0 16px ${color}24`;
+      event.currentTarget.style.boxShadow = `0 8px 24px rgba(3,6,7,.35), 0 0 16px ${color}24`;
     }}
     onMouseLeave={(event) => {
       event.currentTarget.style.borderColor = `${color}30`;
@@ -67,7 +67,7 @@ const DoorButton = ({
         className="-ml-1 opacity-0 transition-[opacity,margin] duration-150 group-hover:ml-0 group-hover:opacity-100"
       />
     </span>
-    <span className="text-[10.5px] leading-tight text-muted-foreground">{hint}</span>
+    <span className="text-micro leading-tight text-muted-foreground">{hint}</span>
   </button>
 );
 
@@ -104,7 +104,7 @@ export const WhereToAddDialog = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-[2px] duration-200 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-inset/60 p-6 backdrop-blur-[2px] duration-200 ${
         closing ? `${CLOSING_ANIM} fade-out-0` : 'animate-in fade-in-0'
       }`}
       onClick={startClose}
@@ -128,7 +128,7 @@ export const WhereToAddDialog = ({
             type="button"
             onClick={startClose}
             aria-label="Cancel"
-            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground/70 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground"
+            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground/70 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground"
           >
             <X size={15} />
           </button>

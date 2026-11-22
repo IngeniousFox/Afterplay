@@ -34,7 +34,7 @@ export const PlayedBeforePanel = (): React.JSX.Element => {
   const [today] = useState(todayValue);
 
   return (
-    <div className="flex flex-col gap-3 rounded-[11px] border border-border bg-white/[0.02] p-3.5">
+    <div className="flex flex-col gap-3 rounded-[11px] border border-border bg-bone/[0.02] p-3.5">
       <PlaythroughLabel number={1} />
       <PlaythroughDatesHoursStatus
         showDates={!endless}

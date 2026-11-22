@@ -14,7 +14,7 @@ import {
 } from '../lib/account';
 
 const SectionTitle = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <h2 className="mb-2.5 text-[10px] font-bold tracking-[.11em] text-muted-foreground uppercase">
+  <h2 className="mb-2.5 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
     {children}
   </h2>
 );
@@ -50,13 +50,13 @@ const AddDevice = (): React.JSX.Element => {
         {live && (
           <div className="mt-4 flex flex-col gap-3">
             <div>
-              <div className="mb-1 text-[10px] font-bold tracking-[.11em] text-muted-foreground uppercase">
+              <div className="mb-1 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
                 One-time code
               </div>
               <div className="flex items-center gap-2">
                 <code
                   data-testid="enroll-code"
-                  className="min-w-0 flex-1 rounded-xl bg-white/6 px-3 py-3 text-center font-mono text-[19px] font-extrabold tracking-wider break-all select-all"
+                  className="min-w-0 flex-1 rounded-xl bg-bone/6 px-3 py-3 text-center font-mono text-[19px] font-extrabold tracking-wider break-all select-all"
                 >
                   {issued.code}
                 </code>
@@ -80,11 +80,11 @@ const AddDevice = (): React.JSX.Element => {
 
         {(live || expired) && (
           <div className="mt-4">
-            <div className="mb-1 text-[10px] font-bold tracking-[.11em] text-muted-foreground uppercase">
+            <div className="mb-1 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
               Address
             </div>
             <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 rounded-xl bg-white/6 px-3 py-2.5 font-mono text-[13px] font-semibold break-all select-all">
+              <code className="min-w-0 flex-1 rounded-xl bg-bone/6 px-3 py-2.5 font-mono text-[13px] font-semibold break-all select-all">
                 {hubAddress}
               </code>
               <CopyButton value={hubAddress} label="address" />
@@ -275,7 +275,7 @@ const Invite = (): React.JSX.Element => {
           placeholder="friend@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-3 w-full rounded-xl border border-border bg-white/6 px-3 py-2.5 text-[16px] outline-none placeholder:text-muted-foreground/60 focus:border-primary"
+          className="mt-3 w-full rounded-xl border border-border bg-bone/6 px-3 py-2.5 text-[16px] outline-none placeholder:text-muted-foreground/60 focus:border-primary"
         />
         {invited !== null && (
           <p role="status" className="mt-3 text-[12.5px] font-semibold text-primary">

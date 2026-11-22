@@ -22,18 +22,18 @@ export const SegmentedButtonGroup = <T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={`rounded-[9px] px-4 py-2 text-[13px] font-semibold transition-[border-color,background-color,color] duration-150 ${
-            isSelected ? '' : 'hover:border-white/20 hover:bg-white/[0.06]'
+            isSelected ? '' : 'hover:border-line-strong hover:bg-bone/[0.06]'
           }`}
           style={
             isSelected
               ? {
-                  border: '1px solid rgba(47,220,126,.5)',
-                  background: 'rgba(47,220,126,.12)',
-                  color: '#2fdc7e',
+                  border: '1px solid rgba(255,179,71,.5)',
+                  background: 'rgba(255,179,71,.12)',
+                  color: '#ffb347',
                 }
               : {
                   border: '1px solid var(--input)',
-                  background: 'rgba(255,255,255,.03)',
+                  background: 'rgba(233,228,216,.03)',
                   color: 'var(--foreground)',
                 }
           }

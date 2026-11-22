@@ -78,7 +78,7 @@ export const CloudInventorySection = (): React.JSX.Element => {
   };
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.75">
+    <div className="flex flex-col gap-2.5 rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.75">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <div
@@ -101,7 +101,7 @@ export const CloudInventorySection = (): React.JSX.Element => {
           type="button"
           onClick={handleScan}
           disabled={busy}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {scan.isPending ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
           {scan.isPending ? 'Reading…' : 'Read the bucket'}
@@ -200,7 +200,7 @@ const Inventory = ({
             type="button"
             onClick={onRecover}
             disabled={busy}
-            className="flex w-fit items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {recovering ? (
               <Loader2 size={13} className="animate-spin" />
@@ -220,24 +220,24 @@ const Inventory = ({
           style={
             machine.isCurrent
               ? { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
-              : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+              : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
           }
         >
           <MonitorSmartphone
             size={13}
             className="flex-none"
-            style={{ color: machine.isCurrent ? BLUE : 'rgba(255,255,255,.25)' }}
+            style={{ color: machine.isCurrent ? BLUE : 'rgba(233,228,216,.25)' }}
           />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12px] font-semibold text-foreground">
               {machine.machineName ?? 'Unregistered PC'}
               {machine.isCurrent && (
-                <span className="ml-1.5 text-[10.5px] font-bold" style={{ color: BLUE }}>
+                <span className="ml-1.5 text-micro font-bold" style={{ color: BLUE }}>
                   this PC
                 </span>
               )}
             </div>
-            <div className="truncate text-[10.5px] text-muted-foreground">
+            <div className="truncate text-micro text-muted-foreground">
               {formatBytes(machine.totalBytes)} · {pluralize(machine.backupCount, 'backup')}
               {machine.home && ` · ${machine.home}`}
             </div>
@@ -273,7 +273,7 @@ const Inventory = ({
                     : `Not in your library (save key ${folder.saveKey})`}
                 </span>
                 {folder.unknownCount > 0 && (
-                  <span className="flex-none text-[10.5px] font-bold" style={{ color: AMBER }}>
+                  <span className="flex-none text-micro font-bold" style={{ color: AMBER }}>
                     {folder.unknownCount} unknown
                   </span>
                 )}

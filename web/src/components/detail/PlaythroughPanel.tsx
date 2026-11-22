@@ -15,7 +15,7 @@ import {
   formatMoney,
   humanizeSpanByPrecision,
 } from '../../lib/format';
-import { AMBER, GREEN, statusOf, VIOLET } from '../../lib/status';
+import { AMBER, GREEN, RED, statusOf, VIOLET } from '../../lib/status';
 import { CardTitle, DetailCard, InfoChip, StatTile } from './primitives';
 
 // La tira de viaje: inicio ──── cuánto duró ──── desenlace. Un playthrough es
@@ -57,22 +57,20 @@ const JourneyStrip = ({ iteration }: { iteration: IterationDetail }): React.JSX.
   );
 
   return (
-    <div className="rounded-[12px] border border-border bg-white/[0.02] px-3 py-3">
+    <div className="rounded-[12px] border border-border bg-bone/[0.02] px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
-            STARTED
-          </div>
+          <div className="text-micro font-bold tracking-[.12em] text-muted-foreground">Started</div>
           <div className="mt-0.75 truncate text-[12px] font-semibold text-foreground">
             {formatByPrecision(iteration.startedAt, startedPrecision)}
           </div>
         </div>
         <div className="min-w-0 text-right">
           <div
-            className="text-[9.5px] font-bold tracking-[.12em]"
+            className="text-micro font-bold tracking-[.12em]"
             style={{ color: isOngoing ? GREEN : `${status.color}cc` }}
           >
-            {isOngoing ? 'ONGOING' : status.label.toUpperCase()}
+            {isOngoing ? 'Ongoing' : status.label}
           </div>
           <div className="mt-0.75 truncate text-[12px] font-semibold text-foreground">
             {iteration.endedAt !== null
@@ -85,7 +83,7 @@ const JourneyStrip = ({ iteration }: { iteration: IterationDetail }): React.JSX.
       <div className="mt-2.75 flex items-center gap-2">
         <span className="h-1.75 w-1.75 flex-none rounded-full bg-muted-foreground" />
         <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
-        <span className="flex-none text-[10.5px] font-semibold whitespace-nowrap text-muted-foreground">
+        <span className="flex-none text-micro font-semibold whitespace-nowrap text-muted-foreground">
           {/* "Same year so far" no se lee bien — con un tramo que no es una
               duración, el sufijo sobra. */}
           {isOngoing && !span.startsWith('Same') ? `${span} so far` : span}
@@ -94,7 +92,7 @@ const JourneyStrip = ({ iteration }: { iteration: IterationDetail }): React.JSX.
         <span
           className="h-2 w-2 flex-none rounded-full"
           style={{
-            background: isOngoing ? GREEN : status.color,
+            background: isOngoing ? RED : status.color,
             ...(isOngoing ? { animation: 'afterplay-pulse-dot 1.4s infinite' } : {}),
           }}
         />
@@ -110,9 +108,7 @@ const RatingRow = ({ rating }: { rating: 1 | 2 | 3 | 4 | 5 | null }): React.JSX.
   if (rating === null) return null;
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-[10px] font-bold tracking-[.12em] text-muted-foreground">
-        MY RATING
-      </span>
+      <span className="text-micro font-bold tracking-[.12em] text-muted-foreground">My rating</span>
       <div className="flex items-center gap-0.75">
         {[1, 2, 3, 4, 5].map((value) => (
           <Star
@@ -209,14 +205,14 @@ export const PlaythroughPanel = ({ game, selected, onSelect }: Props): React.JSX
                       : {
                           color: 'var(--muted-foreground)',
                           borderColor: 'var(--border)',
-                          background: 'rgba(255,255,255,.028)',
+                          background: 'rgba(233,228,216,.028)',
                         }
                   }
                 >
                   {ongoing && (
                     <span
                       className="h-1.25 w-1.25 flex-none rounded-full"
-                      style={{ background: GREEN, animation: 'afterplay-pulse-dot 1.4s infinite' }}
+                      style={{ background: RED, animation: 'afterplay-pulse-dot 1.4s infinite' }}
                     />
                   )}
                   <span>#{index + 1}</span>
@@ -232,10 +228,10 @@ export const PlaythroughPanel = ({ game, selected, onSelect }: Props): React.JSX
         <JourneyStrip iteration={selected} />
 
         <div className="grid grid-cols-2 gap-2">
-          <StatTile color={GREEN} label="PLAYED" value={formatHours(selected.hours)} />
+          <StatTile color={GREEN} label="Played" value={formatHours(selected.hours)} />
           <StatTile
             color={AMBER}
-            label="SPENT"
+            label="Spent"
             value={selected.spend > 0 ? formatMoney(selected.spend) : 'Free'}
           />
         </div>
@@ -244,7 +240,7 @@ export const PlaythroughPanel = ({ game, selected, onSelect }: Props): React.JSX
 
         {/* Ficha técnica: etiquetas, no medidas — una fila de píldoras en
             lugar de tres filas con su borde inferior cada una. */}
-        <div className="flex flex-wrap gap-1.5 border-t border-white/5 pt-3">
+        <div className="flex flex-wrap gap-1.5 border-t border-line pt-3">
           <InfoChip Icon={Gamepad2}>{selected.playedPlatform}</InfoChip>
           {selected.format && (
             <InfoChip Icon={selected.format === 'physical' ? Disc3 : Download}>
@@ -255,7 +251,7 @@ export const PlaythroughPanel = ({ game, selected, onSelect }: Props): React.JSX
             <span className="capitalize">{selected.origin}</span>
           </InfoChip>
           {selected.extraContent && (
-            <InfoChip Icon={Package} color="#85a3d6">
+            <InfoChip Icon={Package} color="#5fd3e0">
               Extra content only
             </InfoChip>
           )}

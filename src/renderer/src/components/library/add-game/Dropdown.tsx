@@ -70,10 +70,10 @@ export const Dropdown = <T extends string>({
           onChange(option);
           close();
         }}
-        className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.75 py-2.25 text-[13.5px] transition-colors duration-100 hover:bg-white/[0.07] ${
+        className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.75 py-2.25 text-[13.5px] transition-colors duration-100 hover:bg-bone/[0.07] ${
           isSelected ? 'text-primary' : 'text-foreground'
         }`}
-        style={isSelected ? { background: 'rgba(47,220,126,.08)' } : undefined}
+        style={isSelected ? { background: 'rgba(255,179,71,.08)' } : undefined}
       >
         {renderOption(option)}
         {isSelected && <Check size={14} className="flex-none text-primary" />}
@@ -94,11 +94,11 @@ export const Dropdown = <T extends string>({
         style={
           open
             ? {
-                borderColor: 'rgba(47,220,126,.45)',
-                background: 'rgba(255,255,255,.05)',
-                boxShadow: '0 0 0 3px rgba(47,220,126,.12)',
+                borderColor: 'rgba(255,179,71,.45)',
+                background: 'rgba(233,228,216,.05)',
+                boxShadow: '0 0 0 3px rgba(255,179,71,.12)',
               }
-            : { borderColor: 'var(--input)', background: 'rgba(255,255,255,.03)' }
+            : { borderColor: 'var(--input)', background: 'rgba(233,228,216,.03)' }
         }
       >
         <span>{renderOption(value)}</span>
@@ -127,7 +127,7 @@ export const Dropdown = <T extends string>({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Type to filter…"
-            className="mb-1.5 w-full rounded-lg border border-input bg-white/[0.03] px-2.75 py-2 text-[13px] text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-primary/45 focus:bg-white/[0.05] focus:shadow-[0_0_0_3px_rgba(47,220,126,.12)]"
+            className="mb-1.5 w-full rounded-lg border border-edge bg-inset px-2.75 py-2 text-[13px] text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
           />
           <div className="flex max-h-52 flex-col gap-0.75 overflow-y-auto">
             {optionRows.length > 0 ? (

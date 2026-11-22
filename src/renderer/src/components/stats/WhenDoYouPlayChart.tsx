@@ -53,7 +53,7 @@ export const WhenDoYouPlayChart = ({
       formatValue={(seconds) => formatHours(seconds / 3600)}
       barGradient="linear-gradient(180deg,var(--ac),var(--ac2))"
       labelColor={GREEN}
-      glowColor="rgba(47,220,126,.18)"
+      glowColor="rgba(255,179,71,.18)"
       maxBarWidthClass="max-w-9"
     />
   );

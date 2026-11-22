@@ -65,9 +65,9 @@ const PanelButton = ({
               translate: '0 -0.15em',
             }
           : {
-              background: 'rgba(0,0,0,.35)',
+              background: 'rgba(3,6,7,.35)',
               color: 'var(--foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)',
+              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.14)',
             }
       }
     >
@@ -126,12 +126,12 @@ export const TvSessionPanel = ({
     <TvFocusLayer>
       <div className="absolute inset-0 z-30 flex items-center justify-center">
         <div
-          className="animate-in fade-in-0 absolute inset-0 bg-black/70 duration-250"
+          className="animate-in fade-in-0 absolute inset-0 bg-inset/70 duration-250"
           onClick={onClose}
         />
         {/* El panel nace con el pop de la casa (pequeño-y-sube) en vez de un
             fade plano: es el remate de una sesión, no un diálogo cualquiera. */}
-        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[28em] overflow-hidden rounded-[0.9em] border border-white/[0.12] bg-[#141614] shadow-[0_2em_5em_rgba(0,0,0,.7)]">
+        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[28em] overflow-hidden rounded-[0.9em] border border-line-strong bg-overlay shadow-[0_2em_5em_rgba(3,6,7,.7)]">
           {heroSrc && (
             <>
               <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -139,7 +139,7 @@ export const TvSessionPanel = ({
                 className="absolute inset-0"
                 style={{
                   background:
-                    'linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.9) 50%, rgba(18,20,19,.72) 100%)',
+                    'linear-gradient(90deg, rgba(36,44,49,.97) 0%, rgba(36,44,49,.9) 50%, rgba(36,44,49,.72) 100%)',
                 }}
               />
             </>
@@ -150,7 +150,7 @@ export const TvSessionPanel = ({
             aria-hidden
             className="absolute inset-x-0 top-0 h-px"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(233,228,216,.28), transparent)',
             }}
           />
 
@@ -158,7 +158,7 @@ export const TvSessionPanel = ({
             <div className="flex items-center gap-[1em]">
               <GameCover
                 url={event.coverUrl}
-                className="h-[5.2em] w-[3.7em] flex-none overflow-hidden rounded-[0.4em] border border-white/15"
+                className="h-[5.2em] w-[3.7em] flex-none overflow-hidden rounded-[0.4em] border border-line-strong"
                 iconSize={20}
               />
               <div className="min-w-0 flex-1">

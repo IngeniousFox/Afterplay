@@ -78,7 +78,7 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
             if (event.key === 'Escape') cancel();
           }}
           placeholder="Where did you leave off?"
-          className="min-w-0 flex-1 rounded-md border border-input bg-white/[0.03] px-2 py-1 text-[12px] text-foreground outline-none focus:border-primary/45"
+          className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1 text-[12px] text-foreground outline-none focus:border-primary/45"
         />
         <button
           type="button"
@@ -92,7 +92,7 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
         <button
           type="button"
           onClick={cancel}
-          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-white/6"
+          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-bone/6"
           aria-label="Cancel"
         >
           <X size={13} />
@@ -112,7 +112,7 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
         type="button"
         onClick={startEditing}
         title="Edit note"
-        className="mt-1.5 flex w-fit max-w-full items-start gap-1.5 border-l-2 pl-2.5 text-left text-[12.5px] text-[#b7bdb8] hover:text-foreground"
+        className="mt-1.5 flex w-fit max-w-full items-start gap-1.5 border-l-2 pl-2.5 text-left text-[12.5px] text-bone hover:text-foreground"
         style={{ borderColor: `${AMBER}55` }}
       >
         <span className="min-w-0">{note}</span>

@@ -97,7 +97,7 @@ export const FolderScanStep = ({
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 rounded-[9px] border border-input bg-white/[0.03] px-2.75 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06]"
+          className="flex items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-2.75 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover"
         >
           <ArrowLeft size={13} />
           Search instead
@@ -115,7 +115,7 @@ export const FolderScanStep = ({
             style={{ borderColor: `${BLUE}2e`, background: `${BLUE}0d` }}
           >
             <HardDrive size={11} className="flex-none" style={{ color: BLUE }} />
-            <span className="truncate font-mono text-[10.5px] text-foreground" title={folder}>
+            <span className="truncate font-mono text-micro text-foreground" title={folder}>
               {folder}
             </span>
             <button
@@ -142,7 +142,7 @@ export const FolderScanStep = ({
         type="button"
         onClick={rescan}
         disabled={folders.length === 0 || isRescanning}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border border-input bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border border-input bg-bone/[0.04] px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-bone/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isRescanning ? <Loader2 size={15} className="animate-spin" /> : <FolderSearch size={15} />}
         {/* "Rescan" cuando ya hay algo: el botón dejó de ser la única forma
@@ -192,7 +192,7 @@ export const FolderScanStep = ({
 
       {!isLoading && !isRescanning && !results?.length && !report?.scannedAt && (
         <div className="mt-6 flex flex-col items-center gap-2.5 px-4 py-8 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bone/[0.04]">
             <FolderSearch size={20} strokeWidth={1.5} className="text-muted-foreground/50" />
           </div>
           <p className="text-[13px] font-semibold text-foreground">Add games from your disk</p>
@@ -266,12 +266,12 @@ const Results = ({
         </span>
         <span className="flex items-center gap-2.5">
           {planned.length > 0 && (
-            <span className="text-[10.5px]" style={{ color: BLUE }}>
+            <span className="text-micro" style={{ color: BLUE }}>
               {planned.length} from your plan
             </span>
           )}
           {unmatched.length > 0 && (
-            <span className="text-[10.5px]" style={{ color: AMBER }}>
+            <span className="text-micro" style={{ color: AMBER }}>
               {unmatched.length} to match by hand
             </span>
           )}
@@ -380,10 +380,10 @@ const CandidateRow = ({
             ? onSelect(proposed, { ...entry, executablePath })
             : onPromotePlanned?.(plannedGameId, { ...entry, executablePath })
         }
-        className={`group/result flex w-full items-start gap-3.25 rounded-[11px] border bg-white/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+        className={`group/result flex w-full items-start gap-3.25 rounded-[11px] border bg-bone/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
           isLocked
             ? 'cursor-default border-border opacity-55'
-            : `hover:-translate-y-0.5 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)] ${
+            : `hover:-translate-y-0.5 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
                 plannedGameId === null ? 'border-border hover:border-primary/35' : ''
               }`
         }`}
@@ -407,7 +407,7 @@ const CandidateRow = ({
             )}
             {plannedGameId !== null && (
               <span
-                className="flex-none rounded-md px-1.75 py-0.5 text-[10px] font-bold tracking-[.08em]"
+                className="flex-none rounded-md px-1.75 py-0.5 text-micro font-bold tracking-[.08em]"
                 style={{ background: `${BLUE}22`, color: BLUE }}
               >
                 IN YOUR PLAN
@@ -420,7 +420,7 @@ const CandidateRow = ({
               {proposed.genres.slice(0, 2).map((genre) => (
                 <span
                   key={genre}
-                  className="rounded-md border border-input bg-white/[0.04] px-1.75 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                  className="rounded-md border border-input bg-bone/[0.04] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
                 >
                   {genre}
                 </span>
@@ -438,7 +438,7 @@ const CandidateRow = ({
             >
               {entry.folderName}
             </span>
-            <span className="flex-none text-[10.5px] text-muted-foreground tabular-nums">
+            <span className="flex-none text-micro text-muted-foreground tabular-nums">
               {formatBytes(entry.sizeBytes)}
             </span>
           </div>
@@ -465,7 +465,7 @@ const CandidateRow = ({
           salieron FUERA del botón grande porque los dos son elegibles, y un
           botón dentro de otro no es ni HTML válido ni clicable sin pelearse
           con el click del padre. */}
-      <div className="mx-2 rounded-b-[9px] border border-t-0 border-border bg-white/[0.015]">
+      <div className="mx-2 rounded-b-[9px] border border-t-0 border-border bg-bone/[0.015]">
         <ExecutablePicker
           basePath={entry.path}
           candidates={entry.executableCandidates}
@@ -478,7 +478,7 @@ const CandidateRow = ({
             <button
               type="button"
               onClick={() => setShowAlternatives((current) => !current)}
-              className="flex w-full items-center gap-2 border-t border-border px-3 py-1.75 text-left outline-none transition-colors duration-150 hover:bg-white/[0.03] focus-visible:bg-white/[0.05]"
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-1.75 text-left outline-none transition-colors duration-150 hover:bg-bone/[0.03] focus-visible:bg-bone/[0.05]"
             >
               <ChevronDown
                 size={12}
@@ -492,7 +492,7 @@ const CandidateRow = ({
                 {alternatives.slice(0, 3).map((match) => (
                   <span
                     key={match.igdbId}
-                    className="h-7 w-5 overflow-hidden rounded-[4px] border border-border bg-muted ring-2 ring-[#141614]"
+                    className="h-7 w-5 overflow-hidden rounded-[4px] border border-border bg-muted ring-2 ring-overlay"
                   >
                     <CoverThumb
                       url={match.coverUrl}
@@ -510,13 +510,13 @@ const CandidateRow = ({
 
             {showAlternatives && (
               <div
-                className={`border-t border-border bg-black/20 px-2.5 pt-2 pb-2.5 ${expandClass}`}
+                className={`border-t border-border bg-inset/20 px-2.5 pt-2 pb-2.5 ${expandClass}`}
               >
                 <div className="mb-2 flex items-center justify-between px-0.5">
-                  <span className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+                  <span className="text-micro font-bold tracking-[.12em] text-muted-foreground">
                     OTHER MATCHES
                   </span>
-                  <span className="text-[9.5px] text-muted-foreground/60">
+                  <span className="text-micro text-muted-foreground/60">
                     Click a cover to use it
                   </span>
                 </div>
@@ -573,18 +573,18 @@ const FixMatchRow = ({
       <button
         type="button"
         onClick={handleToggle}
-        className="flex w-full items-center gap-2.5 px-3 py-2.25 text-left transition-colors duration-150 hover:bg-white/[0.03]"
+        className="flex w-full items-center gap-2.5 px-3 py-2.25 text-left transition-colors duration-150 hover:bg-bone/[0.03]"
       >
         <Search size={13} className="flex-none" style={{ color: AMBER }} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12.5px] font-semibold text-foreground">
             {entry.folderName}
           </span>
-          <span className="block text-[10.5px] text-muted-foreground">
+          <span className="block text-micro text-muted-foreground">
             No match found — search the catalog yourself
           </span>
         </span>
-        <span className="flex-none text-[10.5px] text-muted-foreground tabular-nums">
+        <span className="flex-none text-micro text-muted-foreground tabular-nums">
           {formatBytes(entry.sizeBytes)}
         </span>
         <ChevronDown
@@ -597,7 +597,7 @@ const FixMatchRow = ({
       {/* El .exe se encontró igual aunque el título no casara, y elegirlo
           aquí es lo que hace que arreglar el match a mano no salga perdiendo
           frente a la ficha con propuesta. */}
-      <div className="border-t border-border bg-white/[0.015]">
+      <div className="border-t border-border bg-bone/[0.015]">
         <ExecutablePicker
           basePath={entry.path}
           candidates={entry.executableCandidates}
@@ -618,7 +618,7 @@ const FixMatchRow = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search the catalog…"
-              className="w-full rounded-[9px] border border-input bg-white/[0.03] py-2 pr-3 pl-8.5 text-[12.5px] text-foreground outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-primary/45 focus:shadow-[0_0_0_3px_rgba(47,220,126,.12)]"
+              className="w-full rounded-[9px] border border-edge bg-inset py-2 pr-3 pl-8.5 text-[12.5px] text-foreground outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
             />
           </div>
 
@@ -685,7 +685,7 @@ const MatchCardGrid = ({
           className={`group/alt relative overflow-hidden rounded-[10px] border border-border bg-muted text-left outline-none transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] ${
             isLocked
               ? 'cursor-default opacity-45'
-              : 'hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_12px_28px_rgba(0,0,0,.5)] focus-visible:border-primary/60'
+              : 'hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_12px_28px_rgba(3,6,7,.5)] focus-visible:border-primary/60'
           } ${revealClass}`}
           // La proporción EXACTA de cover_big de IGDB (264×374): con aspect-[3/4]
           // el object-cover recortaba la carátula por los lados — en portadas
@@ -701,7 +701,7 @@ const MatchCardGrid = ({
           {/* El año SOBRE la carátula: entre cinco juegos homónimos es el dato
               que desempata, y aquí no puede perderse por truncado. */}
           {match.releaseYear !== null && (
-            <span className="absolute top-1.5 right-1.5 rounded-[6px] bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums shadow-[0_2px_6px_rgba(0,0,0,.4)] backdrop-blur-sm">
+            <span className="absolute top-1.5 right-1.5 rounded-[6px] bg-inset/75 px-1.5 py-0.5 text-micro font-bold text-bone tabular-nums shadow-[0_2px_6px_rgba(3,6,7,.4)] backdrop-blur-sm">
               {match.releaseYear}
             </span>
           )}
@@ -710,8 +710,8 @@ const MatchCardGrid = ({
               mirando el ojo al elegir de una rejilla. */}
           {owned && (
             <span
-              className="absolute top-1.5 left-1.5 rounded-[6px] px-1.5 py-0.5 text-[9px] font-bold tracking-[.06em] shadow-[0_2px_6px_rgba(0,0,0,.4)] backdrop-blur-sm"
-              style={{ background: 'rgba(8,12,10,.82)', color: owned.color }}
+              className="absolute top-1.5 left-1.5 rounded-[6px] px-1.5 py-0.5 text-micro font-bold tracking-[.06em] shadow-[0_2px_6px_rgba(3,6,7,.4)] backdrop-blur-sm"
+              style={{ background: 'rgba(8,11,12,.82)', color: owned.color }}
             >
               {owned.label}
             </span>
@@ -720,9 +720,9 @@ const MatchCardGrid = ({
           {/* Título como rótulo al pie de la propia carátula, sobre un degradado
               que SIEMPRE está (no solo al hover): así la card es carátula pura
               de esquina a esquina y aun así se puede leer qué juego es. */}
-          <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2 pt-5 pb-1.75">
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-inset/85 via-inset/45 to-transparent px-2 pt-5 pb-1.75">
             <span
-              className="line-clamp-2 text-[10.5px] leading-tight font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]"
+              className="line-clamp-2 text-micro leading-tight font-bold text-bone drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]"
               title={match.title}
             >
               {match.title}
@@ -733,9 +733,9 @@ const MatchCardGrid = ({
               el mismo acento que el botón principal de la app. En los apagados
               no aparece — no hay acción que ofrecer. */}
           {!isLocked && (
-            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[opacity,background-color] duration-150 group-hover/alt:bg-black/35 group-hover/alt:opacity-100">
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-inset/0 opacity-0 transition-[opacity,background-color] duration-150 group-hover/alt:bg-inset/35 group-hover/alt:opacity-100">
               <span
-                className="flex items-center gap-1.25 rounded-full px-2.75 py-1.25 text-[10.5px] font-bold"
+                className="flex items-center gap-1.25 rounded-full px-2.75 py-1.25 text-micro font-bold"
                 style={accentGradientStyle}
               >
                 <Check size={11} strokeWidth={3} />
@@ -761,7 +761,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left transition-colors duration-150 hover:bg-white/[0.03]"
+        className="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left transition-colors duration-150 hover:bg-bone/[0.03]"
       >
         <ChevronDown
           size={13}
@@ -778,7 +778,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
           )}
         </span>
         <span
-          className="flex-none rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+          className="flex-none rounded-full px-2 py-0.5 text-micro font-bold tabular-nums"
           style={{ background: `${GREEN}1f`, color: GREEN }}
         >
           {entries.length}
@@ -790,7 +790,7 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
           {entries.map((entry) => (
             <div
               key={entry.path}
-              className="flex items-center gap-2.5 rounded-[9px] border border-border bg-white/[0.015] px-3 py-1.75"
+              className="flex items-center gap-2.5 rounded-[9px] border border-border bg-bone/[0.015] px-3 py-1.75"
             >
               <Check size={12} className="flex-none" style={{ color: GREEN }} />
               <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
@@ -798,13 +798,13 @@ const InLibraryList = ({ entries }: { entries: ScanCandidate[] }): React.JSX.Ele
               </span>
               {entry.linkedOnThisPc && (
                 <span
-                  className="flex-none rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  className="flex-none rounded-full px-2 py-0.5 text-micro font-bold"
                   style={{ background: `${GREEN}1f`, color: GREEN }}
                 >
                   Linked on this PC
                 </span>
               )}
-              <span className="flex-none text-[10.5px] text-muted-foreground/60 tabular-nums">
+              <span className="flex-none text-micro text-muted-foreground/60 tabular-nums">
                 {formatBytes(entry.sizeBytes)}
               </span>
             </div>

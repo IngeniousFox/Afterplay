@@ -81,14 +81,14 @@ export const CoverPicker = ({
         Back
       </button>
 
-      <div className={fieldLabelClass}>CHOOSE {TARGET_LABEL[target].toUpperCase()}</div>
+      <div className={fieldLabelClass}>Choose {TARGET_LABEL[target].toLowerCase()}</div>
 
       {isInitialLoading ? (
         <div className={cn('mt-2', GRID_CLASS[target])}>
           {Array.from({ length: skeletonCount }, (_, index) => (
             <div
               key={index}
-              className={cn('animate-pulse rounded-lg bg-white/[0.06]', TILE_CLASS[target])}
+              className={cn('animate-pulse rounded-lg bg-bone/[0.06]', TILE_CLASS[target])}
             />
           ))}
         </div>
@@ -107,7 +107,7 @@ export const CoverPicker = ({
               // SteamGridDB, un delay por índice libre dejaría la última
               // apareciendo un segundo tarde.
               className={cn(
-                'group/tile overflow-hidden rounded-lg border border-input bg-muted transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-[0_8px_20px_rgba(0,0,0,.4)]',
+                'group/tile overflow-hidden rounded-lg border border-input bg-muted transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-[0_8px_20px_rgba(3,6,7,.4)]',
                 TILE_CLASS[target],
                 revealClass,
               )}

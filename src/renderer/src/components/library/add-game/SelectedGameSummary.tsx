@@ -32,7 +32,7 @@ export const SelectedGameSummary = ({
       : null;
 
   return (
-    <div className="relative mt-3.5 animate-in overflow-hidden rounded-xl border border-input bg-white/[0.03] fade-in-0 zoom-in-95 duration-300">
+    <div className="relative mt-3.5 animate-in overflow-hidden rounded-xl border border-line-strong bg-raised fade-in-0 zoom-in-95 duration-300">
       {heroUrl && (
         <>
           <CoverThumb
@@ -47,14 +47,14 @@ export const SelectedGameSummary = ({
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.92) 40%, rgba(18,20,19,.55) 100%)',
+                'linear-gradient(90deg, rgba(36,44,49,.97) 0%, rgba(36,44,49,.92) 40%, rgba(36,44,49,.55) 100%)',
             }}
           />
         </>
       )}
 
       <div className="relative flex items-center gap-3.5 p-3.5">
-        <div className="h-21 w-15.5 flex-none overflow-hidden rounded-lg border border-white/15 bg-muted shadow-[0_8px_20px_rgba(0,0,0,.45)]">
+        <div className="h-21 w-15.5 flex-none overflow-hidden rounded-lg border border-line-strong bg-muted shadow-[0_8px_20px_rgba(3,6,7,.45)]">
           <CoverThumb url={selected.coverUrl} alt="" className="h-full w-full object-cover" />
         </div>
 
@@ -92,7 +92,7 @@ export const SelectedGameSummary = ({
           <button
             type="button"
             onClick={onChangeSelection}
-            className="flex-none rounded-lg border border-white/15 bg-black/30 px-3 py-1.75 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:bg-black/50"
+            className="flex-none rounded-lg border border-line-strong bg-inset/30 px-3 py-1.75 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:bg-inset/50"
           >
             Change
           </button>

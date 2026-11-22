@@ -102,7 +102,7 @@ export const PlanRow = ({
     <div
       onClick={onSelect}
       className={`group relative flex cursor-pointer gap-4 overflow-hidden rounded-[15px] border p-3.5 transition-[border-color,background-color] duration-150 ${
-        pinned ? '' : 'border-border bg-card hover:border-white/15 hover:bg-white/[0.045]'
+        pinned ? '' : 'border-border bg-card hover:border-line-strong hover:bg-bone/[0.045]'
       }`}
       style={{
         // Los fijados llevan el color del Plan puesto SIEMPRE, no solo al
@@ -160,7 +160,7 @@ export const PlanRow = ({
           píxel (ver useNearViewport). */}
       <div
         ref={observeCover}
-        className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-white/10 bg-muted shadow-[0_8px_22px_rgba(0,0,0,.45)]"
+        className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-line bg-muted shadow-[0_8px_22px_rgba(3,6,7,.45)]"
       >
         {!coverNear ? null : coverSrc ? (
           <img
@@ -178,7 +178,7 @@ export const PlanRow = ({
             — sin él, los artes muy claros parecían pegatinas flotando. */}
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-6"
-          style={{ background: 'linear-gradient(180deg, transparent, rgba(10,11,10,.35))' }}
+          style={{ background: 'linear-gradient(180deg, transparent, rgba(16,20,22,.35))' }}
         />
       </div>
 
@@ -227,7 +227,7 @@ export const PlanRow = ({
               style={{
                 color: GRAY,
                 borderColor: 'var(--border)',
-                background: 'rgba(255,255,255,.028)',
+                background: 'rgba(233,228,216,.028)',
               }}
               title={`On your plan since ${game.addedAt.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`}
             >
@@ -285,7 +285,7 @@ export const PlanRow = ({
                 key={tag.name}
                 // Sin cifra: es un peso relativo, no personas (ver SteamTag).
                 title="Player tag on Steam"
-                className="flex-none rounded-md border border-white/8 bg-white/[0.03] px-1.75 py-0.5 text-[10.5px] font-semibold text-muted-foreground"
+                className="flex-none rounded-md border border-line bg-bone/[0.03] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
               >
                 {tag.name}
               </span>
@@ -354,7 +354,7 @@ const PinButton = ({
     className={`flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border transition-[opacity,background-color,border-color] duration-150 ${
       pinned
         ? 'opacity-100'
-        : 'border-transparent bg-transparent text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:border-input hover:bg-white/[0.06] hover:text-foreground focus-visible:opacity-100'
+        : 'border-transparent bg-transparent text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:border-input hover:bg-bone/[0.06] hover:text-foreground focus-visible:opacity-100'
     }`}
     style={
       pinned

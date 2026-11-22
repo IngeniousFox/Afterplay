@@ -78,15 +78,15 @@ const DetailSessionRow = ({
         // único elemento de la lista que está PASANDO ahora mismo.
         ...(live
           ? {
-              background: focused ? 'rgba(47,220,126,.1)' : 'rgba(47,220,126,.06)',
+              background: focused ? 'rgba(255,179,71,.1)' : 'rgba(255,179,71,.06)',
               boxShadow: focused
-                ? 'inset 0 0 0 1px rgba(47,220,126,.6)'
-                : 'inset 0 0 0 1px rgba(47,220,126,.4)',
+                ? 'inset 0 0 0 1px rgba(255,179,71,.6)'
+                : 'inset 0 0 0 1px rgba(255,179,71,.4)',
             }
           : focused
             ? {
-                background: 'rgba(133,163,214,.09)',
-                boxShadow: 'inset 0 0 0 1px rgba(133,163,214,.32)',
+                background: 'rgba(95,211,224,.09)',
+                boxShadow: 'inset 0 0 0 1px rgba(95,211,224,.32)',
               }
             : undefined),
       }}
@@ -101,8 +101,8 @@ const DetailSessionRow = ({
           className="pointer-events-none absolute inset-y-0 left-0"
           style={{
             width: `${Math.max(3, (durationSec / maxDurationSec) * 100)}%`,
-            background: 'linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.01))',
-            borderRight: '1.5px solid rgba(255,255,255,.14)',
+            background: 'linear-gradient(90deg, rgba(233,228,216,.05), rgba(233,228,216,.01))',
+            borderRight: '1.5px solid rgba(233,228,216,.14)',
           }}
         />
       )}
@@ -112,17 +112,17 @@ const DetailSessionRow = ({
           {/* La hora de FIN, que el escritorio ya enseñaba y aquí faltaba:
               solo existe con endedAt y precisión datetime (el helper decide). */}
           {endTime && (
-            <span className="ml-[0.5em] font-semibold text-white/40 tabular-nums">→ {endTime}</span>
+            <span className="ml-[0.5em] font-semibold text-dust tabular-nums">→ {endTime}</span>
           )}
         </span>
         <span
           className="flex flex-none items-center gap-[0.35em] font-semibold tabular-nums"
-          style={{ color: live ? '#2fdc7e' : 'rgba(133,163,214,.85)' }}
+          style={{ color: live ? '#ffb347' : 'rgba(95,211,224,.85)' }}
         >
           {isRecord && (
             <Flame
               className="h-[1.05em] w-[1.05em]"
-              style={{ color: '#e85d72', filter: 'drop-shadow(0 0 0.4em rgba(232,93,114,.5))' }}
+              style={{ color: '#ff5e57', filter: 'drop-shadow(0 0 0.4em rgba(255,94,87,.5))' }}
             />
           )}
           {formatElapsed(live ? liveSeconds : durationSec)}
@@ -130,7 +130,7 @@ const DetailSessionRow = ({
       </div>
       <div
         className="relative mt-[0.1em] text-[0.55em] font-semibold"
-        style={{ color: live ? '#2fdc7e' : 'var(--muted-foreground)' }}
+        style={{ color: live ? '#ffb347' : 'var(--muted-foreground)' }}
       >
         {live
           ? device.remote
@@ -141,7 +141,7 @@ const DetailSessionRow = ({
             : 'Tracked'}
         {!live && device.deviceTag !== null && ` · ${device.deviceTag}`}
         {device.noSignal !== null && (
-          <span className="ml-[0.6em] text-[#e3b24a]">{device.noSignal}</span>
+          <span className="ml-[0.6em] text-phosphor">{device.noSignal}</span>
         )}
       </div>
       {/* Los logros de la noche, con el color del más raro de la tanda. */}
@@ -171,7 +171,7 @@ const DetailSessionRow = ({
       {note.length > 0 && (
         <div
           className="relative mt-[0.25em] pl-[0.6em] text-[0.62em] leading-snug italic"
-          style={{ color: '#b7bdb8', boxShadow: 'inset 2px 0 0 #e3b24a55' }}
+          style={{ color: '#e9e4d8', boxShadow: 'inset 2px 0 0 #ffb34755' }}
         >
           “{note}”
         </div>
@@ -238,32 +238,30 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
           azul de sesiones, verde de tiempo, rojo de récords, violeta de
           ratios — el resumen antes del detalle. */}
       <div
-        className={`flex flex-none flex-wrap items-center gap-x-[0.7em] gap-y-[0.25em] pb-[0.6em] text-[0.72em] font-semibold text-white/70 ${tvRevealClass}`}
+        className={`flex flex-none flex-wrap items-center gap-x-[0.7em] gap-y-[0.25em] pb-[0.6em] text-[0.72em] font-semibold text-dust ${tvRevealClass}`}
         style={tvRevealStyle(0)}
       >
         <span className="flex items-center gap-[0.4em]">
-          <ScrollText className="h-[1.05em] w-[1.05em]" style={{ color: '#85a3d6' }} />
-          <span className="text-[#85a3d6] tabular-nums">
-            {pluralize(sessions.length, 'session')}
-          </span>
+          <ScrollText className="h-[1.05em] w-[1.05em]" style={{ color: '#5fd3e0' }} />
+          <span className="text-tube tabular-nums">{pluralize(sessions.length, 'session')}</span>
         </span>
-        <span className="text-white/25">·</span>
+        <span className="text-bone/25">·</span>
         <span className="flex items-center gap-[0.4em]">
-          <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#2fdc7e' }} />
-          <span className="text-[#2fdc7e] tabular-nums">{formatHours(totalSec / 3600)}</span>
-          <span className="text-white/40">played</span>
+          <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#ffb347' }} />
+          <span className="text-phosphor tabular-nums">{formatHours(totalSec / 3600)}</span>
+          <span className="text-dust">played</span>
         </span>
-        <span className="text-white/25">·</span>
+        <span className="text-bone/25">·</span>
         <span className="flex items-center gap-[0.4em]">
-          <Flame className="h-[1.05em] w-[1.05em]" style={{ color: '#e85d72' }} />
-          <span className="text-[#e85d72] tabular-nums">{formatHours(longestSec / 3600)}</span>
-          <span className="text-white/40">longest</span>
+          <Flame className="h-[1.05em] w-[1.05em]" style={{ color: '#ff5e57' }} />
+          <span className="text-live tabular-nums">{formatHours(longestSec / 3600)}</span>
+          <span className="text-dust">longest</span>
         </span>
-        <span className="text-white/25">·</span>
+        <span className="text-bone/25">·</span>
         <span className="flex items-center gap-[0.4em]">
-          <Timer className="h-[1.05em] w-[1.05em]" style={{ color: '#7c86c8' }} />
-          <span className="text-[#7c86c8] tabular-nums">{formatHours(avgSec / 3600)}</span>
-          <span className="text-white/40">avg</span>
+          <Timer className="h-[1.05em] w-[1.05em]" style={{ color: '#b9a6ff' }} />
+          <span className="text-st-resting tabular-nums">{formatHours(avgSec / 3600)}</span>
+          <span className="text-dust">avg</span>
         </span>
       </div>
 
@@ -297,7 +295,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
           que hay más historia debajo del pliegue. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1.4em] bg-gradient-to-t from-black/60 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1.4em] bg-gradient-to-t from-inset/60 to-transparent"
       />
     </div>
   );

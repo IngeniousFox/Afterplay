@@ -27,7 +27,7 @@ export const PlaythroughPlatformFormatOrigin = ({
 }: PlaythroughPlatformFormatOriginProps): React.JSX.Element => (
   <>
     <div>
-      <div className={fieldLabelClass}>PLATFORM</div>
+      <div className={fieldLabelClass}>Platform</div>
       <Dropdown
         value={platform}
         options={PLATFORM_OPTIONS}
@@ -38,12 +38,12 @@ export const PlaythroughPlatformFormatOrigin = ({
     </div>
 
     <div>
-      <div className={fieldLabelClass}>FORMAT</div>
+      <div className={fieldLabelClass}>Format</div>
       <SegmentedButtonGroup value={format} options={FORMAT_OPTIONS} onChange={onFormatChange} />
     </div>
 
     <div>
-      <div className={fieldLabelClass}>ORIGIN</div>
+      <div className={fieldLabelClass}>Origin</div>
       <SegmentedButtonGroup
         value={origin}
         options={ORIGIN_SEGMENT_OPTIONS}

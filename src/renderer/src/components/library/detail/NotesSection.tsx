@@ -21,13 +21,13 @@ export const NotesSection = ({ notes, onEdit }: NotesSectionProps): React.JSX.El
   return (
     <div className="group/notes mt-7.5">
       <div className="mb-3.25 flex items-center gap-2">
-        <SectionLabel>NOTES</SectionLabel>
+        <SectionLabel>Notes</SectionLabel>
         {notes && onEdit && (
           <button
             type="button"
             onClick={onEdit}
             aria-label="Edit notes"
-            className="rounded-md p-1 text-muted-foreground opacity-0 group-hover/notes:opacity-100 hover:bg-white/6 hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground opacity-0 group-hover/notes:opacity-100 hover:bg-bone/6 hover:text-foreground"
           >
             <Pencil size={13} />
           </button>
@@ -44,7 +44,7 @@ export const NotesSection = ({ notes, onEdit }: NotesSectionProps): React.JSX.El
         <button
           type="button"
           onClick={onEdit}
-          className="flex w-full items-center gap-2.5 rounded-[14px] border border-dashed border-input bg-white/[0.015] px-6 py-4.5 text-left hover:border-input/80 hover:bg-white/[0.03]"
+          className="flex w-full items-center gap-2.5 rounded-[14px] border border-dashed border-input bg-bone/[0.015] px-6 py-4.5 text-left hover:border-input/80 hover:bg-bone/[0.03]"
         >
           <NotebookPen size={15} className="flex-none text-muted-foreground" />
           <span className="text-[13px] text-muted-foreground">

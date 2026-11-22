@@ -102,8 +102,8 @@ const Thumb = ({
       {/* Sin esto, la miniatura del tráiler es indistinguible de una captura
           más en la tira de abajo. */}
       {slide.kind === 'trailer' && (
-        <span className="absolute inset-0 flex items-center justify-center bg-black/45">
-          <Play size={13} fill="#fff" className="text-white" />
+        <span className="absolute inset-0 flex items-center justify-center bg-inset/45">
+          <Play size={13} fill="#fff" className="text-bone" />
         </span>
       )}
     </button>
@@ -148,9 +148,9 @@ export const ScreenshotLightbox = ({
         onClick={startClose}
         // El fondo va en clase, no en `style` inline: un style inline SIEMPRE
         // gana sobre cualquier clase (por mucho hover: que le pongas), así que
-        // hover:bg-white/10 sería letra muerta si el fondo base siguiera en
+        // hover:bg-bone/10 sería letra muerta si el fondo base siguiera en
         // `style`.
-        className="absolute top-5.5 right-6.5 z-10 flex h-10 w-10 items-center justify-center rounded-[10px] border border-white/14 bg-[rgba(20,22,21,.7)] transition-colors hover:border-white/28 hover:bg-white/10"
+        className="absolute top-5.5 right-6.5 z-10 flex h-10 w-10 items-center justify-center rounded-[10px] border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10"
       >
         <X size={18} />
       </button>
@@ -161,7 +161,7 @@ export const ScreenshotLightbox = ({
           onIndexChange(Math.max(0, index - 1));
         }}
         disabled={index <= 0}
-        className="absolute top-1/2 left-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-white/14 bg-[rgba(20,22,21,.7)] transition-colors hover:border-white/28 hover:bg-white/10 disabled:opacity-30 disabled:hover:border-white/14 disabled:hover:bg-[rgba(20,22,21,.7)]"
+        className="absolute top-1/2 left-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:bg-[rgba(36,44,49,.7)]"
       >
         <ChevronLeft size={24} />
       </button>
@@ -172,14 +172,14 @@ export const ScreenshotLightbox = ({
           onIndexChange(Math.min(slides.length - 1, index + 1));
         }}
         disabled={index >= slides.length - 1}
-        className="absolute top-1/2 right-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-white/14 bg-[rgba(20,22,21,.7)] transition-colors hover:border-white/28 hover:bg-white/10 disabled:opacity-30 disabled:hover:border-white/14 disabled:hover:bg-[rgba(20,22,21,.7)]"
+        className="absolute top-1/2 right-5.5 z-10 flex h-13 w-13 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-[rgba(36,44,49,.7)] transition-colors hover:border-line-hover hover:bg-bone/10 disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:bg-[rgba(36,44,49,.7)]"
       >
         <ChevronRight size={24} />
       </button>
 
       <div
         onClick={(event) => event.stopPropagation()}
-        className={`w-full max-w-275 overflow-hidden rounded-[14px] border border-white/14 shadow-[0_30px_90px_rgba(0,0,0,.6)] duration-200 ${
+        className={`w-full max-w-275 overflow-hidden rounded-[14px] border border-line-strong shadow-[0_30px_90px_rgba(3,6,7,.6)] duration-200 ${
           closing ? `${CLOSING_ANIM} zoom-out-95` : 'animate-in zoom-in-95'
         }`}
       >

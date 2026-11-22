@@ -29,7 +29,7 @@ export const QueryStatePlaceholder = ({
       <button
         type="button"
         onClick={onBack}
-        className="rounded-[10px] border border-input bg-white/3 px-4 py-2 text-[13px] font-semibold text-foreground"
+        className="rounded-[10px] border border-line-strong bg-raised px-4 py-2 text-[13px] font-semibold text-foreground"
       >
         {backLabel}
       </button>

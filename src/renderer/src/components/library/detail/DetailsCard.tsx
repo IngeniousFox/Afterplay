@@ -22,7 +22,7 @@ export const Cell = ({
   value: React.ReactNode;
 }): React.JSX.Element => (
   <div className="min-w-0">
-    <div className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">{label}</div>
+    <div className="text-micro font-semibold text-dust">{label}</div>
     <div
       className="mt-0.75 truncate text-[12.5px] font-semibold text-foreground"
       title={typeof value === 'string' ? value : undefined}
@@ -55,38 +55,38 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       <div className="text-[13.5px] font-bold text-foreground">Details</div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3.5">
-        <Cell label="DEVELOPER" value={game.developer ?? '—'} />
-        <Cell label="PUBLISHER" value={game.publisher ?? '—'} />
+        <Cell label="Developer" value={game.developer ?? '—'} />
+        <Cell label="Publisher" value={game.publisher ?? '—'} />
         {/* La fecha COMPLETA cuando de verdad se sabe (PLAN-TO-PLAY.md
             §7bis): "March 17, 2017" si IGDB conoce el día, "March 1995" si
             solo el mes, "1995" si solo el año — nunca un día inventado para
             un juego del que solo se sabe el año. El dato viajaba en cada
             respuesta desde el principio y se estaba truncando; lo que
             faltaba no era pedirlo, era saber cuánto de él es real. */}
-        <Cell label="RELEASED" value={formatRelease(game) ?? '—'} />
+        <Cell label="Released" value={formatRelease(game) ?? '—'} />
         {/* Un endless nunca llega a "Beaten" (no existe ese estado para él,
             ver ENDLESS_STATUS_OPTIONS) — su única forma de generar una
             iteración nueva es Dropped -> empezar de cero, que no es lo que
             "replayed" da a entender (terminarlo y volver a jugarlo entero). */}
         {game.endless ? (
-          <Cell label="LAST PLAYED" value={recentActivity} />
+          <Cell label="Last played" value={recentActivity} />
         ) : (
           <>
-            <Cell label="REPLAYED" value={replaysLabel} />
-            <Cell label="LAST PLAYED" value={recentActivity} />
+            <Cell label="Replayed" value={replaysLabel} />
+            <Cell label="Last played" value={recentActivity} />
           </>
         )}
       </div>
 
-      <div className="mt-4 border-t border-white/5 pt-3.5">
-        <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+      <div className="mt-4 border-t border-line pt-3.5">
+        <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
           STEAM APP ID
         </div>
         <button
           type="button"
           onClick={() => setEditingSteamId(true)}
           aria-label="Edit Steam App ID"
-          className="flex min-h-10 w-full items-center gap-2 rounded-[9px] border border-border bg-white/[0.02] px-2.5 py-2 text-left transition-colors hover:border-primary/35 hover:bg-white/[0.05] focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex min-h-10 w-full items-center gap-2 rounded-[9px] border border-border bg-bone/[0.02] px-2.5 py-2 text-left transition-colors hover:border-primary/35 hover:bg-bone/[0.05] focus-visible:outline-2 focus-visible:outline-primary"
         >
           <Hash size={13} className="flex-none text-muted-foreground" />
           <span className="min-w-0 flex-1 font-mono text-[12px] text-foreground tabular-nums">
@@ -97,8 +97,8 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       </div>
 
       {game.genres && game.genres.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="mt-4 border-t border-line pt-3.5">
+          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
             GENRES
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -122,8 +122,8 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
           consola) o sin datos, el bloque simplemente no aparece — no es un
           hueco que explicar, es lo normal para media biblioteca. */}
       {game.steamTags && game.steamTags.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
-          <div className="mb-2 flex items-center gap-1.25 text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+        <div className="mt-4 border-t border-line pt-3.5">
+          <div className="mb-2 flex items-center gap-1.25 text-micro font-bold tracking-[.12em] text-muted-foreground">
             <Tag size={10} />
             STEAM TAGS
           </div>
@@ -142,9 +142,9 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       )}
 
       {game.installDirectory && (
-        <div className="mt-4 border-t border-white/5 pt-3.5">
+        <div className="mt-4 border-t border-line pt-3.5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[9.5px] font-bold tracking-[.12em] text-muted-foreground">
+            <span className="text-micro font-bold tracking-[.12em] text-muted-foreground">
               INSTALLED AT
             </span>
             {game.installSizeBytes !== null && (
@@ -158,7 +158,7 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
               disponible al pasar el ratón, pero no rompe la card en cinco
               líneas cuando el juego vive en una carpeta anidada. */}
           <div
-            className="flex items-center gap-2 rounded-[9px] border border-border bg-white/[0.02] px-2.5 py-2"
+            className="flex items-center gap-2 rounded-[9px] border border-border bg-bone/[0.02] px-2.5 py-2"
             title={game.installDirectory}
           >
             <Folder size={13} className="flex-none text-muted-foreground" />

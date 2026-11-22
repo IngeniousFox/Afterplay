@@ -33,7 +33,7 @@ type RestoreSaveDialogProps = {
 };
 
 // Rojo de las cabeceras destructivas (DeleteGameDialog y compañía).
-const RED = '#e85d72';
+const RED = '#ff5e57';
 
 // Elegir destino y confirmar una restauración (PARTIDAS-GUARDADAS.md
 // §10bis.5). La idea que ordena todo este diálogo: la ruta original es el
@@ -187,7 +187,7 @@ export const RestoreSaveDialog = ({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-white/6"
+            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-raised-hover"
           >
             {done ? 'Close' : 'Cancel'}
           </button>
@@ -197,8 +197,8 @@ export const RestoreSaveDialog = ({
                 type="button"
                 onClick={handleConfirm}
                 disabled={restore.isPending}
-                className="[will-change:transform] flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-[13px] font-bold text-white transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:-translate-y-1"
-                style={{ background: mode === 'in-place' ? '#dc2626' : BLUE }}
+                className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13px] font-semibold text-bone transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ background: mode === 'in-place' ? '#ff5e57' : BLUE }}
               >
                 {restore.isPending ? (
                   <Loader2 size={15} className="animate-spin" />
@@ -216,7 +216,7 @@ export const RestoreSaveDialog = ({
                 type="button"
                 onClick={handlePreview}
                 disabled={!canRun || restore.isPending}
-                className="flex items-center gap-2 rounded-[10px] border border-input bg-white/[0.04] px-5 py-2.5 text-[13px] font-bold text-foreground hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-[10px] border border-input bg-bone/[0.04] px-5 py-2.5 text-[13px] font-bold text-foreground hover:bg-bone/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {restore.isPending && <Loader2 size={15} className="animate-spin" />}
                 Show me what will happen
@@ -241,7 +241,7 @@ export const RestoreSaveDialog = ({
                   borderColor: selected ? `${option.tone}80` : 'var(--input)',
                   background: selected
                     ? `linear-gradient(135deg, ${option.tone}1a, ${option.tone}06 65%, transparent)`
-                    : 'rgba(255,255,255,.02)',
+                    : 'rgba(233,228,216,.02)',
                 }}
               >
                 {/* Chip de icono en vez de radio: el mismo lenguaje que
@@ -250,7 +250,7 @@ export const RestoreSaveDialog = ({
                 <span
                   className="flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] transition-colors duration-150"
                   style={{
-                    background: selected ? `${option.tone}24` : 'rgba(255,255,255,.04)',
+                    background: selected ? `${option.tone}24` : 'rgba(233,228,216,.04)',
                     border: `1px solid ${selected ? `${option.tone}3d` : 'var(--input)'}`,
                   }}
                 >
@@ -279,7 +279,7 @@ export const RestoreSaveDialog = ({
         </div>
 
         {needsTarget && (
-          <div className="flex items-center gap-2.5 rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.5">
+          <div className="flex items-center gap-2.5 rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">
                 DESTINATION FOLDER
@@ -295,7 +295,7 @@ export const RestoreSaveDialog = ({
               type="button"
               onClick={handlePickTarget}
               disabled={done}
-              className="flex flex-none items-center gap-1.5 rounded-[8px] border border-input bg-white/[0.03] px-2.75 py-1.75 text-[12px] font-semibold text-foreground hover:border-primary/45 hover:bg-white/[0.06] disabled:opacity-50"
+              className="flex flex-none items-center gap-1.5 rounded-[8px] border border-line-strong bg-raised px-2.75 py-1.75 text-[12px] font-semibold text-foreground hover:border-line-hover hover:bg-raised-hover disabled:opacity-50"
             >
               <FolderOpen size={13} />
               Choose…
@@ -304,14 +304,14 @@ export const RestoreSaveDialog = ({
         )}
 
         {mode === 'in-place' && (
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-border bg-white/[0.02] px-3.25 py-2.5 text-[12px] leading-relaxed text-foreground">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.5 text-[12px] leading-relaxed text-foreground">
             <input
               type="checkbox"
               data-testid="restore-exact"
               checked={exact}
               onChange={(event) => handleExact(event.target.checked)}
               disabled={done}
-              className="mt-0.5 flex-none accent-[#dc2626]"
+              className="mt-0.5 flex-none accent-live"
             />
             <span>
               Leave the save folder exactly as in this version (deletes save files it doesn&apos;t
@@ -448,11 +448,11 @@ const PlanGroupRow = ({
     <div className="min-w-0">
       {group.from && (
         <div className="mt-1 mb-0.5 flex min-w-0 items-center gap-1.25 px-2">
-          <span className="flex-none text-[9.5px] font-bold tracking-[.1em] text-muted-foreground">
+          <span className="flex-none text-micro font-bold tracking-[.1em] text-muted-foreground">
             FROM
           </span>
           <span
-            className="truncate font-mono text-[10px] text-muted-foreground/80"
+            className="truncate font-mono text-micro text-muted-foreground/80"
             title={group.from}
           >
             {group.from}
@@ -463,7 +463,7 @@ const PlanGroupRow = ({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full min-w-0 items-center gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-white/[0.04]"
+        className="flex w-full min-w-0 items-center gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-bone/[0.04]"
       >
         <ChevronDown
           size={11}
@@ -486,28 +486,28 @@ const PlanGroupRow = ({
         >
           {label}
         </span>
-        <span className="flex-none text-[10px] text-muted-foreground tabular-nums">
+        <span className="flex-none text-micro text-muted-foreground tabular-nums">
           {pluralize(group.files.length, 'file')} · {formatBytes(group.bytes)}
         </span>
       </button>
 
       {open && (
-        <div className="mt-0.5 mb-1.5 ml-5 flex flex-col gap-0.5 border-l border-white/8 pt-0.5 pl-4">
+        <div className="mt-0.5 mb-1.5 ml-5 flex flex-col gap-0.5 border-l border-line pt-0.5 pl-4">
           {visible.map((file) => (
             <div key={file.name} className="flex min-w-0 items-center gap-2">
               <span
-                className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground"
+                className="min-w-0 flex-1 truncate font-mono text-micro text-muted-foreground"
                 title={file.name}
               >
                 {file.name}
               </span>
-              <span className="flex-none text-[9.5px] text-muted-foreground/60 tabular-nums">
+              <span className="flex-none text-micro text-muted-foreground/60 tabular-nums">
                 {formatBytes(file.bytes)}
               </span>
             </div>
           ))}
           {group.files.length > visible.length && (
-            <span className="text-[10px] text-muted-foreground/70">
+            <span className="text-micro text-muted-foreground/70">
               and {group.files.length - visible.length} more in this folder
             </span>
           )}
@@ -526,21 +526,21 @@ const RemovedFiles = ({ files }: { files: string[] }): React.JSX.Element => {
       className="rounded-[10px] border px-3 py-2.5"
       style={{ borderColor: `${RED}40`, background: `${RED}0d` }}
     >
-      <div className="text-[9.5px] font-bold tracking-[.12em]" style={{ color: RED }}>
+      <div className="text-micro font-bold tracking-[.12em]" style={{ color: RED }}>
         WILL BE DELETED · {pluralize(files.length, 'file')}
       </div>
       <div className="mt-1.5 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
         {visible.map((file) => (
           <span
             key={file}
-            className="truncate font-mono text-[10.5px] text-muted-foreground"
+            className="truncate font-mono text-micro text-muted-foreground"
             title={file}
           >
             {file}
           </span>
         ))}
         {files.length > visible.length && (
-          <span className="text-[10px] text-muted-foreground/70">
+          <span className="text-micro text-muted-foreground/70">
             and {files.length - visible.length} more
           </span>
         )}
@@ -579,11 +579,11 @@ const Plan = ({ plan }: { plan: RestoreResult }): React.JSX.Element => {
       {plan.removedFiles.length > 0 && <RemovedFiles files={plan.removedFiles} />}
 
       {plan.files.length === 0 ? (
-        <div className="rounded-[9px] border border-border bg-white/[0.02] px-3 py-2.5 text-[12px] text-muted-foreground">
+        <div className="rounded-[9px] border border-border bg-bone/[0.02] px-3 py-2.5 text-[12px] text-muted-foreground">
           Nothing to write — this backup matches what&apos;s already on disk.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[10px] border border-border bg-white/[0.02]">
+        <div className="overflow-hidden rounded-[10px] border border-border bg-bone/[0.02]">
           {/* Cabecera: la carpeta madre + los totales, con el mismo lavado de
               color que las cabeceras de card. Es la respuesta a "¿dónde va a
               escribir?" en una sola línea. */}
@@ -601,10 +601,7 @@ const Plan = ({ plan }: { plan: RestoreResult }): React.JSX.Element => {
               <FolderDown size={14} style={{ color: BLUE }} />
             </span>
             <div className="min-w-0 flex-1">
-              <div
-                className="text-[9.5px] font-bold tracking-[.12em]"
-                style={{ color: `${BLUE}b3` }}
-              >
+              <div className="text-micro font-bold tracking-[.12em]" style={{ color: `${BLUE}b3` }}>
                 WRITES INTO
               </div>
               {/* dir=rtl + truncate: una ruta se corta por la IZQUIERDA, que
@@ -622,7 +619,7 @@ const Plan = ({ plan }: { plan: RestoreResult }): React.JSX.Element => {
               <div className="text-[12.5px] font-extrabold tabular-nums" style={{ color: BLUE }}>
                 {formatBytes(plan.totalBytes)}
               </div>
-              <div className="text-[9.5px] text-muted-foreground tabular-nums">
+              <div className="text-micro text-muted-foreground tabular-nums">
                 {pluralize(plan.files.length, 'file')}
                 {groups.length > 1 && ` · ${groups.length} folders`}
               </div>

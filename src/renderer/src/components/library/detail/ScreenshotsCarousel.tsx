@@ -22,7 +22,7 @@ const SKELETON_COUNT = 3;
 const slideShellClass = 'h-42.5 w-75 flex-none rounded-[11px] border border-border';
 
 const pagerButtonClass =
-  'flex h-7 w-7 items-center justify-center rounded-[7px] border border-input bg-white/[0.03] text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-7 w-7 items-center justify-center rounded-[7px] border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
 
 const ScreenshotSlide = ({
   url,
@@ -39,7 +39,7 @@ const ScreenshotSlide = ({
       // group + hover:-translate-y — mismo lenguaje que las carátulas de
       // Completed (Stats): la fila entera "levanta" al pasar el ratón, no
       // solo cambia de color, para que se sienta clicable de verdad.
-      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_10px_28px_rgba(0,0,0,.45)] ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] ${slideShellClass}`}
     >
       {/* useImageSrc resuelve por IPC (caché local o descarga) — mientras no
           hay src, un esqueleto propio con el tamaño exacto de la miniatura,
@@ -61,14 +61,14 @@ const ScreenshotSlide = ({
             style={{ background: 'linear-gradient(180deg, transparent, rgba(6,7,6,.55))' }}
           />
           <div
-            className="absolute right-2.25 bottom-2.25 flex h-7 w-7 items-center justify-center rounded-[8px] border border-white/14 opacity-0 transition-opacity duration-200 group-hover/shot:opacity-100"
-            style={{ background: 'rgba(10,11,10,.72)' }}
+            className="absolute right-2.25 bottom-2.25 flex h-7 w-7 items-center justify-center rounded-[8px] border border-line-strong opacity-0 transition-opacity duration-200 group-hover/shot:opacity-100"
+            style={{ background: 'rgba(16,20,22,.72)' }}
           >
             <Maximize2 size={12} />
           </div>
         </>
       ) : (
-        <div className="h-full w-full animate-pulse bg-white/[0.06]" />
+        <div className="h-full w-full animate-pulse bg-bone/[0.06]" />
       )}
     </button>
   );
@@ -99,7 +99,7 @@ const TrailerSlide = ({
       type="button"
       onClick={onClick}
       title={slide.name ?? 'Trailer'}
-      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_10px_28px_rgba(0,0,0,.45)] ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] ${slideShellClass}`}
     >
       {src ? (
         <img
@@ -111,12 +111,12 @@ const TrailerSlide = ({
           className="block h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/shot:scale-107"
         />
       ) : (
-        <div className="h-full w-full animate-pulse bg-white/[0.06]" />
+        <div className="h-full w-full animate-pulse bg-bone/[0.06]" />
       )}
       {/* Velo constante y no solo en hover, a diferencia de las capturas: por
           debajo hay una miniatura de YouTube, más clara y ruidosa que una
           captura de IGDB, y sin él ni el play ni la píldora se leen. */}
-      <div className="pointer-events-none absolute inset-0 bg-black/30 transition-colors duration-200 group-hover/shot:bg-black/15" />
+      <div className="pointer-events-none absolute inset-0 bg-inset/30 transition-colors duration-200 group-hover/shot:bg-inset/15" />
       <div
         className="pointer-events-none absolute inset-0 flex items-center justify-center"
         aria-hidden
@@ -124,7 +124,7 @@ const TrailerSlide = ({
         <span
           className="flex h-13 w-13 items-center justify-center rounded-full border transition-transform duration-200 group-hover/shot:scale-110"
           style={{
-            background: 'rgba(10,11,10,.62)',
+            background: 'rgba(16,20,22,.62)',
             borderColor: `${GREEN}88`,
             boxShadow: `0 0 22px ${GREEN}44`,
           }}
@@ -135,9 +135,9 @@ const TrailerSlide = ({
         </span>
       </div>
       <span
-        className="pointer-events-none absolute top-2.25 left-2.25 rounded-[6px] border px-1.75 py-0.75 text-[9.5px] font-bold tracking-[.08em]"
+        className="pointer-events-none absolute top-2.25 left-2.25 rounded-[6px] border px-1.75 py-0.75 text-micro font-bold tracking-[.08em]"
         style={{
-          background: 'rgba(10,11,10,.72)',
+          background: 'rgba(16,20,22,.72)',
           borderColor: `${GREEN}55`,
           color: GREEN,
         }}
@@ -194,12 +194,12 @@ export const ScreenshotsCarousel = ({
             baja) crecía de golpe al terminar de cargar y empujaba la fila de
             imágenes hacia abajo — el salto que se notaba. */}
         <div className="mb-3.25 flex items-center justify-between">
-          <SectionLabel>SCREENSHOTS</SectionLabel>
+          <SectionLabel>Screenshots</SectionLabel>
           <div className="h-7" />
         </div>
         <div className="flex gap-3.5">
           {Array.from({ length: SKELETON_COUNT }, (_, i) => (
-            <div key={i} className={`animate-pulse bg-white/[0.06] ${slideShellClass}`} />
+            <div key={i} className={`animate-pulse bg-bone/[0.06] ${slideShellClass}`} />
           ))}
         </div>
       </div>
@@ -215,7 +215,7 @@ export const ScreenshotsCarousel = ({
       <div className="mb-3.25 flex items-center justify-between">
         {/* El rótulo cambia si hay tráiler: "SCREENSHOTS" sobre un carril
             cuya primera pieza es un vídeo no describe lo que hay debajo. */}
-        <SectionLabel>{trailer ? 'TRAILER & SCREENSHOTS' : 'SCREENSHOTS'}</SectionLabel>
+        <SectionLabel>{trailer ? 'Trailer & screenshots' : 'Screenshots'}</SectionLabel>
         <div className="flex items-center gap-2.5">
           <span className="text-[11px] text-muted-foreground tabular-nums">
             {index + 1}/{slides.length}
@@ -292,7 +292,7 @@ export const ScreenshotsCarousel = ({
                 className="h-1.75 cursor-pointer rounded-full transition-[width,background-color,box-shadow] duration-200"
                 style={{
                   width: active ? 18 : 7,
-                  background: active ? GREEN : 'rgba(255,255,255,.2)',
+                  background: active ? GREEN : 'rgba(233,228,216,.2)',
                   boxShadow: active ? `0 0 8px ${GREEN}80` : 'none',
                 }}
               />

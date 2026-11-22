@@ -59,28 +59,26 @@ export const DeleteSessionDialog = ({
 
   return (
     <AlertDialog open={session !== null} onOpenChange={handleClose}>
-      <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-[#121413] p-0">
+      <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-overlay p-0">
         <div className="relative overflow-hidden border-b border-border">
           {/* Mismo lavado de color de cabecera que ModalShell/DeleteGame, en
               rojo: acción destructiva, la cabecera lo dice de un vistazo. */}
           <div
             className="pointer-events-none absolute inset-0"
             style={{
-              background: 'linear-gradient(120deg, rgba(232,93,114,.14) 0%, transparent 60%)',
+              background: 'linear-gradient(120deg, rgba(255,94,87,.14) 0%, transparent 60%)',
             }}
           />
           <div className="relative flex items-center gap-3 px-5.5 py-5">
             <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
               <Trash2 size={16} className="text-destructive" />
             </div>
-            <AlertDialogTitle className="text-base font-extrabold text-foreground">
-              Delete session
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete session</AlertDialogTitle>
           </div>
         </div>
 
         <div className="px-5.5 py-5">
-          <div className="text-[13.5px] leading-relaxed text-[#c4cac6]">
+          <div className="text-[13.5px] leading-relaxed text-bone">
             This permanently deletes{' '}
             <span className="font-bold text-foreground">{session?.label}</span> and its tracked
             time.{' '}
@@ -104,7 +102,7 @@ export const DeleteSessionDialog = ({
             type="button"
             onClick={() => handleClose(false)}
             disabled={del.isPending}
-            className="rounded-[10px] border border-input bg-white/3 px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-white/6"
+            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
           >
             Cancel
           </button>
@@ -112,8 +110,7 @@ export const DeleteSessionDialog = ({
             type="button"
             onClick={handleDelete}
             disabled={del.isPending}
-            className="[will-change:transform] flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-white transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(220,38,38,.4)]"
-            style={{ background: '#dc2626' }}
+            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={15} />
             {del.isPending ? 'Deleting…' : 'Delete session'}

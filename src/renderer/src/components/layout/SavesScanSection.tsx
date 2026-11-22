@@ -107,7 +107,7 @@ export const SavesScanSection = (): React.JSX.Element => {
           type="button"
           onClick={handleScan}
           disabled={!status?.binaryAvailable || scan.isPending}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {scan.isPending ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
           {scan.isPending ? 'Scanning…' : 'Scan my games'}
@@ -150,14 +150,14 @@ const CloudUsage = (): React.JSX.Element | null => {
       className="flex items-center gap-2 rounded-[8px] border px-2.75 py-2"
       style={
         empty
-          ? { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+          ? { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
           : { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
       }
     >
       <CloudUpload
         size={13}
         className="flex-none"
-        style={{ color: empty ? 'rgba(255,255,255,.18)' : BLUE }}
+        style={{ color: empty ? 'rgba(233,228,216,.18)' : BLUE }}
       />
       {empty ? (
         <span className="text-[11.5px] text-muted-foreground">
@@ -208,7 +208,7 @@ const LegalLinks = (): React.JSX.Element | null => {
   if (!files?.length) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-muted-foreground">
       <span>Powered by ludusavi (MIT).</span>
       {files.map((file) => (
         <button
@@ -272,19 +272,19 @@ const ScanResults = ({
             style={
               entry.enabled
                 ? { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
-                : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }
+                : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
             }
           >
             <CloudUpload
               size={13}
               className="flex-none transition-colors duration-150"
-              style={{ color: entry.enabled ? BLUE : 'rgba(255,255,255,.18)' }}
+              style={{ color: entry.enabled ? BLUE : 'rgba(233,228,216,.18)' }}
             />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] font-semibold text-foreground">
                 {entry.gameTitle}
               </div>
-              <div className="truncate text-[10.5px] text-muted-foreground">
+              <div className="truncate text-micro text-muted-foreground">
                 {pluralize(entry.fileCount, 'file')} · {formatBytes(entry.bytes)}
                 {entry.registryKeys.length > 0 && ' · registry'}
                 {/* En ámbar: es el aviso de §11.1, no un dato más. */}
@@ -295,7 +295,7 @@ const ScanResults = ({
             </div>
             {/* Todo en clases, sin `style` inline: apagado usa el hover
                 estándar de los botones de la app (borde al primario + lavado
-                blanco), y encendido sube su propio azul. El literal #85a3d6
+                blanco), y encendido sube su propio azul. El literal #5fd3e0
                 es el mismo BLUE de lib/colors — va escrito a mano porque
                 Tailwind solo ve clases literales, no cadenas compuestas. */}
             <button
@@ -304,8 +304,8 @@ const ScanResults = ({
               disabled={entry.gameId !== null && busyIds.has(entry.gameId)}
               className={`flex flex-none items-center gap-1.25 rounded-[7px] border px-2.25 py-1 text-[11px] font-bold transition-colors duration-150 disabled:opacity-70 ${
                 entry.enabled
-                  ? 'border-[#85a3d6]/50 bg-[#85a3d6]/12 text-[#85a3d6] enabled:hover:border-[#85a3d6]/80 enabled:hover:bg-[#85a3d6]/22'
-                  : 'border-input text-muted-foreground enabled:hover:border-primary/45 enabled:hover:bg-white/[0.06] enabled:hover:text-foreground'
+                  ? 'border-tube/50 bg-tube/12 text-tube enabled:hover:border-tube/80 enabled:hover:bg-tube/22'
+                  : 'border-input text-muted-foreground enabled:hover:border-primary/45 enabled:hover:bg-bone/[0.06] enabled:hover:text-foreground'
               }`}
             >
               {entry.gameId !== null && busyIds.has(entry.gameId) ? (

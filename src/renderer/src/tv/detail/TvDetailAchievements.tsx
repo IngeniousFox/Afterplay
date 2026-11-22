@@ -42,7 +42,7 @@ const TvProgressRing = ({ percent }: { percent: number }): React.JSX.Element => 
           cy={RING_VIEW / 2}
           r={RING_RADIUS}
           fill="none"
-          stroke="rgba(255,255,255,.08)"
+          stroke="rgba(233,228,216,.08)"
           strokeWidth={RING_STROKE}
         />
         {percent > 0 && (
@@ -120,11 +120,11 @@ const TvAchievementRow = ({
           ? unlocked
             ? { background: `${accent}14`, boxShadow: `inset 0 0 0 1px ${accent}66` }
             : {
-                background: 'rgba(255,255,255,.05)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.28)',
+                background: 'rgba(233,228,216,.05)',
+                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.28)',
               }
           : unlocked
-            ? { background: 'rgba(255,255,255,.028)' }
+            ? { background: 'rgba(233,228,216,.028)' }
             : undefined),
       }}
     >
@@ -152,15 +152,15 @@ const TvAchievementRow = ({
             }`}
             style={{
               boxShadow: `inset 0 0 0 1px ${
-                rare ? `${accent}80` : unlocked ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.08)'
+                rare ? `${accent}80` : unlocked ? 'rgba(233,228,216,.16)' : 'rgba(233,228,216,.08)'
               }`,
             }}
           >
             {src ? (
               <img src={src} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-white/[0.04]">
-                <Trophy className="h-[0.9em] w-[0.9em] text-white/25" />
+              <div className="flex h-full w-full items-center justify-center bg-bone/[0.04]">
+                <Trophy className="h-[0.9em] w-[0.9em] text-bone/25" />
               </div>
             )}
           </div>
@@ -170,7 +170,7 @@ const TvAchievementRow = ({
           <div className="flex items-baseline gap-[0.5em]">
             <span
               className={`min-w-0 flex-1 truncate text-[0.68em] font-bold ${
-                unlocked ? 'text-foreground' : 'text-white/55'
+                unlocked ? 'text-foreground' : 'text-dust'
               }`}
             >
               {entry.displayName}
@@ -178,21 +178,21 @@ const TvAchievementRow = ({
             {entry.globalPercent !== null && (
               <span
                 className="flex flex-none items-center gap-[0.3em] text-[0.58em] font-bold tabular-nums"
-                style={rare ? { color: accent } : { color: 'rgba(255,255,255,.35)' }}
+                style={rare ? { color: accent } : { color: 'rgba(233,228,216,.35)' }}
               >
                 {rare && <Sparkles className="h-[1em] w-[1em]" />}
                 {percentLabel(entry.globalPercent)}
               </span>
             )}
-            {!unlocked && <Lock className="h-[0.6em] w-[0.6em] flex-none text-white/25" />}
+            {!unlocked && <Lock className="h-[0.6em] w-[0.6em] flex-none text-bone/25" />}
           </div>
 
           {description ? (
-            <p className="mt-[0.1em] line-clamp-1 text-[0.56em] leading-snug text-white/50">
+            <p className="mt-[0.1em] line-clamp-1 text-[0.56em] leading-snug text-dust">
               {description}
             </p>
           ) : hiddenLocked ? (
-            <p className="mt-[0.1em] text-[0.56em] leading-snug text-white/30 italic">
+            <p className="mt-[0.1em] text-[0.56em] leading-snug text-bone/30 italic">
               {canReveal
                 ? focused
                   ? 'Hidden — press A to reveal'
@@ -204,7 +204,7 @@ const TvAchievementRow = ({
           {entry.unlockedAt && (
             <div
               className="mt-[0.12em] flex items-center gap-[0.4em] text-[0.52em] font-semibold"
-              style={{ color: entry.dateReliable ? GREEN : 'rgba(255,255,255,.35)' }}
+              style={{ color: entry.dateReliable ? GREEN : 'rgba(233,228,216,.35)' }}
             >
               <Trophy className="h-[1em] w-[1em] flex-none" />
               {entry.dateReliable
@@ -258,7 +258,7 @@ export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.
             <span className="text-[1.15em] leading-none font-extrabold tabular-nums">
               {unlockedCount}
             </span>
-            <span className="text-[0.68em] font-bold text-white/45 tabular-nums">
+            <span className="text-[0.68em] font-bold text-dust tabular-nums">
               / {sorted.length} unlocked
             </span>
             {complete && (
@@ -292,7 +292,7 @@ export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.
             )}
           </div>
           {/* La barra con marcas de cuarto, gemela de la de escritorio. */}
-          <div className="relative mt-[0.45em] h-[0.28em] overflow-hidden rounded-full bg-white/[0.07]">
+          <div className="relative mt-[0.45em] h-[0.28em] overflow-hidden rounded-full bg-bone/[0.07]">
             <div
               className="h-full rounded-full"
               style={{
@@ -307,7 +307,7 @@ export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.
               <span
                 key={tick}
                 aria-hidden
-                className="absolute inset-y-0 w-px bg-black/40"
+                className="absolute inset-y-0 w-px bg-inset/40"
                 style={{ left: `${tick}%` }}
               />
             ))}
@@ -340,7 +340,7 @@ export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.
           que hay más gabinete debajo del pliegue. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1.4em] bg-gradient-to-t from-black/60 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1.4em] bg-gradient-to-t from-inset/60 to-transparent"
       />
     </div>
   );

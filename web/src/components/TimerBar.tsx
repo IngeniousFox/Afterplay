@@ -154,7 +154,7 @@ export const TimerBar = (): React.JSX.Element | null => {
 
   return (
     <div
-      className="fixed inset-x-0 z-30 border-t border-border bg-[#0a0b0a]/95 backdrop-blur-lg"
+      className="fixed inset-x-0 z-30 border-t border-border bg-cabinet/95 backdrop-blur-lg"
       // Justo encima de la barra de pestañas, respetando el notch inferior.
       style={{ bottom: 'calc(4.25rem + env(safe-area-inset-bottom))' }}
     >
@@ -178,9 +178,9 @@ export const TimerBar = (): React.JSX.Element | null => {
             aria-label="Stop the timer"
             className="flex h-10 w-10 flex-none items-center justify-center rounded-full border"
             style={{
-              color: '#e85d72',
-              borderColor: '#e85d7255',
-              background: '#e85d7218',
+              color: '#ff5e57',
+              borderColor: '#ff5e5755',
+              background: '#ff5e5718',
             }}
           >
             {stop.isPending ? (

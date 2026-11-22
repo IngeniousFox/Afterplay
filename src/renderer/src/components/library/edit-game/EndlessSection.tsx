@@ -18,12 +18,12 @@ export const EndlessSection = (): React.JSX.Element => {
   const { control } = useFormContext<EditGameFormValues>();
 
   return (
-    <div className="flex flex-col gap-3.5 rounded-[11px] border border-border bg-white/[0.02] p-3.5">
+    <div className="flex flex-col gap-3.5 rounded-[11px] border border-border bg-bone/[0.02] p-3.5">
       <div className="flex items-center gap-1.75" style={{ color: BLUE }}>
         <History size={13} />
         <span className="text-[11.5px] font-bold tracking-[.05em]">ENDLESS TRACKING</span>
       </div>
-      <div className="rounded-[9px] bg-white/[0.02] px-3 py-2 text-[12px] text-muted-foreground">
+      <div className="rounded-[9px] bg-bone/[0.02] px-3 py-2 text-[12px] text-muted-foreground">
         No playthroughs — sessions add up on their own. Log hours you played outside the app and
         keep its status current here.
       </div>
@@ -35,7 +35,7 @@ export const EndlessSection = (): React.JSX.Element => {
           render={({ field }) => <HoursPlayedField {...field} />}
         />
         <div className="flex-1">
-          <div className={fieldLabelClass}>STATUS</div>
+          <div className={fieldLabelClass}>Status</div>
           <Controller
             control={control}
             name="status"

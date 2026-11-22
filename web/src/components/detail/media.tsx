@@ -54,16 +54,16 @@ const Lightbox = ({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/95" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex flex-col bg-inset/95" role="dialog" aria-modal="true">
       <div className="flex flex-none items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
-        <span className="text-[12.5px] font-bold text-white/70 tabular-nums">
+        <span className="text-[12.5px] font-bold text-dust tabular-nums">
           {index + 1} / {images.length}
         </span>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.06]"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-line-strong bg-bone/[0.06]"
         >
           <X size={17} />
         </button>
@@ -93,10 +93,10 @@ const Lightbox = ({
           {images.map((url, dotIndex) => (
             <span
               key={url}
-              className="h-1.5 rounded-full transition-all duration-200"
+              className="h-1.5 rounded-full transition-[width,background-color] duration-200"
               style={{
                 width: dotIndex === index ? 16 : 6,
-                background: dotIndex === index ? '#2fdc7e' : 'rgba(255,255,255,.28)',
+                background: dotIndex === index ? '#ffb347' : 'rgba(233,228,216,.28)',
               }}
             />
           ))}
@@ -119,7 +119,7 @@ export const ScreenshotsSection = ({ media }: { media: GameMedia }): React.JSX.E
   return (
     <section>
       <div className="mb-2.5 flex items-center justify-between">
-        <SectionLabel>MEDIA</SectionLabel>
+        <SectionLabel>Media</SectionLabel>
         {media.videoId && (
           <a
             href={`https://www.youtube.com/watch?v=${media.videoId}`}
@@ -180,7 +180,7 @@ export const SagaSection = ({
   return (
     <section>
       <div className="mb-2.5 flex items-baseline justify-between">
-        <SectionLabel>SAGA</SectionLabel>
+        <SectionLabel>Saga</SectionLabel>
         <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
           {owned} of {entries.length} in your library
         </span>
@@ -224,13 +224,13 @@ export const SagaSection = ({
                   )}
                 </div>
                 <div
-                  className={`mt-1.5 line-clamp-2 text-[10.5px] leading-tight font-bold ${
+                  className={`mt-1.5 line-clamp-2 text-micro leading-tight font-bold ${
                     inLibrary ? '' : 'text-muted-foreground'
                   }`}
                 >
                   {entry.title}
                 </div>
-                <div className="mt-0.5 text-[9.5px] font-semibold text-muted-foreground tabular-nums">
+                <div className="mt-0.5 text-micro font-semibold text-muted-foreground tabular-nums">
                   {entry.releaseYear ?? '—'}
                   {entry.totalHours > 0 && ` · ${formatHours(entry.totalHours)}`}
                   {entry.planned && ' · Plan'}

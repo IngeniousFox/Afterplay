@@ -40,7 +40,7 @@ import {
   ULTRA_RARE,
   ULTRA_VIOLET,
 } from '../lib/achievements';
-import { AMBER, BLUE, GREEN, VIOLET } from '../lib/colors';
+import { AMBER, BLUE, GREEN, RED, VIOLET } from '../lib/colors';
 import { daysBetween, humanizeSpan } from '../lib/dateMath';
 import {
   formatByPrecision,
@@ -115,15 +115,15 @@ const enterClass = (closing: boolean): string =>
 // Panel de la casa con su veladura de color por sección (el mismo recurso
 // que las filas fijadas del Plan y la cabecera de deuda).
 const panelStyle = (accent: string): React.CSSProperties => ({
-  background: `linear-gradient(135deg, ${accent}10, transparent 52%) #141614`,
+  background: `linear-gradient(135deg, ${accent}10, transparent 52%) #242c31`,
 });
-const PANEL_CLASS = 'rounded-[16px] border border-input shadow-[0_24px_70px_rgba(0,0,0,.65)]';
+const PANEL_CLASS = 'rounded-[16px] border border-input shadow-[0_24px_70px_rgba(3,6,7,.65)]';
 
 // Los colores de los tres tramos — LOS MISMOS de HowLongToBeatCard, que es
 // lo que las hace la misma pieza.
-const HLTB_MAIN = '#2bb6a6';
-const HLTB_EXTRA = '#3f7fe0';
-const HLTB_COMPLETIONIST = '#2fdc7e';
+const HLTB_MAIN = '#5fd3e0';
+const HLTB_EXTRA = '#8ce4ee';
+const HLTB_COMPLETIONIST = '#ffb347';
 type TierKey = 'main' | 'extra' | 'completionist';
 const TIER_LABEL: Record<TierKey, string> = {
   main: 'Main Story',
@@ -169,7 +169,7 @@ const SectionIcon = ({
 );
 
 const Key = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <kbd className="rounded-[6px] border border-white/15 bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-bold text-white/85">
+  <kbd className="rounded-[6px] border border-line-strong bg-bone/[0.08] px-1.5 py-0.5 text-micro font-bold text-bone">
     {children}
   </kbd>
 );
@@ -221,7 +221,7 @@ const TierTile = ({
         opacity: dimmed ? 0.4 : 1,
         ...(reached || hovered
           ? { borderColor: `${color}5c`, background: `${color}17` }
-          : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }),
+          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }),
         ...(hovered ? { boxShadow: `0 0 0 1px ${color}59, 0 0 14px ${color}33` } : {}),
       }}
     >
@@ -232,7 +232,7 @@ const TierTile = ({
           <span className="h-2 w-2 flex-none rounded-[2px]" style={{ background: color }} />
         )}
         <span
-          className="text-[9.5px] font-bold tracking-[.06em] whitespace-nowrap"
+          className="text-micro font-bold tracking-[.06em] whitespace-nowrap"
           style={{ color: reached || hovered ? color : 'var(--muted-foreground)' }}
         >
           {TIER_LABEL[tierKey]}
@@ -333,10 +333,10 @@ const HltbPanel = ({
           tramos creciendo en cadena de izquierda a derecha. */}
       <div className="relative mt-7 mb-1">
         <div
-          className="absolute -top-5 rounded-md border border-input px-1.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(0,0,0,.4)]"
+          className="absolute -top-5 rounded-md border border-input px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
           style={{
             left: `${markerPct}%`,
-            background: '#1d211f',
+            background: '#1f272b',
             animation: 'afterplay-drop-in 420ms ease-out 380ms both',
             // Los tramos llevan transform (su crecido) y eso crea contexto de
             // apilado: sin z-index explícito, el marcador se pintaba debajo.
@@ -346,19 +346,19 @@ const HltbPanel = ({
           {formatHours(markerHours)}
         </div>
         <div
-          className="absolute -top-1 rounded-sm bg-white"
+          className="absolute -top-1 rounded-sm bg-bone"
           style={{
             left: `${markerPct}%`,
             width: 3,
             height: 22,
-            boxShadow: '0 0 0 2px rgba(13,15,14,.85), 0 0 12px rgba(255,255,255,.5)',
+            boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',
             animation: 'afterplay-drop-in 420ms ease-out 380ms both',
             zIndex: 2,
           }}
         />
         <div
-          className="flex h-3.5 overflow-hidden rounded-[5px] bg-white/5"
-          style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)' }}
+          className="flex h-3.5 overflow-hidden rounded-[5px] bg-bone/5"
+          style={{ boxShadow: 'inset 0 1px 3px rgba(3,6,7,.4)' }}
         >
           {(
             [
@@ -440,19 +440,19 @@ const AchievementRow = memo(
     // Cero blur, cero pulso — chapa esmaltada, no rótulo luminoso.
     const iconShadow = unlocked
       ? ultra
-        ? `inset 0 0 0 1.5px ${accent}, inset 0 1px 0 rgba(255,255,255,.3), 0 3px 8px rgba(0,0,0,.55)`
+        ? `inset 0 0 0 1.5px ${accent}, inset 0 1px 0 rgba(233,228,216,.3), 0 3px 8px rgba(3,6,7,.55)`
         : rare
-          ? `inset 0 0 0 1px ${accent}b3, inset 0 1px 0 rgba(255,255,255,.24), 0 2px 6px rgba(0,0,0,.45)`
-          : 'inset 0 0 0 1px rgba(255,255,255,.12), inset 0 1px 0 rgba(255,255,255,.14)'
-      : 'inset 0 0 0 1px rgba(255,255,255,.07)';
+          ? `inset 0 0 0 1px ${accent}b3, inset 0 1px 0 rgba(233,228,216,.24), 0 2px 6px rgba(3,6,7,.45)`
+          : 'inset 0 0 0 1px rgba(233,228,216,.12), inset 0 1px 0 rgba(233,228,216,.14)'
+      : 'inset 0 0 0 1px rgba(233,228,216,.07)';
     return (
       // flex-none por lo mismo que en SessionRow: dentro de un contenedor flex
       // con altura acotada, un hijo se encoge antes que desbordar — y una fila
       // de logro estrujada pierde su icono y su texto en vez de provocar el
       // scroll que toca.
-      <div className="group -mx-2 flex flex-none items-center gap-2.75 rounded-[10px] px-2 py-1.75 transition-colors duration-150 hover:bg-white/[0.05]">
+      <div className="group -mx-2 flex flex-none items-center gap-2.75 rounded-[10px] px-2 py-1.75 transition-colors duration-150 hover:bg-bone/[0.05]">
         <span
-          className={`relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-white/[0.04] transition-[opacity,filter] duration-150 ${
+          className={`relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-bone/[0.04] transition-[opacity,filter] duration-150 ${
             unlocked ? '' : 'opacity-55 grayscale group-hover:opacity-80'
           }`}
           style={{ boxShadow: iconShadow }}
@@ -469,7 +469,7 @@ const AchievementRow = memo(
               aria-hidden
               className="pointer-events-none absolute inset-0 rounded-[8px]"
               style={{
-                background: `radial-gradient(120% 85% at 30% 12%, rgba(255,255,255,${ultra ? 0.28 : rare ? 0.22 : 0.14}), transparent 46%)`,
+                background: `radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,${ultra ? 0.28 : rare ? 0.22 : 0.14}), transparent 46%)`,
               }}
             />
           )}
@@ -482,7 +482,7 @@ const AchievementRow = memo(
           >
             {entry.displayName}
           </span>
-          <span className="block truncate text-[10.5px] text-muted-foreground/60">
+          <span className="block truncate text-micro text-muted-foreground/60">
             {entry.description ?? (entry.hidden ? 'Hidden achievement' : '')}
           </span>
         </span>
@@ -631,14 +631,14 @@ const AchievementsPanel = ({
           >
             {achievementsPercent}%
           </span>
-          <span className="mt-1 block text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+          <span className="mt-1 block text-micro font-semibold text-muted-foreground tabular-nums">
             {unlocked.length} of {entries.length}
             {rareCount > 0 && <span style={{ color: AMBER }}> · {rareCount} rare</span>}
             {ultraCount > 0 && <span style={{ color: ULTRA_VIOLET }}> · {ultraCount} ultra</span>}
           </span>
         </span>
       </div>
-      <div className="mt-2.5 h-1.5 flex-none overflow-hidden rounded-full bg-white/[0.06]">
+      <div className="mt-2.5 h-1.5 flex-none overflow-hidden rounded-full bg-bone/[0.06]">
         <div
           className="h-full rounded-full transition-[width] duration-700 ease-out"
           style={{
@@ -655,7 +655,7 @@ const AchievementsPanel = ({
       <div className="-mr-2 mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
         {unlocked.length > 0 && (
           <>
-            <div className="text-[9.5px] font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
+            <div className="text-micro font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
               Unlocked · {unlocked.length}
             </div>
             <div className="mt-1.5 mb-3 flex flex-col">
@@ -667,7 +667,7 @@ const AchievementsPanel = ({
         )}
         {locked.length > 0 && (
           <>
-            <div className="text-[9.5px] font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
+            <div className="text-micro font-bold tracking-[.11em] text-muted-foreground/60 uppercase">
               Still locked · {locked.length} — most common first
             </div>
             <div className="mt-1.5 flex flex-col">
@@ -703,7 +703,7 @@ const HistoryStat = ({
     <div className="flex items-center gap-1.25">
       <Icon size={10} style={{ color: `${color}c4` }} className="flex-none" />
       <span
-        className="text-[9.5px] font-bold tracking-[.11em] uppercase"
+        className="text-micro font-bold tracking-[.11em] uppercase"
         style={{ color: `${color}c4` }}
       >
         {label}
@@ -778,8 +778,8 @@ const SessionRow = memo(
         className="group/session relative flex flex-none items-center gap-4 overflow-hidden rounded-[13px] border px-4.5 py-3.5"
         style={
           isLive
-            ? { borderColor: 'rgba(47,220,126,.4)', background: 'rgba(47,220,126,.06)' }
-            : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.024)' }
+            ? { borderColor: 'rgba(255,179,71,.4)', background: 'rgba(255,179,71,.06)' }
+            : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
         }
       >
         {fillPct > 0 && (
@@ -787,12 +787,12 @@ const SessionRow = memo(
             className="pointer-events-none absolute inset-y-0 left-0"
             style={{
               width: `${fillPct}%`,
-              background: 'linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.01))',
-              borderRight: '1.5px solid rgba(255,255,255,.14)',
+              background: 'linear-gradient(90deg, rgba(233,228,216,.05), rgba(233,228,216,.01))',
+              borderRight: '1.5px solid rgba(233,228,216,.14)',
             }}
           />
         )}
-        <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-white/5">
+        <div className="relative z-1 flex h-8.5 w-8.5 flex-none items-center justify-center rounded-[9px] bg-bone/5">
           <Timer size={15} className="text-muted-foreground" />
         </div>
         <div className="relative z-1 min-w-0 flex-1">
@@ -804,7 +804,7 @@ const SessionRow = memo(
           )}
           <div
             className="mt-0.5 text-xs"
-            style={{ color: isLive ? '#2fdc7e' : 'var(--muted-foreground)' }}
+            style={{ color: isLive ? '#ffb347' : 'var(--muted-foreground)' }}
           >
             {isLive ? 'Live now' : session.isManual ? 'Manual' : 'Tracked'}
           </div>
@@ -845,10 +845,10 @@ const SessionRow = memo(
           <SessionNote key={session.note ?? ''} sessionId={session.id} note={session.note} />
         </div>
         <div className="relative z-1 flex flex-none items-center gap-1.5">
-          {isRecord && <Flame size={13} color="#e85d72" />}
+          {isRecord && <Flame size={13} color="#ff5e57" />}
           <span
             className="text-[13px] font-semibold tabular-nums"
-            style={{ color: isLive ? '#2fdc7e' : 'var(--foreground)' }}
+            style={{ color: isLive ? '#ffb347' : 'var(--foreground)' }}
           >
             {formatElapsed(durationSec)}
           </span>
@@ -1256,17 +1256,15 @@ export const OverlayHud = (): React.JSX.Element | null => {
           <div className="flex items-center gap-2 pb-1">
             <span
               className="h-1.5 w-1.5 rounded-full"
-              style={{ background: GREEN, animation: 'afterplay-pulse-dot 1.4s infinite' }}
+              style={{ background: RED, animation: 'afterplay-pulse-dot 1.4s infinite' }}
             />
-            <span className="text-[11px] font-extrabold tracking-[.28em] text-white/45">
-              AFTERPLAY
-            </span>
+            <span className="text-[11px] font-extrabold tracking-[.28em] text-dust">AFTERPLAY</span>
           </div>
           <div className="text-right">
-            <div className="text-[28px] leading-none font-extrabold text-white/95 tabular-nums drop-shadow-[0_2px_10px_rgba(0,0,0,.7)]">
+            <div className="text-[28px] leading-none font-display font-bold text-bone tabular-nums drop-shadow-[0_2px_10px_rgba(3,6,7,.7)]">
               {formatTime(now, timeFormat)}
             </div>
-            <div className="mt-1 text-[10.5px] font-semibold text-white/45">
+            <div className="mt-1 text-micro font-semibold text-dust">
               {now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
             </div>
           </div>
@@ -1287,44 +1285,44 @@ export const OverlayHud = (): React.JSX.Element | null => {
               className="absolute inset-0"
               style={{
                 background:
-                  'linear-gradient(180deg, rgba(13,15,14,.30) 0%, rgba(13,15,14,.62) 55%, rgba(13,15,14,.90) 100%)',
+                  'linear-gradient(180deg, rgba(12,16,18,.30) 0%, rgba(12,16,18,.62) 55%, rgba(12,16,18,.90) 100%)',
               }}
             />
             <div
               className="absolute inset-0"
-              style={{ background: 'linear-gradient(90deg, rgba(13,15,14,.78), transparent 48%)' }}
+              style={{ background: 'linear-gradient(90deg, rgba(12,16,18,.78), transparent 48%)' }}
             />
           </div>
 
           <div className="relative flex items-center gap-4.5 px-6 py-5">
             <GameCover
               url={live.coverUrl}
-              className="h-[110px] w-[78px] flex-none overflow-hidden rounded-[10px] border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,.6)]"
+              className="h-[110px] w-[78px] flex-none overflow-hidden rounded-[10px] border border-line-strong shadow-[0_10px_30px_rgba(3,6,7,.6)]"
               iconSize={22}
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[21px] font-extrabold tracking-[-.01em] text-white drop-shadow-[0_1px_4px_rgba(0,0,0,.8)]">
+              <div className="truncate text-[21px] font-extrabold tracking-[-.01em] text-bone drop-shadow-[0_1px_4px_rgba(3,6,7,.8)]">
                 {live.title}
               </div>
-              <div className="mt-1.5 flex items-center gap-2 text-[11.5px] font-semibold text-white/70">
+              <div className="mt-1.5 flex items-center gap-2 text-[11.5px] font-semibold text-dust">
                 {live.releaseYear !== null && (
                   <span className="tabular-nums">{live.releaseYear}</span>
                 )}
                 {live.genres && live.genres.length > 0 && (
                   <>
-                    <span className="text-white/30">·</span>
-                    <span className="truncate drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
+                    <span className="text-bone/30">·</span>
+                    <span className="truncate drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
                       {live.genres.slice(0, 3).join(' · ')}
                     </span>
                   </>
                 )}
                 {status && (
                   <span
-                    className="ml-1 flex items-center gap-1.25 rounded-[7px] border px-2 py-0.5 text-[10.5px] font-bold"
+                    className="ml-1 flex items-center gap-1.25 rounded-[7px] border px-2 py-0.5 text-micro font-bold"
                     style={{
                       color: status.color,
                       borderColor: `${status.color}55`,
-                      background: 'rgba(8,10,9,.55)',
+                      background: 'rgba(8,11,12,.55)',
                     }}
                   >
                     {status.label}
@@ -1350,16 +1348,16 @@ export const OverlayHud = (): React.JSX.Element | null => {
               <div className="flex items-center justify-end gap-2">
                 <span
                   className="h-2 w-2 flex-none rounded-full"
-                  style={{ background: GREEN, animation: 'afterplay-pulse-dot 1.4s infinite' }}
+                  style={{ background: RED, animation: 'afterplay-pulse-dot 1.4s infinite' }}
                 />
                 <span
-                  className="text-[32px] leading-none font-extrabold tabular-nums"
+                  className="text-[32px] leading-none font-display font-bold tabular-nums"
                   style={{ color: GREEN, textShadow: `0 0 28px ${GREEN}66` }}
                 >
                   {formatElapsed(elapsed)}
                 </span>
               </div>
-              <div className="mt-1.25 text-[11.5px] font-semibold text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
+              <div className="mt-1.25 text-[11.5px] font-semibold text-dust drop-shadow-[0_1px_2px_rgba(3,6,7,.8)]">
                 this session · {formatHours(hoursWithLive)} total
               </div>
             </div>
@@ -1411,7 +1409,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
               <div className="flex items-center gap-2">
                 <SectionIcon icon={Quote} color={BLUE} />
                 <span className="text-[13.5px] font-bold text-foreground">Where are you?</span>
-                <span className="ml-auto text-[10.5px] font-semibold text-muted-foreground/60">
+                <span className="ml-auto text-micro font-semibold text-muted-foreground/60">
                   saved to this session
                 </span>
               </div>
@@ -1431,18 +1429,18 @@ export const OverlayHud = (): React.JSX.Element | null => {
                 }}
                 placeholder="Jot it down while it's fresh — where you left off, what to do next…"
                 disabled={!openSession}
-                className="mt-2.5 w-full resize-none rounded-[10px] border border-input bg-white/[0.03] px-3 py-2.5 text-[13px] text-foreground transition-colors duration-150 placeholder:text-muted-foreground/50 focus:border-white/25 focus:outline-none disabled:opacity-50"
+                className="mt-2.5 w-full resize-none rounded-[10px] border border-edge bg-inset px-3 py-2.5 text-[13px] text-foreground transition-colors duration-150 placeholder:text-muted-foreground/50 focus:border-line-hover focus:outline-none disabled:opacity-50"
               />
               <div className="mt-2 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground/60">
+                <span className="flex items-center gap-1.5 text-micro text-muted-foreground/60">
                   <Key>Ctrl</Key>+<Key>Enter</Key> saves
                 </span>
                 <button
                   type="button"
                   onClick={saveNote}
                   disabled={!openSession || draft === null || savingNote}
-                  className="flex items-center gap-1.5 rounded-[9px] px-3.5 py-1.75 text-[12.5px] font-bold text-[#08120c] shadow-[0_4px_14px_rgba(47,220,126,0.25)] transition-[opacity,transform,box-shadow] duration-150 hover:brightness-105 active:scale-[.97] disabled:opacity-40 disabled:shadow-none"
-                  style={{ background: `linear-gradient(135deg, ${GREEN}, #24c96f)` }}
+                  className="flex items-center gap-1.5 rounded-[9px] px-3.5 py-1.75 text-[12.5px] font-bold text-ink shadow-[0_4px_14px_rgba(255,179,71,0.25)] transition-[opacity,transform,box-shadow] duration-150 hover:brightness-105 active:scale-[.97] disabled:opacity-40 disabled:shadow-none"
+                  style={{ background: `linear-gradient(135deg, ${GREEN}, #e39a2e)` }}
                 >
                   {savingNote ? (
                     <Loader2 size={13} className="animate-spin" />
@@ -1472,7 +1470,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
             <div className="flex flex-none items-center gap-2">
               <SectionIcon icon={History} color={VIOLET} />
               <span className="text-[13.5px] font-bold text-foreground">Your history</span>
-              <span className="ml-auto text-[10.5px] font-semibold text-muted-foreground/60">
+              <span className="ml-auto text-micro font-semibold text-muted-foreground/60">
                 {previousEndedAt !== null
                   ? `last played ${humanizeSpan(daysBetween(previousEndedAt, new Date()))} ago`
                   : 'first time here'}
@@ -1545,12 +1543,12 @@ export const OverlayHud = (): React.JSX.Element | null => {
         <div
           className={`mt-5 flex flex-none items-center justify-center gap-4 ${enterClass(closing)}`}
         >
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-dust">
             <Gamepad2 size={13} className="flex-none" />
             <Key>B</Key> closes
           </span>
-          <span className="text-white/20">·</span>
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50">
+          <span className="text-bone/20">·</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-dust">
             <Key>Esc</Key>
             {shortcut !== '' && (
               <>
@@ -1559,11 +1557,11 @@ export const OverlayHud = (): React.JSX.Element | null => {
               </>
             )}
           </span>
-          <span className="text-white/20">·</span>
+          <span className="text-bone/20">·</span>
           <button
             type="button"
             onClick={() => window.api.overlay.dismiss()}
-            className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 text-[12px] font-semibold text-white/70 transition-[background-color,color,transform] duration-150 hover:bg-black/60 hover:text-white active:scale-[.97]"
+            className="flex items-center gap-1.5 rounded-full border border-line-strong bg-inset/40 px-4 py-1.5 text-[12px] font-semibold text-dust transition-[background-color,color,transform] duration-150 hover:bg-inset/60 hover:text-bone active:scale-[.97]"
           >
             <X size={13} />
             Back to game

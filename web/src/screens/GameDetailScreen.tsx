@@ -46,21 +46,21 @@ const MetricsRow = ({ game }: { game: GameDetail }): React.JSX.Element => {
     <div className="grid grid-cols-2 gap-2.5">
       <MetricCard
         Icon={Clock}
-        label="TOTAL HOURS"
+        label="Total hours"
         value={formatHours(game.totalHours)}
         liveHint={game.isLive ? `+${Math.floor(liveSeconds / 60)}m this session` : undefined}
         accent={GREEN}
       />
       <MetricCard
         Icon={Gauge}
-        label="COST / HOUR"
+        label="Cost / hour"
         value={game.costPerHour !== null ? formatMoney(game.costPerHour) : '—'}
         accent={VIOLET}
       />
-      <MetricCard Icon={Calendar} label="SESSIONS" value={String(sessionCount)} accent={BLUE} />
+      <MetricCard Icon={Calendar} label="Sessions" value={String(sessionCount)} accent={BLUE} />
       <MetricCard
         Icon={DollarSign}
-        label="TOTAL SPENT"
+        label="Total spent"
         value={formatMoney(game.totalSpend)}
         accent={AMBER}
       />
@@ -197,13 +197,13 @@ export const GameDetailScreen = (): React.JSX.Element => {
               className="h-full w-full scale-110 object-cover blur-lg brightness-[.5]"
             />
           ) : (
-            <div className="h-full w-full bg-[#151716]" />
+            <div className="h-full w-full bg-raised" />
           )}
           <div
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(180deg, rgba(10,11,10,.55) 0%, rgba(10,11,10,.30) 40%, rgba(10,11,10,.92) 88%, #0a0b0a 100%)',
+                'linear-gradient(180deg, rgba(16,20,22,.55) 0%, rgba(16,20,22,.30) 40%, rgba(16,20,22,.92) 88%, #101416 100%)',
             }}
           />
         </div>
@@ -211,7 +211,7 @@ export const GameDetailScreen = (): React.JSX.Element => {
         <button
           onClick={() => navigate(-1)}
           aria-label="Back"
-          className="absolute top-3 left-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/50 backdrop-blur-sm"
+          className="absolute top-3 left-3 flex h-9 w-9 items-center justify-center rounded-full border border-line-strong bg-inset/50 backdrop-blur-sm"
         >
           <ChevronLeft size={18} />
         </button>

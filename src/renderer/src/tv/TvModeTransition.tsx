@@ -60,7 +60,7 @@ export const TvModeTransition = (): React.JSX.Element | null => {
           style={{
             // Un aliento de luz mínimo tras la marca de despedida: que el
             // último frame del modo también tenga cuerpo, no solo letras.
-            textShadow: '0 0 2em rgba(47,220,126,.14)',
+            textShadow: '0 0 2em rgba(255,179,71,.14)',
             animation: 'afterplay-tv-outro-mark 720ms ease-in-out both',
           }}
         >
@@ -97,15 +97,15 @@ export const TvModeTransition = (): React.JSX.Element | null => {
           aria-hidden
           className="absolute h-[2px] w-[clamp(120px,16vw,260px)] origin-center rounded-full blur-[6px]"
           style={{
-            background: 'linear-gradient(90deg, transparent, #2fdc7e, transparent)',
+            background: 'linear-gradient(90deg, transparent, #ffb347, transparent)',
             animation: 'afterplay-tv-intro-line 1650ms cubic-bezier(.22,1,.36,1) both',
           }}
         />
         <div
           className="h-[2px] w-[clamp(120px,16vw,260px)] origin-center rounded-full"
           style={{
-            background: 'linear-gradient(90deg, transparent, #2fdc7e, transparent)',
-            boxShadow: '0 0 12px rgba(47,220,126,.5)',
+            background: 'linear-gradient(90deg, transparent, #ffb347, transparent)',
+            boxShadow: '0 0 12px rgba(255,179,71,.5)',
             animation: 'afterplay-tv-intro-line 1650ms cubic-bezier(.22,1,.36,1) both',
           }}
         />

@@ -296,8 +296,8 @@ describe('estados: los adaptadores móvil y PC conservan la presentación', () =
   it('los tres hex que no son acentos de identidad siguen clavados', () => {
     // Estos tres no aparecen en colors.ts, así que el test de la paleta no los
     // alcanza: viven SOLO en la tabla de estados, en las dos copias.
-    mismo(movilPaleta.statusOf('dropped').color, pcEstado.STATUS_META.dropped.color, '#e85d72');
-    mismo(movilPaleta.statusOf('on_hold').color, pcEstado.STATUS_META.on_hold.color, '#8b93a3');
-    mismo(movilPaleta.statusOf(null).color, pcEstado.STATUS_META.unplayed.color, '#888f8a');
+    mismo(movilPaleta.statusOf('dropped').color, pcEstado.STATUS_META.dropped.color, '#8a9496');
+    mismo(movilPaleta.statusOf('on_hold').color, pcEstado.STATUS_META.on_hold.color, '#b9a6ff');
+    mismo(movilPaleta.statusOf(null).color, pcEstado.STATUS_META.unplayed.color, '#5fd3e0');
   });
 });

@@ -48,11 +48,11 @@ const Tile = ({
     <div className="text-[19px] leading-none font-extrabold tabular-nums" style={{ color }}>
       {value}
     </div>
-    <div className="mt-1.5 text-[9.5px] font-bold tracking-[.11em] text-muted-foreground uppercase">
+    <div className="mt-1.5 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
       {label}
     </div>
     {hint && (
-      <div className="mt-0.5 text-[9.5px] font-semibold text-muted-foreground/70 tabular-nums">
+      <div className="mt-0.5 text-micro font-semibold text-muted-foreground/70 tabular-nums">
         {hint}
       </div>
     )}
@@ -104,7 +104,7 @@ const StatusBar = ({ stats }: { stats: StatsSummary }): React.JSX.Element | null
 
   return (
     <div className="afterplay-reveal">
-      <div className="flex h-2 overflow-hidden rounded-full bg-white/8">
+      <div className="flex h-2 overflow-hidden rounded-full bg-bone/8">
         {segments.map(({ key, count, color }) => (
           <div key={key} style={{ width: `${(count / known) * 100}%`, background: color }} />
         ))}
@@ -118,7 +118,7 @@ const StatusBar = ({ stats }: { stats: StatsSummary }): React.JSX.Element | null
           </span>
         ))}
         <span className="flex items-center gap-1.5 text-[11px] font-bold">
-          <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
+          <span className="h-1.5 w-1.5 rounded-full bg-bone/20" />
           <span className="text-muted-foreground">Unplayed</span>
           <span className="tabular-nums">{stats.unplayed}</span>
         </span>
@@ -164,7 +164,7 @@ export const Home = (): React.JSX.Element => {
       {recent.data && recent.data.sessions.length > 0 && (
         <section className="afterplay-reveal">
           <div className="mb-2.5 flex items-baseline justify-between">
-            <h2 className="text-[10px] font-bold tracking-[.13em] text-muted-foreground uppercase">
+            <h2 className="text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
               Recently played
             </h2>
             <Link to="/sessions" className="text-[11.5px] font-bold text-primary">

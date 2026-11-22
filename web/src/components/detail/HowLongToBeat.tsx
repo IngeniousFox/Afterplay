@@ -6,9 +6,9 @@ import { DetailCard } from './primitives';
 
 type TierKey = 'main' | 'extra' | 'completionist';
 
-const MAIN = '#2bb6a6';
-const EXTRA = '#3f7fe0';
-const COMPLETIONIST = '#2fdc7e';
+const MAIN = '#5fd3e0';
+const EXTRA = '#8ce4ee'; // --color-tube-hi: distinto de MAIN
+const COMPLETIONIST = '#ffb347';
 
 const TIER_LABEL: Record<TierKey, string> = {
   main: 'Main Story',
@@ -51,7 +51,7 @@ const TierTile = ({
       opacity: dimmed ? 0.4 : 1,
       ...(reached || active
         ? { borderColor: `${color}5c`, background: `${color}17` }
-        : { borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }),
+        : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }),
       ...(active ? { boxShadow: `0 0 0 1px ${color}59, 0 0 14px ${color}33` } : {}),
     }}
   >
@@ -62,7 +62,7 @@ const TierTile = ({
         <span className="h-2 w-2 flex-none rounded-[2px]" style={{ background: color }} />
       )}
       <span
-        className="text-[9px] font-bold tracking-[.04em]"
+        className="text-micro font-bold tracking-[.04em]"
         style={{ color: reached || active ? color : 'var(--muted-foreground)' }}
       >
         {label}
@@ -136,7 +136,7 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
     return (
       <DetailCard>
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white/[0.04] text-muted-foreground/50">
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-bone/[0.04] text-muted-foreground/50">
             <Hourglass size={14} />
           </span>
           <div className="min-w-0 flex-1">
@@ -211,7 +211,7 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
           </span>
         ) : hasOwnHours && reachedTier === 'completionist' ? (
           <span
-            className="flex flex-none items-center gap-1 rounded-lg border px-2 py-0.75 text-[10.5px] font-bold whitespace-nowrap"
+            className="flex flex-none items-center gap-1 rounded-lg border px-2 py-0.75 text-micro font-bold whitespace-nowrap"
             style={{
               color: COMPLETIONIST,
               borderColor: `${COMPLETIONIST}3d`,
@@ -244,33 +244,33 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
                 posición; en los extremos se clampa el left para que no se
                 salga de la card en 375px. */}
             <div
-              className="absolute -top-5 rounded-md border border-white/14 px-1.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(0,0,0,.4)]"
+              className="absolute -top-5 rounded-md border border-line-strong px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
               style={{
                 left: `${Math.min(92, Math.max(8, markerPct))}%`,
                 transform: 'translateX(-50%)',
-                background: '#1d211f',
+                background: '#1f272b',
                 zIndex: 2,
               }}
             >
               {formatHours(markerHours)}
             </div>
             <div
-              className="absolute -top-1 rounded-sm bg-white"
+              className="absolute -top-1 rounded-sm bg-bone"
               style={{
                 left: `${markerPct}%`,
                 width: 3,
                 height: 22,
                 // Halo blanco además del contorno oscuro: separa el marcador
                 // del tramo que tenga debajo, sea del color que sea.
-                boxShadow: '0 0 0 2px rgba(13,15,14,.85), 0 0 12px rgba(255,255,255,.5)',
+                boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',
                 zIndex: 2,
               }}
             />
           </>
         )}
         <div
-          className="flex h-3.5 overflow-hidden rounded-[5px] bg-white/5"
-          style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,.4)' }}
+          className="flex h-3.5 overflow-hidden rounded-[5px] bg-bone/5"
+          style={{ boxShadow: 'inset 0 1px 3px rgba(3,6,7,.4)' }}
         >
           {[
             { key: 'main' as const, width: segMain, background: MAIN },

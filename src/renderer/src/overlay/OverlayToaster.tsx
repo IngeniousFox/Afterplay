@@ -39,7 +39,7 @@ const ToastIconChip = (): React.JSX.Element => (
 // pantalla, no como una notificación del sistema operativo colada encima.
 const toastClassNames = {
   toast:
-    'flex w-full items-center gap-3 rounded-[16px] border border-input bg-[#141614] px-4 py-3.5 shadow-[0_24px_70px_rgba(0,0,0,.65)]',
+    'flex w-full items-center gap-3 rounded-[16px] border border-input bg-overlay px-4 py-3.5 shadow-[0_24px_70px_rgba(3,6,7,.65)]',
   icon: 'flex-none',
   content: 'flex min-w-0 flex-1 flex-col justify-center gap-0.5',
   title: 'text-[13px] font-bold leading-snug text-foreground',

@@ -20,7 +20,7 @@ import { UsageBreakdownBar } from './UsageBreakdownBar';
 // congelada para siempre: sin esto, nada lo vuelve a mirar jamás.
 
 const buttonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 // Lo que dura la confirmación de la limpieza antes de devolverle el renglón
 // al estado real — mismo criterio que ImagesSection y el mismo motivo: un
@@ -137,7 +137,7 @@ export const LocalSaveBackupsSection = (): React.JSX.Element => {
 
         {/* Lo que un botón que borra ficheros tiene que decir ANTES de que
             lo pulses: qué se va y por qué eso no pierde ninguna versión. */}
-        <div className="text-[10.5px] leading-[1.45] text-muted-foreground/70">
+        <div className="text-micro leading-[1.45] text-muted-foreground/70">
           Cleaning up removes local copies already confirmed in the cloud, plus folders no game
           claims anymore — never a version that only exists here.
         </div>

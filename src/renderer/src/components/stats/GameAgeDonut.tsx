@@ -35,7 +35,7 @@ const BUCKETS: Bucket[] = [
     label: 'New releases',
     shortLabel: 'NEW',
     description: (referenceYear) => `released in ${referenceYear}`,
-    color: '#2fdc7e',
+    color: '#ffb347',
     matches: (age) => age <= 0,
   },
   {
@@ -43,7 +43,7 @@ const BUCKETS: Bucket[] = [
     label: '1–5 years',
     shortLabel: 'RECENT',
     description: () => '1 to 5 years old',
-    color: '#85a3d6',
+    color: '#5fd3e0',
     matches: (age) => age >= 1 && age <= 5,
   },
   {
@@ -59,7 +59,7 @@ const BUCKETS: Bucket[] = [
     label: '10+ years',
     shortLabel: 'CLASSIC',
     description: () => 'over 10 years old',
-    color: '#7c86c8',
+    color: '#b9a6ff',
     matches: (age) => age > 10,
   },
 ];
@@ -112,7 +112,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
   const visibleSlices = slices.filter((slice) => slice.fraction > 0);
 
   return (
-    <StatCard className="afterplay-age-card relative overflow-hidden [background:radial-gradient(circle_at_18%_115%,_rgba(124,_134,_200,_0.08),_transparent_31%),_var(--card)]">
+    <StatCard className="afterplay-age-card relative overflow-hidden [background:radial-gradient(circle_at_18%_115%,_rgba(185,_166,_255,_0.08),_transparent_31%),_var(--card)]">
       <div
         className={cn(
           'afterplay-age-accent relative',
@@ -134,10 +134,10 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
             <div
               className={cn(
                 'afterplay-age-total grid grid-cols-[auto_auto] gap-y-0.5 gap-x-2 min-w-29.5 py-[7px] px-[9px] rounded-[9px]',
-                '[border:1px_solid_rgba(255,_255,_255,_0.065)] [background:rgba(255,_255,_255,_0.018)]',
+                '[border:1px_solid_rgba(233,_228,_216,_0.065)] [background:rgba(233,_228,_216,_0.018)]',
               )}
             >
-              <span className="text-white/45 text-[10px] font-black tracking-[0.12em] uppercase col-[1/3]">
+              <span className="text-dust text-micro font-black tracking-[0.12em] uppercase col-[1/3]">
                 DATED PLAYTIME
               </span>
               <strong className="text-foreground text-[12px] font-[850]">
@@ -189,7 +189,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                   cy={CENTER}
                   r={105}
                   fill="none"
-                  stroke="rgba(255,255,255,.12)"
+                  stroke="rgba(233,228,216,.12)"
                   strokeWidth={1}
                   strokeDasharray="1 7"
                   strokeLinecap="round"
@@ -199,7 +199,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                   cy={CENTER}
                   r={RADIUS}
                   fill="none"
-                  stroke="rgba(255,255,255,.045)"
+                  stroke="rgba(233,228,216,.045)"
                   strokeWidth={STROKE}
                 />
                 <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
@@ -259,19 +259,19 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                 className={cn(
                   'afterplay-age-core absolute z-2 top-1/2 left-1/2 flex w-29.5 h-29.5 flex-col items-center justify-center',
                   'rounded-[50%] pointer-events-none',
-                  '[border:1px_solid_color-mix(in_srgb,_var(--age-accent)_20%,_rgba(255,_255,_255,_0.06))]',
+                  '[border:1px_solid_color-mix(in_srgb,_var(--age-accent)_20%,_rgba(233,_228,_216,_0.06))]',
                   '[background:rgba(12,_15,_13,_0.88)]',
-                  '[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.04),_0_13px_32px_rgba(0,_0,_0,_0.34)]',
+                  '[box-shadow:inset_0_1px_0_rgba(233,_228,_216,_0.04),_0_13px_32px_rgba(3,_6,_7,_0.34)]',
                   '[transform:translate(-50%,_-50%)] [transition:border-color_280ms_ease]',
                 )}
               >
-                <span className="text-white/45 text-[10px] font-black tracking-[0.12em]">
+                <span className="text-dust text-micro font-black tracking-[0.12em]">
                   SHARE OF TIME
                 </span>
-                <strong className="mt-0.75 text-(--age-accent) text-[36px] font-black tracking-[-0.05em] leading-none [transition:color_280ms_ease]">
+                <strong className="mt-0.75 text-(--age-accent) text-[36px] font-display font-bold leading-none [transition:color_280ms_ease] tabular-nums">
                   {activePercent}%
                 </strong>
-                <small className="mt-1 text-white/[0.7] text-[10px] font-black tracking-[0.1em]">
+                <small className="mt-1 text-dust text-micro font-black tracking-[0.1em]">
                   {active.shortLabel}
                 </small>
               </div>
@@ -281,10 +281,10 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
               <div
                 className={cn(
                   'afterplay-age-focus flex items-center justify-between gap-5 min-h-19.5 py-[11px] px-[13px] rounded-[11px]',
-                  '[&_>_div_>_span]:text-white/45 [&_>_div_>_span]:text-[10px] [&_>_div_>_span]:font-black',
+                  '[&_>_div_>_span]:text-dust [&_>_div_>_span]:text-micro [&_>_div_>_span]:font-black',
                   '[&_>_div_>_span]:tracking-[0.12em] [&_>_div_>_span]:uppercase',
-                  '[border:1px_solid_color-mix(in_srgb,_var(--age-accent)_19%,_rgba(255,_255,_255,_0.055))]',
-                  '[background:linear-gradient(_120deg,_color-mix(in_srgb,_var(--age-accent)_8%,_transparent),_rgba(255,_255,_255,_0.014)_)]',
+                  '[border:1px_solid_color-mix(in_srgb,_var(--age-accent)_19%,_rgba(233,_228,_216,_0.055))]',
+                  '[background:linear-gradient(_120deg,_color-mix(in_srgb,_var(--age-accent)_8%,_transparent),_rgba(233,_228,_216,_0.014)_)]',
                   '[transition:border-color_260ms_ease,_background-color_260ms_ease]',
                   '[&_>_div_>_strong]:block [&_>_div_>_strong]:mt-0.5 [&_>_div_>_strong]:text-(--age-accent)',
                   '[&_>_div_>_strong]:text-[17px] [&_>_div_>_strong]:font-black [&_>_div_>_strong]:tracking-[-0.02em]',
@@ -323,16 +323,16 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                       type="button"
                       className={cn(
                         'afterplay-age-era relative grid grid-cols-[minmax(0,_1fr)_auto] gap-2 overflow-hidden min-h-14.5 pt-[9px]',
-                        'pr-[11px] pb-3 pl-3.5 rounded-[10px] outline-none text-left [border:1px_solid_rgba(255,_255,_255,_0.055)]',
-                        'text-inherit [background:rgba(255,_255,_255,_0.015)]',
+                        'pr-[11px] pb-3 pl-3.5 rounded-[10px] outline-none text-left [border:1px_solid_rgba(233,_228,_216,_0.055)]',
+                        'text-inherit [background:rgba(233,_228,_216,_0.015)]',
                         '[transition:border-color_220ms_ease,_background-color_220ms_ease,_box-shadow_240ms_ease,_transform_280ms_cubic-bezier(0.22,_1,_0.36,_1)]',
                         "[&[data-active='true']_.afterplay-age-era-stripe]:opacity-[1]",
                         "[&[data-active='true']_.afterplay-age-era-track_i]:opacity-[1]",
                         "[&[data-active='true']_.afterplay-age-era-copy_strong]:text-foreground",
                         'motion-reduce:animate-none motion-reduce:transition-none',
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[border-color:color-mix(in_srgb,_var(--era-accent)_30%,_rgba(255,_255,_255,_0.06))]",
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[background:color-mix(in_srgb,_var(--era-accent)_7%,_rgba(255,_255,_255,_0.015))]",
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[box-shadow:0_8px_20px_rgba(0,_0,_0,_0.14)]",
+                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[border-color:color-mix(in_srgb,_var(--era-accent)_30%,_rgba(233,_228,_216,_0.06))]",
+                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[background:color-mix(in_srgb,_var(--era-accent)_7%,_rgba(233,_228,_216,_0.015))]",
+                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[box-shadow:0_8px_20px_rgba(3,_6,_7,_0.14)]",
                         "[&:is(:hover,:focus-visible,[data-active='true'])]:[transform:translateY(-2px)]",
                       )}
                       data-active={isActive ? 'true' : 'false'}
@@ -350,7 +350,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                     >
                       <span className="afterplay-age-era-stripe absolute top-[9px] bottom-[11px] left-0 w-[3px] rounded-[0_99px_99px_0] [background:var(--era-accent)] opacity-[0.55]" />
                       <span className="afterplay-age-era-copy">
-                        <strong className="block overflow-hidden text-ellipsis whitespace-nowrap text-white/[0.72] text-[11.5px] font-[750]">
+                        <strong className="block overflow-hidden text-ellipsis whitespace-nowrap text-dust text-[11.5px] font-[750]">
                           {slice.label}
                         </strong>
                         <small className="block overflow-hidden text-ellipsis whitespace-nowrap mt-0.75 text-muted-foreground text-[11px]">
@@ -363,7 +363,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                       <span
                         className={cn(
                           'afterplay-age-era-track absolute right-2.5 bottom-1.5 left-3.5 h-0.5 overflow-hidden rounded-[99px]',
-                          '[background:rgba(255,_255,_255,_0.055)]',
+                          '[background:rgba(233,_228,_216,_0.055)]',
                         )}
                       >
                         <i className="block w-[var(--era-share)] h-full rounded-[inherit] [background:var(--era-accent)] [box-shadow:0_0_8px_color-mix(in_srgb,_var(--era-accent)_35%,_transparent)] opacity-[0.62] origin-left animate-[afterplay-grow-x_650ms_cubic-bezier(0.22,_1,_0.36,_1)_backwards] motion-reduce:animate-none motion-reduce:transition-none" />
@@ -374,7 +374,7 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
               </div>
 
               {unknownCount > 0 && (
-                <div className="afterplay-age-unknown mt-[7px] text-[11px] text-right text-white/45">
+                <div className="afterplay-age-unknown mt-[7px] text-[11px] text-right text-dust">
                   {pluralize(unknownCount, 'game')} without a release year stays outside the orbit.
                 </div>
               )}

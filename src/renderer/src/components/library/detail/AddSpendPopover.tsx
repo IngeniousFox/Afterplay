@@ -65,14 +65,14 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
         if (!next) reset();
       }}
     >
-      <PopoverTrigger className="flex items-center gap-2 rounded-[11px] border border-input bg-white/[0.03] px-4.5 py-3 text-[14px] font-semibold text-foreground hover:bg-white/[0.06]">
+      <PopoverTrigger className="flex items-center gap-2 rounded-[11px] border border-line-strong bg-raised px-4.5 py-3 text-[14px] font-semibold text-foreground hover:bg-raised-hover">
         <Plus size={16} />
         Add spend
       </PopoverTrigger>
       <PopoverContent className={`w-80 ${floatingPanelClass} p-4`}>
         <div className="flex flex-col gap-3.5">
           <div>
-            <div className={fieldLabelClass}>TYPE</div>
+            <div className={fieldLabelClass}>Type</div>
             <SegmentedButtonGroup value={type} options={TYPE_OPTIONS} onChange={setType} />
           </div>
 
@@ -85,7 +85,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
           <DateWithPrecisionPicker label="Date" value={date} onChange={setDate} />
 
           <div>
-            <div className={fieldLabelClass}>NOTE · optional</div>
+            <div className={fieldLabelClass}>Note · optional</div>
             <input
               value={note}
               onChange={(event) => setNote(event.target.value)}
@@ -104,7 +104,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
             type="button"
             onClick={handleSubmit}
             disabled={addSpend.isPending}
-            className="[will-change:transform] rounded-[9px] px-4 py-2.25 text-[13px] font-bold transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] disabled:cursor-not-allowed disabled:opacity-60 enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_24px_rgba(47,220,126,.32)]"
+            className="rounded-sm px-4 py-2.25 text-[13px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-60"
             style={accentGradientStyle}
           >
             {addSpend.isPending ? 'Adding…' : 'Add spend'}

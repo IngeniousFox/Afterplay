@@ -11,7 +11,7 @@ import { SettingsCard } from './SettingsCard';
 
 // Mismo botón de contorno que el resto de Ajustes (Back up now, Export keys).
 const outlineButtonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-input bg-white/[0.03] px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 // Sync entre tus PCs a través de TU hub (AFTERPLAY-2.0.md §9). Aquí solo se
 // empareja este PC, se ve cómo va y se olvida el hub; el alta de dispositivos
@@ -69,7 +69,7 @@ const PairForm = ({ available }: { available: boolean }): React.JSX.Element => {
 
   if (!open) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-2.75">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-2.75">
         <div className="text-[12px] text-muted-foreground">Not paired.</div>
         <button type="button" onClick={() => setOpen(true)} className={outlineButtonClass}>
           Pair this PC…
@@ -80,7 +80,7 @@ const PairForm = ({ available }: { available: boolean }): React.JSX.Element => {
 
   return (
     <form
-      className="flex flex-col gap-2.5 border-t border-white/5 pt-2.75"
+      className="flex flex-col gap-2.5 border-t border-line pt-2.75"
       onSubmit={(event) => {
         event.preventDefault();
         if (canPair) void handlePair();
@@ -91,7 +91,7 @@ const PairForm = ({ available }: { available: boolean }): React.JSX.Element => {
         code, then enter it here with your hub address.
       </div>
       <label className="block">
-        <div className={fieldLabelClass}>HUB ADDRESS</div>
+        <div className={fieldLabelClass}>Hub address</div>
         <input
           type="text"
           value={hubUrl}
@@ -109,7 +109,7 @@ const PairForm = ({ available }: { available: boolean }): React.JSX.Element => {
         )}
       </label>
       <label className="block">
-        <div className={fieldLabelClass}>PAIRING CODE</div>
+        <div className={fieldLabelClass}>Pairing code</div>
         <input
           type="text"
           value={code}
@@ -160,7 +160,7 @@ const PairedView = ({ status }: { status: SyncStatus }): React.JSX.Element => {
   const lastSync = Math.max(status.lastPushAt ?? 0, status.lastPullAt ?? 0) || null;
 
   return (
-    <div className="flex flex-col gap-2.5 border-t border-white/5 pt-2.75">
+    <div className="flex flex-col gap-2.5 border-t border-line pt-2.75">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <div className="min-w-0 text-[12px] text-muted-foreground">
           Paired with <span className="font-semibold text-foreground">{hostOf(status.hubUrl)}</span>

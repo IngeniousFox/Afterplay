@@ -77,13 +77,13 @@ const PlanRow = ({
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {release && (
-            <span className="text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+            <span className="text-micro font-semibold text-muted-foreground tabular-nums">
               {release}
             </span>
           )}
           {game.hltbMain !== null && game.hltbMain > 0 && (
             <span
-              className="flex items-center gap-1 text-[10.5px] font-semibold tabular-nums"
+              className="flex items-center gap-1 text-micro font-semibold tabular-nums"
               style={{ color: TEAL }}
             >
               <Clock3 size={10} />
@@ -91,14 +91,14 @@ const PlanRow = ({
             </span>
           )}
           {rating !== null && (
-            <span className="flex items-center gap-1 text-[10.5px] font-bold tabular-nums">
+            <span className="flex items-center gap-1 text-micro font-bold tabular-nums">
               <Star size={10} className="text-muted-foreground" />
               {rating}
             </span>
           )}
           {countdown && (
             <span
-              className="rounded-md px-1.5 py-0.25 text-[9.5px] font-extrabold tracking-wide"
+              className="rounded-md px-1.5 py-0.25 text-micro font-extrabold tracking-wide"
               style={{
                 color:
                   countdown.kind === 'soon' && !countdown.imminent
@@ -106,7 +106,7 @@ const PlanRow = ({
                     : GREEN,
                 background:
                   countdown.kind === 'soon' && !countdown.imminent
-                    ? 'rgba(255,255,255,.05)'
+                    ? 'rgba(233,228,216,.05)'
                     : `${GREEN}18`,
               }}
             >
@@ -119,7 +119,7 @@ const PlanRow = ({
   );
 
   const controlClass =
-    'flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-white/12 disabled:opacity-30';
+    'flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-line-strong disabled:opacity-30';
 
   return (
     <div
@@ -207,7 +207,7 @@ const Collapsible = ({
           className={color ? '' : 'text-muted-foreground'}
         />
         <span
-          className="text-[10px] font-bold tracking-[.13em] uppercase"
+          className="text-micro font-bold tracking-[.13em] uppercase"
           style={{ color: color ?? 'var(--muted-foreground)' }}
         >
           {label}
@@ -322,7 +322,7 @@ export const PlanScreen = (): React.JSX.Element => {
             </span>
           </div>
           {debt.withoutEstimate > 0 && (
-            <div className="mt-1 text-[10.5px] font-semibold text-muted-foreground/70 tabular-nums">
+            <div className="mt-1 text-micro font-semibold text-muted-foreground/70 tabular-nums">
               {debt.withoutEstimate} without an estimate
             </div>
           )}
@@ -399,7 +399,7 @@ export const PlanScreen = (): React.JSX.Element => {
               onToggle={() => setHorizonOpen((previous) => !previous)}
               whisper={
                 headline && (
-                  <span className="truncate text-[10.5px] font-semibold" style={{ color: GREEN }}>
+                  <span className="truncate text-micro font-semibold" style={{ color: GREEN }}>
                     {headline.title} · {headline.label}
                   </span>
                 )
@@ -432,7 +432,7 @@ export const PlanScreen = (): React.JSX.Element => {
                   <button
                     type="button"
                     onClick={() => setReordering((previous) => !previous)}
-                    className="flex-none rounded-lg border border-white/14 px-2.5 py-1 text-[10.5px] font-bold text-muted-foreground"
+                    className="flex-none rounded-lg border border-line-strong px-2.5 py-1 text-micro font-bold text-muted-foreground"
                   >
                     {reordering ? 'Done' : 'Reorder'}
                   </button>
@@ -478,7 +478,7 @@ export const PlanScreen = (): React.JSX.Element => {
           {queue.length > 0 && (
             <section>
               <div className="mb-2.5 flex items-baseline justify-between">
-                <h2 className="text-[10px] font-bold tracking-[.13em] text-muted-foreground uppercase">
+                <h2 className="text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
                   The queue
                 </h2>
                 <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">

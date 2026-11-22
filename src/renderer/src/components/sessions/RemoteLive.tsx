@@ -28,25 +28,25 @@ export const PlayingOnNotice = ({
   const noSignal = useNoSignalText(session);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[11px] border border-border bg-white/[0.02] px-3.5 py-2.5 text-[13px]">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[11px] border border-border bg-bone/[0.02] px-3.5 py-2.5 text-[13px]">
       <span className="flex items-center gap-2 font-semibold text-foreground">
         <span
           className={
             noSignal === null
-              ? 'h-1.75 w-1.75 flex-none animate-[afterplay-pulse-dot_1.4s_infinite] rounded-full bg-primary'
-              : 'h-1.75 w-1.75 flex-none rounded-full bg-[#e3b24a]'
+              ? 'h-1.75 w-1.75 flex-none animate-[afterplay-pulse-dot_1.4s_infinite] rounded-full bg-live'
+              : 'h-1.75 w-1.75 flex-none rounded-full bg-phosphor'
           }
         />
         Playing on {deviceName}
       </span>
-      {noSignal !== null && <span className="font-semibold text-[#e3b24a]">{noSignal}</span>}
+      {noSignal !== null && <span className="font-semibold text-phosphor">{noSignal}</span>}
       {onStop && (
         <button
           type="button"
           onClick={onStop}
           disabled={stopping}
           title="Stop this timer"
-          className="ml-auto flex items-center gap-1.5 rounded-[8px] border border-input bg-white/[0.04] px-2.5 py-1.25 text-[12px] font-bold text-muted-foreground transition-colors duration-150 hover:border-destructive/45 hover:text-destructive focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
+          className="ml-auto flex items-center gap-1.5 rounded-[8px] border border-input bg-bone/[0.04] px-2.5 py-1.25 text-[12px] font-bold text-muted-foreground transition-colors duration-150 hover:border-destructive/45 hover:text-destructive focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
         >
           <Square size={11} fill="currentColor" />
           {stopping ? 'Stopping…' : 'Stop timer'}

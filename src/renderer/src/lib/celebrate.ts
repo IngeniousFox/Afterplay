@@ -18,7 +18,7 @@ const COLORS = [
   TEAL,
   BLUE,
   VIOLET,
-  '#e85d72', // el rosa de 'dropped', que como confeti es solo un rosa cálido
+  '#ff5e57', // el rosa de 'dropped', que como confeti es solo un rosa cálido
   '#ffffff',
 ];
 

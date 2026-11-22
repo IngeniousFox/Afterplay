@@ -42,10 +42,10 @@ export const RadarRow = ({ game, onAdd, onDismiss }: RadarRowProps): React.JSX.E
           summary: null,
         })
       }
-      className="group relative flex cursor-pointer gap-4 rounded-[15px] border border-dashed p-3.5 transition-[border-color,background-color] duration-150 hover:bg-white/[0.04]"
+      className="group relative flex cursor-pointer gap-4 rounded-[15px] border border-dashed p-3.5 transition-[border-color,background-color] duration-150 hover:bg-bone/[0.04]"
       style={{ borderColor: `${VIOLET}3d`, background: `${VIOLET}08` }}
     >
-      <div className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-white/10 bg-muted shadow-[0_8px_22px_rgba(0,0,0,.45)]">
+      <div className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-line bg-muted shadow-[0_8px_22px_rgba(3,6,7,.45)]">
         {coverSrc ? (
           <img
             src={coverSrc}
@@ -68,7 +68,7 @@ export const RadarRow = ({ game, onAdd, onDismiss }: RadarRowProps): React.JSX.E
             </span>
             {isNew && (
               <span
-                className="flex flex-none items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-extrabold tracking-[.08em]"
+                className="flex flex-none items-center gap-1 rounded-md px-1.5 py-0.5 text-micro font-extrabold tracking-[.08em]"
                 style={{ color: VIOLET, background: `${VIOLET}24` }}
               >
                 <Sparkles size={9} />
@@ -86,7 +86,7 @@ export const RadarRow = ({ game, onAdd, onDismiss }: RadarRowProps): React.JSX.E
               }}
               title="Not interested — hide this one"
               aria-label="Dismiss"
-              className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-transparent text-muted-foreground/70 opacity-0 transition-[opacity,background-color,border-color] duration-150 group-hover:opacity-100 hover:border-input hover:bg-white/[0.06] hover:text-foreground focus-visible:opacity-100"
+              className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-transparent text-muted-foreground/70 opacity-0 transition-[opacity,background-color,border-color] duration-150 group-hover:opacity-100 hover:border-input hover:bg-bone/[0.06] hover:text-foreground focus-visible:opacity-100"
             >
               <X size={13} />
             </button>

@@ -60,7 +60,7 @@ export const SteamAppIdEditor = ({
       }
     >
       <label htmlFor="steam-app-id" className={fieldLabelClass}>
-        STEAM APP ID
+        Steam app ID
       </label>
       <input
         id="steam-app-id"

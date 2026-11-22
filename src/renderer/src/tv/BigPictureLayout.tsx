@@ -133,17 +133,17 @@ const KEY_GLYPHS: Record<TvHintAction, string> = {
 // notas ("¿por qué hay tantas doradas?") y ya no puedes dejar de ver.
 // Geometría/ritmo deterministas por índice (el compilador de React prohíbe
 // Math.random en render, y así cada arranque enseña el mismo cielo).
-const ORB_COLORS = ['#f5d98a', '#e8c97a', '#fbe7b2', '#e3b24a'] as const;
+const ORB_COLORS = ['#f5d98a', '#e8c97a', '#fbe7b2', '#ffb347'] as const;
 // La tabla de brasas por estado — SIEMPRE versiones suaves, nunca el color
-// de UI puro (un enjambre de #e85d72 puros sería una alarma, no un cielo).
+// de UI puro (un enjambre de #ff5e57 puros sería una alarma, no un cielo).
 const ORB_STATE_COLORS: Record<string, string> = {
-  started: '#8be8b6',
-  completed: '#edd39a',
-  dropped: '#d998a5',
-  on_hold: '#aab2be',
-  resting: '#adb3e2',
-  plan_to_play: '#9fb8dc',
-  unplayed: '#c2c8c2',
+  started: '#ffd08a',
+  completed: '#c3e6ad',
+  dropped: '#b5bcbd',
+  on_hold: '#d5caff',
+  resting: '#d5caff',
+  plan_to_play: '#a6e6ee',
+  unplayed: '#a6e6ee',
 };
 // Sin tope ni mínimo, a propósito: el cielo enseña EXACTAMENTE tu
 // biblioteca — un juego, una luz. La ley de conservación de energía de
@@ -183,7 +183,7 @@ const routeAccent = (pathname: string): string => {
 const ROOM_ACCENTS = [GREEN, BLUE, VIOLET, TEAL] as const;
 
 const PadGlyph = ({ label }: { label: string }): React.JSX.Element => (
-  <span className="flex h-[1.4em] min-w-[1.4em] items-center justify-center rounded-full border border-white/20 bg-white/[0.05] px-[0.35em] text-[0.6em] font-extrabold tracking-[.04em] text-foreground/90">
+  <span className="flex h-[1.4em] min-w-[1.4em] items-center justify-center rounded-full border border-line-strong bg-bone/[0.05] px-[0.35em] text-[0.6em] font-extrabold tracking-[.04em] text-foreground/90">
     {label}
   </span>
 );
@@ -515,10 +515,10 @@ const TvShell = (): React.JSX.Element => {
       <TvLegendContext.Provider value={legendRegistry}>
         <TvBackdropContext.Provider value={setBackdrop}>
           <div
-            // Base #070908 y no el #0b0d0c del escritorio: la tele arranca
+            // Base #0c1012 y no el #101416 del escritorio: la tele arranca
             // desde un negro más hondo — la viñeta muere ahí y los paneles
             // de cristal tienen algo oscuro de verdad detrás.
-            className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-[#070908] text-foreground"
+            className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-inset text-foreground"
             // La escala 10-foot entera cuelga de esta base (§6): proporcional
             // al alto del display que negocie Moonlight — ni enana en 4K ni
             // gigante en 720p. Todo lo interno va en em/rem.
@@ -571,7 +571,7 @@ const TvShell = (): React.JSX.Element => {
                 className="absolute inset-0"
                 style={{
                   background:
-                    'linear-gradient(180deg, rgba(8,10,9,.52) 0%, rgba(8,10,9,.26) 40%, rgba(8,10,9,.62) 100%)',
+                    'linear-gradient(180deg, rgba(8,11,12,.52) 0%, rgba(8,11,12,.26) 40%, rgba(8,11,12,.62) 100%)',
                 }}
               />
               {/* La luz de la habitación (routeAccent): un baño cenital del
@@ -597,14 +597,14 @@ const TvShell = (): React.JSX.Element => {
                 className="afterplay-tv-aurora-a animate-[afterplay-tv-aurora-a_26s_ease-in-out_infinite] absolute -top-[30%] -left-[22%] h-[95vh] w-[70vw]"
                 style={{
                   background:
-                    'radial-gradient(closest-side, rgba(47,220,126,.14), rgba(47,220,126,.055) 55%, transparent 78%)',
+                    'radial-gradient(closest-side, rgba(255,179,71,.14), rgba(255,179,71,.055) 55%, transparent 78%)',
                 }}
               />
               <div
                 className="afterplay-tv-aurora-b animate-[afterplay-tv-aurora-b_32s_ease-in-out_infinite] absolute -right-[20%] -bottom-[34%] h-[100vh] w-[66vw]"
                 style={{
                   background:
-                    'radial-gradient(closest-side, rgba(124,134,200,.15), rgba(124,134,200,.06) 55%, transparent 78%)',
+                    'radial-gradient(closest-side, rgba(185,166,255,.15), rgba(185,166,255,.06) 55%, transparent 78%)',
                 }}
               />
               {/* Las luciérnagas y los brillos-aurora vagando — tu
@@ -638,7 +638,7 @@ const TvShell = (): React.JSX.Element => {
             {/* La leyenda: el manual permanente, en el idioma del dispositivo
               que hablara último. El item de menú es un BOTÓN de verdad — el
               ratón también merece su puerta al menú. */}
-            <div className="relative flex h-[2.7em] flex-none items-center gap-[1.5em] bg-black/45 px-[4vw] text-[0.72em] font-bold text-muted-foreground backdrop-blur-[10px]">
+            <div className="relative flex h-[2.7em] flex-none items-center gap-[1.5em] bg-inset/45 px-[4vw] text-[0.72em] font-bold text-muted-foreground backdrop-blur-[10px]">
               {/* Filete de luz en vez de un border plano — y del COLOR de la
                 habitación (routeAccent): la luz de la pantalla llega hasta
                 el pie. Cambia seco al navegar, pero un pelo de luz de 1px

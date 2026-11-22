@@ -65,7 +65,7 @@ const HistoryRow = ({ entry }: { entry: Entry }): React.JSX.Element => {
             </span>
           </div>
           {entry.event.note && (
-            <div className="truncate text-[10.5px] text-muted-foreground">{entry.event.note}</div>
+            <div className="truncate text-micro text-muted-foreground">{entry.event.note}</div>
           )}
         </div>
         <span className="flex-none text-[11px] font-semibold text-muted-foreground tabular-nums">
@@ -90,7 +90,7 @@ const HistoryRow = ({ entry }: { entry: Entry }): React.JSX.Element => {
           {status.label}
         </div>
         {entry.event.note && (
-          <div className="truncate text-[10.5px] text-muted-foreground">{entry.event.note}</div>
+          <div className="truncate text-micro text-muted-foreground">{entry.event.note}</div>
         )}
       </div>
       <span className="flex-none text-[11px] font-semibold text-muted-foreground tabular-nums">
@@ -109,7 +109,7 @@ export const HistorySection = ({ game }: { game: GameDetail }): React.JSX.Elemen
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">HISTORY</SectionLabel>
+      <SectionLabel className="mb-2.5">History</SectionLabel>
       <div className="flex flex-col gap-1.5">
         {shown.map((entry, index) => (
           <HistoryRow key={`${entry.kind}-${index}`} entry={entry} />
@@ -151,7 +151,7 @@ export const SessionHistorySection = ({
   return (
     <section>
       <div className="mb-2.5 flex items-baseline justify-between">
-        <SectionLabel>SESSION HISTORY</SectionLabel>
+        <SectionLabel>Session history</SectionLabel>
         <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
           {pluralize(sessions.length, 'session')} · {formatHours(totalSeconds / 3600)}
         </span>
@@ -174,7 +174,7 @@ export const SessionHistorySection = ({
                     ? formatByPrecision(session.startedAt, 'day')
                     : formatByPrecision(session.startedAt, session.datePrecision)}
                 </div>
-                <div className="mt-0.5 text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+                <div className="mt-0.5 text-micro font-semibold text-muted-foreground tabular-nums">
                   {session.datePrecision === 'datetime' && (
                     <>
                       {formatTime(session.startedAt)}
@@ -197,7 +197,7 @@ export const SessionHistorySection = ({
             </div>
             {/* El diario de sesión: "dónde lo dejé". */}
             {session.note && (
-              <p className="mt-1.5 border-t border-white/5 pt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                 {session.note}
               </p>
             )}

@@ -92,7 +92,7 @@ const ProgressRing = ({
           cy={RING_SIZE / 2}
           r={RING_RADIUS}
           fill="none"
-          stroke="rgba(255,255,255,.07)"
+          stroke="rgba(233,228,216,.07)"
           strokeWidth={RING_STROKE}
         />
         {fraction > 0 && (
@@ -114,7 +114,7 @@ const ProgressRing = ({
         )}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[10.5px] font-extrabold tabular-nums" style={{ color }}>
+        <span className="text-micro font-extrabold tabular-nums" style={{ color }}>
           {percent}%
         </span>
       </div>
@@ -163,7 +163,7 @@ const RarestMedal = ({ entry }: { entry: AchievementEntry }): React.JSX.Element 
       <div
         className="relative h-12 w-12 overflow-hidden rounded-full transition-transform duration-200 ease-[cubic-bezier(.2,.7,.3,1)] hover:-translate-y-0.75"
         style={{
-          boxShadow: `inset 0 0 0 1.5px ${rare ? `${accent}a6` : 'rgba(255,255,255,.22)'}, inset 0 1px 0 rgba(255,255,255,.26), 0 4px 11px rgba(0,0,0,.5)`,
+          boxShadow: `inset 0 0 0 1.5px ${rare ? `${accent}a6` : 'rgba(233,228,216,.22)'}, inset 0 1px 0 rgba(233,228,216,.26), 0 4px 11px rgba(3,6,7,.5)`,
         }}
       >
         <MedalFace entry={entry} size={48} iconSize={14} />
@@ -172,13 +172,13 @@ const RarestMedal = ({ entry }: { entry: AchievementEntry }): React.JSX.Element 
           className="pointer-events-none absolute inset-0 rounded-full"
           style={{
             background:
-              'radial-gradient(120% 85% at 30% 12%, rgba(255,255,255,.26), transparent 46%)',
+              'radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,.26), transparent 46%)',
           }}
         />
       </div>
       {entry.globalPercent !== null && (
         <span
-          className="text-[10.5px] font-extrabold tabular-nums"
+          className="text-micro font-extrabold tabular-nums"
           style={rare ? { color: accent } : { color: 'var(--muted-foreground)' }}
         >
           {percentLabel(entry.globalPercent)}
@@ -240,8 +240,8 @@ const TrophyCase = ({
       className="relative overflow-hidden rounded-[16px] border"
       style={{
         borderColor: `${accent}33`,
-        background: `linear-gradient(118deg, ${accent}1c, rgba(255,255,255,.016) 54%)`,
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,.07)',
+        background: `linear-gradient(118deg, ${accent}1c, rgba(233,228,216,.016) 54%)`,
+        boxShadow: 'inset 0 1px 0 rgba(233,228,216,.07)',
       }}
     >
       {/* El aliento de color tras la medalla — un lavado radial, no un glow:
@@ -265,7 +265,7 @@ const TrophyCase = ({
               title={`${star.displayName} — click to find it below`}
               className="relative block h-25 w-25 cursor-pointer overflow-hidden rounded-full border-0 p-0 transition-transform duration-250 ease-[cubic-bezier(.2,.7,.3,1)] hover:-translate-y-1"
               style={{
-                boxShadow: `inset 0 0 0 2px ${accent}, inset 0 2px 0 rgba(255,255,255,.34), 0 10px 26px rgba(0,0,0,.6), 0 0 0 5px ${accent}1f`,
+                boxShadow: `inset 0 0 0 2px ${accent}, inset 0 2px 0 rgba(233,228,216,.34), 0 10px 26px rgba(3,6,7,.6), 0 0 0 5px ${accent}1f`,
               }}
             >
               <MedalFace entry={star} size={100} iconSize={22} />
@@ -274,7 +274,7 @@ const TrophyCase = ({
                 className="pointer-events-none absolute inset-0 rounded-full"
                 style={{
                   background:
-                    'radial-gradient(120% 85% at 30% 12%, rgba(255,255,255,.3), transparent 46%)',
+                    'radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,.3), transparent 46%)',
                 }}
               />
             </button>
@@ -283,15 +283,15 @@ const TrophyCase = ({
             <span
               aria-hidden
               className="absolute -bottom-2.5 left-1/2 h-2.5 w-18.5 -translate-x-1/2 rounded-full"
-              style={{ background: 'radial-gradient(ellipse, rgba(0,0,0,.62), transparent 70%)' }}
+              style={{ background: 'radial-gradient(ellipse, rgba(3,6,7,.62), transparent 70%)' }}
             />
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-[9.5px] font-extrabold tracking-[.2em]" style={{ color: accent }}>
+            <div className="text-micro font-extrabold tracking-[.2em]" style={{ color: accent }}>
               {complete ? 'COMPLETED' : starUltra ? 'YOUR RAREST PIECE' : 'RAREST UNLOCKED'}
             </div>
-            <div className="mt-1.75 text-[25px] leading-[1.12] font-extrabold tracking-[-.015em] text-foreground">
+            <div className="mt-1.75 text-[25px] leading-[1.12] font-display font-bold text-foreground tabular-nums">
               {star.displayName}
             </div>
             {/* La línea editorial: el logro CUENTA algo, y el filo de color
@@ -330,8 +330,8 @@ const TrophyCase = ({
               sola conseguida el bloque colapsa entero — nada de divisores
               huérfanos custodiando el vacío. */}
           {alsoRare.length > 0 && (
-            <div className="hidden flex-none flex-col items-center justify-center gap-2.75 self-stretch border-l border-white/[0.07] pl-5.5 min-[900px]:flex">
-              <span className="text-[8.5px] font-extrabold tracking-[.18em] text-muted-foreground/50">
+            <div className="hidden flex-none flex-col items-center justify-center gap-2.75 self-stretch border-l border-line pl-5.5 min-[900px]:flex">
+              <span className="text-micro font-extrabold tracking-[.18em] text-muted-foreground/50">
                 ALSO RARE
               </span>
               <div className="flex gap-3.5">
@@ -349,9 +349,9 @@ const TrophyCase = ({
           0% y un "none yet" honesto dicen más que una medalla inventada. */}
       <div
         className={`relative flex flex-wrap items-center gap-3.5 px-6 py-3.25 ${
-          star ? 'border-t border-white/[0.07]' : ''
+          star ? 'border-t border-line' : ''
         }`}
-        style={{ background: star ? 'rgba(0,0,0,.24)' : 'transparent' }}
+        style={{ background: star ? 'rgba(3,6,7,.24)' : 'transparent' }}
       >
         <ProgressRing fraction={fraction} complete={complete} />
         <span className="text-[19px] leading-none font-extrabold text-foreground tabular-nums">
@@ -361,7 +361,7 @@ const TrophyCase = ({
           of {total} achievements
         </span>
         {(rareCount > 0 || ultraCount > 0) && (
-          <span aria-hidden className="h-3.5 w-px bg-white/[0.12]" />
+          <span aria-hidden className="h-3.5 w-px bg-bone/[0.12]" />
         )}
         {rareCount > 0 && (
           <span
@@ -407,7 +407,7 @@ const TrophyCase = ({
                 : 'Re-fetch this game’s achievements from Steam'
             }
             aria-label="Refresh achievements"
-            className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition-colors duration-150 hover:bg-bone/[0.07] hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           >
             <RefreshCw size={11} className={refreshing ? 'animate-spin' : undefined} />
           </button>
@@ -429,7 +429,7 @@ const SourceCompletionRow = ({
 }: {
   completion: SourceCompletion[];
 }): React.JSX.Element => (
-  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/[0.07] px-6 py-2.5">
+  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line px-6 py-2.5">
     {completion.map((source) => (
       <span
         key={source.source}
@@ -440,7 +440,7 @@ const SourceCompletionRow = ({
             : undefined
         }
       >
-        <span className="text-[10px] font-bold tracking-[.12em] text-muted-foreground uppercase">
+        <span className="text-micro font-bold tracking-[.12em] text-muted-foreground uppercase">
           {ACHIEVEMENT_SOURCE_LABEL[source.source]}
         </span>
         {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
@@ -489,11 +489,11 @@ const RowIcon = ({
   // la regla de la casa prohíbe (la viveza sale de lo físico, no del neón).
   const shadow = unlocked
     ? ultra
-      ? `inset 0 0 0 2px ${accent}, inset 0 1.5px 0 rgba(255,255,255,.34), 0 5px 14px rgba(0,0,0,.6), 0 0 0 3px ${accent}26`
+      ? `inset 0 0 0 2px ${accent}, inset 0 1.5px 0 rgba(233,228,216,.34), 0 5px 14px rgba(3,6,7,.6), 0 0 0 3px ${accent}26`
       : rare
-        ? `inset 0 0 0 1.5px ${accent}b3, inset 0 1px 0 rgba(255,255,255,.26), 0 3px 9px rgba(0,0,0,.5)`
-        : 'inset 0 0 0 1px rgba(255,255,255,.14), inset 0 1px 0 rgba(255,255,255,.16), 0 2px 6px rgba(0,0,0,.4)'
-    : 'inset 0 0 0 1px rgba(255,255,255,.07)';
+        ? `inset 0 0 0 1.5px ${accent}b3, inset 0 1px 0 rgba(233,228,216,.26), 0 3px 9px rgba(3,6,7,.5)`
+        : 'inset 0 0 0 1px rgba(233,228,216,.14), inset 0 1px 0 rgba(233,228,216,.16), 0 2px 6px rgba(3,6,7,.4)'
+    : 'inset 0 0 0 1px rgba(233,228,216,.07)';
   const specular = ultra ? 0.3 : rare ? 0.24 : 0.16;
 
   return (
@@ -515,7 +515,7 @@ const RowIcon = ({
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-[11px]"
           style={{
-            background: `radial-gradient(120% 85% at 30% 12%, rgba(255,255,255,${specular}), transparent 46%)`,
+            background: `radial-gradient(120% 85% at 30% 12%, rgba(233,228,216,${specular}), transparent 46%)`,
           }}
         />
       )}
@@ -606,7 +606,7 @@ const AchievementRow = ({
       data-ach={entry.id}
       className={`group/ach relative flex items-center gap-3.25 px-4 py-2.25 transition-colors duration-150 ${flashClass}`}
       style={{
-        borderTop: showDivider ? '1px solid rgba(255,255,255,.05)' : '1px solid transparent',
+        borderTop: showDivider ? '1px solid rgba(233,228,216,.05)' : '1px solid transparent',
         // El lavado de color SOLO en los raros conseguidos: si cada fila se
         // tiñera, la lista sería un neón y el raro dejaría de destacar.
         background:
@@ -615,8 +615,8 @@ const AchievementRow = ({
       onMouseEnter={(event) => {
         event.currentTarget.style.background =
           unlocked && rare
-            ? `linear-gradient(90deg, ${accent}1c, rgba(255,255,255,.03) 42%)`
-            : 'rgba(255,255,255,.04)';
+            ? `linear-gradient(90deg, ${accent}1c, rgba(233,228,216,.03) 42%)`
+            : 'rgba(233,228,216,.04)';
       }}
       onMouseLeave={(event) => {
         event.currentTarget.style.background =
@@ -651,7 +651,7 @@ const AchievementRow = ({
           {unlocked &&
             !entry.sources.includes('steam') &&
             (entry.sources.includes('emu') || entry.sources.includes('ra')) && (
-              <span className="flex-none rounded px-1 py-0.25 text-[8.5px] font-bold tracking-[.06em] text-muted-foreground/60 uppercase">
+              <span className="flex-none rounded px-1 py-0.25 text-micro font-bold tracking-[.06em] text-muted-foreground/60 uppercase">
                 {entry.sources.includes('emu') ? 'local' : 'RA'}
               </span>
             )}
@@ -661,7 +661,7 @@ const AchievementRow = ({
           {/* La fecha comparte línea con la descripción: es lo que baja la
               fila de tres líneas a dos. Solo como fecha si es de fiar. */}
           {entry.unlockedAt && (
-            <span className="flex-none text-[10px] font-semibold text-muted-foreground/65 tabular-nums">
+            <span className="flex-none text-micro font-semibold text-muted-foreground/65 tabular-nums">
               {entry.dateReliable
                 ? formatByPrecision(entry.unlockedAt, 'day', timeFormat)
                 : 'date unknown'}
@@ -684,12 +684,12 @@ const AchievementRow = ({
           >
             {percentLabel(percent)}
           </span>
-          <div className="h-[3px] w-11 overflow-hidden rounded-full bg-white/[0.08]">
+          <div className="h-[3px] w-11 overflow-hidden rounded-full bg-bone/[0.08]">
             <div
               className="h-full rounded-full"
               style={{
                 width: `${Math.max(3, Math.min(100, percent))}%`,
-                background: rare ? accent : 'rgba(255,255,255,.35)',
+                background: rare ? accent : 'rgba(233,228,216,.35)',
                 opacity: unlocked ? 1 : 0.4,
               }}
             />
@@ -715,7 +715,7 @@ const GroupHeader = ({
 }): React.JSX.Element => (
   <div
     className="flex items-center gap-2.25 px-4 pt-2.75 pb-2"
-    style={{ background: unlocked ? `${GREEN}0b` : 'rgba(255,255,255,.02)' }}
+    style={{ background: unlocked ? `${GREEN}0b` : 'rgba(233,228,216,.02)' }}
   >
     <span
       aria-hidden
@@ -723,13 +723,13 @@ const GroupHeader = ({
       style={{ background: unlocked ? GREEN : 'rgba(139,145,140,.5)' }}
     />
     <span
-      className="text-[9.5px] font-extrabold tracking-[.18em]"
+      className="text-micro font-extrabold tracking-[.18em]"
       style={{ color: unlocked ? GREEN : 'rgba(139,145,140,.8)' }}
     >
       {label}
     </span>
-    <span className="text-[9.5px] font-bold text-muted-foreground/60 tabular-nums">{count}</span>
-    <span aria-hidden className="h-px flex-1 bg-white/[0.06]" />
+    <span className="text-micro font-bold text-muted-foreground/60 tabular-nums">{count}</span>
+    <span aria-hidden className="h-px flex-1 bg-bone/[0.06]" />
   </div>
 );
 
@@ -864,20 +864,20 @@ export const AchievementsSection = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search achievements…"
-              className="w-full rounded-[10px] border border-white/[0.12] bg-white/[0.03] py-2.25 pr-8 pl-8.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+              className="w-full rounded-[10px] border border-line-strong bg-bone/[0.03] py-2.25 pr-8 pl-8.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
             />
             {searching && (
               <button
                 type="button"
                 onClick={() => setQuery('')}
                 aria-label="Clear search"
-                className="absolute top-1/2 right-2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.08] text-foreground transition-colors duration-150 hover:bg-white/[0.14]"
+                className="absolute top-1/2 right-2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-bone/[0.08] text-foreground transition-colors duration-150 hover:bg-bone/[0.14]"
               >
                 <X size={11} />
               </button>
             )}
           </div>
-          <div className="flex gap-1.25 rounded-[10px] border border-white/[0.09] bg-white/[0.03] p-0.75">
+          <div className="flex gap-1.25 rounded-[10px] border border-line bg-bone/[0.03] p-0.75">
             {filters.map((option) => (
               <button
                 key={option.key}
@@ -886,14 +886,12 @@ export const AchievementsSection = ({
                 className="flex items-center gap-1.25 rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition-colors duration-150"
                 style={
                   filter === option.key
-                    ? { background: 'rgba(255,255,255,.1)', color: 'var(--foreground)' }
+                    ? { background: 'rgba(233,228,216,.1)', color: 'var(--foreground)' }
                     : { color: 'var(--muted-foreground)' }
                 }
               >
                 {option.label}
-                <span className="text-[10.5px] font-bold opacity-65 tabular-nums">
-                  {option.count}
-                </span>
+                <span className="text-micro font-bold opacity-65 tabular-nums">{option.count}</span>
               </button>
             ))}
           </div>
@@ -910,7 +908,7 @@ export const AchievementsSection = ({
 
       {filtered.length > 0 ? (
         <div
-          className={`overflow-hidden rounded-[14px] border border-white/[0.07] bg-white/[0.012] ${showToolbar ? '' : 'mt-2.5'} ${revealClass}`}
+          className={`overflow-hidden rounded-[14px] border border-line bg-bone/[0.012] ${showToolbar ? '' : 'mt-2.5'} ${revealClass}`}
           style={revealStyle(2)}
         >
           {visible.map((entry) => (
@@ -933,7 +931,7 @@ export const AchievementsSection = ({
             <button
               type="button"
               onClick={() => setExpanded((current) => !current)}
-              className="flex w-full items-center justify-center gap-1.75 border-t border-white/[0.07] bg-white/[0.02] py-2.75 text-[12px] font-bold text-muted-foreground transition-colors duration-150 hover:bg-white/[0.055] hover:text-foreground"
+              className="flex w-full items-center justify-center gap-1.75 border-t border-line bg-bone/[0.02] py-2.75 text-[12px] font-bold text-muted-foreground transition-colors duration-150 hover:bg-bone/[0.055] hover:text-foreground"
             >
               <ChevronDown
                 size={13}
@@ -944,7 +942,7 @@ export const AchievementsSection = ({
           )}
         </div>
       ) : (
-        <div className="mt-2.5 rounded-[14px] border border-dashed border-white/[0.1] px-8 py-8.5 text-center">
+        <div className="mt-2.5 rounded-[14px] border border-dashed border-line px-8 py-8.5 text-center">
           <Trophy size={22} className="mx-auto mb-2.25 text-muted-foreground/35" />
           <div className="text-[13px] text-muted-foreground">
             Nothing matches{' '}
@@ -956,7 +954,7 @@ export const AchievementsSection = ({
               setQuery('');
               setFilter('all');
             }}
-            className="mt-3 rounded-[9px] border border-white/[0.14] bg-white/[0.03] px-3.75 py-1.75 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:bg-white/[0.07]"
+            className="mt-3 rounded-[9px] border border-line-strong bg-bone/[0.03] px-3.75 py-1.75 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:bg-bone/[0.07]"
           >
             Clear search
           </button>

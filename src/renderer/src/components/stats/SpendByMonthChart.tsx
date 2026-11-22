@@ -56,7 +56,7 @@ export const SpendByMonthChart = ({
       formatValue={formatMoney}
       barGradient={`linear-gradient(180deg,${AMBER},#b98c2e)`}
       labelColor={AMBER}
-      glowColor="rgba(227,178,74,.18)"
+      glowColor="rgba(255,179,71,.18)"
     />
   );
 };

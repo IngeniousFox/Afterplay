@@ -42,8 +42,8 @@ const NoteRowTv = ({
         ...tvRevealStyle(index),
         ...(focused
           ? {
-              background: 'rgba(227,178,74,.08)',
-              boxShadow: 'inset 0 0 0 1px rgba(227,178,74,.30)',
+              background: 'rgba(255,179,71,.08)',
+              boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.30)',
             }
           : undefined),
       }}
@@ -52,8 +52,8 @@ const NoteRowTv = ({
         {formatByPrecision(when, datePrecision, timeFormat)}
       </div>
       <div
-        className="mt-[0.25em] border-l-[0.14em] pl-[0.55em] text-[0.68em] leading-snug text-white/80 italic"
-        style={{ borderColor: '#e3b24a55' }}
+        className="mt-[0.25em] border-l-[0.14em] pl-[0.55em] text-[0.68em] leading-snug text-bone italic"
+        style={{ borderColor: '#ffb34755' }}
       >
         “{note}”
       </div>
@@ -80,8 +80,8 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
     <div className="flex h-full min-h-0 flex-col gap-[1em]">
       {gameNotes ? (
         <div
-          className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[0.6em] border border-white/[0.08] bg-black/70 ${tvRevealClass}`}
-          style={{ ...tvRevealStyle(0), boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+          className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[0.6em] border border-line bg-inset/70 ${tvRevealClass}`}
+          style={{ ...tvRevealStyle(0), boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
         >
           {/* El aliento violeta y el lomo del cuaderno: las notas son
               memoria, y la memoria en esta casa es violeta — el mismo
@@ -91,29 +91,29 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                'radial-gradient(120% 170% at 0% 0%, rgba(124,134,200,.14), transparent 55%)',
+                'radial-gradient(120% 170% at 0% 0%, rgba(185,166,255,.14), transparent 55%)',
             }}
           />
           <span
             aria-hidden
             className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
             style={{
-              background: 'linear-gradient(180deg, #7c86c8, #7c86c826)',
-              boxShadow: '0 0 0.8em rgba(124,134,200,.55)',
+              background: 'linear-gradient(180deg, #b9a6ff, #b9a6ff26)',
+              boxShadow: '0 0 0.8em rgba(185,166,255,.55)',
             }}
           />
           {/* Las comillas de agua, medio recortadas a propósito — filigrana
               heredada del panel de la ficha, no rótulo. */}
           <span
             aria-hidden
-            className="pointer-events-none absolute -top-[0.12em] right-[0.3em] text-[2.3em] leading-none font-extrabold text-[#7c86c8]/15"
+            className="pointer-events-none absolute -top-[0.12em] right-[0.3em] text-[2.3em] leading-none font-extrabold text-st-resting/15"
           >
             ”
           </span>
-          <div className="relative flex flex-none items-center gap-[0.5em] border-b border-white/[0.07] px-[1em] py-[0.6em]">
+          <div className="relative flex flex-none items-center gap-[0.5em] border-b border-line px-[1em] py-[0.6em]">
             <NotebookPen
-              className="h-[0.95em] w-[0.95em] flex-none text-[#7c86c8]"
-              style={{ filter: 'drop-shadow(0 0 0.45em rgba(124,134,200,.55))' }}
+              className="h-[0.95em] w-[0.95em] flex-none text-st-resting"
+              style={{ filter: 'drop-shadow(0 0 0.45em rgba(185,166,255,.55))' }}
             />
             <span className="text-[0.55em] font-extrabold tracking-[.18em] text-muted-foreground">
               YOUR NOTES
@@ -135,14 +135,14 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
           {/* La lista se funde contra el borde: pista de que hay más abajo. */}
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-[1em] rounded-b-[0.6em] bg-gradient-to-t from-black/60 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-[1em] rounded-b-[0.6em] bg-gradient-to-t from-inset/60 to-transparent"
           />
         </div>
       ) : (
         // Vacío honesto: la sección existe (que se sepa que el juego admite
         // notas) pero no finge contenido — y dice claro dónde se escriben.
         <div
-          className={`flex flex-none items-center gap-[0.6em] rounded-[0.6em] border border-dashed border-white/[0.14] bg-white/[0.02] px-[1em] py-[0.8em] ${tvRevealClass}`}
+          className={`flex flex-none items-center gap-[0.6em] rounded-[0.6em] border border-dashed border-line-strong bg-bone/[0.02] px-[1em] py-[0.8em] ${tvRevealClass}`}
           style={tvRevealStyle(0)}
         >
           <NotebookPen className="h-[1em] w-[1em] flex-none text-muted-foreground" />
@@ -154,8 +154,8 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
 
       {sessionNotes.length > 0 && (
         <div
-          className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[0.6em] border border-white/[0.08] bg-black/70 ${tvRevealClass}`}
-          style={{ ...tvRevealStyle(1), boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }}
+          className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[0.6em] border border-line bg-inset/70 ${tvRevealClass}`}
+          style={{ ...tvRevealStyle(1), boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
         >
           {/* Aliento ámbar en la esquina: el color de las notas de sesión. */}
           <span
@@ -163,18 +163,18 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                'radial-gradient(120% 130% at 100% 0%, rgba(227,178,74,.10), transparent 55%)',
+                'radial-gradient(120% 130% at 100% 0%, rgba(255,179,71,.10), transparent 55%)',
             }}
           />
-          <div className="relative flex flex-none items-center gap-[0.5em] border-b border-white/[0.07] px-[1em] py-[0.6em]">
+          <div className="relative flex flex-none items-center gap-[0.5em] border-b border-line px-[1em] py-[0.6em]">
             <MessageSquareQuote
-              className="h-[0.95em] w-[0.95em] flex-none text-[#e3b24a]"
-              style={{ filter: 'drop-shadow(0 0 0.45em rgba(227,178,74,.5))' }}
+              className="h-[0.95em] w-[0.95em] flex-none text-phosphor"
+              style={{ filter: 'drop-shadow(0 0 0.45em rgba(255,179,71,.5))' }}
             />
             <span className="text-[0.55em] font-extrabold tracking-[.18em] text-muted-foreground">
               SESSION NOTES
             </span>
-            <span className="ml-auto rounded-full bg-white/[0.06] px-[0.6em] py-[0.12em] text-[0.5em] font-bold text-[#e3b24a] tabular-nums shadow-[inset_0_0_0_1px_rgba(255,255,255,.10)]">
+            <span className="ml-auto rounded-full bg-bone/[0.06] px-[0.6em] py-[0.12em] text-[0.5em] font-bold text-phosphor tabular-nums shadow-[inset_0_0_0_1px_rgba(233,228,216,.10)]">
               {sessionNotes.length}
             </span>
           </div>
@@ -197,7 +197,7 @@ export const TvDetailNotes = ({ game }: { game: GameDetail }): React.JSX.Element
           </div>
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-[1em] rounded-b-[0.6em] bg-gradient-to-t from-black/60 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-[1em] rounded-b-[0.6em] bg-gradient-to-t from-inset/60 to-transparent"
           />
         </div>
       )}

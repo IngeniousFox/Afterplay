@@ -146,14 +146,14 @@ export const SearchStep = ({
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search a game… (e.g. Sekiro)"
-          className="w-full rounded-[10px] border border-input bg-white/[0.03] py-2.75 pr-9.5 pl-9.5 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-primary/45 focus:bg-white/[0.05] focus:shadow-[0_0_0_3px_rgba(47,220,126,.12)]"
+          className="w-full rounded-[10px] border border-edge bg-inset py-2.75 pr-9.5 pl-9.5 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
         />
         {trimmed !== '' && (
           <button
             type="button"
             onClick={() => onQueryChange('')}
             aria-label="Clear search"
-            className="absolute top-1/2 right-2.75 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
+            className="absolute top-1/2 right-2.75 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-bone/8 hover:text-foreground"
           >
             <X size={14} />
           </button>
@@ -167,7 +167,7 @@ export const SearchStep = ({
         <button
           type="button"
           onClick={onScanFolders}
-          className="group/scan mt-2.5 flex w-full items-center gap-2.5 rounded-[10px] border border-dashed border-input bg-white/[0.02] px-3.25 py-2.5 text-left transition-colors duration-150 hover:border-primary/45 hover:bg-white/[0.04]"
+          className="group/scan mt-2.5 flex w-full items-center gap-2.5 rounded-[10px] border border-dashed border-input bg-bone/[0.02] px-3.25 py-2.5 text-left transition-colors duration-150 hover:border-primary/45 hover:bg-bone/[0.04]"
         >
           <span
             className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
@@ -195,7 +195,7 @@ export const SearchStep = ({
           <span className="text-[11px] font-bold tracking-[.11em] text-muted-foreground">
             {results.length} {results.length === 1 ? 'RESULT' : 'RESULTS'}
           </span>
-          <span className="text-[10.5px] text-muted-foreground/60">↑ ↓ to browse · ↵ to pick</span>
+          <span className="text-micro text-muted-foreground/60">↑ ↓ to browse · ↵ to pick</span>
         </div>
       )}
 
@@ -208,12 +208,12 @@ export const SearchStep = ({
             >
               {/* Mismo tamaño que CoverFrame, para que al llegar los
                   resultados la fila no cambie de alto ni dé el salto. */}
-              <div className="h-25 w-18 flex-none rounded-[8px] bg-white/[0.06]" />
+              <div className="h-25 w-18 flex-none rounded-[8px] bg-bone/[0.06]" />
               <div className="flex-1">
-                <div className="h-3.5 w-2/3 rounded bg-white/[0.06]" />
-                <div className="mt-2 h-3 w-1/3 rounded bg-white/[0.05]" />
-                <div className="mt-2.5 h-2.5 w-full rounded bg-white/[0.04]" />
-                <div className="mt-1.5 h-2.5 w-4/5 rounded bg-white/[0.04]" />
+                <div className="h-3.5 w-2/3 rounded bg-bone/[0.06]" />
+                <div className="mt-2 h-3 w-1/3 rounded bg-bone/[0.05]" />
+                <div className="mt-2.5 h-2.5 w-full rounded bg-bone/[0.04]" />
+                <div className="mt-1.5 h-2.5 w-4/5 rounded bg-bone/[0.04]" />
               </div>
             </div>
           ))
@@ -235,7 +235,7 @@ export const SearchStep = ({
           // Antes esto era un hueco en blanco: el modal abría sin decir nada
           // hasta que escribías. Ahora explica de dónde salen los resultados.
           <div className="flex flex-col items-center gap-2.5 px-4 py-10 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bone/[0.04]">
               <Gamepad2 size={20} strokeWidth={1.5} className="text-muted-foreground/50" />
             </div>
             <p className="text-[13px] font-semibold text-foreground">Find a game to add</p>
@@ -273,11 +273,11 @@ export const SearchStep = ({
                 ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
                 className={`group/result flex items-start gap-3.25 rounded-[11px] border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
                   isLocked
-                    ? 'cursor-default border-border bg-white/[0.02] opacity-55'
-                    : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-white/[0.05] hover:shadow-[0_8px_20px_rgba(0,0,0,.35)] ${
+                    ? 'cursor-default border-border bg-bone/[0.02] opacity-55'
+                    : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
                         isHighlighted
-                          ? 'border-primary/45 bg-white/[0.06] shadow-[0_8px_20px_rgba(0,0,0,.35)]'
-                          : 'border-border bg-white/[0.02]'
+                          ? 'border-primary/45 bg-bone/[0.06] shadow-[0_8px_20px_rgba(3,6,7,.35)]'
+                          : 'border-border bg-bone/[0.02]'
                       }`
                 } ${revealClass}`}
                 style={revealStyle(Math.min(index, 6))}
@@ -301,7 +301,7 @@ export const SearchStep = ({
                     )}
                     {owned && (
                       <span
-                        className="flex-none rounded-md px-1.75 py-0.5 text-[10px] font-bold tracking-[.08em]"
+                        className="flex-none rounded-md px-1.75 py-0.5 text-micro font-bold tracking-[.08em]"
                         style={{ background: `${owned.color}22`, color: owned.color }}
                       >
                         {owned.label}
@@ -313,13 +313,13 @@ export const SearchStep = ({
                     {result.genres.slice(0, MAX_GENRES).map((genre) => (
                       <span
                         key={genre}
-                        className="rounded-md border border-input bg-white/[0.04] px-1.75 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                        className="rounded-md border border-input bg-bone/[0.04] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
                       >
                         {genre}
                       </span>
                     ))}
                     {result.platforms.length > 0 && (
-                      <span className="truncate text-[10.5px] text-muted-foreground/70">
+                      <span className="truncate text-micro text-muted-foreground/70">
                         {result.platforms.slice(0, 3).join(' · ')}
                       </span>
                     )}

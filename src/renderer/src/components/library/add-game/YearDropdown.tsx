@@ -56,8 +56,8 @@ export const YearDropdown = ({ year, onSelectYear }: YearDropdownProps): React.J
                   setOpen(false);
                 }}
                 className={cn(
-                  'cursor-pointer rounded-lg px-2.5 py-1.75 text-center text-[13px] text-foreground hover:bg-white/[0.06]',
-                  isSelected && 'bg-white/[0.06] font-semibold',
+                  'cursor-pointer rounded-lg px-2.5 py-1.75 text-center text-[13px] text-foreground hover:bg-bone/[0.06]',
+                  isSelected && 'bg-bone/[0.06] font-semibold',
                 )}
               >
                 {option}
