@@ -238,7 +238,7 @@ const GameDetailView = ({
       tab={tab}
       onTabChange={setTab}
       bannerTab="overview"
-      status={<DetailStatus game={game} />}
+      status={<DetailStatus game={game} live={liveSession !== null} />}
       meta={
         <DetailMeta
           game={game}

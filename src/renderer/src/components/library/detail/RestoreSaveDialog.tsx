@@ -13,6 +13,8 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { dangerButtonClass, primaryButtonClass, secondaryButtonClass } from '../../../lib/styles';
+import { cn } from '../../../lib/utils';
+import { pressClass } from '../../fx/press';
 import { useState } from 'react';
 import type { RestoreMode, RestoreResult, SaveBackupRow } from '../../../../../shared/types';
 import { useRestoreSave } from '../../../hooks/saves';
@@ -198,8 +200,22 @@ export const RestoreSaveDialog = ({
                 type="button"
                 onClick={handleConfirm}
                 disabled={restore.isPending}
-                className={mode === 'in-place' ? dangerButtonClass : primaryButtonClass}
+                aria-busy={restore.isPending || undefined}
+                className={cn(
+                  mode === 'in-place' ? dangerButtonClass : primaryButtonClass,
+                  'relative isolate overflow-hidden',
+                  pressClass,
+                )}
               >
+                {/* Mientras escribe en disco, un barrido de luz recorre el
+                    botón: «escribiendo». Con reduced motion queda el giro
+                    del icono apagado y el texto. */}
+                {restore.isPending && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 -z-10 animate-sweep bg-[linear-gradient(100deg,transparent_30%,rgb(255_255_255/0.32)_50%,transparent_70%)] bg-size-[250%_100%] motion-reduce:hidden"
+                  />
+                )}
                 {restore.isPending ? (
                   <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />
                 ) : (
@@ -216,7 +232,7 @@ export const RestoreSaveDialog = ({
                 type="button"
                 onClick={handlePreview}
                 disabled={!canRun || restore.isPending}
-                className={secondaryButtonClass}
+                className={cn(secondaryButtonClass, pressClass)}
               >
                 {restore.isPending && (
                   <Loader2 size={15} className="animate-spin motion-reduce:animate-none" />

@@ -3,8 +3,10 @@ import { useState } from 'react';
 import type { IgdbSearchResult, SteamSearchResult } from '../../../../../shared/types';
 import { AddModeSwitch } from './AddModeSwitch';
 import { SteamFallback } from './SteamFallback';
-import { revealClass, revealStyle } from '../../../lib/styles';
 import { CoverThumb } from './CoverThumb';
+import { Stagger } from '../../fx/Stagger';
+import { TiltCover, TiltGlare } from '../../fx/TiltCover';
+import { useTiltRegion } from '../../fx/tilt';
 import type { GameId } from '../../../../../shared/entityIds';
 
 type SearchStepProps = {
@@ -62,13 +64,16 @@ const MAX_GENRES = 2;
 // tamaño. Sin nada superpuesto encima: la carátula se ve entera, que es
 // media gracia de reconocer un juego de un vistazo.
 const CoverFrame = ({ url }: { url: string | null }): React.JSX.Element => (
-  <div className="h-25 w-18 flex-none overflow-hidden rounded-sm border border-border bg-muted">
-    <CoverThumb
-      url={url}
-      alt=""
-      className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/result:scale-108"
-    />
-  </div>
+  <TiltCover className="flex-none rounded-sm">
+    <span className="relative block h-25 w-18 overflow-hidden rounded-sm border border-border bg-muted">
+      <CoverThumb
+        url={url}
+        alt=""
+        className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover/result:scale-108"
+      />
+      <TiltGlare />
+    </span>
+  </TiltCover>
 );
 
 // Paso de búsqueda IGDB del modal de Add Game — el resto del modal (ficha
@@ -93,6 +98,7 @@ export const SearchStep = ({
   // (que se queda en CSS puro): si el hover moviera este índice, el
   // scrollIntoView de abajo pelearía con el scroll del propio usuario.
   const [highlighted, setHighlighted] = useState(-1);
+  const tiltRegion = useTiltRegion();
   // Cambiar la búsqueda descarta el resaltado anterior (apuntaría a un juego
   // que ya no está en la lista) — ajuste durante el render, sin useEffect,
   // como el resto de la app.
@@ -171,162 +177,170 @@ export const SearchStep = ({
         </div>
       )}
 
-      <div className="mt-2.5 flex flex-col gap-2">
-        {isLoading && trimmed ? (
-          Array.from({ length: 4 }, (_, index) => (
-            <div
-              key={index}
-              className="flex animate-pulse motion-reduce:animate-none items-center gap-3.25 rounded-md border border-border p-2.75"
-            >
-              {/* Mismo tamaño que CoverFrame, para que al llegar los
-                  resultados la fila no cambie de alto ni dé el salto. */}
-              <div className="h-25 w-18 flex-none rounded-sm bg-bone/[0.06]" />
-              <div className="flex-1">
-                <div className="h-3.5 w-2/3 rounded bg-bone/[0.06]" />
-                <div className="mt-2 h-3 w-1/3 rounded bg-bone/[0.05]" />
-                <div className="mt-2.5 h-2.5 w-full rounded bg-bone/[0.04]" />
-                <div className="mt-1.5 h-2.5 w-4/5 rounded bg-bone/[0.04]" />
-              </div>
-            </div>
-          ))
-        ) : isError ? (
-          // Antes de esto, una búsqueda caída (sin red, token de IGDB
-          // caducado, 429) llegaba con `results` en undefined — que no
-          // encaja en NINGUNA de las otras ramas (ni "vacío" exige
-          // length===0, ni la de resultados tiene qué pintar) — y el área se
-          // quedaba en blanco, indistinguible de una app colgada.
-          <div className="flex flex-col items-center gap-2.5 px-4 py-8 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10">
-              <TriangleAlert size={18} strokeWidth={1.5} className="text-destructive/70" />
-            </div>
-            <p className="text-[13px] text-muted-foreground">
-              Couldn&apos;t reach the catalog — check your connection and try again.
-            </p>
-          </div>
-        ) : trimmed === '' ? (
-          // Antes esto era un hueco en blanco: el modal abría sin decir nada
-          // hasta que escribías. Ahora explica de dónde salen los resultados.
-          <div className="flex flex-col items-center gap-2.5 px-4 py-10 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bone/[0.04]">
-              <Gamepad2 size={20} strokeWidth={1.5} className="text-muted-foreground/50" />
-            </div>
-            <p className="text-[13px] font-semibold text-foreground">Find a game to add</p>
-            <p className="max-w-64 text-[12px] text-muted-foreground">
-              Type a title and pick it from the IGDB catalog — cover, genres and release year come
-              filled in.
-            </p>
-          </div>
-        ) : results?.length === 0 ? (
-          <SteamFallback
-            query={trimmed}
-            onSelect={onSelectSteam}
-            ownedBySteamAppId={ownedBySteamAppId}
-          />
-        ) : (
-          // Sin key artificial por búsqueda: cada tecleo trae igdbId
-          // distintos, así que React ya monta filas nuevas por su cuenta —
-          // eso solo ya relanza animate-in, sin necesitar un key de más.
-          results?.map((result, index) => {
-            const isHighlighted = index === highlighted;
-            const owned = ownedByIgdbId.get(result.igdbId);
-            // Ya es tuyo y no hay sitio al que llevarte: se enseña marcado
-            // pero apagado, en vez de dejar que lo elijas para estrellarte
-            // luego contra el UNIQUE al guardar.
-            const isLocked = owned !== undefined && owned.onPick === undefined;
-            return (
-              <button
-                key={result.igdbId}
-                type="button"
-                disabled={isLocked}
-                onClick={() => pick(result)}
-                // block:'nearest' es idempotente (no hace nada si la fila ya
-                // se ve entera), así que vale con llamarlo al pintar la fila
-                // resaltada — sin efectos ni refs que mantener.
-                ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-                className={`group/result flex items-start gap-3.25 rounded-md border p-2.75 text-left transition-[transform,scale,border-color,background-color,box-shadow] duration-150 ${
-                  isLocked
-                    ? 'cursor-default border-border bg-bone/[0.02] opacity-55'
-                    : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
-                        isHighlighted
-                          ? 'border-primary/45 bg-bone/[0.06] shadow-[0_8px_20px_rgba(3,6,7,.35)]'
-                          : 'border-border bg-bone/[0.02]'
-                      }`
-                } ${revealClass}`}
-                style={revealStyle(Math.min(index, 6))}
+      {/* Los resultados entran escalonados (fx/Stagger) cada vez que llega
+          una tanda nueva —la clave es la tanda, no lo tecleado— y sus
+          portadas se inclinan bajo el ratón: el modal vive en un portal
+          fuera del <main>, así que lleva su propia región de tilt. */}
+      <div ref={tiltRegion}>
+        <Stagger replayKey={results} max={6} step={50} className="mt-2.5 flex flex-col gap-2">
+          {isLoading && trimmed ? (
+            Array.from({ length: 4 }, (_, index) => (
+              <div
+                key={index}
+                className="flex animate-pulse motion-reduce:animate-none items-center gap-3.25 rounded-md border border-border p-2.75"
               >
-                <CoverFrame url={result.coverUrl} />
+                {/* Mismo tamaño que CoverFrame, para que al llegar los
+                  resultados la fila no cambie de alto ni dé el salto. */}
+                <div className="h-25 w-18 flex-none rounded-sm bg-bone/[0.06]" />
+                <div className="flex-1">
+                  <div className="h-3.5 w-2/3 rounded bg-bone/[0.06]" />
+                  <div className="mt-2 h-3 w-1/3 rounded bg-bone/[0.05]" />
+                  <div className="mt-2.5 h-2.5 w-full rounded bg-bone/[0.04]" />
+                  <div className="mt-1.5 h-2.5 w-4/5 rounded bg-bone/[0.04]" />
+                </div>
+              </div>
+            ))
+          ) : isError ? (
+            // Antes de esto, una búsqueda caída (sin red, token de IGDB
+            // caducado, 429) llegaba con `results` en undefined — que no
+            // encaja en NINGUNA de las otras ramas (ni "vacío" exige
+            // length===0, ni la de resultados tiene qué pintar) — y el área se
+            // quedaba en blanco, indistinguible de una app colgada.
+            <div className="flex flex-col items-center gap-2.5 px-4 py-8 text-center">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10">
+                <TriangleAlert size={18} strokeWidth={1.5} className="text-destructive/70" />
+              </div>
+              <p className="text-[13px] text-muted-foreground">
+                Couldn&apos;t reach the catalog — check your connection and try again.
+              </p>
+            </div>
+          ) : trimmed === '' ? (
+            // Antes esto era un hueco en blanco: el modal abría sin decir nada
+            // hasta que escribías. Ahora explica de dónde salen los resultados.
+            <div className="flex flex-col items-center gap-2.5 px-4 py-10 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bone/[0.04]">
+                <Gamepad2 size={20} strokeWidth={1.5} className="text-muted-foreground/50" />
+              </div>
+              <p className="text-[13px] font-semibold text-foreground">Find a game to add</p>
+              <p className="max-w-64 text-[12px] text-muted-foreground">
+                Type a title and pick it from the IGDB catalog — cover, genres and release year come
+                filled in.
+              </p>
+            </div>
+          ) : results?.length === 0 ? (
+            <SteamFallback
+              query={trimmed}
+              onSelect={onSelectSteam}
+              ownedBySteamAppId={ownedBySteamAppId}
+            />
+          ) : (
+            // Sin key artificial por búsqueda: cada tecleo trae igdbId
+            // distintos, así que React ya monta filas nuevas por su cuenta —
+            // eso solo ya relanza animate-in, sin necesitar un key de más.
+            results?.map((result, index) => {
+              const isHighlighted = index === highlighted;
+              const owned = ownedByIgdbId.get(result.igdbId);
+              // Ya es tuyo y no hay sitio al que llevarte: se enseña marcado
+              // pero apagado, en vez de dejar que lo elijas para estrellarte
+              // luego contra el UNIQUE al guardar.
+              const isLocked = owned !== undefined && owned.onPick === undefined;
+              return (
+                <button
+                  key={result.igdbId}
+                  type="button"
+                  disabled={isLocked}
+                  onClick={() => pick(result)}
+                  // block:'nearest' es idempotente (no hace nada si la fila ya
+                  // se ve entera), así que vale con llamarlo al pintar la fila
+                  // resaltada — sin efectos ni refs que mantener.
+                  ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                  className={`group/result flex items-start gap-3.25 rounded-md border p-2.75 text-left transition-[transform,scale,border-color,background-color,box-shadow] duration-150 ${
+                    isLocked
+                      ? 'cursor-default border-border bg-bone/[0.02] opacity-55'
+                      : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
+                          isHighlighted
+                            ? 'border-primary/45 bg-bone/[0.06] shadow-[0_8px_20px_rgba(3,6,7,.35)]'
+                            : 'border-border bg-bone/[0.02]'
+                        }`
+                  }`}
+                >
+                  <CoverFrame url={result.coverUrl} />
 
-                <div className="min-w-0 flex-1 py-0.5">
-                  {/* Título + año en la misma línea, como los nombra todo el
+                  <div className="min-w-0 flex-1 py-0.5">
+                    {/* Título + año en la misma línea, como los nombra todo el
                       mundo ("Doom (2016)"). El año va flex-none y el título
                       truncate: por largo que sea el nombre, el año —el dato
                       que distingue un original de su remake— nunca se pierde
                       en los puntos suspensivos. */}
-                  <div className="flex items-baseline gap-2">
-                    <span className="truncate text-sm font-bold text-foreground">
-                      {result.title}
-                    </span>
-                    {result.releaseYear !== null && (
-                      <span className="flex-none text-[12px] font-semibold text-muted-foreground tabular-nums">
-                        {result.releaseYear}
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate text-sm font-bold text-foreground">
+                        {result.title}
                       </span>
-                    )}
-                    {owned && (
-                      <span
-                        className="flex-none rounded-md px-1.75 py-0.5 text-micro font-semibold"
-                        style={{ background: `${owned.color}22`, color: owned.color }}
-                      >
-                        {owned.label}
-                      </span>
-                    )}
-                  </div>
+                      {result.releaseYear !== null && (
+                        <span className="flex-none text-[12px] font-semibold text-muted-foreground tabular-nums">
+                          {result.releaseYear}
+                        </span>
+                      )}
+                      {owned && (
+                        <span
+                          className="flex-none rounded-md px-1.75 py-0.5 text-micro font-semibold"
+                          style={{ background: `${owned.color}22`, color: owned.color }}
+                        >
+                          {owned.label}
+                        </span>
+                      )}
+                    </div>
 
-                  <div className="mt-1.25 flex flex-wrap items-center gap-1.25">
-                    {result.genres.slice(0, MAX_GENRES).map((genre) => (
-                      <span
-                        key={genre}
-                        className="rounded-md border border-input bg-bone/[0.04] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
-                      >
-                        {genre}
-                      </span>
-                    ))}
-                    {result.platforms.length > 0 && (
-                      <span className="truncate text-micro text-muted-foreground">
-                        {result.platforms.slice(0, 3).join(' · ')}
-                      </span>
-                    )}
-                  </div>
+                    <div className="mt-1.25 flex flex-wrap items-center gap-1.25">
+                      {result.genres.slice(0, MAX_GENRES).map((genre) => (
+                        <span
+                          key={genre}
+                          className="rounded-md border border-input bg-bone/[0.04] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
+                        >
+                          {genre}
+                        </span>
+                      ))}
+                      {result.platforms.length > 0 && (
+                        <span className="truncate text-micro text-muted-foreground">
+                          {result.platforms.slice(0, 3).join(' · ')}
+                        </span>
+                      )}
+                    </div>
 
-                  {/* Uno que ya tienes dice a dónde lleva en vez de su
+                    {/* Uno que ya tienes dice a dónde lleva en vez de su
                       sinopsis: lo que hay que decidir aquí ya no es "¿es este
                       juego?" (eso lo zanja el tenerlo ya) sino qué va a pasar
                       al pincharlo — que no es dar de alta nada nuevo. */}
-                  {owned ? (
-                    <p className="mt-1.5 text-micro leading-relaxed" style={{ color: owned.color }}>
-                      {owned.hint}
-                    </p>
-                  ) : (
-                    result.summary && (
-                      <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground">
-                        {result.summary}
+                    {owned ? (
+                      <p
+                        className="mt-1.5 text-micro leading-relaxed"
+                        style={{ color: owned.color }}
+                      >
+                        {owned.hint}
                       </p>
-                    )
-                  )}
-                </div>
+                    ) : (
+                      result.summary && (
+                        <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground">
+                          {result.summary}
+                        </p>
+                      )
+                    )}
+                  </div>
 
-                {/* Sin flecha en los apagados: no llevan a ningún sitio. */}
-                {!isLocked && (
-                  <ArrowRight
-                    size={15}
-                    className={`mt-1 flex-none transition-[transform,scale,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary ${
-                      isHighlighted ? 'translate-x-0.75 text-primary' : 'text-muted-foreground'
-                    }`}
-                  />
-                )}
-              </button>
-            );
-          })
-        )}
+                  {/* Sin flecha en los apagados: no llevan a ningún sitio. */}
+                  {!isLocked && (
+                    <ArrowRight
+                      size={15}
+                      className={`mt-1 flex-none transition-[transform,scale,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary ${
+                        isHighlighted ? 'translate-x-0.75 text-primary' : 'text-muted-foreground'
+                      }`}
+                    />
+                  )}
+                </button>
+              );
+            })
+          )}
+        </Stagger>
       </div>
     </>
   );

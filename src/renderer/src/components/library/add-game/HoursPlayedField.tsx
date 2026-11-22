@@ -1,39 +1,37 @@
 import { Clock } from 'lucide-react';
 import { NumberInput } from '../../ui/number-input';
-import { GREEN } from '../../../lib/colors';
+import { fieldLabelClass } from './styles';
 
-// Mismo campo "HOURS PLAYED · outside the app" que se repite en
+// Mismo campo "Hours played · outside the app" que se repite en
 // PlayedBeforePanel, ManualPlaythroughsField, EndlessSection e
-// IterationSection — antes una label + NumberInput sueltos, ahora en el
-// mismo lenguaje de "tile" teñida que ya usan las StatTile de GameCard y
-// las MeasureTile del detalle. El input vive en su propio hueco oscuro
-// dentro de la tile (no flotando transparente sobre el tinte) — así se ve
-// de un vistazo que es un campo editable, no un dato de solo lectura.
+// IterationSection. Un solo marco: el propio NumberInput (Inset, borde Edge,
+// foco Phosphor con halo), con el icono y la unidad dentro como adornos. Antes
+// era una tile teñida con un hueco con borde y, dentro, el input con el suyo:
+// tres marcos y colores en línea (GREEN con alfa) en vez de tokens.
 // Acepta las mismas props que NumberInput (compatible con register() y con
 // Controller) para poder sustituir el input sin tocar el sitio que lo usa.
 export const HoursPlayedField = (props: React.ComponentProps<'input'>): React.JSX.Element => (
-  <div
-    className="flex-1 rounded-sm border px-3 py-2"
-    style={{ borderColor: `${GREEN}2e`, background: `${GREEN}0f` }}
-  >
-    <div className="text-micro font-semibold" style={{ color: `${GREEN}c4` }}>
-      Hours played{' '}
-      <span className="font-medium tracking-normal normal-case opacity-80">· outside the app</span>
+  <div className="min-w-0 flex-1">
+    <div className={fieldLabelClass}>
+      Hours played <span className="font-medium">· outside the app</span>
     </div>
-    <div
-      className="mt-1 flex items-center gap-1.5 rounded-sm border px-2.25 py-1.5"
-      style={{ borderColor: `${GREEN}26`, background: 'rgba(3,6,7,.22)' }}
-    >
-      <Clock size={13} className="flex-none" style={{ color: `${GREEN}99` }} />
+    <div className="relative">
+      <Clock
+        aria-hidden
+        size={13}
+        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-phosphor/70"
+      />
       <NumberInput
         aria-label="Hours played outside the app"
         {...props}
         min={0}
         placeholder="e.g. 42"
-        className="w-full bg-transparent text-[15px] font-extrabold tabular-nums outline-hidden placeholder:font-medium placeholder:text-muted-foreground/40"
-        style={{ color: GREEN }}
+        className="w-full py-2 pr-7 pl-8.5 text-[15px] font-extrabold text-phosphor placeholder:font-medium placeholder:text-dust/60"
       />
-      <span className="flex-none text-micro font-bold" style={{ color: `${GREEN}80` }}>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-micro font-bold text-phosphor/60"
+      >
         h
       </span>
     </div>

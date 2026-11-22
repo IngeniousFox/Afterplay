@@ -9,7 +9,7 @@ import {
   Rocket,
   ToggleLeft,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import type {
   GameDetail,
@@ -40,6 +40,10 @@ import {
   secondaryButtonClass,
 } from '../../lib/styles';
 import { ModalShell } from '../ui/modal-shell';
+import { PressButton } from '../fx/PressButton';
+import { pressClass } from '../fx/press';
+import { confirmFlash } from '../fx/sparks';
+import { cn } from '../../lib/utils';
 import { AddGameImagesField } from './add-game/AddGameImagesField';
 import { CheckboxRow } from './add-game/CheckboxRow';
 import type { CoverPickerTarget } from './add-game/CoverPicker';
@@ -218,6 +222,7 @@ const AddGameModalBody = ({
   // de `selected`/`pickerTarget`: son la fuente de qué paso se ve, esto es
   // solo POR DÓNDE entra.
   const [stepDirection, setStepDirection] = useState<1 | -1>(1);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
 
   const methods = useForm<AddGameFormValues>({
     defaultValues: promoteGame
@@ -426,6 +431,11 @@ const AddGameModalBody = ({
     }
   };
 
+  // El destello de "añadido": se mide el botón ahora, antes de que el modal
+  // se cierre y se lo lleve.
+  const confirmAdded = (): void =>
+    confirmFlash(addButtonRef.current?.getBoundingClientRect() ?? null);
+
   const handleSave = async (): Promise<void> => {
     if (!selected) return;
     const values = getValues();
@@ -435,6 +445,7 @@ const AddGameModalBody = ({
       // esto revienta, activeMutation.isError ya lo refleja tal cual, y
       // reintentar no puede duplicar nada porque no llegó a crearse nada.
       const planned = await savePlannedGame(selected, values, createPlanned);
+      confirmAdded();
       resetAll();
       onOpenChange(false);
       onCreated?.(planned.id);
@@ -478,6 +489,7 @@ const AddGameModalBody = ({
           );
           createdExtras += 1;
         }
+        confirmAdded();
         resetAll();
         onOpenChange(false);
         onPromoted?.();
@@ -510,6 +522,7 @@ const AddGameModalBody = ({
         createdExtras += 1;
       }
 
+      confirmAdded();
       resetAll();
       onOpenChange(false);
       onCreated?.(gameId);
@@ -552,11 +565,18 @@ const AddGameModalBody = ({
       }
       footer={
         <>
-          <button type="button" onClick={handleClose} className={secondaryButtonClass}>
-            Cancel
-          </button>
           <button
             type="button"
+            onClick={handleClose}
+            className={cn(secondaryButtonClass, pressClass)}
+          >
+            Cancel
+          </button>
+          {/* Se hunde y suelta el anillo ámbar al pulsar; si el alta sale bien,
+              un destello de confirmación desde aquí (confirmFlash). */}
+          <PressButton
+            ref={addButtonRef}
+            burst="phosphor"
             onClick={handleSave}
             disabled={!selected || isSaving || !steamAppIdValid}
             // Sin juego elegido el botón se queda gris (no un ámbar apagado):
@@ -577,7 +597,7 @@ const AddGameModalBody = ({
                   ? 'Add to plan'
                   : 'Add to library'}
             </span>
-          </button>
+          </PressButton>
         </>
       }
     >

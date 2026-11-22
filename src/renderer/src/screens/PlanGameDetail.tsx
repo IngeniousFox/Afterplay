@@ -23,6 +23,8 @@ import { PlannedPanel } from '../components/library/detail/PlannedPanel';
 import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCarousel';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
+import { PressButton } from '../components/fx/PressButton';
+import { pressClass } from '../components/fx/press';
 import { primaryButtonClass, secondaryButtonClass } from '../components/shell/controls';
 import type { TabItem } from '../components/ui/tabs';
 import { useGameAchievements } from '../hooks/achievements';
@@ -117,14 +119,15 @@ const PlanGameDetailView = ({
         const size = compact ? 'h-9 px-4 text-body' : 'h-11 px-5 text-lead';
         return (
           <>
-            <button
-              type="button"
+            {/* La acción principal del Plan: se hunde y suelta el anillo ámbar. */}
+            <PressButton
+              burst="phosphor"
               onClick={() => setPromoteOpen(true)}
               className={cn(primaryButtonClass, size)}
             >
               Add to library
               <ArrowRight size={compact ? 14 : 16} />
-            </button>
+            </PressButton>
             {/* "Up next" (PLAN-TO-PLAY.md §2.2) también desde la ficha: el
                 estado del botón ES la respuesta a "¿está en Up next?", así que
                 va encendido (Tube, el color del Plan) mientras está fijado. */}
@@ -138,6 +141,7 @@ const PlanGameDetailView = ({
                 secondaryButtonClass,
                 size,
                 game.planPinnedAt && 'border-tube/55 bg-tube/10 text-tube hover:border-tube',
+                pressClass,
               )}
             >
               {game.planPinnedAt ? (

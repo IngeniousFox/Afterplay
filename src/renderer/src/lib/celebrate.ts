@@ -2,6 +2,11 @@ import confetti from 'canvas-confetti';
 import type { Options } from 'canvas-confetti';
 import { AMBER, BLUE, GREEN, TEAL, VIOLET } from './colors';
 
+// NOTA (Fósforo, rock and roll): la ficha de juego ya celebra con las chispas
+// de fósforo de components/fx/sparks (`celebrate('beaten')`). Este confeti
+// multicolor queda para el aviso de cierre de sesión y el modo TV, que tienen
+// su propia pasada.
+//
 // Confeti al dar un juego por completado. Es lo único de la app que existe
 // solo por gusto: terminarte un juego es EL momento del ciclo, y hasta ahora
 // la ficha lo trataba igual que a "en pausa" — un evento más en el log.

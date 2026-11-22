@@ -282,6 +282,26 @@
     transform: translate(-50%, 0);
   }
 }
+/* El marcador de HowLongToBeat en la ficha: cae y rebota. Solo `transform`:
+   el centrado va aparte, con `translate`, para que el reposo no dependa de la
+   animación. */
+@keyframes afterplay-marker-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(2px);
+  }
+  72% {
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
 @keyframes afterplay-pin-land {
   0% {
     opacity: 0.3;

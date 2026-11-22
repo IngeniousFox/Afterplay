@@ -9,7 +9,7 @@ import {
   Timer,
   Trash2,
 } from 'lucide-react';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import type { IterationDetail, Session } from '../../../../../shared/types';
@@ -38,6 +38,8 @@ import {
 import { DeleteSessionDialog } from '../../sessions/DeleteSessionDialog';
 import { useSessionDevice } from '../../../hooks/sessionDevice';
 import { SessionNote } from '../../sessions/SessionNote';
+import { celebrate } from '../../fx/sparks';
+import { Stagger } from '../../fx/Stagger';
 import { textLinkClass } from '../../shell/controls';
 import type { AchievementId, GameId, SessionId } from '../../../../../shared/entityIds';
 
@@ -116,6 +118,51 @@ const DeviceLabel = ({
 
 const markClass = 'flex items-center gap-1.5 text-small text-dust';
 
+// Lo que tarda la fila en llegar a la vista al aterrizar desde el aviso de
+// cierre (useFlashLanding espera 450 ms) antes de medir de dónde salen las
+// chispas.
+const RECORD_SPARKS_DELAY_MS = 500;
+
+// UN RÉCORD NUEVO. La marca "Longest" ya es la señal en la UI; las chispas
+// (fx/sparks) salen de ella cuando el récord es NOTICIA:
+//   · la sesión estaba en marcha con la ficha abierta y, al cerrarse, es la
+//     más larga, o
+//   · se aterriza en ella desde el aviso de cierre de sesión y es la más larga.
+// Abrir la pestaña y encontrarse un récord antiguo no celebra nada, y que una
+// fila herede el récord porque se borró otra, tampoco.
+const useRecordSparks = (
+  isRecord: boolean,
+  landing: boolean,
+  isLive: boolean,
+): React.RefObject<HTMLSpanElement | null> => {
+  const markRef = useRef<HTMLSpanElement>(null);
+  const wasLive = useRef(isLive);
+  const fired = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const justClosed = wasLive.current && !isLive;
+    wasLive.current = isLive;
+    if (!isRecord || fired.current || !(justClosed || landing)) return;
+    fired.current = true;
+    // Sin limpieza ligada a `landing`: la fila consume el aterrizaje (vuelve a
+    // false) antes de que venza la espera, y eso no debe cancelar la fiesta.
+    timer.current = setTimeout(
+      () => celebrate('record', { origin: markRef.current }),
+      landing ? RECORD_SPARKS_DELAY_MS : 0,
+    );
+  }, [isRecord, landing, isLive]);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  return markRef;
+};
+
 const SessionRow = ({
   session,
   isRecord,
@@ -145,6 +192,7 @@ const SessionRow = ({
   const { data: timeFormat = '24h' } = useTimeFormat();
   const range = timeRange(session, timeFormat);
   const { rowRef, flashClass, onAnimationEnd } = useFlashLanding(flash, consumeSessionFlash);
+  const recordRef = useRecordSparks(isRecord, flash, session.endedAt === null);
 
   return (
     <div
@@ -207,7 +255,7 @@ const SessionRow = ({
             </span>
           )}
           {isRecord && (
-            <span className={markClass}>
+            <span ref={recordRef} className={markClass}>
               <Flame size={13} className="flex-none text-live" />
               Longest
             </span>
@@ -296,11 +344,11 @@ export const RecentSessions = ({
           See all
         </button>
       </div>
-      <ul className="overflow-hidden rounded-md border border-line bg-panel">
+      <Stagger as="ul" className="overflow-hidden rounded-md border border-line bg-panel">
         {sessions.slice(0, RECENT_LIMIT).map((session) => (
           <RecentRow key={session.id} session={session} />
         ))}
-      </ul>
+      </Stagger>
     </section>
   );
 };
@@ -375,7 +423,9 @@ const PlaythroughBlock = ({
     : null;
 
   return (
-    <section className="border-b border-line pb-4 last:border-b-0">
+    // Las semanas entran escalonadas al abrir la pestaña (fx/Stagger: solo las
+    // que se ven, sin nada puesto en reposo).
+    <Stagger as="section" step={50} className="border-b border-line pb-4 last:border-b-0">
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 border-b border-line pb-3">
         <button
           type="button"
@@ -466,7 +516,7 @@ const PlaythroughBlock = ({
             );
           })
         ))}
-    </section>
+    </Stagger>
   );
 };
 
