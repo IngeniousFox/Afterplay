@@ -1,9 +1,14 @@
 import type { LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type FormSectionProps = {
   icon: LucideIcon;
   title: string;
-  color: string;
+  // Se conserva por los consumidores; Fósforo ya no tiñe cada grupo de su
+  // color (el color se reserva para estados y acciones).
+  color?: string;
+  // Algo junto al título: la etiqueta "On this PC" de Launch and install.
+  extra?: React.ReactNode;
   children: React.ReactNode;
   // Para la entrada escalonada (revealClass/revealStyle) — el propio grupo
   // no sabe de eso, solo deja sitio para que quien lo monta se lo pegue.
@@ -11,33 +16,24 @@ type FormSectionProps = {
   style?: React.CSSProperties;
 };
 
-// Cabecera ligera para agrupar campos dentro de Add Game / Edit Game —
-// chip de icono + etiqueta coloreada + una regla que se come el resto del
-// ancho, mismo espíritu que el "GENRES"/"INSTALLED AT" de DetailsCard pero
-// con icono y color propios por grupo. A propósito NO es una card con
-// borde: varios de los grupos ya contienen sus propias cajas (CheckboxRow,
-// PlayedBeforePanel...) y una caja más alrededor las anidaría dos veces.
+// Cabecera de un grupo de campos dentro de Add Game / Edit Game
+// (ficha-editar.png): título de panel en Barlow semibold con su icono en Dust,
+// sin caja alrededor — varios grupos ya contienen sus propias cajas
+// (CheckboxRow, PlayedBeforePanel...) y otra más las anidaría dos veces.
 export const FormSection = ({
   icon: Icon,
   title,
-  color,
+  extra,
   children,
   className,
   style,
 }: FormSectionProps): React.JSX.Element => (
-  <div className={`flex flex-col gap-3.5 ${className ?? ''}`} style={style}>
-    <div className="flex items-center gap-2">
-      <div
-        className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px]"
-        style={{ background: `${color}1f` }}
-      >
-        <Icon size={11} style={{ color }} />
-      </div>
-      <span className="text-[11px] font-bold tracking-[.09em] whitespace-nowrap" style={{ color }}>
-        {title.toUpperCase()}
-      </span>
-      <div className="h-px flex-1 rounded-full" style={{ background: `${color}26` }} />
-    </div>
+  <section className={cn('flex flex-col gap-3.5', className)} style={style}>
+    <h3 className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-lead font-semibold text-bone">
+      <Icon size={16} className="flex-none text-dust" />
+      {title}
+      {extra}
+    </h3>
     {children}
-  </div>
+  </section>
 );

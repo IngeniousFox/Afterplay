@@ -14,6 +14,8 @@ import type { GameId } from '../../../../../shared/entityIds';
 
 type AddSpendPopoverProps = {
   gameId: GameId;
+  // La clase del botón que lo abre: la cabecera lo pinta a dos tamaños.
+  triggerClassName: string;
 };
 
 const TYPE_OPTIONS: { value: SpendEvent['type']; label: string }[] = [
@@ -24,7 +26,10 @@ const TYPE_OPTIONS: { value: SpendEvent['type']; label: string }[] = [
 // Botón "Añadir gasto" de la barra de acciones (SPEC 4.5) — popover con un
 // formulario pequeño e independiente del playthrough: tipo, cantidad, fecha
 // con precisión, nota libre. Crea un spendEvent suelto colgando del juego.
-export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Element => {
+export const AddSpendPopover = ({
+  gameId,
+  triggerClassName,
+}: AddSpendPopoverProps): React.JSX.Element => {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<SpendEvent['type']>('purchase');
   const [amount, setAmount] = useState('');
@@ -65,7 +70,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
         if (!next) reset();
       }}
     >
-      <PopoverTrigger className="flex items-center gap-2 rounded-[11px] border border-line-strong bg-raised px-4.5 py-3 text-[14px] font-semibold text-foreground hover:bg-raised-hover">
+      <PopoverTrigger className={triggerClassName}>
         <Plus size={16} />
         Add spend
       </PopoverTrigger>
@@ -77,7 +82,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
           </div>
 
           <MoneyAmountField
-            label="AMOUNT (€)"
+            label="Amount (€)"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />
@@ -104,7 +109,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
             type="button"
             onClick={handleSubmit}
             disabled={addSpend.isPending}
-            className="rounded-sm px-4 py-2.25 text-[13px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-sm px-4 py-2.25 text-[13px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-60"
             style={accentGradientStyle}
           >
             {addSpend.isPending ? 'Adding…' : 'Add spend'}

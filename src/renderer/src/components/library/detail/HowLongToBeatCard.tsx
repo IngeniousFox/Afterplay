@@ -73,7 +73,7 @@ const TierTile = ({
   <div
     onMouseEnter={() => onHover(tierKey)}
     onMouseLeave={() => onHover(null)}
-    className="flex-1 rounded-[10px] border px-2 py-2.25 text-center transition-[opacity,box-shadow,border-color] duration-150"
+    className="flex-1 rounded-sm border px-2 py-2.25 text-center transition-[opacity,box-shadow,border-color] duration-150"
     style={{
       opacity: dimmed ? 0.4 : 1,
       ...(reached || hovered
@@ -89,7 +89,7 @@ const TierTile = ({
         <span className="size-2 flex-none rounded-[2px]" style={{ background: color }} />
       )}
       <span
-        className="text-micro font-bold tracking-[.06em]"
+        className="text-micro font-semibold"
         style={{ color: reached || hovered ? color : 'var(--muted-foreground)' }}
       >
         {label}
@@ -138,12 +138,12 @@ export const HowLongToBeatCard = ({
     return (
       <div
         className={cn(
-          'rounded-[14px] px-5 py-4.5',
+          'rounded-md px-5 py-4.5',
           'border border-border bg-card',
           variant === 'dossier'
             ? cn(
                 'afterplay-game-hltb-empty',
-                'rounded-[15px] relative overflow-hidden',
+                'rounded-md relative overflow-hidden',
                 'border border-line',
                 '[background:radial-gradient(circle_at_0%_0%,rgba(95,211,224,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(95,211,224,0.035),transparent_37%),var(--card)]',
                 'shadow-[inset_0_1px_rgba(233,228,216,0.03)]',
@@ -254,7 +254,7 @@ export const HowLongToBeatCard = ({
       <div
         className={cn(
           'afterplay-game-hltb-dossier',
-          'rounded-[15px] relative overflow-hidden px-5.5 py-5.25',
+          'rounded-md relative overflow-hidden px-5.5 py-5.25',
           'border border-line',
           '[background:radial-gradient(circle_at_0%_0%,rgba(95,211,224,0.04),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(95,211,224,0.035),transparent_37%),var(--card)]',
           'shadow-[inset_0_1px_rgba(233,228,216,0.03)]',
@@ -271,7 +271,7 @@ export const HowLongToBeatCard = ({
             <strong className="mt-1 text-[18px] font-black tracking-[-0.02em] text-foreground">
               You vs HowLongToBeat
             </strong>
-            <small className="mt-0.5 text-[11.5px] text-dust">
+            <small className="mt-0.5 text-micro text-dust">
               Your real playtime against the community&apos;s landmarks
             </small>
           </div>
@@ -292,7 +292,7 @@ export const HowLongToBeatCard = ({
             aria-label="Refresh times"
             className={cn(
               'afterplay-game-hltb-refresh',
-              'flex size-7 flex-none items-center justify-center rounded-[8px] text-dust',
+              'flex size-7 flex-none items-center justify-center rounded-sm text-dust',
               'border border-line bg-bone/[0.025]',
               '[&:is(:hover,:focus-visible)]:border-[rgba(95,211,224,0.3)]',
               '[&:is(:hover,:focus-visible)]:bg-[rgba(95,211,224,0.07)] [&:is(:hover,:focus-visible)]:text-tube',
@@ -322,14 +322,14 @@ export const HowLongToBeatCard = ({
             <strong className="mt-1.25 text-[41px] leading-none font-display font-bold text-foreground tabular-nums">
               {hasOwnHours ? formatHours(markerHours) : '—'}
             </strong>
-            <small className="mt-1 text-[11px] text-dust">
+            <small className="mt-1 text-micro text-dust">
               {markerScope === 'total' ? 'across every playthrough' : 'in this playthrough'}
             </small>
 
             <div
               className={cn(
                 'afterplay-game-hltb-verdict',
-                'mt-3.25 flex min-h-10 flex-col justify-center rounded-[8px] px-2.25 py-2',
+                'mt-3.25 flex min-h-10 flex-col justify-center rounded-sm px-2.25 py-2',
                 'border border-line bg-bone/[0.02]',
                 '[&>span]:text-micro [&>span]:font-black [&>span]:leading-[1.25] [&>span]:tracking-[0.09em]',
                 '[&>span]:whitespace-normal',
@@ -353,7 +353,7 @@ export const HowLongToBeatCard = ({
                 </>
               ) : hasOwnHours && reachedTier === 'completionist' ? (
                 <>
-                  <span style={{ color: COMPLETIONIST }}>ALL TARGETS CLEARED</span>
+                  <span style={{ color: COMPLETIONIST }}>All targets cleared</span>
                   <small className="mt-0.25 text-micro text-dust">
                     {formatHours(markerHours - completionist)} beyond 100%
                   </small>
@@ -367,7 +367,7 @@ export const HowLongToBeatCard = ({
           <div className="afterplay-game-hltb-race min-w-0">
             <div className="afterplay-game-hltb-race-head flex items-baseline justify-between gap-2.5">
               <span className="text-micro font-black tracking-[0.13em] text-dust">
-                THE PACE LINE
+                The pace line
               </span>
               <small className="text-micro text-bone/[0.39]">
                 {formatHours(scale)} community ceiling
@@ -395,7 +395,7 @@ export const HowLongToBeatCard = ({
                   style={{ left: `${markerPct}%` }}
                 >
                   <em className="absolute -top-0.25 left-[50%] rounded-[5px] px-1.5 py-1 text-micro font-[950] tracking-[0.09em] text-foreground not-italic">
-                    {markerHours > scale ? 'BEYOND' : 'YOU'}
+                    {markerHours > scale ? 'Beyond' : 'You'}
                   </em>
                   <i className="absolute -right-0.5 -bottom-0.25 size-1.5 rounded-[50%]" />
                 </div>
@@ -454,9 +454,9 @@ export const HowLongToBeatCard = ({
                     onBlur={() => setHoveredTier(null)}
                     className={cn(
                       'afterplay-game-hltb-milestone',
-                      'relative grid min-h-17.5 min-w-0 grid-cols-[30px_minmax(0,_1fr)] items-center gap-2 rounded-[9px]',
+                      'relative grid min-h-17.5 min-w-0 grid-cols-[30px_minmax(0,_1fr)] items-center gap-2 rounded-sm',
                       'p-2.25',
-                      '[--tier-color:var(--primary)] border border-line outline-none bg-bone/[0.018]',
+                      '[--tier-color:var(--primary)] border border-line outline-hidden bg-bone/[0.018]',
                       '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:border-[color-mix(in_srgb,var(--tier-color)_23%,rgba(233,228,216,0.04))]',
                       '[&.is-reached:not(:where(.is-hovered,:hover,:focus-visible))]:bg-[color-mix(in_srgb,var(--tier-color)_6%,rgba(233,228,216,0.015))]',
                       '[&.is-hovered]:z-[2]',
@@ -480,7 +480,7 @@ export const HowLongToBeatCard = ({
                     <span
                       className={cn(
                         'afterplay-game-hltb-milestone-icon',
-                        'flex size-7.5 items-center justify-center rounded-[8px] text-(--tier-color)',
+                        'flex size-7.5 items-center justify-center rounded-sm text-(--tier-color)',
                         'border border-[color-mix(in_srgb,var(--tier-color)_28%,transparent)]',
                         'bg-[color-mix(in_srgb,var(--tier-color)_8%,transparent)]',
                         '[&_i]:bg-(--tier-color) [&_i]:shadow-[0_0_4px_color-mix(in_srgb,var(--tier-color)_26%,transparent)]',
@@ -501,7 +501,7 @@ export const HowLongToBeatCard = ({
                       </strong>
                     </span>
                     <em className="absolute right-2 bottom-1.5 text-micro font-[950] tracking-[0.08em] text-(--tier-color) not-italic opacity-[0.72]">
-                      {reached ? 'CLEARED' : available ? 'TARGET' : 'NO DATA'}
+                      {reached ? 'Cleared' : available ? 'Target' : 'No data'}
                     </em>
                   </div>
                 );
@@ -514,7 +514,7 @@ export const HowLongToBeatCard = ({
   }
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+    <div className="rounded-md border border-border bg-card px-5 py-4.5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-[13.5px] font-bold text-foreground">How long to beat</span>
@@ -557,7 +557,7 @@ export const HowLongToBeatCard = ({
           />
         ) : hasOwnHours && nextTier ? (
           <span
-            className="flex-none text-[11.5px] font-semibold whitespace-nowrap tabular-nums"
+            className="flex-none text-micro font-semibold whitespace-nowrap tabular-nums"
             style={{ color: TIER_COLOR[nextTier.key] }}
           >
             {formatHours(nextTier.threshold - markerHours)} to {TIER_LABEL[nextTier.key]}
@@ -688,7 +688,7 @@ export const HowLongToBeatCard = ({
         <TierTile
           tierKey="main"
           color={MAIN}
-          label="MAIN"
+          label="Main"
           value={formatHours(main)}
           reached={reachedTier !== null}
           hovered={hoveredTier === 'main'}
@@ -698,7 +698,7 @@ export const HowLongToBeatCard = ({
         <TierTile
           tierKey="extra"
           color={EXTRA}
-          label="+ EXTRA"
+          label="+ Extra"
           value={formatHours(extra)}
           reached={reachedTier === 'extra' || reachedTier === 'completionist'}
           hovered={hoveredTier === 'extra'}
@@ -738,7 +738,7 @@ const HeaderDetail = ({
   const diff = markerHours === null ? null : threshold - markerHours;
   return (
     <span
-      className="flex-none text-[11.5px] font-semibold whitespace-nowrap tabular-nums"
+      className="flex-none text-micro font-semibold whitespace-nowrap tabular-nums"
       style={{ color }}
     >
       {label} · {formatHours(threshold)}

@@ -1,15 +1,21 @@
-import { ArrowRight, ImagePlus, Pencil, Pin, PinOff, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowRight, ImagePlus, NotebookPen, Pin, PinOff, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { AchievementsSection } from '../components/library/detail/AchievementsSection';
 import { ChangeCoverModal } from '../components/library/detail/ChangeCoverModal';
 import { DeleteGameDialog } from '../components/library/detail/DeleteGameDialog';
 import { AboutCard } from '../components/library/detail/AboutCard';
+import {
+  DetailLayout,
+  DetailMeta,
+  DetailStatus,
+  HeaderUtilityButton,
+} from '../components/library/detail/DetailHeader';
 import { SagaSection } from '../components/library/detail/SagaSection';
 import { DetailsCard } from '../components/library/detail/DetailsCard';
 import { RatingsCard } from '../components/library/detail/RatingsCard';
 import { EditNotesModal } from '../components/library/detail/EditNotesModal';
-import { HeroBanner } from '../components/library/detail/HeroBanner';
 import { HistoryList } from '../components/library/detail/HistoryList';
 import { HowLongToBeatCard } from '../components/library/detail/HowLongToBeatCard';
 import { NotesSection } from '../components/library/detail/NotesSection';
@@ -17,20 +23,13 @@ import { PlannedPanel } from '../components/library/detail/PlannedPanel';
 import { ScreenshotsCarousel } from '../components/library/detail/ScreenshotsCarousel';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { QueryStatePlaceholder } from '../components/layout/QueryStatePlaceholder';
+import { primaryButtonClass, secondaryButtonClass } from '../components/shell/controls';
+import type { TabItem } from '../components/ui/tabs';
+import { useGameAchievements } from '../hooks/achievements';
 import { useGame, useSetPlanPinned } from '../hooks/games';
 import { useRefreshGame } from '../hooks/useRefreshGame';
-import { STATUS_META } from '../lib/gameStatus';
-import {
-  accentGradientStyle,
-  destructiveIconButtonClass,
-  heroCtaButtonClass,
-  revealClass,
-  revealStyle,
-  squareIconButtonClass,
-} from '../lib/styles';
+import type { GameDetail as GameDetailData } from '../../../shared/types';
 import type { GameId } from '../../../shared/entityIds';
-
-const PLAN_COLOR = STATUS_META.plan.color;
 
 type PlanGameDetailProps = {
   gameId: GameId;
@@ -39,31 +38,19 @@ type PlanGameDetailProps = {
   onPromoted: () => void;
 };
 
-// Ficha de un juego de Plan to Play — la misma que la de un juego normal
-// pero quitando lo que un juego planeado no tiene por definición: ni cards
-// de métricas, ni StatusCard, ni sesiones, ni playthroughs. Se quedan el
-// hero, las notas, las capturas, el historial (con su entrada de cuándo lo
-// planeaste), el How Long to Beat y los detalles técnicos. El botón de Play
-// se sustituye por "Add to library", que abre el modal normal de Add Game
-// prellenado (modo promote).
+type PlanTab = 'overview' | 'achievements' | 'notes';
+
+// Ficha de un juego de Plan to Play — la misma estructura que la de un juego
+// normal (banner, cabecera compacta, pestañas) quitando lo que un planeado no
+// tiene por definición: ni cifras, ni estado, ni sesiones, ni playthroughs, ni
+// partidas guardadas. Play se sustituye por "Add to library", que abre el
+// modal normal de Add Game prellenado (modo promote).
 export const PlanGameDetail = ({
   gameId,
   onBack,
   onPromoted,
 }: PlanGameDetailProps): React.JSX.Element => {
   const { data: game, isLoading, isError } = useGame(gameId);
-  const setPinned = useSetPlanPinned();
-  // `game?.title` y no `game.title`: este hook va ANTES de la guarda de carga
-  // (los hooks no pueden llamarse condicionalmente) y ahí el juego todavía
-  // puede no haber llegado. El título solo se usa en el aviso de éxito, que
-  // para entonces ya existe.
-  const refreshGame = useRefreshGame(gameId, game?.title ?? '');
-  const [promoteOpen, setPromoteOpen] = useState(false);
-  const [addPlannedOpen, setAddPlannedOpen] = useState(false);
-  const [changeCoverOpen, setChangeCoverOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editNotesOpen, setEditNotesOpen] = useState(false);
-
   if (isLoading || isError || !game) {
     return (
       <QueryStatePlaceholder
@@ -74,221 +61,199 @@ export const PlanGameDetail = ({
       />
     );
   }
+  return <PlanGameDetailView key={game.id} game={game} onBack={onBack} onPromoted={onPromoted} />;
+};
+
+const PlanGameDetailView = ({
+  game,
+  onBack,
+  onPromoted,
+}: {
+  game: GameDetailData;
+  onBack: () => void;
+  onPromoted: () => void;
+}): React.JSX.Element => {
+  const setPinned = useSetPlanPinned();
+  const refreshGame = useRefreshGame(game.id, game.title);
+  const { data: achievements } = useGameAchievements(game.id);
+  const [tab, setTab] = useState<PlanTab>('overview');
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [changeCoverOpen, setChangeCoverOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editNotesOpen, setEditNotesOpen] = useState(false);
+
+  const unlocked = achievements?.entries.filter((entry) => entry.unlockedAt !== null).length ?? 0;
+  const tabs: TabItem<PlanTab>[] = [
+    { key: 'overview', label: 'Overview' },
+    {
+      key: 'achievements',
+      label: 'Achievements',
+      count: achievements?.entries.length ? `${unlocked}/${achievements.entries.length}` : null,
+    },
+    { key: 'notes', label: 'Notes' },
+  ];
+
+  const togglePinned = (): void => {
+    const next = !game.planPinnedAt;
+    setPinned.mutate(
+      { id: game.id, pinned: next },
+      {
+        onSuccess: () => toast.success(next ? 'Pinned to Up next' : 'Removed from Up next'),
+        onError: () => toast.error("Couldn't update Up next."),
+      },
+    );
+  };
 
   return (
-    <div className="h-full overflow-y-auto">
-      <HeroBanner
-        game={game}
-        liveSince={null}
-        onBack={onBack}
-        backLabel="Back to plan"
-        onAddGame={() => setAddPlannedOpen(true)}
-        addGameLabel="Plan a game"
-      />
-
-      <div key={game.id} className="mx-auto max-w-345 px-7.5 pt-6 pb-15">
-        <div className="flex items-start gap-6">
-          <div className="min-w-0 flex-1">
-            <div
-              className={`flex flex-wrap items-center gap-2.5 ${revealClass}`}
-              style={revealStyle(0)}
+    <DetailLayout
+      game={game}
+      tabs={tabs}
+      tab={tab}
+      onTabChange={setTab}
+      bannerTab="overview"
+      status={<DetailStatus game={game} />}
+      meta={<DetailMeta game={game} />}
+      actions={(compact) => {
+        const size = compact ? 'h-9 px-4 text-body' : 'h-11 px-5 text-lead';
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => setPromoteOpen(true)}
+              className={cn(primaryButtonClass, size)}
             >
-              <button
-                type="button"
-                onClick={() => setPromoteOpen(true)}
-                className={heroCtaButtonClass}
-                style={{
-                  ...accentGradientStyle,
-                  border: '1px solid transparent',
-                }}
-              >
-                <span>Add to library</span>
-                <ArrowRight size={16} />
-              </button>
-
-              {/* "Up next" (PLAN-TO-PLAY.md §2.2) también desde la ficha —
-                  hasta ahora solo se podía fijar desde la fila de la lista, y
-                  la ficha es justo donde uno acaba de decidir "este va el
-                  primero". Mismo lenguaje que su gemelo en PlanRow: tintado y
-                  ENCENDIDO siempre que está fijado (no solo al pasar el
-                  ratón, a diferencia del resto de botones cuadrados de esta
-                  fila) — el estado del botón ES la respuesta a "¿está en Up
-                  next?", no hace falta ir a mirar la lista. */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !game.planPinnedAt;
-                  setPinned.mutate(
-                    { id: game.id, pinned: next },
-                    {
-                      onSuccess: () =>
-                        toast.success(next ? 'Pinned to Up next' : 'Removed from Up next'),
-                      onError: () => toast.error("Couldn't update Up next."),
-                    },
-                  );
-                }}
-                disabled={setPinned.isPending}
-                title={game.planPinnedAt ? 'Remove from Up next' : 'Pin to Up next'}
-                className={squareIconButtonClass}
-                style={
-                  game.planPinnedAt
-                    ? {
-                        color: PLAN_COLOR,
-                        borderColor: `${PLAN_COLOR}47`,
-                        background: `${PLAN_COLOR}1c`,
-                      }
-                    : undefined
-                }
-              >
-                {game.planPinnedAt ? <PinOff size={17} /> : <Pin size={17} />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setChangeCoverOpen(true)}
-                title="Change cover / hero"
-                className={squareIconButtonClass}
-              >
-                <ImagePlus size={17} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setEditNotesOpen(true)}
-                title="Edit notes"
-                className={squareIconButtonClass}
-              >
-                <Pencil size={17} />
-              </button>
-
-              {/* Actualizar este juego ENTERO — el mismo gesto y la misma
-                  lógica que el de la ficha de biblioteca (useRefreshGame).
-                  Aquí importa incluso más: un planeado es justo el juego cuyos
-                  datos envejecen solos — sale, estrena fecha, acumula reseñas
-                  y entra por fin en Steam — y hasta ahora la única forma de
-                  ponerlo al día era refrescar el Plan entero. */}
-              <button
-                type="button"
-                onClick={refreshGame.refresh}
-                disabled={refreshGame.refreshing}
-                title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
-                aria-label="Refresh everything for this game"
-                className={`${squareIconButtonClass} disabled:cursor-default disabled:opacity-60 disabled:hover:bg-raised`}
-              >
-                <RefreshCw
-                  size={17}
-                  className={refreshGame.refreshing ? 'animate-spin' : undefined}
-                />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDeleteOpen(true)}
-                title="Delete game"
-                className={destructiveIconButtonClass}
-              >
-                <Trash2 size={17} className="text-destructive" />
-              </button>
-            </div>
-
-            {/* Arriba y abierta, al reves que en la biblioteca: aqui el
-                juego no lo has jugado, y esta es la que contesta "que era
-                esto que apunte hace ocho meses". Es la primera pregunta de
-                la ficha de un planeado, no una nota al pie. */}
-            <div className={`mt-5 ${revealClass}`} style={revealStyle(1)}>
-              <AboutCard game={game} />
-            </div>
-
-            <div className={revealClass} style={revealStyle(2)}>
-              <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
-            </div>
-            {/* Sin id de IGDB no hay capturas ni trailer que pedir (un juego
-                que existe en Steam y que IGDB todavia no tiene): la seccion
-                no se pinta, igual que cuando IGDB no devuelve ninguna. */}
-            {game.igdbId !== null && (
-              <div className={revealClass} style={revealStyle(3)}>
-                <ScreenshotsCarousel igdbId={game.igdbId} />
-              </div>
-            )}
-            {/* Y aqui vale doble: mirando un planeado, ver que el 1 y el 2
-                los tienes terminados es justo el contexto que decide si este
-                sube en la lista o se queda esperando. */}
-            <div className={revealClass} style={revealStyle(4)}>
-              <SagaSection game={game} />
-            </div>
-
-            <div className={`mt-7.5 ${revealClass}`} style={revealStyle(4)}>
-              <HistoryList
-                stateHistory={game.stateHistory}
-                spendHistory={game.spendHistory}
-                planHistory={game.planHistory}
-              />
-            </div>
-
-            {/* Sí, también en un planeado: el catálogo de Steam responde
-                tengas el juego o no, así que "esto tiene 34 logros" es
-                información válida de algo que aún no has jugado. */}
-            <div className={revealClass} style={revealStyle(5)}>
-              <AchievementsSection gameId={gameId} />
-            </div>
+              Add to library
+              <ArrowRight size={compact ? 14 : 16} />
+            </button>
+            {/* "Up next" (PLAN-TO-PLAY.md §2.2) también desde la ficha: el
+                estado del botón ES la respuesta a "¿está en Up next?", así que
+                va encendido (Tube, el color del Plan) mientras está fijado. */}
+            <button
+              type="button"
+              onClick={togglePinned}
+              disabled={setPinned.isPending}
+              aria-pressed={Boolean(game.planPinnedAt)}
+              title={game.planPinnedAt ? 'Remove from Up next' : 'Pin to Up next'}
+              className={cn(
+                secondaryButtonClass,
+                size,
+                game.planPinnedAt && 'border-tube/55 bg-tube/10 text-tube hover:border-tube',
+              )}
+            >
+              {game.planPinnedAt ? (
+                <PinOff size={compact ? 14 : 16} />
+              ) : (
+                <Pin size={compact ? 14 : 16} />
+              )}
+              {game.planPinnedAt ? 'Up next' : 'Pin to Up next'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditNotesOpen(true)}
+              title="Edit notes"
+              className={cn(secondaryButtonClass, size)}
+            >
+              <NotebookPen size={compact ? 14 : 16} />
+              Notes
+            </button>
+          </>
+        );
+      }}
+      utilities={
+        <>
+          <HeaderUtilityButton
+            icon={ImagePlus}
+            label="Change cover / hero"
+            onClick={() => setChangeCoverOpen(true)}
+          />
+          {/* Un planeado es justo el juego cuyos datos envejecen solos — sale,
+              estrena fecha, acumula reseñas y entra por fin en Steam. */}
+          <HeaderUtilityButton
+            icon={RefreshCw}
+            label="Refresh everything for this game"
+            title="Refresh everything for this game — ratings, how long to beat, Steam tags and achievements"
+            onClick={refreshGame.refresh}
+            disabled={refreshGame.refreshing}
+            spinning={refreshGame.refreshing}
+          />
+          <HeaderUtilityButton
+            icon={Trash2}
+            label="Delete game"
+            onClick={() => setDeleteOpen(true)}
+            danger
+          />
+        </>
+      }
+      overlays={
+        <>
+          {/* Montado solo al abrirse — el prellenado del modo promote vive en
+              los inicializadores de estado del modal. */}
+          {promoteOpen && (
+            <AddGameModal
+              open
+              onOpenChange={(next) => {
+                if (!next) setPromoteOpen(false);
+              }}
+              promoteGame={game}
+              onPromoted={onPromoted}
+            />
+          )}
+          <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
+          <EditNotesModal game={game} open={editNotesOpen} onOpenChange={setEditNotesOpen} />
+          <DeleteGameDialog
+            game={game}
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            onDeleted={onBack}
+          />
+        </>
+      }
+    >
+      {tab === 'overview' && (
+        <div className="grid items-start gap-x-12 gap-y-10 xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="flex min-w-0 flex-col gap-9">
+            {/* Arriba y abierta, al revés que en la biblioteca: aquí el juego
+                no lo has jugado, y la sinopsis contesta "qué era esto que
+                apunté hace ocho meses". */}
+            <AboutCard game={game} />
+            <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} />
+            {game.igdbId !== null && <ScreenshotsCarousel igdbId={game.igdbId} />}
+            {/* Ver que el 1 y el 2 los tienes terminados es justo el contexto
+                que decide si este sube en la lista. */}
+            <SagaSection game={game} />
+            <HistoryList
+              stateHistory={game.stateHistory}
+              spendHistory={game.spendHistory}
+              planHistory={game.planHistory}
+            />
           </div>
-
-          <div className="flex w-92 min-w-70 flex-none flex-col gap-4.5">
-            <div className={revealClass} style={revealStyle(1)}>
-              <PlannedPanel game={game} />
-            </div>
-            <div className={revealClass} style={revealStyle(2)}>
-              <HowLongToBeatCard game={game} markerHours={0} markerScope="total" />
-            </div>
-            {/* En un planeado, las notas son directamente material de
-                decisión: cuánto dura y si vale la pena, una debajo de la
-                otra, ANTES de comprometerte a jugarlo. */}
-            <div className={revealClass} style={revealStyle(3)}>
-              <RatingsCard game={game} />
-            </div>
-            <div className={revealClass} style={revealStyle(4)}>
-              <DetailsCard game={game} />
-            </div>
-          </div>
+          <aside className="flex min-w-0 flex-col gap-8">
+            <PlannedPanel game={game} />
+            <HowLongToBeatCard game={game} markerHours={0} markerScope="total" />
+            {/* Cuánto dura y si vale la pena, una debajo de la otra, ANTES de
+                comprometerte a jugarlo. */}
+            <RatingsCard game={game} />
+            <DetailsCard game={game} />
+          </aside>
         </div>
-      </div>
-
-      {/* Montado solo al abrirse — el prellenado del modo promote vive en
-          los inicializadores de estado del modal, así que necesita montarse
-          de cero cada vez con el juego ya cargado. */}
-      {promoteOpen && (
-        <AddGameModal
-          open
-          onOpenChange={(next) => {
-            if (!next) setPromoteOpen(false);
-          }}
-          promoteGame={game}
-          onPromoted={onPromoted}
-        />
       )}
-      {/* Alta desde la propia ficha, en modo 'plan': lo que se añade aquí
-          nace planeado, igual que el botón de la lista — desde Plan to Play
-          no se entra nunca a la biblioteca por la puerta de atrás.
-          onCreated con un toast y no una navegación (a diferencia de
-          GameListScreen, que sí navega a la ficha nueva): aquí el usuario
-          está viendo OTRO juego planeado, y llevárselo de golpe al que
-          acaba de añadir sería más confuso que útil. Sin ningún onCreated
-          antes, el modal se cerraba sin dejar ni rastro de que el alta
-          hubiera funcionado — había que ir a /plan a comprobarlo a ciegas. */}
-      <AddGameModal
-        open={addPlannedOpen}
-        onOpenChange={setAddPlannedOpen}
-        mode="plan"
-        onCreated={() => toast.success('Added to your Plan to play')}
-      />
-      <ChangeCoverModal game={game} open={changeCoverOpen} onOpenChange={setChangeCoverOpen} />
-      <EditNotesModal game={game} open={editNotesOpen} onOpenChange={setEditNotesOpen} />
-      <DeleteGameDialog
-        game={game}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onDeleted={onBack}
-      />
-    </div>
+
+      {/* Sí, también en un planeado: el catálogo de Steam responde tengas el
+          juego o no. */}
+      {tab === 'achievements' &&
+        (achievements && achievements.entries.length === 0 ? (
+          <p className="rounded-md border border-dashed border-line-strong px-5 py-6 text-body text-dust">
+            No achievements found for this game.
+          </p>
+        ) : (
+          <AchievementsSection gameId={game.id} />
+        ))}
+
+      {tab === 'notes' && (
+        <div className="max-w-240">
+          <NotesSection notes={game.notes} onEdit={() => setEditNotesOpen(true)} variant="full" />
+        </div>
+      )}
+    </DetailLayout>
   );
 };

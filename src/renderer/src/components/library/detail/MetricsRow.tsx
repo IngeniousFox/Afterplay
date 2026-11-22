@@ -1,8 +1,7 @@
-import { Calendar, Clock, DollarSign, Gauge } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useLiveTimer } from '../../../hooks/useLiveTimer';
-import { AMBER, BLUE, GREEN, VIOLET } from '../../../lib/colors';
+import { GREEN } from '../../../lib/colors';
 import { formatHours, formatMoney } from '../../../lib/format';
 
 type MetricsRowProps = {
@@ -34,7 +33,7 @@ export const MetricCard = ({
   liveHint,
   accent = GREEN,
 }: MetricCardProps): React.JSX.Element => (
-  <div className="relative min-w-42 flex-1 overflow-hidden rounded-[13px] border border-border bg-card px-4.5 py-4">
+  <div className="relative min-w-42 flex-1 overflow-hidden rounded-md border border-border bg-card px-4.5 py-4">
     {/* Brillo suave del color de la métrica en la esquina — decorativo,
         tan tenue que solo "colorea el aire" de la card. */}
     <div
@@ -43,7 +42,7 @@ export const MetricCard = ({
     />
     <div className="relative flex items-center gap-2">
       <span
-        className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-[7px] border"
+        className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-sm border"
         style={{ background: `${accent}1f`, borderColor: `${accent}40` }}
       >
         <Icon size={13} color={accent} />
@@ -61,34 +60,70 @@ export const MetricCard = ({
   </div>
 );
 
-// SPEC 10.7 — fila de 4 métricas: Total Hours (+"Xm this session" si hay
-// sesión activa), Cost/Hour, Sessions, Total Spent.
+// La fila de cifras grandes de Overview (detail.png): tiempo jugado (con las
+// unidades pequeñas y "+Xm this session" si hay sesión en marcha), sesiones,
+// gasto y coste por hora, en Big Shoulders y separadas por una línea.
+const BigFigure = ({
+  value,
+  accent = false,
+}: {
+  value: string;
+  accent?: boolean;
+}): React.JSX.Element => (
+  <span
+    className={`font-display text-[clamp(44px,4.4vw,64px)] leading-[0.9] font-bold tabular-nums ${accent ? 'text-phosphor' : 'text-bone'}`}
+  >
+    {/* "38h 10m": las letras van más pequeñas y en Dust, como en la maqueta. */}
+    {value.split(/([a-z]+)/i).map((part, index) =>
+      /^[a-z]+$/i.test(part) ? (
+        <span key={index} className="ml-px text-[0.5em] font-semibold text-dust">
+          {part}
+        </span>
+      ) : (
+        <span key={index}>{part}</span>
+      ),
+    )}
+  </span>
+);
+
+const Figure = ({
+  label,
+  value,
+  accent,
+  hint,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  hint?: string;
+}): React.JSX.Element => (
+  <div className="min-w-36 flex-1 border-line pr-6 not-first:border-l not-first:pl-6">
+    <BigFigure value={value} accent={accent} />
+    <div className="mt-2 text-small text-dust">{label}</div>
+    {hint && (
+      <div className="mt-0.5 text-small font-semibold text-phosphor tabular-nums">{hint}</div>
+    )}
+  </div>
+);
+
 export const MetricsRow = ({ game, liveSince }: MetricsRowProps): React.JSX.Element => {
   const liveSeconds = useLiveTimer(liveSince);
   const liveMinutes = Math.floor(liveSeconds / 60);
   const sessionCount = game.iterations.reduce((sum, it) => sum + it.sessions.length, 0);
 
   return (
-    <div className="flex flex-wrap gap-3.5">
-      <MetricCard
-        Icon={Clock}
-        label="Total hours"
+    <div className="flex flex-wrap gap-y-5">
+      <Figure
+        label="Time played"
         value={formatHours(game.totalHours)}
-        liveHint={liveSince ? `+${liveMinutes}m this session` : undefined}
-        accent={GREEN}
+        accent
+        hint={liveSince ? `+${liveMinutes}m this session` : undefined}
       />
-      <MetricCard
-        Icon={Gauge}
-        label="Cost / hour"
+      <Figure label="Sessions" value={String(sessionCount)} />
+      <Figure label="Spent" value={formatMoney(game.totalSpend)} />
+      <Figure
+        label="Per hour"
         value={game.costPerHour !== null ? formatMoney(game.costPerHour) : '—'}
-        accent={VIOLET}
-      />
-      <MetricCard Icon={Calendar} label="Sessions" value={String(sessionCount)} accent={BLUE} />
-      <MetricCard
-        Icon={DollarSign}
-        label="Total spent"
-        value={formatMoney(game.totalSpend)}
-        accent={AMBER}
       />
     </div>
   );

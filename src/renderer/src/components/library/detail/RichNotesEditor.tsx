@@ -64,7 +64,7 @@ const ToolbarButton = ({
     title={label}
     aria-label={label}
     aria-pressed={active}
-    className="group/tb flex h-8 w-8 flex-none items-center justify-center rounded-[8px] transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+    className="group/tb flex h-8 w-8 flex-none items-center justify-center rounded-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30"
     style={
       active
         ? { color: GREEN, background: `${GREEN}1f`, boxShadow: `inset 0 0 0 1px ${GREEN}4d` }
@@ -83,7 +83,7 @@ const ToolbarButton = ({
 // verticales sueltas: en vez de separar con líneas, se agrupa por color de
 // fondo, que es más limpio y más "app moderna".
 const Group = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <div className="flex items-center gap-0.5 rounded-[10px] bg-bone/[0.02] p-0.5">{children}</div>
+  <div className="flex items-center gap-0.5 rounded-sm bg-bone/[0.02] p-0.5">{children}</div>
 );
 
 const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
@@ -292,7 +292,7 @@ const Toolbar = ({ editor }: { editor: Editor }): React.JSX.Element => {
               }
             }}
             placeholder={state.hasSelection ? 'Link the selection to…' : 'Paste a URL…'}
-            className="min-w-0 flex-1 rounded-md border border-edge bg-inset px-2.5 py-1.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 rounded-md border border-edge bg-inset px-2.5 py-1.5 text-[12.5px] text-foreground outline-hidden placeholder:text-muted-foreground"
           />
           <button
             type="button"
@@ -348,7 +348,7 @@ export const RichNotesEditor = ({
         'aria-label': 'Game notes',
         'aria-multiline': 'true',
         // Shared prose utilities keep heading and divider spacing identical in edit and read views.
-        class: `${notesProseClass} ${minHeightClass} px-4.5 py-4 outline-none [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5`,
+        class: `${notesProseClass} ${minHeightClass} px-4.5 py-4 outline-hidden [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5`,
       },
     },
     onUpdate: ({ editor: instance }) => {
@@ -356,10 +356,10 @@ export const RichNotesEditor = ({
     },
   });
 
-  if (!editor) return <div className="min-h-80 rounded-[12px] border border-input" />;
+  if (!editor) return <div className="min-h-80 rounded-md border border-input" />;
 
   return (
-    <div className="overflow-hidden rounded-[12px] border border-input bg-bone/[0.02] focus-within:border-input/80">
+    <div className="overflow-hidden rounded-md border border-input bg-bone/[0.02] focus-within:border-input/80">
       <Toolbar editor={editor} />
       <div className="max-h-125 overflow-y-auto">
         <EditorContent editor={editor} />

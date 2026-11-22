@@ -34,7 +34,7 @@ export const AboutCard = ({ game }: AboutCardProps): React.JSX.Element | null =>
   if (!game.summary) return null;
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+    <div className="rounded-md border border-border bg-card px-5 py-4.5">
       <div className="flex items-center gap-1.75">
         <BookOpen size={13} className="flex-none text-muted-foreground" />
         <span className="text-[13.5px] font-bold text-foreground">About</span>
@@ -82,7 +82,7 @@ export const AboutCard = ({ game }: AboutCardProps): React.JSX.Element | null =>
         <button
           type="button"
           onClick={() => setExpanded((previous) => !previous)}
-          className="mt-2 flex items-center gap-1 text-[11.5px] font-semibold text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
+          className="mt-2 flex items-center gap-1 text-micro font-semibold text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
         >
           {expanded ? 'Show less' : 'Read more'}
           <ChevronDown

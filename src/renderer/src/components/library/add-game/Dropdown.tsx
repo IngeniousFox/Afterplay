@@ -90,7 +90,7 @@ export const Dropdown = <T extends string>({
       <button
         type="button"
         onClick={() => (open ? close() : setOpen(true))}
-        className="flex w-full items-center justify-between rounded-[9px] border px-3.25 py-2.5 text-[13.5px] font-semibold text-foreground transition-[border-color,background-color,box-shadow] duration-150"
+        className="flex w-full items-center justify-between rounded-sm border px-3.25 py-2.5 text-[13.5px] font-semibold text-foreground transition-[border-color,background-color,box-shadow] duration-150"
         style={
           open
             ? {
@@ -109,7 +109,7 @@ export const Dropdown = <T extends string>({
       </button>
       {open && !searchable && (
         <div
-          className={`absolute left-0 z-40 flex max-h-52 w-full flex-col gap-0.75 overflow-y-auto rounded-[11px] border ${floatingPanelClass} p-1.5 ${panelAnimationClass} ${
+          className={`absolute left-0 z-40 flex max-h-52 w-full flex-col gap-0.75 overflow-y-auto rounded-md border ${floatingPanelClass} p-1.5 ${panelAnimationClass} ${
             openDirection === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
           }`}
         >
@@ -118,7 +118,7 @@ export const Dropdown = <T extends string>({
       )}
       {open && searchable && (
         <div
-          className={`absolute left-0 z-40 flex w-full flex-col rounded-[11px] border ${floatingPanelClass} p-1.5 ${panelAnimationClass} ${
+          className={`absolute left-0 z-40 flex w-full flex-col rounded-md border ${floatingPanelClass} p-1.5 ${panelAnimationClass} ${
             openDirection === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
           }`}
         >
@@ -127,7 +127,7 @@ export const Dropdown = <T extends string>({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Type to filter…"
-            className="mb-1.5 w-full rounded-lg border border-edge bg-inset px-2.75 py-2 text-[13px] text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
+            className="mb-1.5 w-full rounded-lg border border-edge bg-inset px-2.75 py-2 text-[13px] text-foreground outline-hidden transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
           />
           <div className="flex max-h-52 flex-col gap-0.75 overflow-y-auto">
             {optionRows.length > 0 ? (

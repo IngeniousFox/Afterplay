@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { secondaryButtonClass } from '../../../lib/styles';
 import { useState } from 'react';
 import type { GameDetail } from '../../../../../shared/types';
 import { useDeleteGame } from '../../../hooks/games';
@@ -59,7 +60,7 @@ export const DeleteGameDialog = ({
             }}
           />
           <div className="relative flex items-center gap-3 px-5.5 py-5">
-            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
+            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-destructive/12">
               <Trash2 size={16} className="text-destructive" />
             </div>
             <AlertDialogTitle>Delete game</AlertDialogTitle>
@@ -73,8 +74,8 @@ export const DeleteGameDialog = ({
             undone.
           </div>
 
-          <div className="mt-4.5 mb-1.75 text-[12px] font-bold tracking-[.04em] text-muted-foreground">
-            TYPE THE GAME NAME TO CONFIRM
+          <div className="mt-4.5 mb-1.75 text-[12px] font-semibold text-muted-foreground">
+            Type the game name to confirm
           </div>
           <input
             value={confirmText}
@@ -96,7 +97,7 @@ export const DeleteGameDialog = ({
             type="button"
             onClick={() => handleClose(false)}
             disabled={deleteGame.isPending}
-            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
+            className={secondaryButtonClass}
           >
             Cancel
           </button>
@@ -104,7 +105,7 @@ export const DeleteGameDialog = ({
             type="button"
             onClick={handleDelete}
             disabled={!canDelete || deleteGame.isPending}
-            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={15} />
             {deleteGame.isPending ? 'Deleting…' : 'Delete forever'}

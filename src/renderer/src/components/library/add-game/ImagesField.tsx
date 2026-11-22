@@ -51,7 +51,7 @@ export const ImagesField = ({
             alt=""
             className="h-full w-full scale-100 object-cover transition-transform duration-300 group-hover:scale-105"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-inset/0 text-[11px] font-semibold text-bone opacity-0 transition-opacity duration-150 group-hover:bg-inset/55 group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-inset/0 text-micro font-semibold text-bone opacity-0 transition-opacity duration-150 group-hover:bg-inset/55 group-hover:opacity-100">
             Change
           </div>
         </button>
@@ -71,10 +71,10 @@ export const ImagesField = ({
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
               <ImageUp size={16} />
-              <span className="text-[11.5px]">No hero image</span>
+              <span className="text-micro">No hero image</span>
             </div>
           )}
-          <div className="absolute inset-0 flex items-center justify-center bg-inset/0 text-[11px] font-semibold text-bone opacity-0 transition-opacity duration-150 group-hover:bg-inset/55 group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-inset/0 text-micro font-semibold text-bone opacity-0 transition-opacity duration-150 group-hover:bg-inset/55 group-hover:opacity-100">
             {heroUrl ? 'Change' : 'Choose hero'}
           </div>
         </button>
@@ -86,7 +86,7 @@ export const ImagesField = ({
         <button
           type="button"
           onClick={() => setIdOpen((current) => !current)}
-          className="flex items-center gap-1.5 text-[11.5px] font-bold tracking-[.05em] text-muted-foreground transition-colors duration-150 select-none hover:text-foreground"
+          className="flex items-center gap-1.5 text-micro font-semibold text-muted-foreground transition-colors duration-150 select-none hover:text-foreground"
         >
           <ChevronDown
             size={12}

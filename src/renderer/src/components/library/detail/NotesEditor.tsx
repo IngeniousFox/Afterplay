@@ -21,7 +21,7 @@ export const NotesEditor = (props: NotesEditorProps): React.JSX.Element => (
     fallback={
       <LoadingNotice
         label="Loading notes editor…"
-        className={`${props.minHeightClass ?? 'min-h-64'} rounded-[12px] border border-input`}
+        className={`${props.minHeightClass ?? 'min-h-64'} rounded-md border border-input`}
       />
     }
   >

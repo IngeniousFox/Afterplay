@@ -302,14 +302,14 @@ export const HistoryList = ({
                     <span className="w-px" style={{ background: 'var(--border)' }} />
                   </div>
                   <div className="flex flex-1 items-center gap-2 pb-2.5">
-                    <span className="text-micro font-bold tracking-[.1em] text-muted-foreground/55 tabular-nums">
+                    <span className="text-micro font-semibold text-muted-foreground/55 tabular-nums">
                       {entry.date.getFullYear()}
                     </span>
                     <span className="h-px flex-1 bg-bone/5" />
                   </div>
                 </div>
               )}
-              <div className="group/row relative -mx-2 flex gap-3.5 rounded-[10px] px-2 py-1.5 hover:bg-bone/[0.022]">
+              <div className="group/row relative -mx-2 flex gap-3.5 rounded-sm px-2 py-1.5 hover:bg-bone/[0.022]">
                 <div className="relative flex flex-none flex-col items-center">
                   <div
                     className="z-1 flex h-8 w-8 items-center justify-center rounded-full border"
@@ -352,7 +352,7 @@ export const HistoryList = ({
                               : formatMoney(entry.event.amount)}
                       </span>
                       {entry.kind === 'spend' && (
-                        <span className="text-[11.5px] text-muted-foreground">
+                        <span className="text-micro text-muted-foreground">
                           {SPEND_TYPE_LABEL[entry.event.type]}
                         </span>
                       )}
@@ -362,7 +362,7 @@ export const HistoryList = ({
                       // Editor multi-campo: sin auto-guardar en blur (el foco
                       // salta legítimamente de un campo a otro) — se confirma
                       // con el check o con Enter en cualquier input.
-                      <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-input bg-bone/[0.02] p-2.5">
+                      <div className="mt-2 flex flex-col gap-2 rounded-sm border border-input bg-bone/[0.02] p-2.5">
                         <div className="flex items-end gap-2">
                           {entry.kind === 'spend' && (
                             <div className="w-24 flex-none">
@@ -403,7 +403,7 @@ export const HistoryList = ({
                               if (event.key === 'Escape') setEditingKey(null);
                             }}
                             placeholder="Note…"
-                            className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1.5 text-[12.5px] text-foreground outline-none"
+                            className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1.5 text-[12.5px] text-foreground outline-hidden"
                           />
                           <button
                             type="button"
@@ -423,7 +423,7 @@ export const HistoryList = ({
                           </button>
                         </div>
                         {saveError && (
-                          <div className="text-[11px] text-destructive">
+                          <div className="text-micro text-destructive">
                             Couldn&apos;t save — {saveError}
                           </div>
                         )}
@@ -448,7 +448,7 @@ export const HistoryList = ({
                     una x distinta y no había forma de leerlas en vertical. */}
                   {!isEditing && (
                     <div className="flex-none pt-0.25 text-right">
-                      <div className="text-[11.5px] font-semibold text-muted-foreground tabular-nums">
+                      <div className="text-micro font-semibold text-muted-foreground tabular-nums">
                         {dateLabel}
                       </div>
                     </div>

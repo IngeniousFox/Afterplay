@@ -22,7 +22,7 @@ const SKELETON_COUNT = 6;
 const slideShellClass = 'w-29 flex-none';
 
 const pagerButtonClass =
-  'flex h-7 w-7 items-center justify-center rounded-[7px] border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-7 w-7 items-center justify-center rounded-sm border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
 
 // Dónde vive un juego de la saga en TU biblioteca. Es lo que decide el badge
 // de la carátula y a dónde lleva el clic (§3.3-3.4).
@@ -66,7 +66,7 @@ const SagaSlide = ({
       className={`group/saga ${slideShellClass} text-left ${isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
     >
       <div
-        className={`relative aspect-3/4 overflow-hidden rounded-[10px] border transition-[transform,border-color,box-shadow] duration-200 ${
+        className={`relative aspect-3/4 overflow-hidden rounded-sm border transition-[transform,border-color,box-shadow] duration-200 ${
           isCurrent
             ? ''
             : 'border-border group-hover/saga:-translate-y-1 group-hover/saga:border-line-strong group-hover/saga:shadow-[0_10px_28px_rgba(3,6,7,.45)]'
@@ -101,7 +101,7 @@ const SagaSlide = ({
             tienes, y esa es la carátula limpia (§3.3). */}
         {status && (
           <span
-            className="absolute top-1.5 right-1.5 flex h-5.5 w-5.5 items-center justify-center rounded-[7px] border"
+            className="absolute top-1.5 right-1.5 flex h-5.5 w-5.5 items-center justify-center rounded-sm border"
             style={{
               background: 'rgba(8,11,12,.78)',
               borderColor: `${status.color}59`,
@@ -112,7 +112,7 @@ const SagaSlide = ({
         )}
         {owned.kind === 'plan' && (
           <span
-            className="absolute top-1.5 right-1.5 flex h-5.5 w-5.5 items-center justify-center rounded-[7px] border"
+            className="absolute top-1.5 right-1.5 flex h-5.5 w-5.5 items-center justify-center rounded-sm border"
             style={{ background: 'rgba(8,11,12,.78)', borderColor: `${PLAN_COLOR}59` }}
           >
             <StatusIcon meta={STATUS_META.plan} size={11} />
@@ -121,7 +121,7 @@ const SagaSlide = ({
 
         {isCurrent && (
           <span
-            className="absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-[6px] px-1.75 py-0.5 text-micro font-extrabold tracking-[.08em] whitespace-nowrap"
+            className="absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-sm px-1.75 py-0.5 text-micro font-semibold whitespace-nowrap"
             style={{ ...accentGradientStyle }}
           >
             YOU&apos;RE HERE
@@ -140,7 +140,7 @@ const SagaSlide = ({
           leading en px (y no leading-tight) porque el hueco reservado tiene
           que ser exactamente 2 líneas: 2 × 14 = min-h-7. */}
       <div
-        className={`mt-1.5 line-clamp-2 min-h-7 text-[11.5px] leading-[14px] font-semibold ${
+        className={`mt-1.5 line-clamp-2 min-h-7 text-micro leading-[14px] font-semibold ${
           isCurrent ? 'text-foreground' : 'text-muted-foreground group-hover/saga:text-foreground'
         }`}
       >
@@ -250,11 +250,11 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
         <div className="flex items-start gap-3">
           {Array.from({ length: SKELETON_COUNT }, (_, i) => (
             <div key={i} className={slideShellClass}>
-              <div className="aspect-3/4 animate-pulse rounded-[10px] bg-bone/[0.06]" />
+              <div className="aspect-3/4 animate-pulse rounded-sm bg-bone/[0.06]" />
               {/* El mismo hueco que reserva el slide de verdad (dos líneas de
                   título + el año): sin él la sección crecía de golpe al
                   terminar de cargar y empujaba todo lo que tiene debajo. */}
-              <div className="mt-1.5 min-h-7 text-[11.5px] leading-[14px]" />
+              <div className="mt-1.5 min-h-7 text-micro leading-[14px]" />
               <div className="text-micro">&nbsp;</div>
             </div>
           ))}
@@ -305,12 +305,12 @@ export const SagaSection = ({ game }: SagaSectionProps): React.JSX.Element | nul
           {/* El nombre de la colección de IGDB: es lo que da sentido a que
               estos juegos estén juntos, y en un Mario o un Pokémon distingue
               "Super Mario" de "Mario Kart" sin tener que deducirlo. */}
-          <span className="truncate text-[11px] font-semibold text-muted-foreground/60">
+          <span className="truncate text-micro font-semibold text-muted-foreground/60">
             {game.igdbCollections?.map((collection) => collection.name).join(' · ')}
           </span>
         </div>
         <div className="flex flex-none items-center gap-2.5">
-          <span className="text-[11px] text-muted-foreground tabular-nums">
+          <span className="text-micro text-muted-foreground tabular-nums">
             {Math.min(index, maxIndex) + 1}/{slots.length}
           </span>
           <div className="flex items-center gap-1.5">

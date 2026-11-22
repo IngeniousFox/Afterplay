@@ -37,6 +37,13 @@ const idOf = async (page: Page, title: string): Promise<GameId> => {
 const flashingRows = (page: Page): ReturnType<Page['locator']> =>
   page.locator('[data-ach].afterplay-flash-gold');
 
+// Desde la ficha por pestañas (rediseño Fósforo) las sesiones y los logros
+// viven en pestañas distintas: los trofeos se pulsan en Sessions y la ficha
+// salta sola a Achievements para aterrizar.
+const openTab = async (page: Page, name: 'Sessions' | 'Achievements'): Promise<void> => {
+  await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+};
+
 test.describe('aterrizaje en un logro', () => {
   test('pulsar el mismo trofeo dos veces seguidas parpadea LAS DOS VECES', async ({
     afterplay,
@@ -54,6 +61,7 @@ test.describe('aterrizaje en un logro', () => {
     // El primer trofeo del historial de sesiones. Su aria-label lleva el
     // nombre del logro ("Open achievement: Logro 1"), que es como lo ve quien
     // navega con lector de pantalla.
+    await openTab(page, 'Sessions');
     const trophy = page.getByRole('button', { name: /^Open achievement:/ }).first();
     await expect(trophy).toBeVisible();
 
@@ -70,6 +78,8 @@ test.describe('aterrizaje en un logro', () => {
     await expect(flashingRows(page)).toHaveCount(0, { timeout: 6000 });
 
     // ── Segunda vez, el MISMO trofeo y sin pasar por otro ──────────────────
+    // (De vuelta a Sessions: el aterrizaje cambió a la pestaña de logros.)
+    await openTab(page, 'Sessions');
     await trophy.click();
     await expect(flashingRows(page)).toHaveCount(1, { timeout: 4000 });
     expect(await flashingRows(page).first().getAttribute('data-ach')).toBe(landed);
@@ -83,6 +93,7 @@ test.describe('aterrizaje en un logro', () => {
     const gameId = await idOf(page, 'Strange Horticulture');
     await goTo(page, `/games/${gameId}`);
 
+    await openTab(page, 'Sessions');
     const trophy = page.getByRole('button', { name: /^Open achievement:/ }).first();
     await expect(trophy).toBeVisible();
 
@@ -99,6 +110,7 @@ test.describe('aterrizaje en un logro', () => {
     await search.fill('zzzz');
     await expect(flashingRows(page)).toHaveCount(0);
 
+    await openTab(page, 'Sessions');
     await trophy.click();
     await expect(flashingRows(page)).toHaveCount(1, { timeout: 4000 });
     await expect(search).toHaveValue('');
@@ -120,6 +132,7 @@ test.describe('enlaces desde el resto de superficies', () => {
 
     // La vitrina preside con el conseguido más raro; el seed reparte rarezas
     // crecientes (2%, 5%, 8%…), así que el más raro es el primero.
+    await openTab(page, 'Achievements');
     const featured = page.getByRole('button', { name: /^Find in the list:/ }).first();
     await expect(featured).toBeVisible();
     const label = await featured.getAttribute('aria-label');

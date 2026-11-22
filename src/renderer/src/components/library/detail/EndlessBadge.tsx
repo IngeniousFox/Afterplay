@@ -7,14 +7,14 @@ import { VIOLET } from '../../../lib/colors';
 // color propio) para que no cante al ir uno encima del otro.
 export const EndlessBadge = (): React.JSX.Element => (
   <div
-    className="flex items-center gap-3.5 rounded-[14px] border px-5 py-4"
+    className="flex items-center gap-3.5 rounded-md border px-5 py-4"
     style={{
       borderColor: `${VIOLET}2e`,
       background: `linear-gradient(135deg, ${VIOLET}1a, ${VIOLET}08 60%, transparent)`,
     }}
   >
     <div
-      className="flex h-11 w-11 flex-none items-center justify-center rounded-[12px]"
+      className="flex h-11 w-11 flex-none items-center justify-center rounded-md"
       style={{ background: `${VIOLET}24`, border: `1px solid ${VIOLET}3d` }}
     >
       <InfinityIcon size={20} color={VIOLET} />

@@ -67,7 +67,7 @@ export const ScanAutofillRow = ({
         type="button"
         onClick={() => void handleFind()}
         disabled={searching}
-        className="flex w-full items-center justify-center gap-2 rounded-[9px] border border-dashed border-input bg-bone/[0.02] px-3.5 py-2.25 text-[12.5px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-input bg-bone/[0.02] px-3.5 py-2.25 text-[12.5px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/45 hover:text-foreground disabled:opacity-60"
       >
         {searching ? <Loader2 size={14} className="animate-spin" /> : <FolderSearch size={14} />}
         Find in my game folders
@@ -77,7 +77,7 @@ export const ScanAutofillRow = ({
           tenía varios candidatos, el "N found" para corregir la apuesta. */}
       {found && (
         <div
-          className={`mt-1.5 overflow-hidden rounded-[9px] border border-border bg-bone/[0.02] ${expandClass}`}
+          className={`mt-1.5 overflow-hidden rounded-sm border border-border bg-bone/[0.02] ${expandClass}`}
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.25">
             <Check size={13} strokeWidth={3} className="flex-none" style={{ color: GREEN }} />
@@ -87,7 +87,7 @@ export const ScanAutofillRow = ({
             >
               {found.folderName}
             </span>
-            <span className="flex-none text-[11.5px] text-muted-foreground tabular-nums">
+            <span className="flex-none text-micro text-muted-foreground tabular-nums">
               {formatBytes(found.sizeBytes)}
             </span>
           </div>
@@ -103,14 +103,14 @@ export const ScanAutofillRow = ({
       )}
 
       {found === null && (
-        <div className={`mt-1.5 text-[11.5px] text-muted-foreground ${expandClass}`}>
+        <div className={`mt-1.5 text-micro text-muted-foreground ${expandClass}`}>
           Nothing matching in your game folders — add or scan them from the search step, or fill the
           paths below by hand.
         </div>
       )}
 
       {failed && (
-        <div className={`mt-1.5 text-[11.5px] text-destructive ${expandClass}`}>
+        <div className={`mt-1.5 text-micro text-destructive ${expandClass}`}>
           Couldn&apos;t search your game folders — try again, or fill the paths below by hand.
         </div>
       )}

@@ -51,7 +51,7 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
     : '—';
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+    <div className="rounded-md border border-border bg-card px-5 py-4.5">
       <div className="text-[13.5px] font-bold text-foreground">Details</div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3.5">
@@ -79,14 +79,12 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       </div>
 
       <div className="mt-4 border-t border-line pt-3.5">
-        <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-          STEAM APP ID
-        </div>
+        <div className="mb-2 text-micro font-semibold text-muted-foreground">Steam App ID</div>
         <button
           type="button"
           onClick={() => setEditingSteamId(true)}
           aria-label="Edit Steam App ID"
-          className="flex min-h-10 w-full items-center gap-2 rounded-[9px] border border-border bg-bone/[0.02] px-2.5 py-2 text-left transition-colors hover:border-primary/35 hover:bg-bone/[0.05] focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex min-h-10 w-full items-center gap-2 rounded-sm border border-border bg-bone/[0.02] px-2.5 py-2 text-left transition-colors hover:border-primary/35 hover:bg-bone/[0.05] focus-visible:outline-2 focus-visible:outline-primary"
         >
           <Hash size={13} className="flex-none text-muted-foreground" />
           <span className="min-w-0 flex-1 font-mono text-[12px] text-foreground tabular-nums">
@@ -98,9 +96,7 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
 
       {game.genres && game.genres.length > 0 && (
         <div className="mt-4 border-t border-line pt-3.5">
-          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-            GENRES
-          </div>
+          <div className="mb-2 text-micro font-semibold text-muted-foreground">Genres</div>
           <div className="flex flex-wrap gap-1.5">
             {game.genres.map((genre) => (
               <InfoChip key={genre}>{genre}</InfoChip>
@@ -123,9 +119,9 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
           hueco que explicar, es lo normal para media biblioteca. */}
       {game.steamTags && game.steamTags.length > 0 && (
         <div className="mt-4 border-t border-line pt-3.5">
-          <div className="mb-2 flex items-center gap-1.25 text-micro font-bold tracking-[.12em] text-muted-foreground">
+          <div className="mb-2 flex items-center gap-1.25 text-micro font-semibold text-muted-foreground">
             <Tag size={10} />
-            STEAM TAGS
+            Steam tags
           </div>
           {/* Sin cifra en el título: el número que traen ahora las etiquetas
               es un PESO relativo de Steam, no un recuento de personas (ver
@@ -144,11 +140,9 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
       {game.installDirectory && (
         <div className="mt-4 border-t border-line pt-3.5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-micro font-bold tracking-[.12em] text-muted-foreground">
-              INSTALLED AT
-            </span>
+            <span className="text-micro font-semibold text-muted-foreground">Installed at</span>
             {game.installSizeBytes !== null && (
-              <span className="flex items-center gap-1.25 text-[11px] font-semibold text-muted-foreground tabular-nums">
+              <span className="flex items-center gap-1.25 text-micro font-semibold text-muted-foreground tabular-nums">
                 <HardDrive size={11} />
                 {formatBytes(game.installSizeBytes)}
               </span>
@@ -158,11 +152,11 @@ export const DetailsCard = ({ game }: DetailsCardProps): React.JSX.Element => {
               disponible al pasar el ratón, pero no rompe la card en cinco
               líneas cuando el juego vive en una carpeta anidada. */}
           <div
-            className="flex items-center gap-2 rounded-[9px] border border-border bg-bone/[0.02] px-2.5 py-2"
+            className="flex items-center gap-2 rounded-sm border border-border bg-bone/[0.02] px-2.5 py-2"
             title={game.installDirectory}
           >
             <Folder size={13} className="flex-none text-muted-foreground" />
-            <span className="truncate font-mono text-[11.5px] text-foreground">
+            <span className="truncate font-mono text-micro text-foreground">
               {game.installDirectory}
             </span>
           </div>

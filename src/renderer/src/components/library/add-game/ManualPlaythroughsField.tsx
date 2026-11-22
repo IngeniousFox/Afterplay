@@ -40,7 +40,7 @@ export const ManualPlaythroughsList = ({
     <button
       type="button"
       onClick={() => onChange([...entries, EMPTY_MANUAL_PLAYTHROUGH])}
-      className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3.5 py-1.75 text-[12.5px] font-semibold text-foreground hover:bg-raised-hover"
+      className="flex w-fit items-center gap-1.5 rounded-sm border border-line-strong bg-raised px-3.5 py-1.75 text-[12.5px] font-semibold text-foreground hover:bg-raised-hover"
     >
       <Plus size={13} />
       {addLabel}

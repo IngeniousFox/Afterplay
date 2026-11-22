@@ -30,14 +30,14 @@ export const PlaythroughEntryCard = ({
   onRemove,
 }: PlaythroughEntryCardProps): React.JSX.Element => (
   <div
-    className={`flex flex-col gap-3 rounded-[11px] border border-border bg-bone/[0.02] p-3.5 ${expandClass}`}
+    className={`flex flex-col gap-3 rounded-md border border-border bg-bone/[0.02] p-3.5 ${expandClass}`}
   >
     <div className="flex items-center justify-between gap-2.5">
       <PlaythroughLabel number={number} />
       <button
         type="button"
         onClick={onRemove}
-        className="flex items-center gap-1.5 rounded-[9px] px-2.5 py-1 text-[12px] font-semibold text-destructive hover:bg-destructive/10"
+        className="flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[12px] font-semibold text-destructive hover:bg-destructive/10"
       >
         <Trash2 size={13} />
         Remove

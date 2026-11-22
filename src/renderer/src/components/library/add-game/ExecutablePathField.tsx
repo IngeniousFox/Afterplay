@@ -35,14 +35,14 @@ export const ExecutablePathField = (): React.JSX.Element => {
             <input
               {...field}
               placeholder="C:\Games\…\game.exe"
-              className="min-w-0 flex-1 rounded-[9px] border border-edge bg-inset px-3.25 py-2.5 font-mono text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="min-w-0 flex-1 rounded-sm border border-edge bg-inset px-3.25 py-2.5 font-mono text-[12.5px] text-foreground outline-hidden placeholder:text-muted-foreground/70"
             />
           )}
         />
         <button
           type="button"
           onClick={handleBrowse}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-raised-hover"
+          className="flex flex-none items-center gap-1.75 rounded-sm border border-line-strong bg-raised px-3.5 py-2.5 text-[13px] font-semibold text-foreground hover:bg-raised-hover"
         >
           <Folder size={15} />
           <span>Browse</span>

@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { secondaryButtonClass } from '../../../lib/styles';
 import { useDeleteSpendEvent } from '../../../hooks/spend';
 import { useDeleteStateEvent } from '../../../hooks/stateEvents';
 import {
@@ -67,7 +68,7 @@ export const DeleteHistoryEntryDialog = ({
             }}
           />
           <div className="relative flex items-center gap-3 px-5.5 py-5">
-            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
+            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-sm bg-destructive/12">
               <Trash2 size={16} className="text-destructive" />
             </div>
             <AlertDialogTitle>Delete history entry</AlertDialogTitle>
@@ -99,7 +100,7 @@ export const DeleteHistoryEntryDialog = ({
             type="button"
             onClick={() => handleClose(false)}
             disabled={del.isPending}
-            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
+            className={secondaryButtonClass}
           >
             Cancel
           </button>
@@ -107,7 +108,7 @@ export const DeleteHistoryEntryDialog = ({
             type="button"
             onClick={handleDelete}
             disabled={del.isPending}
-            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={15} />
             {del.isPending ? 'Deleting…' : 'Delete entry'}

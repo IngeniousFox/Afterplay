@@ -26,7 +26,7 @@ import type { IterationId } from '../../../../../shared/entityIds';
 const PER_PAGE = 4;
 // Mismo pager que CompletedGallery/HltbCompareList en Stats.
 const pagerButtonClass =
-  'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-5.5 w-5.5 items-center justify-center rounded-sm border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
 
 type PlaythroughPanelProps = {
   game: GameDetail;
@@ -72,17 +72,17 @@ const JourneyStrip = ({
   );
 
   return (
-    <div className="rounded-[12px] border border-border bg-bone/[0.02] px-3.5 py-3">
+    <div className="rounded-md border border-border bg-bone/[0.02] px-3.5 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-micro font-bold tracking-[.12em] text-muted-foreground">Started</div>
+          <div className="text-micro font-semibold text-muted-foreground">Started</div>
           <div className="mt-0.75 truncate text-[12.5px] font-semibold text-foreground">
             {formatByPrecision(iteration.startedAt, startedPrecision, timeFormat)}
           </div>
         </div>
         <div className="min-w-0 text-right">
           <div
-            className="text-micro font-bold tracking-[.12em]"
+            className="text-micro font-semibold"
             style={{ color: isOngoing ? GREEN : `${status.color}cc` }}
           >
             {isOngoing ? 'Ongoing' : status.label}
@@ -126,7 +126,7 @@ const RatingRow = ({
   onRate: (value: number) => void;
 }): React.JSX.Element => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-micro font-bold tracking-[.12em] text-muted-foreground">My rating</span>
+    <span className="text-micro font-semibold text-muted-foreground">My rating</span>
     <div className="flex items-center gap-0.75">
       {[1, 2, 3, 4, 5].map((value) => {
         const on = rating !== null && value <= rating;
@@ -187,7 +187,7 @@ export const PlaythroughPanel = ({
     .slice(currentPage * PER_PAGE, (currentPage + 1) * PER_PAGE);
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+    <div className="rounded-md border border-border bg-card px-5 py-4.5">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[13.5px] font-bold text-foreground">Playthrough</div>
         {/* El estado sube a la cabecera: es la respuesta a "¿en qué quedó
@@ -219,7 +219,7 @@ export const PlaythroughPanel = ({
               >
                 <ChevronLeft size={13} />
               </button>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
+              <span className="text-micro text-muted-foreground tabular-nums">
                 {currentPage + 1}/{totalPages}
               </span>
               <button
@@ -242,7 +242,7 @@ export const PlaythroughPanel = ({
                   key={it.id}
                   type="button"
                   onClick={() => onSelectIteration(it.id)}
-                  className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-semibold"
+                  className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-micro font-semibold"
                   style={
                     active
                       ? { color: GREEN, borderColor: `${GREEN}59`, background: `${GREEN}14` }

@@ -157,7 +157,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
           "change status" cuando se despliega hacia abajo saliéndose de ella.
           El redondeo del degradado se consigue redondeando el propio banner
           (rounded-t), no la card entera. */}
-      <div className="rounded-[14px] border border-border bg-card">
+      <div className="rounded-md border border-border bg-card">
         {/* Banner del estado actual: el color del propio estado como
             degradado de fondo, para que la respuesta a "¿cómo va este
             juego?" se lea antes de leer nada. rounded-t-[13px] = 14px de la
@@ -171,7 +171,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
           }}
         >
           <div
-            className="flex h-12 w-12 flex-none items-center justify-center rounded-[13px]"
+            className="flex h-12 w-12 flex-none items-center justify-center rounded-md"
             style={{ background: `${status.color}24`, border: `1px solid ${status.color}3d` }}
           >
             <StatusIcon meta={status} size={22} />
@@ -187,9 +187,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
         </div>
 
         <div className="px-4.5 py-4">
-          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-            Change status
-          </div>
+          <div className="mb-2 text-micro font-semibold text-muted-foreground">Change status</div>
           <Dropdown
             value={pending}
             options={options}
@@ -209,7 +207,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="Add a note (e.g. Chapter 3)…"
-            className="mt-2.5 w-full rounded-[9px] border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            className="mt-2.5 w-full rounded-sm border border-edge bg-inset px-3.25 py-2.5 text-[13px] text-foreground outline-hidden placeholder:text-muted-foreground"
           />
 
           <button
@@ -223,7 +221,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
                   ' — add a note to log it again'
                 : undefined
             }
-            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.75 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-sm py-2.75 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
             style={accentGradientStyle}
           >
             <Check size={16} />
@@ -231,7 +229,7 @@ export const StatusCard = ({ game }: StatusCardProps): React.JSX.Element => {
           </button>
 
           {saveError && (
-            <div className="mt-2 text-[11.5px] text-destructive">
+            <div className="mt-2 text-micro text-destructive">
               Couldn&apos;t save — {saveError.message}
             </div>
           )}

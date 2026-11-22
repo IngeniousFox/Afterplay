@@ -43,7 +43,7 @@ export const YearDropdown = ({ year, onSelectYear }: YearDropdownProps): React.J
       {open && (
         <div
           ref={panelRef}
-          className={`absolute top-full left-1/2 z-40 mt-1 max-h-52 w-20 -translate-x-1/2 overflow-y-auto rounded-[10px] border ${floatingPanelClass} p-1.5`}
+          className={`absolute top-full left-1/2 z-40 mt-1 max-h-52 w-20 -translate-x-1/2 overflow-y-auto rounded-sm border ${floatingPanelClass} p-1.5`}
         >
           {years.map((option) => {
             const isSelected = option === year;

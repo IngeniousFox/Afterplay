@@ -38,7 +38,7 @@ const ScoreTile = ({
   const active = score !== null;
   return (
     <div
-      className="min-w-0 flex-1 rounded-[10px] border px-2 py-2.75 text-center"
+      className="min-w-0 flex-1 rounded-sm border px-2 py-2.75 text-center"
       style={
         active
           ? { borderColor: `${color}5c`, background: `${color}17` }
@@ -48,7 +48,7 @@ const ScoreTile = ({
       <div className="mb-1.25 flex items-center justify-center gap-1.25">
         <Icon size={11} style={{ color: active ? color : 'var(--muted-foreground)' }} />
         <span
-          className="text-micro font-bold tracking-[.06em]"
+          className="text-micro font-semibold"
           style={{ color: active ? color : 'var(--muted-foreground)' }}
         >
           {label}
@@ -96,7 +96,7 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
   const hasAny = ratings.critics !== null || ratings.players !== null || ratings.steam !== null;
 
   return (
-    <div className="rounded-[14px] border border-border bg-card px-5 py-4.5">
+    <div className="rounded-md border border-border bg-card px-5 py-4.5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-[13.5px] font-bold text-foreground">Ratings</span>
@@ -167,7 +167,7 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
         <div className="flex gap-2">
           <ScoreTile
             icon={Newspaper}
-            label="CRITICS"
+            label="Critics"
             color={CRITICS_COLOR}
             score={ratings.critics}
             countLabel={
@@ -179,7 +179,7 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
           />
           <ScoreTile
             icon={Users}
-            label="PLAYERS"
+            label="Players"
             color={PLAYERS_COLOR}
             score={ratings.players}
             countLabel={
@@ -194,7 +194,7 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
           {ratings.steam !== null && (
             <ScoreTile
               icon={ThumbsUp}
-              label="STEAM"
+              label="Steam"
               color={STEAM_BLUE}
               score={ratings.steam}
               suffix="%"
@@ -204,7 +204,7 @@ export const RatingsCard = ({ game }: RatingsCardProps): React.JSX.Element => {
           )}
         </div>
       ) : (
-        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="text-micro leading-relaxed text-muted-foreground">
           No ratings on IGDB yet — try the refresh, or check back once more people have played it.
         </p>
       )}

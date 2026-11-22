@@ -19,10 +19,10 @@ const SLIDE_GAP = 14;
 // fijo que llena la fila visible (mismo criterio que CoverPicker con sus 8/4
 // de sobra), no un intento de adivinar el total real.
 const SKELETON_COUNT = 3;
-const slideShellClass = 'h-42.5 w-75 flex-none rounded-[11px] border border-border';
+const slideShellClass = 'h-42.5 w-75 flex-none rounded-md border border-border';
 
 const pagerButtonClass =
-  'flex h-7 w-7 items-center justify-center rounded-[7px] border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-7 w-7 items-center justify-center rounded-sm border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
 
 const ScreenshotSlide = ({
   url,
@@ -61,7 +61,7 @@ const ScreenshotSlide = ({
             style={{ background: 'linear-gradient(180deg, transparent, rgba(6,7,6,.55))' }}
           />
           <div
-            className="absolute right-2.25 bottom-2.25 flex h-7 w-7 items-center justify-center rounded-[8px] border border-line-strong opacity-0 transition-opacity duration-200 group-hover/shot:opacity-100"
+            className="absolute right-2.25 bottom-2.25 flex h-7 w-7 items-center justify-center rounded-sm border border-line-strong opacity-0 transition-opacity duration-200 group-hover/shot:opacity-100"
             style={{ background: 'rgba(16,20,22,.72)' }}
           >
             <Maximize2 size={12} />
@@ -135,14 +135,14 @@ const TrailerSlide = ({
         </span>
       </div>
       <span
-        className="pointer-events-none absolute top-2.25 left-2.25 rounded-[6px] border px-1.75 py-0.75 text-micro font-bold tracking-[.08em]"
+        className="pointer-events-none absolute top-2.25 left-2.25 rounded-sm border px-1.75 py-0.75 text-micro font-semibold"
         style={{
           background: 'rgba(16,20,22,.72)',
           borderColor: `${GREEN}55`,
           color: GREEN,
         }}
       >
-        TRAILER
+        Trailer
       </span>
     </button>
   );
@@ -217,7 +217,7 @@ export const ScreenshotsCarousel = ({
             cuya primera pieza es un vídeo no describe lo que hay debajo. */}
         <SectionLabel>{trailer ? 'Trailer & screenshots' : 'Screenshots'}</SectionLabel>
         <div className="flex items-center gap-2.5">
-          <span className="text-[11px] text-muted-foreground tabular-nums">
+          <span className="text-micro text-muted-foreground tabular-nums">
             {index + 1}/{slides.length}
           </span>
           <div className="flex items-center gap-1.5">
@@ -253,7 +253,7 @@ export const ScreenshotsCarousel = ({
           arriba/abajo) lo compensa para que el carril no baje ni empuje lo de
           debajo — un -m-2 a secas habría tirado también de los lados y
           desplazado/ensanchado el carril hacia la izquierda sin querer. */}
-      <div className="-my-2 overflow-hidden rounded-[11px] py-2">
+      <div className="-my-2 overflow-hidden rounded-md py-2">
         <div
           className="flex gap-3.5 transition-transform duration-320 ease-[cubic-bezier(.4,0,.2,1)]"
           style={{ transform: `translateX(${trackX}px)` }}
