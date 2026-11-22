@@ -149,6 +149,9 @@ const PaletteBody = ({
         <Search aria-hidden size={18} className="flex-none text-phosphor" />
         <input
           ref={inputRef}
+          // Focus on mount too: base-ui moves initial focus a frame later, and
+          // letters typed right after Ctrl K would otherwise land on the page.
+          autoFocus
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);

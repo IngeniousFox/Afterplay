@@ -215,6 +215,7 @@ test.describe('biblioteca', () => {
     await page.keyboard.press('Control+k');
     const palette = page.getByRole('dialog', { name: 'Jump to a game' });
     await expect(palette).toBeVisible();
+    await expect(palette.getByRole('combobox').or(palette.getByRole('textbox'))).toBeFocused();
     await page.keyboard.type('terra');
     await expect(palette.getByRole('option', { name: /Terraria/ })).toBeVisible();
     await page.keyboard.press('Enter');
