@@ -2402,7 +2402,7 @@ Sobre una **copia** completa de los datos reales: importar, validar, sembrar un 
 - **Comprobado:** tipos, tests y lint; en el hub de desarrollo, la pantalla carga, genera un código y enseña los dos PCs, y a 390 px no se desborda ni queda tapada por la barra inferior.
 - **Desplegado (2026-11-22):** el hub de producción ya sirve la PWA con Ajustes.
 
-**Corte del anfitrión (2026-11-22).** El anfitrión migra antes que nadie con un instalador `2.0.0-rc.1` compilado en local y sin publicar (`electron-builder --publish never -c.extraMetadata.version=2.0.0-rc.1`). Así la 1.8 de la segunda persona no recibe la 2.0, y la 2.0.0 oficial le llegará como actualización. El Worker antiguo no se ha puesto en mantenimiento: el anfitrión no usa la PWA antigua.
+**Corte del anfitrión (2026-11-22).** El anfitrión migra antes que nadie con un instalador `2.0.0-rc.1` compilado en local y sin publicar (`electron-builder --publish never -c.extraMetadata.version=2.0.0-rc.1`). Así la 1.8 de la segunda persona no recibe la 2.0, y la 2.0.0 oficial le llegará como actualización. El Worker antiguo no se ha puesto en mantenimiento: el anfitrión no usa la PWA antigua. **Hecho:** el PC principal migró ese mismo día; la PWA de producción lo enseña emparejado y con la biblioteca entera (348 juegos). Falta su otro PC, que se empareja solo con el secreto de alta (7 días).
 
 **Falso «cambios sin subir» en el corte (arreglado el 2026-11-22).** En la migración real, el PC migrador salía con «2 changes never reached the sync service». Mirado en una copia de su réplica, esos 2 eran solo contabilidad: la marca de lo subido que reescribe el replicador y el `device_status` de la 1.8. Había dos fallos:
 
