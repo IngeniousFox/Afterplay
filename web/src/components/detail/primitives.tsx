@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { Figure } from '../Figure';
+import { Ticker } from '../fx/Ticker';
 
 // Las piezas pequeñas que se repiten por toda la ficha. Están juntas en un
 // fichero porque son componentes de diez líneas: un archivo por cada uno sería
@@ -46,27 +47,45 @@ export const InfoChip = ({
 );
 
 // Una cifra con su etiqueta debajo, para las filas de cifras separadas por
-// líneas finas (Played · Sessions · Spent…).
+// líneas finas (Played · Sessions · Spent…). Con un número y su `format`, la
+// cifra entra contando como un marcador (Ticker); con un texto, se pinta tal
+// cual ("—").
 export const FigureCell = ({
   value,
+  format = (amount) => String(Math.round(amount)),
   label,
   accent = false,
   hint,
 }: {
-  value: string;
+  value: string | number;
+  format?: (value: number) => string;
   label: string;
   accent?: boolean;
   hint?: string;
-}): React.JSX.Element => (
-  <div className="min-w-0 flex-1 border-l border-line pl-3 first:border-l-0 first:pl-0">
-    <Figure
-      value={value}
-      className={cn('block text-[30px] leading-8', accent ? 'text-phosphor' : 'text-bone')}
-    />
-    <div className="mt-0.5 text-micro text-dust">{label}</div>
-    {hint && <div className="text-micro font-semibold text-phosphor">{hint}</div>}
-  </div>
-);
+}): React.JSX.Element => {
+  const figureClass = cn(
+    'block text-[30px] leading-8',
+    accent
+      ? 'text-phosphor [text-shadow:0_0_1px_rgb(255_179_71/0.45),0_0_16px_rgb(255_179_71/0.32)]'
+      : 'text-bone',
+  );
+  return (
+    <div className="min-w-0 flex-1 border-l border-line pl-3 first:border-l-0 first:pl-0">
+      {typeof value === 'number' ? (
+        <Ticker
+          value={value}
+          format={format}
+          className="block"
+          render={(text) => <Figure value={text} className={figureClass} />}
+        />
+      ) : (
+        <Figure value={value} className={figureClass} />
+      )}
+      <div className="mt-0.5 text-micro text-dust">{label}</div>
+      {hint && <div className="text-micro font-semibold text-phosphor">{hint}</div>}
+    </div>
+  );
+};
 
 // Celda de la rejilla de Details: etiqueta pequeña arriba, dato debajo. El
 // dato envuelve: un "Bandai Namco Entertainment" no se recorta.

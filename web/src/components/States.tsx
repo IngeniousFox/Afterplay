@@ -4,11 +4,23 @@ import { ApiFailure } from '../api';
 import { useOnline } from '../hooks/useOnline';
 import { cn } from '../lib/cn';
 import { secondaryButtonClass } from '../lib/styles';
+import { loopPlayClass } from './fx/motion';
 
-// El esqueleto: Raised con una franja más clara que lo recorre (animate-sweep
-// mueve el background-position de 100 % a 0).
-const skeletonClass =
-  'animate-sweep bg-raised bg-[linear-gradient(90deg,transparent_30%,rgb(233_228_216/0.06)_50%,transparent_70%)] bg-size-[200%_100%] motion-reduce:animate-none';
+// El esqueleto: un bloque Raised que recorre un barrido de fósforo. El brillo
+// es una capa con degradado que se desplaza de lado a lado (transform, en el
+// compositor), no un background-position que repinta cada frame. Se para con
+// la pestaña oculta y con movimiento reducido no se mueve.
+const Skeleton = ({ className }: { className: string }): React.JSX.Element => (
+  <div className={cn('relative overflow-hidden bg-raised', className)}>
+    <span
+      className={cn(
+        'absolute inset-0 block bg-[linear-gradient(90deg,transparent_25%,rgb(255_179_71/0.07)_45%,rgb(255_214_150/0.11)_50%,rgb(255_179_71/0.07)_55%,transparent_75%)]',
+        'animate-[fx-sweep_1.6s_var(--ease-in-out)_infinite] motion-reduce:hidden',
+        loopPlayClass,
+      )}
+    />
+  </div>
+);
 
 // Carga: spinner ámbar con su frase y, debajo, filas esqueleto con un brillo
 // que barre de izquierda a derecha (quieto con movimiento reducido). Las filas
@@ -32,12 +44,12 @@ export const Loading = ({
     <div aria-hidden="true">
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="flex items-center gap-3 border-b border-line py-2.5">
-          <div className={cn(skeletonClass, 'h-14 w-11 rounded-sm')} />
+          <Skeleton className="h-14 w-11 rounded-sm" />
           <div className="flex flex-1 flex-col gap-2">
-            <div className={cn(skeletonClass, 'h-3 w-3/5 rounded-xs')} />
-            <div className={cn(skeletonClass, 'h-2.5 w-2/5 rounded-xs')} />
+            <Skeleton className="h-3 w-3/5 rounded-xs" />
+            <Skeleton className="h-2.5 w-2/5 rounded-xs" />
           </div>
-          <div className={cn(skeletonClass, 'h-4 w-12 rounded-xs')} />
+          <Skeleton className="h-4 w-12 rounded-xs" />
         </div>
       ))}
     </div>

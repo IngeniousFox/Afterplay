@@ -5,6 +5,9 @@ import type { SourceCompletion } from '../../../../src/shared/api/v2';
 import { isRare, percentLabel, sortAchievements } from '../../lib/achievements';
 import { cn } from '../../lib/cn';
 import { formatDate } from '../../lib/format';
+import { chartGroup, growX, growY } from '../fx/chart';
+import { Ticker } from '../fx/Ticker';
+import { useInView } from '../fx/viewport';
 import { SectionLabel, ShowMoreButton } from './primitives';
 
 // El medidor de logros: una barrita por logro (hasta 60), encendidas las
@@ -12,26 +15,40 @@ import { SectionLabel, ShowMoreButton } from './primitives';
 // continua.
 const SEGMENT_LIMIT = 60;
 
+// Se rellena la primera vez que entra en la vista: las barritas encendidas
+// suben una detrás de otra; la barra continua crece de izquierda a derecha.
 const Meter = ({ unlocked, total }: { unlocked: number; total: number }): React.JSX.Element => {
+  const { observe, inView } = useInView();
   if (total > SEGMENT_LIMIT) {
     return (
-      <div className="h-3 overflow-hidden rounded-xs bg-bone/10" aria-hidden="true">
+      <div
+        ref={observe}
+        data-inview={inView || undefined}
+        className={cn(chartGroup, 'h-3 overflow-hidden rounded-xs bg-bone/10')}
+        aria-hidden="true"
+      >
         <div
-          className="h-full bg-phosphor shadow-glow-bar"
+          className={cn('h-full bg-phosphor shadow-glow-bar', growX)}
           style={{ width: `${(unlocked / total) * 100}%` }}
         />
       </div>
     );
   }
   return (
-    <div className="flex h-3 gap-[2px]" aria-hidden="true">
+    <div
+      ref={observe}
+      data-inview={inView || undefined}
+      className={cn(chartGroup, 'flex h-3 gap-[2px]')}
+      aria-hidden="true"
+    >
       {Array.from({ length: total }, (_, index) => (
         <span
           key={index}
           className={cn(
             'flex-1 rounded-xs',
-            index < unlocked ? 'bg-phosphor shadow-glow-bar' : 'bg-bone/10',
+            index < unlocked ? cn('bg-phosphor shadow-glow-bar', growY) : 'bg-bone/10',
           )}
+          style={index < unlocked ? { animationDelay: `${index * 18}ms` } : undefined}
         />
       ))}
     </div>
@@ -181,7 +198,10 @@ export const AchievementsSection = ({
 
       <div className="mt-1 flex items-end justify-between gap-3">
         <span className="font-display font-bold tabular-nums">
-          <span className="text-[56px] leading-[52px] text-phosphor">{unlockedCount}</span>
+          <Ticker
+            value={unlockedCount}
+            className="text-[56px] leading-[52px] text-phosphor [text-shadow:0_0_1px_rgb(255_179_71/0.45),0_0_18px_rgb(255_179_71/0.32)]"
+          />
           <span className="ml-1 text-[26px] text-dust">/{sorted.length}</span>
         </span>
         <div className="pb-1 text-right text-small">

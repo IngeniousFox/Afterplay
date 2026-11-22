@@ -4,6 +4,8 @@ import type { GameDetail } from '../../api';
 import { cn } from '../../lib/cn';
 import { formatHours } from '../../lib/format';
 import { Figure } from '../Figure';
+import { chartGroup, growY } from '../fx/chart';
+import { useInView } from '../fx/viewport';
 import { SectionLabel } from './primitives';
 
 type TierKey = 'main' | 'extra' | 'completionist';
@@ -32,6 +34,8 @@ type Props = {
 // pasaste); se vuelve a tocar para soltarlo.
 export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.JSX.Element => {
   const [activeTier, setActiveTier] = useState<TierKey | null>(null);
+  // El medidor se rellena la primera vez que entra en la vista.
+  const { observe, inView } = useInView();
 
   const main = game.hltbMain ?? 0;
   const extra = game.hltbMainExtras ?? 0;
@@ -180,16 +184,23 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
       </div>
 
       {/* El medidor: una barrita por segmento, encendida hasta tus horas, y una
-          marca fina en cada tramo. */}
-      <div className="relative mt-3" aria-hidden="true">
+          marca fina en cada tramo. Al entrar en la vista las encendidas suben
+          desde la base una detrás de otra, como un VU que se llena. */}
+      <div
+        ref={observe}
+        data-inview={inView || undefined}
+        className={cn(chartGroup, 'relative mt-3')}
+        aria-hidden="true"
+      >
         <div className="flex h-5 gap-[2px]">
           {Array.from({ length: SEGMENTS }, (_, index) => (
             <span
               key={index}
               className={cn(
                 'flex-1 rounded-xs',
-                index < filled ? 'bg-phosphor shadow-glow-bar' : 'bg-bone/10',
+                index < filled ? cn('bg-phosphor shadow-glow-bar', growY) : 'bg-bone/10',
               )}
+              style={index < filled ? { animationDelay: `${index * 16}ms` } : undefined}
             />
           ))}
         </div>

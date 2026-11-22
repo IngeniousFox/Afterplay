@@ -88,3 +88,28 @@
     background-clip: padding-box;
   }
 }
+
+/*
+ * Keyframes propios de components/fx de la PWA (el resto vive en
+ * src/shared/theme/fosforo.css). Solo transform: corren en el compositor.
+ *   · fx-sweep  el barrido de fósforo de los esqueletos, de lado a lado.
+ *   · fx-shine  un reflejo que cruza una tarjeta en el primer cuarto del
+ *               ciclo y descansa el resto (el Next up del Plan).
+ */
+@keyframes fx-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes fx-shine {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  26%,
+  100% {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
