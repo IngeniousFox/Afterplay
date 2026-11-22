@@ -1,4 +1,5 @@
 import { CircleCheck, Info, TriangleAlert } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AmbientMode } from './components/ambient/AmbientMode';
@@ -40,14 +41,56 @@ const ToastIconChip = ({
 // Mismo trío borde/fondo/sombra que los avisos hechos a medida
 // (SessionClosedToast, useMemoryArrivalToast) — así un básico y uno a
 // medida se sienten de la MISMA familia si coinciden apilados, en vez de
-// que uno luzca y el otro parezca un aviso del sistema operativo.
+// que uno luzca y el otro parezca un aviso del sistema operativo. El aviso de
+// sesión cerrada (`.afterplay-toast`) trae su propio panel entero: sin el
+// `has-[…]`, Sonner le ponía este marco alrededor y se veía doble.
 const toastClassNames = {
   toast:
-    'flex w-full items-center gap-3 rounded-[14px] border border-input bg-overlay px-3.5 py-3 shadow-[0_20px_55px_rgba(3,6,7,.6)]',
+    'flex w-full items-center gap-3 rounded-[14px] border border-input bg-overlay px-3.5 py-3 shadow-[0_20px_55px_rgba(3,6,7,.6)] has-[.afterplay-toast]:border-0 has-[.afterplay-toast]:bg-transparent has-[.afterplay-toast]:p-0 has-[.afterplay-toast]:shadow-none',
   icon: 'flex-none',
   content: 'flex min-w-0 flex-1 flex-col justify-center gap-0.5',
   title: 'text-[13px] font-bold leading-snug text-foreground',
   description: 'text-[11.5px] font-semibold text-muted-foreground',
+};
+
+// Los avisos salen abajo a la derecha, justo donde se acopla la barra "Now
+// playing" (72 px, 112 con una segunda sesión, y ninguna sin sesión en
+// marcha). Se mide la barra de verdad para apilar los avisos ENCIMA de ella y
+// no tapar su Stop: el alto cambia con lo que haya en marcha, y la barra vive
+// dentro del router, lejos de aquí. Con ella fuera (o en modo TV), 0.
+const VIEWPORT_OFFSET_PX = 24;
+const useNowPlayingDockHeight = (): number => {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    let observed: Element | null = null;
+    let frame: number | null = null;
+    const resize = new ResizeObserver((entries) => {
+      const box = entries[0]?.borderBoxSize?.[0];
+      setHeight(Math.round(box ? box.blockSize : (entries[0]?.contentRect.height ?? 0)));
+    });
+    const sync = (): void => {
+      frame = null;
+      const dock = document.querySelector('[data-testid="now-playing"]');
+      if (dock === observed) return;
+      if (observed) resize.unobserve(observed);
+      observed = dock;
+      if (dock) resize.observe(dock, { box: 'border-box' });
+      else setHeight(0);
+    };
+    sync();
+    // La barra aparece y desaparece con las sesiones: se vuelve a buscar
+    // cuando cambia el árbol, como mucho una vez por frame.
+    const mutations = new MutationObserver(() => {
+      if (frame === null) frame = requestAnimationFrame(sync);
+    });
+    mutations.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mutations.disconnect();
+      resize.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, []);
+  return height;
 };
 
 // Shell raíz de la app — routing de verdad (Bloque 3A, SPEC 10.6): rail
@@ -87,6 +130,7 @@ const Afterplay = (): React.JSX.Element => {
   // Modo TV: los toasts que sobrevivan en él (errores, conexión de mando) se
   // escalan para leerse desde el sofá (BIG-PICTURE.md §4).
   const bigPicture = useBigPicture();
+  const dockHeight = useNowPlayingDockHeight();
 
   return (
     <TooltipProvider>
@@ -114,8 +158,10 @@ const Afterplay = (): React.JSX.Element => {
         // carátula, título, cifra y un campo de texto — apretado ahí dentro se
         // veía estrecho y pobre. En modo TV, escalado desde la esquina para
         // leerse a distancia de sofá.
+        // Encima de la barra Now playing acoplada, nunca sobre ella.
+        offset={{ bottom: VIEWPORT_OFFSET_PX + dockHeight }}
         style={{
-          width: 420,
+          width: 424,
           ...(bigPicture ? { transform: 'scale(1.35)', transformOrigin: 'bottom right' } : {}),
         }}
         toastOptions={{ unstyled: true, classNames: toastClassNames }}

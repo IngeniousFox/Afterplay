@@ -1,13 +1,14 @@
-import { ArrowRight, Link2, Plus, Search } from 'lucide-react';
+import { ArrowRight, Link2, Plus, Search, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import type { PendingSession } from '../../../../shared/types';
 import { useGames } from '../../hooks/games';
 import { useAssignSession } from '../../hooks/sessions';
 import { useTimeFormat } from '../../hooks/settings';
-import { formatByPrecision, formatElapsed, formatHours } from '../../lib/format';
+import { formatByPrecision, formatHours, pluralize } from '../../lib/format';
 import { filterByTitle } from '../../lib/search';
-import { accentGradientStyle, revealClass, revealStyle } from '../../lib/styles';
 import { GameCover } from '../GameCover';
+import { buttonSize, focusRing, kbdClass, primaryButtonClass } from '../shell/controls';
 import { ModalShell } from '../ui/modal-shell';
 import { BLUE } from '../../lib/colors';
 import type { GameId } from '../../../../shared/entityIds';
@@ -90,70 +91,71 @@ export const AssignSessionModal = ({
       title="Assign session"
       icon={Link2}
       color={BLUE}
-      widthClass="w-130"
-      maxHClass="max-h-[70vh]"
-      bodyClassName="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      widthClass="w-160 max-w-[calc(100vw-48px)]"
+      maxHClass="max-h-[78vh]"
+      bodyClassName="min-h-0 flex-1 overflow-y-auto px-5 py-5"
       headerExtra={
-        <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+        <div className="mt-0.5 text-small text-dust tabular-nums">
           {session.emulatorName} · {formatByPrecision(session.startedAt, 'datetime', timeFormat)}
-          {session.durationSec !== null && ` · ${formatElapsed(session.durationSec)}`}
+          {session.durationSec !== null && ` · ${formatHours(session.durationSec / 3600)}`}
         </div>
       }
     >
       {emulatedGames.length === 0 ? (
         // EMULADORES.md §6 — estado vacío: sin ningún juego emulado en la
         // biblioteca, directo al crear (nada de una lista vacía confusa).
-        <div
-          className={`flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-border py-10 text-center ${revealClass}`}
-        >
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-full"
-            style={{ background: `${BLUE}1a` }}
-          >
-            <Link2 size={18} style={{ color: BLUE }} />
-          </div>
-          <p className="text-[13px] font-semibold text-foreground">
+        <div className="flex animate-fade-in flex-col items-center gap-3 rounded-md border border-dashed border-line-strong px-6 py-10 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-tube/12">
+            <Link2 aria-hidden size={19} className="text-tube" />
+          </span>
+          <p className="text-body font-semibold text-bone">
             No emulated games in your library yet.
           </p>
-          <p className="max-w-72 text-[12px] text-muted-foreground">
+          <p className="max-w-80 text-small text-dust">
             Add the game you were playing — it&apos;ll be marked as emulated and this session will
             be assigned to it.
           </p>
           <button
             type="button"
             onClick={onAddNewGame}
-            className="mt-1 flex items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
-            style={accentGradientStyle}
+            className={cn(primaryButtonClass, buttonSize.md, 'mt-1')}
           >
-            <Plus size={14} />
+            <Plus aria-hidden size={15} />
             Add new game
           </button>
         </div>
       ) : (
         <>
-          {/* group + focus-within: el brillo del foco envuelve también el
-              icono de la lupa, no solo el campo — mismo patrón que SearchStep. */}
-          <div className="group/search relative mb-2.5">
+          {/* group + focus-within: el foco Phosphor envuelve también el icono
+              de la lupa, no solo el campo. */}
+          <div className="group/search relative mb-3">
             <Search
-              size={15}
-              className="pointer-events-none absolute top-1/2 left-2.75 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within/search:text-primary"
+              aria-hidden
+              size={16}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-dust transition-colors group-focus-within/search:text-phosphor"
             />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search emulated games…"
+              aria-label="Search emulated games"
               autoFocus
-              className="w-full rounded-[9px] border border-edge bg-inset py-2.25 pr-3 pl-8.5 text-[13px] text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:border-phosphor  focus:shadow-[0_0_0_3px_rgba(255,179,71,.12)]"
+              className="h-10 w-full rounded-sm border border-edge bg-inset pr-3 pl-9.5 text-body text-bone outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
             />
           </div>
 
           {filtered.length > 0 && (
-            <div className="mb-2 flex items-center justify-between px-0.5">
-              <span className="text-[11px] font-bold tracking-[.11em] text-muted-foreground">
-                {filtered.length} {filtered.length === 1 ? 'GAME' : 'GAMES'}
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-0.5">
+              <span className="text-small font-semibold text-dust tabular-nums">
+                {pluralize(filtered.length, 'game')}
               </span>
-              <span className="text-micro text-muted-foreground/60">↑ ↓ to browse · ↵ to pick</span>
+              <span className="flex items-center gap-1 text-micro text-dust">
+                <kbd className={kbdClass}>↑</kbd>
+                <kbd className={kbdClass}>↓</kbd>
+                to browse ·<kbd className={kbdClass}>Enter</kbd>
+                to pick
+              </span>
             </div>
           )}
 
@@ -169,40 +171,41 @@ export const AssignSessionModal = ({
                   // block:'nearest' es idempotente (no hace nada si la fila ya
                   // se ve entera), así que vale llamarlo al pintar la resaltada.
                   ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-                  className={`group/row flex items-start gap-3.25 rounded-[11px] border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] disabled:opacity-60 ${
-                    isHighlighted
-                      ? 'border-primary/45 bg-bone/[0.06] shadow-[0_8px_20px_rgba(3,6,7,.35)]'
-                      : 'border-transparent'
-                  } ${revealClass}`}
-                  style={revealStyle(Math.min(index, 6))}
+                  className={cn(
+                    'group/row relative flex animate-fade-in items-center gap-3.5 overflow-hidden rounded-sm border p-2.5 text-left',
+                    'transition-[border-color,background-color] duration-150 ease-out hover:border-phosphor/50 hover:bg-raised disabled:opacity-60',
+                    focusRing,
+                    isHighlighted ? 'border-phosphor/60 bg-raised' : 'border-line',
+                  )}
+                  style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}
                 >
-                  {/* Misma carátula grande (72×100) que los resultados de
-                      SearchStep, con el mismo zoom suave al pasar el ratón. */}
+                  {/* La barra lateral de la fila elegida con el teclado. */}
+                  {isHighlighted && (
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-phosphor" />
+                  )}
                   <GameCover
                     url={game.coverUrl}
-                    className="h-25 w-18 flex-none overflow-hidden rounded-[8px] border border-border bg-muted"
-                    iconSize={22}
-                    imgClassName="scale-100 transition-transform duration-300 group-hover/row:scale-108"
+                    className="h-20 w-15 flex-none overflow-hidden rounded-sm border border-line bg-raised"
+                    iconSize={20}
+                    imgClassName="scale-100 transition-transform duration-300 group-hover/row:scale-105 motion-reduce:transition-none"
                   />
 
-                  <div className="min-w-0 flex-1 py-0.5">
-                    <div className="flex items-baseline gap-2">
-                      <span className="truncate text-sm font-bold text-foreground">
-                        {game.title}
-                      </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-body font-semibold text-bone">{game.title}</span>
                       {game.releaseYear !== null && (
-                        <span className="flex-none text-[12px] font-semibold text-muted-foreground/80 tabular-nums">
+                        <span className="flex-none text-small text-dust tabular-nums">
                           {game.releaseYear}
                         </span>
                       )}
                     </div>
 
                     {game.genres && game.genres.length > 0 && (
-                      <div className="mt-1.25 flex flex-wrap items-center gap-1.25">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
                         {game.genres.slice(0, MAX_GENRES).map((genre) => (
                           <span
                             key={genre}
-                            className="rounded-md border border-input bg-bone/[0.04] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
+                            className="rounded-sm border border-line-strong px-1.5 text-micro text-dust"
                           >
                             {genre}
                           </span>
@@ -211,25 +214,26 @@ export const AssignSessionModal = ({
                     )}
 
                     {game.totalHours > 0 && (
-                      <div className="mt-1.5 text-[11.5px] text-muted-foreground/75">
+                      <div className="mt-1.5 text-small text-dust">
                         {formatHours(game.totalHours)} played
-                        {game.sessionCount > 0 &&
-                          ` · ${game.sessionCount} session${game.sessionCount === 1 ? '' : 's'}`}
+                        {game.sessionCount > 0 && ` · ${pluralize(game.sessionCount, 'session')}`}
                       </div>
                     )}
                   </div>
 
                   <ArrowRight
-                    size={15}
-                    className={`mt-1 flex-none transition-[transform,color] duration-150 group-hover/row:translate-x-0.75 group-hover/row:text-primary ${
-                      isHighlighted ? 'translate-x-0.75 text-primary' : 'text-muted-foreground'
-                    }`}
+                    aria-hidden
+                    size={16}
+                    className={cn(
+                      'flex-none transition-[transform,color] duration-150 group-hover/row:translate-x-0.5 group-hover/row:text-phosphor motion-reduce:transition-none',
+                      isHighlighted ? 'translate-x-0.5 text-phosphor' : 'text-dust',
+                    )}
                   />
                 </button>
               );
             })}
             {filtered.length === 0 && (
-              <p className="px-2.5 py-3 text-xs text-muted-foreground">
+              <p className="px-1 py-3 text-small text-dust">
                 No emulated games match &quot;{search}&quot;.
               </p>
             )}
@@ -237,10 +241,14 @@ export const AssignSessionModal = ({
             <button
               type="button"
               onClick={onAddNewGame}
-              className="mt-0.5 flex items-center gap-3.25 rounded-[11px] border border-dashed border-border p-2.75 text-left text-[13px] font-semibold text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:bg-bone/[0.04] hover:text-foreground"
+              className={cn(
+                'mt-0.5 flex items-center gap-3.5 rounded-sm border border-dashed border-line-strong p-2.5 text-left text-body font-semibold text-dust',
+                'transition-[border-color,background-color,color] duration-150 ease-out hover:border-phosphor/50 hover:bg-raised hover:text-bone',
+                focusRing,
+              )}
             >
-              <span className="flex h-25 w-18 flex-none items-center justify-center rounded-[8px] border border-dashed border-border">
-                <Plus size={18} />
+              <span className="flex h-20 w-15 flex-none items-center justify-center rounded-sm border border-dashed border-line-strong">
+                <Plus aria-hidden size={18} />
               </span>
               Add new game…
             </button>
@@ -249,7 +257,11 @@ export const AssignSessionModal = ({
       )}
 
       {assignSession.isError && (
-        <div className="mt-3 rounded-[10px] border border-destructive/40 bg-destructive/10 px-3.25 py-2.5 text-[12.5px] text-destructive">
+        <div
+          role="alert"
+          className="mt-3 flex items-start gap-2.5 rounded-sm border border-live/40 bg-live/10 px-3.5 py-3 text-small text-bone"
+        >
+          <TriangleAlert aria-hidden size={16} className="mt-px flex-none text-live" />
           Couldn&apos;t assign the session — {assignSession.error.message}
         </div>
       )}

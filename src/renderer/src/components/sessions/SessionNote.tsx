@@ -1,8 +1,9 @@
 import { Check, NotebookPen, X } from 'lucide-react';
 import { useState } from 'react';
 import { useSetSessionNote } from '../../hooks/sessions';
-import { AMBER } from '../../lib/colors';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { focusRing, iconButtonClass } from '../shell/controls';
 import type { SessionId } from '../../../../shared/entityIds';
 
 type SessionNoteProps = {
@@ -78,24 +79,25 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
             if (event.key === 'Escape') cancel();
           }}
           placeholder="Where did you leave off?"
-          className="min-w-0 flex-1 rounded-md border border-line-strong bg-raised px-2 py-1 text-[12px] text-foreground outline-none focus:border-primary/45"
+          aria-label="Session note"
+          className="h-8 min-w-0 flex-1 rounded-sm border border-edge bg-inset px-2.5 text-small text-bone outline-none placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
         />
         <button
           type="button"
           onClick={() => void save()}
           disabled={setSessionNote.isPending}
-          className="flex-none rounded-md p-1.5 text-primary hover:bg-primary/10 disabled:opacity-50"
+          className={cn(iconButtonClass, 'size-8 text-phosphor hover:text-phosphor-hi')}
           aria-label="Save note"
         >
-          <Check size={13} />
+          <Check aria-hidden size={15} />
         </button>
         <button
           type="button"
           onClick={cancel}
-          className="flex-none rounded-md p-1.5 text-muted-foreground hover:bg-bone/6"
+          className={cn(iconButtonClass, 'size-8')}
           aria-label="Cancel"
         >
-          <X size={13} />
+          <X aria-hidden size={15} />
         </button>
       </div>
     );
@@ -104,36 +106,39 @@ export const SessionNote = ({ sessionId, note }: SessionNoteProps): React.JSX.El
   if (note) {
     return (
       // w-fit y no w-full: con el ancho completo, el lapicero se iba al
-      // extremo derecho de la fila y quedaba flotando lejísimos del texto,
-      // como si fuera de otra cosa. Pegado al final de la nota se lee como lo
-      // que es — el gesto de editar ESA nota. max-w-full para que una nota
-      // larga siga cortando bien.
+      // extremo derecho de la fila y quedaba flotando lejísimos del texto.
+      // Pegado al final de la nota se lee como lo que es — el gesto de editar
+      // ESA nota. La nota envuelve entera: es lo que escribiste.
       <button
         type="button"
         onClick={startEditing}
         title="Edit note"
-        className="mt-1.5 flex w-fit max-w-full items-start gap-1.5 border-l-2 pl-2.5 text-left text-[12.5px] text-bone hover:text-foreground"
-        style={{ borderColor: `${AMBER}55` }}
+        className={cn(
+          'mt-1.5 flex w-fit max-w-full items-start gap-1.5 rounded-xs border-l-2 border-phosphor/50 pl-2.5 text-left text-small text-bone hover:text-bone/80',
+          focusRing,
+        )}
       >
         <span className="min-w-0">{note}</span>
-        <NotebookPen size={11} className="mt-0.75 flex-none opacity-45" />
+        <NotebookPen aria-hidden size={12} className="mt-0.75 flex-none text-dust" />
       </button>
     );
   }
 
   // Pastilla con borde y su color, no un texto gris suelto: escribir "dónde
-  // lo dejé" es LA función de esta fila, y en gris al 70% no se veía ni se
-  // adivinaba que existiera. Ámbar como el resto de "pendientes" de la app
-  // (rachas, gasto, sesiones sin asignar) y en reposo apagado, para que
-  // invite sin competir con el título del juego.
+  // lo dejé" es LA función de esta fila, y sin color no se adivinaba que
+  // existiera. Phosphor como el resto de "pendientes" de la app, en tinte
+  // suave para que invite sin competir con el título del juego.
   return (
     <button
       type="button"
       onClick={startEditing}
-      className="mt-1.5 flex w-fit items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-semibold transition-colors duration-150"
-      style={{ borderColor: `${AMBER}40`, background: `${AMBER}12`, color: AMBER }}
+      className={cn(
+        'mt-1.5 flex h-7 w-fit items-center gap-1.5 rounded-sm border border-phosphor/30 bg-phosphor-tint px-2 text-micro font-semibold text-phosphor',
+        'transition-[background-color,border-color] duration-150 ease-out hover:border-phosphor/55 hover:bg-phosphor/16',
+        focusRing,
+      )}
     >
-      <NotebookPen size={12} />
+      <NotebookPen aria-hidden size={13} />
       Add a note
     </button>
   );

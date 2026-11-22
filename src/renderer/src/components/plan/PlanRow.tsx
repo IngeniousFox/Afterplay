@@ -1,5 +1,6 @@
 import {
-  Clock3,
+  ChevronDown,
+  ChevronUp,
   Gamepad2,
   GripVertical,
   Hourglass,
@@ -10,30 +11,33 @@ import {
   ThumbsUp,
   Users,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { PlannedGameItem } from '../../../../shared/types';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { useNearViewport } from '../../hooks/useNearViewport';
-import { GRAY, TEAL } from '../../lib/colors';
 import { daysBetween, humanizeSpan } from '../../lib/dateMath';
 import { formatHours } from '../../lib/format';
-import { STATUS_META } from '../../lib/gameStatus';
 import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../lib/ratings';
 import { isUnreleased, releaseCountdown } from '../../lib/releaseDate';
 import { RefreshGameButton } from '../RefreshGameButton';
+import { Figure } from '../sessions/Figure';
+import { focusRing, focusRingInset, iconButtonClass } from '../shell/controls';
 import { RatingChip } from './RatingChip';
 import { ReleaseBadge } from './ReleaseBadge';
 
-const PLAN_COLOR = STATUS_META.plan.color;
-const SUMMARY_TEXT_CLASS = 'text-[11.5px] leading-relaxed';
-
-// Los cuatro manejadores del arrastre viven en UpNextList (que es quien ve la
-// lista entera y puede mover a los vecinos); la fila solo pinta el asa y les
-// pasa los eventos. `dragging` enciende el asa mientras dura el gesto.
+// Los manejadores del arrastre viven en UpNextList (que es quien ve la lista
+// entera y puede mover a los vecinos); la fila solo pinta el asa y les pasa
+// los eventos. `dragging` enciende el asa mientras dura el gesto. `onMove`
+// es el reordenado con teclado y con los botones de subir/bajar: la misma
+// mutation que el arrastre, un puesto cada vez.
 export type RowReorderHandle = {
   onPointerDown: (event: React.PointerEvent) => void;
   onPointerMove: (event: React.PointerEvent) => void;
   onPointerUp: (event: React.PointerEvent) => void;
   dragging: boolean;
+  onMove: (delta: -1 | 1) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 };
 
 type PlanRowProps = {
@@ -41,59 +45,50 @@ type PlanRowProps = {
   pinned: boolean;
   onSelect: () => void;
   onTogglePin: () => void;
+  // El puesto en Up next (1, 2, 3…), en numerales grandes como una lista de
+  // reproducción. La cola no lo lleva: ahí ordenan las lentes.
+  rank?: number;
   // Solo en Up next, y solo con más de una fila: la cola se ordena con las
   // lentes, no a mano — el asa ahí sería una promesa falsa.
   reorder?: RowReorderHandle;
+  // El asa recibe el foco tras mover con teclado (la fila cambia de sitio y
+  // el foco tiene que seguirla). Aparte de `reorder` a propósito: pasarlo
+  // dentro del objeto a ref= hace que el compilador de React tome el objeto
+  // entero por una ref.
+  gripRef?: (element: HTMLElement | null) => void;
   // La fila ACABA de cambiar de estantería por un pin/unpin: entra con la
-  // animación de llegada (zoom sutil + halo del color del Plan que se apaga).
-  // Señala A DÓNDE fue el juego sin que haya que buscarlo — al fijar, la fila
-  // desaparece de la cola y reaparece arriba; sin el halo, encontrarla era
-  // trabajo del ojo.
+  // animación de llegada (halo que se apaga). Señala A DÓNDE fue el juego sin
+  // que haya que buscarlo.
   landing?: boolean;
 };
 
-// La FILA DE DECISIÓN (PLAN-TO-PLAY.md §2.3) — la pieza que separa de verdad
-// el Plan de la biblioteca.
+// La FILA DE DECISIÓN (PLAN-TO-PLAY.md §2.3) en Fósforo: una fila de lista de
+// reproducción, no una tarjeta. Lo que decide va ALINEADO en columnas —HLTB
+// Main en cifra grande a la derecha, la espera y las notas en chips— para que
+// cada fila se compare con la de arriba y la de abajo sin abrir nada.
 //
-// Library pregunta "¿qué tengo?" y la contesta una parrilla de carátulas:
-// reconocimiento puro. El Plan pregunta "¿qué juego a continuación?", y una
-// parrilla esconde justo lo que esa decisión necesita — cuánto dura, cuánto
-// lleva esperando, por qué lo apunté, qué dicen de él. Aquí todo eso va a la
-// vista y, sobre todo, ALINEADO: el valor de una fila no está en lo que dice
-// de su juego, está en que se puede comparar con la de arriba y la de abajo
-// sin abrir nada.
-//
-// La carátula va GRANDE (96×128 — creció dos veces desde el sello de 52×70
-// con el que nació, a petición): reconocer un juego de un vistazo es la mitad
-// del trabajo de esta lista, y a este tamaño el arte además le da a cada fila
-// su color propio — la lista deja de ser un formulario gris.
+// La clase `group` de la raíz es además el gancho de los e2e (plan-ajustes):
+// acota los botones de pin a SU fila. No anidar otra `.group` dentro.
 export const PlanRow = ({
   game,
   pinned,
   onSelect,
   onTogglePin,
+  rank,
   reorder,
+  gripRef,
   landing = false,
 }: PlanRowProps): React.JSX.Element => {
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
   // Desestructurado y no `const cover = …`: pasar `cover.observe` a un ref=
-  // hace que el compilador de React tome el objeto entero por una ref y
-  // prohíba leer `cover.near` en el render (mismo motivo por el que
-  // useScrollMemory se desestructura en sus consumidores).
+  // hace que el compilador de React tome el objeto entero por una ref.
   const { observe: observeCover, near: coverNear } = useNearViewport();
   const ratings = resolveRatings(game);
 
-  // Lo que decide qué se pinta a la derecha lo dice el JUEGO, no la sección
-  // en la que cae: un planeado sin salir que además has fijado se queda en Up
-  // next (si te comprometiste a mano, la app no te lo esconde en una sección
-  // plegada) — pero sigue necesitando su cuenta atrás, y decirle "esperando 8
-  // meses" a un juego que aún no existe no significa nada.
+  // Lo que se pinta lo dice el JUEGO, no la sección: un planeado sin salir que
+  // has fijado sigue necesitando su cuenta atrás, y uno que ACABA de salir
+  // lleva su "Out now" unas semanas.
   const unreleased = isUnreleased(game);
-  // Y el caso simétrico: un planeado que ACABA de salir. Ya no está en el
-  // horizonte (es jugable, así que su sitio es la cola), pero durante unas
-  // semanas lleva su "OUT NOW" — el empujón a bajártelo y pasarlo a la
-  // biblioteca. Sin esto, un juego que llevabas dos años esperando cambiaba
-  // de sección en silencio y nadie se enteraba de que ya se puede jugar.
   const justOut = !unreleased && releaseCountdown(game)?.kind === 'out-now';
   const waiting = humanizeSpan(daysBetween(game.addedAt, new Date()));
   const hasRatings = ratings.critics !== null || ratings.players !== null || ratings.steam !== null;
@@ -101,58 +96,72 @@ export const PlanRow = ({
   return (
     <div
       onClick={onSelect}
-      className={`group relative flex cursor-pointer gap-4 overflow-hidden rounded-[15px] border p-3.5 transition-[border-color,background-color] duration-150 ${
-        pinned ? '' : 'border-border bg-card hover:border-line-strong hover:bg-bone/[0.045]'
-      }`}
-      style={{
-        // Los fijados llevan el color del Plan puesto SIEMPRE, no solo al
-        // pasar el ratón: Up next es la estantería del compromiso y tiene que
-        // verse distinta sin tocar nada — el mismo velo degradado que ya usa
-        // el panel "On your plan" de la ficha, para que las dos cosas se
-        // reconozcan como la misma idea.
-        ...(pinned
-          ? {
-              borderColor: `${PLAN_COLOR}38`,
-              background: `linear-gradient(135deg, ${PLAN_COLOR}12, ${PLAN_COLOR}05 45%, transparent)`,
-            }
-          : undefined),
+      className={cn(
+        'group relative flex cursor-pointer items-stretch gap-3.5 rounded-md border bg-panel py-3 pr-3 pl-3.5',
+        'transition-[border-color,background-color] duration-150 ease-out hover:bg-raised',
+        pinned
+          ? 'border-line-strong hover:border-line-hover'
+          : 'border-line hover:border-line-strong',
         // La animación corre al MONTAR: la fila que cambia de estantería se
-        // desmonta de una sección y se monta en la otra, así que basta con
-        // que la clase llegue puesta en ese primer render.
-        ...(landing
-          ? { animation: 'afterplay-pin-land 750ms cubic-bezier(.22,1,.36,1) both' }
-          : undefined),
-      }}
+        // desmonta de una sección y se monta en la otra.
+        landing &&
+          'animate-[afterplay-pin-land_750ms_cubic-bezier(.22,1,.36,1)_both] motion-reduce:animate-none',
+      )}
     >
-      {/* La firma de color por la izquierda — siempre encendida en los
-          fijados, asomando al pasar el ratón en el resto. */}
-      <span
-        className={`absolute inset-y-3 left-0 w-[3px] rounded-full transition-opacity duration-150 ${
-          pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
-        }`}
-        style={{ background: PLAN_COLOR }}
-      />
+      {/* Up next lleva su filo Phosphor siempre encendido: es la estantería
+          del compromiso y tiene que verse distinta sin tocar nada. */}
+      {pinned && (
+        <span aria-hidden className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-phosphor" />
+      )}
 
-      {/* El asa de arrastre — SEPARADA del clic de la fila (que navega a la
-          ficha) y del pin: agarrar y hacer clic son gestos distintos y cada
-          uno necesita su sitio. touch-none es lo que permite arrastrar con el
-          dedo sin que la lista haga scroll debajo. */}
+      {/* El asa de arrastre — separada del clic de la fila (que navega) y del
+          pin. Es también el control de teclado: con el foco en ella, las
+          flechas suben y bajan el juego un puesto. touch-none deja arrastrar
+          con el dedo sin que la lista haga scroll debajo. */}
       {reorder && (
         <div
+          ref={gripRef}
+          role="button"
+          tabIndex={0}
+          aria-label={`Reorder ${game.title}. Use the arrow keys to move it.`}
+          title="Drag to reorder (or focus and use ↑ ↓)"
           onPointerDown={reorder.onPointerDown}
           onPointerMove={reorder.onPointerMove}
           onPointerUp={reorder.onPointerUp}
           onPointerCancel={reorder.onPointerUp}
           onClick={(event) => event.stopPropagation()}
-          title="Drag to reorder"
-          className={`-my-1.5 -ml-2 flex w-5 flex-none touch-none items-center justify-center self-stretch text-muted-foreground/40 transition-[opacity,color] duration-150 hover:text-foreground/70 ${
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowUp' && reorder.canMoveUp) {
+              event.preventDefault();
+              reorder.onMove(-1);
+            } else if (event.key === 'ArrowDown' && reorder.canMoveDown) {
+              event.preventDefault();
+              reorder.onMove(1);
+            }
+          }}
+          className={cn(
+            '-my-3 -ml-2 flex w-6 flex-none touch-none items-center justify-center self-stretch rounded-sm text-dust/60',
+            'transition-[opacity,color] duration-150 hover:text-bone focus-visible:opacity-100',
+            focusRingInset,
             reorder.dragging
-              ? 'cursor-grabbing opacity-100'
-              : 'cursor-grab opacity-0 group-hover:opacity-100'
-          }`}
+              ? 'cursor-grabbing text-bone opacity-100'
+              : 'cursor-grab opacity-0 group-hover:opacity-100',
+          )}
         >
-          <GripVertical size={15} />
+          <GripVertical aria-hidden size={16} />
         </div>
+      )}
+
+      {rank !== undefined && (
+        <span
+          aria-hidden
+          className={cn(
+            'w-8 flex-none self-center text-center font-display text-[30px] leading-none font-bold tabular-nums',
+            rank === 1 ? 'text-phosphor' : 'text-dust',
+          )}
+        >
+          {rank}
+        </span>
       )}
 
       {/* La caja mide lo mismo con carátula y sin ella, que es lo que permite
@@ -160,7 +169,7 @@ export const PlanRow = ({
           píxel (ver useNearViewport). */}
       <div
         ref={observeCover}
-        className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-line bg-muted shadow-[0_8px_22px_rgba(3,6,7,.45)]"
+        className="relative h-24 w-18 flex-none overflow-hidden rounded-sm border border-line bg-raised"
       >
         {!coverNear ? null : coverSrc ? (
           <img
@@ -171,67 +180,55 @@ export const PlanRow = ({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Gamepad2 size={22} strokeWidth={1.5} className="text-muted-foreground/40" />
+            <Gamepad2 aria-hidden size={22} strokeWidth={1.5} className="text-dust/50" />
           </div>
         )}
-        {/* Un velo mínimo al pie ancla la carátula al fondo oscuro de la fila
-            — sin él, los artes muy claros parecían pegatinas flotando. */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-6"
-          style={{ background: 'linear-gradient(180deg, transparent, rgba(16,20,22,.35))' }}
-        />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate text-[15.5px] leading-tight font-extrabold tracking-[-.01em] text-foreground">
-              {game.title}
-            </span>
-            {game.releaseYear !== null && (
-              <span className="flex-none text-[11px] font-semibold text-muted-foreground/55 tabular-nums">
-                {game.releaseYear}
-              </span>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          {/* El título es el botón de verdad (teclado y lector): la fila entera
+              también abre la ficha con el ratón. */}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect();
+            }}
+            className={cn(
+              'min-w-0 rounded-xs text-left text-lead font-semibold text-bone hover:underline underline-offset-2',
+              focusRing,
             )}
-          </div>
-          <div className="flex flex-none items-center gap-2">
-            {(unreleased || justOut) && <ReleaseBadge game={game} />}
-            {/* El "actualízalo todo" de ESTE juego, sin salir de la lista —
-                el mismo gesto que su ficha (PlanGameDetail) ofrece dentro.
-                Aquí porque el Plan es una pantalla de COMPARAR: si para
-                refrescar una fila hay que entrar y volver, se pierde el sitio
-                en la lista y con él la comparación que estabas haciendo. */}
-            <RefreshGameButton gameId={game.id} title={game.title} />
-            <PinButton pinned={pinned} onToggle={onTogglePin} />
-          </div>
+          >
+            {game.title}
+          </button>
+          {game.releaseYear !== null && (
+            <span className="flex-none text-small text-dust tabular-nums">{game.releaseYear}</span>
+          )}
+          {(unreleased || justOut) && <ReleaseBadge game={game} />}
         </div>
 
-        {/* Los datos que deciden, en una sola línea comparable entre filas. */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {/* Los datos que deciden, en una sola línea comparable entre filas.
+            HLTB va en su columna grande a la derecha; en ventanas estrechas,
+            donde la columna se esconde, baja aquí como chip. */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {game.hltbMain !== null && (
             <span
-              className="inline-flex flex-none items-center gap-1.25 rounded-lg border px-2 py-0.75 text-[11.5px] font-bold tabular-nums"
-              style={{ color: TEAL, borderColor: `${TEAL}3d`, background: `${TEAL}14` }}
+              className="inline-flex flex-none items-center rounded-sm border border-tube/25 bg-tube/8 px-1.5 py-0.5 text-micro font-semibold text-tube tabular-nums lg:hidden"
               title="Main Story, from HowLongToBeat"
             >
-              <Clock3 size={11} className="flex-none" />
-              {formatHours(game.hltbMain)}
+              HLTB {formatHours(game.hltbMain)}
             </span>
           )}
 
           {/* De un juego sin salir no se dice cuánto lleva esperando: lo que
-              importa es cuánto QUEDA, y eso ya lo dice su badge de arriba. */}
+              importa es cuánto QUEDA, y eso ya lo dice su badge. */}
           {!unreleased && (
             <span
-              className="inline-flex flex-none items-center gap-1.25 rounded-lg border px-2 py-0.75 text-[11.5px] font-semibold"
-              style={{
-                color: GRAY,
-                borderColor: 'var(--border)',
-                background: 'rgba(233,228,216,.028)',
-              }}
+              className="inline-flex flex-none items-center gap-1 rounded-sm border border-line bg-bone/3 px-1.5 py-0.5 text-micro font-medium text-dust"
               title={`On your plan since ${game.addedAt.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`}
             >
-              <Hourglass size={11} className="flex-none" />
+              <Hourglass aria-hidden size={11} className="flex-none" />
               waiting {waiting}
             </span>
           )}
@@ -262,30 +259,20 @@ export const PlanRow = ({
             />
           )}
           {!hasRatings && game.hltbMain === null && !unreleased && (
-            <span className="text-[11px] text-muted-foreground/60">
-              No times or ratings yet — try Refresh data
-            </span>
+            <span className="text-micro text-dust">No times or ratings yet — try Refresh data</span>
           )}
         </div>
 
-        {/* Las etiquetas de Steam (§8): la verdad cultural del juego, dicha
-            por quien lo ha jugado — "Metroidvania, Souls-like" cuenta qué
-            noche te espera mejor que cualquier género de catálogo. Más
-            apagadas que los chips de arriba a propósito: son contexto, no
-            datos de decisión, y a un color competirían con las notas.
-            TODAS las guardadas (top 8 de §8, ya recortadas ahí) — sin el
-            "+N" de antes: un juego con etiquetas es precisamente la clase de
-            dato que uno quiere leer entero de un vistazo, no adivinar
-            cuántas se quedaron escondidas. flex-wrap deja que la fila crezca
+        {/* Las etiquetas de Steam (§8): contexto, no datos de decisión — más
+            apagadas que los chips de arriba. Todas las guardadas, envolviendo
             lo que haga falta. */}
         {game.steamTags && game.steamTags.length > 0 && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {game.steamTags.map((tag) => (
               <span
                 key={tag.name}
-                // Sin cifra: es un peso relativo, no personas (ver SteamTag).
                 title="Player tag on Steam"
-                className="flex-none rounded-md border border-line bg-bone/[0.03] px-1.75 py-0.5 text-micro font-semibold text-muted-foreground"
+                className="flex-none rounded-sm bg-bone/5 px-1.5 py-px text-micro text-dust"
               >
                 {tag.name}
               </span>
@@ -293,49 +280,83 @@ export const PlanRow = ({
           </div>
         )}
 
-        {/* El hueco flexible ANTES del porqué y la sinopsis: con la carátula
-            alta, las filas cortas estiran y el texto humano queda asentado
-            abajo, alineado entre filas — no flotando a media altura. */}
-        <div className="min-h-1.5 flex-1" />
-
-        {/* EL PORQUÉ. Hasta ahora vivía enterrado en el historial de la ficha,
-            a dos clics; en la fila cambia lo que la sección ES — de lista de
-            deuda a lista de ilusiones. "Me lo recomendó Dani" no es un dato
-            de catálogo, es la razón por la que ese juego está aquí. */}
+        {/* EL PORQUÉ: "Me lo recomendó Dani" no es un dato de catálogo, es la
+            razón por la que ese juego está aquí. */}
         {game.planNote && (
-          <div className="flex items-start gap-1.5">
-            <Quote size={10.5} className="mt-[3px] flex-none" style={{ color: PLAN_COLOR }} />
-            <span className="line-clamp-1 text-[12px] leading-snug font-medium text-foreground/85 italic">
-              {game.planNote}
-            </span>
+          <div className="mt-2 flex items-start gap-1.5">
+            <Quote aria-hidden size={11} className="mt-1 flex-none text-phosphor" />
+            <span className="text-small font-medium text-bone italic">{game.planNote}</span>
           </div>
         )}
 
-        {/* Y la respuesta a "¿qué era esto que apunté hace ocho meses?".
-            SIEMPRE a dos líneas, sin expandir: la fila es para comparar y
-            decidir, y para leer la sinopsis entera ya se entra a la ficha —
-            que es literalmente el clic de la propia fila. Hubo una versión
-            con "Show more" aquí (botón + clon de medida + estado) y era
-            interacción duplicada con peor destino: desplegaba un muro de
-            texto en medio de la lista en vez de llevarte a donde está todo.
-            El clamp fijo de salida además mantiene la altura de la fila
-            estable desde el primer render — sin él, las sinopsis largas
-            nacían a cinco líneas y el FLIP leía el reajuste como una
-            reordenación (bandazo real que ya pasó). */}
-        {game.summary && (
-          <p className={`mt-1 line-clamp-2 ${SUMMARY_TEXT_CLASS} text-muted-foreground/85`}>
-            {game.summary}
-          </p>
+        {/* La sinopsis, SIEMPRE a dos líneas: la fila es para comparar, y para
+            leerla entera está la ficha — el clic de la propia fila. El clamp
+            fijo mantiene además la altura estable desde el primer render, que
+            es lo que necesita el FLIP. */}
+        {game.summary && <p className="mt-1 line-clamp-2 text-small text-dust">{game.summary}</p>}
+      </div>
+
+      {/* HLTB Main en cifra grande: la columna que se compara de un vistazo. */}
+      <div
+        className="hidden w-22 flex-none flex-col items-end justify-center lg:flex"
+        title="Main Story, from HowLongToBeat"
+      >
+        {game.hltbMain !== null ? (
+          <Figure value={formatHours(game.hltbMain)} className="text-[30px] text-bone" />
+        ) : (
+          <span className="font-display text-[30px] leading-none font-bold text-dust/40">—</span>
         )}
+        <span className="mt-1 text-micro text-dust">HLTB Main</span>
+      </div>
+
+      <div className="flex flex-none items-start gap-0.5 self-start">
+        {/* El "actualízalo todo" de ESTE juego, sin salir de la lista. */}
+        <RefreshGameButton gameId={game.id} title={game.title} />
+        {reorder && (
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                reorder.onMove(-1);
+              }}
+              disabled={!reorder.canMoveUp}
+              aria-label={`Move ${game.title} up`}
+              title="Move up"
+              className={cn(
+                iconButtonClass,
+                'size-7.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:invisible',
+              )}
+            >
+              <ChevronUp aria-hidden size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                reorder.onMove(1);
+              }}
+              disabled={!reorder.canMoveDown}
+              aria-label={`Move ${game.title} down`}
+              title="Move down"
+              className={cn(
+                iconButtonClass,
+                'size-7.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:invisible',
+              )}
+            >
+              <ChevronDown aria-hidden size={15} />
+            </button>
+          </>
+        )}
+        <PinButton pinned={pinned} onToggle={onTogglePin} />
       </div>
     </div>
   );
 };
 
 // Fijar/soltar en Up next. Fantasma hasta que pasas el ratón por la fila (o
-// hasta que el juego está fijado, que entonces se queda encendido): es un
-// gesto ocasional y no puede competir por atención con los datos de decisión,
-// pero tampoco puede esconderse en un menú — es EL gesto de esta pantalla.
+// hasta que el juego está fijado, que entonces se queda encendido en
+// Phosphor): es EL gesto de esta pantalla, pero no compite con los datos.
 const PinButton = ({
   pinned,
   onToggle,
@@ -351,17 +372,14 @@ const PinButton = ({
     }}
     title={pinned ? 'Remove from Up next' : 'Pin to Up next'}
     aria-label={pinned ? 'Remove from Up next' : 'Pin to Up next'}
-    className={`flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border transition-[opacity,background-color,border-color] duration-150 ${
+    className={cn(
+      iconButtonClass,
+      'size-7.5',
       pinned
-        ? 'opacity-100'
-        : 'border-transparent bg-transparent text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:border-input hover:bg-bone/[0.06] hover:text-foreground focus-visible:opacity-100'
-    }`}
-    style={
-      pinned
-        ? { color: PLAN_COLOR, borderColor: `${PLAN_COLOR}47`, background: `${PLAN_COLOR}1c` }
-        : undefined
-    }
+        ? 'text-phosphor hover:text-phosphor-hi'
+        : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+    )}
   >
-    {pinned ? <PinOff size={12.5} /> : <Pin size={12.5} />}
+    {pinned ? <PinOff aria-hidden size={14} /> : <Pin aria-hidden size={14} />}
   </button>
 );

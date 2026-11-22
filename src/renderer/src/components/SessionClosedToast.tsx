@@ -1,20 +1,28 @@
-import { Check, Flame, Timer, Trophy } from 'lucide-react';
+import { Check, Clock3, Flame, NotebookPen, Trophy, X } from 'lucide-react';
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { splitSessionDuration } from '../../../shared/sessionDuration';
+import { formatSessionDuration } from '../../../shared/sessionDuration';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useGameAchievements } from '../hooks/achievements';
 import { useSetSessionNote } from '../hooks/sessions';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
-import { rarityAccent } from '../lib/achievements';
+import { percentLabel } from '../lib/achievements';
 import { celebrateCompletion } from '../lib/celebrate';
-import { AMBER } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
 import { quickStatusOptions, STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
 import { requestAchievementFlash } from '../lib/achievementFlash';
 import { expandClass } from '../lib/styles';
+import { Figure } from './sessions/Figure';
+import {
+  buttonSize,
+  focusRing,
+  iconButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from './shell/controls';
 import { GameCover } from './GameCover';
 import { AchievementMiniIcon } from './sessions/SessionAchievements';
 
@@ -54,6 +62,9 @@ export const SessionClosedToast = ({
 }: SessionClosedToastProps): React.JSX.Element => {
   const [note, setNote] = useState('');
   const [saved, setSaved] = useState(false);
+  // El campo de la nota se abre con Add note, EN SU SITIO (sin modal) — y
+  // nunca solo: robar el foco al llegar pausaría la cuenta atrás para siempre.
+  const [noteOpen, setNoteOpen] = useState(false);
   // Estado rápido ya elegido en este toast (null = sin tocar). Se queda a la
   // vista como acuse de recibo — el toast sigue su cuenta atrás normal, que
   // marcar el desenlace no te roba el hueco de escribir la nota.
@@ -63,7 +74,6 @@ export const SessionClosedToast = ({
   const heroSrc = useImageSrc(event.heroUrl, 'heroes');
   // Partida en cifra y unidad para pintar el número grande y la "m" pequeña
   // sin que el conjunto parezca texto plano.
-  const duration = splitSessionDuration(event.durationSec);
 
   // Los trofeos de ESTA sesión, llegando EN VIVO al aviso (LOGROS-IDEAS.md
   // §2.2): el cierre dispara la sincronización del juego, que tarda un par
@@ -129,93 +139,110 @@ export const SessionClosedToast = ({
   };
 
   return (
-    <div className="afterplay-toast group/toast animate-[afterplay-toast-in_0.42s_cubic-bezier(0.16,1,0.3,1)_backwards] relative w-full overflow-hidden rounded-[14px] border border-input bg-overlay shadow-[0_20px_55px_rgba(3,6,7,.6)]">
-      {/* Hero del juego de fondo, con el mismo velo de izquierda a derecha de
-          la ficha: da identidad al aviso sin comerse la legibilidad. */}
-      {heroSrc && (
-        <>
-          <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(90deg, rgba(36,44,49,.97) 0%, rgba(36,44,49,.93) 45%, rgba(36,44,49,.68) 100%)',
-            }}
-          />
-        </>
+    <div
+      className={cn(
+        // `afterplay-toast` es el gancho del arreglo de alto de Sonner en
+        // main.css (el aviso crece cuando llegan los logros).
+        'afterplay-toast group/toast relative w-full animate-toast-in overflow-hidden rounded-md border border-line-strong bg-overlay font-sans font-normal shadow-float',
       )}
+    >
+      {/* Zona héroe: el banner del juego tras un velo que lo funde con el
+          panel, y las líneas de escaneo. Da identidad al aviso sin comerse la
+          legibilidad. */}
+      {heroSrc && (
+        <div aria-hidden className="absolute inset-0">
+          <img src={heroSrc} alt="" className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-linear-to-r from-overlay/97 via-overlay/92 to-overlay/70" />
+        </div>
+      )}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-(image:--scan)" />
 
-      <div className="relative flex flex-col gap-2.5 px-3.5 pt-3.25 pb-3.5">
-        <div className="flex items-center gap-3">
+      <div className="relative flex flex-col gap-3 px-4 pt-4 pb-4.5">
+        <div className="flex items-start gap-3.5">
           <button
             type="button"
             onClick={onOpenGame}
             title="Open game"
-            className="flex-none transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] hover:-translate-y-0.5"
+            aria-label={`Open ${event.gameTitle}`}
+            className={cn(
+              'flex-none rounded-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+              focusRing,
+            )}
           >
             <GameCover
               url={event.coverUrl}
-              className="h-16 w-11.5 overflow-hidden rounded-[8px] border border-line-strong shadow-[0_8px_20px_rgba(3,6,7,.45)]"
-              iconSize={15}
+              className="h-17 w-12.5 overflow-hidden rounded-sm border border-line-strong shadow-lift"
+              iconSize={16}
             />
           </button>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.25 text-micro font-bold tracking-[.09em] text-muted-foreground/80">
-              <Timer size={11} />
-              SESSION ENDED
+            <div className="flex items-center gap-1.5 text-small text-dust">
+              <Clock3 aria-hidden size={13} />
+              Session ended
             </div>
             <button
               type="button"
               onClick={onOpenGame}
-              className="mt-0.75 block max-w-full truncate text-left text-[14.5px] font-extrabold text-foreground hover:underline"
+              className={cn(
+                'mt-0.5 block max-w-full rounded-xs text-left text-lead font-semibold text-bone hover:underline underline-offset-2',
+                focusRing,
+              )}
             >
               {event.gameTitle}
             </button>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-[24px] leading-none font-display font-bold text-primary tabular-nums">
-                {duration.value}
-              </span>
-              <span className="text-[13px] font-bold text-primary/80">{duration.unit}</span>
-              <span className="ml-0.5 text-[11.5px] text-muted-foreground">
-                · {formatHours(event.totalHours)} total
-              </span>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+              <Figure
+                value={formatSessionDuration(event.durationSec)}
+                className="text-[40px] text-phosphor [text-shadow:var(--shadow-glow-text)]"
+                unitClassName="text-phosphor/75"
+              />
+              <span className="text-small text-dust">· {formatHours(event.totalHours)} total</span>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => toast.dismiss(toastId)}
+            aria-label="Dismiss"
+            title="Dismiss"
+            className={cn(iconButtonClass, 'size-7.5 -mt-1 -mr-1.5')}
+          >
+            <X aria-hidden size={15} />
+          </button>
         </div>
 
-        {/* El récord es LA noticia cuando pasa: se lleva su propia banda, no
-            una palabra suelta perdida entre el resto. */}
+        {/* El récord es LA noticia cuando pasa: se lleva su propia banda. */}
         {event.isLongest && (
-          <div
-            className="flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold"
-            style={{ background: `${AMBER}1a`, color: AMBER }}
-          >
-            <Flame size={12} className="flex-none" />
+          <div className="flex items-center gap-2 rounded-sm border border-phosphor/25 bg-phosphor-tint px-3 py-2 text-small font-semibold text-phosphor">
+            <Flame aria-hidden size={14} className="flex-none" />
             Your longest session with this game
           </div>
         )}
 
-        {/* Los trofeos de la noche, en la MISMA banda que el récord — y
-            llegando EN VIVO: la sync corre al cerrar y esta banda aparece
-            (expandClass) en cuanto el main los cuelga de la sesión, mientras
-            el toast sigue en pantalla. Teñida del más raro de la tanda; los
-            iconos son la pieza compartida de las filas de sesión. */}
+        {/* Los trofeos de la noche, llegando EN VIVO: la sync corre al cerrar
+            y esta banda aparece (expandClass) en cuanto el main los cuelga de
+            la sesión, mientras el toast sigue en pantalla. Banda en Tube
+            (información); el aro de rareza va en cada icono. */}
         {sessionAchievements.length > 0 && (
           <div
-            className={`flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 ${expandClass}`}
-            style={{
-              background: `${rarityAccent(rarestPercent)}1a`,
-              color: rarityAccent(rarestPercent),
-            }}
+            className={cn(
+              'flex items-center gap-2 rounded-sm border border-tube/25 bg-tube/8 px-3 py-1.5 text-tube',
+              expandClass,
+            )}
+            title={
+              rarestPercent !== null
+                ? `Rarest: ${percentLabel(rarestPercent)} of players`
+                : undefined
+            }
           >
-            <Trophy size={12} className="flex-none" />
-            <span className="flex-none text-[11.5px] font-bold">
+            <Trophy aria-hidden size={14} className="flex-none" />
+            <span className="flex-none text-small font-semibold">
               {sessionAchievements.length === 1
                 ? 'Achievement unlocked'
                 : `${sessionAchievements.length} achievements`}
             </span>
-            <span className="ml-0.5 flex min-w-0 items-center gap-1">
+            <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
               {[...sessionAchievements]
                 .sort(
                   (a, b) =>
@@ -247,18 +274,16 @@ export const SessionClosedToast = ({
         )}
 
         {saved ? (
-          <div className="flex items-center gap-1.5 text-[12px] font-semibold text-primary">
-            <Check size={13} />
+          <div className="flex items-center gap-2 rounded-sm border border-st-beaten/30 bg-st-beaten/8 px-3 py-2 text-small font-semibold text-st-beaten">
+            <Check aria-hidden size={14} />
             Saved — you&apos;ll see it when you come back.
           </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            {/* SIN autoFocus, y es importante: robar el foco interrumpe lo que
-                estuvieras haciendo, y además el CSS pausa la cuenta atrás
-                mientras el toast tiene el foco dentro — enfocarlo solo hacía
-                que el aviso no se fuera NUNCA por su cuenta. Si no lo tocas,
-                se va; si escribes, se para mientras escribes. */}
+        ) : noteOpen ? (
+          <div className={cn('flex items-center gap-2', expandClass)}>
+            {/* Se enfoca porque lo has pedido tú (Add note). Mientras tiene el
+                foco, la cuenta atrás se para: si escribes, el aviso espera. */}
             <input
+              autoFocus
               value={note}
               onChange={(changeEvent) => setNote(changeEvent.target.value)}
               onKeyDown={(keyEvent) => {
@@ -266,37 +291,58 @@ export const SessionClosedToast = ({
                 if (keyEvent.key === 'Escape') toast.dismiss(toastId);
               }}
               placeholder="Where did you leave off?"
-              className="min-w-0 flex-1 rounded-[7px] border border-input bg-inset/35 px-2.5 py-1.5 text-[12px] text-foreground outline-none backdrop-blur-sm placeholder:text-muted-foreground/70 focus:border-primary/50"
+              aria-label="Session note"
+              className="h-9 min-w-0 flex-1 rounded-sm border border-edge bg-inset/85 px-3 text-body font-normal text-bone outline-none placeholder:text-dust focus:border-phosphor focus:shadow-focus-field"
             />
             <button
               type="button"
               onClick={() => void save()}
               disabled={!note.trim() || setSessionNote.isPending}
-              className="flex-none rounded-[7px] p-1.5 text-primary transition-colors duration-150 hover:bg-primary/12 disabled:opacity-30"
+              className={cn(primaryButtonClass, 'size-9 px-0')}
               aria-label="Save note"
             >
-              <Check size={14} />
+              <Check aria-hidden size={16} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNoteOpen(true)}
+              className={cn(secondaryButtonClass, buttonSize.md)}
+            >
+              <NotebookPen aria-hidden size={14} />
+              Add note
+            </button>
+            <button
+              type="button"
+              onClick={onOpenGame}
+              className={cn(primaryButtonClass, buttonSize.md)}
+            >
+              Open game
             </button>
           </div>
         )}
 
         {/* Estado rápido (AFTERPLAY-LOOP.md §6): "¿y cómo acabó?" como oferta,
             no como pregunta que persigue. Tras pulsar, el acuse ocupa el sitio
-            de los botones con el color del estado — y el toast sigue su cuenta
+            de los chips con el color del estado — y el toast sigue su cuenta
             atrás normal: marcar el desenlace no roba el hueco de la nota. */}
         {marked !== null ? (
           <div
-            className="flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold"
+            className="flex items-center gap-2 rounded-sm border px-3 py-2 text-small font-semibold"
             style={{
-              background: `${STATUS_META[marked].color}1a`,
               color: STATUS_META[marked].color,
+              borderColor: `${STATUS_META[marked].color}40`,
+              background: `${STATUS_META[marked].color}14`,
             }}
           >
-            <Check size={12} className="flex-none" />
+            <Check aria-hidden size={14} className="flex-none" />
             Marked as {STATUS_META[marked].label}
           </div>
         ) : (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <span className="text-small text-dust">How did it end?</span>
             {quickStatusOptions(event.endless).map((key) => {
               const meta = STATUS_META[key];
               return (
@@ -305,9 +351,17 @@ export const SessionClosedToast = ({
                   type="button"
                   onClick={() => void markState(key)}
                   disabled={addStateEvent.isPending}
-                  className="flex items-center gap-1.5 rounded-full border border-line-strong bg-inset/30 px-2.75 py-1.25 text-[11.5px] font-bold text-foreground/90 backdrop-blur-sm transition-colors duration-150 hover:border-line-hover hover:bg-bone/[0.07] disabled:opacity-50"
+                  className={cn(
+                    'flex h-7 items-center gap-1.5 rounded-full border border-line-strong bg-inset/60 px-2.5 text-small font-semibold text-bone',
+                    'transition-[background-color,border-color] duration-150 ease-out hover:border-line-hover hover:bg-raised disabled:opacity-50',
+                    focusRing,
+                  )}
                 >
-                  <meta.Icon size={12} className="flex-none" style={{ color: meta.color }} />
+                  <span
+                    aria-hidden
+                    className="size-2 flex-none rounded-full"
+                    style={{ background: meta.color }}
+                  />
                   {meta.label}
                 </button>
               );
@@ -316,13 +370,14 @@ export const SessionClosedToast = ({
         )}
       </div>
 
-      {/* Cuenta atrás. Se pinta solo mientras el toast se pueda ir solo: tras
-          guardar, el cierre lo controla el propio guardado y una barra
-          corriendo ahí sería mentira. */}
+      {/* Cuenta atrás de 3 px. Se pinta solo mientras el toast se pueda ir
+          solo: tras guardar, el cierre lo controla el propio guardado y una
+          barra corriendo ahí sería mentira. Se para con el ratón encima o con
+          el foco dentro, igual que el propio Sonner. */}
       {!saved && (
-        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-bone/8">
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-0.75 bg-bone/8">
           <div
-            className="afterplay-toast-countdown origin-left animate-[afterplay-grow-x_var(--afterplay-toast-duration,15s)_linear_reverse_forwards] group-hover/toast:[animation-play-state:paused] group-focus-within/toast:[animation-play-state:paused] h-full bg-primary/75"
+            className="afterplay-toast-countdown h-full origin-left animate-[afterplay-grow-x_var(--afterplay-toast-duration,15s)_linear_reverse_forwards] bg-phosphor shadow-glow-bar group-focus-within/toast:[animation-play-state:paused] group-hover/toast:[animation-play-state:paused]"
             style={{ '--afterplay-toast-duration': `${durationMs}ms` } as React.CSSProperties}
           />
         </div>

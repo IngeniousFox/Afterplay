@@ -2,10 +2,11 @@ import { Bookmark, CalendarClock, Gamepad2, ListOrdered, Pin, Plus, RefreshCw } 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { AddGameModal } from '../components/library/AddGameModal';
 import { computePlanDebt } from '../../../shared/planShelves';
 import type { IgdbSearchResult } from '../../../shared/types';
+import { NextUpCard } from '../components/plan/NextUpCard';
 import { PlanDebtHeader } from '../components/plan/PlanDebtHeader';
 import { PlanLensChips } from '../components/plan/PlanLensChips';
 import { PlanRow } from '../components/plan/PlanRow';
@@ -14,30 +15,27 @@ import { PlanSectionHeading } from '../components/plan/PlanSectionHeading';
 import { RadarRow } from '../components/plan/RadarRow';
 import { UpNextList } from '../components/plan/UpNextList';
 import { WhereToAddDialog } from '../components/library/WhereToAddDialog';
+import { buttonSize, primaryButtonClass, secondaryButtonClass } from '../components/shell/controls';
 import {
   externalRefreshBar,
   useExternalRefreshProgress,
   useIsExternalRefreshRunning,
   useRefreshPlanData,
 } from '../hooks/external';
-import { usePlannedGamesWithExtras, useSetPlanPinned } from '../hooks/games';
+import { usePlannedGamesWithExtras, useReorderUpNext, useSetPlanPinned } from '../hooks/games';
 import { useDismissRadarGame, useRadarGames } from '../hooks/radar';
 import { getStoredScroll, useScrollMemory } from '../hooks/useScrollMemory';
-import { AMBER, GRAY, GREEN, TEAL, VIOLET } from '../lib/colors';
-import { STATUS_META } from '../lib/gameStatus';
+import { pluralize } from '../lib/format';
 import type { PlanLens } from '../lib/plan';
 import { splitPlanSections } from '../lib/plan';
 import { countdownLabel, releaseCountdown, releaseSortKey } from '../lib/releaseDate';
-import {
-  accentGradientStyle,
-  expandClass,
-  outlineButtonClass,
-  revealClass,
-  revealStyle,
-} from '../lib/styles';
+import { expandClass } from '../lib/styles';
 import type { GameId } from '../../../shared/entityIds';
 
-const PLAN_COLOR = STATUS_META.plan.color;
+// Entrada escalonada de los bloques de la pantalla, la misma de Home.
+const enter = (index: number): React.CSSProperties => ({
+  animationDelay: `${Math.min(index, 5) * 40}ms`,
+});
 
 // El montaje POR TANDAS de la cola — el arreglo del lag de 1-2s al entrar.
 //
@@ -81,11 +79,11 @@ const QUEUE_BATCH_TIMEOUT_MS = 120;
 const PLAN_SCROLL_KEY = 'plan';
 
 // Alto de fila para la cuenta del scroll restaurado. A propósito por DEBAJO
-// del mínimo real (una fila pelada mide ~156px: carátula de 128 + padding):
-// quedarse corto en el alto significa pasarse en el número de filas, que es
-// el error inofensivo — sobran unas pocas. Al revés, el scroll aterrizaría
-// más arriba de donde estabas.
-const ESTIMATED_ROW_HEIGHT = 150;
+// del mínimo real (una fila pelada mide ~130px: carátula de 96 + padding y el
+// hueco entre filas): quedarse corto en el alto significa pasarse en el número
+// de filas, que es el error inofensivo — sobran unas pocas. Al revés, el
+// scroll aterrizaría más arriba de donde estabas.
+const ESTIMATED_ROW_HEIGHT = 120;
 const SCROLL_RESTORE_BUFFER_ROWS = 8;
 
 // Cuántas filas montar en el PRIMER render. Sin scroll guardado, lo que llena
@@ -165,6 +163,9 @@ export const PlanToPlay = (): React.JSX.Element => {
   );
 
   const setPinned = useSetPlanPinned();
+  // "Move down" de la tarjeta Next up: la misma mutation que el arrastre de
+  // la lista, cediendo el primer puesto al segundo.
+  const reorderUpNext = useReorderUpNext();
   const refresh = useRefreshPlanData();
   // El "ocupado" viene del MAIN, no de la mutation: la pasada sobrevive a
   // salir de esta pantalla (y el aviso de que termino llega estes donde
@@ -204,7 +205,7 @@ export const PlanToPlay = (): React.JSX.Element => {
   // cabecera es lo que hace que plegarla por defecto no esconda nada — la
   // lista está ordenada por cercanía, así que el primero con cuenta atrás
   // urgente ES el titular.
-  const horizonHeadline = ((): { title: string; label: string; color: string } | null => {
+  const horizonHeadline = ((): { title: string; label: string; out: boolean } | null => {
     for (const item of horizonItems) {
       const countdown = releaseCountdown(item.game);
       if (!countdown) continue;
@@ -213,7 +214,7 @@ export const PlanToPlay = (): React.JSX.Element => {
       return {
         title: item.game.title,
         label: countdownLabel(urgent),
-        color: urgent.kind === 'out-now' ? GREEN : AMBER,
+        out: urgent.kind === 'out-now',
       };
     }
     return null;
@@ -284,397 +285,399 @@ export const PlanToPlay = (): React.JSX.Element => {
         ? 'Saving…'
         : 'Refreshing…';
 
-  return (
-    <div ref={attachRef} onScroll={onScroll} className="h-full overflow-y-auto px-8.5 pt-7.5 pb-15">
-      <div
-        className={`mb-5 flex items-start justify-between gap-4 ${revealClass}`}
-        style={revealStyle(0)}
-      >
-        <div>
-          {/* items-baseline y no items-center: mismo motivo que en Library —
-              con el H1 tan grande junto a una píldora pequeña, centrar por
-              CAJA deja la píldora flotando en vez de asentada. */}
-          <div className="flex items-baseline gap-2.75">
-            <h1 className="font-display text-[34px] leading-none font-bold text-bone">
-              Plan to play
-            </h1>
-            {!isLoading && !isError && games.length > 0 && (
-              <span className="flex-none rounded-full border border-line-strong bg-raised px-2.5 py-0.75 text-[12px] font-bold text-foreground tabular-nums">
-                {games.length}
-                <span className="ml-1 font-semibold text-muted-foreground">
-                  {games.length === 1 ? 'game' : 'games'}
-                </span>
-              </span>
-            )}
-          </div>
-          <p className="mt-1.25 text-[13.5px] text-muted-foreground">
-            Everything you want to play, with what it takes to decide — how long it is, how long
-            it&apos;s waited and what people say about it.
-          </p>
-        </div>
+  // "Move down" de la tarjeta Next up: el primero cede su puesto al segundo,
+  // con la misma mutation (optimista) que reordena la lista.
+  const moveNextUpDown = (): void => {
+    if (upNext.length < 2) return;
+    const ids = upNext.map((game) => game.id);
+    [ids[0], ids[1]] = [ids[1], ids[0]];
+    reorderUpNext.mutate(ids, { onError: () => toast.error("Couldn't update Up next.") });
+  };
 
-        <div className="flex flex-none items-center gap-2">
-          {/* Puerta 1 de las dos del refresco (§5.1): la del día a día, solo
-              sobre los planeados. Notas, sinopsis, fecha de salida y
-              etiquetas de Steam — justo los datos que esta pantalla usa para
-              decidir, y los que más se mueven por debajo (un juego sin salir
-              gana fecha, uno recién salido gana reseñas cada semana). */}
-          {!isEmpty && (
-            <button
-              type="button"
-              onClick={runRefresh}
-              disabled={refreshing}
-              title="Re-fetch ratings, summaries, release dates and Steam tags for your plan"
-              className={`${outlineButtonClass} relative overflow-hidden border-line-strong bg-raised text-muted-foreground hover:bg-raised-hover hover:text-foreground disabled:cursor-default disabled:opacity-100`}
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin' : undefined} />
-              <span className="tabular-nums">{refreshLabel}</span>
-              {/* La barra DENTRO del propio botón, pegada a su borde inferior:
-                  es donde el ojo ya está mirando (acaba de pulsarlo) y no le
-                  roba sitio a nada de la cabecera. Un contador suelto dice
-                  "42/260" y hay que hacer la división de cabeza; la barra dice
-                  cuánto queda de un vistazo. En las fases sin porcentaje
-                  medible late a lo ancho en vez de mentir con un avance. */}
-              {refreshing && (
-                <span className="absolute inset-x-0 bottom-0 h-[2px] bg-bone/[0.07]">
-                  <span
-                    className={`block h-full transition-[width] duration-500 ease-out ${
-                      measurable ? '' : 'animate-pulse'
-                    }`}
-                    style={{
-                      width: measurable ? `${refreshPercent}%` : '100%',
-                      background: TEAL,
-                    }}
-                  />
+  return (
+    <div ref={attachRef} onScroll={onScroll} className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-[1600px] flex-col px-7 pt-5 pb-12">
+        <header
+          className="mb-5 flex animate-screen-in flex-wrap items-end justify-between gap-x-6 gap-y-3"
+          style={enter(0)}
+        >
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h1 className="font-display text-page font-bold text-bone">Plan</h1>
+              {!isLoading && !isError && games.length > 0 && (
+                <span className="text-small text-dust tabular-nums">
+                  {pluralize(games.length, 'game')} on your plan
                 </span>
               )}
-            </button>
-          )}
-          <Button
-            type="button"
-            onClick={() => setAddModalOpen(true)}
-            className="flex flex-none items-center gap-2 rounded-[10px] px-4.5 py-4.5 text-sm font-bold text-ink shadow-[0_4px_14px_rgba(255,179,71,0.22)]"
-            style={{ background: accentGradientStyle.background }}
-          >
-            <Plus size={16} />
-            Plan a game
-          </Button>
-        </div>
-      </div>
-
-      {/* onCreated abre la ficha del recién añadido — mismo comportamiento
-          que tenía la pantalla vieja.
-
-          Sin onOpenExisting a propósito: ese atajo es el de "esto ya lo
-          tienes, ábrelo", y aquí abrir es openGame → /plan/:id, la sección
-          equivocada para un juego que está en la BIBLIOTECA (la ficha del
-          planeado le ofrecería "Add to library" a uno que ya está dentro). El
-          modal ya lo apaga en modo 'plan' —canLeaveForOwned—, así que pasarlo
-          era código muerto que además contradecía esa invariante escrita. */}
-      <AddGameModal
-        open={addModalOpen}
-        onOpenChange={setAddModalOpen}
-        mode="plan"
-        onCreated={openGame}
-      />
-
-      {isLoading ? (
-        <p className={`text-sm text-muted-foreground ${revealClass}`} style={revealStyle(1)}>
-          Loading your plan…
-        </p>
-      ) : isError ? (
-        <div className={`flex flex-col items-start gap-2.5 ${revealClass}`} style={revealStyle(1)}>
-          <p className="text-sm text-destructive">
-            Something went wrong loading your plan. Try again in a moment.
-          </p>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className={`${outlineButtonClass} border-line-strong bg-raised text-foreground hover:bg-raised-hover`}
-          >
-            <RefreshCw size={14} />
-            <span>Try again</span>
-          </button>
-        </div>
-      ) : isEmpty ? (
-        <div
-          className={`flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-24 text-center ${revealClass}`}
-          style={revealStyle(1)}
-        >
-          <div className="flex h-13 w-13 items-center justify-center rounded-full bg-bone/[0.04]">
-            <Gamepad2 size={24} strokeWidth={1.5} className="text-muted-foreground/50" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Nothing planned yet</p>
-            <p className="mt-0.75 text-xs text-muted-foreground">
-              Add a game you want to play someday — it won&apos;t clutter your library.
+            </div>
+            <p className="mt-1.5 max-w-[72ch] text-small text-dust">
+              Everything you want to play, with what it takes to decide — how long it is, how long
+              it&apos;s waited and what people say about it.
             </p>
           </div>
-        </div>
-      ) : (
-        <>
-          <div className={revealClass} style={revealStyle(1)}>
-            <PlanDebtHeader
-              debt={debt}
-              upNextCount={upNext.length}
-              queueCount={queue.length}
-              horizonCount={horizon.length}
-            />
+
+          <div className="flex flex-none flex-wrap items-center gap-2.5">
+            {/* Puerta 1 de las dos del refresco (§5.1): la del día a día, solo
+                sobre los planeados. Notas, sinopsis, fecha de salida y
+                etiquetas de Steam — justo los datos que esta pantalla usa
+                para decidir. */}
+            {!isEmpty && (
+              <button
+                type="button"
+                onClick={runRefresh}
+                disabled={refreshing}
+                aria-busy={refreshing}
+                title="Re-fetch ratings, summaries, release dates and Steam tags for your plan"
+                className={cn(
+                  secondaryButtonClass,
+                  buttonSize.md,
+                  'relative overflow-hidden disabled:cursor-default disabled:opacity-100',
+                )}
+              >
+                <RefreshCw
+                  aria-hidden
+                  size={14}
+                  className={cn(refreshing && 'animate-spin motion-reduce:animate-none')}
+                />
+                <span className="tabular-nums">{refreshLabel}</span>
+                {/* La barra DENTRO del propio botón, pegada a su borde
+                    inferior: es donde el ojo ya está mirando. En las fases sin
+                    porcentaje medible late a lo ancho en vez de mentir con un
+                    avance. */}
+                {refreshing && (
+                  <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-bone/8">
+                    <span
+                      className={cn(
+                        'block h-full bg-tube transition-[width] duration-500 ease-out',
+                        !measurable && 'animate-pulse-soft motion-reduce:animate-none',
+                      )}
+                      style={{ width: measurable ? `${refreshPercent}%` : '100%' }}
+                    />
+                  </span>
+                )}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setAddModalOpen(true)}
+              className={cn(primaryButtonClass, buttonSize.md)}
+            >
+              <Plus aria-hidden size={16} />
+              Plan a game
+            </button>
           </div>
+        </header>
 
-          {/* ── Las tres secciones, dentro de un FLIP de SECCIONES ──────
-              Cada bloque de aquí abajo puede aparecer o desaparecer entero
-              (fijar el primer juego monta Up next; soltar el último la
-              desmonta), y eso desplaza TODO lo que tiene debajo. Sin este
-              FLIP externo, la cabecera de la cola saltaba de golpe mientras
-              sus filas planeaban con el FLIP interno — dos mitades de la
-              misma sección moviéndose a velocidades distintas. Con él, la
-              sección entera (rótulo + filas) se desliza como una unidad, y
-              el FLIP interior no se entera porque mide relativo a su propio
-              contenedor, que viaja con ella.
+        {/* onCreated abre la ficha del recién añadido. Sin onOpenExisting a
+            propósito: abrir aquí es openGame → /plan/:id, la sección
+            equivocada para un juego que ya está en la BIBLIOTECA (el modal ya
+            lo apaga en modo 'plan' —canLeaveForOwned—). */}
+        <AddGameModal
+          open={addModalOpen}
+          onOpenChange={setAddModalOpen}
+          mode="plan"
+          onCreated={openGame}
+        />
 
-              Las secciones entran con expandClass (corta, sin retraso) y no
-              con el reveal escalonado de la carga: un retraso con fill
-              backwards deja 200ms de hueco invisible ya reservado — en la
-              carga inicial nadie lo nota, pero al aparecer en mitad de una
-              interacción se veía como un agujero que luego se rellenaba. */}
-          <FlipList
-            items={[
-              ...(horizonItems.length > 0
-                ? [
-                    {
-                      key: 'horizon',
-                      node: (
-                        /* ── En el horizonte (§2.5) ──────────────────────
-                           Lo que aún no ha salido no compite con lo jugable
-                           — es ESPERA, no decisión. Arriba pero PLEGADO:
-                           cerrada ocupa un renglón y su titular ("Out
-                           today!") queda a la vista sin competir con la
-                           cola. DOS fuentes mezcladas por fecha: tus
-                           planeados sin salir y lo que el radar (§4)
-                           descubrió — las tuyas con borde sólido, las del
-                           radar punteadas. */
-                        <section className={`mt-5 ${expandClass}`}>
-                          <PlanSectionHeading
-                            Icon={CalendarClock}
-                            color={VIOLET}
-                            label="ON THE HORIZON"
-                            count={horizonItems.length}
-                            hint={
-                              horizonOpen ? undefined : horizonHeadline ? (
-                                <span className="font-semibold">
-                                  <span className="text-foreground/80">
-                                    {horizonHeadline.title}
-                                  </span>
-                                  <span className="mx-1 text-muted-foreground/40">·</span>
-                                  <span style={{ color: horizonHeadline.color }}>
-                                    {horizonHeadline.label}
-                                  </span>
-                                </span>
-                              ) : radarGames.length > 0 ? (
-                                `not out yet · ${radarGames.length} found by radar`
-                              ) : (
-                                'not out yet'
-                              )
-                            }
-                            collapsible={{
-                              open: horizonOpen,
-                              onToggle: () => setHorizonOpen((it) => !it),
-                            }}
-                          />
-                          {horizonOpen && (
-                            <div className={`flex flex-col gap-2 ${expandClass}`}>
-                              {horizonItems.map((item) =>
-                                item.kind === 'plan' ? (
-                                  /* Un planeado sin salir vive aquí ESTÉ O NO
-                                     fijado (ver splitPlanSections), así que su
-                                     pin refleja el estado real y alterna en
-                                     los dos sentidos. Sin animación de
-                                     llegada: esta fila no se mueve de sitio al
-                                     fijarla — la que aterriza es su copia de
-                                     Up next, y animar las dos contaría dos
-                                     viajes donde solo hay uno. */
-                                  <PlanRow
-                                    key={`plan-${item.game.id}`}
-                                    game={item.game}
-                                    pinned={item.game.planPinnedAt !== null}
-                                    landing={false}
-                                    onSelect={() => openGame(item.game.id)}
-                                    onTogglePin={() =>
-                                      togglePin(item.game.id, item.game.planPinnedAt === null)
-                                    }
-                                  />
-                                ) : (
-                                  <RadarRow
-                                    key={`radar-${item.game.id}`}
-                                    game={item.game}
-                                    onAdd={setPendingAdd}
-                                    onDismiss={() => dismissRadar.mutate(item.game.igdbId)}
-                                  />
-                                ),
-                              )}
-                            </div>
-                          )}
-                        </section>
-                      ),
-                    },
-                  ]
-                : []),
-              ...(upNext.length > 0
-                ? [
-                    {
-                      key: 'upnext',
-                      node: (
-                        /* ── Up next (§2.2) — máxima prioridad, siempre
-                           manual: se entra por un gesto tuyo, nunca lo
-                           deriva la app. */
-                        <section className={`mt-7 ${expandClass}`}>
-                          <PlanSectionHeading
-                            Icon={Pin}
-                            color={PLAN_COLOR}
-                            label="UP NEXT"
-                            count={upNext.length}
-                            /* Plegada, el rótulo dice a QUIÉN le toca: es la
-                               única pregunta que Up next contesta, y sería
-                               absurdo tener que abrirla para leerla. */
-                            hint={
-                              !upNextOpen ? (
-                                <span className="font-semibold">
-                                  <span className="text-muted-foreground/40">first · </span>
-                                  <span className="text-foreground/80">{upNext[0].title}</span>
-                                </span>
-                              ) : upNext.length >= 8 ? (
-                                'if everything is a priority, nothing is'
-                              ) : (
-                                'the ones you actually committed to'
-                              )
-                            }
-                            collapsible={{
-                              open: upNextOpen,
-                              onToggle: () => setUpNextOpen((it) => !it),
-                            }}
-                          />
-                          {/* Lista propia porque las filas se REORDENAN
-                              arrastrando por el asa — la cola no la
-                              necesita: ahí ordenan las lentes.
+        {isLoading ? (
+          <p className="animate-screen-in text-body text-dust" style={enter(1)}>
+            Loading your plan…
+          </p>
+        ) : isError ? (
+          <div className="flex animate-screen-in flex-col items-start gap-3" style={enter(1)}>
+            <p className="text-body text-live">
+              Something went wrong loading your plan. Try again in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className={cn(secondaryButtonClass, buttonSize.md)}
+            >
+              <RefreshCw aria-hidden size={14} />
+              Try again
+            </button>
+          </div>
+        ) : isEmpty ? (
+          <div
+            className="flex animate-screen-in flex-col items-center justify-center gap-4 rounded-md border border-dashed border-line-strong px-6 py-20 text-center"
+            style={enter(1)}
+          >
+            <span className="font-display text-stat font-bold text-dust/60">0</span>
+            <div>
+              <p className="text-lead font-semibold text-bone">Nothing planned yet</p>
+              <p className="mt-1 text-small text-dust">
+                Add a game you want to play someday — it won&apos;t clutter your library.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAddModalOpen(true)}
+              className={cn(primaryButtonClass, buttonSize.md)}
+            >
+              <Gamepad2 aria-hidden size={16} />
+              Plan a game
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="animate-screen-in" style={enter(1)}>
+              <PlanDebtHeader
+                debt={debt}
+                upNextCount={upNext.length}
+                queueCount={queue.length}
+                horizonCount={horizon.length}
+              />
+            </div>
 
-                              El pliegue ANIMA la altura en los dos sentidos
-                              (interpolate-size permite transicionar hasta
-                              auto/0 sin medir nada), y por eso la lista se
-                              queda MONTADA en vez del montar/desmontar del
-                              horizonte: desmontar es instantáneo por
-                              definición y el cierre aparecía de golpe. Son
-                              tus fijados (un puñado), tenerlos vivos
-                              plegados no cuesta nada — el horizonte sí se
-                              desmonta porque arranca cerrado y puede cargar
-                              decenas de filas que quizá nunca abras. */}
-                          {/* Curvas DISTINTAS por dirección, a propósito: la
-                              de la casa (.22,1,.36,1) mete casi todo el
-                              recorrido en el primer tercio — cerrando lee
-                              como un chasquido que se asienta, pero abriendo
-                              soltaba la lista entera de golpe y arrastraba
-                              la cola: un pop, no un despliegue. Abrir va con
-                              un ease-in-out clásico y un pelín más de
-                              tiempo: arranca suave, cruza rápido y aterriza
-                              suave. La clase cambia con el estado en el
-                              mismo render, así que cada transición usa la
-                              curva de SU dirección. */}
-                          <div
-                            className={`overflow-hidden [interpolate-size:allow-keywords] transition-[height] ${
-                              upNextOpen
-                                ? 'h-auto duration-350 ease-[cubic-bezier(.45,0,.2,1)]'
-                                : 'h-0 duration-300 ease-[cubic-bezier(.22,1,.36,1)]'
-                            }`}
-                          >
-                            <UpNextList
-                              games={upNext}
-                              onSelect={openGame}
-                              onUnpin={(id) => togglePin(id, false)}
-                              highlightId={landingInUpNext}
+            {/* ── Los bloques, dentro de un FLIP de SECCIONES ──────────────
+                Cada bloque puede aparecer o desaparecer entero (fijar el
+                primer juego monta Next up y Up next; soltar el último los
+                desmonta), y eso desplaza TODO lo que tiene debajo. Con este
+                FLIP externo la sección entera (rótulo + filas) se desliza como
+                una unidad, y el FLIP interior no se entera porque mide
+                relativo a su propio contenedor, que viaja con ella.
+
+                Las secciones entran con expandClass (corta, sin retraso): un
+                retraso con fill backwards dejaría un hueco invisible ya
+                reservado al aparecer en mitad de una interacción. */}
+            <FlipList
+              items={[
+                ...(upNext.length > 0
+                  ? [
+                      {
+                        key: 'nextup',
+                        node: (
+                          <div className={cn('mt-5', expandClass)}>
+                            <NextUpCard
+                              game={upNext[0]}
+                              upNextCount={upNext.length}
+                              onOpen={() => openGame(upNext[0].id)}
+                              onMoveDown={moveNextUpDown}
+                              onRemove={() => togglePin(upNext[0].id, false)}
                             />
                           </div>
-                        </section>
-                      ),
-                    },
-                  ]
-                : []),
-              ...(queue.length > 0
-                ? [
-                    {
-                      key: 'queue',
-                      node: (
-                        /* ── La cola, con sus lentes (§2.3-2.4) ────────── */
-                        <section className={`mt-7 ${expandClass}`}>
-                          <PlanSectionHeading
-                            Icon={ListOrdered}
-                            color={GRAY}
-                            label={upNext.length > 0 ? 'THE REST' : 'YOUR QUEUE'}
-                            count={queue.length}
-                            right={<PlanLensChips value={lens} onChange={setLens} />}
-                          />
-                          {/* FlipList y no un .map() a secas: cambiar de
-                              lente baraja el array entero y React
-                              reconcilia por key sin animar nada. */}
-                          <FlipList
-                            items={visibleQueue}
-                            keyOf={(game) => game.id}
-                            className="flex flex-col gap-2"
-                            /* content-visibility:auto en cada envoltorio:
-                               Chromium se salta maquetar y pintar las filas
-                               fuera del viewport (el grueso de una cola de
-                               cientos), con su alto estimado reservando el
-                               hueco para que el scroll no baile. FlipList lo
-                               respeta porque mide el envoltorio, no el
-                               contenido — ver su comentario de medición. */
-                            itemClassName="[content-visibility:auto] [contain-intrinsic-size:auto_158px]"
-                            renderItem={(game) => (
-                              <PlanRow
-                                game={game}
-                                pinned={false}
-                                landing={landingInQueue === game.id}
-                                onSelect={() => openGame(game.id)}
-                                onTogglePin={() => togglePin(game.id, true)}
+                        ),
+                      },
+                      {
+                        key: 'upnext',
+                        node: (
+                          /* ── Up next (§2.2) — máxima prioridad, siempre
+                             manual: se entra por un gesto tuyo, nunca lo
+                             deriva la app. Una lista de reproducción que se
+                             reordena arrastrando por el asa, con las flechas
+                             del teclado o con los botones de subir/bajar. */
+                          <section aria-label="Up next" className={cn('mt-8', expandClass)}>
+                            <PlanSectionHeading
+                              Icon={Pin}
+                              iconClassName="text-phosphor"
+                              label="Up next"
+                              count={upNext.length}
+                              /* Plegada, el rótulo dice a QUIÉN le toca. */
+                              hint={
+                                !upNextOpen ? (
+                                  <span>
+                                    first · <span className="text-bone">{upNext[0].title}</span>
+                                  </span>
+                                ) : upNext.length >= 8 ? (
+                                  'if everything is a priority, nothing is'
+                                ) : (
+                                  'the ones you actually committed to'
+                                )
+                              }
+                              collapsible={{
+                                open: upNextOpen,
+                                onToggle: () => setUpNextOpen((it) => !it),
+                              }}
+                            />
+                            {/* El pliegue ANIMA la altura en los dos sentidos
+                                (interpolate-size permite transicionar hasta
+                                auto/0), y por eso la lista se queda MONTADA:
+                                desmontar es instantáneo por definición. Curvas
+                                distintas por dirección: abrir arranca suave y
+                                aterriza suave; cerrar es un chasquido que se
+                                asienta. `inert` plegada: lo que no se ve no se
+                                alcanza con el tabulador. */}
+                            <div
+                              inert={!upNextOpen}
+                              className={cn(
+                                'overflow-hidden [interpolate-size:allow-keywords] transition-[height] motion-reduce:transition-none',
+                                upNextOpen
+                                  ? 'h-auto duration-350 ease-[cubic-bezier(.45,0,.2,1)]'
+                                  : 'h-0 duration-300 ease-[cubic-bezier(.22,1,.36,1)]',
+                              )}
+                            >
+                              <UpNextList
+                                games={upNext}
+                                onSelect={openGame}
+                                onUnpin={(id) => togglePin(id, false)}
+                                highlightId={landingInUpNext}
                               />
+                            </div>
+                          </section>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(horizonItems.length > 0
+                  ? [
+                      {
+                        key: 'horizon',
+                        node: (
+                          /* ── En el horizonte (§2.5) ────────────────────────
+                             Lo que aún no ha salido no compite con lo jugable
+                             — es ESPERA, no decisión. PLEGADO: cerrado ocupa
+                             un renglón y su titular ("Out today!") queda a la
+                             vista. DOS fuentes mezcladas por fecha: tus
+                             planeados sin salir y lo que el radar (§4)
+                             descubrió — las del radar, punteadas. */
+                          <section aria-label="On the horizon" className={cn('mt-8', expandClass)}>
+                            <PlanSectionHeading
+                              Icon={CalendarClock}
+                              iconClassName="text-st-resting"
+                              label="On the horizon"
+                              count={horizonItems.length}
+                              hint={
+                                horizonOpen ? undefined : horizonHeadline ? (
+                                  <span>
+                                    <span className="text-bone">{horizonHeadline.title}</span>
+                                    {' · '}
+                                    <span
+                                      className={cn(
+                                        'font-semibold',
+                                        horizonHeadline.out ? 'text-st-beaten' : 'text-phosphor',
+                                      )}
+                                    >
+                                      {horizonHeadline.label}
+                                    </span>
+                                  </span>
+                                ) : radarGames.length > 0 ? (
+                                  `not out yet · ${radarGames.length} found by radar`
+                                ) : (
+                                  'not out yet'
+                                )
+                              }
+                              collapsible={{
+                                open: horizonOpen,
+                                onToggle: () => setHorizonOpen((it) => !it),
+                              }}
+                            />
+                            {horizonOpen && (
+                              <div className={cn('flex flex-col gap-2', expandClass)}>
+                                {horizonItems.map((item) =>
+                                  item.kind === 'plan' ? (
+                                    /* Un planeado sin salir vive aquí ESTÉ O NO
+                                       fijado, así que su pin alterna en los dos
+                                       sentidos. Sin animación de llegada: la
+                                       que aterriza es su copia de Up next. */
+                                    <PlanRow
+                                      key={`plan-${item.game.id}`}
+                                      game={item.game}
+                                      pinned={item.game.planPinnedAt !== null}
+                                      landing={false}
+                                      onSelect={() => openGame(item.game.id)}
+                                      onTogglePin={() =>
+                                        togglePin(item.game.id, item.game.planPinnedAt === null)
+                                      }
+                                    />
+                                  ) : (
+                                    <RadarRow
+                                      key={`radar-${item.game.id}`}
+                                      game={item.game}
+                                      onAdd={setPendingAdd}
+                                      onDismiss={() => dismissRadar.mutate(item.game.igdbId)}
+                                    />
+                                  ),
+                                )}
+                              </div>
                             )}
-                          />
-                        </section>
-                      ),
-                    },
-                  ]
-                : []),
-              ...(queue.length === 0 && upNext.length === 0 && horizonItems.length > 0
-                ? [
-                    {
-                      key: 'all-waiting',
-                      node: (
-                        /* Todo lo planeado está sin salir: la cola vacía no
-                           es un error, es una situación con su propia frase. */
-                        <div
-                          className={`mt-7 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center ${expandClass}`}
-                        >
-                          <Bookmark
-                            size={20}
-                            strokeWidth={1.5}
-                            className="text-muted-foreground/50"
-                          />
-                          <p className="text-[13px] font-semibold text-foreground">
-                            Everything on your plan is still to come.
-                          </p>
-                          <p className="max-w-80 text-[11.5px] text-muted-foreground">
-                            Nothing here is playable tonight — open the horizon above to see
-                            what&apos;s on the way.
-                          </p>
-                        </div>
-                      ),
-                    },
-                  ]
-                : []),
-            ]}
-            keyOf={(section) => section.key}
-            renderItem={(section) => section.node}
-          />
-        </>
-      )}
+                          </section>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(queue.length > 0
+                  ? [
+                      {
+                        key: 'queue',
+                        node: (
+                          /* ── La cola, con sus lentes (§2.3-2.4) ────────── */
+                          <section
+                            aria-label={upNext.length > 0 ? 'The rest' : 'Your queue'}
+                            className={cn('mt-8', expandClass)}
+                          >
+                            <PlanSectionHeading
+                              Icon={ListOrdered}
+                              iconClassName="text-dust"
+                              label={upNext.length > 0 ? 'The rest' : 'Your queue'}
+                              count={queue.length}
+                              right={<PlanLensChips value={lens} onChange={setLens} />}
+                            />
+                            {/* FlipList y no un .map() a secas: cambiar de
+                                lente baraja el array entero y React reconcilia
+                                por key sin animar nada. */}
+                            <FlipList
+                              items={visibleQueue}
+                              keyOf={(game) => game.id}
+                              className="flex flex-col gap-2"
+                              /* content-visibility:auto en cada envoltorio:
+                                 Chromium se salta maquetar y pintar las filas
+                                 fuera del viewport, con su alto estimado
+                                 reservando el hueco. FlipList lo respeta porque
+                                 mide el envoltorio, no el contenido. */
+                              itemClassName="[content-visibility:auto] [contain-intrinsic-size:auto_124px]"
+                              renderItem={(game) => (
+                                <PlanRow
+                                  game={game}
+                                  pinned={false}
+                                  landing={landingInQueue === game.id}
+                                  onSelect={() => openGame(game.id)}
+                                  onTogglePin={() => togglePin(game.id, true)}
+                                />
+                              )}
+                            />
+                          </section>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(queue.length === 0 && upNext.length === 0 && horizonItems.length > 0
+                  ? [
+                      {
+                        key: 'all-waiting',
+                        node: (
+                          /* Todo lo planeado está sin salir: la cola vacía no
+                             es un error, es una situación con su propia frase. */
+                          <div
+                            className={cn(
+                              'mt-8 flex flex-col items-center gap-2 rounded-md border border-dashed border-line-strong px-6 py-10 text-center',
+                              expandClass,
+                            )}
+                          >
+                            <Bookmark
+                              aria-hidden
+                              size={20}
+                              strokeWidth={1.5}
+                              className="text-dust"
+                            />
+                            <p className="text-body font-semibold text-bone">
+                              Everything on your plan is still to come.
+                            </p>
+                            <p className="max-w-80 text-small text-dust">
+                              Nothing here is playable tonight — open the horizon above to see
+                              what&apos;s on the way.
+                            </p>
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+              keyOf={(section) => section.key}
+              renderItem={(section) => section.node}
+            />
+          </>
+        )}
+      </div>
 
       {/* El intermedio del radar: pulsaste una entrega que no tienes y hay
           exactamente dos sitios donde puede ir. El mismo diálogo que usa el
@@ -710,9 +713,8 @@ export const PlanToPlay = (): React.JSX.Element => {
           onCreated={(gameId) => {
             setAddTo(null);
             // Al añadirlo deja de ser un descubrimiento pendiente: la
-            // siguiente pasada del radar borra su fila (su igdbId ya está en
-            // tu BD), y hasta entonces se descarta para que no se vea
-            // duplicado con el juego de verdad.
+            // siguiente pasada del radar borra su fila, y hasta entonces se
+            // descarta para que no se vea duplicado con el juego de verdad.
             dismissRadar.mutate(addTo.game.igdbId);
             if (addTo.where === 'library') void navigate(`/games/${gameId}`);
             else openGame(gameId);

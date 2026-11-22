@@ -142,6 +142,34 @@ export const UpNextList = ({
   // planeo y no debe provocar ningún render por sí misma.
   const muteFlipOnce = useRef(false);
 
+  // El reordenado SIN ratón: las flechas sobre el asa y los botones de
+  // subir/bajar mueven el juego un puesto con la MISMA mutation que el
+  // arrastre. Aquí no se silencia el FLIP: no hay fila planeando hasta su
+  // hueco, así que el deslizamiento de FlipList es justo la animación que
+  // cuenta el cambio. Al reordenarse, React mueve el nodo de sitio y el foco
+  // se puede perder por el camino: se le devuelve al asa del juego movido.
+  const gripRefs = useRef(new Map<GameId, HTMLElement>());
+  const focusAfterMove = useRef<GameId | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    const id = focusAfterMove.current;
+    if (id === null) return;
+    focusAfterMove.current = null;
+    gripRefs.current.get(id)?.focus({ preventScroll: false });
+  }, [games]);
+
+  const moveBy = (index: number, delta: -1 | 1): void => {
+    if (dragRef.current) return;
+    const target = index + delta;
+    if (target < 0 || target >= games.length) return;
+    const ids = games.map((game) => game.id);
+    const [moved] = ids.splice(index, 1);
+    ids.splice(target, 0, moved);
+    focusAfterMove.current = moved;
+    setAnnouncement(`${games[index].title} moved to position ${target + 1} of ${games.length}.`);
+    reorder.mutate(ids);
+  };
+
   useEffect(
     () => () => {
       clearTimeout(settleTimer.current ?? undefined);
@@ -351,8 +379,8 @@ export const UpNextList = ({
         zIndex: 30,
         position: 'relative',
         transition: drag.settling ? `transform ${SETTLE_MS}ms ${EASE}` : 'none',
-        boxShadow: '0 18px 44px rgba(3,6,7,.55)',
-        borderRadius: 15,
+        boxShadow: 'var(--shadow-float)',
+        borderRadius: 'var(--radius-md)',
       };
     }
 
@@ -370,53 +398,68 @@ export const UpNextList = ({
   const indexOf = (id: GameId): number => games.findIndex((game) => game.id === id);
 
   return (
-    // FLIP alrededor de las filas para que soltar un juego de Up next no haga
-    // SALTAR a los de abajo: se deslizan a su sitio nuevo, igual que hace la
-    // cola con las lentes. Apagado mientras se arrastra — ahí mandan los
-    // transforms del gesto (ver el comentario de `enabled` en FlipList).
-    <FlipList
-      items={games}
-      keyOf={(game) => game.id}
-      enabled={drag === null}
-      consumeMute={() => {
-        const muted = muteFlipOnce.current;
-        muteFlipOnce.current = false;
-        return muted;
-      }}
-      className="flex flex-col gap-2"
-      containerRef={(element) => {
-        containerRef.current = element;
-      }}
-      renderItem={(game) => {
-        const index = indexOf(game.id);
-        return (
-          <div
-            ref={(element) => {
-              if (element) itemRefs.current.set(game.id, element);
-              else itemRefs.current.delete(game.id);
-            }}
-            style={styleOf(index)}
-          >
-            <PlanRow
-              game={game}
-              pinned
-              landing={highlightId === game.id}
-              onSelect={() => onSelect(game.id)}
-              onTogglePin={() => onUnpin(game.id)}
-              reorder={
-                games.length > 1
-                  ? {
-                      onPointerDown: handleDown(index),
-                      onPointerMove: handleMove(index),
-                      onPointerUp: handleUp(index),
-                      dragging: drag?.id === game.id && !drag.settling,
-                    }
-                  : undefined
-              }
-            />
-          </div>
-        );
-      }}
-    />
+    <>
+      {/* Lo que el teclado acaba de mover, dicho en voz alta para el lector
+          de pantalla: el cambio de orden no se ve si no se mira. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
+      {/* FLIP alrededor de las filas para que soltar un juego de Up next no haga
+        SALTAR a los de abajo: se deslizan a su sitio nuevo, igual que hace la
+        cola con las lentes. Apagado mientras se arrastra — ahí mandan los
+        transforms del gesto (ver el comentario de `enabled` en FlipList). */}
+      <FlipList
+        items={games}
+        keyOf={(game) => game.id}
+        enabled={drag === null}
+        consumeMute={() => {
+          const muted = muteFlipOnce.current;
+          muteFlipOnce.current = false;
+          return muted;
+        }}
+        className="flex flex-col gap-2"
+        containerRef={(element) => {
+          containerRef.current = element;
+        }}
+        renderItem={(game) => {
+          const index = indexOf(game.id);
+          return (
+            <div
+              ref={(element) => {
+                if (element) itemRefs.current.set(game.id, element);
+                else itemRefs.current.delete(game.id);
+              }}
+              style={styleOf(index)}
+            >
+              <PlanRow
+                game={game}
+                pinned
+                rank={index + 1}
+                landing={highlightId === game.id}
+                onSelect={() => onSelect(game.id)}
+                onTogglePin={() => onUnpin(game.id)}
+                reorder={
+                  games.length > 1
+                    ? {
+                        onPointerDown: handleDown(index),
+                        onPointerMove: handleMove(index),
+                        onPointerUp: handleUp(index),
+                        dragging: drag?.id === game.id && !drag.settling,
+                        onMove: (delta) => moveBy(index, delta),
+                        canMoveUp: index > 0,
+                        canMoveDown: index < games.length - 1,
+                      }
+                    : undefined
+                }
+                gripRef={(element) => {
+                  if (element) gripRefs.current.set(game.id, element);
+                  else gripRefs.current.delete(game.id);
+                }}
+              />
+            </div>
+          );
+        }}
+      />
+    </>
   );
 };

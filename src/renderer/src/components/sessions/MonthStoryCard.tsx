@@ -1,15 +1,27 @@
 import { ArrowRight, BookOpen } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { GeneratedMemorySummary } from '../../../../shared/types';
-import { VIOLET } from '../../lib/colors';
+import { focusRing } from '../shell/controls';
+
+// "Your October story is ready" — el MISMO texto que el aviso de aterrizaje
+// del recap (useMemoryArrivalToast), para que tarjeta y aviso se reconozcan
+// como la misma noticia. El año solo cuando no es el corriente.
+const storyLabel = (scopeKey: string): string => {
+  const [year, month] = scopeKey.split('-').map(Number);
+  const monthName = new Date(year, (month ?? 1) - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+  });
+  const suffix = year === new Date().getFullYear() ? '' : ` ${year}`;
+  return `Your ${monthName}${suffix} story is ready`;
+};
 
 // La tarjeta-resumen del recap de un mes cerrado, al frente de su grupo en el
-// diario (AFTERPLAY-LOOP.md §5): el titular del mes y la puerta al Journey,
-// donde vive el texto completo. El grupo del mes en curso nunca la tiene —
-// esa regla la aplica quien agrupa (Sessions.tsx), no esta tarjeta.
+// diario (AFTERPLAY-LOOP.md §5): el aviso de que la historia del mes existe, su
+// titular y la puerta al Journey, donde vive el texto completo. El grupo del mes
+// en curso nunca la tiene — esa regla la aplica quien agrupa (Sessions.tsx).
 //
-// Mismo lenguaje visual que el panel del Journey y el toast de aterrizaje:
-// violeta de la memoria + lomo de libro. Verla en tres sitios con la misma
-// cara es lo que la convierte en "la historia" y no en tres features sueltas.
+// Mismo lenguaje que el aviso "story ready" de estados-avisos.png: icono de
+// libro en Tube (información) y la flecha hacia el Journey.
 export const MonthStoryCard = ({
   recap,
   onOpen,
@@ -20,40 +32,25 @@ export const MonthStoryCard = ({
   <button
     type="button"
     onClick={onOpen}
-    className="group/story relative mb-2.5 flex w-full items-center gap-3 overflow-hidden rounded-[13px] border border-line px-4 py-3 text-left transition-colors duration-150 hover:border-line-strong"
-    style={{
-      background:
-        'linear-gradient(125deg, rgba(185,166,255,.12), rgba(185,166,255,.04) 55%, transparent)',
-    }}
+    className={cn(
+      'group/story mb-3 flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-line bg-panel px-4 py-3 text-left',
+      'transition-[background-color,border-color] duration-150 ease-out hover:border-line-strong hover:bg-raised',
+      focusRing,
+    )}
   >
-    <span
-      aria-hidden
-      className="absolute inset-y-0 left-0 w-0.75"
-      style={{ background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)` }}
-    />
-    <span
-      className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]"
-      style={{ background: `${VIOLET}21` }}
-    >
-      <BookOpen size={15} style={{ color: VIOLET }} />
+    <span className="flex size-10 flex-none items-center justify-center rounded-sm bg-tube/12">
+      <BookOpen aria-hidden size={17} className="text-tube" />
     </span>
     <span className="min-w-0 flex-1">
-      <span
-        className="block text-micro font-extrabold tracking-[.16em]"
-        style={{ color: `${VIOLET}c9` }}
-      >
-        THE STORY OF THIS MONTH
-      </span>
-      <span className="mt-0.75 block truncate text-[14px] font-extrabold text-foreground">
-        {recap.payload.headline}
-      </span>
+      <span className="block text-body font-semibold text-bone">{storyLabel(recap.scopeKey)}</span>
+      <span className="mt-0.5 block text-small text-dust">{recap.payload.headline}</span>
     </span>
-    <span className="flex flex-none items-center gap-1 text-micro font-bold text-muted-foreground">
+    <span className="flex flex-none items-center gap-1.5 text-small font-semibold text-tube">
       Read it in your Journey
       <ArrowRight
-        size={12}
-        className="transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] group-hover/story:translate-x-0.5"
-        style={{ color: `${VIOLET}cc` }}
+        aria-hidden
+        size={14}
+        className="transition-transform duration-200 ease-out group-hover/story:translate-x-0.5 motion-reduce:transition-none"
       />
     </span>
   </button>
