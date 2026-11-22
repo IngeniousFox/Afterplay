@@ -97,6 +97,9 @@ type Service = {
   // Un servicio solo está listo con TODAS sus claves — IGDB y Turso necesitan
   // las dos suyas, media configuración no sirve de nada.
   isReady: (creds: CredentialsValues, provider: SaveStorageProvider) => boolean;
+  // Hidden services are not drawn, but their keys stay in the draft (see
+  // FIELD_KEYS) so Save keys writes them back untouched instead of wiping them.
+  hidden?: boolean;
 };
 
 const SERVICES: Service[] = [
@@ -169,8 +172,10 @@ const SERVICES: Service[] = [
     id: 'turso',
     // La base de la 1.x. La 2.0 ya no sincroniza por aquí, pero el corte de
     // la migración (main/migration/legacyCutover.ts) todavía LEE estas dos
-    // claves para hablar con la base antigua, así que siguen a la vista y
-    // al final, rotuladas como lo que son.
+    // claves para hablar con la base antigua. No se pintan, pero siguen en el
+    // borrador para que guardar no las borre; desaparecen con el resto de
+    // Turso (AFTERPLAY-2.0.md, Apéndice C).
+    hidden: true,
     label: 'Turso (1.x)',
     detail: 'Old cloud database · only read while moving from 1.x',
     where: 'turso.tech',
@@ -186,6 +191,9 @@ const SERVICES: Service[] = [
 // guardado deben incluir incluso las claves del destino que está oculto.
 // El cast es la contrapartida de Object.fromEntries, que devuelve un índice ancho.
 const FIELD_KEYS = SERVICES.flatMap((service) => service.fields.map((field) => field.key));
+
+// Lo que se pinta: todo menos los servicios ocultos.
+const VISIBLE_SERVICES = SERVICES.filter((service) => !service.hidden);
 
 const draftFrom = (read: (key: FieldKey) => string): Record<FieldKey, string> =>
   Object.fromEntries(FIELD_KEYS.map((key) => [key, read(key)])) as Record<FieldKey, string>;
@@ -396,7 +404,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
         )}
 
         <ul>
-          {SERVICES.map((service) => {
+          {VISIBLE_SERVICES.map((service) => {
             const ready = creds ? service.isReady(creds, provider) : false;
             const isOpen = openService === service.id;
             const fields =
@@ -686,7 +694,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
       <div className="flex min-w-0 flex-col gap-5">
         <SettingsCard title="What each key unlocks" flush>
           <ul>
-            {SERVICES.map((service) => {
+            {VISIBLE_SERVICES.map((service) => {
               const ready = creds ? service.isReady(creds, provider) : false;
               return (
                 <li

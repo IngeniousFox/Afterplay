@@ -1428,7 +1428,7 @@ La 2.0.0 estrena aspecto en escritorio, TV, overlay y móvil. Se exploraron tres
 | Ajustes en un modal                   | Página `/settings/:section` con 9 secciones                                                    |
 | Overlay a pantalla completa           | Panel de 440 px con pestañas Session e History, sin perder nada                                |
 
-**Ajustes.** General, Library (incluye Images), Emulators, Saves, Integrations, Sync, Achievements (antes Journey), Backups y About. Las claves de Turso siguen en Integrations como "Turso (1.x)" porque `legacyCutover` las lee durante el corte y `setCredentials` borraría las que no estén en el formulario; desaparecen con el resto de Turso (Apéndice C).
+**Ajustes.** General, Library (incluye Images), Emulators, Saves, Integrations, Sync, Achievements (antes Journey), Backups y About. Las claves de Turso ya no se ven en Integrations, pero no se borran: `legacyCutover` las lee durante el corte, así que siguen guardadas y viajan en el borrador del formulario (si faltaran ahí, `setCredentials` las borraría al pulsar Save keys). Desaparecen del todo con el resto de Turso (Apéndice C).
 
 **Lo que no cambia.** La lógica: sync, migración, hub, datos y cálculos de estadísticas no se tocaron. La migración conserva sus pasos (Check, Copy, Connect, Upload, Finish). La TV conserva sus salas (Home, Library, Journey) y su navegación con mando.
 
