@@ -1,5 +1,5 @@
 import { Check, Clock3, Flame, NotebookPen, Trophy, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatSessionDuration } from '../../../shared/sessionDuration';
@@ -9,12 +9,12 @@ import { useSetSessionNote } from '../hooks/sessions';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { percentLabel } from '../lib/achievements';
-import { celebrateCompletion } from '../lib/celebrate';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
 import { quickStatusOptions, STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
 import { requestAchievementFlash } from '../lib/achievementFlash';
 import { expandClass } from '../lib/styles';
+import { celebrate, GlowText, pressClass, PressButton, Stagger, Ticker } from './fx';
 import { Figure } from './sessions/Figure';
 import {
   buttonSize,
@@ -40,6 +40,18 @@ import { AchievementMiniIcon } from './sessions/SessionAchievements';
 // fondo tras un velo y carátula al lado, el mismo lenguaje visual que
 // GameBanner y HeroBanner. Tiene que llamar la atención — es el remate de
 // haber estado jugando, no una notificación de que algo se ha guardado.
+//
+// Rock and roll: entra ENCENDIÉNDOSE como un tubo (power-on), la duración
+// cuenta hasta su valor como un marcador, el récord se enciende con bloom,
+// destello y chispas, los trofeos que llegan entran uno a uno con un brillo,
+// y la cuenta atrás es un haz que se va consumiendo con la punta al rojo.
+
+// El récord se celebra cuando el aviso ya está encendido (el power-on dura
+// 760 ms): las chispas salen de una banda que se ve, no de un tubo a medias.
+const RECORD_AT_MS = 620;
+
+// Las cifras intermedias del conteo, redondeadas a segundos enteros.
+const durationText = (seconds: number): string => formatSessionDuration(Math.round(seconds));
 
 type SessionClosedToastProps = {
   event: SessionClosedEvent;
@@ -72,6 +84,18 @@ export const SessionClosedToast = ({
   const setSessionNote = useSetSessionNote();
   const addStateEvent = useAddStateEvent();
   const heroSrc = useImageSrc(event.heroUrl, 'heroes');
+  const recordRef = useRef<HTMLDivElement | null>(null);
+
+  // Un récord: chispas desde su banda, una vez por aviso. El destello de la
+  // propia banda es CSS (abajo), con el mismo retraso.
+  useEffect(() => {
+    if (!event.isLongest) return undefined;
+    const timer = setTimeout(
+      () => celebrate('record', { origin: recordRef.current }),
+      RECORD_AT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [event.isLongest]);
   // Partida en cifra y unidad para pintar el número grande y la "m" pequeña
   // sin que el conjunto parezca texto plano.
 
@@ -135,7 +159,7 @@ export const SessionClosedToast = ({
     }
     setMarked(key);
     // Terminarte un juego es EL momento del ciclo — el confeti está para esto.
-    if (key === 'beaten') celebrateCompletion();
+    if (key === 'beaten') celebrate('beaten');
   };
 
   return (
@@ -143,7 +167,7 @@ export const SessionClosedToast = ({
       className={cn(
         // `afterplay-toast` es el gancho del arreglo de alto de Sonner en
         // main.css (el aviso crece cuando llegan los logros).
-        'afterplay-toast group/toast relative w-full animate-toast-in overflow-hidden rounded-md border border-line-strong bg-overlay font-sans font-normal shadow-float',
+        'afterplay-toast group/toast relative w-full origin-center animate-power-on overflow-hidden rounded-md border border-line-strong bg-overlay font-sans font-normal shadow-float motion-reduce:animate-fade-in',
       )}
     >
       {/* Zona héroe: el banner del juego tras un velo que lo funde con el
@@ -192,10 +216,17 @@ export const SessionClosedToast = ({
               {event.gameTitle}
             </button>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-              <Figure
-                value={formatSessionDuration(event.durationSec)}
-                className="text-[40px] text-phosphor [text-shadow:var(--shadow-glow-text)]"
-                unitClassName="text-phosphor/75"
+              <Ticker
+                value={event.durationSec}
+                format={durationText}
+                duration={1100}
+                render={(seconds) => (
+                  <Figure
+                    value={durationText(seconds)}
+                    className="text-[40px] text-phosphor [text-shadow:var(--shadow-glow-text)]"
+                    unitClassName="text-phosphor/75"
+                  />
+                )}
               />
               <span className="text-small text-dust">· {formatHours(event.totalHours)} total</span>
             </div>
@@ -214,9 +245,23 @@ export const SessionClosedToast = ({
 
         {/* El récord es LA noticia cuando pasa: se lleva su propia banda. */}
         {event.isLongest && (
-          <div className="flex items-center gap-2 rounded-sm border border-phosphor/25 bg-phosphor-tint px-3 py-2 text-small font-semibold text-phosphor">
-            <Flame aria-hidden size={14} className="flex-none" />
-            Your longest session with this game
+          <div
+            ref={recordRef}
+            className="relative isolate flex items-center gap-2 overflow-hidden rounded-sm border border-phosphor/25 bg-phosphor-tint px-3 py-2 text-small font-semibold text-phosphor"
+          >
+            {/* El destello: la banda entera se enciende en ámbar y se apaga. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 -z-10 animate-[press-flash_900ms_var(--ease-out)_620ms_both] bg-[radial-gradient(ellipse_at_20%_50%,rgb(255_226_180/0.55),rgb(255_179_71/0.25)_45%,transparent_80%)]"
+            />
+            <Flame
+              aria-hidden
+              size={14}
+              className="flex-none drop-shadow-[0_0_6px_rgb(255_179_71/0.8)]"
+            />
+            <GlowText flicker className="[animation-delay:520ms]">
+              Your longest session with this game
+            </GlowText>
           </div>
         )}
 
@@ -242,7 +287,14 @@ export const SessionClosedToast = ({
                 ? 'Achievement unlocked'
                 : `${sessionAchievements.length} achievements`}
             </span>
-            <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+            {/* Llegan uno a uno, saltando a su sitio con un brillo Tube que
+                se apaga. Se reparte otra vez si la sync trae más. */}
+            <Stagger
+              variant="pop"
+              step={70}
+              replayKey={sessionAchievements.length}
+              className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1"
+            >
               {[...sessionAchievements]
                 .sort(
                   (a, b) =>
@@ -250,26 +302,32 @@ export const SessionClosedToast = ({
                     (b.globalPercent ?? Number.POSITIVE_INFINITY),
                 )
                 .slice(0, 6)
-                .map((entry) => (
-                  <AchievementMiniIcon
-                    key={entry.id}
-                    entry={{
-                      achievementId: entry.id,
-                      displayName: entry.displayName,
-                      iconUrl: entry.iconUrl,
-                      globalPercent: entry.globalPercent,
-                    }}
-                    // Pulsar el trofeo lleva a SU logro, no a la ficha a
-                    // secas (LOGROS-REDISENO §1): se pide el parpadeo y se
-                    // reutiliza el mismo onOpenGame del toast, que ya navega
-                    // y lo descarta.
-                    onOpen={(achievementId) => {
-                      requestAchievementFlash(achievementId);
-                      onOpenGame();
-                    }}
-                  />
+                .map((entry, index) => (
+                  <span key={entry.id} className="relative flex-none">
+                    <AchievementMiniIcon
+                      entry={{
+                        achievementId: entry.id,
+                        displayName: entry.displayName,
+                        iconUrl: entry.iconUrl,
+                        globalPercent: entry.globalPercent,
+                      }}
+                      // Pulsar el trofeo lleva a SU logro, no a la ficha a
+                      // secas (LOGROS-REDISENO §1): se pide el parpadeo y se
+                      // reutiliza el mismo onOpenGame del toast, que ya navega
+                      // y lo descarta.
+                      onOpen={(achievementId) => {
+                        requestAchievementFlash(achievementId);
+                        onOpenGame();
+                      }}
+                    />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -inset-0.5 animate-[press-flash_900ms_var(--ease-out)_both] rounded-[7px] shadow-[0_0_0_1px_rgb(95_211_224/0.8),0_0_12px_rgb(95_211_224/0.7)]"
+                      style={{ animationDelay: `${index * 70 + 120}ms` }}
+                    />
+                  </span>
                 ))}
-            </span>
+            </Stagger>
           </div>
         )}
 
@@ -309,18 +367,18 @@ export const SessionClosedToast = ({
             <button
               type="button"
               onClick={() => setNoteOpen(true)}
-              className={cn(secondaryButtonClass, buttonSize.md)}
+              className={cn(secondaryButtonClass, buttonSize.md, pressClass)}
             >
               <NotebookPen aria-hidden size={14} />
               Add note
             </button>
-            <button
-              type="button"
+            <PressButton
+              burst="phosphor"
               onClick={onOpenGame}
               className={cn(primaryButtonClass, buttonSize.md)}
             >
               Open game
-            </button>
+            </PressButton>
           </div>
         )}
 
@@ -370,16 +428,25 @@ export const SessionClosedToast = ({
         )}
       </div>
 
-      {/* Cuenta atrás de 3 px. Se pinta solo mientras el toast se pueda ir
-          solo: tras guardar, el cierre lo controla el propio guardado y una
-          barra corriendo ahí sería mentira. Se para con el ratón encima o con
-          el foco dentro, igual que el propio Sonner. */}
+      {/* Cuenta atrás de 3 px: un HAZ que se consume. Se pinta solo mientras
+          el toast se pueda ir solo: tras guardar, el cierre lo controla el
+          propio guardado y una barra corriendo ahí sería mentira. Se para con
+          el ratón encima o con el foco dentro, igual que el propio Sonner.
+
+          El haz entero se desliza hacia la izquierda (transform, sin
+          repintar) y el aviso, con su overflow-hidden, lo va recortando: la
+          punta, al rojo blanco, se come la barra de derecha a izquierda. Es
+          información (cuánto queda), así que corre también con reduced
+          motion. */}
       {!saved && (
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-0.75 bg-bone/8">
           <div
-            className="afterplay-toast-countdown h-full origin-left animate-[afterplay-grow-x_var(--afterplay-toast-duration,15s)_linear_reverse_forwards] bg-phosphor shadow-glow-bar group-focus-within/toast:[animation-play-state:paused] group-hover/toast:[animation-play-state:paused]"
+            className="afterplay-toast-countdown relative h-full animate-[afterplay-burn_var(--afterplay-toast-duration,15s)_linear_forwards] group-focus-within/toast:[animation-play-state:paused] group-hover/toast:[animation-play-state:paused]"
             style={{ '--afterplay-toast-duration': `${durationMs}ms` } as React.CSSProperties}
-          />
+          >
+            <div className="h-full bg-linear-to-r from-phosphor/45 via-phosphor/85 to-phosphor shadow-glow-bar" />
+            <div className="absolute inset-y-0 right-0 w-8 bg-linear-to-r from-transparent to-[rgb(255_236_200)] shadow-[0_0_10px_2px_rgb(255_179_71/0.75)]" />
+          </div>
         </div>
       )}
     </div>

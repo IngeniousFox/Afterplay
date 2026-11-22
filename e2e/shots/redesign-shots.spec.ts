@@ -1368,3 +1368,184 @@ test('rendimiento de Library con 331 juegos', async () => {
     sandbox.cleanup();
   }
 });
+
+// MOVIMIENTO de la fase B («rock and roll» en Plan, Sessions y Ajustes): el
+// aviso de sesión cerrada encendiéndose (con récord), una fila de Up next
+// cambiando de puesto con su estela y su destello, y el cambio de sección de
+// Ajustes con la píldora deslizándose. Misma técnica que la prueba de arriba:
+// las animaciones nuevas nacen en pausa y se fotografían a mitad de camino.
+// Van a docs/redesign/screens/motion/.
+test('capturas de movimiento de Plan, Sessions y Ajustes', async () => {
+  test.setTimeout(240_000);
+  const MOTION = join(process.cwd(), 'docs', 'redesign', 'screens', 'motion');
+  mkdirSync(MOTION, { recursive: true });
+  const daysAgo = (days: number, hour: number): Date => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    date.setHours(hour, 0, 0, 0);
+    return date;
+  };
+  const planned = (title: string, hltbMain: number, pinnedDaysAgo: number): SeedGame => ({
+    title,
+    planned: true,
+    releaseYear: 2019,
+    hltb: { main: hltbMain },
+    addedAt: daysAgo(30, 12),
+    pinnedAt: daysAgo(pinnedDaysAgo, 10),
+    playthroughs: [{ events: [{ type: 'plan_to_play', at: daysAgo(30, 12), precision: 'day' }] }],
+  });
+  const { app, window, sandbox } = await launchAfterplay({
+    games: [
+      planned('Motion Plan Metaphor', 70, 20),
+      planned('Motion Plan Pentiment', 20, 19),
+      planned('Motion Plan Animal Well', 6, 18),
+      planned('Motion Plan Sea of Stars', 18, 17),
+      {
+        title: 'Motion Clair Obscur',
+        releaseYear: 2025,
+        playthroughs: [
+          {
+            events: [{ type: 'started', at: daysAgo(40, 20), precision: 'datetime' }],
+            sessions: [{ at: daysAgo(2, 20), hours: 1.5 }],
+          },
+        ],
+      },
+    ],
+  });
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await window.waitForTimeout(1500);
+
+    // Las animaciones WAAPI nuevas nacen en pausa; las CSS se pausan al
+    // congelar. `freezeAt` lleva TODAS (WAAPI, CSS y transiciones) al mismo
+    // instante, así que lo que arrancó un frame antes o después cuadra.
+    const holdNew = (): Promise<void> =>
+      window.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        proto.heldAnimate ??= proto.animate;
+        const original = proto.heldAnimate;
+        proto.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+          const animation = original.apply(this, args);
+          animation.pause();
+          return animation;
+        };
+      });
+    const release = (): Promise<void> =>
+      window.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        if (proto.heldAnimate) proto.animate = proto.heldAnimate;
+        for (const animation of document.getAnimations()) animation.play();
+      });
+    const frames = async (
+      name: string,
+      times: number[],
+      clip: { x: number; y: number; width: number; height: number },
+    ): Promise<void> => {
+      for (const time of times) {
+        await window.evaluate((at) => {
+          for (const animation of document.getAnimations()) {
+            animation.pause();
+            animation.currentTime = at;
+          }
+        }, time);
+        await window.waitForTimeout(80);
+        await window.screenshot({
+          path: join(MOTION, `${name}-${String(time).padStart(4, '0')}ms.png`),
+          clip,
+        });
+      }
+      await release();
+    };
+
+    // 1. Plan: el segundo de Up next sube al primer puesto con el teclado.
+    await goTo(window, '/plan');
+    await window.getByRole('region', { name: 'Up next', exact: true }).waitFor();
+    await window.waitForTimeout(1500);
+    const grip = window.getByRole('button', { name: /Reorder Motion Plan Pentiment/ });
+    await grip.scrollIntoViewIfNeeded();
+    const list = window.getByRole('region', { name: 'Up next', exact: true });
+    const listBox = await list.boundingBox();
+    await grip.focus();
+    await holdNew();
+    await window.keyboard.press('ArrowUp');
+    await window.waitForTimeout(120);
+    if (listBox) {
+      await frames('plan-reorder', [0, 80, 160, 260, 380, 560, 800], {
+        x: listBox.x - 20,
+        y: Math.max(0, listBox.y - 20),
+        width: listBox.width + 40,
+        height: Math.min(listBox.height + 40, 1000 - Math.max(0, listBox.y - 20)),
+      });
+    }
+
+    // 2. El aviso de sesión cerrada, con récord: power-on, la duración
+    // contando y la banda del récord encendiéndose.
+    const closedId = gameIdOf(sandbox, 'Motion Clair Obscur');
+    const ended = await window.evaluate(
+      (id) => globalThis.api.sessions.startForGame(id as never),
+      closedId,
+    );
+    if (ended) {
+      await window.evaluate((id) => globalThis.api.sessions.close(id, new Date()), ended.id);
+      await goTo(window, '/sessions');
+      await window.waitForTimeout(1200);
+      await holdNew();
+      await app.evaluate(
+        ({ BrowserWindow }, payload) => {
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (w.isVisible()) w.webContents.send('sessions:closed', payload);
+          }
+        },
+        {
+          sessionId: ended.id,
+          gameId: closedId,
+          iterationId: ended.iterationId,
+          endless: false,
+          gameTitle: 'Motion Clair Obscur',
+          coverUrl: null,
+          heroUrl: null,
+          durationSec: 2 * 3600 + 10 * 60,
+          totalHours: 40.3,
+          isLongest: true,
+        },
+      );
+      await window.locator('.afterplay-toast').waitFor();
+      await window.mouse.move(400, 300);
+      // El power-on (760 ms): punto, línea, pantalla, parpadeo y asiento; la
+      // duración cuenta a la vez y el récord se enciende al final.
+      await frames('toast-power-on', [0, 60, 140, 220, 320, 450, 600, 900], {
+        x: 1000,
+        y: 560,
+        width: 600,
+        height: 440,
+      });
+      await window.waitForTimeout(800);
+      await window.screenshot({ path: join(MOTION, 'toast-settled.png') });
+      await window.getByRole('button', { name: 'Dismiss', exact: true }).click();
+    }
+
+    // 3. Ajustes: de General a Sync, la píldora del índice se desliza y la
+    // sección se enciende.
+    await window.getByRole('link', { name: 'Settings', exact: true }).click();
+    const settings = window.getByTestId('settings-page');
+    await settings.getByRole('heading', { name: 'General' }).waitFor();
+    await window.waitForTimeout(800);
+    await holdNew();
+    await settings.getByRole('link', { name: 'Sync', exact: true }).click();
+    await settings.getByRole('heading', { name: 'Sync' }).waitFor();
+    await window.waitForTimeout(60);
+    await frames('settings-section', [0, 60, 120, 200, 300, 450], {
+      x: 0,
+      y: 40,
+      width: 1200,
+      height: 560,
+    });
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});

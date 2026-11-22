@@ -1,6 +1,7 @@
 import { ArrowRight, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { GeneratedMemorySummary } from '../../../../shared/types';
+import { ScanBeam } from '../fx';
 import { focusRing } from '../shell/controls';
 
 // "Your October story is ready" — el MISMO texto que el aviso de aterrizaje
@@ -21,7 +22,8 @@ const storyLabel = (scopeKey: string): string => {
 // en curso nunca la tiene — esa regla la aplica quien agrupa (Sessions.tsx).
 //
 // Mismo lenguaje que el aviso "story ready" de estados-avisos.png: icono de
-// libro en Tube (información) y la flecha hacia el Journey.
+// libro en Tube (información) y la flecha hacia el Journey. Un haz de barrido
+// la recorre cada 9 s, por detrás del texto: es la noticia del mes.
 export const MonthStoryCard = ({
   recap,
   onOpen,
@@ -33,11 +35,12 @@ export const MonthStoryCard = ({
     type="button"
     onClick={onOpen}
     className={cn(
-      'group/story mb-3 flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-line bg-panel px-4 py-3 text-left',
+      'group/story relative isolate mb-3 flex w-full overflow-hidden flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-line bg-panel px-4 py-3 text-left',
       'transition-[background-color,border-color] duration-150 ease-out hover:border-line-strong hover:bg-raised',
       focusRing,
     )}
   >
+    <ScanBeam every={9} className="-z-10" />
     <span className="flex size-10 flex-none items-center justify-center rounded-sm bg-tube/12">
       <BookOpen aria-hidden size={17} className="text-tube" />
     </span>

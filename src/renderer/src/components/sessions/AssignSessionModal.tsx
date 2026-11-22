@@ -8,6 +8,7 @@ import { useTimeFormat } from '../../hooks/settings';
 import { formatByPrecision, formatHours, pluralize } from '../../lib/format';
 import { filterByTitle } from '../../lib/search';
 import { GameCover } from '../GameCover';
+import { pressClass } from '../fx';
 import { buttonSize, focusRing, kbdClass, primaryButtonClass } from '../shell/controls';
 import { ModalShell } from '../ui/modal-shell';
 import { BLUE } from '../../lib/colors';
@@ -118,7 +119,7 @@ export const AssignSessionModal = ({
           <button
             type="button"
             onClick={onAddNewGame}
-            className={cn(primaryButtonClass, buttonSize.md, 'mt-1')}
+            className={cn(primaryButtonClass, buttonSize.md, 'mt-1', pressClass)}
           >
             <Plus aria-hidden size={15} />
             Add new game
@@ -176,6 +177,9 @@ export const AssignSessionModal = ({
                     'transition-[border-color,background-color] duration-150 ease-out hover:border-phosphor/50 hover:bg-raised disabled:opacity-60',
                     focusRing,
                     isHighlighted ? 'border-phosphor/60 bg-raised' : 'border-line',
+                    // Elegir el juego ES el Assign: la fila se hunde al pulsarla.
+                    pressClass,
+                    'active:scale-[.98]',
                   )}
                   style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}
                 >

@@ -2,6 +2,7 @@ import { CalendarClock, Pin, Play } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { pluralize } from '../../lib/format';
+import { GlowText, Ticker } from '../fx';
 import type { PlanDebt } from '../../../../shared/planShelves';
 
 type PlanDebtHeaderProps = {
@@ -18,6 +19,10 @@ type PlanDebtHeaderProps = {
 //
 // En Fósforo es una tira de cifras sin cajas, como la de la semana en Home:
 // la deuda en numerales grandes y, a la derecha, el reparto en tres cifras.
+// Las cifras entran contando como un marcador (Ticker) y, al fijar o soltar un
+// juego, cuentan desde lo que se veía; la deuda lleva el bloom del fósforo.
+const thousands = (value: number): string => Math.round(value).toLocaleString('en-US');
+
 export const PlanDebtHeader = ({
   debt,
   upNextCount,
@@ -30,9 +35,12 @@ export const PlanDebtHeader = ({
   >
     <div className="min-w-0">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="font-display text-[56px] leading-[52px] font-bold text-bone tabular-nums">
-          {Math.round(debt.totalHours).toLocaleString('en-US')}
-        </span>
+        <GlowText
+          tone="bone"
+          className="font-display text-[56px] leading-[52px] font-bold text-bone tabular-nums"
+        >
+          <Ticker value={debt.totalHours} format={thousands} duration={900} from="previous" />
+        </GlowText>
         <span className="text-lead font-semibold text-bone">hours ahead</span>
       </div>
       <p className="mt-2 text-small text-dust">
@@ -93,7 +101,7 @@ const DebtFigure = ({
       {label}
     </dt>
     <dd className={cn('font-display text-[34px] leading-none font-bold tabular-nums', className)}>
-      {value}
+      <Ticker value={value} from="previous" />
     </dd>
   </div>
 );

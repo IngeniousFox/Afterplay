@@ -85,8 +85,17 @@ export const BackupSection = (): React.JSX.Element => {
           type="button"
           onClick={handleBackupNow}
           disabled={createManualBackup.isPending}
-          className={cn(primaryButtonClass, buttonSize.md)}
+          className={cn(primaryButtonClass, buttonSize.md, 'relative overflow-hidden')}
         >
+          {/* Mientras copia, un barrido de luz cruza el botón una y otra vez
+              (transform, sin repintar): está trabajando. Reduced motion: sin
+              barrido; queda el icono que late. */}
+          {createManualBackup.isPending && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-full w-[200%] animate-[afterplay-burn_1.3s_var(--ease-in-out)_infinite_reverse] bg-linear-to-r from-transparent via-[rgb(255_244_224/0.45)] to-transparent motion-reduce:hidden"
+            />
+          )}
           {createManualBackup.isPending ? (
             <HardDriveDownload
               aria-hidden

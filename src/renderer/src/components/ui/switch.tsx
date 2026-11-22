@@ -15,6 +15,9 @@ type SwitchProps = {
 // 38 x 22 px, encendido en Phosphor con la bola en tinta, apagado en Raised
 // con la bola en Dust. Es un botón con role="switch" para que el lector de
 // pantalla diga "activado/desactivado" y Espacio/Enter lo alternen.
+//
+// La bola viaja con un muelle suave (--ease-spring-soft: se pasa un pelo y
+// vuelve) y se encoge un poco mientras la pulsas. Reduced motion: salta.
 export const Switch = ({
   checked,
   onCheckedChange,
@@ -30,7 +33,7 @@ export const Switch = ({
     onClick={() => onCheckedChange(!checked)}
     {...aria}
     className={cn(
-      'relative inline-flex h-5.5 w-9.5 flex-none items-center rounded-full border transition-[background-color,border-color] duration-150 ease-out',
+      'group/switch relative inline-flex h-5.5 w-9.5 flex-none items-center rounded-full border transition-[background-color,border-color] duration-150 ease-out',
       'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
       'disabled:cursor-not-allowed disabled:opacity-40',
       checked
@@ -42,7 +45,8 @@ export const Switch = ({
     <span
       aria-hidden
       className={cn(
-        'absolute left-0.5 size-4 rounded-full transition-[transform,scale,background-color] duration-200 ease-out motion-reduce:transition-none',
+        'absolute left-0.5 size-4 rounded-full transition-[translate,scale,background-color] duration-320 ease-spring-soft motion-reduce:transition-none',
+        'group-enabled/switch:group-active/switch:scale-[.86]',
         checked ? 'translate-x-4 bg-ink' : 'translate-x-0 bg-dust',
       )}
     />

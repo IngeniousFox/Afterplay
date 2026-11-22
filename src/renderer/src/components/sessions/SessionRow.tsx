@@ -16,6 +16,7 @@ import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { humanizeSpan } from '../../lib/dateMath';
 import { formatElapsed, formatHours, formatTime } from '../../lib/format';
+import { chartGroup, GlowText, growX, Odometer, useInView, VuMeter } from '../fx';
 import { GameCover } from '../GameCover';
 import { iconButtonClass } from '../shell/controls';
 import { Figure } from './Figure';
@@ -109,6 +110,9 @@ export const SessionRow = ({
   const device = useSessionDevice(session);
   const { data: timeFormat = '24h' } = useTimeFormat();
   const ownLive = isLive && !device.remote;
+  // El medidor de duración crece desde la izquierda la primera vez que la
+  // fila entra en pantalla (un observador compartido para todas las filas).
+  const { observe: observeMeter, inView: meterInView } = useInView();
 
   // La franja horaria solo existe con hora de verdad: una manual de "un día"
   // o de "un mes" no tiene inicio ni fin que contar.
@@ -234,15 +238,21 @@ export const SessionRow = ({
       <div className="flex w-26 flex-none flex-col items-end pt-0.5">
         {isLive ? (
           <span className="flex items-center gap-2">
+            {/* El LED vivo: el punto late y un anillo se expande desde él. */}
             {ownLive && (
-              <span
-                aria-hidden
-                className="size-2 flex-none animate-led-live rounded-full bg-live motion-reduce:animate-none"
-              />
+              <span aria-hidden className="relative inline-flex size-2 flex-none">
+                <span className="absolute inset-0 animate-led-ring rounded-full bg-live motion-reduce:hidden" />
+                <span className="relative size-2 animate-led-live rounded-full bg-live motion-reduce:animate-none" />
+              </span>
             )}
-            <span className="font-display text-[24px] leading-none font-bold text-phosphor tabular-nums">
-              {formatElapsed(liveSeconds)}
-            </span>
+            {/* Odometer: solo ruedan los dígitos que cambian. Respira como el
+                cronómetro de Now playing: es lo que está vivo. */}
+            <GlowText
+              breathe={ownLive}
+              className="font-display text-[24px] leading-none font-bold text-phosphor"
+            >
+              <Odometer value={formatElapsed(liveSeconds)} />
+            </GlowText>
           </span>
         ) : (
           <span className="flex items-center gap-1.5">
@@ -256,12 +266,22 @@ export const SessionRow = ({
             />
           </span>
         )}
+        {/* En marcha, en el sitio del medidor baila un VU: la sesión suena. */}
+        {ownLive && <VuMeter tone="live" className="mt-2" />}
         {fillPct > 0 && (
           <span
+            ref={observeMeter}
             aria-hidden
-            className="mt-2 block h-0.5 w-20 overflow-hidden rounded-full bg-bone/8"
+            data-inview={meterInView || undefined}
+            className={cn(
+              chartGroup,
+              'mt-2 block h-0.5 w-20 overflow-hidden rounded-full bg-bone/8',
+            )}
           >
-            <span className="block h-full bg-phosphor/70" style={{ width: `${fillPct}%` }} />
+            <span
+              className={cn('block h-full bg-phosphor/70', growX)}
+              style={{ width: `${fillPct}%` }}
+            />
           </span>
         )}
       </div>

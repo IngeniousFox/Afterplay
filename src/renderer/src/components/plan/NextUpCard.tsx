@@ -15,6 +15,7 @@ import { daysBetween, humanizeSpan } from '../../lib/dateMath';
 import { formatHours } from '../../lib/format';
 import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../lib/ratings';
 import { isUnreleased } from '../../lib/releaseDate';
+import { GlowText, pressClass, PressButton, ScanBeam, TiltCover, TiltGlare } from '../fx';
 import { Figure } from '../sessions/Figure';
 import { buttonSize, primaryButtonClass, secondaryButtonClass } from '../shell/controls';
 import { RatingChip } from './RatingChip';
@@ -34,6 +35,11 @@ type NextUpCardProps = {
 // así que aquí sí van el arte del juego, las líneas de escaneo y la cifra
 // grande. La lista de Up next de debajo sigue empezando por él: es la que se
 // reordena, y esta tarjeta solo enseña quién va primero.
+//
+// Rock and roll: el arte respira con Ken Burns, un haz de barrido lo recorre
+// cada 10 s (detrás del texto, nunca encima), el título se enciende con un
+// parpadeo de tubo y la portada se inclina bajo el ratón. Open game se hunde y
+// suelta un destello ámbar; los otros dos solo se hunden.
 export const NextUpCard = ({
   game,
   upNextCount,
@@ -56,7 +62,11 @@ export const NextUpCard = ({
       {(heroSrc ?? coverSrc) && (
         <div aria-hidden className="absolute inset-y-0 right-0 -z-10 w-[70%]">
           {heroSrc ? (
-            <img src={heroSrc} alt="" className="h-full w-full object-cover opacity-70" />
+            <img
+              src={heroSrc}
+              alt=""
+              className="h-full w-full animate-ken-burns object-cover opacity-70 motion-reduce:animate-none"
+            />
           ) : (
             <img
               src={coverSrc ?? undefined}
@@ -68,25 +78,27 @@ export const NextUpCard = ({
         </div>
       )}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-(image:--scan)" />
+      <ScanBeam every={10} className="-z-10" />
 
       <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={onOpen}
           aria-label={`Open ${game.title}`}
-          className="group/cover h-56 w-42 flex-none self-start overflow-hidden rounded-sm border border-line-strong bg-raised shadow-lift outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+          className="flex-none self-start rounded-sm outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
         >
-          {coverSrc ? (
-            <img
-              src={coverSrc}
-              alt=""
-              className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/cover:scale-[1.03] motion-reduce:transition-none"
-            />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center">
-              <Gamepad2 aria-hidden size={32} strokeWidth={1.5} className="text-dust/50" />
+          <TiltCover className="rounded-sm">
+            <span className="relative block h-56 w-42 overflow-hidden rounded-sm border border-line-strong bg-raised shadow-lift">
+              {coverSrc ? (
+                <img src={coverSrc} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center">
+                  <Gamepad2 aria-hidden size={32} strokeWidth={1.5} className="text-dust/50" />
+                </span>
+              )}
+              <TiltGlare />
             </span>
-          )}
+          </TiltCover>
         </button>
 
         <div className="min-w-0 flex-1">
@@ -94,9 +106,17 @@ export const NextUpCard = ({
             <span className="font-semibold text-phosphor">Next up</span>
             <span className="text-dust">first in your queue</span>
           </p>
-          <h2 className="mt-1.5 font-display text-[clamp(40px,4.4vw,64px)] leading-[0.95] font-bold text-bone">
+          {/* Parpadeo de encendido una vez por título: la tarjeta cambia de
+              juego cuando reordenas, y es ahí cuando se vuelve a encender. */}
+          <GlowText
+            key={game.id}
+            as="h2"
+            tone="bone"
+            flicker
+            className="mt-1.5 font-display text-[clamp(40px,4.4vw,64px)] leading-[0.95] font-bold text-bone"
+          >
             {game.title}
-          </h2>
+          </GlowText>
 
           <dl className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
             <div className="flex flex-col-reverse">
@@ -174,19 +194,19 @@ export const NextUpCard = ({
           )}
 
           <div className="mt-5 flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
+            <PressButton
+              burst="phosphor"
               onClick={onOpen}
               className={cn(primaryButtonClass, buttonSize.md)}
             >
               Open game
               <ArrowRight aria-hidden size={15} />
-            </button>
+            </PressButton>
             {upNextCount > 1 && (
               <button
                 type="button"
                 onClick={onMoveDown}
-                className={cn(secondaryButtonClass, buttonSize.md)}
+                className={cn(secondaryButtonClass, buttonSize.md, pressClass)}
               >
                 <ChevronDown aria-hidden size={15} />
                 Move down
@@ -196,7 +216,7 @@ export const NextUpCard = ({
               type="button"
               onClick={onRemove}
               title="Remove from Up next"
-              className={cn(secondaryButtonClass, buttonSize.md)}
+              className={cn(secondaryButtonClass, buttonSize.md, pressClass)}
             >
               <PinOff aria-hidden size={14} />
               Remove from Up next

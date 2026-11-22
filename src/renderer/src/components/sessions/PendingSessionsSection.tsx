@@ -5,6 +5,8 @@ import type { PendingSession } from '../../../../shared/types';
 import { usePendingSessions } from '../../hooks/sessions';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useTimeFormat } from '../../hooks/settings';
+import { useOffscreenAnimation } from '../../hooks/useOffscreenAnimation';
+import { PressButton } from '../fx';
 import { formatByPrecision, formatElapsed, formatHours, formatTime } from '../../lib/format';
 import { AddGameModal } from '../library/AddGameModal';
 import { buttonSize, iconButtonClass, primaryButtonClass } from '../shell/controls';
@@ -65,10 +67,14 @@ const PendingSessionCard = ({
       </div>
 
       <div className="ml-auto flex flex-none items-center gap-2">
-        <button type="button" onClick={onAssign} className={cn(primaryButtonClass, buttonSize.md)}>
+        <PressButton
+          burst="phosphor"
+          onClick={onAssign}
+          className={cn(primaryButtonClass, buttonSize.md)}
+        >
           <Link2 aria-hidden size={15} />
           Assign
-        </button>
+        </PressButton>
         {/* La papelera solo con la sesión terminada: una en marcha se volvería
             a abrir sola al ciclo siguiente del watcher. Hueco fijo para que
             los Assign queden alineados. */}
@@ -94,9 +100,12 @@ const PendingSessionCard = ({
 // del todo de la vista de Sesiones. Solo existe si hay algo pendiente: con
 // cero huérfanas la vista se ve exactamente como siempre. Filo Phosphor =
 // "requiere tu atención" sin parecer un error (el rojo queda para lo que está
-// en marcha y lo destructivo), y sin pulso — pendiente, no vivo.
+// en marcha y lo destructivo). El filo late en ámbar, lento y suave (4 s): un
+// recordatorio que se ve de reojo, no la urgencia del LED rojo de lo que está
+// en directo. Se pausa fuera de la vista; con reduced motion, quieto.
 export const PendingSessionsSection = (): React.JSX.Element | null => {
   const { data: pending = [] } = usePendingSessions();
+  const { observe: observePulse, playState: pulseState } = useOffscreenAnimation();
   const { data: timeFormat = '24h' } = useTimeFormat();
   const [assigning, setAssigning] = useState<PendingSession | null>(null);
   // "+ Add new game" desde el modal de asignar: se cierra ese y se abre el
@@ -112,7 +121,13 @@ export const PendingSessionsSection = (): React.JSX.Element | null => {
   return (
     <section aria-label="Pending sessions">
       {pending.length > 0 && (
-        <div className="mb-7 overflow-hidden rounded-md border border-l-2 border-line border-l-phosphor bg-panel">
+        <div className="relative isolate mb-7 overflow-hidden rounded-md border border-l-2 border-line border-l-phosphor bg-panel">
+          <span
+            ref={observePulse}
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 -z-10 w-24 animate-[pulse-soft_4s_var(--ease-in-out)_infinite] bg-linear-to-r from-phosphor/14 to-transparent motion-reduce:animate-none motion-reduce:opacity-50"
+            style={{ animationPlayState: pulseState }}
+          />
           <header className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-line bg-phosphor/4 px-5 py-4">
             <h2 className="font-display text-title font-bold text-bone">Pending sessions</h2>
             <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-phosphor px-1.5 font-display text-[16px] leading-none font-bold text-ink tabular-nums">

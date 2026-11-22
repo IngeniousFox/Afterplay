@@ -10,12 +10,12 @@ import { MonthStoryCard } from '../components/sessions/MonthStoryCard';
 import { Pager } from '../components/sessions/Pager';
 import { PendingSessionsSection } from '../components/sessions/PendingSessionsSection';
 import { SessionRow } from '../components/sessions/SessionRow';
+import { Stagger, Ticker } from '../components/fx';
 import { buttonSize, secondaryButtonClass } from '../components/shell/controls';
 import { useSessionUnlocks } from '../hooks/achievements';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
 import { useSessionsPage } from '../hooks/sessions';
-import { useCountUp } from '../hooks/useCountUp';
 import { requestAchievementFlash } from '../lib/achievementFlash';
 import { formatDateOnly, formatHours, pluralize } from '../lib/format';
 import { groupPageByDate } from '../lib/sessionGroups';
@@ -140,13 +140,6 @@ export const Sessions = (): React.JSX.Element => {
   const longestSessionSec = pageData?.longestSec ?? 0;
   const avgSessionSec = pageData?.avgSec ?? 0;
 
-  // Contadores animados de las 4 cifras — mismo count-up que Stats; al
-  // cambiar de filtro los targets cambian y vuelven a subir solos.
-  const animatedHours = useCountUp(totalHours);
-  const animatedCount = useCountUp(total);
-  const animatedLongestSec = useCountUp(longestSessionSec);
-  const animatedAvgSec = useCountUp(avgSessionSec);
-
   const subtitle = selectedGame
     ? `${formatHours(selectedGame.totalHours)} played in total`
     : 'Across your library';
@@ -237,30 +230,37 @@ export const Sessions = (): React.JSX.Element => {
               className="mb-7 grid animate-screen-in grid-cols-2 gap-x-8 gap-y-5 rounded-md border border-line bg-panel px-6 py-5 sm:grid-cols-4"
               style={enter(2)}
             >
+              {/* Las cuatro entran contando como un marcador (Ticker); al
+                  cambiar de filtro los valores cambian y vuelven a subir. */}
               <SessionFigure
                 label="Total hours"
-                value={formatHours(animatedHours)}
+                value={totalHours}
+                format={formatHours}
                 className="text-phosphor"
               />
               <SessionFigure
                 label="Sessions"
-                value={String(Math.round(animatedCount))}
+                value={total}
+                format={(count) => String(Math.round(count))}
                 className="text-bone"
               />
               <SessionFigure
                 label="Longest session"
-                value={formatHours(animatedLongestSec / 3600)}
+                value={longestSessionSec / 3600}
+                format={formatHours}
                 className="text-bone"
               />
               <SessionFigure
                 label="Avg session"
-                value={formatHours(animatedAvgSec / 3600)}
+                value={avgSessionSec / 3600}
+                format={formatHours}
                 className="text-bone"
               />
             </dl>
 
             {/* key por filtro+página: cambiar cualquiera de los dos relanza la
-                cascada de los tramos con los datos nuevos. */}
+                cascada de los tramos con los datos nuevos (y, dentro de cada
+                tramo, la de sus filas: Stagger se reparte al montar). */}
             <div
               key={`${gameId ?? 'all'}-${pageData?.page ?? safePage}`}
               className="flex flex-col gap-7"
@@ -300,7 +300,10 @@ export const Sessions = (): React.JSX.Element => {
                         onOpen={() => navigate(`/stats?view=journey&month=${group.monthScopeKey}`)}
                       />
                     )}
-                    <div className="overflow-hidden rounded-md border border-line bg-panel">
+                    <Stagger
+                      step={35}
+                      className="overflow-hidden rounded-md border border-line bg-panel"
+                    >
                       {group.sessions.map((session, rowIndex) => {
                         const day = dayOf(session, currentYear);
                         const firstOfDay =
@@ -330,7 +333,7 @@ export const Sessions = (): React.JSX.Element => {
                           />
                         );
                       })}
-                    </div>
+                    </Stagger>
                   </section>
                 );
               })}
@@ -362,16 +365,24 @@ export const Sessions = (): React.JSX.Element => {
 const SessionFigure = ({
   label,
   value,
+  format,
   className,
 }: {
   label: string;
-  value: string;
+  value: number;
+  format: (value: number) => string;
   className: string;
 }): React.JSX.Element => (
   <div className="flex min-w-0 flex-col-reverse">
     <dt className="mt-1.5 text-small text-dust">{label}</dt>
     <dd>
-      <Figure value={value} className={cn('text-[40px]', className)} />
+      <Ticker
+        value={value}
+        format={format}
+        render={(shown) => (
+          <Figure value={format(shown)} className={cn('text-[40px]', className)} />
+        )}
+      />
     </dd>
   </div>
 );
