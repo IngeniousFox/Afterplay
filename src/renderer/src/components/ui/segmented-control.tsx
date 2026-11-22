@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { SlidingIndicator } from '../fx';
 
 export type SegmentedOption<T extends string> = { value: T; label: React.ReactNode };
 
@@ -15,6 +16,10 @@ type SegmentedControlProps<T extends string> = {
 // marco Inset con Line strong; la elegida en Raised con el texto en Phosphor.
 // Semántica de grupo de radio: las flechas mueven la selección y solo la
 // opción elegida entra en el orden de tabulación.
+//
+// La píldora Raised de la elegida es UNA sola que se desliza de opción en
+// opción con un muelle suave (SlidingIndicator); las opciones solo cambian
+// el color del texto. Reduced motion: salta sin deslizarse.
 export const SegmentedControl = <T extends string>({
   value,
   options,
@@ -23,6 +28,7 @@ export const SegmentedControl = <T extends string>({
   'aria-label': ariaLabel,
 }: SegmentedControlProps<T>): React.JSX.Element => {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const groupRef = useRef<HTMLDivElement | null>(null);
 
   const move = (from: number, step: number): void => {
     const next = (from + step + options.length) % options.length;
@@ -32,13 +38,20 @@ export const SegmentedControl = <T extends string>({
 
   return (
     <div
+      ref={groupRef}
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        'inline-flex flex-none overflow-hidden rounded-sm border border-line-strong bg-inset',
+        'relative isolate inline-flex flex-none overflow-hidden rounded-sm border border-line-strong bg-inset',
         className,
       )}
     >
+      <SlidingIndicator
+        containerRef={groupRef}
+        activeKey={value}
+        selector='[aria-checked="true"]'
+        className="inset-y-0 -z-10 bg-raised"
+      />
       {options.map((option, index) => {
         const selected = option.value === value;
         return (
@@ -65,7 +78,7 @@ export const SegmentedControl = <T extends string>({
               'h-8 px-3.5 text-small font-semibold whitespace-nowrap transition-[background-color,color] duration-150',
               'outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
               index > 0 && 'border-l border-line',
-              selected ? 'bg-raised text-phosphor' : 'text-dust hover:bg-bone/6 hover:text-bone',
+              selected ? 'text-phosphor' : 'text-dust hover:bg-bone/6 hover:text-bone',
             )}
           >
             {option.label}

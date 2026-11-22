@@ -272,6 +272,17 @@
     transform: scaleX(1);
   }
 }
+/* La cuenta atrás del aviso de sesión cerrada: el haz entero se desliza fuera
+   por la izquierda (transform) en vez de encogerse, para que su punta encendida
+   no se aplaste con un scaleX. */
+@keyframes afterplay-burn {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
 @keyframes afterplay-drop-in {
   from {
     opacity: 0;

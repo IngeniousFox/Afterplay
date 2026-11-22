@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { PlannedGameItem } from '../../../../shared/types';
+import { cn } from '@/lib/utils';
 import { useReorderUpNext } from '../../hooks/games';
 import { FlipList } from './FlipList';
 import { PlanRow } from './PlanRow';
@@ -97,6 +98,12 @@ type Drag = {
   snap: Snapshot;
 };
 
+// La fila que ACABA de cambiar de puesto (teclado, botones o arrastre): deja
+// una estela de fósforo del lado del que vino y un destello al llegar. `shot`
+// cambia en cada movimiento para que la animación se repita aunque sea la
+// misma fila dos veces seguidas.
+type Moved = { id: GameId; from: 'above' | 'below'; shot: number };
+
 type UpNextListProps = {
   games: PlannedGameItem[];
   onSelect: (id: GameId) => void;
@@ -151,6 +158,13 @@ export const UpNextList = ({
   const gripRefs = useRef(new Map<GameId, HTMLElement>());
   const focusAfterMove = useRef<GameId | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [moved, setMoved] = useState<Moved | null>(null);
+  const markMoved = (id: GameId, from: number, to: number): void =>
+    setMoved((last) => ({
+      id,
+      from: to < from ? 'below' : 'above',
+      shot: (last?.shot ?? 0) + 1,
+    }));
   useEffect(() => {
     const id = focusAfterMove.current;
     if (id === null) return;
@@ -166,6 +180,7 @@ export const UpNextList = ({
     const [moved] = ids.splice(index, 1);
     ids.splice(target, 0, moved);
     focusAfterMove.current = moved;
+    markMoved(moved, index, target);
     setAnnouncement(`${games[index].title} moved to position ${target + 1} of ${games.length}.`);
     reorder.mutate(ids);
   };
@@ -359,6 +374,7 @@ export const UpNextList = ({
         const ids = games.map((game) => game.id).filter((id) => id !== current.id);
         ids.splice(current.target, 0, current.id);
         reorder.mutate(ids);
+        markMoved(current.id, current.index, current.target);
       }
       applyDrag(null);
     }, SETTLE_MS);
@@ -418,19 +434,26 @@ export const UpNextList = ({
           return muted;
         }}
         className="flex flex-col gap-2"
+        stagger={{ step: 55 }}
+        // La fila recién movida viaja POR ENCIMA de las que aparta: es la
+        // protagonista, y su estela tiene que verse sobre ellas.
+        itemClassName={(game) => (moved?.id === game.id ? 'relative z-2' : undefined)}
         containerRef={(element) => {
           containerRef.current = element;
         }}
         renderItem={(game) => {
           const index = indexOf(game.id);
+          const trail = moved?.id === game.id ? moved : null;
           return (
             <div
               ref={(element) => {
                 if (element) itemRefs.current.set(game.id, element);
                 else itemRefs.current.delete(game.id);
               }}
+              className="relative"
               style={styleOf(index)}
             >
+              {trail && <MoveTrail key={trail.shot} from={trail.from} />}
               <PlanRow
                 game={game}
                 pinned
@@ -456,6 +479,7 @@ export const UpNextList = ({
                   else gripRefs.current.delete(game.id);
                 }}
               />
+              {trail && <MoveFlash key={trail.shot} />}
             </div>
           );
         }}
@@ -463,3 +487,37 @@ export const UpNextList = ({
     </>
   );
 };
+
+// La ESTELA: una cola de luz ámbar pegada a la fila por el lado del que viene,
+// que se encoge hacia ella y se apaga. Va dentro del envoltorio de la fila, así
+// que viaja con el deslizamiento del FLIP como la cola de un cometa, por
+// encima de los vecinos, que es donde se ve el rastro.
+// Reduced motion: sin estela.
+const MoveTrail = ({ from }: { from: 'above' | 'below' }): React.JSX.Element => (
+  <span
+    aria-hidden
+    className={cn(
+      'pointer-events-none absolute inset-x-4 z-10 block h-20 animate-[press-flash_640ms_var(--ease-out)_both] motion-reduce:hidden',
+      from === 'below' ? 'top-[calc(100%-12px)]' : 'bottom-[calc(100%-12px)]',
+    )}
+  >
+    <span
+      className={cn(
+        'block h-full w-full animate-[grow-y_560ms_var(--ease-out)_reverse_both] rounded-full blur-[6px]',
+        from === 'below'
+          ? 'origin-top bg-linear-to-b from-phosphor/55 via-phosphor/18 to-transparent'
+          : 'origin-bottom bg-linear-to-t from-phosphor/55 via-phosphor/18 to-transparent',
+      )}
+    />
+  </span>
+);
+
+// El DESTELLO de llegada: el filo de la fila se enciende en ámbar con un halo
+// y se apaga (opacidad, sin geometría: con reduced motion se queda tal cual).
+// Encima de la fila, sin eventos.
+const MoveFlash = (): React.JSX.Element => (
+  <span
+    aria-hidden
+    className="pointer-events-none absolute inset-0 animate-[press-flash_760ms_var(--ease-out)_both] rounded-md shadow-[0_0_0_1px_rgb(255_179_71/0.8),0_0_26px_rgb(255_179_71/0.35),inset_0_0_22px_rgb(255_179_71/0.14)]"
+  />
+);

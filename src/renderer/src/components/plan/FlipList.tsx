@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { useStagger, type StaggerOptions } from '../fx';
 
 const DURATION = 380;
 const EASE = 'cubic-bezier(.22,1,.36,1)';
@@ -52,8 +53,16 @@ type FlipListProps<T> = {
   // Clase para CADA envoltorio de fila. La cola del Plan pasa aquí su
   // content-visibility:auto — el envoltorio es justo el elemento que puede
   // llevarla sin que este componente la rompa midiendo dentro (ver el
-  // porqué de medir el envoltorio y no el hijo, abajo).
-  itemClassName?: string;
+  // porqué de medir el envoltorio y no el hijo, abajo). Como función, por
+  // fila: Up next sube por encima de las demás la que acaba de moverse (el
+  // envoltorio es quien lleva el transform del FLIP, así que su z-index es
+  // el que cuenta).
+  itemClassName?: string | ((item: T) => string | undefined);
+  // Entrada escalonada de las filas al montar (components/fx/useStagger):
+  // solo las que se ven, una vez. Sin replayKey a propósito: lo que reordena
+  // después (lentes, pins, arrastre) ya lo cuenta el FLIP, y repartir otra
+  // vez encima se pelearía con él.
+  stagger?: Omit<StaggerOptions, 'replayKey'>;
 };
 
 // Reordena SIN parpadeo cuando el layout de los items cambia por una causa
@@ -98,6 +107,7 @@ export const FlipList = <T,>({
   consumeMute,
   containerRef,
   itemClassName,
+  stagger,
 }: FlipListProps<T>): React.JSX.Element => {
   const container = useRef<HTMLDivElement | null>(null);
   const elements = useRef(new Map<Key, HTMLDivElement>());
@@ -219,10 +229,16 @@ export const FlipList = <T,>({
     previous.current = next;
   });
 
+  // Siempre se llama (regla de los hooks); solo actúa si se le presta el
+  // contenedor, cosa que pasa únicamente con `stagger`. DESPUÉS del efecto
+  // de medir: así la foto del montaje se toma sin las animaciones de entrada.
+  const staggerRef = useStagger<HTMLDivElement>(stagger);
+
   return (
     <div
       ref={(element) => {
         container.current = element;
+        if (stagger) staggerRef.current = element;
         containerRef?.(element);
       }}
       className={className}
@@ -232,7 +248,7 @@ export const FlipList = <T,>({
         return (
           <div
             key={key}
-            className={itemClassName}
+            className={typeof itemClassName === 'function' ? itemClassName(item) : itemClassName}
             ref={(element) => {
               if (element) elements.current.set(key, element);
               else elements.current.delete(key);

@@ -20,6 +20,7 @@ import { formatHours } from '../../lib/format';
 import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../lib/ratings';
 import { isUnreleased, releaseCountdown } from '../../lib/releaseDate';
 import { RefreshGameButton } from '../RefreshGameButton';
+import { GlowText, TiltCover, TiltGlare } from '../fx';
 import { Figure } from '../sessions/Figure';
 import { focusRing, focusRingInset, iconButtonClass } from '../shell/controls';
 import { RatingChip } from './RatingChip';
@@ -152,38 +153,51 @@ export const PlanRow = ({
         </div>
       )}
 
+      {/* El número de pista se ENCIENDE al montar, escalonado por puesto
+          como una lista de reproducción que arranca (70 ms entre uno y el
+          siguiente, tope en el octavo). La key es el puesto: cuando el
+          juego cambia de sitio, su número nuevo se vuelve a encender. El
+          primero lleva además el bloom del fósforo. */}
       {rank !== undefined && (
-        <span
+        <GlowText
+          key={rank}
           aria-hidden
+          tone={rank === 1 ? 'phosphor' : 'bone'}
+          flicker
+          style={{ animationDelay: `${Math.min(rank - 1, 7) * 70}ms` }}
           className={cn(
             'w-8 flex-none self-center text-center font-display text-[30px] leading-none font-bold tabular-nums',
-            rank === 1 ? 'text-phosphor' : 'text-dust',
+            rank === 1 ? 'text-phosphor' : 'text-dust [text-shadow:none]',
           )}
         >
           {rank}
-        </span>
+        </GlowText>
       )}
 
       {/* La caja mide lo mismo con carátula y sin ella, que es lo que permite
           soltar la imagen de las filas lejanas sin mover el layout ni un
-          píxel (ver useNearViewport). */}
-      <div
-        ref={observeCover}
-        className="relative h-24 w-18 flex-none overflow-hidden rounded-sm border border-line bg-raised"
-      >
-        {!coverNear ? null : coverSrc ? (
-          <img
-            src={coverSrc}
-            loading="lazy"
-            alt={game.title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Gamepad2 aria-hidden size={22} strokeWidth={1.5} className="text-dust/50" />
-          </div>
-        )}
-      </div>
+          píxel (ver useNearViewport). Se inclina bajo el ratón (TiltCover:
+          un solo listener delegado en el <main>, nada por fila). */}
+      <TiltCover className="flex-none self-start rounded-sm">
+        <div
+          ref={observeCover}
+          className="relative h-24 w-18 overflow-hidden rounded-sm border border-line bg-raised"
+        >
+          {!coverNear ? null : coverSrc ? (
+            <img
+              src={coverSrc}
+              loading="lazy"
+              alt={game.title}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <Gamepad2 aria-hidden size={22} strokeWidth={1.5} className="text-dust/50" />
+            </div>
+          )}
+          <TiltGlare />
+        </div>
+      </TiltCover>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

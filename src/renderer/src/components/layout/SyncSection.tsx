@@ -6,6 +6,7 @@ import type { SyncStatus } from '../../../../shared/sync/status';
 import { useDevices } from '../../hooks/devices';
 import { usePairSync, useSyncNow, useSyncStatus, useUnpairSync } from '../../hooks/sync';
 import { describeAgo } from '../../lib/syncText';
+import { Glitch, GlowText, pressClass } from '../fx';
 import { fieldLabelClass, textInputClass } from '../library/add-game/styles';
 import { buttonSize, primaryButtonClass, secondaryButtonClass } from '../shell/controls';
 import { SettingsCard, SettingsNotice } from './SettingsCard';
@@ -161,6 +162,9 @@ const headlineOf = (
   return { heading: 'Up to date', tone: 'ok' };
 };
 
+// Al día, el LED Tube late con un anillo que se expande despacio (cada 2.8 s,
+// más tranquilo que el LED rojo de lo que está en directo): todo va bien y
+// está vivo. Con reduced motion, el punto quieto.
 const DOT_CLASS = {
   ok: 'bg-tube shadow-[0_0_8px_var(--color-tube)]',
   busy: 'bg-tube animate-pulse-soft motion-reduce:animate-none',
@@ -180,14 +184,39 @@ const PairedView = ({ status }: { status: SyncStatus }): React.JSX.Element => {
   }, []);
   const lastSync = Math.max(status.lastPushAt ?? 0, status.lastPullAt ?? 0) || null;
   const { heading, tone } = headlineOf(status);
+  // El titular se enciende con bloom en el color de su estado: Tube si va
+  // bien, Live si necesita algo de ti. Sin conexión o en pausa, apagado.
+  const glow = tone === 'error' ? 'live' : tone === 'off' ? null : 'tube';
 
   return (
     <SettingsCard
       title={
-        <span className="flex items-center gap-3">
-          <span aria-hidden className={cn('size-3 flex-none rounded-full', DOT_CLASS[tone])} />
-          <span className="font-display text-title font-bold">{heading}</span>
-        </span>
+        // Glitch: un desplazamiento RGB breve al ENTRAR en error (y si cambia
+        // el motivo), nunca en bucle.
+        <Glitch
+          active={tone === 'error'}
+          replayKey={status.problem?.code}
+          className="items-center gap-3"
+        >
+          <span aria-hidden className="relative inline-flex size-3 flex-none">
+            {tone === 'ok' && (
+              <span className="absolute inset-0 animate-[led-ring_2.8s_var(--ease-out)_infinite] rounded-full bg-tube motion-reduce:hidden" />
+            )}
+            <span className={cn('relative size-3 rounded-full', DOT_CLASS[tone])} />
+          </span>
+          {glow ? (
+            <GlowText
+              key={heading}
+              tone={glow}
+              flicker={tone !== 'busy'}
+              className="font-display text-title font-bold"
+            >
+              {heading}
+            </GlowText>
+          ) : (
+            <span className="font-display text-title font-bold">{heading}</span>
+          )}
+        </Glitch>
       }
       description={
         <>
@@ -207,7 +236,7 @@ const PairedView = ({ status }: { status: SyncStatus }): React.JSX.Element => {
             type="button"
             onClick={() => syncNow.mutate()}
             disabled={status.running || status.disabledReason !== null}
-            className={cn(primaryButtonClass, buttonSize.md)}
+            className={cn(primaryButtonClass, buttonSize.md, pressClass)}
           >
             <RefreshCw
               aria-hidden

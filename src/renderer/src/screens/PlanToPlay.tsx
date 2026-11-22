@@ -619,6 +619,10 @@ export const PlanToPlay = (): React.JSX.Element => {
                               items={visibleQueue}
                               keyOf={(game) => game.id}
                               className="flex flex-col gap-2"
+                              /* Las filas que se ven entran escalonadas al
+                                 llegar a la pantalla; luego, las lentes las
+                                 baraja el FLIP. */
+                              stagger={{ step: 40 }}
                               /* content-visibility:auto en cada envoltorio:
                                  Chromium se salta maquetar y pintar las filas
                                  fuera del viewport, con su alto estimado
