@@ -1,11 +1,8 @@
-import { CalendarClock, Hourglass, Pin, Play } from 'lucide-react';
+import { CalendarClock, Pin, Play } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { GRAY, VIOLET } from '../../lib/colors';
+import { cn } from '@/lib/utils';
 import { pluralize } from '../../lib/format';
-import { STATUS_META } from '../../lib/gameStatus';
 import type { PlanDebt } from '../../../../shared/planShelves';
-
-const PLAN_COLOR = STATUS_META.plan.color;
 
 type PlanDebtHeaderProps = {
   debt: PlanDebt;
@@ -15,99 +12,88 @@ type PlanDebtHeaderProps = {
 };
 
 // La CABECERA HONESTA (PLAN-TO-PLAY.md §2.1): "1.400 horas por delante, en
-// 262 juegos".
+// 262 juegos". Ponérselo delante al Plan es decirle la verdad a la sección:
+// esto no es una lista de deseos, es una deuda de tiempo, y saber cuánto mide
+// es lo que hace que "uno más no pasa nada" deje de ser gratis.
 //
-// El número ya existía —la card de Backlog debt de Stats lo suma desde hace
-// tiempo—, pero vivía en otra pantalla, mezclado con lo que tienes sin tocar
-// en la biblioteca. Ponérselo delante al Plan es decirle la verdad a la
-// sección: esto no es una lista de deseos, es una deuda de tiempo, y saber
-// cuánto mide es lo que hace que "uno más no pasa nada" deje de ser gratis.
-//
-// El violeta es el mismo con el que Stats pinta la deuda cuando crece — no
-// es un color decorativo elegido aquí, es el que la app ya usa para esto.
+// En Fósforo es una tira de cifras sin cajas, como la de la semana en Home:
+// la deuda en numerales grandes y, a la derecha, el reparto en tres cifras.
 export const PlanDebtHeader = ({
   debt,
   upNextCount,
   queueCount,
   horizonCount,
 }: PlanDebtHeaderProps): React.JSX.Element => (
-  <div
-    className="relative overflow-hidden rounded-[16px] border px-5.5 py-4.5"
-    style={{
-      borderColor: `${VIOLET}2b`,
-      background: `linear-gradient(135deg, ${VIOLET}18, ${VIOLET}07 55%, transparent)`,
-    }}
+  <section
+    aria-label="Backlog debt"
+    className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5 rounded-md border border-line bg-panel px-6 py-5"
   >
-    <div className="flex flex-col gap-4.5 sm:flex-row sm:items-center sm:gap-7">
-      <div className="flex min-w-0 flex-1 items-center gap-3.5">
-        <div
-          className="flex h-12 w-12 flex-none items-center justify-center rounded-[13px]"
-          style={{ background: `${VIOLET}24`, border: `1px solid ${VIOLET}3d` }}
-        >
-          <Hourglass size={21} color={VIOLET} />
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span
-              className="text-[32px] leading-none font-display font-bold tabular-nums"
-              style={{ color: VIOLET }}
-            >
-              {Math.round(debt.totalHours).toLocaleString()}
-            </span>
-            <span className="text-[14px] font-semibold text-muted-foreground">hours ahead</span>
-          </div>
-          <div className="mt-1.25 text-[12.5px] text-muted-foreground">
-            across {pluralize(debt.totalGames, 'game')} on your plan
-            {/* Los juegos sin estimación se cuentan aparte y se dicen en
-                pequeño — rellenarlos con la media daría una cifra que parece
-                exacta y no lo es (la misma regla que Backlog debt). */}
-            {debt.withoutEstimate > 0 && (
-              <span className="text-muted-foreground/60">
-                {' · '}
-                {debt.withoutEstimate} without an estimate
-              </span>
-            )}
-          </div>
-        </div>
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-display text-[56px] leading-[52px] font-bold text-bone tabular-nums">
+          {Math.round(debt.totalHours).toLocaleString('en-US')}
+        </span>
+        <span className="text-lead font-semibold text-bone">hours ahead</span>
       </div>
-
-      {/* El reparto: cuánto de esta lista es compromiso, cuánto es "algún
-          día" y cuánto ni siquiera se puede jugar todavía. Tres números que
-          responden solos a "¿por dónde empiezo?". */}
-      <div className="flex flex-none gap-2">
-        <DebtTile Icon={Pin} color={PLAN_COLOR} label="UP NEXT" value={upNextCount} />
-        <DebtTile Icon={Play} color={GRAY} label="READY" value={queueCount} />
-        {horizonCount > 0 && (
-          <DebtTile Icon={CalendarClock} color={VIOLET} label="NOT OUT" value={horizonCount} />
-        )}
-      </div>
+      <p className="mt-2 text-small text-dust">
+        across {pluralize(debt.totalGames, 'game')} on your plan
+        {/* Los juegos sin estimación se cuentan aparte — rellenarlos con la
+            media daría una cifra que parece exacta y no lo es (la misma regla
+            que Backlog debt). */}
+        {debt.withoutEstimate > 0 && ` · ${debt.withoutEstimate} without an estimate`}
+      </p>
     </div>
-  </div>
+
+    {/* El reparto: cuánto de esta lista es compromiso, cuánto es "algún día"
+        y cuánto ni siquiera se puede jugar todavía. */}
+    <dl className="flex flex-wrap items-end gap-x-8 gap-y-3">
+      <DebtFigure
+        Icon={Pin}
+        label="Up next"
+        value={upNextCount}
+        className="text-phosphor"
+        iconClassName="text-phosphor"
+      />
+      <DebtFigure
+        Icon={Play}
+        label="Ready"
+        value={queueCount}
+        className="text-bone"
+        iconClassName="text-dust"
+      />
+      {horizonCount > 0 && (
+        <DebtFigure
+          Icon={CalendarClock}
+          label="Not out"
+          value={horizonCount}
+          className="text-bone"
+          iconClassName="text-st-resting"
+        />
+      )}
+    </dl>
+  </section>
 );
 
-const DebtTile = ({
+const DebtFigure = ({
   Icon,
-  color,
   label,
   value,
+  className,
+  iconClassName,
 }: {
   Icon: LucideIcon;
-  color: string;
   label: string;
   value: number;
+  className: string;
+  iconClassName: string;
 }): React.JSX.Element => (
-  <div
-    className="min-w-19 rounded-[11px] border px-3 py-2"
-    style={{ borderColor: `${color}2e`, background: `${color}0f` }}
-  >
-    <div className="flex items-center gap-1.25">
-      <Icon size={10} style={{ color: `${color}c4` }} />
-      <span className="text-micro font-bold tracking-[.11em]" style={{ color: `${color}c4` }}>
-        {label}
-      </span>
-    </div>
-    <div className="mt-0.75 text-[18px] leading-none font-extrabold tabular-nums" style={{ color }}>
+  <div className="flex flex-col-reverse">
+    <dt className="mt-1.5 flex items-center gap-1.5 text-small text-dust">
+      <Icon aria-hidden size={13} className={cn('flex-none', iconClassName)} />
+      {label}
+    </dt>
+    <dd className={cn('font-display text-[34px] leading-none font-bold tabular-nums', className)}>
       {value}
-    </div>
+    </dd>
   </div>
 );

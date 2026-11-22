@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useDeletePendingSession, useDeleteSession } from '../../hooks/sessions';
 import {
   AlertDialog,
@@ -6,6 +7,7 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
+import { buttonSize, liveButtonClass, secondaryButtonClass } from '../shell/controls';
 import type { SessionId } from '../../../../shared/entityIds';
 
 type DeleteSessionDialogProps = {
@@ -59,50 +61,43 @@ export const DeleteSessionDialog = ({
 
   return (
     <AlertDialog open={session !== null} onOpenChange={handleClose}>
-      <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-overlay p-0">
-        <div className="relative overflow-hidden border-b border-border">
-          {/* Mismo lavado de color de cabecera que ModalShell/DeleteGame, en
-              rojo: acción destructiva, la cabecera lo dice de un vistazo. */}
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background: 'linear-gradient(120deg, rgba(255,94,87,.14) 0%, transparent 60%)',
-            }}
-          />
-          <div className="relative flex items-center gap-3 px-5.5 py-5">
-            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
-              <Trash2 size={16} className="text-destructive" />
-            </div>
-            <AlertDialogTitle>Delete session</AlertDialogTitle>
-          </div>
+      <AlertDialogContent className="w-full max-w-[440px] gap-0 overflow-hidden rounded-md border border-line-strong bg-overlay p-0 shadow-modal">
+        <div className="flex items-center gap-3 border-b border-line px-5.5 py-4.5">
+          {/* Icono en Live: acción destructiva, la cabecera lo dice de un
+              vistazo sin teñir el diálogo entero. */}
+          <span className="flex size-9 flex-none items-center justify-center rounded-sm bg-live/12">
+            <Trash2 aria-hidden size={17} className="text-live" />
+          </span>
+          <AlertDialogTitle className="font-display text-title font-bold text-bone">
+            Delete session
+          </AlertDialogTitle>
         </div>
 
         <div className="px-5.5 py-5">
-          <div className="text-[13.5px] leading-relaxed text-bone">
-            This permanently deletes{' '}
-            <span className="font-bold text-foreground">{session?.label}</span> and its tracked
-            time.{' '}
+          <p className="text-body text-bone">
+            This permanently deletes <span className="font-semibold">{session?.label}</span> and its
+            tracked time.{' '}
             {pending
               ? // Una pendiente nunca se asignó a ningún juego, así que borrarla
                 // no cambia horas ni stats de nada — no prometas lo contrario.
                 'It was never assigned to a game, so nothing else changes.'
               : 'Hours and stats will update; the status history stays untouched.'}{' '}
-            This can&apos;t be undone.
-          </div>
+            <span className="text-dust">This can&apos;t be undone.</span>
+          </p>
 
           {del.isError && (
-            <div className="mt-3 text-[12px] text-destructive">
+            <p role="alert" className="mt-3 text-small text-live">
               Couldn&apos;t delete the session — {del.error.message}
-            </div>
+            </p>
           )}
         </div>
 
-        <AlertDialogFooter className="!mx-0 !mb-0 flex-row justify-end gap-2.5 !border-t border-border !bg-transparent px-5.5 py-4">
+        <AlertDialogFooter className="!mx-0 !mb-0 flex-row justify-end gap-2.5 !border-t border-line !bg-transparent px-5.5 py-4">
           <button
             type="button"
             onClick={() => handleClose(false)}
             disabled={del.isPending}
-            className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover"
+            className={cn(secondaryButtonClass, buttonSize.md)}
           >
             Cancel
           </button>
@@ -110,9 +105,9 @@ export const DeleteSessionDialog = ({
             type="button"
             onClick={handleDelete}
             disabled={del.isPending}
-            className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13.5px] font-semibold bg-live text-ink-live transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(liveButtonClass, buttonSize.md)}
           >
-            <Trash2 size={15} />
+            <Trash2 aria-hidden size={15} />
             {del.isPending ? 'Deleting…' : 'Delete session'}
           </button>
         </AlertDialogFooter>

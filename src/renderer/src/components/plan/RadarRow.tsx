@@ -1,8 +1,9 @@
 import { Gamepad2, Radar, Sparkles, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { IgdbSearchResult, RadarGame } from '../../../../shared/types';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { DAY_MS, startOfDayMs } from '../../lib/dateMath';
-import { VIOLET } from '../../lib/colors';
+import { focusRing, iconButtonClass } from '../shell/controls';
 import { ReleaseBadge } from './ReleaseBadge';
 
 // Cuánto tiempo un descubrimiento sigue siendo "nuevo". Una semana: el radar
@@ -22,30 +23,29 @@ type RadarRowProps = {
 // Se parece a una fila del Plan pero NO es una: este juego no está en tu
 // biblioteca ni en tu lista, es una noticia. De ahí las tres diferencias
 // deliberadas — el borde punteado (no es tuyo todavía), "de la saga X" en vez
-// de tus datos de decisión (no hay horas jugadas ni notas que enseñar de algo
-// que no existe), y el gesto de descartar, que una fila tuya no necesita.
+// de tus datos de decisión, y el gesto de descartar.
 export const RadarRow = ({ game, onAdd, onDismiss }: RadarRowProps): React.JSX.Element => {
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
   const isNew =
     (startOfDayMs(new Date()) - startOfDayMs(game.discoveredAt)) / DAY_MS <= NEW_FOR_DAYS;
 
+  const add = (): void =>
+    onAdd({
+      igdbId: game.igdbId,
+      title: game.title,
+      coverUrl: game.coverUrl,
+      releaseYear: game.releaseYear,
+      platforms: [],
+      genres: [],
+      summary: null,
+    });
+
   return (
     <div
-      onClick={() =>
-        onAdd({
-          igdbId: game.igdbId,
-          title: game.title,
-          coverUrl: game.coverUrl,
-          releaseYear: game.releaseYear,
-          platforms: [],
-          genres: [],
-          summary: null,
-        })
-      }
-      className="group relative flex cursor-pointer gap-4 rounded-[15px] border border-dashed p-3.5 transition-[border-color,background-color] duration-150 hover:bg-bone/[0.04]"
-      style={{ borderColor: `${VIOLET}3d`, background: `${VIOLET}08` }}
+      onClick={add}
+      className="group/radar relative flex cursor-pointer items-stretch gap-3.5 rounded-md border border-dashed border-line-strong bg-transparent py-3 pr-3 pl-3.5 transition-[border-color,background-color] duration-150 ease-out hover:border-line-hover hover:bg-panel"
     >
-      <div className="relative h-32 w-24 flex-none overflow-hidden rounded-[10px] border border-line bg-muted shadow-[0_8px_22px_rgba(3,6,7,.45)]">
+      <div className="relative h-24 w-18 flex-none overflow-hidden rounded-sm border border-line bg-raised">
         {coverSrc ? (
           <img
             src={coverSrc}
@@ -55,60 +55,64 @@ export const RadarRow = ({ game, onAdd, onDismiss }: RadarRowProps): React.JSX.E
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Gamepad2 size={22} strokeWidth={1.5} className="text-muted-foreground/40" />
+            <Gamepad2 aria-hidden size={22} strokeWidth={1.5} className="text-dust/50" />
           </div>
         )}
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[14.5px] leading-tight font-extrabold text-foreground">
-              {game.title}
-            </span>
-            {isNew && (
-              <span
-                className="flex flex-none items-center gap-1 rounded-md px-1.5 py-0.5 text-micro font-extrabold tracking-[.08em]"
-                style={{ color: VIOLET, background: `${VIOLET}24` }}
-              >
-                <Sparkles size={9} />
-                NEW
-              </span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              add();
+            }}
+            className={cn(
+              'min-w-0 rounded-xs text-left text-lead font-semibold text-bone hover:underline underline-offset-2',
+              focusRing,
             )}
-          </div>
-          <div className="flex flex-none items-center gap-2">
-            <ReleaseBadge game={game} />
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDismiss();
-              }}
-              title="Not interested — hide this one"
-              aria-label="Dismiss"
-              className="flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-transparent text-muted-foreground/70 opacity-0 transition-[opacity,background-color,border-color] duration-150 group-hover:opacity-100 hover:border-input hover:bg-bone/[0.06] hover:text-foreground focus-visible:opacity-100"
-            >
-              <X size={13} />
-            </button>
-          </div>
+          >
+            {game.title}
+          </button>
+          {isNew && (
+            <span className="flex flex-none items-center gap-1 self-center rounded-sm bg-tube/12 px-1.5 py-px text-micro font-semibold text-tube">
+              <Sparkles aria-hidden size={11} />
+              New
+            </span>
+          )}
+          <ReleaseBadge game={game} />
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span
-            className="inline-flex flex-none items-center gap-1.25 rounded-lg border px-2 py-0.75 text-[11.5px] font-semibold"
-            style={{ color: VIOLET, borderColor: `${VIOLET}3d`, background: `${VIOLET}14` }}
-          >
-            <Radar size={11} className="flex-none" />
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex flex-none items-center gap-1 rounded-sm border border-st-resting/30 bg-st-resting/8 px-1.5 py-0.5 text-micro font-medium text-st-resting">
+            <Radar aria-hidden size={11} className="flex-none" />
             {game.collectionName
               ? `From the ${game.collectionName} series`
               : 'From one of your sagas'}
           </span>
         </div>
 
-        <div className="mt-1.75 text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="mt-1.5 text-small text-dust">
           You don&apos;t have this one — click to add it to your plan or your library.
-        </div>
+        </p>
       </div>
+
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDismiss();
+        }}
+        title="Not interested — hide this one"
+        aria-label="Dismiss"
+        className={cn(
+          iconButtonClass,
+          'size-7.5 self-start opacity-0 group-hover/radar:opacity-100 focus-visible:opacity-100',
+        )}
+      >
+        <X aria-hidden size={15} />
+      </button>
     </div>
   );
 };

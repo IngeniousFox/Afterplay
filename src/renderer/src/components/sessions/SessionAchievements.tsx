@@ -120,7 +120,7 @@ export const SessionAchievements = ({
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
       <span
-        className="flex items-center gap-1 rounded-full px-2 py-0.75 text-micro font-bold tracking-[.02em]"
+        className="flex items-center gap-1 rounded-sm px-1.5 py-px text-micro font-semibold"
         style={{
           color: accent,
           background: `${accent}14`,
@@ -128,16 +128,14 @@ export const SessionAchievements = ({
         }}
         title={sorted.map((entry) => entry.displayName).join(' · ')}
       >
-        <Trophy size={10} className="flex-none" />
+        <Trophy aria-hidden size={11} className="flex-none" />
         {entries.length === 1 ? 'Achievement' : `${entries.length} achievements`}
       </span>
       {shown.map((entry) => (
         <AchievementMiniIcon key={entry.displayName} entry={entry} onOpen={onOpen} />
       ))}
       {hidden > 0 && (
-        <span className="text-micro font-bold text-muted-foreground/60 tabular-nums">
-          +{hidden}
-        </span>
+        <span className="text-micro font-semibold text-dust tabular-nums">+{hidden}</span>
       )}
     </div>
   );

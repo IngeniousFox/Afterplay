@@ -1,13 +1,12 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
 
 type PagerProps = {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
 };
-
-const pagerButtonClass =
-  'flex items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3.5 py-2 text-[13px] font-semibold text-foreground hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-bone/[0.03]';
 
 // Paginador simple (Bloque 5A) — nada que pintar si todo cabe en una sola
 // página. El número de página vive en el propio Sessions.tsx (no aquí):
@@ -16,28 +15,28 @@ export const Pager = ({ page, totalPages, onChange }: PagerProps): React.JSX.Ele
   if (totalPages <= 1) return null;
 
   return (
-    <div className="mt-6.5 flex items-center justify-center gap-4">
+    <nav aria-label="Pages" className="mt-8 flex items-center justify-center gap-4">
       <button
         type="button"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
-        className={pagerButtonClass}
+        className={cn(secondaryButtonClass, buttonSize.md)}
       >
-        <ChevronLeft size={15} />
+        <ChevronLeft aria-hidden size={15} />
         Previous
       </button>
-      <span className="text-[13px] text-muted-foreground tabular-nums">
-        Page {page} of {totalPages}
+      <span className="text-small text-dust tabular-nums" aria-current="page">
+        Page <span className="font-semibold text-bone">{page}</span> of {totalPages}
       </span>
       <button
         type="button"
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
-        className={pagerButtonClass}
+        className={cn(secondaryButtonClass, buttonSize.md)}
       >
         Next
-        <ChevronRight size={15} />
+        <ChevronRight aria-hidden size={15} />
       </button>
-    </div>
+    </nav>
   );
 };

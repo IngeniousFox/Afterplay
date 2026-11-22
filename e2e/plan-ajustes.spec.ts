@@ -117,10 +117,11 @@ test.describe('Plan to play — Up next', () => {
     try {
       await goTo(page, '/plan');
 
-      // Dos secciones reales de la pantalla (PlanToPlay.tsx): "UP NEXT" y,
-      // con al menos un fijado, la cola se rotula "THE REST".
-      const upNextSection = page.locator('section', { hasText: 'UP NEXT' });
-      const queueSection = page.locator('section', { hasText: 'THE REST' });
+      // Dos secciones reales de la pantalla (PlanToPlay.tsx), con su nombre
+      // accesible: "Up next" y, con al menos un fijado, la cola se rotula
+      // "The rest".
+      const upNextSection = page.getByRole('region', { name: 'Up next', exact: true });
+      const queueSection = page.getByRole('region', { name: 'The rest', exact: true });
 
       await expect(upNextSection.getByText('E2E Plan Alpha', { exact: true })).toBeVisible();
       await expect(upNextSection.getByText('E2E Plan Beta', { exact: true })).toBeVisible();
@@ -152,8 +153,8 @@ test.describe('Plan to play — Up next', () => {
     try {
       await goTo(page, '/plan');
 
-      const upNextSection = page.locator('section', { hasText: 'UP NEXT' });
-      const queueSection = page.locator('section', { hasText: 'THE REST' });
+      const upNextSection = page.getByRole('region', { name: 'Up next', exact: true });
+      const queueSection = page.getByRole('region', { name: 'The rest', exact: true });
       // La fila entera de un juego: el único elemento ".group" de PlanRow
       // (mismo hook de Tailwind que usan sus botones fantasma para
       // group-hover) que contiene el título exacto — así el botón de pin, que

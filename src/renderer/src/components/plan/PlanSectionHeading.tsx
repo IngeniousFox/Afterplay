@@ -1,9 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { focusRing } from '../shell/controls';
 
 type PlanSectionHeadingProps = {
   Icon: LucideIcon;
-  color: string;
+  // Clase de color del icono (literal, para que Tailwind la encuentre).
+  iconClassName: string;
   label: string;
   count: number;
   hint?: React.ReactNode;
@@ -15,13 +18,12 @@ type PlanSectionHeadingProps = {
   right?: React.ReactNode;
 };
 
-// Rótulo de cada sección del Plan. Diminuto y con mucho tracking a propósito
-// —el mismo lenguaje que las etiquetas de las cards del detalle (GENRES,
-// DEVELOPER)—: son separadores, no titulares. El H1 de la pantalla es uno
-// solo, y las tres secciones cuelgan de él sin competirle.
+// Rótulo de cada sección del Plan, como las estanterías de Home: título en
+// Lead semibold, recuento y una pista en Dust. El H1 de la pantalla es uno
+// solo y las secciones cuelgan de él con h2.
 export const PlanSectionHeading = ({
   Icon,
-  color,
+  iconClassName,
   label,
   count,
   hint,
@@ -30,42 +32,42 @@ export const PlanSectionHeading = ({
 }: PlanSectionHeadingProps): React.JSX.Element => {
   const content = (
     <>
-      <span
-        className="flex h-6 w-6 flex-none items-center justify-center rounded-lg"
-        style={{ background: `${color}1c`, border: `1px solid ${color}33` }}
-      >
-        <Icon size={12} style={{ color }} />
-      </span>
-      <span className="text-[11px] font-extrabold tracking-[.13em]" style={{ color }}>
-        {label}
-      </span>
-      <span className="text-[11px] font-bold text-muted-foreground/70 tabular-nums">{count}</span>
-      {hint && (
-        <span className="truncate text-[11.5px] font-normal text-muted-foreground/60">{hint}</span>
-      )}
+      <Icon aria-hidden size={15} className={cn('flex-none', iconClassName)} />
+      <span className="text-lead font-semibold text-bone">{label}</span>
+      <span className="text-small font-semibold text-dust tabular-nums">{count}</span>
+      {hint && <span className="min-w-0 text-small text-dust">{hint}</span>}
       {collapsible && (
         <ChevronDown
-          size={13}
-          className="flex-none text-muted-foreground/60 transition-transform duration-200"
-          style={{ transform: collapsible.open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          aria-hidden
+          size={15}
+          className={cn(
+            'flex-none text-dust transition-transform duration-200 ease-out',
+            collapsible.open && 'rotate-180',
+          )}
         />
       )}
     </>
   );
 
   return (
-    <div className="mb-2.5 flex items-center justify-between gap-4">
-      {collapsible ? (
-        <button
-          type="button"
-          onClick={collapsible.onToggle}
-          className="flex min-w-0 items-center gap-2 rounded-lg py-0.5 text-left"
-        >
-          {content}
-        </button>
-      ) : (
-        <div className="flex min-w-0 items-center gap-2">{content}</div>
-      )}
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <h2 className="min-w-0">
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={collapsible.onToggle}
+            aria-expanded={collapsible.open}
+            className={cn(
+              'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-sm py-0.5 text-left',
+              focusRing,
+            )}
+          >
+            {content}
+          </button>
+        ) : (
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">{content}</span>
+        )}
+      </h2>
       {right}
     </div>
   );

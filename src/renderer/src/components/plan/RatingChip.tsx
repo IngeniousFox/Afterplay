@@ -10,16 +10,10 @@ type RatingChipProps = {
   title: string;
 };
 
-// Chip de nota para las filas del Plan. Deliberadamente MÁS PEQUEÑO y más
-// denso que los tiles de la RatingsCard de la ficha: allí es EL dato de la
-// pantalla y ocupa un tercio de la card; aquí son tres números que tienen que
-// poder compararse de un vistazo entre veinte filas sin robarle el sitio al
-// título ni a la nota de por qué planeaste el juego.
-//
-// El número va gordo y la fuente en un icono diminuto de su color, no en
-// texto: escrito ("88 CRITICS") triplica el ancho del chip y en una fila
-// estrecha eso significa que el tercero ya no cabe. El title del hover dice
-// la fuente y la muestra completas para quien las quiera.
+// Chip de nota para las filas del Plan. Pequeño y denso a propósito: son tres
+// números que tienen que poder compararse de un vistazo entre veinte filas sin
+// robarle el sitio al título ni a la nota de por qué planeaste el juego. La
+// fuente va en un icono de su color y entera en el title del hover.
 export const RatingChip = ({
   Icon,
   color,
@@ -29,10 +23,10 @@ export const RatingChip = ({
 }: RatingChipProps): React.JSX.Element => (
   <span
     title={title}
-    className="inline-flex flex-none items-center gap-1 rounded-lg border px-1.75 py-0.75 text-[11.5px] font-extrabold tabular-nums"
-    style={{ color, borderColor: `${color}3d`, background: `${color}14` }}
+    className="inline-flex flex-none items-center gap-1 rounded-sm border px-1.5 py-0.5 text-micro font-semibold tabular-nums"
+    style={{ color, borderColor: `${color}40`, background: `${color}12` }}
   >
-    <Icon size={11} className="flex-none" />
+    <Icon aria-hidden size={11} className="flex-none" />
     {value}
     {suffix}
   </span>
