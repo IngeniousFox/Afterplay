@@ -22,19 +22,16 @@ import { landingError } from './scroll';
 // base), así que si algún día cambia el seed este test cambia solo con él
 // en vez de quedarse mintiendo con un número viejo.
 
-// El valor de una MetricCard (label.tsx) a partir de su etiqueta: la
-// etiqueta vive en el div "cabecera" (icono + texto) de la card, y el
-// número es el SIGUIENTE div hermano de esa cabecera — estructura fija de
-// components/library/detail/MetricsRow.tsx, no depende de ninguna clase de
-// Tailwind que pueda cambiar con un retoque visual.
+// El valor de una cifra del hero de Stats a partir de su rótulo: cada
+// .afterplay-stats-metric es rótulo (primer hijo) y valor (segundo hijo),
+// el contrato que también usan las comparaciones por año. No depende de
+// ninguna clase de Tailwind que pueda cambiar con un retoque visual.
 const readMetricValue = (page: Page, label: string): Promise<string | null> =>
   page.evaluate((needle) => {
-    const isLeaf = (element: Element): boolean => element.children.length === 0;
-    const labelSpan = Array.from(document.querySelectorAll('span')).find(
-      (span) => isLeaf(span) && span.textContent?.trim() === needle,
+    const metric = Array.from(document.querySelectorAll('.afterplay-stats-metric')).find(
+      (element) => element.children[0]?.textContent?.trim() === needle,
     );
-    const header = labelSpan?.parentElement ?? null;
-    return header?.nextElementSibling?.textContent?.trim() ?? null;
+    return metric?.children[1]?.textContent?.trim() ?? null;
   }, label);
 
 type BacklogDebtSnapshot = {
@@ -79,10 +76,10 @@ test.describe('Stats — cifras derivadas', () => {
     // valor final — expect.poll reintenta hasta que lo hace, en vez de un
     // sleep a ciegas.
     await expect
-      .poll(() => readMetricValue(window, 'GAMES TRACKED'), { timeout: 5_000 })
+      .poll(() => readMetricValue(window, 'Games tracked'), { timeout: 5_000 })
       .toBe(expectedGames);
     await expect
-      .poll(() => readMetricValue(window, 'TOTAL PLAYTIME'), { timeout: 5_000 })
+      .poll(() => readMetricValue(window, 'Total playtime'), { timeout: 5_000 })
       .toBe(expectedHours);
   });
 

@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { StateEventSummary } from '../../../../shared/types';
 import { monthKey } from '../../lib/dateMath';
 import { floatingPanelClass } from '../../lib/styles';
-import { StatCard } from './StatCard';
+import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
 
@@ -28,16 +28,18 @@ type BacklogFlowChartProps = {
   year: Year;
 };
 
-const LIBRARY_COLOR = '#ffb347';
-const PLAN_COLOR = '#5fd3e0';
-const COMPLETED_COLOR = '#ffb347';
+// Tres series (stats-pace.png): altas en Phosphor, Plan en Tube y
+// completados en el verde del estado Beaten.
+const LIBRARY_COLOR = 'var(--color-phosphor)';
+const PLAN_COLOR = 'var(--color-tube)';
+const COMPLETED_COLOR = 'var(--color-st-beaten)';
 
 const INITIAL_WIDTH = 720;
-const HEIGHT = 246;
-const PAD_LEFT = 116;
+const HEIGHT = 258;
+const PAD_LEFT = 128;
 const PAD_RIGHT = 18;
 const PAD_TOP = 12;
-const LANE_HEIGHT = 56;
+const LANE_HEIGHT = 60;
 const LANE_GAP = 15;
 
 const LINES: FlowLine[] = [
@@ -201,54 +203,44 @@ export const BacklogFlowChart = ({
 
   return (
     <StatCard className="afterplay-backlog-flow-card">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-[14px] font-bold text-foreground">Backlog flow</div>
-            <span
-              className={cn(
-                'afterplay-backlog-scale-note py-[3px] px-1.5 rounded-[99px] text-[11px] font-extrabold tracking-[0.09em]',
-                'leading-none border border-[rgba(95,211,224,0.16)] bg-[rgba(95,211,224,0.06)]',
-                'text-[color:rgba(178,199,234,0.78)]',
-              )}
-            >
-              OWN SCALE · EACH LANE
-            </span>
-          </div>
-          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-            Recorded growth without one total flattening the others
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <ChartHeading
+            title="Backlog flow"
+            subtitle={
+              <span className="afterplay-backlog-scale-note rounded-sm border border-line-strong px-1.5 py-0.5 text-micro text-dust">
+                Own scale · each lane
+              </span>
+            }
+          />
+          <div className="mt-1 text-small text-dust">
+            Games entering and leaving, recorded growth without one total flattening the others
           </div>
         </div>
         {last && (
-          <div className="afterplay-backlog-flow-legend flex items-stretch gap-[7px]">
+          <div className="afterplay-backlog-flow-legend flex items-stretch gap-5">
             {LINES.map((line) => {
               const isDimmed = activeSeries !== null && activeSeries !== line.key;
               return (
                 <div
                   key={line.key}
                   className={cn(
-                    'afterplay-backlog-flow-stat flex min-w-18.5 items-center gap-[7px] py-1.5 px-2 rounded-[8px] border',
-                    'border-line bg-bone/[0.018]',
-                    '[transition:opacity_180ms_ease,border-color_180ms_ease,background-color_180ms_ease,transform_220ms_cubic-bezier(0.22,1,0.36,1)]',
-                    'hover:border-line-strong hover:bg-bone/[0.035] hover:[transform:translateY(-1px)]',
-                    'motion-reduce:animate-none motion-reduce:transition-none',
+                    'afterplay-backlog-flow-stat flex items-center gap-2 rounded-sm px-1.5 py-1',
+                    'transition-[opacity,background-color] duration-150 hover:bg-raised motion-reduce:transition-none',
                   )}
                   style={{ opacity: isDimmed ? 0.38 : 1 }}
                   onMouseEnter={() => setActiveSeries(line.key)}
                   onMouseLeave={() => setActiveSeries(null)}
                 >
                   <span
-                    className="w-1.5 h-5.5 flex-none rounded-[99px] opacity-80"
+                    className="h-0.5 w-4 flex-none rounded-full"
                     style={{ background: line.color }}
                   />
                   <div>
-                    <small className="block leading-[1] text-muted-foreground text-[11px] whitespace-nowrap">
+                    <small className="block text-micro whitespace-nowrap text-dust">
                       {line.label}
                     </small>
-                    <strong
-                      className="block leading-[1] mt-1 text-[13px] font-black"
-                      style={{ color: line.color }}
-                    >
+                    <strong className="block font-display text-[22px] leading-none font-bold text-bone tabular-nums">
                       {line.valueOf(last)}
                     </strong>
                   </div>
@@ -264,9 +256,7 @@ export const BacklogFlowChart = ({
       ) : (
         <div
           className={cn(
-            'afterplay-backlog-chart-shell relative mt-4 overflow-hidden pt-[7px] px-2 pb-0.5 rounded-[12px] border',
-            'border-line',
-            '[background:radial-gradient(circle_at_82%_0%,rgba(255,179,71,0.045),transparent_31%),rgba(3,6,7,0.08)]',
+            'afterplay-backlog-chart-shell relative mt-4 overflow-hidden px-1 pt-2 pb-0.5',
           )}
           onMouseLeave={() => {
             setHoveredIndex(null);
@@ -290,8 +280,8 @@ export const BacklogFlowChart = ({
                   y1="0"
                   y2="1"
                 >
-                  <stop offset="0%" stopColor={line.color} stopOpacity={0.26} />
-                  <stop offset="100%" stopColor={line.color} stopOpacity={0.015} />
+                  <stop offset="0%" stopColor={line.color} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={line.color} stopOpacity={0.01} />
                 </linearGradient>
               ))}
               <filter id="afterplay-flow-glow" x="-30%" y="-30%" width="160%" height="160%">
@@ -316,39 +306,26 @@ export const BacklogFlowChart = ({
                     y={top}
                     width={innerWidth}
                     height={LANE_HEIGHT}
-                    rx={9}
-                    fill="rgba(233,228,216,.013)"
-                    stroke="rgba(233,228,216,.045)"
+                    rx={2}
+                    fill="var(--color-inset)"
+                    fillOpacity={0.5}
+                    stroke="var(--color-line)"
                   />
                   <line
                     x1={PAD_LEFT}
                     x2={WIDTH - PAD_RIGHT}
                     y1={yAt(lineIndex, total / 2, total)}
                     y2={yAt(lineIndex, total / 2, total)}
-                    stroke="rgba(233,228,216,.045)"
+                    stroke="var(--color-line)"
                     strokeDasharray="2 5"
                   />
 
-                  <text
-                    x={5}
-                    y={top + 20}
-                    fill={line.color}
-                    fontSize={11}
-                    fontWeight={800}
-                    fontFamily="-apple-system,sans-serif"
-                  >
+                  <text x={5} y={top + 20} fill="var(--color-bone)" fontSize={13} fontWeight={600}>
                     {line.label}
                   </text>
-                  <text
-                    x={5}
-                    y={top + 37}
-                    fill="var(--muted-foreground)"
-                    opacity={0.7}
-                    fontSize={11}
-                    fontFamily="-apple-system,sans-serif"
-                  >
+                  <text x={5} y={top + 37} fill="var(--color-dust)" fontSize={12.5}>
                     {line.context.split('\n').map((part, index) => (
-                      <tspan key={part} x={5} dy={index === 0 ? 0 : 13}>
+                      <tspan key={part} x={5} dy={index === 0 ? 0 : 15}>
                         {part}
                       </tspan>
                     ))}
@@ -405,10 +382,9 @@ export const BacklogFlowChart = ({
                         x={batchX + (batchOnRight ? -7 : 7)}
                         y={baseline - 7}
                         fill={line.color}
-                        fontSize={11}
-                        fontWeight={800}
+                        fontSize={12.5}
+                        fontWeight={600}
                         textAnchor={batchOnRight ? 'end' : 'start'}
-                        fontFamily="-apple-system,sans-serif"
                       >
                         +{bulkAdd.value} bulk add
                       </text>
@@ -425,9 +401,9 @@ export const BacklogFlowChart = ({
                   <circle
                     cx={xAt(points.length - 1)}
                     cy={yAt(lineIndex, total, total)}
-                    r={3}
+                    r={3.5}
                     fill={line.color}
-                    stroke="#171d20"
+                    stroke="var(--color-panel)"
                     strokeWidth={1.5}
                   />
                 </g>
@@ -439,10 +415,9 @@ export const BacklogFlowChart = ({
                 key={`label-${points[index].key}`}
                 x={xAt(index)}
                 y={HEIGHT - 7}
-                fill="var(--muted-foreground)"
-                fontSize={11}
+                fill="var(--color-dust)"
+                fontSize={12.5}
                 textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}
-                fontFamily="-apple-system,sans-serif"
               >
                 {monthLabel(points[index].key)}
               </text>
@@ -455,7 +430,7 @@ export const BacklogFlowChart = ({
                   x2={xAt(hoveredIndex)}
                   y1={PAD_TOP}
                   y2={laneBaseline(LINES.length - 1)}
-                  stroke="rgba(233,228,216,.24)"
+                  stroke="var(--color-line-hover)"
                   strokeWidth={1}
                   strokeDasharray="3 4"
                 />
@@ -467,7 +442,7 @@ export const BacklogFlowChart = ({
                       cx={xAt(hoveredIndex)}
                       cy={yAt(lineIndex, line.valueOf(points[hoveredIndex]), total)}
                       r={3.5}
-                      fill="#171d20"
+                      fill="var(--color-panel)"
                       stroke={line.color}
                       strokeWidth={2}
                     />
@@ -497,15 +472,15 @@ export const BacklogFlowChart = ({
           {hoveredIndex !== null && points[hoveredIndex] && (
             <div
               className={cn(
-                'afterplay-backlog-tooltip pointer-events-none absolute top-2 z-10 w-48 rounded-[10px] border',
-                '[box-shadow:0_14px_34px_rgba(3,6,7,0.42)] animate-[afterplay-fade-in_130ms_ease-out]',
+                'afterplay-backlog-tooltip pointer-events-none absolute top-2 z-10 w-48 rounded-md border',
+                'animate-[afterplay-fade-in_130ms_ease-out]',
                 'motion-reduce:animate-none motion-reduce:transition-none',
                 floatingPanelClass,
-                'px-3 py-2.5 text-[11px]',
+                'px-3 py-2.5 text-micro',
               )}
               style={{ left: `${hoverPercent}%`, transform: tooltipTransform }}
             >
-              <div className="mb-1.5 font-bold text-foreground">
+              <div className="mb-1.5 font-semibold text-bone">
                 {monthLabel(points[hoveredIndex].key)}
               </div>
               {LINES.map((line) => {
@@ -514,7 +489,7 @@ export const BacklogFlowChart = ({
                 const progress = total > 0 ? Math.round((value / total) * 100) : 0;
                 return (
                   <div key={line.key} className="flex items-center justify-between gap-4 py-0.25">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-dust">
                       <i className="h-1.5 w-1.5 rounded-full" style={{ background: line.color }} />
                       {line.shortLabel}
                     </span>

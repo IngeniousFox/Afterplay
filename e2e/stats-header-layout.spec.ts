@@ -50,7 +50,7 @@ test('the top bar meets the title bar on each desktop view and after fullscreen'
   });
 });
 
-test('year comparisons sit under their matching totals, before archive records', async ({}, testInfo) => {
+test('year comparisons sit under their matching totals, inside the hero', async ({}, testInfo) => {
   const launched = await launchAfterplay({
     games: [
       {
@@ -75,7 +75,6 @@ test('year comparisons sit under their matching totals, before archive records',
     await goTo(window, '/stats');
     await expect(window.locator('.afterplay-stats-hero')).toBeVisible();
     await expect(window.locator('[data-year-comparison]')).toHaveCount(0);
-    await window.getByRole('button', { name: 'All Time', exact: true }).click();
     await window.getByRole('button', { name: '2026', exact: true }).click();
     await expect(window.locator('[data-year-comparison]')).toHaveCount(4);
     await expect(window.locator('[data-year-comparison="totalGames"]')).toContainText(
@@ -85,7 +84,7 @@ test('year comparisons sit under their matching totals, before archive records',
       '5h more than 2025',
     );
     await expect(
-      window.locator('.afterplay-stats-metric').nth(1).locator(':scope > div').nth(1),
+      window.locator('.afterplay-stats-metric').nth(0).locator(':scope > div').nth(1),
     ).toHaveText('7h');
     for (const width of [1060, 1400]) {
       await app.evaluate(({ BrowserWindow }, size) => {
@@ -96,21 +95,21 @@ test('year comparisons sit under their matching totals, before archive records',
       await window.waitForFunction((size) => globalThis.innerWidth === size, width);
       const problems = await window.locator('[data-year-comparison]').evaluateAll((elements) => {
         const labels: Record<string, string> = {
-          totalGames: 'GAMES PLAYED',
-          totalHours: 'TOTAL PLAYTIME',
-          totalSpent: 'SPENT IN 2026',
-          costPerHour: 'AVG COST / HOUR',
+          totalGames: 'Games played',
+          totalHours: 'Total playtime',
+          totalSpent: 'Spent in 2026',
+          costPerHour: 'Average cost per hour',
         };
-        const recordsTop = document
-          .querySelector('.afterplay-stats-record-deck')!
-          .getBoundingClientRect().top;
+        const heroBottom = document
+          .querySelector('.afterplay-stats-hero')!
+          .getBoundingClientRect().bottom;
         return elements.flatMap((comparison) => {
           const metric = comparison.closest('.afterplay-stats-metric');
           const key = (comparison as HTMLElement).dataset.yearComparison!;
           const text = comparison.querySelector('span')!;
           const box = comparison.getBoundingClientRect();
           return !metric?.textContent?.includes(labels[key]) ||
-            box.bottom > recordsTop ||
+            box.bottom > heroBottom ||
             text.scrollWidth > text.clientWidth + 1
             ? [key]
             : [];
@@ -122,7 +121,6 @@ test('year comparisons sit under their matching totals, before archive records',
         animations: 'disabled',
       });
     }
-    await window.getByRole('button', { name: '2026', exact: true }).click();
     await window.getByRole('button', { name: '2025', exact: true }).click();
     await expect(window.locator('[data-year-comparison]')).toHaveCount(0);
   } finally {

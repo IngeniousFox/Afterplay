@@ -1,6 +1,4 @@
-import { CalendarRange } from 'lucide-react';
 import { useMemo } from 'react';
-import { GREEN } from '../../lib/colors';
 import { monthKey, twelveMonthWindow } from '../../lib/dateMath';
 import { formatHours } from '../../lib/format';
 import { secondsByMonthOf, type SessionStats } from '../../../../shared/domain/sessionStats';
@@ -33,7 +31,6 @@ export const HoursByMonthChart = ({ stats, year }: HoursByMonthChartProps): Reac
     <CategoryBarChart
       title="Hours per month"
       subtitle="Your recent rhythm"
-      Icon={CalendarRange}
       headerRight={() => (
         <>
           <strong>{formatHours(totalSeconds / 3600)}</strong>
@@ -42,9 +39,6 @@ export const HoursByMonthChart = ({ stats, year }: HoursByMonthChartProps): Reac
       )}
       bars={bars}
       formatValue={(seconds) => formatHours(seconds / 3600)}
-      barGradient="linear-gradient(180deg,var(--ac),var(--ac2))"
-      labelColor={GREEN}
-      glowColor="rgba(255,179,71,.18)"
     />
   );
 };

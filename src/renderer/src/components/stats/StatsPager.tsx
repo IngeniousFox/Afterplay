@@ -9,7 +9,7 @@ type StatsPagerProps = {
 };
 
 const pagerButtonClass =
-  'flex h-5.5 w-5.5 items-center justify-center rounded-[6px] border border-line-strong bg-raised text-muted-foreground hover:text-foreground disabled:opacity-35 disabled:hover:text-muted-foreground';
+  'flex h-7 w-7 items-center justify-center rounded-sm border border-line-strong bg-raised text-dust transition-colors hover:border-line-hover hover:text-bone focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:opacity-40 disabled:hover:text-dust';
 
 // Flechas + contador de página — compartido por CompletedGallery y
 // HltbCompareList (mismo pagerButtonClass, mismo layout). Se pinta a sí
@@ -35,7 +35,7 @@ export const StatsPager = ({
       >
         <ChevronLeft size={13} />
       </button>
-      <span className="text-[11px] text-muted-foreground tabular-nums">
+      <span className="text-micro text-dust tabular-nums">
         {currentPage + 1}/{totalPages}
       </span>
       <button

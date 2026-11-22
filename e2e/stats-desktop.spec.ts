@@ -10,11 +10,12 @@ test.describe('Stats de escritorio', () => {
     await goTo(window, '/stats');
 
     await expect(window.locator('.afterplay-stats-hero')).toBeVisible();
-    await expect(window.getByText('ALL TIME // ARCHIVE')).toBeVisible();
+    await expect(window.getByText('All time, every year you have logged')).toBeVisible();
     await expect(window.getByRole('heading', { name: 'How the time moved' })).toBeVisible();
     await expect(window.getByRole('heading', { name: 'The games that defined it' })).toBeVisible();
-    await expect(window.getByText('GAMES TRACKED')).toBeVisible();
-    await expect(window.getByText('TOTAL PLAYTIME')).toBeVisible();
+    await expect(window.getByText('Games tracked', { exact: true })).toBeVisible();
+    await expect(window.getByText('Average cost per hour', { exact: true })).toBeVisible();
+    await expect(window.getByText('Total playtime', { exact: true })).toBeAttached();
     await expect(window.getByRole('navigation', { name: 'Stats chapters' })).toHaveCount(0);
 
     const records = window.getByRole('region', { name: 'Archive records' });
@@ -57,7 +58,7 @@ test.describe('Stats de escritorio', () => {
       fullPage: false,
     });
 
-    const genre = window.getByText('Genre Spread', { exact: true });
+    const genre = window.getByText('Genre spread', { exact: true });
     await genre.evaluate((element) => element.scrollIntoView({ block: 'center' }));
     await expect(genre).toBeInViewport();
     await expect(window.locator('.afterplay-genre-row')).toHaveCount(6);
@@ -112,7 +113,7 @@ test.describe('Stats de escritorio', () => {
     const debt = window.locator('.afterplay-debt-card');
     await debt.scrollIntoViewIfNeeded();
     await expect(debt).toBeInViewport();
-    await expect(window.getByText('PACE FORECAST')).toBeVisible();
+    await expect(window.getByText('Pace forecast', { exact: true })).toBeVisible();
     await window.waitForTimeout(450);
     await debt.screenshot({ path: testInfo.outputPath('stats-redesign-debt.png') });
 
@@ -127,35 +128,39 @@ test.describe('Stats de escritorio', () => {
     await age.screenshot({ path: testInfo.outputPath('stats-redesign-game-age.png') });
   });
 
-  test('los números de capítulo no invaden los títulos', async ({ afterplay }) => {
+  // Fósforo quitó la numeración de los capítulos: título en Big Shoulders y
+  // descripción al lado, en una sola línea cuando cabe.
+  test('los capítulos llevan título y descripción sin numeración', async ({ afterplay }) => {
     const { window } = afterplay;
     await goTo(window, '/stats');
 
     const headings = window.locator('.afterplay-stats-chapter-heading');
     await expect(headings).toHaveCount(5);
-    const collisions = await headings.evaluateAll((elements) =>
+    await expect(window.locator('.afterplay-stats-chapter-number')).toHaveCount(0);
+    const overlaps = await headings.evaluateAll((elements) =>
       elements.flatMap((element, index) => {
-        const number = element.querySelector('.afterplay-stats-chapter-number');
         const title = element.querySelector('h2');
-        if (!number || !title) return [`chapter ${index + 1}: missing geometry`];
-        const numberBox = number.getBoundingClientRect();
+        const description = element.querySelector('p');
+        if (!title || !description) return [`chapter ${index + 1}: missing geometry`];
         const titleBox = title.getBoundingClientRect();
-        return numberBox.right <= titleBox.left ? [] : [`chapter ${index + 1}: overlap`];
+        const descriptionBox = description.getBoundingClientRect();
+        const sameLine = descriptionBox.top < titleBox.bottom;
+        return !sameLine || titleBox.right <= descriptionBox.left
+          ? []
+          : [`chapter ${index + 1}: overlap`];
       }),
     );
-    expect(collisions).toEqual([]);
+    expect(overlaps).toEqual([]);
 
     await headings.last().evaluate((element) => element.scrollIntoView({ block: 'start' }));
-    await expect(
-      window.getByRole('heading', { name: 'What entered, what left, what waits' }),
-    ).toBeInViewport();
+    // El último capítulo (la vitrina) queda bajo la cabecera fija, no tapado.
+    await expect(window.getByRole('heading', { name: 'The cabinet' })).toBeInViewport();
   });
 
   test('el movimiento anual comparte el nuevo lenguaje visual', async ({ afterplay }, testInfo) => {
     const { window } = afterplay;
     await goTo(window, '/stats');
 
-    await window.getByRole('button', { name: 'All Time', exact: true }).click();
     await window.getByRole('button', { name: '2026', exact: true }).click();
 
     const movement = window.locator('.afterplay-movement-card');
@@ -222,7 +227,7 @@ test.describe('Stats de escritorio', () => {
 
       const longSessions = sessionLength.getByRole('group', { name: /2–4h, 4 sessions/ });
       await longSessions.hover();
-      await expect(sessionLength.locator('.afterplay-session-focus')).toContainText('INSPECTING');
+      await expect(sessionLength.locator('.afterplay-session-focus')).toContainText('Inspecting');
       await expect(sessionLength.locator('.afterplay-session-focus')).toContainText('2–4h');
       await expect(longSessions).toHaveClass(/is-active/);
 
@@ -323,7 +328,7 @@ test.describe('Stats de escritorio', () => {
       await backlog.scrollIntoViewIfNeeded();
       await expect(backlog).toBeInViewport();
 
-      await expect(window.getByText('OWN SCALE · EACH LANE')).toBeVisible();
+      await expect(window.getByText('Own scale · each lane')).toBeVisible();
       await expect(window.locator('[data-flow-lane]')).toHaveCount(3);
       await expect(window.getByText('+34 bulk add')).toBeVisible();
       await expect(window.getByText('+67 bulk add')).toBeVisible();

@@ -1,6 +1,5 @@
 import { cn } from '../../lib/utils';
 import { useMemo, useState } from 'react';
-import { AMBER } from '../../lib/colors';
 import { formatHours, pluralize } from '../../lib/format';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
@@ -33,33 +32,33 @@ const BUCKETS: Bucket[] = [
   {
     key: 'new',
     label: 'New releases',
-    shortLabel: 'NEW',
+    shortLabel: 'new',
     description: (referenceYear) => `released in ${referenceYear}`,
-    color: '#ffb347',
+    color: 'var(--color-phosphor)',
     matches: (age) => age <= 0,
   },
   {
     key: 'recent',
     label: '1–5 years',
-    shortLabel: 'RECENT',
+    shortLabel: 'recent',
     description: () => '1 to 5 years old',
-    color: '#5fd3e0',
+    color: 'color-mix(in srgb, var(--color-phosphor) 74%, var(--color-panel))',
     matches: (age) => age >= 1 && age <= 5,
   },
   {
     key: 'modern',
     label: '5–10 years',
-    shortLabel: 'MODERN',
+    shortLabel: 'modern',
     description: () => '5 to 10 years old',
-    color: AMBER,
+    color: 'color-mix(in srgb, var(--color-phosphor) 52%, var(--color-panel))',
     matches: (age) => age > 5 && age <= 10,
   },
   {
     key: 'classic',
     label: '10+ years',
-    shortLabel: 'CLASSIC',
+    shortLabel: 'classic',
     description: () => 'over 10 years old',
-    color: '#b9a6ff',
+    color: 'color-mix(in srgb, var(--color-phosphor) 32%, var(--color-panel))',
     matches: (age) => age > 10,
   },
 ];
@@ -112,123 +111,70 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
   const visibleSlices = slices.filter((slice) => slice.fraction > 0);
 
   return (
-    <StatCard className="afterplay-age-card relative overflow-hidden [background:radial-gradient(circle_at_18%_115%,_rgba(185,_166,_255,_0.08),_transparent_31%),_var(--card)]">
+    <StatCard className="afterplay-age-card relative flex h-full flex-col overflow-hidden">
       <div
-        className={cn(
-          'afterplay-age-accent relative',
-          "[&::before]:content-[''] [&::before]:absolute [&::before]:-top-40 [&::before]:-left-32.5 [&::before]:w-105",
-          '[&::before]:h-105 [&::before]:rounded-[50%] [&::before]:pointer-events-none',
-          '[&::before]:[background:var(--age-accent)] [&::before]:opacity-[0.055] [&::before]:[filter:blur(55px)]',
-          '[&::before]:[transition:background-color_320ms_ease]',
-        )}
+        className="afterplay-age-accent relative flex flex-1 flex-col"
         style={{ '--age-accent': active.color } as React.CSSProperties}
       >
-        <div className="afterplay-age-header flex items-start justify-between gap-4 relative z-1">
+        <div className="afterplay-age-header flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <div>
-            <div className="text-[14px] font-bold text-foreground">Playtime by game age</div>
-            <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-              Where your time lands across generations
+            <div className="text-[16px] leading-tight font-semibold text-bone">
+              Playtime by game age
             </div>
+            <div className="text-small text-dust">Age when you played it</div>
           </div>
           {totalHours > 0 && (
-            <div
-              className={cn(
-                'afterplay-age-total grid grid-cols-[auto_auto] gap-y-0.5 gap-x-2 min-w-29.5 py-[7px] px-[9px] rounded-[9px]',
-                '[border:1px_solid_rgba(233,_228,_216,_0.065)] [background:rgba(233,_228,_216,_0.018)]',
-              )}
-            >
-              <span className="text-dust text-micro font-black tracking-[0.12em] uppercase col-[1/3]">
-                DATED PLAYTIME
-              </span>
-              <strong className="text-foreground text-[12px] font-[850]">
+            <div className="afterplay-age-total text-right">
+              <span className="block text-micro text-dust">Dated playtime</span>
+              <strong className="mr-1 font-display text-[20px] leading-none font-bold text-bone tabular-nums">
                 {formatHours(totalHours)}
               </strong>
-              <small className="[align-self:end] text-muted-foreground text-[11px] text-right">
-                across {pluralize(datedCount, 'game')}
-              </small>
+              <small className="text-micro text-dust">across {pluralize(datedCount, 'game')}</small>
             </div>
           )}
         </div>
 
         {totalHours <= 0 ? (
-          <StatCardEmpty>Nothing tracked yet.</StatCardEmpty>
+          <div className="mt-4">
+            <StatCardEmpty>Nothing tracked yet.</StatCardEmpty>
+          </div>
         ) : (
-          <div
-            className={cn(
-              'afterplay-age-stage relative z-1 grid grid-cols-[minmax(250px,_0.72fr)_minmax(0,_1.65fr)] gap-7 items-center',
-              'mt-2',
-              '[@media(max-width:_1040px)]:grid-cols-1 [@media(max-width:_1040px)]:gap-3',
-            )}
-          >
-            <div className="afterplay-age-orbit-wrap relative w-59 h-59 my-0 mx-auto">
-              <div
-                className={cn(
-                  'afterplay-age-orbit-glow absolute [inset:38px] rounded-[50%] [background:var(--age-accent)] opacity-[0.075]',
-                  '[filter:blur(25px)] [transition:background-color_320ms_ease]',
-                )}
-              />
-              <svg
-                className={cn(
-                  'afterplay-age-orbit relative z-1 block overflow-visible origin-center',
-                  'animate-[afterplay-age-orbit-in_720ms_cubic-bezier(0.22,_1,_0.36,_1)_backwards]',
-                  'motion-reduce:animate-none motion-reduce:transition-none',
-                )}
-                width={SIZE}
-                height={SIZE}
-                viewBox={`0 0 ${SIZE} ${SIZE}`}
-                role="img"
-                aria-label={`Game age distribution. ${active.label}: ${activePercent}%`}
-              >
-                <defs>
-                  <filter id="afterplay-age-glow" x="-30%" y="-30%" width="160%" height="160%">
-                    <feGaussianBlur stdDeviation="3.2" />
-                  </filter>
-                </defs>
-                <circle
-                  cx={CENTER}
-                  cy={CENTER}
-                  r={105}
-                  fill="none"
-                  stroke="rgba(233,228,216,.12)"
-                  strokeWidth={1}
-                  strokeDasharray="1 7"
-                  strokeLinecap="round"
-                />
-                <circle
-                  cx={CENTER}
-                  cy={CENTER}
-                  r={RADIUS}
-                  fill="none"
-                  stroke="rgba(233,228,216,.045)"
-                  strokeWidth={STROKE}
-                />
-                <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
-                  {visibleSlices.map((slice) => {
-                    const isActive = slice.key === active.key;
-                    // Flat ends stay inside each sector, including very small shares.
-                    // A single era fills the entire ring without an artificial seam.
-                    const sectorLength = slice.fraction * CIRCUMFERENCE;
-                    const gap =
-                      visibleSlices.length === 1 ? 0 : Math.min(SLICE_GAP, sectorLength / 4);
-                    const visibleLength = sectorLength - gap;
-                    const dashOffset = -(slice.offset * CIRCUMFERENCE + gap / 2);
-                    return (
-                      <g key={slice.key}>
-                        {isActive && (
-                          <circle
-                            cx={CENTER}
-                            cy={CENTER}
-                            r={RADIUS}
-                            fill="none"
-                            stroke={slice.color}
-                            strokeWidth={STROKE + 9}
-                            strokeDasharray={`${visibleLength} ${CIRCUMFERENCE}`}
-                            strokeDashoffset={dashOffset}
-                            opacity={0.2}
-                            filter="url(#afterplay-age-glow)"
-                          />
-                        )}
+          <div className="afterplay-age-stage mt-3 flex flex-1 flex-col">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="afterplay-age-orbit-wrap relative mx-auto size-59 flex-none">
+                <svg
+                  className={cn(
+                    'afterplay-age-orbit relative z-1 block origin-center overflow-visible',
+                    'animate-[afterplay-age-orbit-in_600ms_var(--ease-out)_backwards]',
+                    'motion-reduce:animate-none',
+                  )}
+                  width={SIZE}
+                  height={SIZE}
+                  viewBox={`0 0 ${SIZE} ${SIZE}`}
+                  role="img"
+                  aria-label={`Game age distribution. ${active.label}: ${activePercent}%`}
+                >
+                  <circle
+                    cx={CENTER}
+                    cy={CENTER}
+                    r={RADIUS}
+                    fill="none"
+                    stroke="var(--color-raised)"
+                    strokeWidth={STROKE}
+                  />
+                  <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
+                    {visibleSlices.map((slice) => {
+                      const isActive = slice.key === active.key;
+                      // Flat ends stay inside each sector, including very small shares.
+                      // A single era fills the entire ring without an artificial seam.
+                      const sectorLength = slice.fraction * CIRCUMFERENCE;
+                      const gap =
+                        visibleSlices.length === 1 ? 0 : Math.min(SLICE_GAP, sectorLength / 4);
+                      const visibleLength = sectorLength - gap;
+                      const dashOffset = -(slice.offset * CIRCUMFERENCE + gap / 2);
+                      return (
                         <circle
+                          key={slice.key}
                           cx={CENTER}
                           cy={CENTER}
                           r={RADIUS}
@@ -238,83 +184,30 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                           strokeDasharray={`${visibleLength} ${CIRCUMFERENCE}`}
                           strokeDashoffset={dashOffset}
                           strokeLinecap="butt"
-                          opacity={isActive ? 1 : 0.42}
                           className={cn(
                             'afterplay-age-slice cursor-pointer',
-                            '[transition:opacity_220ms_ease,_stroke-width_300ms_cubic-bezier(0.22,_1,_0.36,_1),_filter_220ms_ease]',
-                            '[&:hover]:[filter:brightness(1.12)]',
-                            'motion-reduce:animate-none motion-reduce:transition-none',
+                            'transition-[stroke-width,filter] duration-200 hover:brightness-110',
+                            'motion-reduce:transition-none',
                           )}
                           data-age-slice={slice.key}
                           onMouseEnter={() => setHoveredKey(slice.key)}
                           onMouseLeave={() => setHoveredKey(null)}
                         />
-                      </g>
-                    );
-                  })}
-                </g>
-              </svg>
+                      );
+                    })}
+                  </g>
+                </svg>
 
-              <div
-                className={cn(
-                  'afterplay-age-core absolute z-2 top-1/2 left-1/2 flex w-29.5 h-29.5 flex-col items-center justify-center',
-                  'rounded-[50%] pointer-events-none',
-                  '[border:1px_solid_color-mix(in_srgb,_var(--age-accent)_20%,_rgba(233,_228,_216,_0.06))]',
-                  '[background:rgba(12,_15,_13,_0.88)]',
-                  '[box-shadow:inset_0_1px_0_rgba(233,_228,_216,_0.04),_0_13px_32px_rgba(3,_6,_7,_0.34)]',
-                  '[transform:translate(-50%,_-50%)] [transition:border-color_280ms_ease]',
-                )}
-              >
-                <span className="text-dust text-micro font-black tracking-[0.12em]">
-                  SHARE OF TIME
-                </span>
-                <strong className="mt-0.75 text-(--age-accent) text-[36px] font-display font-bold leading-none [transition:color_280ms_ease] tabular-nums">
-                  {activePercent}%
-                </strong>
-                <small className="mt-1 text-dust text-micro font-black tracking-[0.1em]">
-                  {active.shortLabel}
-                </small>
-              </div>
-            </div>
-
-            <div className="afterplay-age-story min-w-0">
-              <div
-                className={cn(
-                  'afterplay-age-focus flex items-center justify-between gap-5 min-h-19.5 py-[11px] px-[13px] rounded-[11px]',
-                  '[&_>_div_>_span]:text-dust [&_>_div_>_span]:text-micro [&_>_div_>_span]:font-black',
-                  '[&_>_div_>_span]:tracking-[0.12em] [&_>_div_>_span]:uppercase',
-                  '[border:1px_solid_color-mix(in_srgb,_var(--age-accent)_19%,_rgba(233,_228,_216,_0.055))]',
-                  '[background:linear-gradient(_120deg,_color-mix(in_srgb,_var(--age-accent)_8%,_transparent),_rgba(233,_228,_216,_0.014)_)]',
-                  '[transition:border-color_260ms_ease,_background-color_260ms_ease]',
-                  '[&_>_div_>_strong]:block [&_>_div_>_strong]:mt-0.5 [&_>_div_>_strong]:text-(--age-accent)',
-                  '[&_>_div_>_strong]:text-[17px] [&_>_div_>_strong]:font-black [&_>_div_>_strong]:tracking-[-0.02em]',
-                  '[&_>_div_>_strong]:[transition:color_280ms_ease]',
-                  '[&_p]:max-w-115 [&_p]:mt-0.75 [&_p]:text-muted-foreground [&_p]:text-[11.5px] [&_p]:leading-[1.45]',
-                )}
-              >
-                <div>
-                  <span>ACTIVE ERA</span>
-                  <strong>{active.label}</strong>
-                  <p>
-                    {activePercent}% of your {year === 'all' ? 'all-time' : year} hours went to
-                    games {active.description(referenceYear)}.
-                  </p>
-                </div>
-                <div
-                  className={cn(
-                    'afterplay-age-focus-numbers flex-none text-right',
-                    '[&_strong]:block',
-                    '[&_span]:block',
-                    '[&_strong]:text-foreground! [&_strong]:text-[18px]! [&_strong]:font-black! [&_strong]:whitespace-nowrap',
-                    '[&_span]:mt-0.5 [&_span]:text-muted-foreground [&_span]:text-[11px]',
-                  )}
-                >
-                  <strong>{formatHours(active.hours)}</strong>
-                  <span>{pluralize(active.gameCount, 'game')}</span>
+                <div className="afterplay-age-core pointer-events-none absolute top-1/2 left-1/2 z-2 flex size-29.5 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full">
+                  <span className="text-micro text-dust">Share of time</span>
+                  <strong className="font-display text-[40px] leading-none font-bold text-bone tabular-nums">
+                    {activePercent}%
+                  </strong>
+                  <small className="mt-0.5 text-micro text-dust">{active.shortLabel}</small>
                 </div>
               </div>
 
-              <div className="afterplay-age-eras grid grid-cols-2 gap-[7px] mt-2">
+              <div className="afterplay-age-eras flex min-w-55 flex-1 flex-col">
                 {slices.map((slice) => {
                   const isActive = slice.key === active.key;
                   return (
@@ -322,63 +215,58 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                       key={slice.key}
                       type="button"
                       className={cn(
-                        'afterplay-age-era relative grid grid-cols-[minmax(0,_1fr)_auto] gap-2 overflow-hidden min-h-14.5 pt-[9px]',
-                        'pr-[11px] pb-3 pl-3.5 rounded-[10px] outline-none text-left [border:1px_solid_rgba(233,_228,_216,_0.055)]',
-                        'text-inherit [background:rgba(233,_228,_216,_0.015)]',
-                        '[transition:border-color_220ms_ease,_background-color_220ms_ease,_box-shadow_240ms_ease,_transform_280ms_cubic-bezier(0.22,_1,_0.36,_1)]',
-                        "[&[data-active='true']_.afterplay-age-era-stripe]:opacity-[1]",
-                        "[&[data-active='true']_.afterplay-age-era-track_i]:opacity-[1]",
-                        "[&[data-active='true']_.afterplay-age-era-copy_strong]:text-foreground",
-                        'motion-reduce:animate-none motion-reduce:transition-none',
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[border-color:color-mix(in_srgb,_var(--era-accent)_30%,_rgba(233,_228,_216,_0.06))]",
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[background:color-mix(in_srgb,_var(--era-accent)_7%,_rgba(233,_228,_216,_0.015))]",
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[box-shadow:0_8px_20px_rgba(3,_6,_7,_0.14)]",
-                        "[&:is(:hover,:focus-visible,[data-active='true'])]:[transform:translateY(-2px)]",
+                        'afterplay-age-era grid grid-cols-[12px_minmax(0,1fr)_auto_44px] items-center gap-3 rounded-sm border-b border-line px-1.5 py-2 text-left last:border-b-0',
+                        'transition-colors duration-150 outline-hidden hover:bg-raised',
+                        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
+                        "data-[active='true']:bg-raised",
                       )}
                       data-active={isActive ? 'true' : 'false'}
                       aria-pressed={isActive}
-                      style={
-                        {
-                          '--era-accent': slice.color,
-                          '--era-share': `${slice.fraction * 100}%`,
-                        } as React.CSSProperties
-                      }
                       onMouseEnter={() => setHoveredKey(slice.key)}
                       onMouseLeave={() => setHoveredKey(null)}
                       onFocus={() => setHoveredKey(slice.key)}
                       onBlur={() => setHoveredKey(null)}
                     >
-                      <span className="afterplay-age-era-stripe absolute top-[9px] bottom-[11px] left-0 w-[3px] rounded-[0_99px_99px_0] [background:var(--era-accent)] opacity-[0.55]" />
-                      <span className="afterplay-age-era-copy">
-                        <strong className="block overflow-hidden text-ellipsis whitespace-nowrap text-dust text-[11.5px] font-[750]">
+                      <span
+                        className="afterplay-age-era-stripe size-3 rounded-[2px]"
+                        style={{ background: slice.color }}
+                      />
+                      <span className="afterplay-age-era-copy min-w-0">
+                        <strong className="block text-body font-semibold text-bone">
                           {slice.label}
                         </strong>
-                        <small className="block overflow-hidden text-ellipsis whitespace-nowrap mt-0.75 text-muted-foreground text-[11px]">
-                          {formatHours(slice.hours)} · {pluralize(slice.gameCount, 'game')}
+                        <small className="block text-micro text-dust">
+                          {pluralize(slice.gameCount, 'game')}
                         </small>
                       </span>
-                      <span className="afterplay-age-era-percent text-[16px] font-black leading-none text-(--era-accent) [tab-size:2]">
-                        {Math.round(slice.fraction * 100)}%
+                      <span className="font-display text-[24px] leading-none font-bold text-bone tabular-nums">
+                        {formatHours(slice.hours)}
                       </span>
-                      <span
-                        className={cn(
-                          'afterplay-age-era-track absolute right-2.5 bottom-1.5 left-3.5 h-0.5 overflow-hidden rounded-[99px]',
-                          '[background:rgba(233,_228,_216,_0.055)]',
-                        )}
-                      >
-                        <i className="block w-[var(--era-share)] h-full rounded-[inherit] [background:var(--era-accent)] [box-shadow:0_0_8px_color-mix(in_srgb,_var(--era-accent)_35%,_transparent)] opacity-[0.62] origin-left animate-[afterplay-grow-x_650ms_cubic-bezier(0.22,_1,_0.36,_1)_backwards] motion-reduce:animate-none motion-reduce:transition-none" />
+                      <span className="afterplay-age-era-percent text-right text-micro text-dust tabular-nums">
+                        {Math.round(slice.fraction * 100)}%
                       </span>
                     </button>
                   );
                 })}
               </div>
-
-              {unknownCount > 0 && (
-                <div className="afterplay-age-unknown mt-[7px] text-[11px] text-right text-dust">
-                  {pluralize(unknownCount, 'game')} without a release year stays outside the orbit.
-                </div>
-              )}
             </div>
+
+            <div className="afterplay-age-focus mt-auto border-t border-line pt-3">
+              <div>
+                <span className="block text-micro text-dust">Active era</span>
+                <strong className="block text-body font-semibold text-bone">{active.label}</strong>
+                <p className="text-small text-dust">
+                  {activePercent}% of your {year === 'all' ? 'all-time' : year} hours went to games{' '}
+                  {active.description(referenceYear)}.
+                </p>
+              </div>
+            </div>
+
+            {unknownCount > 0 && (
+              <div className="afterplay-age-unknown mt-1.5 text-micro text-dust">
+                {pluralize(unknownCount, 'game')} without a release year stays outside the ring.
+              </div>
+            )}
           </div>
         )}
       </div>

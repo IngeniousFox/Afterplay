@@ -6,9 +6,23 @@ import { useAchievementsOverview } from '../../hooks/achievements';
 import { useTimeFormat } from '../../hooks/settings';
 import { useImageSrc } from '../../hooks/useImageSrc';
 import { requestAchievementFlash } from '../../lib/achievementFlash';
-import { percentLabel, rarityAccent, ULTRA_VIOLET } from '../../lib/achievements';
+import { percentLabel } from '../../lib/achievements';
+import { RARE, ULTRA_RARE } from '../../../../shared/achievements';
 import { ACHIEVEMENT_SOURCE_LABEL } from '../../lib/achievementSources';
-import { AMBER, GREEN } from '../../lib/colors';
+// Rareza en Fósforo (stats-cabinet.png): común en gris, raro en Tube y ultra
+// raro en ámbar — el ámbar se reserva para lo que de verdad es excepcional.
+const COMMON_COLOR = 'var(--color-dust)';
+const RARE_COLOR = 'var(--color-tube)';
+const ULTRA_COLOR = 'var(--color-phosphor)';
+const ACCENT = 'var(--color-phosphor)';
+const tint = (color: string, percent: number): string =>
+  `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+const rarityAccent = (percent: number | null): string =>
+  percent === null || percent >= RARE
+    ? COMMON_COLOR
+    : percent < ULTRA_RARE
+      ? ULTRA_COLOR
+      : RARE_COLOR;
 import { formatByPrecision } from '../../lib/format';
 import { floatingPanelClass } from '../../lib/styles';
 import { GameCover } from '../GameCover';
@@ -26,7 +40,7 @@ import type { GameId } from '../../../../shared/entityIds';
 // Breakdown en el perfil de rareza, el CategoryBarChart de Hours per month
 // para los meses, y la galería del Completed para los 100%.
 
-const CARD_CLASS = 'rounded-[14px] border border-border bg-card px-5 py-4.5';
+const CARD_CLASS = 'rounded-md border border-line bg-panel px-5 py-4.5';
 
 const MONTH_LABELS = [
   'Jan',
@@ -70,21 +84,21 @@ const RarityMonthChart = ({
   return (
     <div className={`${CARD_CLASS} flex h-full flex-col`} data-testid="achievement-month-card">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="text-[13.5px] font-bold text-foreground">Unlocks by month</div>
+        <div className="text-[16px] leading-tight font-semibold text-bone">Unlocks by month</div>
         {/* Con un mes bajo el ratón, la cabecera es SU detalle con los
             colores de cada cubo; si no, el total del año. */}
         {hovered && hovered.total > 0 ? (
-          <div className="text-[11px] font-semibold tabular-nums">
-            <span className="text-foreground">
+          <div className="text-micro font-semibold tabular-nums">
+            <span className="text-bone">
               {MONTH_LABELS[hovered.month]} · {hovered.total}
             </span>
-            {hovered.rare > 0 && <span style={{ color: AMBER }}> · {hovered.rare} rare</span>}
+            {hovered.rare > 0 && <span style={{ color: RARE_COLOR }}> · {hovered.rare} rare</span>}
             {hovered.ultra > 0 && (
-              <span style={{ color: ULTRA_VIOLET }}> · {hovered.ultra} ultra</span>
+              <span style={{ color: ULTRA_COLOR }}> · {hovered.ultra} ultra</span>
             )}
           </div>
         ) : (
-          <div className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+          <div className="text-micro font-semibold text-dust tabular-nums">
             {yearTotal} in {year}
           </div>
         )}
@@ -112,7 +126,7 @@ const RarityMonthChart = ({
                 {/* La pista de fondo, tenue — presencia del mes vacío sin
                   hacer de lápida. */}
                 <div
-                  className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-7 rounded-[6px] transition-colors duration-150"
+                  className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-7 rounded-sm transition-colors duration-150"
                   style={{
                     height: MONTH_BAR_AREA - MONTH_LABEL_SPACE,
                     background: isHovered ? 'rgba(233,228,216,.055)' : 'rgba(233,228,216,.025)',
@@ -120,10 +134,10 @@ const RarityMonthChart = ({
                 />
                 {showLabel && (
                   <span
-                    className="absolute left-1/2 -translate-x-1/2 text-[11.5px] font-bold whitespace-nowrap tabular-nums"
+                    className="absolute left-1/2 -translate-x-1/2 text-micro font-bold whitespace-nowrap tabular-nums"
                     style={{
                       bottom: barPx + 4,
-                      color: isHovered ? 'var(--foreground)' : GREEN,
+                      color: isHovered ? 'var(--color-bone)' : ACCENT,
                     }}
                   >
                     {entry.total}
@@ -134,7 +148,7 @@ const RarityMonthChart = ({
                   perfil de rareza de la vitrina. */}
                 {barPx > 0 && (
                   <div
-                    className="relative flex w-full max-w-7 flex-col justify-end overflow-hidden rounded-[6px] transition-[filter] duration-150"
+                    className="relative flex w-full max-w-7 flex-col justify-end overflow-hidden rounded-sm transition-[filter] duration-150"
                     style={{
                       height: barPx,
                       filter:
@@ -144,12 +158,12 @@ const RarityMonthChart = ({
                       boxShadow: isHovered ? '0 0 18px rgba(255,179,71,.28)' : 'none',
                     }}
                   >
-                    <div style={{ height: segmentPx(entry.ultra), background: ULTRA_VIOLET }} />
-                    <div style={{ height: segmentPx(entry.rare), background: AMBER }} />
+                    <div style={{ height: segmentPx(entry.ultra), background: ULTRA_COLOR }} />
+                    <div style={{ height: segmentPx(entry.rare), background: RARE_COLOR }} />
                     <div
                       style={{
                         height: segmentPx(entry.common),
-                        background: `linear-gradient(180deg, ${GREEN}, #1f9e5c)`,
+                        background: COMMON_COLOR,
                       }}
                     />
                   </div>
@@ -163,9 +177,9 @@ const RarityMonthChart = ({
           {months.map((entry, index) => (
             <div
               key={entry.month}
-              className="flex-1 text-center text-[11.5px]"
+              className="flex-1 text-center text-micro"
               style={{
-                color: hoveredMonth === index ? 'var(--foreground)' : 'var(--muted-foreground)',
+                color: hoveredMonth === index ? 'var(--color-bone)' : 'var(--color-dust)',
                 fontWeight: hoveredMonth === index ? 700 : 400,
               }}
             >
@@ -205,8 +219,8 @@ const FameMedallion = ({
       }}
       title={`${entry.displayName} — ${entry.gameTitle}`}
       className={cn(
-        'afterplay-fame-medallion group/fame relative flex flex-col items-center gap-2 overflow-hidden rounded-[13px]',
-        'border border-line px-2 pt-3.5 pb-3 text-center isolate outline-none',
+        'afterplay-fame-medallion group/fame relative flex flex-col items-center gap-2 overflow-hidden rounded-md',
+        'border border-line px-2 pt-3.5 pb-3 text-center isolate outline-hidden',
         '[transition:transform_320ms_cubic-bezier(0.22,1,0.36,1),border-color_240ms_ease,box-shadow_280ms_ease,background-color_240ms_ease]',
         "before:content-[''] before:absolute before:-z-1 before:inset-0 before:pointer-events-none before:opacity-0",
         'before:[background:radial-gradient(circle_at_50%_34%,color-mix(in_srgb,var(--fame-accent)_18%,transparent),transparent_58%)]',
@@ -220,13 +234,13 @@ const FameMedallion = ({
       style={
         {
           '--fame-accent': accent,
-          background: `linear-gradient(180deg, ${accent}0d, rgba(233,228,216,.015))`,
+          background: `linear-gradient(180deg, ${tint(accent, 5)}, rgba(233,228,216,.015))`,
         } as CSSProperties
       }
     >
       <span
         className={cn(
-          'afterplay-fame-rank absolute top-1.75 left-2.25 text-[11.5px] font-extrabold text-muted-foreground/70 tabular-nums',
+          'afterplay-fame-rank absolute top-1.75 left-2.25 text-micro font-semibold text-dust tabular-nums',
           '[transition:color_220ms_ease,transform_280ms_cubic-bezier(0.22,1,0.36,1)]',
           '[.afterplay-fame-medallion:is(:hover,:focus-visible)_&]:text-[color:var(--fame-accent)]',
           '[.afterplay-fame-medallion:is(:hover,:focus-visible)_&]:[transform:translateX(1px)]',
@@ -246,7 +260,7 @@ const FameMedallion = ({
           'motion-reduce:animate-none motion-reduce:transition-none',
         )}
         style={{
-          boxShadow: `inset 0 0 0 2px ${accent}85, inset 0 1px 0 rgba(233,228,216,.3), 0 6px 16px rgba(3,6,7,.5)`,
+          boxShadow: `inset 0 0 0 2px ${tint(accent, 52)}, inset 0 1px 0 rgba(233,228,216,.3), 0 6px 16px rgba(3,6,7,.5)`,
         }}
       >
         {src ? (
@@ -262,8 +276,8 @@ const FameMedallion = ({
             )}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <Trophy size={16} className="text-muted-foreground/40" />
+          <div className="flex h-full w-full items-center justify-center bg-raised">
+            <Trophy size={16} className="text-dust" />
           </div>
         )}
         <span
@@ -281,15 +295,13 @@ const FameMedallion = ({
           }}
         />
       </div>
-      <span className="text-[13px] font-extrabold tabular-nums" style={{ color: accent }}>
+      <span className="text-small font-semibold tabular-nums" style={{ color: accent }}>
         {percentLabel(entry.globalPercent)}
       </span>
-      <span className="line-clamp-2 h-8 w-full text-[11.5px] leading-[1.32] font-semibold text-bone">
+      <span className="line-clamp-2 h-8 w-full text-micro leading-[1.32] font-semibold text-bone">
         {entry.displayName}
       </span>
-      <span className="w-full truncate text-[11px] text-muted-foreground/75">
-        {entry.gameTitle}
-      </span>
+      <span className="w-full truncate text-micro text-dust">{entry.gameTitle}</span>
     </button>
   );
 };
@@ -323,26 +335,26 @@ const RarestHero = ({
         requestAchievementFlash(entry.achievementId);
         onOpenGame(entry.gameId);
       }}
-      className="relative flex h-full flex-col justify-center overflow-hidden rounded-[14px] border px-6 py-5.5 text-left transition-transform duration-200 hover:-translate-y-0.5"
+      className="relative flex h-full flex-col justify-center overflow-hidden rounded-md border px-6 py-5.5 text-left transition-transform duration-200 hover:-translate-y-0.5"
       style={{
-        borderColor: `${accent}47`,
-        background: `linear-gradient(135deg, ${accent}21, rgba(233,228,216,.02) 55%)`,
+        borderColor: `${tint(accent, 28)}`,
+        background: `linear-gradient(135deg, ${tint(accent, 13)}, rgba(233,228,216,.02) 55%)`,
       }}
     >
       <div
         aria-hidden
         className="pointer-events-none absolute -top-10 -right-10 h-57.5 w-57.5 rounded-full"
-        style={{ background: `radial-gradient(circle, ${accent}38, transparent 68%)` }}
+        style={{ background: `radial-gradient(circle, ${tint(accent, 22)}, transparent 68%)` }}
       />
       <div className="relative flex items-center justify-between gap-2.5">
         <span
-          className="flex items-center gap-1.75 text-[11.5px] font-extrabold tracking-[.16em]"
+          className="flex items-center gap-1.75 text-micro font-semibold"
           style={{ color: accent }}
         >
           <Crown size={13} />
-          {year === 'all' ? 'YOUR RAREST TROPHY' : `RAREST OF ${year}`}
+          {year === 'all' ? 'Your rarest trophy' : `Rarest of ${year}`}
         </span>
-        <span className="text-[11px] text-muted-foreground tabular-nums">
+        <span className="text-micro text-dust tabular-nums">
           of {totalUnlocked.toLocaleString('en-US')} unlocked
         </span>
       </div>
@@ -350,14 +362,14 @@ const RarestHero = ({
         <div
           className="relative h-23 w-23 flex-none overflow-hidden rounded-full"
           style={{
-            boxShadow: `inset 0 0 0 2px ${accent}b3, inset 0 2px 0 rgba(233,228,216,.3), 0 10px 26px rgba(3,6,7,.55)`,
+            boxShadow: `inset 0 0 0 2px ${tint(accent, 70)}, inset 0 2px 0 rgba(233,228,216,.3), 0 10px 26px rgba(3,6,7,.55)`,
           }}
         >
           {src ? (
             <img src={src} alt="" className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-muted">
-              <Trophy size={24} className="text-muted-foreground/40" />
+            <div className="flex h-full w-full items-center justify-center bg-raised">
+              <Trophy size={24} className="text-dust" />
             </div>
           )}
           <span
@@ -370,24 +382,24 @@ const RarestHero = ({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[20px] leading-[1.2] font-extrabold tracking-[-.01em] text-foreground">
+          <div className="text-[20px] leading-[1.2] font-semibold tracking-[-.01em] text-bone">
             {entry.displayName}
           </div>
-          <div className="mt-2 truncate text-[13px] font-semibold text-bone">{entry.gameTitle}</div>
+          <div className="mt-2 truncate text-small font-semibold text-bone">{entry.gameTitle}</div>
           <div className="mt-3.25 flex flex-wrap items-center gap-2">
             <span
-              className="flex items-center gap-1.25 rounded-full px-3 py-1.25 text-[13px] font-extrabold tabular-nums"
+              className="flex items-center gap-1.25 rounded-full px-3 py-1.25 text-small font-semibold tabular-nums"
               style={{
-                background: `${accent}29`,
+                background: `${tint(accent, 16)}`,
                 color: accent,
-                boxShadow: `inset 0 0 0 1px ${accent}59`,
+                boxShadow: `inset 0 0 0 1px ${tint(accent, 35)}`,
               }}
             >
               <Sparkles size={10} />
               {percentLabel(entry.globalPercent)} of players
             </span>
             {entry.unlockedAt && (
-              <span className="text-[12px] text-muted-foreground">
+              <span className="text-micro text-dust">
                 {formatByPrecision(entry.unlockedAt, 'day', timeFormat)}
               </span>
             )}
@@ -471,7 +483,7 @@ const RarityDonut = ({
                 strokeDashoffset: offset,
                 cursor: 'default',
                 opacity: dimmed ? 0.28 : 1,
-                filter: isHovered ? `drop-shadow(0 0 9px ${segment.color}aa)` : 'none',
+                filter: isHovered ? `drop-shadow(0 0 9px ${tint(segment.color, 67)})` : 'none',
                 transition:
                   'stroke-width .22s cubic-bezier(.2,.7,.3,1), opacity .22s ease, filter .22s ease',
                 ['--afterplay-ring-c' as string]: `${DONUT_C}`,
@@ -484,14 +496,14 @@ const RarityDonut = ({
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
         <span
           className="text-[32px] leading-none font-display font-bold tabular-nums transition-colors duration-200"
-          style={{ color: hoveredSegment ? hoveredSegment.color : 'var(--foreground)' }}
+          style={{ color: hoveredSegment ? hoveredSegment.color : 'var(--color-bone)' }}
         >
           {(hoveredSegment ? hoveredSegment.count : total).toLocaleString('en-US')}
         </span>
         <span
-          className="text-[11.5px] font-bold tracking-[.12em] uppercase transition-colors duration-200"
+          className="text-micro font-bold transition-colors duration-200"
           style={{
-            color: hoveredSegment ? hoveredSegment.color : 'var(--muted-foreground)',
+            color: hoveredSegment ? hoveredSegment.color : 'var(--color-dust)',
             opacity: hoveredSegment ? 0.9 : 0.75,
           }}
         >
@@ -518,7 +530,7 @@ const MissingIcon = ({
           : ''
       } — click to open it`}
       className={cn(
-        'afterplay-almost-missing h-7.5 w-7.5 flex-none overflow-hidden rounded-[7px] opacity-45 grayscale',
+        'afterplay-almost-missing h-7.5 w-7.5 flex-none overflow-hidden rounded-sm opacity-45 grayscale',
         '[box-shadow:inset_0_0_0_1px_rgba(233,228,216,0.1)]',
         '[transition:opacity_200ms_ease,filter_220ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
         '[.afterplay-almost-card:is(:hover,:focus-visible)_&]:opacity-68',
@@ -531,8 +543,8 @@ const MissingIcon = ({
       {src ? (
         <img src={src} alt="" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-muted">
-          <Trophy size={10} className="text-muted-foreground/40" />
+        <div className="flex h-full w-full items-center justify-center bg-raised">
+          <Trophy size={10} className="text-dust" />
         </div>
       )}
     </div>
@@ -557,8 +569,8 @@ const AlmostThereRow = ({
       type="button"
       onClick={() => onOpenGame(game.gameId)}
       className={cn(
-        'afterplay-almost-card group relative flex min-w-0 items-center gap-3.5 overflow-hidden rounded-[13px] border',
-        'border-line px-3.5 py-3 text-left min-h-27.5 outline-none',
+        'afterplay-almost-card group relative flex min-w-0 items-center gap-3.5 overflow-hidden rounded-md border',
+        'border-line px-3.5 py-3 text-left min-h-27.5 outline-hidden',
         '[background:linear-gradient(120deg,rgba(255,179,71,0.045),rgba(233,228,216,0.018))]',
         '[box-shadow:inset_0_1px_0_rgba(233,228,216,0.02)]',
         '[transition:transform_300ms_cubic-bezier(0.22,1,0.36,1),border-color_220ms_ease,box-shadow_260ms_ease,background-color_220ms_ease]',
@@ -598,7 +610,7 @@ const AlmostThereRow = ({
 
       <div
         className={cn(
-          'afterplay-almost-cover relative z-1 h-20 w-14 flex-none overflow-hidden rounded-[7px] border border-line',
+          'afterplay-almost-cover relative z-1 h-20 w-14 flex-none overflow-hidden rounded-sm border border-line',
           '[box-shadow:0_9px_22px_rgba(3,6,7,0.32)]',
           '[transition:transform_300ms_cubic-bezier(0.22,1,0.36,1),border-color_220ms_ease,box-shadow_260ms_ease]',
           '[.afterplay-almost-card:is(:hover,:focus-visible)_&]:border-[rgba(255,179,71,0.32)]',
@@ -610,30 +622,30 @@ const AlmostThereRow = ({
         {src ? (
           <img src={src} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <Trophy size={12} className="text-muted-foreground/40" />
+          <div className="flex h-full w-full items-center justify-center bg-raised">
+            <Trophy size={12} className="text-dust" />
           </div>
         )}
       </div>
       <div className="relative z-1 min-w-0 flex-1 self-stretch py-0.5">
-        <div className="text-[11px] font-black tracking-[.16em] text-primary/60 uppercase">
+        <div className="text-micro font-semibold text-phosphor/60">
           Final stretch · #{String(index + 1).padStart(2, '0')} ·{' '}
           {ACHIEVEMENT_SOURCE_LABEL[game.source]}
         </div>
-        <div className="mt-1 truncate text-[13.5px] font-extrabold tracking-[-.01em] text-foreground">
+        <div className="mt-1 truncate text-small font-semibold tracking-[-.01em] text-bone">
           {game.title}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-2 text-[11.5px] tabular-nums">
-          <span className="font-semibold text-muted-foreground">
+        <div className="mt-1 flex items-center justify-between gap-2 text-micro tabular-nums">
+          <span className="font-semibold text-dust">
             {game.unlocked} of {game.total} unlocked
           </span>
-          <span className="font-bold text-primary">{remaining} left</span>
+          <span className="font-bold text-phosphor">{remaining} left</span>
         </div>
         <div className="afterplay-almost-track mt-1.75 h-1 overflow-hidden rounded-[99px] bg-bone/[0.065]">
           <span
             className={cn(
               'block w-[var(--almost-progress)] h-full rounded-[inherit]',
-              '[background:linear-gradient(90deg,rgba(255,179,71,0.5),#ffb347)] [box-shadow:0_0_12px_rgba(255,179,71,0.22)]',
+              'bg-tube',
               'origin-left animate-[afterplay-grow-x_750ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
               'motion-reduce:animate-none motion-reduce:transition-none',
             )}
@@ -649,7 +661,7 @@ const AlmostThereRow = ({
             </span>
           ))}
           {hiddenMissing > 0 && (
-            <span className="flex h-7.5 min-w-7.5 items-center justify-center rounded-[7px] border border-line bg-inset/20 px-1 text-[11px] font-bold text-muted-foreground tabular-nums">
+            <span className="flex h-7.5 min-w-7.5 items-center justify-center rounded-sm border border-line bg-inset/20 px-1 text-micro font-bold text-dust tabular-nums">
               +{hiddenMissing}
             </span>
           )}
@@ -664,23 +676,23 @@ const AlmostThereRow = ({
           '[.afterplay-almost-card:is(:hover,:focus-visible)_&]:[box-shadow:0_0_22px_rgba(255,179,71,0.14)]',
           'motion-reduce:animate-none motion-reduce:transition-none',
         )}
-        style={{ background: `conic-gradient(${GREEN} ${percent}%, rgba(233,228,216,.07) 0)` }}
+        style={{
+          background: `conic-gradient(var(--color-tube) ${percent}%, var(--color-raised) 0)`,
+        }}
       >
         <div className="flex size-12 flex-col items-center justify-center rounded-full bg-panel">
-          <strong className="text-[13px] leading-none font-black text-foreground tabular-nums">
+          <strong className="text-small leading-none font-semibold text-bone tabular-nums">
             {percent}
           </strong>
-          <span className="mt-0.5 text-[11px] leading-none font-bold tracking-[.04em] text-primary/85 uppercase">
-            done
-          </span>
+          <span className="mt-0.5 text-micro leading-none font-bold text-phosphor/85">done</span>
         </div>
       </div>
       <ChevronRight
         size={13}
         className={cn(
-          'afterplay-almost-arrow absolute right-2 bottom-1.75 z-1 text-muted-foreground/25',
+          'afterplay-almost-arrow absolute right-2 bottom-1.75 z-1 text-dust',
           '[transition:color_180ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
-          '[.afterplay-almost-card:is(:hover,:focus-visible)_&]:text-[color:#ffb347]',
+          '[.afterplay-almost-card:is(:hover,:focus-visible)_&]:text-tube',
           '[.afterplay-almost-card:is(:hover,:focus-visible)_&]:[transform:translateX(2px)]',
           'motion-reduce:animate-none motion-reduce:transition-none',
         )}
@@ -706,32 +718,32 @@ const TopGameRow = ({
     <button
       type="button"
       onClick={() => onOpenGame(game.gameId)}
-      className="flex w-full flex-none items-center gap-2.5 rounded-[9px] px-1.5 py-1.25 text-left transition-colors duration-150 hover:bg-bone/[0.04]"
+      className="flex w-full flex-none items-center gap-2.5 rounded-md px-1.5 py-1.25 text-left transition-colors duration-150 hover:bg-bone/[0.04]"
     >
-      <div className="h-9 w-6.5 flex-none overflow-hidden rounded-[5px]">
+      <div className="h-9 w-6.5 flex-none overflow-hidden rounded-sm">
         {src ? (
           <img src={src} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <Trophy size={10} className="text-muted-foreground/40" />
+          <div className="flex h-full w-full items-center justify-center bg-raised">
+            <Trophy size={10} className="text-dust" />
           </div>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-bold text-foreground">{game.title}</div>
+        <div className="truncate text-micro font-bold text-bone">{game.title}</div>
         <div className="mt-1 h-1 overflow-hidden rounded-full bg-bone/[0.06]">
           <div
             className="h-full rounded-full"
             style={{
               width: `${(game.total / maxTotal) * 100}%`,
-              background: `linear-gradient(90deg, ${GREEN}99, ${GREEN})`,
+              background: ACCENT,
             }}
           />
         </div>
       </div>
-      <span className="flex-none text-right text-[11px] font-bold text-foreground tabular-nums">
+      <span className="flex-none text-right text-micro font-bold text-bone tabular-nums">
         {game.total}
-        {game.rare > 0 && <span style={{ color: AMBER }}> ·{game.rare}</span>}
+        {game.rare > 0 && <span style={{ color: RARE_COLOR }}> ·{game.rare}</span>}
       </span>
     </button>
   );
@@ -771,9 +783,9 @@ export const AchievementsShowcase = ({
   const { rarityProfile } = data;
   const rarityTotal = rarityProfile.common + rarityProfile.rare + rarityProfile.ultra;
   const raritySegments: { key: RarityKey; label: string; count: number; color: string }[] = [
-    { key: 'common', label: 'Common', count: rarityProfile.common, color: GREEN },
-    { key: 'rare', label: 'Rare', count: rarityProfile.rare, color: AMBER },
-    { key: 'ultra', label: 'Ultra rare', count: rarityProfile.ultra, color: ULTRA_VIOLET },
+    { key: 'common', label: 'Common', count: rarityProfile.common, color: COMMON_COLOR },
+    { key: 'rare', label: 'Rare', count: rarityProfile.rare, color: RARE_COLOR },
+    { key: 'ultra', label: 'Ultra rare', count: rarityProfile.ultra, color: ULTRA_COLOR },
   ];
 
   // La escala de las barras de año, sobre TODOS (todos se pintan — la lista
@@ -816,10 +828,12 @@ export const AchievementsShowcase = ({
           <div className={`${CARD_CLASS} flex flex-col`}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Trophy size={15} style={{ color: GREEN }} />
-                <span className="text-[13.5px] font-bold text-foreground">Rarity split</span>
+                <Trophy size={15} className="text-dust" />
+                <span className="text-[16px] leading-tight font-semibold text-bone">
+                  Rarity split
+                </span>
               </div>
-              <span className="text-[11.5px] text-muted-foreground/70">
+              <span className="text-micro text-dust">
                 {year === 'all' ? 'all time' : String(year)}
               </span>
             </div>
@@ -839,35 +853,35 @@ export const AchievementsShowcase = ({
                     key={segment.key}
                     onMouseEnter={() => setHoveredRarity(segment.key)}
                     onMouseLeave={() => setHoveredRarity(null)}
-                    className="flex cursor-default items-center gap-2.5 rounded-[9px] px-2.5 py-1.75 transition-[background,opacity,box-shadow] duration-200"
+                    className="flex cursor-default items-center gap-2.5 rounded-md px-2.5 py-1.75 transition-[background,opacity,box-shadow] duration-200"
                     style={{
-                      background: isHovered ? `${segment.color}12` : 'transparent',
-                      boxShadow: isHovered ? `inset 0 0 0 1px ${segment.color}40` : 'none',
+                      background: isHovered ? `${tint(segment.color, 7)}` : 'transparent',
+                      boxShadow: isHovered ? `inset 0 0 0 1px ${tint(segment.color, 25)}` : 'none',
                       opacity: dimmed ? 0.35 : 1,
                     }}
                   >
                     <span
                       aria-hidden
-                      className="h-2.25 w-2.25 flex-none rounded-[3px]"
+                      className="h-2.25 w-2.25 flex-none rounded-[2px]"
                       style={{ background: segment.color }}
                     />
                     <span
-                      className="min-w-0 flex-1 text-[12.5px] font-bold"
+                      className="min-w-0 flex-1 text-micro font-bold"
                       style={{ color: segment.color }}
                     >
                       {segment.label}
                     </span>
-                    <span className="text-[11.5px] text-muted-foreground/80">
+                    <span className="text-micro text-dust">
                       {segment.key === 'common'
                         ? '10%+ of players'
                         : segment.key === 'rare'
                           ? 'under 10%'
                           : 'under 5%'}
                     </span>
-                    <span className="w-8 text-right text-[13px] font-extrabold text-foreground tabular-nums">
+                    <span className="w-8 text-right text-small font-semibold text-bone tabular-nums">
                       {segment.count}
                     </span>
-                    <span className="w-8.5 text-right text-[11px] font-semibold text-muted-foreground/75 tabular-nums">
+                    <span className="w-8.5 text-right text-micro font-semibold text-dust tabular-nums">
                       {rarityTotal > 0 ? Math.round((segment.count / rarityTotal) * 100) : 0}%
                     </span>
                   </div>
@@ -884,10 +898,12 @@ export const AchievementsShowcase = ({
         <div className={CARD_CLASS}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Medal size={15} style={{ color: AMBER }} />
-              <span className="text-[13.5px] font-bold text-foreground">Hall of fame</span>
+              <Medal size={15} style={{ color: RARE_COLOR }} />
+              <span className="text-[16px] leading-tight font-semibold text-bone">
+                Hall of fame
+              </span>
             </div>
-            <span className="text-[11px] font-semibold text-muted-foreground">
+            <span className="text-micro font-semibold text-dust">
               {year === 'all' ? 'your rarest unlocks' : `your rarest unlocks of ${year}`}
             </span>
           </div>
@@ -912,28 +928,30 @@ export const AchievementsShowcase = ({
         <div className={CARD_CLASS}>
           <div className="mb-3.5 flex items-baseline justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Trophy size={15} style={{ color: GREEN }} />
-              <span className="text-[13.5px] font-bold text-foreground">Harvest by year</span>
+              <Trophy size={15} className="text-dust" />
+              <span className="text-[16px] leading-tight font-semibold text-bone">
+                Harvest by year
+              </span>
             </div>
             {(() => {
               const hovered = data.unlockedByYear.find((entry) => entry.year === hoveredYear);
               if (hovered) {
                 const common = hovered.total - hovered.rare - hovered.ultra;
                 return (
-                  <span className="text-[11px] font-semibold text-foreground tabular-nums">
+                  <span className="text-micro font-semibold text-bone tabular-nums">
                     {common} common
                     {hovered.rare > 0 && (
-                      <span style={{ color: AMBER }}> · {hovered.rare} rare</span>
+                      <span style={{ color: RARE_COLOR }}> · {hovered.rare} rare</span>
                     )}
                     {hovered.ultra > 0 && (
-                      <span style={{ color: ULTRA_VIOLET }}> · {hovered.ultra} ultra</span>
+                      <span style={{ color: ULTRA_COLOR }}> · {hovered.ultra} ultra</span>
                     )}
                   </span>
                 );
               }
               const total = data.unlockedByYear.reduce((sum, entry) => sum + entry.total, 0);
               return (
-                <span className="text-[11.5px] font-semibold text-muted-foreground/85 tabular-nums">
+                <span className="text-micro font-semibold text-dust tabular-nums">
                   {total.toLocaleString('en-US')} dated in total
                 </span>
               );
@@ -955,7 +973,7 @@ export const AchievementsShowcase = ({
                     key={entry.year}
                     onMouseEnter={() => setHoveredYear(entry.year)}
                     onMouseLeave={() => setHoveredYear(null)}
-                    className="flex cursor-default items-center gap-3.25 rounded-[9px] px-2.25 py-1.5 transition-[background,opacity] duration-200"
+                    className="flex cursor-default items-center gap-3.25 rounded-md px-2.25 py-1.5 transition-[background,opacity] duration-200"
                     style={{
                       background: isHovered ? 'rgba(233,228,216,.045)' : 'transparent',
                       opacity: dimmed ? 0.32 : 1,
@@ -963,18 +981,20 @@ export const AchievementsShowcase = ({
                   >
                     <div className="flex w-13 flex-none items-center gap-1.25">
                       <span
-                        className="text-[12px] font-extrabold tabular-nums"
+                        className="text-micro font-semibold tabular-nums"
                         style={{
-                          color: isHovered || best ? 'var(--foreground)' : 'rgba(139,145,140,.9)',
+                          color: isHovered || best ? 'var(--color-bone)' : 'rgba(139,145,140,.9)',
                         }}
                       >
                         {entry.year}
                       </span>
-                      {best && <Crown size={10} className="flex-none" style={{ color: AMBER }} />}
+                      {best && (
+                        <Crown size={10} className="flex-none" style={{ color: RARE_COLOR }} />
+                      )}
                     </div>
                     <div className="flex h-3.5 min-w-0 flex-1 items-center">
                       <div
-                        className="flex h-full gap-[1.5px] overflow-hidden rounded-[5px] transition-shadow duration-200"
+                        className="flex h-full gap-[1.5px] overflow-hidden rounded-sm transition-shadow duration-200"
                         style={{
                           width: `${widthPct}%`,
                           boxShadow: isHovered ? '0 3px 14px rgba(3,6,7,.5)' : 'none',
@@ -983,14 +1003,14 @@ export const AchievementsShowcase = ({
                         <div
                           style={{
                             width: segment(common),
-                            background: `linear-gradient(180deg, #ffc266, ${GREEN})`,
+                            background: COMMON_COLOR,
                           }}
                         />
                         {entry.rare > 0 && (
                           <div
                             style={{
                               width: segment(entry.rare),
-                              background: `linear-gradient(180deg, #f0c469, ${AMBER})`,
+                              background: RARE_COLOR,
                             }}
                           />
                         )}
@@ -998,7 +1018,7 @@ export const AchievementsShowcase = ({
                           <div
                             style={{
                               width: segment(entry.ultra),
-                              background: `linear-gradient(180deg, #eec0ff, ${ULTRA_VIOLET})`,
+                              background: ULTRA_COLOR,
                             }}
                           />
                         )}
@@ -1008,18 +1028,18 @@ export const AchievementsShowcase = ({
                         ultra no puede desplazar la columna de totales. */}
                     <div className="flex w-29.5 flex-none items-center justify-end gap-2.25 tabular-nums">
                       <span
-                        className="w-6 text-right text-[11.5px] font-bold"
-                        style={{ color: AMBER, opacity: entry.rare > 0 ? 1 : 0.22 }}
+                        className="w-6 text-right text-micro font-bold"
+                        style={{ color: RARE_COLOR, opacity: entry.rare > 0 ? 1 : 0.22 }}
                       >
                         {entry.rare > 0 ? entry.rare : '—'}
                       </span>
                       <span
-                        className="w-6 text-right text-[11.5px] font-bold"
-                        style={{ color: ULTRA_VIOLET, opacity: entry.ultra > 0 ? 1 : 0.22 }}
+                        className="w-6 text-right text-micro font-bold"
+                        style={{ color: ULTRA_COLOR, opacity: entry.ultra > 0 ? 1 : 0.22 }}
                       >
                         {entry.ultra > 0 ? entry.ultra : '—'}
                       </span>
-                      <span className="w-9 text-right text-[13px] font-extrabold text-foreground">
+                      <span className="w-9 text-right text-small font-semibold text-bone">
                         {entry.total}
                       </span>
                     </div>
@@ -1049,8 +1069,10 @@ export const AchievementsShowcase = ({
               data-testid="achievement-games-card"
             >
               <div className="flex flex-none items-center justify-between gap-3">
-                <span className="text-[13.5px] font-bold text-foreground">Where you hunted</span>
-                <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                <span className="text-[16px] leading-tight font-semibold text-bone">
+                  Where you hunted
+                </span>
+                <span className="text-micro font-semibold text-dust tabular-nums">
                   {data.topGames?.length} {data.topGames?.length === 1 ? 'game' : 'games'}
                 </span>
               </div>
@@ -1085,14 +1107,16 @@ export const AchievementsShowcase = ({
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Target size={15} style={{ color: GREEN }} />
-              <span className="text-[13.5px] font-bold text-foreground">Almost there</span>
+              <Target size={15} className="text-dust" />
+              <span className="text-[16px] leading-tight font-semibold text-bone">
+                Almost there
+              </span>
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="text-[11px] font-semibold text-muted-foreground">
+              <span className="text-micro font-semibold text-dust">
                 choose tonight&apos;s final push
               </span>
-              <span className="rounded-full border border-primary/20 bg-primary/8 px-2 py-0.75 text-[11px] font-black tracking-[.08em] text-primary uppercase tabular-nums">
+              <span className="rounded-full border border-primary/20 bg-primary/8 px-2 py-0.75 text-micro font-semibold text-phosphor tabular-nums">
                 {data.almostThere.length} in reach
               </span>
             </div>
@@ -1115,7 +1139,7 @@ export const AchievementsShowcase = ({
       {data.perfectGames.length > 0 && (
         <div
           className={cn(
-            'afterplay-stat-card rounded-[14px] border border-border bg-card px-5.5 py-5',
+            'afterplay-stat-card rounded-md border border-line bg-panel px-5.5 py-5',
             '[.afterplay-stats-screen_&]:relative [.afterplay-stats-screen_&]:isolate',
             '[.afterplay-stats-screen_&]:[background:linear-gradient(145deg,rgba(233,228,216,0.038),rgba(233,228,216,0.012)),rgba(12,14,13,0.76)]',
             '[.afterplay-stats-screen_&]:border-line',
@@ -1133,11 +1157,11 @@ export const AchievementsShowcase = ({
           )}
         >
           <div className="mb-4 flex items-center justify-between">
-            <div className="text-[14px] font-bold text-foreground">
+            <div className="text-[14px] font-bold text-bone">
               {year === 'all' ? 'Perfect games' : `Perfected in ${year}`}
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="text-[11.5px] font-semibold tabular-nums" style={{ color: AMBER }}>
+              <span className="text-micro font-semibold tabular-nums" style={{ color: RARE_COLOR }}>
                 {data.perfectGames.length} at 100%
               </span>
               <StatsPager
@@ -1165,7 +1189,7 @@ export const AchievementsShowcase = ({
                   type="button"
                   onClick={() => onOpenGame(game.gameId)}
                   className={cn(
-                    'afterplay-completed-button block w-full relative overflow-hidden rounded-[8px] outline-none',
+                    'afterplay-completed-button block w-full relative overflow-hidden rounded-md outline-hidden',
                     '[transition:transform_260ms_cubic-bezier(0.22,1,0.36,1),box-shadow_220ms_ease]',
                     '[&:is(:hover,:focus-visible)]:[box-shadow:0_10px_22px_rgba(3,6,7,0.34)]',
                     '[&:is(:hover,:focus-visible)]:[transform:translateY(-2px)]',
@@ -1176,9 +1200,9 @@ export const AchievementsShowcase = ({
                   <GameCover
                     url={game.coverUrl}
                     className={cn(
-                      'afterplay-completed-cover aspect-[2/3] w-full overflow-hidden rounded-[8px] border border-border',
+                      'afterplay-completed-cover aspect-[2/3] w-full overflow-hidden rounded-md border border-line',
                       '[transition:border-color_180ms_ease,filter_220ms_ease]',
-                      '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:border-[rgba(216,180,91,0.45)]',
+                      '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:border-line-hover',
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:[filter:saturate(1.12)_brightness(1.05)]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
@@ -1189,8 +1213,8 @@ export const AchievementsShowcase = ({
                   <span
                     aria-hidden="true"
                     className={cn(
-                      'afterplay-completed-wash absolute inset-0 rounded-[8px] pointer-events-none opacity-58',
-                      '[background:linear-gradient(180deg,transparent_58%,rgba(216,180,91,0.2))] [transition:opacity_220ms_ease]',
+                      'afterplay-completed-wash absolute inset-0 rounded-md pointer-events-none opacity-58',
+                      'bg-[linear-gradient(180deg,transparent_58%,rgb(3_6_7/0.45))] [transition:opacity_220ms_ease]',
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:opacity-100',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
@@ -1205,22 +1229,20 @@ export const AchievementsShowcase = ({
                       '[.afterplay-completed-button:is(:hover,:focus-visible)_&]:[transform:translateY(0)]',
                       'motion-reduce:animate-none motion-reduce:transition-none',
                     )}
-                    style={{ color: AMBER }}
+                    style={{ color: RARE_COLOR }}
                   />
                 </button>
                 <div
                   className={cn(
                     'pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-48 -translate-x-1/2 flex-col gap-0.5',
-                    'rounded-[10px] border',
+                    'rounded-md border',
                     floatingPanelClass,
-                    'px-3.25 py-2.75 text-[11.5px]',
+                    'px-3.25 py-2.75 text-micro',
                     'group-hover/perfect:flex',
                   )}
                 >
-                  <span className="truncate text-[12px] font-bold text-foreground">
-                    {game.title}
-                  </span>
-                  <span style={{ color: AMBER }}>
+                  <span className="truncate text-micro font-bold text-bone">{game.title}</span>
+                  <span style={{ color: RARE_COLOR }}>
                     All {game.total} {ACHIEVEMENT_SOURCE_LABEL[game.source]} achievements
                     {game.completedAt &&
                       ` — ${formatByPrecision(game.completedAt, 'day', timeFormat)}`}

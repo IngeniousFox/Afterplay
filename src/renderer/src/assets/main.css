@@ -192,26 +192,6 @@
   }
 }
 
-@keyframes afterplay-desktop-art-drift {
-  from {
-    transform: scale(1.025) translate3d(0, 0, 0);
-  }
-  to {
-    transform: scale(1.075) translate3d(-0.8%, -0.6%, 0);
-  }
-}
-
-@keyframes afterplay-stats-ambient {
-  from {
-    opacity: 0.15;
-    transform: translate3d(0, -18px, 0) scale(0.92);
-  }
-  to {
-    opacity: 0.28;
-    transform: translate3d(-70px, 58px, 0) scale(1.12);
-  }
-}
-
 @keyframes afterplay-game-hltb-track-in {
   from {
     opacity: 0.2;
@@ -231,15 +211,6 @@
   to {
     opacity: 1;
     transform: translate(-1px, 0);
-  }
-}
-
-@keyframes afterplay-game-art-drift {
-  from {
-    transform: scale(1.01) translate3d(-0.5%, -0.5%, 0);
-  }
-  to {
-    transform: scale(1.055) translate3d(1.2%, 0.8%, 0);
   }
 }
 

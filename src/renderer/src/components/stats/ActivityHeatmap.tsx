@@ -5,7 +5,7 @@ import { formatElapsed, formatHours, formatTime, pluralize } from '../../lib/for
 import { isMeasuredSession } from '../../../../shared/domain/sessionMeasure';
 import { floatingPanelClass } from '../../lib/styles';
 import { useTimeFormat } from '../../hooks/settings';
-import { StatCard } from './StatCard';
+import { ChartHeading, StatCard } from './StatCard';
 
 type HeatmapSession = {
   startedAt: Date;
@@ -38,11 +38,11 @@ const DAY_LABEL_WIDTH_PX = 26;
 // Mismos 5 colores que el prototipo (Backlog.html, heatColor) — del blanco
 // casi transparente al verde de acento sólido.
 const LEVEL_COLORS = [
-  'rgba(233,228,216,.045)',
-  'rgba(255,179,71,.28)',
-  'rgba(255,179,71,.48)',
-  'rgba(255,179,71,.72)',
-  'rgba(255,179,71,1)',
+  'var(--color-raised)',
+  'color-mix(in srgb, var(--color-phosphor) 30%, var(--color-panel))',
+  'color-mix(in srgb, var(--color-phosphor) 50%, var(--color-panel))',
+  'color-mix(in srgb, var(--color-phosphor) 74%, var(--color-panel))',
+  'var(--color-phosphor)',
 ];
 
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
@@ -232,7 +232,7 @@ export const ActivityHeatmap = ({
   const monthRow =
     cellPx > 0 ? (
       <div
-        className="mb-1.5 grid text-[11px] whitespace-nowrap text-muted-foreground"
+        className="mb-1.5 grid text-micro whitespace-nowrap text-dust"
         style={{
           gridTemplateColumns: `${DAY_LABEL_WIDTH_PX}px repeat(${weeks}, ${cellPx}px)`,
           columnGap: GAP_PX,
@@ -261,7 +261,7 @@ export const ActivityHeatmap = ({
         {DAY_LABELS.map((label, index) => (
           <span
             key={`day-${index}`}
-            className="flex items-center text-[11px] leading-none text-muted-foreground"
+            className="flex items-center text-micro leading-none text-dust"
           >
             {label}
           </span>
@@ -269,13 +269,7 @@ export const ActivityHeatmap = ({
         {cells.map((cell) => (
           <div
             key={cell.dayMs}
-            className={cn(
-              'afterplay-heat-cell rounded-[3px] origin-center',
-              '[transition:transform_110ms_ease,filter_110ms_ease,box-shadow_110ms_ease]',
-              'hover:z-2 hover:[filter:brightness(1.18)_saturate(1.15)] hover:[transform:scale(1.32)]',
-              'hover:[box-shadow:0_0_10px_rgba(255,179,71,0.25)]',
-              'motion-reduce:animate-none motion-reduce:transition-none',
-            )}
+            className={cn('afterplay-heat-cell rounded-[2px]')}
             style={{ background: LEVEL_COLORS[cell.level] }}
             // Solo días reales del rango — el futuro y los restos de
             // diciembre anterior no tienen nada que contar.
@@ -311,23 +305,22 @@ export const ActivityHeatmap = ({
 
   return (
     <StatCard>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-[14px] font-bold text-foreground">{title}</div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.75 text-[11px] text-muted-foreground">
-            Less
-            {LEVEL_COLORS.map((color) => (
-              <span
-                key={color}
-                className="h-2.5 w-2.5 rounded-[2px]"
-                style={{ background: color }}
-              />
-            ))}
-            More
+      <ChartHeading
+        className="mb-4"
+        title={title}
+        right={
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-micro text-dust">
+              Less
+              {LEVEL_COLORS.map((color) => (
+                <span key={color} className="size-3 rounded-[2px]" style={{ background: color }} />
+              ))}
+              More
+            </div>
+            {yearPicker}
           </div>
-          {yearPicker}
-        </div>
-      </div>
+        }
+      />
 
       <div ref={containerRef} className="relative">
         {cellPx > 0 && (
@@ -350,13 +343,13 @@ export const ActivityHeatmap = ({
             {hovered && (
               <div
                 aria-hidden
-                className="pointer-events-none absolute rounded-[3px]"
+                className="pointer-events-none absolute rounded-[2px]"
                 style={{
                   left: hovered.cellLeft,
                   top: hovered.y,
                   width: cellPx,
                   height: cellPx,
-                  boxShadow: '0 0 0 1.5px rgba(233,228,216,.55)',
+                  boxShadow: '0 0 0 2px var(--color-bone)',
                 }}
               />
             )}
@@ -374,48 +367,49 @@ export const ActivityHeatmap = ({
                 });
                 return (
                   <div
-                    className={`pointer-events-none absolute z-10 w-55 rounded-[10px] border ${floatingPanelClass} px-3.25 py-2.75`}
+                    className={`pointer-events-none absolute z-10 w-60 rounded-md border ${floatingPanelClass} px-3.5 py-3`}
                     style={{
                       left: hovered.x,
                       top: hovered.y - 9,
                       transform: 'translate(-50%, -100%)',
                     }}
                   >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-[12px] font-bold text-foreground">{dateLabel}</span>
-                      {totalSeconds > 0 && (
-                        <span className="text-[12px] font-bold text-primary tabular-nums">
-                          {formatHours(totalSeconds / 3600)}
-                        </span>
-                      )}
-                    </div>
+                    <span className="block text-small font-semibold text-bone">{dateLabel}</span>
+                    {totalSeconds > 0 && (
+                      <span className="mt-1 block font-display text-[30px] leading-none font-bold text-phosphor tabular-nums">
+                        {formatHours(totalSeconds / 3600)}
+                      </span>
+                    )}
+                    {daySessions.length > 0 && (
+                      <span className="mt-1 block text-micro text-dust">
+                        {pluralize(daySessions.length, 'session')}
+                      </span>
+                    )}
 
                     {daySessions.length === 0 ? (
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">No sessions</div>
+                      <div className="mt-1 text-micro text-dust">No sessions</div>
                     ) : (
-                      <div className="mt-1.5 flex flex-col gap-1">
+                      <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2">
                         {shown.map((session, index) => (
-                          <div key={index} className="flex items-center gap-1.75 text-[11.5px]">
-                            <span className="h-1.5 w-1.5 flex-none rounded-full bg-primary/70" />
-                            <span className="flex-none text-muted-foreground tabular-nums">
+                          <div key={index} className="flex items-center gap-1.75 text-micro">
+                            <span className="h-1.5 w-1.5 flex-none rounded-full bg-phosphor" />
+                            <span className="flex-none text-dust tabular-nums">
                               {formatTime(session.startedAt, timeFormat)}
                             </span>
-                            <span className="flex-none font-semibold text-foreground tabular-nums">
+                            <span className="flex-none font-semibold text-bone tabular-nums">
                               {session.endedAt === null ? (
-                                <span className="text-primary">live</span>
+                                <span className="text-phosphor">live</span>
                               ) : (
                                 formatElapsed(session.durationSec ?? 0)
                               )}
                             </span>
                             {session.gameTitle && (
-                              <span className="truncate text-muted-foreground">
-                                — {session.gameTitle}
-                              </span>
+                              <span className="truncate text-dust">— {session.gameTitle}</span>
                             )}
                           </div>
                         ))}
                         {hiddenCount > 0 && (
-                          <div className="text-[11px] text-muted-foreground/70">
+                          <div className="text-micro text-dust">
                             +{pluralize(hiddenCount, 'more session')}
                           </div>
                         )}

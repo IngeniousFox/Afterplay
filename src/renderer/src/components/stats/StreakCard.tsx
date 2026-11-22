@@ -1,11 +1,9 @@
 import { cn } from '../../lib/utils';
-import { Flame } from 'lucide-react';
-import { type CSSProperties, useMemo } from 'react';
-import { AMBER } from '../../lib/colors';
+import { useMemo } from 'react';
 import { pluralize } from '../../lib/format';
 import { playedDayKeysOf, type SessionStats } from '../../../../shared/domain/sessionStats';
 import { currentStreak, longestStreak } from '../../../../shared/domain/streaks';
-import { StatCard } from './StatCard';
+import { ChartHeading, StatCard } from './StatCard';
 import type { Year } from './YearPicker';
 
 type StreakCardProps = {
@@ -15,8 +13,8 @@ type StreakCardProps = {
 
 // Racha de días jugados (estilo resumen anual de Steam). En "All Time" el
 // número grande es la racha ACTUAL (lo que está en juego ahora mismo) y,
-// filtrando por un año, la mejor racha de ese año. El aro no convierte la
-// racha en una meta: solo da escala comparándola con el récord personal.
+// filtrando por un año, la mejor racha de ese año. Las marcas no convierten
+// la racha en una meta: solo dan escala comparándola con el récord personal.
 export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element => {
   const dayKeys = useMemo(() => playedDayKeysOf(stats), [stats]);
   const isAllTime = year === 'all';
@@ -28,7 +26,7 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
   const gapToRecord = Math.max(0, longestEver - mainValue);
   const hasStreak = mainValue > 0;
 
-  const statusLabel = !hasStreak ? 'READY' : isAllTime ? 'CURRENT RUN' : `${year} BEST`;
+  const statusLabel = !hasStreak ? 'Ready' : isAllTime ? 'Current run' : `${year} best`;
   const supportingCopy = !hasStreak
     ? isAllTime
       ? 'Your next played day starts a new run.'
@@ -39,163 +37,77 @@ export const StreakCard = ({ stats, year }: StreakCardProps): React.JSX.Element 
         ? 'This run matches your personal best'
         : 'Your strongest recorded run';
 
+  // Una marca por día del récord (hasta 60; más allá cada marca vale varios
+  // días) y se encienden las de la racha que se enseña.
+  const tickCount = Math.min(60, Math.max(20, recordValue));
+  const litTicks = hasStreak ? Math.max(1, Math.round(progress * tickCount)) : 0;
+
   return (
     <StatCard
       className={cn(
-        'afterplay-streak-card flex h-full flex-col relative overflow-hidden',
-        "after:content-[''] after:absolute after:top-0 after:left-5.5 after:w-14.5 after:h-px after:pointer-events-none",
-        'after:[background:linear-gradient(90deg,transparent,var(--streak-accent),transparent)] after:opacity-50',
-        '[--chart-accent:var(--streak-accent)]',
+        'afterplay-streak-card relative flex h-full flex-col overflow-hidden',
         hasStreak ? '' : 'is-empty',
       )}
-      style={
-        {
-          '--streak-accent': AMBER,
-          '--streak-progress': `${progress * 360}deg`,
-        } as CSSProperties
-      }
     >
-      <div className="afterplay-chart-heading grid grid-cols-[32px_minmax(0,_1fr)_auto] items-center gap-2.5 min-w-0">
-        <span
-          className={cn(
-            'afterplay-chart-heading-icon flex w-8 h-8 items-center justify-center rounded-[9px] border',
-            'border-[color-mix(in_srgb,var(--chart-accent,#ffb347)_22%,transparent)]',
-            'text-[color:var(--chart-accent,#ffb347)]',
-            'bg-[color-mix(in_srgb,var(--chart-accent,#ffb347)_7%,rgba(233,228,216,0.01))]',
-            '[.afterplay-category-card_&]:[transition:color_200ms_ease,border-color_200ms_ease,transform_260ms_cubic-bezier(0.22,1,0.36,1)]',
-            '[.afterplay-category-card:hover_&]:border-[color-mix(in_srgb,var(--chart-accent)_38%,transparent)]',
-            '[.afterplay-category-card:hover_&]:[transform:translateY(-1px)_rotate(-3deg)]',
-            'motion-reduce:animate-none motion-reduce:transition-none',
-          )}
-        >
-          <Flame size={15} />
-        </span>
-        <div className="afterplay-chart-heading-copy min-w-0">
-          <strong className="block text-foreground text-[14px] font-[850] leading-[1.2] whitespace-normal">
-            Daily streak
-          </strong>
-          <small className="block mt-0.75 text-muted-foreground text-[11.5px] leading-[1.2] whitespace-normal">
-            {isAllTime ? 'The rhythm you are carrying now' : `Your strongest run in ${year}`}
-          </small>
-        </div>
-        <span
-          className={cn(
-            'afterplay-streak-status inline-flex items-center gap-1.5 py-[5px] px-[7px] rounded-[99px] text-[11px] font-black',
-            'tracking-[0.09em] whitespace-nowrap border border-[color-mix(in_srgb,var(--streak-accent)_25%,transparent)]',
-            'text-[color:var(--streak-accent)]',
-            'bg-[color-mix(in_srgb,var(--streak-accent)_7%,transparent)]',
-            '[.afterplay-streak-card.is-empty_&]:text-dust [.afterplay-streak-card.is-empty_&]:border-line',
-            '[.afterplay-streak-card.is-empty_&]:bg-bone/[0.025]',
-          )}
-        >
-          <i
-            className={cn(
-              'w-1.25 h-1.25 rounded-full bg-current',
-              '[box-shadow:0_0_6px_color-mix(in_srgb,var(--streak-accent)_35%,transparent)]',
-            )}
-            aria-hidden="true"
-          />
+      <ChartHeading
+        title="Daily streak"
+        right={isAllTime ? 'The rhythm you carry now' : `Your strongest run in ${year}`}
+      />
+
+      <div className="afterplay-streak-stage mt-3 flex flex-1 flex-col">
+        <span className="afterplay-streak-status text-micro font-semibold text-dust">
           {statusLabel}
         </span>
-      </div>
-
-      <div className="afterplay-streak-stage flex min-h-39.5 flex-1 flex-wrap items-center justify-center gap-[17px] pt-[13px] px-[3px] pb-[11px]">
-        <div
-          className={cn(
-            'afterplay-streak-orbit relative flex w-28.5 h-28.5 flex-none items-center justify-center p-[7px] rounded-[50%]',
-            '[background:conic-gradient(var(--streak-accent)_0deg_var(--streak-progress),rgba(233,228,216,0.055)_var(--streak-progress)_360deg)]',
-            '[box-shadow:0_10px_25px_rgba(3,6,7,0.2),0_0_13px_color-mix(in_srgb,var(--streak-accent)_11%,transparent)]',
-            '[transition:box-shadow_240ms_ease,transform_320ms_cubic-bezier(0.22,1,0.36,1)]',
-            "before:content-[''] before:absolute before:-inset-1.75 before:rounded-full before:opacity-32",
-            'before:[background:repeating-conic-gradient(from_-1deg,rgba(233,228,216,0.28)_0deg_1deg,transparent_1deg_15deg)]',
-            'before:[mask:radial-gradient(circle,transparent_68%,#000_69%_71%,transparent_72%)]',
-            '[.afterplay-streak-card:hover_&]:[box-shadow:0_12px_28px_rgba(3,6,7,0.24),0_0_15px_color-mix(in_srgb,var(--streak-accent)_15%,transparent)]',
-            '[.afterplay-streak-card:hover_&]:[transform:translateY(-2px)_rotate(-1deg)]',
-            'motion-reduce:animate-none motion-reduce:transition-none',
-          )}
-          aria-hidden="true"
-        >
-          <div
-            className={cn(
-              'afterplay-streak-orbit-inner flex w-full h-full flex-col items-center justify-center rounded-[50%] border',
-              'border-line',
-              'text-[color:var(--streak-accent)]',
-              '[background:radial-gradient(circle_at_50%_34%,color-mix(in_srgb,var(--streak-accent)_9%,transparent),transparent_43%),#101310]',
-              '[box-shadow:inset_0_0_18px_rgba(3,6,7,0.28)]',
-            )}
-          >
-            <Flame size={20} fill={hasStreak ? AMBER : 'none'} />
-            <strong className="mt-0.5 text-foreground text-[34px] font-display font-bold leading-[0.92] tabular-nums">
-              {mainValue}
-            </strong>
-            <small className="mt-1.25 text-dust text-[11px] font-extrabold tracking-[0.1em] uppercase">
-              {mainValue === 1 ? 'day' : 'days'}
-            </small>
-          </div>
-        </div>
-
-        <div className="afterplay-streak-story min-w-32 flex-1">
-          <span
-            className={cn(
-              'text-[color:var(--streak-accent)]',
-              'text-[11px] font-black tracking-[0.08em]',
-            )}
-          >
-            {isAllTime ? 'CURRENT STREAK' : 'LONGEST RUN'}
-          </span>
-          <strong className="block mt-1.25 text-foreground text-[15px] font-[850] leading-[1.15]">
-            {hasStreak
-              ? isAllTime
-                ? 'Keep the flame moving'
-                : `${year} had momentum`
-              : 'A fresh run'}
-          </strong>
-          <small className="block mt-1.25 text-muted-foreground text-[11px] leading-[1.35]">
-            {supportingCopy}
-          </small>
-          <div className="afterplay-streak-progress mt-[13px]">
-            <span className="block h-1 overflow-hidden rounded-[99px] bg-bone/[0.055]">
-              <i
-                className={cn(
-                  'block h-full rounded-[inherit]',
-                  '[background:linear-gradient(90deg,color-mix(in_srgb,var(--streak-accent)_46%,transparent),var(--streak-accent))]',
-                  'origin-left animate-[afterplay-grow-x_680ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
-                  'motion-reduce:animate-none motion-reduce:transition-none',
-                )}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </span>
-            <em className="block mt-1.25 text-dust text-[11px] not-italic font-bold text-right">
-              {progressPercent}% of record
-            </em>
-          </div>
-        </div>
-      </div>
-
-      <div className="afterplay-streak-footer grid grid-cols-2 gap-[9px] pt-2.5 border-t border-t-[rgba(233,228,216,0.055)]">
-        <div className="min-w-0 p-[7px_9px] border border-line rounded-[8px] bg-bone/[0.018]">
-          <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.04em]">
-            LONGEST EVER
-          </span>
+        <div className="flex items-baseline gap-2">
           <strong
             className={cn(
-              'block whitespace-normal mt-1 text-foreground text-[11px] font-extrabold',
-              'tabular-nums',
+              'font-display text-[88px] leading-[0.9] font-bold tabular-nums',
+              hasStreak ? 'text-phosphor [text-shadow:var(--shadow-glow-text)]' : 'text-bone',
             )}
           >
+            {mainValue}
+          </strong>
+          <small className="font-display text-[32px] leading-none font-bold text-dust">
+            {mainValue === 1 ? 'day' : 'days'}
+          </small>
+        </div>
+        <p className="afterplay-streak-story mt-2 text-small text-dust">{supportingCopy}</p>
+
+        <div
+          className="afterplay-streak-orbit mt-auto flex h-10 items-stretch gap-[3px] pt-4"
+          role="img"
+          aria-label={`${progressPercent}% of your record`}
+        >
+          {Array.from({ length: tickCount }, (_, index) => (
+            <i
+              key={index}
+              className={cn(
+                'min-w-0 flex-1 rounded-[1px]',
+                index < litTicks ? 'bg-phosphor' : 'bg-line-strong',
+              )}
+            />
+          ))}
+        </div>
+        <div className="mt-1.5 flex justify-between gap-3 text-micro text-dust tabular-nums">
+          <span>
+            {pluralize(mainValue, 'day')} {isAllTime ? 'now' : 'best'}
+          </span>
+          <span>{progressPercent}% of record</span>
+        </div>
+      </div>
+
+      <div className="afterplay-streak-footer mt-4 grid grid-cols-2 gap-4 border-t border-line pt-3">
+        <div className="min-w-0">
+          <span className="block text-small text-dust">Longest ever</span>
+          <strong className="mt-0.5 block text-small font-semibold text-bone tabular-nums">
             {pluralize(longestEver, 'day')}
           </strong>
         </div>
-        <div className="min-w-0 p-[7px_9px] border border-line rounded-[8px] bg-bone/[0.018]">
-          <span className="block min-h-7 whitespace-normal text-dust text-[11px] leading-[1.25] font-bold tracking-[0.04em]">
-            {gapToRecord > 0 ? 'TO MATCH IT' : 'STATUS'}
+        <div className="min-w-0">
+          <span className="block text-small text-dust">
+            {gapToRecord > 0 ? 'To match it' : 'Status'}
           </span>
-          <strong
-            className={cn(
-              'block whitespace-normal mt-1 text-foreground text-[11px] font-extrabold',
-              'tabular-nums',
-            )}
-          >
+          <strong className="mt-0.5 block text-small font-semibold text-bone tabular-nums">
             {gapToRecord > 0
               ? pluralize(gapToRecord, 'day')
               : hasStreak

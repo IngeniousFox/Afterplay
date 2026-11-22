@@ -57,7 +57,6 @@ test('year-filtered achievement panels share their top and bottom edges', async 
 }, testInfo) => {
   const { app, window } = afterplay;
   await goTo(window, '/stats');
-  await window.getByRole('button', { name: 'All Time', exact: true }).click();
   await window.getByRole('button', { name: '2026', exact: true }).click();
   const pair = window.getByTestId('achievement-year-panels');
   await expect(pair).toBeAttached();
