@@ -4,31 +4,37 @@ import { buildSplashHtml, SPLASH_SIZE } from '../src/main/splash/splashHtml';
 import { expect, test } from './fixtures';
 
 test.describe('identidad de Afterplay', () => {
-  // Fósforo: el logotipo vive en la barra superior y lleva a Home; Ajustes se
-  // abre con el engranaje de la derecha (antes era la luciérnaga del rail).
+  // Fósforo: el logotipo vive en la barra superior y lleva a Home; el
+  // engranaje de la derecha lleva a la página de Ajustes (antes abría un
+  // modal; antes aún era la luciérnaga del rail).
   test('el engranaje abre Ajustes con ratón y teclado', async ({ afterplay }, testInfo) => {
     const { window } = afterplay;
     const logo = window.getByRole('link', { name: 'Afterplay', exact: true });
     await expect(logo).toBeVisible();
     await expect(logo).toHaveAttribute('href', '#/home');
-    await expect(window.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
-    // Por title y no por rol: con el diálogo abierto el resto de la página
-    // queda inerte y fuera del árbol de accesibilidad.
-    const settings = window.getByTitle('Settings', { exact: true });
-    await expect(settings).toHaveAttribute('aria-expanded', 'false');
+    const settings = window.getByRole('link', { name: 'Settings', exact: true });
+    await expect(settings).toBeVisible();
+    await expect(settings).toHaveAttribute('title', 'Settings');
+    await expect(settings).not.toHaveAttribute('aria-current', 'page');
     await window.getByTestId('app-topbar').screenshot({ path: testInfo.outputPath('top-bar.png') });
 
     await settings.click();
-    await expect(window.getByRole('dialog')).toBeVisible();
-    await expect(settings).toHaveAttribute('aria-expanded', 'true');
-    await window.keyboard.press('Escape');
-    await expect(window.getByRole('dialog')).not.toBeVisible();
+    const page = window.getByTestId('settings-page');
+    await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+    // Encendido en cualquier sección de Ajustes.
+    await expect(settings).toHaveAttribute('aria-current', 'page');
+    await page.getByRole('link', { name: 'About', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'About', exact: true })).toBeVisible();
+    await expect(settings).toHaveAttribute('aria-current', 'page');
+
+    await logo.click();
+    await expect(page).toHaveCount(0);
+    await expect(settings).not.toHaveAttribute('aria-current', 'page');
 
     await settings.focus();
     await window.keyboard.press('Enter');
-    await expect(window.getByRole('dialog')).toBeVisible();
-    await window.keyboard.press('Escape');
-    await expect(settings).toHaveAttribute('aria-expanded', 'false');
+    await expect(page).toBeVisible();
+    await expect(settings).toHaveAttribute('aria-current', 'page');
   });
 
   test('la ventana y el favicon ya no se llaman Electron', async ({ afterplay }) => {

@@ -1,4 +1,5 @@
-import { Check, Images, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, RefreshCw, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ImageCacheType, ImageCacheUsage } from '../../../../shared/types';
@@ -8,8 +9,8 @@ import {
   useImageRedownloadActivity,
   useRedownloadImages,
 } from '../../hooks/images';
-import { AMBER, BLUE, GRAY, GREEN } from '../../lib/colors';
 import { formatBytes } from '../../lib/format';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
 import { SettingsCard } from './SettingsCard';
 import { UsageBreakdownBar } from './UsageBreakdownBar';
 import type { UsageSegment } from './UsageBreakdownBar';
@@ -29,14 +30,13 @@ import type { UsageSegment } from './UsageBreakdownBar';
 // eran violeta, y a ese tamaño no había quien lo distinguiera del azul de los
 // heroes: 650 MB y 146 MB parecían el mismo bloque.)
 const FOLDERS: { type: ImageCacheType; label: string; color: string }[] = [
-  { type: 'covers', label: 'Covers', color: GREEN },
-  { type: 'heroes', label: 'Heroes', color: BLUE },
-  { type: 'achievements', label: 'Achievements', color: AMBER },
-  { type: 'screenshots', label: 'Screenshots', color: GRAY },
+  { type: 'covers', label: 'Covers', color: 'var(--color-success)' },
+  { type: 'heroes', label: 'Heroes', color: 'var(--color-tube)' },
+  { type: 'achievements', label: 'Achievements', color: 'var(--color-phosphor)' },
+  { type: 'screenshots', label: 'Screenshots', color: 'var(--color-dust)' },
 ];
 
-const buttonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
+const buttonClass = cn(secondaryButtonClass, buttonSize.md);
 
 const BAR_CLASS = 'flex h-2.5 gap-0.5 overflow-hidden rounded-full';
 
@@ -60,7 +60,7 @@ const segmentsOf = (usage: ImageCacheUsage): UsageSegment[] =>
 // es el mismo hueco y la misma forma, así que la tarjeta no da un salto al
 // empezar ni al terminar.
 const RedownloadBar = ({ done, total }: { done: number; total: number }): React.JSX.Element => (
-  <div className={`${BAR_CLASS} bg-bone/[0.06]`}>
+  <div className={cn(BAR_CLASS, 'bg-inset')}>
     {/* transform y no width: la redescarga emite un evento cada 25 imágenes
         (decenas de miles entre carátulas, heroes y los dos iconos de cada uno
         de los 39.808 logros) y cada evento redirige esta transición de 500ms,
@@ -72,10 +72,9 @@ const RedownloadBar = ({ done, total }: { done: number; total: number }): React.
         contenedor recortando el borde izquierdo con el mismo radio (5px,
         mitad de h-2.5) que tenía el casquete propio del relleno. */}
     <div
-      className="h-full w-full rounded-full transition-transform duration-500 ease-out"
+      className="h-full w-full rounded-full bg-phosphor transition-transform duration-500 ease-out motion-reduce:transition-none"
       style={{
         transform: `translateX(${(total === 0 ? 0 : (done / total) * 100) - 100}%)`,
-        background: AMBER,
       }}
     />
   </div>
@@ -127,79 +126,78 @@ export const ImagesSection = (): React.JSX.Element => {
     // había servido de nada.
     const mutationError = clean.error ?? redownload.error;
     if (mutationError)
-      return { text: `Failed — ${mutationError.message}`, color: 'var(--destructive)' };
+      return { text: `Failed — ${mutationError.message}`, color: 'var(--color-live)' };
     if (running && progress) {
-      return { text: `${progress.done} / ${progress.total}`, color: AMBER };
+      return { text: `${progress.done} / ${progress.total}`, color: 'var(--color-phosphor)' };
     }
-    if (clean.isPending) return { text: 'Cleaning up…', color: AMBER };
+    if (clean.isPending) return { text: 'Cleaning up…', color: 'var(--color-phosphor)' };
     // En verde y con el tic: lo que distingue "esto ya ha pasado" de "esto
     // te queda por hacer" no puede ser solo el tiempo verbal.
     if (freed) {
       return freed.files === 0
-        ? { text: 'Nothing to free', color: 'var(--muted-foreground)', icon: Check }
-        : { text: `Freed ${formatBytes(freed.bytes)}`, color: GREEN, icon: Check };
+        ? { text: 'Nothing to free', color: 'var(--color-dust)', icon: Check }
+        : { text: `Freed ${formatBytes(freed.bytes)}`, color: 'var(--color-success)', icon: Check };
     }
     if (!usage) return null;
     return usage.unusedFiles > 0
-      ? { text: `${formatBytes(usage.unusedBytes)} reclaimable`, color: AMBER }
-      : { text: 'All in use', color: 'var(--muted-foreground)' };
+      ? { text: `${formatBytes(usage.unusedBytes)} reclaimable`, color: 'var(--color-phosphor)' }
+      : { text: 'All in use', color: 'var(--color-dust)' };
   })();
 
   return (
     <SettingsCard
-      layout="column"
       title="Images"
       // Corta a propósito: con los dos botones a la derecha, esta columna se
-      // queda en media tarjeta, y la versión larga caía en seis renglones de
-      // hilo. Lo que hacía falta explicar (que borrar no pierde nada) está
-      // abajo, junto al botón que borra.
-      description="Covers, heroes, achievement icons and screenshots, kept on your disk so the app works offline and instantly."
-      icon={Images}
-      color={BLUE}
-      headerRight={
-        <div className="flex flex-none items-center gap-2">
-          <button
-            type="button"
-            onClick={handleClean}
-            disabled={busy || usage === undefined || usage.unusedFiles === 0}
-            className={buttonClass}
-          >
-            <Trash2 size={14} />
-            Clean up
-          </button>
+      // queda estrecha. Lo que hacía falta explicar (que borrar no pierde
+      // nada) está abajo, junto al botón que borra.
+      description="Covers, heroes, achievement icons and screenshots kept on your disk, so the app works offline and instantly."
+      action={
+        <>
           <button
             type="button"
             onClick={() => redownload.mutate()}
             disabled={busy || (usage?.usedImages ?? 0) === 0}
             className={buttonClass}
           >
-            <RefreshCw size={14} className={running ? 'animate-spin' : undefined} />
+            <RefreshCw
+              aria-hidden
+              size={15}
+              className={cn(running && 'animate-spin motion-reduce:animate-none')}
+            />
             {running ? 'Downloading…' : 'Redownload'}
           </button>
-        </div>
+          <button
+            type="button"
+            onClick={handleClean}
+            disabled={busy || usage === undefined || usage.unusedFiles === 0}
+            className={buttonClass}
+          >
+            <Trash2 aria-hidden size={15} />
+            Clean up
+          </button>
+        </>
       }
     >
-      <div className="flex flex-col gap-2.75">
+      <div className="flex flex-col gap-3.5">
         {/* El peso primero, que es la pregunta que trae aquí a cualquiera
-            ("¿cuánto me están ocupando?"). A 11px como el resto de renglones
-            de estado de Ajustes: el número en negrita ya destaca lo justo
-            dentro de una tarjeta pequeña, y un titular grande hacía que esta
-            sección pesara más que las demás sin merecerlo. */}
-        <div className="flex items-baseline justify-between gap-3 text-[11px]">
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-semibold tabular-nums text-foreground">
+            ("¿cuánto me están ocupando?"), en cifra de Big Shoulders. A la
+            derecha, siempre en el mismo sitio, lo que sobra o lo que va la
+            pasada en marcha. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-title font-bold text-bone tabular-nums">
               {usage ? formatBytes(usage.totalBytes) : '—'}
             </span>
-            <span className="text-muted-foreground">
+            <span className="text-small text-dust">
               {usage ? `across ${usage.totalFiles.toLocaleString()} files` : 'measuring…'}
             </span>
           </div>
           {badge && (
             <span
-              className="flex flex-none items-center gap-1 font-semibold tabular-nums"
+              className="flex flex-none items-center gap-1 text-small font-semibold tabular-nums"
               style={{ color: badge.color }}
             >
-              {badge.icon && <badge.icon size={11} strokeWidth={3} />}
+              {badge.icon && <badge.icon aria-hidden size={13} strokeWidth={3} />}
               {badge.text}
             </span>
           )}
@@ -211,8 +209,8 @@ export const ImagesSection = (): React.JSX.Element => {
           <UsageBreakdownBar segments={segments} />
         ) : (
           usage && (
-            <div className="text-[11px] text-muted-foreground">
-              Nothing cached yet — images download the first time you see them.
+            <div className="text-small text-dust">
+              Nothing cached yet. Images download the first time you see them.
             </div>
           )
         )}
@@ -221,8 +219,8 @@ export const ImagesSection = (): React.JSX.Element => {
             ANTES de que lo pulses. Las capturas se van siempre porque no
             salen de la base de datos: no hay forma de saber cuáles siguen
             valiendo, y vuelven solas al abrir la ficha del juego. */}
-        <div className="text-micro leading-[1.45] text-muted-foreground/70">
-          These are copies of things still online — cleaning up never loses anything. It removes
+        <div className="text-micro text-dust">
+          These are copies of things still online, so cleaning up never loses anything. It removes
           what no game or achievement points to anymore, plus every screenshot.
         </div>
       </div>

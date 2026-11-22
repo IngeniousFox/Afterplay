@@ -17,7 +17,8 @@ import { SyncLed } from './SyncLed';
 //
 // Logo y pestañas a la izquierda; a la derecha la búsqueda (Ctrl K abre la
 // paleta), el LED de sync, Add game y el engranaje de Ajustes. Sustituye al
-// rail lateral y a la columna fija de juegos.
+// rail lateral y a la columna fija de juegos. El engranaje lleva a la página
+// de Ajustes.
 //
 // Cabe en la ventana mínima de la app (1000 px, mainWindow.ts): por debajo de
 // 1280 px la búsqueda se queda en "Search" y Add game en su icono, con su
@@ -43,13 +44,11 @@ const Logo = (): React.JSX.Element => (
 );
 
 export const TopBar = ({
-  settingsOpen,
-  onOpenSettings,
+  onOpenSyncSettings,
   onOpenPalette,
   onAddGame,
 }: {
-  settingsOpen: boolean;
-  onOpenSettings: () => void;
+  onOpenSyncSettings: () => void;
   onOpenPalette: () => void;
   onAddGame: () => void;
 }): React.JSX.Element => {
@@ -120,7 +119,7 @@ export const TopBar = ({
         <kbd className={kbdClass}>Ctrl K</kbd>
       </button>
 
-      <SyncLed onOpenSettings={onOpenSettings} />
+      <SyncLed onOpenSettings={onOpenSyncSettings} />
 
       <button
         type="button"
@@ -133,17 +132,19 @@ export const TopBar = ({
         <span className="max-xl:hidden">Add game</span>
       </button>
 
-      <button
-        type="button"
-        onClick={onOpenSettings}
+      {/* Ajustes es una página (/settings): el engranaje es un enlace y se
+          queda encendido mientras estás en cualquiera de sus secciones. */}
+      <NavLink
+        to="/settings"
         aria-label="Settings"
         title="Settings"
-        aria-haspopup="dialog"
-        aria-expanded={settingsOpen}
-        className={cn(iconButtonClass, settingsOpen && 'bg-raised text-bone')}
+        className={cn(
+          iconButtonClass,
+          'aria-[current=page]:bg-raised aria-[current=page]:text-phosphor',
+        )}
       >
         <Settings aria-hidden size={18} />
-      </button>
+      </NavLink>
     </header>
   );
 };

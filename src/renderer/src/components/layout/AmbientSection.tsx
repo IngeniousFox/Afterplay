@@ -1,8 +1,6 @@
-import { Sparkles } from 'lucide-react';
 import { useAmbientIdleMinutes, useSetAmbientIdleMinutes } from '../../hooks/settings';
-import { VIOLET } from '../../lib/colors';
 import { Dropdown } from '../library/add-game/Dropdown';
-import { SettingsCard } from './SettingsCard';
+import { SettingsCard, SettingsRow } from './SettingsCard';
 
 // Cuánto tarda en entrar el modo ambiente, o apagarlo del todo.
 //
@@ -35,25 +33,27 @@ export const AmbientSection = (): React.JSX.Element => {
 
   return (
     <SettingsCard
-      layout="row"
       title="Ambient mode"
       description="When you leave the app alone, your library takes over the screen and drifts by. Move the mouse and it steps aside."
-      textClassName="min-w-0 flex-1"
-      icon={Sparkles}
-      color={VIOLET}
+      flush
     >
-      <div className="w-44 flex-none">
-        <Dropdown
-          value={value}
-          options={[...OPTIONS]}
-          onChange={(next) => setMinutes.mutate(Number(next))}
-          renderOption={(option) => LABELS[option]}
-          // Hacia abajo: en la pestaña General esta tarjeta vive arriba del
-          // panel — hacia arriba el desplegable se recortaba contra el borde
-          // superior del área con scroll.
-          openDirection="down"
-        />
-      </div>
+      <SettingsRow
+        label="Start after"
+        description="Never while a game is running or a dialog is open."
+        control={
+          <div className="w-48 flex-none">
+            <Dropdown
+              value={value}
+              options={[...OPTIONS]}
+              onChange={(next) => setMinutes.mutate(Number(next))}
+              renderOption={(option) => LABELS[option]}
+              // Hacia abajo: esta fila vive arriba de la página y hacia
+              // arriba el desplegable se recortaba contra el borde del scroll.
+              openDirection="down"
+            />
+          </div>
+        }
+      />
     </SettingsCard>
   );
 };

@@ -2,9 +2,20 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { launchAfterplay } from './fixtures';
 import type { CredentialsValues } from '../src/shared/types';
+
+// Ajustes es una página (Fósforo): el engranaje de la barra superior es un
+// enlace a /settings y las claves viven en la sección Integrations.
+const openIntegrations = async (page: Page): Promise<Locator> => {
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  const settings = page.getByTestId('settings-page');
+  await expect(settings).toBeVisible();
+  await settings.getByRole('link', { name: 'Integrations', exact: true }).click();
+  await expect(settings.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  return settings;
+};
 
 const buckets = new Map<string, Map<string, Buffer>>();
 const readBody = async (request: IncomingMessage): Promise<Buffer> => {
@@ -106,17 +117,16 @@ test('existing Cloudflare credentials remain selected and unchanged', async () =
     expect(current.credentials.r2AccessKeyId).toBe('existing-key');
     expect(current.credentials.r2SecretAccessKey).toBe('existing-secret');
 
-    await page.getByRole('button', { name: 'Settings' }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    const dialog = await openIntegrations(page);
     await expect(dialog.getByRole('button', { name: /Cloud saves.*Cloudflare R2/ })).toHaveCount(1);
-    await expect(dialog.getByRole('button', { name: 'S3 compatible', exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('radio', { name: 'S3 compatible', exact: true })).toHaveCount(0);
     await dialog.getByRole('button', { name: /Cloud saves/ }).click();
-    await expect(
-      dialog.getByRole('button', { name: 'Cloudflare R2', exact: true }),
-    ).toHaveAttribute('aria-pressed', 'true');
-    await expect(dialog.getByText('ACCOUNT ID', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('ENDPOINT URL', { exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('radio', { name: 'Cloudflare R2', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await expect(dialog.getByText('Account ID', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Endpoint URL', { exact: true })).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Anthropic' }).click();
     await dialog.locator('input').fill('unrelated-setting');
     await dialog.getByRole('button', { name: 'Save keys' }).click();
@@ -147,15 +157,13 @@ test('a new installation can choose S3 without a migration', async () => {
     credentials: fakeCredentials('new'),
   });
   try {
-    await page.getByRole('button', { name: 'Settings' }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    const dialog = await openIntegrations(page);
     await dialog.getByRole('button', { name: /Cloud saves/ }).click();
-    await dialog.getByRole('button', { name: 'S3 compatible', exact: true }).click();
-    await expect(dialog.getByText('ENDPOINT URL', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('ACCOUNT ID', { exact: true })).toHaveCount(0);
+    await dialog.getByRole('radio', { name: 'S3 compatible', exact: true }).click();
+    await expect(dialog.getByText('Endpoint URL', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Account ID', { exact: true })).toHaveCount(0);
     await expect(dialog.locator('select')).toHaveCount(0);
-    const addressing = dialog.getByRole('combobox', { name: 'ADDRESSING' });
+    const addressing = dialog.getByRole('combobox', { name: 'Addressing' });
     await expect(addressing).toContainText('Path style');
     await addressing.click();
     await expect(page.getByRole('option', { name: 'Virtual host style' })).toBeVisible();
@@ -190,12 +198,10 @@ test('changing an S3 bucket offers migration and activates it only after verifie
     credentials: fakeCredentials('old'),
   });
   try {
-    await page.getByRole('button', { name: 'Settings' }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    const dialog = await openIntegrations(page);
     await dialog.getByRole('button', { name: /Cloud saves/ }).click();
     await dialog
-      .getByText('BUCKET', { exact: true })
+      .getByText('Bucket', { exact: true })
       .last()
       .locator('..')
       .locator('input')
@@ -247,12 +253,10 @@ test('a conflicting object keeps the old bucket active and leaves both copies un
     credentials: fakeCredentials('old'),
   });
   try {
-    await page.getByRole('button', { name: 'Settings' }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    const dialog = await openIntegrations(page);
     await dialog.getByRole('button', { name: /Cloud saves/ }).click();
     await dialog
-      .getByText('BUCKET', { exact: true })
+      .getByText('Bucket', { exact: true })
       .last()
       .locator('..')
       .locator('input')

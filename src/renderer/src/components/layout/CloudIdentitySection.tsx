@@ -1,4 +1,5 @@
-import { Check, Loader2, MonitorSmartphone, Search, TriangleAlert } from 'lucide-react';
+import { Check, Loader2, Monitor, Search, TriangleAlert } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import type { CloudMachine, DuplicateResolution, IdentityCheck } from '../../../../shared/types';
 import {
@@ -9,16 +10,19 @@ import {
   useNeedsIdentityCheck,
   useResolveDuplicate,
 } from '../../hooks/saves';
-import { CloudConfirmDialog } from './CloudConfirmDialog';
 import { expandClass } from '../../lib/styles';
-import { AMBER, BLUE } from '../../lib/colors';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
+import { CloudConfirmDialog } from './CloudConfirmDialog';
+import { SettingsCard, StatusLine } from './SettingsCard';
+
+const buttonClass = cn(secondaryButtonClass, buttonSize.md);
 
 // Reconocer la carpeta que este PC ya tenía en el bucket, antes de empezar a
 // subir a una nueva (PARTIDAS-GUARDADAS.md §7.2, ver saves/identity.ts).
 //
 // Por qué esto tiene que existir: el machineId vive en un fichero local que
 // nunca sincroniza, así que una reinstalación mina uno nuevo y abandona la
-// carpeta anterior — que deja de podarse y se paga para siempre. Y sin Turso,
+// carpeta anterior — que deja de podarse y se paga para siempre. Y sin sync,
 // además, el índice desaparece y esos backups quedan invisibles.
 //
 // La sección solo aparece cuando hay algo que decidir: la comprobación previa
@@ -73,41 +77,22 @@ const DuplicateIdentityCard = (): React.JSX.Element | null => {
   const confirm = pending ? DUPLICATE_CONFIRM[pending] : null;
 
   return (
-    <div
+    <SettingsCard
       data-testid="duplicate-identity"
-      className="flex flex-col gap-2.5 rounded-[10px] border px-3.25 py-2.75"
-      style={{ borderColor: `${AMBER}3d`, background: `${AMBER}0d` }}
+      tone="danger"
+      title={
+        <span className="flex items-center gap-2.5">
+          <TriangleAlert aria-hidden size={17} className="flex-none text-live" />
+          Another installation shares this PC&apos;s identity
+        </span>
+      }
+      description="Another Afterplay installation is using this PC's identity. Its data folder was probably copied from here or to here. Cloud backups and cleanup are paused on this PC."
     >
-      <div className="flex items-start gap-2">
-        <div
-          className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-          style={{ background: `${AMBER}1f` }}
-        >
-          <TriangleAlert size={13} style={{ color: AMBER }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold text-foreground">
-            Another installation shares this PC&apos;s identity
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Another Afterplay installation is using this PC&apos;s identity — its data folder was
-            probably copied from here or to here. Cloud backups and cleanup are paused on this PC.
-          </div>
-        </div>
-      </div>
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setPending('keep-this-pc')}
-          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover"
-        >
+        <button type="button" onClick={() => setPending('keep-this-pc')} className={buttonClass}>
           This PC is the original
         </button>
-        <button
-          type="button"
-          onClick={() => setPending('new-identity')}
-          className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover"
-        >
+        <button type="button" onClick={() => setPending('new-identity')} className={buttonClass}>
           This PC is a different one
         </button>
       </div>
@@ -125,7 +110,7 @@ const DuplicateIdentityCard = (): React.JSX.Element | null => {
           setPending(null);
         }}
       />
-    </div>
+    </SettingsCard>
   );
 };
 
@@ -156,61 +141,44 @@ const BucketIdentityCheck = (): React.JSX.Element | null => {
   const busy = check.isPending || adopt.isPending || keep.isPending;
 
   return (
-    <div
-      className="flex flex-col gap-2.5 rounded-[10px] border px-3.25 py-2.75"
-      style={{ borderColor: `${AMBER}3d`, background: `${AMBER}0d` }}
+    <SettingsCard
+      tone="notice"
+      title="Check this PC's cloud folder"
+      description="Afterplay hasn't looked at this bucket yet. If you've backed up from this PC before, on another install, it can reclaim that folder instead of starting a second one that never gets cleaned up."
+      action={
+        !result && (
+          <button type="button" onClick={handleCheck} disabled={busy} className={buttonClass}>
+            {check.isPending ? (
+              <Loader2 aria-hidden size={15} className="animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Search aria-hidden size={15} />
+            )}
+            {check.isPending ? 'Looking…' : 'Check the cloud'}
+          </button>
+        )
+      }
+      extra={
+        <>
+          {check.isError && (
+            <StatusLine tone="error">
+              Couldn&apos;t read the bucket: {check.error.message}
+            </StatusLine>
+          )}
+          {/* adopt/keep escriben en el bucket (PUT machines/<id>.json) — a
+              diferencia de check, que solo lee. Un token de R2 acotado a un
+              prefijo dejaría esto fallar en silencio si no se pintara. */}
+          {(adopt.isError || keep.isError) && (
+            <StatusLine tone="error">
+              Couldn&apos;t write to the bucket: {(adopt.error ?? keep.error)?.message}
+            </StatusLine>
+          )}
+        </>
+      }
     >
-      <div className="flex items-start gap-2">
-        <div
-          className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-          style={{ background: `${AMBER}1f` }}
-        >
-          <MonitorSmartphone size={13} style={{ color: AMBER }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold text-foreground">
-            Check this PC&apos;s cloud folder
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Afterplay hasn&apos;t looked at this bucket yet. If you&apos;ve backed up from this PC
-            before — on another install — it can reclaim that folder instead of starting a second
-            one that never gets cleaned up.
-          </div>
-        </div>
-      </div>
-
-      {!result && (
-        <button
-          type="button"
-          onClick={handleCheck}
-          disabled={busy}
-          className="flex w-fit flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {check.isPending ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-          {check.isPending ? 'Looking…' : 'Check the cloud'}
-        </button>
-      )}
-
-      {check.isError && (
-        <div className="text-[11px] text-destructive">
-          Couldn&apos;t read the bucket — {check.error.message}
-        </div>
-      )}
-      {/* adopt/keep escriben en el bucket (PUT machines/<id>.json) — a
-          diferencia de check, que solo lee. Un token de R2 con permisos
-          acotados a un prefijo concreto (p.ej. solo "saves/") dejaría esto
-          fallar en silencio si no se pintara: la mutation captura el error
-          igual, pero sin esto en el JSX nadie lo veía. */}
-      {(adopt.isError || keep.isError) && (
-        <div className="text-[11px] text-destructive">
-          Couldn&apos;t write to the bucket — {(adopt.error ?? keep.error)?.message}
-        </div>
-      )}
-
       {result && (
         <IdentityResult result={result} busy={busy} onAdopt={handleAdopt} onKeep={handleKeep} />
       )}
-    </div>
+    </SettingsCard>
   );
 };
 
@@ -233,8 +201,8 @@ const IdentityResult = ({
 
   if (sorted.length === 0) {
     return (
-      <div className={`flex flex-col gap-2 ${expandClass}`}>
-        <div className="text-[11.5px] text-muted-foreground">
+      <div className={cn('flex flex-col items-start gap-3', expandClass)}>
+        <div className="text-small text-dust">
           {/* claimed distingue dos situaciones que acababan en el mismo
               texto: un bucket estrenándose de verdad, y el caso normal de
               una instalación que YA subía backups desde antes de que
@@ -251,12 +219,12 @@ const IdentityResult = ({
   }
 
   return (
-    <div className={`flex flex-col gap-2 ${expandClass}`}>
+    <div className={cn('flex flex-col gap-2.5', expandClass)}>
       {/* Ya hemos escrito bajo el id actual: cambiarlo ahora dejaría esos
           objetos huérfanos, así que se avisa antes de ofrecer nada. */}
       {result.claimed && (
-        <div className="flex items-start gap-1.75 text-[11px]" style={{ color: AMBER }}>
-          <TriangleAlert size={12} className="mt-0.5 flex-none" />
+        <div className="flex items-start gap-2 text-small text-phosphor">
+          <TriangleAlert aria-hidden size={14} className="mt-0.5 flex-none" />
           <span>
             This install has already uploaded backups under its own folder. Claiming another one
             would leave those behind — only do it if you know they&apos;re not worth keeping.
@@ -264,9 +232,7 @@ const IdentityResult = ({
         </div>
       )}
 
-      <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">
-        FOUND IN THE CLOUD
-      </div>
+      <div className="text-small font-semibold text-dust">Found in the cloud</div>
 
       {sorted.map((machine) => (
         <MachineRow
@@ -277,7 +243,9 @@ const IdentityResult = ({
         />
       ))}
 
-      <ConfirmButton label="None of these — this is a different PC" busy={busy} onClick={onKeep} />
+      <div>
+        <ConfirmButton label="None of these, this is a different PC" busy={busy} onClick={onKeep} />
+      </div>
     </div>
   );
 };
@@ -295,34 +263,30 @@ const MachineRow = ({
 
   return (
     <div
-      className="flex items-center gap-2.5 rounded-[8px] border px-2.75 py-2"
-      style={
-        likely
-          ? { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
-          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
-      }
+      className={cn(
+        'flex items-center gap-3 rounded-sm border px-3.5 py-2.5',
+        likely ? 'border-tube/40 bg-tube/6' : 'border-line bg-inset',
+      )}
     >
-      <MonitorSmartphone
-        size={13}
-        className="flex-none"
-        style={{ color: likely ? BLUE : 'rgba(233,228,216,.25)' }}
+      <Monitor
+        aria-hidden
+        size={15}
+        className={cn('flex-none', likely ? 'text-tube' : 'text-dust')}
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-semibold text-foreground">
+        <div className="text-body font-semibold text-bone">
           {machine.machineName}
           {likely && (
-            <span className="ml-1.5 text-micro font-bold" style={{ color: BLUE }}>
-              probably this PC
-            </span>
+            <span className="ml-2 text-micro font-semibold text-tube">probably this PC</span>
           )}
         </div>
-        <div className="truncate font-mono text-micro text-muted-foreground">{machine.home}</div>
+        <div className="font-mono text-micro break-all text-dust">{machine.home}</div>
       </div>
       <button
         type="button"
         onClick={onAdopt}
         disabled={busy}
-        className="flex-none rounded-[7px] border border-input px-2.25 py-1 text-[11px] font-bold text-muted-foreground transition-colors duration-150 enabled:hover:border-primary/45 enabled:hover:bg-bone/[0.06] enabled:hover:text-foreground disabled:opacity-50"
+        className={cn(secondaryButtonClass, buttonSize.sm)}
       >
         That&apos;s me
       </button>
@@ -339,13 +303,12 @@ const ConfirmButton = ({
   busy: boolean;
   onClick: () => void;
 }): React.JSX.Element => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={busy}
-    className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+  <button type="button" onClick={onClick} disabled={busy} className={buttonClass}>
+    {busy ? (
+      <Loader2 aria-hidden size={14} className="animate-spin motion-reduce:animate-none" />
+    ) : (
+      <Check aria-hidden size={14} />
+    )}
     {label}
   </button>
 );

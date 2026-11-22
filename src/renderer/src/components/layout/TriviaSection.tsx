@@ -1,13 +1,14 @@
-import { Lightbulb, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   useCuriositiesActivity,
   useCuriositiesStatus,
   useRunCuriositiesBackfill,
 } from '../../hooks/curiosities';
 import { useCredentials } from '../../hooks/settings';
-import { TEAL } from '../../lib/colors';
 import { missingKeyHint } from '../../lib/settingsTabs';
-import { SettingsCard } from './SettingsCard';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
+import { SettingsCard, StatusLine } from './SettingsCard';
 
 // Ajustes → Game trivia: el botón que genera las curiosidades de los juegos
 // que aún no tienen (los nuevos se generan solos al añadirlos). Es una
@@ -43,47 +44,38 @@ export const TriviaSection = (): React.JSX.Element => {
 
   return (
     <SettingsCard
-      layout="row"
       title="Game trivia"
-      description="Real stories about your games — written once from each game's Wikipedia article and mixed into ambient mode, next to your own memories."
-      textClassName="min-w-0 flex-1"
+      description="Real stories about your games, written once from each game's Wikipedia article and mixed into ambient mode, next to your own memories."
       extra={
         <>
-          {statusLine && (
-            <div
-              className="mt-1 text-[11px] font-semibold"
-              style={{ color: running ? TEAL : 'var(--muted-foreground)' }}
-            >
-              {statusLine}
-            </div>
-          )}
+          {statusLine && <StatusLine tone={running ? 'active' : 'muted'}>{statusLine}</StatusLine>}
           {/* Antes runBackfill.isError no se miraba en ningún sitio: un
               rechazo ANTES del primer evento de progreso (clave mala, sin
-              red) devolvía el botón a su reposo con statusLine sin cambiar
-              — parecía que el clic no había hecho nada. */}
+              red) devolvía el botón a su reposo con statusLine sin cambiar. */}
           {runBackfill.isError && (
-            <div className="mt-1 text-[11px] font-semibold text-destructive">
-              Couldn&apos;t start — {runBackfill.error.message}
-            </div>
+            <StatusLine tone="error">Couldn&apos;t start: {runBackfill.error.message}</StatusLine>
           )}
         </>
       }
-      icon={Lightbulb}
-      color={TEAL}
-    >
-      <button
-        type="button"
-        onClick={() => runBackfill.mutate()}
-        disabled={!hasKey || running || pending === 0}
-        className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Sparkles size={14} className={running ? 'animate-pulse' : undefined} />
-        {running
-          ? 'Generating…'
-          : pending > 0
-            ? `Generate for ${pending} game${pending === 1 ? '' : 's'}`
-            : 'Generate'}
-      </button>
-    </SettingsCard>
+      action={
+        <button
+          type="button"
+          onClick={() => runBackfill.mutate()}
+          disabled={!hasKey || running || pending === 0}
+          className={cn(secondaryButtonClass, buttonSize.md)}
+        >
+          <Sparkles
+            aria-hidden
+            size={15}
+            className={cn(running && 'animate-pulse motion-reduce:animate-none')}
+          />
+          {running
+            ? 'Generating…'
+            : pending > 0
+              ? `Generate for ${pending} game${pending === 1 ? '' : 's'}`
+              : 'Generate'}
+        </button>
+      }
+    />
   );
 };

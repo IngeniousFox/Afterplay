@@ -1,5 +1,6 @@
 import { TriangleAlert } from 'lucide-react';
-import { BLUE } from '../../lib/colors';
+import { cn } from '@/lib/utils';
+import { liveButtonClass, primaryButtonClass, secondaryButtonClass } from '../shell/controls';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -14,7 +15,7 @@ type CloudConfirmDialogProps = {
   confirmLabel: string;
   busy?: boolean;
   error?: string | null;
-  // Destructivo = botón rojo; si no, el azul de la app.
+  // Destructivo = botón Live; si no, el primario Phosphor.
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -40,23 +41,28 @@ export const CloudConfirmDialog = ({
       if (!next && !busy) onCancel();
     }}
   >
-    <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-destructive/30 bg-overlay p-0">
-      <div className="flex items-center gap-3 border-b border-border px-5.5 py-5">
-        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-destructive/12">
-          <TriangleAlert size={16} className="text-destructive" />
+    <AlertDialogContent className="w-full max-w-[440px] gap-0 border border-line-strong bg-overlay p-0">
+      <div className="flex items-center gap-3 border-b border-line px-5.5 py-5">
+        <div
+          className={cn(
+            'flex size-8 flex-none items-center justify-center rounded-sm',
+            destructive ? 'bg-live/12 text-live' : 'bg-phosphor-tint text-phosphor',
+          )}
+        >
+          <TriangleAlert aria-hidden size={16} />
         </div>
         <AlertDialogTitle>{title}</AlertDialogTitle>
       </div>
-      <div className="px-5.5 py-5 text-[13.5px] leading-relaxed text-bone">
+      <div className="px-5.5 py-5 text-body text-bone">
         {message}
-        {error && <div className="mt-3 text-[12px] text-destructive">{error}</div>}
+        {error && <div className="mt-3 text-small text-live">{error}</div>}
       </div>
-      <AlertDialogFooter className="!mx-0 !mb-0 flex-row justify-end gap-2.5 !border-t border-border !bg-transparent px-5.5 py-4">
+      <AlertDialogFooter className="!mx-0 !mb-0 flex-row justify-end gap-2.5 !border-t border-line !bg-transparent px-5.5 py-4">
         <button
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="rounded-[10px] border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-foreground hover:bg-raised-hover disabled:opacity-50"
+          className={cn(secondaryButtonClass, 'h-10 px-4.5')}
         >
           Cancel
         </button>
@@ -64,8 +70,7 @@ export const CloudConfirmDialog = ({
           type="button"
           onClick={onConfirm}
           disabled={busy}
-          className="rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-bone disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: destructive ? '#ff5e57' : BLUE }}
+          className={cn(destructive ? liveButtonClass : primaryButtonClass, 'h-10 px-5')}
         >
           {busy ? 'Working…' : confirmLabel}
         </button>

@@ -1,11 +1,5 @@
-import {
-  Cloud,
-  DownloadCloud,
-  Loader2,
-  MonitorSmartphone,
-  Trash2,
-  TriangleAlert,
-} from 'lucide-react';
+import { Cloud, DownloadCloud, Loader2, Monitor, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import type { CloudFolder, CloudInventory } from '../../../../shared/types';
 import {
@@ -14,15 +8,21 @@ import {
   useRecoverFromCloud,
   useScanBucket,
 } from '../../hooks/saves';
-import { CloudConfirmDialog } from './CloudConfirmDialog';
 import { formatBytes, pluralize } from '../../lib/format';
 import { expandClass } from '../../lib/styles';
-import { AMBER, BLUE } from '../../lib/colors';
+import {
+  buttonSize,
+  iconButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from '../shell/controls';
+import { CloudConfirmDialog } from './CloudConfirmDialog';
+import { SettingsCard, SettingsNotice, StatusLine } from './SettingsCard';
 
 // Qué hay DE VERDAD en el bucket, frente a lo que el índice local cree.
 //
 // Las dos cifras pueden no coincidir, y cuando no coinciden es justo cuando
-// importa: el índice viaja por Turso, así que una reinstalación sin sync lo
+// importa: el índice viaja por el sync, así que una reinstalación sin sync lo
 // pierde entero y deja los backups arriba pagándose sin que nada los liste.
 // Desde aquí se ven, se recuperan (se reconstruyen sus filas leyendo el
 // bucket) y se puede tirar lo de una máquina que ya no exista.
@@ -78,43 +78,36 @@ export const CloudInventorySection = (): React.JSX.Element => {
   };
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.75">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-2">
-          <div
-            className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-            style={{ background: `${BLUE}1f` }}
-          >
-            <Cloud size={13} style={{ color: BLUE }} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[13.5px] font-semibold text-foreground">
-              What&apos;s in the cloud
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Read the bucket itself instead of the local index — the way to spot backups this
-              install doesn&apos;t know about, and to get them back.
-            </div>
-          </div>
-        </div>
+    <SettingsCard
+      title="What's in the cloud"
+      description="Read the bucket itself instead of the local index: the way to spot backups this install doesn't know about, and to get them back."
+      action={
         <button
           type="button"
           onClick={handleScan}
           disabled={busy}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(secondaryButtonClass, buttonSize.md)}
         >
-          {scan.isPending ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
+          {scan.isPending ? (
+            <Loader2 aria-hidden size={15} className="animate-spin motion-reduce:animate-none" />
+          ) : (
+            <Cloud aria-hidden size={15} />
+          )}
           {scan.isPending ? 'Reading…' : 'Read the bucket'}
         </button>
-      </div>
-
-      {(scan.isError || recover.isError || deleteMachine.isError || purge.isError) && (
-        <div className="text-[11px] text-destructive">
-          {(scan.error ?? recover.error ?? deleteMachine.error ?? purge.error)?.message}
-        </div>
-      )}
-      {flash && <div className="text-[11.5px] font-semibold text-primary">{flash}</div>}
-
+      }
+      extra={
+        <>
+          {(scan.isError || recover.isError || deleteMachine.isError || purge.isError) && (
+            <StatusLine tone="error">
+              {(scan.error ?? recover.error ?? deleteMachine.error ?? purge.error)?.message}
+            </StatusLine>
+          )}
+          {flash && <StatusLine tone="info">{flash}</StatusLine>}
+        </>
+      }
+      flush
+    >
       {inventory && (
         <Inventory
           inventory={inventory}
@@ -128,7 +121,7 @@ export const CloudInventorySection = (): React.JSX.Element => {
           onPurgeReset={purge.reset}
         />
       )}
-    </div>
+    </SettingsCard>
   );
 };
 
@@ -159,22 +152,19 @@ const Inventory = ({
 
   if (inventory.objectCount === 0) {
     return (
-      <div className={`text-[11.5px] text-muted-foreground ${expandClass}`}>
-        The bucket is empty — nothing has been backed up yet.
+      <div className={cn('px-5 py-4 text-small text-dust', expandClass)}>
+        The bucket is empty. Nothing has been backed up yet.
       </div>
     );
   }
 
   return (
-    <div className={`flex flex-col gap-2 ${expandClass}`}>
-      <div
-        className="flex items-center gap-2 rounded-[8px] border px-2.75 py-2"
-        style={{ borderColor: `${BLUE}2e`, background: `${BLUE}0d` }}
-      >
-        <Cloud size={13} className="flex-none" style={{ color: BLUE }} />
-        <span className="text-[12px] font-semibold text-foreground">
+    <div className={expandClass}>
+      <div className="flex items-center gap-2.5 px-5 py-3 text-small">
+        <Cloud aria-hidden size={15} className="flex-none text-tube" />
+        <span className="font-semibold text-bone">
           {formatBytes(inventory.totalBytes)} in the bucket
-          <span className="font-normal text-muted-foreground">
+          <span className="font-normal text-dust">
             {' · '}
             {pluralize(inventory.objectCount, 'file')}
           </span>
@@ -184,100 +174,108 @@ const Inventory = ({
       {/* Lo que el índice no conoce: ni se puede restaurar ni borrar desde la
           app, pero se paga igual. Es EL motivo de que esta sección exista. */}
       {unknown > 0 && (
-        <div
-          className="flex flex-col gap-2 rounded-[8px] border px-2.75 py-2"
-          style={{ borderColor: `${AMBER}3d`, background: `${AMBER}0d` }}
-        >
-          <div className="flex items-start gap-1.75 text-[11.5px]" style={{ color: AMBER }}>
-            <TriangleAlert size={12} className="mt-0.5 flex-none" />
-            <span>
-              {pluralize(unknown, 'backup')} up there ({formatBytes(inventory.unknownBytes)}) that
-              this install doesn&apos;t know about — it can&apos;t restore or delete them until they
-              are back in the index.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onRecover}
-            disabled={busy}
-            className="flex w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
+        <div className="px-5 pb-3">
+          <SettingsNotice
+            action={
+              <button
+                type="button"
+                onClick={onRecover}
+                disabled={busy}
+                className={cn(primaryButtonClass, buttonSize.md)}
+              >
+                {recovering ? (
+                  <Loader2
+                    aria-hidden
+                    size={15}
+                    className="animate-spin motion-reduce:animate-none"
+                  />
+                ) : (
+                  <DownloadCloud aria-hidden size={15} />
+                )}
+                {recovering ? 'Recovering…' : 'Recover them'}
+              </button>
+            }
           >
-            {recovering ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <DownloadCloud size={13} />
-            )}
-            {recovering ? 'Recovering…' : 'Recover them'}
-          </button>
+            {pluralize(unknown, 'backup')} up there ({formatBytes(inventory.unknownBytes)}) that
+            this install doesn&apos;t know about. It can&apos;t restore or delete them until they
+            are back in the index.
+          </SettingsNotice>
         </div>
       )}
 
-      <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">BY PC</div>
-      {inventory.machines.map((machine) => (
-        <div
-          key={machine.machineId}
-          className="flex items-center gap-2.5 rounded-[8px] border px-2.75 py-2"
-          style={
-            machine.isCurrent
-              ? { borderColor: `${BLUE}2e`, background: `${BLUE}0d` }
-              : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
-          }
-        >
-          <MonitorSmartphone
-            size={13}
-            className="flex-none"
-            style={{ color: machine.isCurrent ? BLUE : 'rgba(233,228,216,.25)' }}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[12px] font-semibold text-foreground">
-              {machine.machineName ?? 'Unregistered PC'}
-              {machine.isCurrent && (
-                <span className="ml-1.5 text-micro font-bold" style={{ color: BLUE }}>
-                  this PC
-                </span>
-              )}
+      <div className="border-t border-line px-5 pt-3 pb-1 text-small font-semibold text-dust">
+        By PC
+      </div>
+      <ul>
+        {inventory.machines.map((machine) => (
+          <li
+            key={machine.machineId}
+            className="flex items-center gap-3 border-t border-line px-5 py-2.5 first:border-t-0"
+          >
+            <span className="flex size-8 flex-none items-center justify-center rounded-sm bg-raised">
+              <Monitor
+                aria-hidden
+                size={15}
+                className={machine.isCurrent ? 'text-phosphor' : 'text-dust'}
+              />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 text-body font-semibold text-bone">
+                {machine.machineName ?? 'Unregistered PC'}
+                {machine.isCurrent && (
+                  <span className="rounded-xs bg-phosphor px-1.5 py-px text-micro font-semibold text-ink">
+                    This PC
+                  </span>
+                )}
+              </div>
+              <div className="text-micro break-all text-dust">
+                {formatBytes(machine.totalBytes)} · {pluralize(machine.backupCount, 'backup')}
+                {machine.home && ` · ${machine.home}`}
+              </div>
             </div>
-            <div className="truncate text-micro text-muted-foreground">
-              {formatBytes(machine.totalBytes)} · {pluralize(machine.backupCount, 'backup')}
-              {machine.home && ` · ${machine.home}`}
-            </div>
-          </div>
-          {/* La propia máquina no se ofrece borrar: sería tirar tus backups
-              actuales desde un botón pensado para limpiar los de otros. */}
-          {!machine.isCurrent && (
-            <button
-              type="button"
-              onClick={() => onDelete(machine.machineId)}
-              disabled={busy}
-              className="flex-none rounded-md p-1.5 text-muted-foreground transition-colors duration-150 enabled:hover:bg-destructive/10 enabled:hover:text-destructive disabled:opacity-50"
-              aria-label="Delete this PC's backups from the bucket"
-            >
-              <Trash2 size={13} />
-            </button>
-          )}
-        </div>
-      ))}
+            {/* La propia máquina no se ofrece borrar: sería tirar tus backups
+                actuales desde un botón pensado para limpiar los de otros. */}
+            {!machine.isCurrent && (
+              <button
+                type="button"
+                onClick={() => onDelete(machine.machineId)}
+                disabled={busy}
+                className={cn(iconButtonClass, 'hover:text-live')}
+                aria-label="Delete this PC's backups from the bucket"
+                title="Delete this PC's backups from the bucket"
+              >
+                <Trash2 aria-hidden size={15} />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
 
-      <div className="text-[11px] font-bold tracking-[.05em] text-muted-foreground">BY GAME</div>
-      <div className="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
+      <div className="border-t border-line px-5 pt-3 pb-1 text-small font-semibold text-dust">
+        By game
+      </div>
+      <div className="flex max-h-72 flex-col overflow-y-auto px-5 pb-3">
         {groups.map((group) => (
-          <div key={group.saveKey} className="flex flex-col">
+          <div
+            key={group.saveKey}
+            className="flex flex-col border-t border-line py-1.5 first:border-t-0"
+          >
             {group.folders.map((folder) => (
               <div
                 key={`${folder.saveKey}-${folder.machineId}`}
-                className="flex items-center gap-2 px-1 py-1 text-[11.5px]"
+                className="flex items-center gap-2 py-1 text-small"
               >
-                <span className="min-w-0 flex-1 truncate text-foreground">
+                <span className="min-w-0 flex-1 text-bone">
                   {folder.gameTitle
                     ? `${folder.gameTitle}${folder.gameDeleted ? ' (deleted)' : ''}`
                     : `Not in your library (save key ${folder.saveKey})`}
                 </span>
                 {folder.unknownCount > 0 && (
-                  <span className="flex-none text-micro font-bold" style={{ color: AMBER }}>
+                  <span className="flex-none text-micro font-semibold text-phosphor">
                     {folder.unknownCount} unknown
                   </span>
                 )}
-                <span className="flex-none text-muted-foreground">
+                <span className="flex-none text-dust tabular-nums">
                   {formatBytes(folder.totalBytes)}
                 </span>
               </div>
@@ -288,9 +286,9 @@ const Inventory = ({
                 data-testid="cloud-purge"
                 onClick={() => setPurgeTarget(group)}
                 disabled={busy}
-                className="mb-1 ml-1 flex w-fit items-center gap-1.5 text-[11px] font-semibold text-muted-foreground transition-colors duration-150 enabled:hover:text-destructive disabled:opacity-50"
+                className="flex w-fit items-center gap-1.5 rounded-xs py-0.5 text-small font-semibold text-dust transition-colors duration-150 outline-none enabled:hover:text-live focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:opacity-40"
               >
-                <Trash2 size={11} />
+                <Trash2 aria-hidden size={13} />
                 Delete these copies
               </button>
             )}
@@ -304,8 +302,8 @@ const Inventory = ({
           purgeTarget && (
             <>
               Deletes {pluralize(purgeTarget.backupCount, 'version')} of{' '}
-              <span className="font-bold text-foreground">{purgeTarget.title}</span> from every PC.
-              This can&apos;t be undone.
+              <span className="font-bold text-bone">{purgeTarget.title}</span> from every PC. This
+              can&apos;t be undone.
             </>
           )
         }

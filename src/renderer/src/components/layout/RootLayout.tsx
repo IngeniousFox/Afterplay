@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import type { GameId } from '../../../../shared/entityIds';
 import { useCredentials } from '../../hooks/settings';
@@ -13,7 +13,7 @@ import {
 } from '../shell/shellContext';
 import { TopBar } from '../shell/TopBar';
 import { NowPlayingCard } from './NowPlayingCard';
-import { SettingsModal } from './SettingsModal';
+import { settingsPath, type SettingsLocationState } from './SettingsSections';
 
 // El alta de juegos pesa (buscador, escaneo, formulario) y solo se usa al
 // pulsar Add game: se carga entonces, fuera del presupuesto de arranque.
@@ -38,30 +38,38 @@ export const RootLayout = (): React.JSX.Element => {
   useMemoryArrivalToast();
   const navigate = useNavigate();
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [credentialsSpotlight, setCredentialsSpotlight] = useState(false);
   const [addGameOpen, setAddGameOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [library, setLibrary] = useState<LibraryView>(INITIAL_LIBRARY_VIEW);
 
+  const openSettings: ShellActions['openSettings'] = (options) => {
+    const state: SettingsLocationState = options?.credentials
+      ? { credentialsSpotlight: true }
+      : null;
+    navigate(settingsPath(options?.credentials ? 'integrations' : options?.section), { state });
+  };
+
   // Primer arranque sin credenciales de IGDB (instalación virgen, sin .env que
-  // importar): se abre Ajustes UNA vez en la sección de claves, con el grupo
-  // de IGDB desplegado y el aviso de bienvenida. Sin ellas no hay búsqueda de
-  // juegos y el porqué no es obvio. Ajustar-estado-durante-render (sin
-  // useEffect), como el resto de la app; una sola vez por sesión.
+  // importar): se va UNA vez a Ajustes → Integrations, con el grupo de IGDB
+  // desplegado y el aviso de bienvenida. Sin ellas no hay búsqueda de juegos
+  // y el porqué no es obvio. Navegar es un efecto, así que va en useEffect;
+  // la marca de "ya mirado" (un ref, no estado: no pinta nada) evita
+  // repetirlo en la misma sesión.
   const { data: credentials } = useCredentials();
-  const [credentialsChecked, setCredentialsChecked] = useState(false);
-  if (credentials && !credentialsChecked) {
-    setCredentialsChecked(true);
+  const credentialsChecked = useRef(false);
+  useEffect(() => {
+    if (credentials === undefined || credentialsChecked.current) return;
+    credentialsChecked.current = true;
     if (!credentials.twitchClientId || !credentials.twitchClientSecret) {
-      setCredentialsSpotlight(true);
-      setSettingsOpen(true);
+      navigate(settingsPath('integrations'), {
+        state: { credentialsSpotlight: true } satisfies SettingsLocationState,
+      });
     }
-  }
+  }, [credentials, navigate]);
 
   // Ctrl K (Cmd K en macOS) desde cualquier pantalla, también escribiendo en
   // un campo. Con otro diálogo abierto no se apila encima.
-  const modalOpen = settingsOpen || addGameOpen;
+  const modalOpen = addGameOpen;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
@@ -74,10 +82,7 @@ export const RootLayout = (): React.JSX.Element => {
   }, [modalOpen]);
 
   const shell: ShellActions = {
-    openSettings: (options) => {
-      setCredentialsSpotlight(options?.credentials === true);
-      setSettingsOpen(true);
-    },
+    openSettings,
     openAddGame: () => setAddGameOpen(true),
     openPalette: () => setPaletteOpen(true),
     library,
@@ -92,8 +97,7 @@ export const RootLayout = (): React.JSX.Element => {
     <ShellContext.Provider value={shell}>
       <div className="flex h-full flex-col bg-cabinet text-bone" data-testid="desktop-layout">
         <TopBar
-          settingsOpen={settingsOpen}
-          onOpenSettings={() => shell.openSettings()}
+          onOpenSyncSettings={() => openSettings({ section: 'sync' })}
           onOpenPalette={() => setPaletteOpen(true)}
           onAddGame={() => setAddGameOpen(true)}
         />
@@ -102,17 +106,6 @@ export const RootLayout = (): React.JSX.Element => {
         </main>
         <NowPlayingCard />
       </div>
-
-      <SettingsModal
-        open={settingsOpen}
-        onOpenChange={(next) => {
-          setSettingsOpen(next);
-          // El spotlight es solo para ESA apertura: al cerrar, el modal vuelve
-          // a ser el de siempre (sección colapsada, sin aviso).
-          if (!next) setCredentialsSpotlight(false);
-        }}
-        credentialsSpotlight={credentialsSpotlight}
-      />
 
       {/* onCreated: el juego recién añadido queda abierto en su ficha. Y uno
           que ya tenías y buscaste sin acordarte te lleva a la suya en vez de

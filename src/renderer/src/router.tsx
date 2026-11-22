@@ -109,6 +109,18 @@ export const router = createHashRouter([
             // The separate module is warmed after startup and reused on navigation.
             lazy: loadStatsRoute,
           },
+          {
+            // Ajustes es una página (Fósforo): /settings/<sección>. Sin
+            // sección, General.
+            path: 'settings',
+            children: [
+              { index: true, element: <Navigate to="/settings/general" replace /> },
+              {
+                path: ':section',
+                lazy: () => import('./screens/Settings').then((m) => ({ Component: m.Settings })),
+              },
+            ],
+          },
         ],
       },
       {

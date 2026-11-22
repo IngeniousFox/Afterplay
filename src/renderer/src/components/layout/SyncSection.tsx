@@ -1,39 +1,30 @@
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Monitor, RefreshCw, Smartphone } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { checkHubUrl } from '../../../../shared/sync/hubUrl';
 import type { SyncStatus } from '../../../../shared/sync/status';
+import { useDevices } from '../../hooks/devices';
 import { usePairSync, useSyncNow, useSyncStatus, useUnpairSync } from '../../hooks/sync';
-import { AMBER, GREEN } from '../../lib/colors';
-import { accentGradientStyle } from '../../lib/styles';
 import { describeAgo } from '../../lib/syncText';
-import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
-import { SettingsCard } from './SettingsCard';
+import { fieldLabelClass, textInputClass } from '../library/add-game/styles';
+import { buttonSize, primaryButtonClass, secondaryButtonClass } from '../shell/controls';
+import { SettingsCard, SettingsNotice } from './SettingsCard';
 
-// Mismo botón de contorno que el resto de Ajustes (Back up now, Export keys).
-const outlineButtonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
+const secondaryClass = cn(secondaryButtonClass, buttonSize.md);
 
-// Sync entre tus PCs a través de TU hub (AFTERPLAY-2.0.md §9). Aquí solo se
-// empareja este PC, se ve cómo va y se olvida el hub; el alta de dispositivos
-// nuevos y su revocación viven en la web.
-export const SyncSection = (): React.JSX.Element => {
+// Sync entre tus PCs a través de TU hub (AFTERPLAY-2.0.md §9). Aquí se
+// empareja este PC, se ve cómo va, qué dispositivos conoce la base y se
+// olvida el hub; el alta de dispositivos nuevos y su revocación viven en la
+// web. Página propia en Fósforo (settings.png): estado grande arriba.
+export const SyncSection = (): React.JSX.Element | null => {
   const { data: status } = useSyncStatus();
+  if (!status) return null;
 
   return (
-    <SettingsCard
-      layout="column"
-      title="Sync"
-      description="Keep your library, sessions and plan in step across your PCs and your phone through your own Afterplay hub. The app works the same without it."
-      icon={RefreshCw}
-      color={GREEN}
-    >
-      {status &&
-        (status.paired ? (
-          <PairedView status={status} />
-        ) : (
-          <PairForm available={status.available} />
-        ))}
-    </SettingsCard>
+    <div className="flex max-w-[1100px] flex-col gap-5">
+      {status.paired ? <PairedView status={status} /> : <PairForm available={status.available} />}
+      {status.paired && <DevicesCard />}
+    </div>
   );
 };
 
@@ -43,7 +34,7 @@ const PairForm = ({ available }: { available: boolean }): React.JSX.Element => {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   // El formulario nace plegado: la mayoría de la gente no usa sync, y así la
-  // pestaña Connections no estrena dos campos de texto más a la vista.
+  // sección no estrena dos campos de texto a la vista.
   const [open, setOpen] = useState(false);
 
   // La dirección se valida mientras se escribe, pero solo si hay algo: un
@@ -67,85 +58,115 @@ const PairForm = ({ available }: { available: boolean }): React.JSX.Element => {
     }
   };
 
-  if (!open) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-2.75">
-        <div className="text-[12px] text-muted-foreground">Not paired.</div>
-        <button type="button" onClick={() => setOpen(true)} className={outlineButtonClass}>
-          Pair this PC…
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <form
-      className="flex flex-col gap-2.5 border-t border-line pt-2.75"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (canPair) void handlePair();
-      }}
+    <SettingsCard
+      title={
+        <span className="flex items-center gap-3">
+          <span aria-hidden className="size-2.5 flex-none rounded-full border-2 border-dust" />
+          <span className="font-display text-title font-bold">Not paired.</span>
+        </span>
+      }
+      description="Keep your library, sessions and plan in step across your PCs and your phone through your own Afterplay hub. The app works the same without it."
+      action={
+        !open && (
+          <button type="button" onClick={() => setOpen(true)} className={secondaryClass}>
+            Pair this PC…
+          </button>
+        )
+      }
     >
-      <div className="text-[12px] text-muted-foreground">
-        In the web app, open <span className="text-foreground">Add device</span> to get a one-time
-        code, then enter it here with your hub address.
-      </div>
-      <label className="block">
-        <div className={fieldLabelClass}>Hub address</div>
-        <input
-          type="text"
-          value={hubUrl}
-          onChange={(event) => setHubUrl(event.target.value)}
-          placeholder="https://your-hub.example"
-          spellCheck={false}
-          autoComplete="off"
-          aria-invalid={urlMessage !== null}
-          className={`${textInputClass} ${textInputFocusClass}`}
-        />
-        {urlMessage && (
-          <div role="alert" className="mt-1 text-[11px] text-destructive">
-            {urlMessage}
-          </div>
-        )}
-      </label>
-      <label className="block">
-        <div className={fieldLabelClass}>Pairing code</div>
-        <input
-          type="text"
-          value={code}
-          onChange={(event) => setCode(event.target.value)}
-          placeholder="Code from the web app"
-          spellCheck={false}
-          autoComplete="off"
-          className={`${textInputClass} ${textInputFocusClass}`}
-        />
-      </label>
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={!canPair}
-          style={accentGradientStyle}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] px-3.5 py-2 text-[12.5px] font-bold disabled:cursor-not-allowed disabled:opacity-50"
+      {open && (
+        <form
+          className="flex max-w-[640px] flex-col gap-3.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (canPair) void handlePair();
+          }}
         >
-          {pair.isPending ? 'Pairing…' : 'Pair'}
-        </button>
-        <button type="button" onClick={() => setOpen(false)} className={outlineButtonClass}>
-          Cancel
-        </button>
-        {!available && (
-          <span className="text-[11px] text-muted-foreground">
-            Sync is turned off in this session.
-          </span>
-        )}
-      </div>
-      {error && (
-        <div role="alert" className="text-[11px] text-destructive">
-          {error}
-        </div>
+          <div className="text-small text-dust">
+            In the web app, open <span className="text-bone">Add device</span> to get a one-time
+            code, then enter it here with your hub address.
+          </div>
+          <label className="block">
+            <div className={fieldLabelClass}>Hub address</div>
+            <input
+              type="text"
+              value={hubUrl}
+              onChange={(event) => setHubUrl(event.target.value)}
+              placeholder="https://your-hub.example"
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={urlMessage !== null}
+              className={textInputClass}
+            />
+            {urlMessage && (
+              <div role="alert" className="mt-1.5 text-small text-live">
+                {urlMessage}
+              </div>
+            )}
+          </label>
+          <label className="block">
+            <div className={fieldLabelClass}>Pairing code</div>
+            <input
+              type="text"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="Code from the web app"
+              spellCheck={false}
+              autoComplete="off"
+              className={cn(textInputClass, 'font-mono')}
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={!canPair}
+              className={cn(primaryButtonClass, buttonSize.md)}
+            >
+              {pair.isPending ? 'Pairing…' : 'Pair'}
+            </button>
+            <button type="button" onClick={() => setOpen(false)} className={secondaryClass}>
+              Cancel
+            </button>
+            {!available && (
+              <span className="text-small text-dust">Sync is turned off in this session.</span>
+            )}
+          </div>
+          {error && (
+            <div role="alert" className="text-small text-live">
+              {error}
+            </div>
+          )}
+        </form>
       )}
-    </form>
+    </SettingsCard>
   );
 };
+
+// El titular del estado, con las mismas palabras que la pastilla de la barra
+// superior (SyncLed): Tube cuando todo va bien, gris sin conexión o en pausa,
+// Live solo cuando hace falta que hagas algo.
+const headlineOf = (
+  status: SyncStatus,
+): { heading: string; tone: 'ok' | 'busy' | 'off' | 'error' } => {
+  if (status.disabledReason !== null) return { heading: 'Sync paused', tone: 'off' };
+  if (status.problem) {
+    if (status.problem.code === 'network') return { heading: 'Offline', tone: 'off' };
+    const needsYou = !status.problem.retrying || status.problem.code === 'clock_ahead';
+    return needsYou
+      ? { heading: 'Sync stopped', tone: 'error' }
+      : { heading: 'Sync will retry', tone: 'off' };
+  }
+  if (status.running) return { heading: 'Syncing', tone: 'busy' };
+  return { heading: 'Up to date', tone: 'ok' };
+};
+
+const DOT_CLASS = {
+  ok: 'bg-tube shadow-[0_0_8px_var(--color-tube)]',
+  busy: 'bg-tube animate-pulse-soft motion-reduce:animate-none',
+  off: 'border-2 border-dust',
+  error: 'bg-live',
+} as const;
 
 const PairedView = ({ status }: { status: SyncStatus }): React.JSX.Element => {
   const syncNow = useSyncNow();
@@ -158,75 +179,124 @@ const PairedView = ({ status }: { status: SyncStatus }): React.JSX.Element => {
     return () => clearInterval(timer);
   }, []);
   const lastSync = Math.max(status.lastPushAt ?? 0, status.lastPullAt ?? 0) || null;
+  const { heading, tone } = headlineOf(status);
 
   return (
-    <div className="flex flex-col gap-2.5 border-t border-line pt-2.75">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-        <div className="min-w-0 text-[12px] text-muted-foreground">
-          Paired with <span className="font-semibold text-foreground">{hostOf(status.hubUrl)}</span>
+    <SettingsCard
+      title={
+        <span className="flex items-center gap-3">
+          <span aria-hidden className={cn('size-3 flex-none rounded-full', DOT_CLASS[tone])} />
+          <span className="font-display text-title font-bold">{heading}</span>
+        </span>
+      }
+      description={
+        <>
+          Paired with <span className="font-semibold text-bone">{hostOf(status.hubUrl)}</span>
           {' · '}
           {status.running ? 'syncing…' : `last sync ${describeAgo(lastSync, now)}`}
-        </div>
-        <div className="flex flex-none items-center gap-2">
+        </>
+      }
+      action={
+        <>
+          {!confirming && (
+            <button type="button" onClick={() => setConfirming(true)} className={secondaryClass}>
+              Unpair
+            </button>
+          )}
           <button
             type="button"
             onClick={() => syncNow.mutate()}
             disabled={status.running || status.disabledReason !== null}
-            className={outlineButtonClass}
+            className={cn(primaryButtonClass, buttonSize.md)}
           >
-            <RefreshCw size={13} className={status.running ? 'animate-spin' : ''} />
+            <RefreshCw
+              aria-hidden
+              size={15}
+              className={cn(status.running && 'animate-spin motion-reduce:animate-none')}
+            />
             Sync now
           </button>
-          {!confirming && (
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className={outlineButtonClass}
-            >
-              Unpair
-            </button>
+        </>
+      }
+    >
+      {(status.problem || status.disabledReason || confirming) && (
+        <div className="flex flex-col gap-3">
+          {(status.problem || status.disabledReason) && (
+            <SettingsNotice danger={tone === 'error'}>
+              {status.disabledReason ?? status.problem?.message}
+            </SettingsNotice>
+          )}
+          {confirming && (
+            <div className="flex flex-col gap-3 rounded-sm border border-line-strong bg-inset px-4 py-3.5">
+              <div className="text-small text-bone">
+                This PC will stop syncing and forget the hub. Your data stays here. To cut off its
+                access for good, also remove this device from the web app.
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    unpair.mutate(undefined, { onSettled: () => setConfirming(false) })
+                  }
+                  disabled={unpair.isPending}
+                  className={secondaryClass}
+                >
+                  {unpair.isPending ? 'Unpairing…' : 'Unpair this PC'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className={secondaryClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
         </div>
-      </div>
-
-      {(status.problem || status.disabledReason) && (
-        <div
-          className="flex items-start gap-2 rounded-[9px] border px-2.75 py-2"
-          style={{ borderColor: `${AMBER}44`, background: `${AMBER}0f` }}
-        >
-          <AlertTriangle size={13} className="mt-0.5 flex-none" style={{ color: AMBER }} />
-          <div className="min-w-0 text-[11.5px] leading-relaxed" style={{ color: AMBER }}>
-            {status.disabledReason ?? status.problem?.message}
-          </div>
-        </div>
       )}
+    </SettingsCard>
+  );
+};
 
-      {confirming && (
-        <div className="flex flex-col gap-2 rounded-[9px] border border-border px-2.75 py-2">
-          <div className="text-[11.5px] leading-relaxed text-muted-foreground">
-            This PC will stop syncing and forget the hub. Your data stays here. To cut off its
-            access for good, also remove this device from the web app.
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => unpair.mutate(undefined, { onSettled: () => setConfirming(false) })}
-              disabled={unpair.isPending}
-              className={outlineButtonClass}
+// Los dispositivos que conoce la base (los mismos que firman las sesiones).
+// Solo se leen: renombrar y dar de baja viven en la web.
+const DevicesCard = (): React.JSX.Element | null => {
+  const { data: devices = [] } = useDevices();
+  if (devices.length === 0) return null;
+  return (
+    <SettingsCard
+      title="Devices"
+      description="Every device that writes to this library. Add or remove devices from the web app."
+      flush
+    >
+      <ul>
+        {devices.map((device) => {
+          const Icon = device.os === 'web' ? Smartphone : Monitor;
+          return (
+            <li
+              key={device.id}
+              className={cn(
+                'flex items-center gap-3.5 border-t border-line px-5 py-3 first:border-t-0',
+                device.isThisDevice && 'bg-phosphor-tint',
+              )}
             >
-              {unpair.isPending ? 'Unpairing…' : 'Unpair this PC'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className={outlineButtonClass}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+              <span className="flex size-8 flex-none items-center justify-center rounded-sm bg-raised text-dust">
+                <Icon aria-hidden size={16} />
+              </span>
+              <span className="min-w-0 flex-1 text-body font-semibold text-bone">
+                {device.name}
+              </span>
+              {device.isThisDevice && (
+                <span className="rounded-xs bg-phosphor px-1.5 py-0.5 text-micro font-semibold text-ink">
+                  This PC
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </SettingsCard>
   );
 };
 

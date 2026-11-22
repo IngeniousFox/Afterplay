@@ -93,20 +93,37 @@ test('capturas de escritorio', async () => {
       await window.evaluate((id) => globalThis.api.sessions.close(id, new Date()), session.id);
     }
 
-    // Ajustes: hoy un modal que abre el engranaje; en 2.0, una página.
+    // Ajustes: una página con sus nueve secciones (estados-ajustes-*.png). El
+    // engranaje lleva a General; el resto, una captura por sección.
     await goTo(window, '/games');
-    const gear = window.getByRole('button', { name: 'Settings' }).first();
-    if (await gear.isVisible().catch(() => false)) {
-      await gear.click();
-      await shot('settings');
-      await window.keyboard.press('Escape');
-    } else {
-      const link = window.getByRole('link', { name: 'Settings' }).first();
-      if (await link.isVisible().catch(() => false)) {
-        await link.click();
-        await shot('settings');
-      }
+    await window.getByRole('link', { name: 'Settings', exact: true }).click();
+    await shot('settings');
+    for (const section of [
+      'general',
+      'library',
+      'emulators',
+      'saves',
+      'integrations',
+      'sync',
+      'achievements',
+      'backups',
+      'about',
+    ]) {
+      await goTo(window, `/settings/${section}` as Route);
+      await shot(`settings-${section}`);
     }
+    // Integrations con el aviso de bienvenida y IGDB abierto, como llega en el
+    // primer arranque sin claves. La biblioteca de prueba sí tiene claves, así
+    // que se simula la navegación del armazón: la misma ruta con el estado
+    // { credentialsSpotlight } que pone RootLayout (formato del historial de
+    // React Router: el estado propio va en `usr`).
+    await goTo(window, '/home');
+    await window.evaluate(() => {
+      const state = { usr: { credentialsSpotlight: true }, key: 'shots', idx: 1 };
+      globalThis.history.pushState(state, '', '#/settings/integrations');
+      globalThis.dispatchEvent(new PopStateEvent('popstate', { state }));
+    });
+    await shot('settings-integrations-welcome');
   } finally {
     await app.close().catch(() => {});
     sandbox.cleanup();
@@ -145,6 +162,8 @@ test('capturas de biblioteca vacía y ventana mínima', async () => {
     for (const [name, route] of [
       ['home-min', '/home'],
       ['library-min', '/games'],
+      ['settings-integrations-min', '/settings/integrations' as Route],
+      ['settings-saves-min', '/settings/saves' as Route],
     ] as [string, Route][]) {
       await goTo(small.window, route);
       await small.window.waitForTimeout(1500);

@@ -1,10 +1,12 @@
 import { createContext, useContext } from 'react';
 import type { GameId } from '../../../../shared/entityIds';
 import { EMPTY_FILTERS, type GameFilters } from '../../lib/gameFilters';
+import type { SettingsSectionId } from '../layout/SettingsSections';
 
 // Lo que el armazón de escritorio (RootLayout) ofrece a las pantallas que
-// monta: abrir Ajustes, el alta de juegos o la paleta de Ctrl K sin que cada
-// pantalla tenga su propia copia de esos modales, y la vista de la biblioteca.
+// monta: ir a Ajustes, abrir el alta de juegos o la paleta de Ctrl K sin que
+// cada pantalla tenga su propia copia de esos modales, y la vista de la
+// biblioteca.
 //
 // La vista de Library (búsqueda, filtros y el último juego abierto) vive aquí y
 // no en la pantalla: antes la columna de juegos sobrevivía a la ficha porque
@@ -28,9 +30,10 @@ export const INITIAL_LIBRARY_VIEW: LibraryView = {
 };
 
 export type ShellActions = {
-  // credentials: abre Ajustes en la sección de claves con el aviso de
-  // bienvenida desplegado (lo que hacía el rail en el primer arranque).
-  openSettings: (options?: { credentials?: boolean }) => void;
+  // Navega a la página de Ajustes (/settings/<section>, General por defecto).
+  // credentials: abre Integrations con el aviso de bienvenida y el grupo de
+  // IGDB desplegado (lo que hacía el rail en el primer arranque).
+  openSettings: (options?: { section?: SettingsSectionId; credentials?: boolean }) => void;
   openAddGame: () => void;
   openPalette: () => void;
   library: LibraryView;

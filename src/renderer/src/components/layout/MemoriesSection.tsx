@@ -1,4 +1,5 @@
-import { BookOpen, RefreshCw, Sparkles, Square } from 'lucide-react';
+import { RefreshCw, Sparkles, Square } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   useMemoriesActivity,
   useMemoriesStatus,
@@ -7,9 +8,9 @@ import {
   useStopMemories,
 } from '../../hooks/memories';
 import { useCredentials } from '../../hooks/settings';
-import { VIOLET } from '../../lib/colors';
 import { missingKeyHint } from '../../lib/settingsTabs';
-import { SettingsCard } from './SettingsCard';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
+import { SettingsCard, StatusLine } from './SettingsCard';
 
 // Ajustes → Your story (AFTERPLAY-LOOP.md §3.6): la tarjeta de los recaps,
 // junto a la de curiosidades y con su misma gramática. Lo AUTOMÁTICO (el mes
@@ -17,8 +18,7 @@ import { SettingsCard } from './SettingsCard';
 // decisiones que cuestan dinero y por eso son botones: el backfill del pasado
 // histórico y regenerar lo que corregiste (§7.2). Nada se paga por sorpresa.
 
-const buttonClass =
-  'flex flex-none items-center justify-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
+const buttonClass = cn(secondaryButtonClass, buttonSize.md);
 
 export const MemoriesSection = (): React.JSX.Element => {
   const { data: creds } = useCredentials();
@@ -57,50 +57,29 @@ export const MemoriesSection = (): React.JSX.Element => {
 
   return (
     <SettingsCard
-      layout="row"
       title="Your story"
-      description="Each month and year of your playing, told back to you in a few lines — written when the period closes and kept in your Journey."
-      textClassName="min-w-0 flex-1"
+      description="Each month and year of your playing, told back to you in a few lines, written when the period closes and kept in your Journey."
       extra={
         <>
-          {statusLine && (
-            <div
-              className="mt-1 text-[11px] font-semibold"
-              style={{ color: running ? VIOLET : 'var(--muted-foreground)' }}
-            >
-              {statusLine}
-            </div>
-          )}
+          {statusLine && <StatusLine tone={running ? 'active' : 'muted'}>{statusLine}</StatusLine>}
           {/* Ni runBackfill.isError ni regenerateStale.isError se miraban
               antes: un rechazo previo al primer evento de progreso volvía el
               botón a su reposo sin decir nada de lo que había pasado. */}
           {(runBackfill.error ?? regenerateStale.error) && (
-            <div className="mt-1 text-[11px] font-semibold text-destructive">
-              Couldn&apos;t start — {(runBackfill.error ?? regenerateStale.error)?.message}
-            </div>
+            <StatusLine tone="error">
+              Couldn&apos;t start: {(runBackfill.error ?? regenerateStale.error)?.message}
+            </StatusLine>
           )}
         </>
       }
-      icon={BookOpen}
-      color={VIOLET}
-    >
-      <div className="flex flex-none flex-col items-stretch gap-1.5">
-        {running ? (
+      action={
+        running ? (
           <button type="button" onClick={() => stopQueue.mutate()} className={buttonClass}>
-            <Square size={13} />
+            <Square aria-hidden size={14} />
             Stop after this one
           </button>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => runBackfill.mutate()}
-              disabled={!hasKey || missing === 0}
-              className={buttonClass}
-            >
-              <Sparkles size={14} />
-              {missing > 0 ? `Write ${missing} ${missing === 1 ? 'story' : 'stories'}` : 'Write'}
-            </button>
             {stale > 0 && (
               <button
                 type="button"
@@ -108,13 +87,22 @@ export const MemoriesSection = (): React.JSX.Element => {
                 disabled={!hasKey}
                 className={buttonClass}
               >
-                <RefreshCw size={13} />
+                <RefreshCw aria-hidden size={14} />
                 {`Refresh ${stale} outdated`}
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => runBackfill.mutate()}
+              disabled={!hasKey || missing === 0}
+              className={buttonClass}
+            >
+              <Sparkles aria-hidden size={15} />
+              {missing > 0 ? `Write ${missing} ${missing === 1 ? 'story' : 'stories'}` : 'Write'}
+            </button>
           </>
-        )}
-      </div>
-    </SettingsCard>
+        )
+      }
+    />
   );
 };

@@ -142,7 +142,11 @@ export const LibraryOnboarding = (): React.JSX.Element => {
 
       <p className="mt-7 text-small text-dust">
         Already use Afterplay on another PC?{' '}
-        <button type="button" onClick={() => shell.openSettings()} className={textLinkClass}>
+        <button
+          type="button"
+          onClick={() => shell.openSettings({ section: 'sync' })}
+          className={textLinkClass}
+        >
           Join with a code
         </button>
       </p>
