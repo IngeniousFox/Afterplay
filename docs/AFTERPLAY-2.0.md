@@ -1408,7 +1408,33 @@ Nada obligatorio. Las horas de dos PCs ya suman en los totales. Un desglose por 
 
 #### Lo que no cambia
 
-La estructura de la biblioteca, de la ficha, de las estadísticas y del modo TV; el aviso de sesión cerrada; el modo ambiente; el recorrido ("Journey"). Con un solo PC, la única novedad visible es el bloque de Sincronización en Ajustes.
+La estructura de la biblioteca, de la ficha, de las estadísticas y del modo TV; el aviso de sesión cerrada; el modo ambiente; el recorrido ("Journey"). Con un solo PC, la única novedad visible es el bloque de Sincronización en Ajustes. Esto era así hasta el rediseño de §15.8, que cambia el aspecto y la estructura de todas las pantallas sin cambiar lo que hacen.
+
+### §15.8 Rediseño visual "Fósforo"
+
+La 2.0.0 estrena aspecto en escritorio, TV, overlay y móvil. Se exploraron tres direcciones (`docs/redesign/concepts/`) y se eligió **Fósforo**: fondo petróleo, ámbar de pantalla de fósforo como único acento, cifras grandes en Big Shoulders Display e interfaz en Barlow. Solo modo oscuro. La referencia completa (67 maquetas, sistema de diseño y decisiones de cada área) está en `docs/redesign/concepts/b-fosforo/`, con el sistema en `README-sistema.md`.
+
+**Tokens compartidos.** `src/shared/theme/fosforo.css` es la única fuente de color, tipografía, radios, sombras y movimiento. La importan `src/renderer/src/assets/main.css` y `web/src/index.css`, que mapean sobre ella las variables de shadcn. Las fuentes van empaquetadas (`@fontsource`), no del sistema. Los colores de estado del juego viven en `src/shared/gameStatus.ts` (cinco LED: Playing, Beaten, Backlog, Resting, Dropped; On Hold comparte el de Resting y Unplayed/Plan el de Backlog). No hay color de aviso propio: los avisos usan el ámbar con un triángulo.
+
+**Estructura nueva en escritorio.**
+
+| Antes (1.x)                           | Ahora                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Rail lateral + columna fija de juegos | Barra superior de 56 px: Home, Library, Plan, Sessions, Stats; Ctrl K, LED de sync, Add game   |
+| Entrada en la biblioteca              | Home "Tonight" (`/home`): sesión en marcha o último juego, semana, Up next, avisos             |
+| Biblioteca en la columna              | Library a pantalla completa (`/games`) con filtros laterales y rejilla                         |
+| Tarjeta "Now playing" en la columna   | Barra acoplada abajo (72 px), solo con sesión en marcha                                        |
+| Ficha en una página larga             | Cabecera con banda compacta pegajosa y pestañas Overview, Sessions, Achievements, Saves, Notes |
+| Ajustes en un modal                   | Página `/settings/:section` con 9 secciones                                                    |
+| Overlay a pantalla completa           | Panel de 440 px con pestañas Session e History, sin perder nada                                |
+
+**Ajustes.** General, Library (incluye Images), Emulators, Saves, Integrations, Sync, Achievements (antes Journey), Backups y About. Las claves de Turso siguen en Integrations como "Turso (1.x)" porque `legacyCutover` las lee durante el corte y `setCredentials` borraría las que no estén en el formulario; desaparecen con el resto de Turso (Apéndice C).
+
+**Lo que no cambia.** La lógica: sync, migración, hub, datos y cálculos de estadísticas no se tocaron. La migración conserva sus pasos (Check, Copy, Connect, Upload, Finish). La TV conserva sus salas (Home, Library, Journey) y su navegación con mando.
+
+**Comprobación.** `playwright.shots.config.ts` (`e2e/shots/`) recorre las pantallas sobre la biblioteca desechable de los e2e y guarda capturas en `docs/redesign/screens/<set>/`: `before` es la 1.x y `after` el rediseño. La PWA tiene su propio arnés con datos inventados en `web/scripts/shots/`.
+
+**Pendiente.** El icono de la app (`resources/icon.png`) sigue en el verde 1.x. Sin probar en hardware: TV con mando real, overlay sobre un juego, PWA en un iPhone.
 
 ---
 
