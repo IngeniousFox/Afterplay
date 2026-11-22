@@ -5,6 +5,9 @@ import type { GameId } from '../../../shared/entityIds';
 import { GameGrid } from '../components/library/GameGrid';
 import { LibraryOnboarding } from '../components/library/LibraryOnboarding';
 import { GameFilterPanel } from '../components/layout/GameFilterPanel';
+import { ScanBeam } from '../components/fx/Backdrop';
+import { GlowText } from '../components/fx/GlowText';
+import { Ticker } from '../components/fx/Ticker';
 import {
   buttonSize,
   focusRing,
@@ -34,6 +37,11 @@ import { filterByTitle } from '../lib/search';
 // título, filtrar, contar, dejar seleccionado el último juego abierto y
 // navegar a su ficha. La vista (búsqueda, filtros, selección) vive en el
 // armazón para sobrevivir a la ficha (ver shellContext).
+//
+// Movimiento (components/fx): la cifra grande cuenta hasta su valor (desde
+// la anterior al filtrar), la rejilla entra escalonada al cargar y al cambiar
+// de filtro, las portadas se inclinan con el ratón y la biblioteca vacía está
+// en modo «attract», como una recreativa esperando moneda.
 
 const GROUPS: FilterGroup[] = ['status', 'flags', 'playtime', 'era', 'genre'];
 const FLAGS: FlagKey[] = ['endless', 'emulated'];
@@ -103,14 +111,19 @@ export const Library = (): React.JSX.Element => {
           <h1 className="sr-only">Library</h1>
           <header className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <p className="flex items-baseline gap-3" aria-live="polite">
-              <span
-                className={cn(
-                  'font-display text-stat font-bold tabular-nums',
-                  empty ? 'text-phosphor' : 'text-bone',
-                )}
-              >
-                {isLoading ? '–' : visible.length}
-              </span>
+              {isLoading ? (
+                <span className="font-display text-stat font-bold text-bone tabular-nums">–</span>
+              ) : (
+                <Ticker
+                  value={visible.length}
+                  from="previous"
+                  duration={520}
+                  className={cn(
+                    'font-display text-stat font-bold tabular-nums',
+                    empty ? 'text-phosphor' : 'text-bone',
+                  )}
+                />
+              )}
               <span className="font-display text-title font-semibold text-dust">
                 {narrowed && !empty
                   ? `of ${games.length} ${games.length === 1 ? 'game' : 'games'}`
@@ -190,7 +203,14 @@ export const Library = (): React.JSX.Element => {
               </p>
             </div>
           ) : (
-            <GameGrid games={visible} onSelectGame={openGame} selectedId={library.lastOpenedId} />
+            <GameGrid
+              games={visible}
+              onSelectGame={openGame}
+              selectedId={library.lastOpenedId}
+              // Un filtro u orden nuevo reparte la entrada otra vez; escribir
+              // en el buscador, no.
+              dealKey={JSON.stringify(filters)}
+            />
           )}
         </div>
       </div>
@@ -198,32 +218,49 @@ export const Library = (): React.JSX.Element => {
   );
 };
 
-// Primer arranque: rejilla fantasma con borde punteado que se desvanece
-// (la primera con "+", que abre el alta) y, encima, los tres pasos.
+// Primer arranque, en modo «attract» de recreativa: la rejilla fantasma de
+// borde punteado se desvanece hacia abajo y un testigo ámbar la recorre
+// casilla a casilla; la primera es el "+" que abre el alta, con un «Insert
+// game» que parpadea, y un haz barre el conjunto. Encima, los tres pasos.
+// Reduced motion: todo quieto (el "+" sigue resaltado).
+const ATTRACT_TILES = 7;
+const ATTRACT_STEP_MS = 2400 / (ATTRACT_TILES + 1);
+
 const EmptyLibrary = (): React.JSX.Element => {
   const { openAddGame } = useShell();
   return (
     <div className="relative">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 mask-b-from-0% mask-b-to-100% opacity-80">
+      <div className="relative grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 mask-b-from-0% mask-b-to-100% opacity-80">
         <button
           type="button"
           onClick={openAddGame}
           aria-label="Add game"
           title="Add game"
           className={cn(
-            'flex aspect-3/4 items-center justify-center rounded-sm border border-dashed border-phosphor/50 bg-phosphor/5 font-display text-title text-phosphor transition-colors duration-150 hover:bg-phosphor/10',
+            'flex aspect-3/4 flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-phosphor/50 bg-phosphor/5 text-phosphor transition-colors duration-150 hover:bg-phosphor/10',
             focusRing,
           )}
         >
-          +
+          <GlowText className="font-display text-title">+</GlowText>
+          <span
+            aria-hidden
+            className="animate-blink text-small font-semibold motion-reduce:animate-none"
+            // Cuatro parpadeos y se queda encendido: un texto que parpadea
+            // sin fin pasa de molestia a barrera (WCAG 2.2.2).
+            style={{ animationIterationCount: 4 }}
+          >
+            Insert game
+          </span>
         </button>
-        {Array.from({ length: 7 }, (_, index) => (
+        {Array.from({ length: ATTRACT_TILES }, (_, index) => (
           <span
             key={index}
             aria-hidden
-            className="aspect-3/4 rounded-sm border border-dashed border-line-strong"
+            className="aspect-3/4 animate-attract rounded-sm border border-dashed border-line-strong motion-reduce:animate-none"
+            style={{ animationDelay: `${(index + 1) * ATTRACT_STEP_MS}ms` }}
           />
         ))}
+        <ScanBeam every={6} className="rounded-sm" />
       </div>
       <div className="relative -mt-40">
         <LibraryOnboarding />

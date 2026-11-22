@@ -4,11 +4,17 @@ import { useSessionsInRange } from '../../hooks/sessions';
 import { useNow } from '../../hooks/useNow';
 import { addDays, startOfDay } from '../../lib/dateMath';
 import { formatHours } from '../../lib/format';
+import { chartGroup, growY, useInView } from '../fx/chart';
+import { GlowText } from '../fx/GlowText';
+import { Ticker } from '../fx/Ticker';
 
 // "This week" de Home: horas, sesiones y juegos de la semana en curso (de
 // lunes a domingo), con una barra por día. Sale de las sesiones que
 // ARRANCARON en la semana (useSessionsInRange, la misma consulta que el
 // heatmap); una sesión abierta cuenta hasta ahora.
+//
+// Marcador (components/fx): las tres cifras entran contando y las barras de
+// los días crecen desde la base, escalonadas, al entrar en pantalla.
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -53,7 +59,7 @@ export const WeekPanel = (): React.JSX.Element => {
   }
   const total = days.reduce((sum, value) => sum + value, 0);
   const longest = Math.max(...days);
-  const { hours, minutes } = splitHours(total);
+  const { observe: observeBars, inView: barsInView } = useInView();
 
   return (
     <section
@@ -70,11 +76,30 @@ export const WeekPanel = (): React.JSX.Element => {
       <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
         <div className="flex flex-col-reverse">
           <dt className="mt-1 text-small text-dust">played</dt>
-          <dd className="font-display text-stat font-bold text-phosphor tabular-nums">
-            {hours}
-            <span className="text-[0.45em] font-semibold text-dust">h</span>
-            {minutes}
-            <span className="text-[0.45em] font-semibold text-dust">m</span>
+          <dd>
+            <GlowText className="font-display text-stat font-bold text-phosphor tabular-nums">
+              <Ticker
+                value={total}
+                // Desde lo que se veía: con una sesión abierta el total sube
+                // cada minuto y no debe volver a contar desde cero.
+                from="previous"
+                format={(seconds) => {
+                  const { hours, minutes } = splitHours(seconds);
+                  return `${hours}h ${minutes}m`;
+                }}
+                render={(seconds) => {
+                  const { hours, minutes } = splitHours(seconds);
+                  return (
+                    <>
+                      {hours}
+                      <span className="text-[0.45em] font-semibold text-dust">h</span>
+                      {minutes}
+                      <span className="text-[0.45em] font-semibold text-dust">m</span>
+                    </>
+                  );
+                }}
+              />
+            </GlowText>
           </dd>
         </div>
         <div className="flex flex-col-reverse border-l border-line pl-8">
@@ -82,12 +107,14 @@ export const WeekPanel = (): React.JSX.Element => {
             {sessions.length === 1 ? 'session' : 'sessions'}
           </dt>
           <dd className="font-display text-stat font-bold text-bone tabular-nums">
-            {sessions.length}
+            <Ticker value={sessions.length} from="previous" />
           </dd>
         </div>
         <div className="flex flex-col-reverse border-l border-line pl-8">
           <dt className="mt-1 text-small text-dust">{games.size === 1 ? 'game' : 'games'}</dt>
-          <dd className="font-display text-stat font-bold text-bone tabular-nums">{games.size}</dd>
+          <dd className="font-display text-stat font-bold text-bone tabular-nums">
+            <Ticker value={games.size} from="previous" />
+          </dd>
         </div>
       </dl>
 
@@ -96,7 +123,13 @@ export const WeekPanel = (): React.JSX.Element => {
       )}
 
       {/* Escala = el día más largo; los días vacíos conservan un tope de 3 px. */}
-      <ol className="mt-auto grid grid-cols-7 gap-2 pt-5" aria-label="Time played per day">
+      <ol
+        ref={observeBars}
+        // Las barras esperan a los datos: crecer hasta 3 px no luce.
+        data-inview={(barsInView && !isLoading) || undefined}
+        className={cn('mt-auto grid grid-cols-7 gap-2 pt-5', chartGroup)}
+        aria-label="Time played per day"
+      >
         {days.map((seconds, index) => {
           const today = index === todayIndex;
           const height = longest > 0 ? Math.max(3, Math.round((seconds / longest) * 64)) : 3;
@@ -112,9 +145,10 @@ export const WeekPanel = (): React.JSX.Element => {
                 <span
                   className={cn(
                     'w-full rounded-xs',
+                    growY,
                     today ? 'bg-phosphor shadow-glow-bar' : 'bg-raised-hover',
                   )}
-                  style={{ height }}
+                  style={{ height, animationDelay: `${120 + index * 45}ms` }}
                 />
               </span>
               <span

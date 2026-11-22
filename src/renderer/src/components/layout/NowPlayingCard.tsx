@@ -17,6 +17,11 @@ import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { formatElapsed, formatTime } from '../../lib/format';
 import { GameCover } from '../GameCover';
+import { GlowText } from '../fx/GlowText';
+import { PressButton } from '../fx/PressButton';
+import { celebrate } from '../fx/sparks';
+import { Odometer } from '../fx/Ticker';
+import { VuMeter } from '../fx/VuMeter';
 import { AssignSessionModal } from '../sessions/AssignSessionModal';
 import {
   buttonSize,
@@ -31,7 +36,9 @@ import {
 // Una barra de 72 px bajo todas las pantallas de escritorio mientras haya algo
 // en marcha; sin nada en marcha NO se pinta y la página recupera el sitio (un
 // hueco fijo con "lo último jugado" repetiría lo que ya dice Home). Entra
-// deslizándose (animate-np-in; con reduced motion es un fundido).
+// «encendiéndose» como un tubo (animate-power-on; con reduced motion es un
+// fundido). Mientras corre: el VU meter baila, el cronómetro respira y sus
+// dígitos caen al cambiar; parar una sesión de más de una hora suelta chispas.
 //
 // Lo que enseña y hace es lo de siempre (§10.8, §15.7):
 //   · Sesión de este PC: pulso rojo, cronómetro, Stop.
@@ -54,6 +61,9 @@ type LiveEntry =
   // juego, ni carátula, ni título — solo el emulador. Se enseña igual porque
   // es el empujón natural para asignarla.
   | { kind: 'pending'; startedAt: Date; session: PendingSession };
+
+// A partir de aquí, parar la sesión desde la barra se celebra.
+const LONG_SESSION_MS = 60 * 60 * 1000;
 
 const rank = (entry: LiveEntry): number => (entry.kind === 'pending' ? 1 : entry.own ? 0 : 2);
 
@@ -115,7 +125,7 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
         <section
           aria-label="Now playing"
           data-testid="now-playing"
-          className="relative flex-none animate-np-in overflow-hidden border-t border-line bg-panel"
+          className="relative flex-none origin-center animate-power-on overflow-hidden border-t border-line bg-panel"
         >
           {/* Zona héroe: líneas de escaneo y el brillo ámbar, solo aquí. */}
           <div aria-hidden className="pointer-events-none absolute inset-0 bg-(image:--scan)" />
@@ -213,6 +223,21 @@ const GameBar = ({ entry }: { entry: Extract<LiveEntry, { kind: 'game' }> }): Re
   const open = (): void => {
     navigate(`/games/${entry.game.id}`);
   };
+  // Una sesión de más de una hora que paras tú se celebra, con chispas que
+  // salen de donde estaba Stop (la barra desaparece al cerrar, así que el
+  // sitio se mide en el clic). Solo si el cierre sale bien.
+  const stop = (closing: SessionWithGame, button: HTMLElement): void => {
+    const long = Date.now() - entry.startedAt.getTime() >= LONG_SESSION_MS;
+    const origin = button.getBoundingClientRect();
+    closeSession.mutate(
+      { id: closing.id, endedAt: new Date() },
+      {
+        onSuccess: () => {
+          if (long) celebrate('session', { origin });
+        },
+      },
+    );
+  };
 
   return (
     <div className="flex h-18 items-center gap-4 px-5">
@@ -259,19 +284,29 @@ const GameBar = ({ entry }: { entry: Extract<LiveEntry, { kind: 'game' }> }): Re
         </div>
       </div>
 
-      <span
-        className={cn(
-          'flex-none font-display text-[44px] leading-none font-bold tabular-nums',
-          silent ? 'text-dust' : 'animate-timer-breathe text-phosphor motion-reduce:animate-none',
-        )}
-      >
-        {formatElapsed(elapsed)}
-      </span>
+      <VuMeter
+        bars={6}
+        tone={device.remote ? 'tube' : 'phosphor'}
+        active={!silent}
+        className={cn('h-7', silent && 'opacity-40')}
+      />
+      {silent ? (
+        <span className="flex-none font-display text-[44px] leading-none font-bold text-dust tabular-nums">
+          {formatElapsed(elapsed)}
+        </span>
+      ) : (
+        <GlowText
+          breathe
+          className="flex-none font-display text-[44px] leading-none font-bold text-phosphor"
+        >
+          <Odometer value={formatElapsed(elapsed)} />
+        </GlowText>
+      )}
 
       {session !== null && canStop ? (
-        <button
-          type="button"
-          onClick={() => closeSession.mutate({ id: session.id, endedAt: new Date() })}
+        <PressButton
+          burst="live"
+          onClick={(event) => stop(session, event.currentTarget)}
           disabled={closeSession.isPending}
           aria-label="Stop session"
           title="Stop session"
@@ -279,7 +314,7 @@ const GameBar = ({ entry }: { entry: Extract<LiveEntry, { kind: 'game' }> }): Re
         >
           <Square aria-hidden size={12} fill="currentColor" />
           Stop
-        </button>
+        </PressButton>
       ) : device.remote ? (
         <span className="flex min-w-0 items-center gap-1.5 text-small text-dust">
           <Lock aria-hidden size={13} className="flex-none" />
@@ -314,9 +349,10 @@ const PendingBar = ({
           Emulator session · not assigned to a game yet · since {since}
         </div>
       </div>
-      <span className="flex-none font-display text-[44px] leading-none font-bold text-phosphor tabular-nums">
-        {formatElapsed(elapsed)}
-      </span>
+      <VuMeter bars={6} className="h-7" />
+      <GlowText className="flex-none font-display text-[44px] leading-none font-bold text-phosphor">
+        <Odometer value={formatElapsed(elapsed)} />
+      </GlowText>
       <button type="button" onClick={onAssign} className={cn(primaryButtonClass, buttonSize.md)}>
         <Link2 aria-hidden size={15} />
         Assign

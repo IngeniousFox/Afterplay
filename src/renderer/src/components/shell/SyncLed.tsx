@@ -5,6 +5,7 @@ import type { SyncStatus } from '../../../../shared/sync/status';
 import { useSyncNow, useSyncStatus } from '../../hooks/sync';
 import { useNow } from '../../hooks/useNow';
 import { describeAgo } from '../../lib/syncText';
+import { Glitch } from '../fx/Glitch';
 import { buttonSize, focusRing, primaryButtonClass, textLinkClass } from './controls';
 
 // La pastilla de sync de la barra superior (AFTERPLAY-2.0.md §15.7, concepto
@@ -104,8 +105,15 @@ export const SyncLed = ({
           focusRing,
         )}
       >
-        <span aria-hidden className={cn('size-2 flex-none rounded-full', DOT_CLASS[view.tone])} />
-        <span>{view.label}</span>
+        {/* Un corte de RGB al ENTRAR en error o sin conexión, nunca en bucle. */}
+        <Glitch
+          active={view.tone === 'error' || view.tone === 'offline'}
+          replayKey={view.tone}
+          className="items-center gap-2"
+        >
+          <SyncDot tone={view.tone} />
+          <span>{view.label}</span>
+        </Glitch>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Positioner
@@ -171,6 +179,17 @@ export const SyncLed = ({
     </PopoverPrimitive.Root>
   );
 };
+
+// El LED de la barra. Al día: un halo cian que respira despacio (vivo, pero
+// sin reclamar atención); el resto de tonos, como en el popover.
+const SyncDot = ({ tone }: { tone: Tone }): React.JSX.Element => (
+  <span aria-hidden className="relative inline-flex size-2 flex-none">
+    {tone === 'ok' && (
+      <span className="absolute inset-0 animate-[led-ring_3.2s_var(--ease-out)_infinite] rounded-full bg-tube/70 motion-reduce:hidden" />
+    )}
+    <span className={cn('relative size-2 rounded-full', DOT_CLASS[tone])} />
+  </span>
+);
 
 const hostOf = (url: string): string => {
   try {

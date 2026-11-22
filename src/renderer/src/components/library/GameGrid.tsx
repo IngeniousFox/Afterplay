@@ -1,19 +1,21 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { GameListItem } from '../../../../shared/types';
 import type { GameId } from '../../../../shared/entityIds';
+import { useStagger } from '../fx/useStagger';
 import { GameCard } from './GameCard';
 
 // La rejilla de portadas de Library.
 //
-// ENTRADA ESCALONADA POR PANTALLA, no por lista: justo antes del primer
-// pintado se mide qué tarjetas caen dentro del viewport —da igual a qué altura
-// esté restaurado el scroll— y solo ESAS reciben la onda, ordenadas por
-// posición visual. Al resto se les apaga la animación. Así la cascada se ve
-// siempre, su coste no depende del tamaño de la biblioteca, y quien hace
+// ENTRADA ESCALONADA POR PANTALLA, no por lista (components/fx/Stagger):
+// justo antes del primer pintado se mide qué tarjetas caen dentro del
+// viewport —da igual a qué altura esté restaurado el scroll— y solo ESAS
+// reciben la onda (un pop), ordenadas por posición visual. El resto aparece
+// ya asentado. Así la cascada se ve siempre, su coste no depende del tamaño
+// de la biblioteca (331 juegos: se animan las ~30 visibles) y quien hace
 // scroll durante la entrada encuentra tarjetas ya asentadas.
 //
-// Una vez repartida, las tarjetas que monten después (filtrar, buscar) entran
-// sin animación: lo que el teclado repite no se anima (README-sistema,
+// Se reparte otra vez al cambiar de FILTRO (`dealKey`), no al escribir en el
+// buscador: lo que el teclado repite no se anima (README-sistema,
 // principio 8).
 //
 // TECLADO: cada portada es un botón; las flechas mueven el foco por la
@@ -21,12 +23,13 @@ import { GameCard } from './GameCard';
 // Inicio y Fin van a la primera y a la última.
 const INTRO_STEP_MS = 26;
 const INTRO_STAGGER_CAP = 18;
-const INTRO_DONE_MS = 240 + INTRO_STEP_MS * INTRO_STAGGER_CAP;
 
 type GameGridProps = {
   games: GameListItem[];
   onSelectGame: (id: GameId) => void;
   selectedId?: GameId | null;
+  // Cambia → la entrada escalonada se repite (un filtro nuevo).
+  dealKey?: string;
 };
 
 const columnsOf = (grid: HTMLElement): number =>
@@ -36,46 +39,15 @@ export const GameGrid = ({
   games,
   onSelectGame,
   selectedId = null,
+  dealKey = '',
 }: GameGridProps): React.JSX.Element => {
-  const gridRef = useRef<HTMLUListElement | null>(null);
-  // La escalera se reparte UNA vez por montaje, no en cada refetch.
-  const dealt = useRef(false);
-
-  // Sin deps a propósito: en el primer arranque la rejilla monta vacía y las
-  // tarjetas llegan en un render posterior. useLayoutEffect para que las
-  // escrituras aterricen antes del primer pintado.
-  useLayoutEffect(() => {
-    if (dealt.current) return;
-    const grid = gridRef.current;
-    if (!grid || grid.children.length === 0) return;
-    dealt.current = true;
-
-    // Lecturas primero, escrituras después: sin reflow por tarjeta.
-    const viewportHeight = window.innerHeight;
-    const measured = [...grid.children].map((element) => ({
-      element: element as HTMLElement,
-      rect: element.getBoundingClientRect(),
-    }));
-    const visible = measured
-      .filter(({ rect }) => rect.bottom > 0 && rect.top < viewportHeight)
-      .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
-
-    for (const [order, { element }] of visible.entries()) {
-      element.style.animationDelay = `${Math.min(order, INTRO_STAGGER_CAP) * INTRO_STEP_MS}ms`;
-    }
-    for (const { element, rect } of measured) {
-      if (rect.bottom <= 0 || rect.top >= viewportHeight) element.style.animation = 'none';
-    }
+  const gridRef = useStagger<HTMLUListElement>({
+    variant: 'pop',
+    step: INTRO_STEP_MS,
+    max: INTRO_STAGGER_CAP,
+    duration: 260,
+    replayKey: dealKey,
   });
-
-  // Terminada la entrada, las tarjetas nuevas ya no animan.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (gridRef.current) gridRef.current.dataset.settled = 'true';
-    }, INTRO_DONE_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Al volver de una ficha, el foco vuelve a la portada que se abrió (sin
   // mover el scroll: de eso se encarga la memoria de scroll de Library).
   const focusedSelection = useRef(false);
@@ -121,10 +93,10 @@ export const GameGrid = ({
       aria-label="Games"
       data-testid="library-grid"
       onKeyDown={onKeyDown}
-      className="group/grid grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6"
+      className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6"
     >
       {games.map((game) => (
-        <li key={game.id} className="animate-screen-in group-data-[settled=true]/grid:animate-none">
+        <li key={game.id}>
           <GameCard
             game={game}
             selected={game.id === selectedId}

@@ -1,12 +1,16 @@
 import { cn } from '@/lib/utils';
 import type { StatusKey } from '../../lib/gameStatus';
 import { GameCover } from '../GameCover';
+import { Stagger } from '../fx/Stagger';
+import { TiltCover, TiltGlare } from '../fx/TiltCover';
 import { StatusLed } from '../library/statusLed';
 import { focusRing, textLinkClass } from '../shell/controls';
 import { useFitCount } from './useFitCount';
 
 // Una estantería de Home: título, recuento, un enlace "See all" y UNA fila de
 // portadas (las que quepan). Cada portada es un botón con su título debajo.
+// Las portadas entran con un pop escalonado y se inclinan al pasar el ratón
+// (components/fx: Stagger y TiltCover; el listener es el de RootLayout).
 
 export type ShelfItem = {
   key: string;
@@ -56,7 +60,10 @@ export const Shelf = ({
         {items.length === 0 ? (
           empty
         ) : (
-          <ul
+          <Stagger
+            as="ul"
+            variant="pop"
+            step={50}
             className="grid gap-4"
             style={{ gridTemplateColumns: `repeat(${Math.max(1, count)}, minmax(0, 1fr))` }}
           >
@@ -65,7 +72,7 @@ export const Shelf = ({
                 <ShelfCover item={item} />
               </li>
             ))}
-          </ul>
+          </Stagger>
         )}
       </div>
     </section>
@@ -82,23 +89,26 @@ const ShelfCover = ({ item }: { item: ShelfItem }): React.JSX.Element => (
       'focus-visible:outline-offset-3',
     )}
   >
-    <span className="relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 ring-line transition-[transform,box-shadow] duration-180 ease-out group-hover:-translate-y-0.5 group-hover:shadow-lift group-hover:ring-bone/30 motion-reduce:group-hover:translate-y-0">
-      <GameCover
-        url={item.coverUrl}
-        className="h-full w-full"
-        iconSize={24}
-        imgClassName="transition-transform duration-180 ease-out group-hover:scale-104 motion-reduce:group-hover:scale-100"
-      />
-      {item.rank !== undefined && (
-        <span className="absolute top-2 left-2 flex h-7 min-w-6 items-center justify-center rounded-xs border border-line-strong bg-cabinet/85 px-1.5 font-display text-figure font-bold text-bone">
-          {item.rank}
-        </span>
-      )}
-      <StatusLed
-        status={item.status}
-        className="absolute top-1.75 right-1.75 size-2.25 ring-2 ring-cabinet"
-      />
-    </span>
+    <TiltCover className="rounded-sm">
+      <span className="relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 ring-line transition-[transform,box-shadow] duration-180 ease-out group-hover:-translate-y-0.5 group-hover:shadow-lift group-hover:ring-bone/30 motion-reduce:group-hover:translate-y-0">
+        <GameCover
+          url={item.coverUrl}
+          className="h-full w-full"
+          iconSize={24}
+          imgClassName="transition-transform duration-180 ease-out group-hover:scale-104 motion-reduce:group-hover:scale-100"
+        />
+        {item.rank !== undefined && (
+          <span className="absolute top-2 left-2 flex h-7 min-w-6 items-center justify-center rounded-xs border border-line-strong bg-cabinet/85 px-1.5 font-display text-figure font-bold text-bone">
+            {item.rank}
+          </span>
+        )}
+        <TiltGlare />
+        <StatusLed
+          status={item.status}
+          className="absolute top-1.75 right-1.75 size-2.25 ring-2 ring-cabinet transition-[filter] duration-200 group-data-tilting/tilt:brightness-150"
+        />
+      </span>
+    </TiltCover>
     <span className="mt-2 block text-small font-semibold text-bone">{item.title}</span>
     {item.meta && <span className="mt-0.5 block text-micro text-dust">{item.meta}</span>}
   </button>

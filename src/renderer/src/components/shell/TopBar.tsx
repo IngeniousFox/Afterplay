@@ -1,6 +1,10 @@
 import { Plus, Search, Settings } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { useRef } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { GlowText } from '../fx/GlowText';
+import { pressClass } from '../fx/press';
+import { SlidingIndicator } from '../fx/SlidingIndicator';
 import { usePendingSessions } from '../../hooks/sessions';
 import { preloadStatsRoute } from '../../lib/statsRoute';
 import {
@@ -34,9 +38,18 @@ const TABS: Tab[] = [
   { to: '/stats', label: 'Stats' },
 ];
 
-// El logotipo del concepto: una pantalla con el triángulo de Play.
+// El logotipo del concepto: una pantalla con el triángulo de Play. Al
+// arrancar la app «se enciende» como un tubo (power-on, una vez: la barra no
+// se desmonta al navegar) y el nombre parpadea al coger corriente.
 const Logo = (): React.JSX.Element => (
-  <svg aria-hidden width="26" height="26" viewBox="0 0 26 26" fill="none" className="flex-none">
+  <svg
+    aria-hidden
+    width="26"
+    height="26"
+    viewBox="0 0 26 26"
+    fill="none"
+    className="flex-none animate-power-on motion-reduce:animate-fade-in"
+  >
     <rect x="1" y="3" width="24" height="18" rx="4" className="stroke-phosphor" strokeWidth="2" />
     <path d="M10.5 8.2v7.6l6.2-3.8z" className="fill-phosphor" />
     <path d="M8 24h10" className="stroke-phosphor" strokeWidth="2" strokeLinecap="round" />
@@ -56,6 +69,9 @@ export const TopBar = ({
   // (EMULADORES.md §6). Estática, sin pulso: es atención pasiva.
   const { data: pendingSessions = [] } = usePendingSessions();
   const pendingCount = pendingSessions.length;
+  // El subrayado de la pestaña activa se desliza de una a otra.
+  const navRef = useRef<HTMLElement | null>(null);
+  const { pathname } = useLocation();
 
   return (
     <header
@@ -68,10 +84,17 @@ export const TopBar = ({
         className={cn('flex flex-none items-center gap-2.5 rounded-sm', focusRing)}
       >
         <Logo />
-        <span className="font-display text-[26px] leading-none font-bold text-bone">Afterplay</span>
+        <GlowText
+          tone="bone"
+          flicker
+          className="font-display text-[26px] leading-none font-bold text-bone"
+          style={{ animationDelay: '260ms' }}
+        >
+          Afterplay
+        </GlowText>
       </NavLink>
 
-      <nav aria-label="Main" className="flex h-full flex-none items-stretch">
+      <nav ref={navRef} aria-label="Main" className="relative flex h-full flex-none items-stretch">
         {TABS.map(({ to, label }) => (
           <NavLink
             key={to}
@@ -93,12 +116,14 @@ export const TopBar = ({
                 {pendingCount}
               </span>
             )}
-            <span
-              aria-hidden
-              className="absolute inset-x-3 bottom-0 hidden h-0.5 rounded-full bg-phosphor shadow-glow-bar group-aria-[current=page]:block"
-            />
           </NavLink>
         ))}
+        <SlidingIndicator
+          containerRef={navRef}
+          activeKey={pathname}
+          inset={12}
+          className="bottom-0 h-0.5 rounded-full bg-phosphor shadow-glow-bar"
+        />
       </nav>
 
       <span className="min-w-0 flex-1" />
@@ -126,7 +151,7 @@ export const TopBar = ({
         onClick={onAddGame}
         aria-label="Add game"
         title="Add game"
-        className={cn(primaryButtonClass, buttonSize.md, 'max-xl:w-8.5 max-xl:px-0')}
+        className={cn(primaryButtonClass, buttonSize.md, 'max-xl:w-8.5 max-xl:px-0', pressClass)}
       >
         <Plus aria-hidden size={16} />
         <span className="max-xl:hidden">Add game</span>

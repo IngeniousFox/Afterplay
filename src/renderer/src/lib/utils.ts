@@ -9,6 +9,9 @@ const twMerge = extendTailwindMerge({
     theme: {
       text: ['hero', 'stat', 'page', 'title', 'figure', 'lead', 'body', 'small', 'micro'],
       shadow: ['float', 'modal', 'lift', 'glow-text', 'glow-bar', 'glow-halo', 'focus-field'],
+      // Las curvas de fosforo.css: sin esto, `ease-spring` (fx/PressButton)
+      // no pisaría al `ease-out` de los botones y mandaría el orden del CSS.
+      ease: ['spring', 'spring-soft', 'drawer'],
     },
   },
 });

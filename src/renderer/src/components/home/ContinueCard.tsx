@@ -13,12 +13,21 @@ import { DAY_MS, humanizeSpan, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours } from '../../lib/format';
 import { statusKeyOf as gameStatusKey } from '../../lib/gameFilters';
 import { STATUS_META } from '../../lib/gameStatus';
+import { Grain, ScanBeam, ScanLines, Vignette } from '../fx/Backdrop';
+import { GlowText } from '../fx/GlowText';
+import { PressButton } from '../fx/PressButton';
+import { Odometer, Ticker } from '../fx/Ticker';
 import { StatusLed } from '../library/statusLed';
 import { buttonSize, primaryButtonClass, secondaryButtonClass } from '../shell/controls';
 
 // La tarjeta grande de Home: el juego en marcha o, sin sesión, el último que
 // jugaste, con su botón Play. Solo cifras que ya existen: el cronómetro de la
 // sesión, las horas totales y el número de sesiones.
+//
+// Es el héroe de la app, así que lleva la energía (components/fx): el arte
+// con Ken Burns lento, scanlines que reptan, un haz que barre cada 9 s, grano
+// y viñeta; el título se enciende con bloom; las cifras entran contando; Play
+// se hunde y suelta un anillo con destello.
 
 const lastPlayedText = (at: Date): string => {
   const days = Math.round((startOfDayMs(new Date()) - startOfDayMs(at)) / DAY_MS);
@@ -95,7 +104,11 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
       {/* El arte: el banner del juego o, sin él, su carátula desenfocada. */}
       <div className="relative min-h-45 overflow-hidden bg-raised">
         {heroSrc ? (
-          <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img
+            src={heroSrc}
+            alt=""
+            className="absolute inset-0 h-full w-full animate-ken-burns object-cover motion-reduce:animate-none"
+          />
         ) : coverSrc ? (
           <img
             src={coverSrc}
@@ -107,7 +120,10 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
             <Gamepad2 aria-hidden size={40} strokeWidth={1.5} className="text-dust/50" />
           </div>
         )}
-        <div aria-hidden className="absolute inset-0 bg-(image:--scan)" />
+        <ScanLines crawl />
+        <Grain />
+        <Vignette />
+        <ScanBeam every={9} />
         <div
           aria-hidden
           className="absolute inset-0 bg-linear-to-r from-transparent via-transparent to-panel/70"
@@ -140,7 +156,11 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
               </>
             )}
           </div>
-          <h2 className="mt-2 font-display text-page font-bold text-bone">{game.title}</h2>
+          {/* Bloom fijo, sin parpadeo: Home se visita muchas veces al día y
+              un título que parpadea cada vez cansa. */}
+          <GlowText as="h2" tone="bone" className="mt-2 font-display text-page font-bold text-bone">
+            {game.title}
+          </GlowText>
         </div>
 
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
@@ -148,16 +168,25 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
             <div className="flex flex-col-reverse">
               <dt className="mt-1 text-small text-dust">this session</dt>
               <dd>
-                <span className="font-display text-[34px] leading-none font-bold text-phosphor tabular-nums">
-                  {formatElapsed(elapsed)}
-                </span>
+                <GlowText
+                  breathe
+                  className="font-display text-[34px] leading-none font-bold text-phosphor"
+                >
+                  <Odometer value={formatElapsed(elapsed)} />
+                </GlowText>
               </dd>
             </div>
           )}
           <div className="flex flex-col-reverse">
             <dt className="mt-1 text-small text-dust">total played</dt>
             <dd>
-              <Figure value={formatHours(game.totalHours)} className="text-[34px] text-bone" />
+              <Ticker
+                value={game.totalHours}
+                format={formatHours}
+                render={(hours) => (
+                  <Figure value={formatHours(hours)} className="text-[34px] text-bone" />
+                )}
+              />
             </dd>
           </div>
           <div className="flex flex-col-reverse">
@@ -165,7 +194,12 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
               {game.sessionCount === 1 ? 'session' : 'sessions'}
             </dt>
             <dd>
-              <Figure value={String(game.sessionCount)} className="text-[34px] text-bone" />
+              <Ticker
+                value={game.sessionCount}
+                render={(count) => (
+                  <Figure value={String(Math.round(count))} className="text-[34px] text-bone" />
+                )}
+              />
             </dd>
           </div>
         </dl>
@@ -173,8 +207,8 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
         <div className="flex flex-wrap items-center gap-2.5">
           {canPlay ? (
             <>
-              <button
-                type="button"
+              <PressButton
+                burst="phosphor"
                 onClick={() => void handlePlay()}
                 disabled={busy}
                 aria-busy={busy}
@@ -182,7 +216,7 @@ export const ContinueCard = ({ game }: { game: GameListItem }): React.JSX.Elemen
               >
                 <Play aria-hidden size={15} fill="currentColor" />
                 {launchExecutable.isPending ? 'Launching…' : 'Play'}
-              </button>
+              </PressButton>
               <button
                 type="button"
                 onClick={openGame}

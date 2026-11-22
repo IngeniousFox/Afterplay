@@ -9,6 +9,8 @@ import {
   textLinkClass,
 } from '../shell/controls';
 import { useShell } from '../shell/shellContext';
+import { GlowText } from '../fx/GlowText';
+import { Stagger } from '../fx/Stagger';
 
 // EL PRIMER ARRANQUE (estados-vacio-biblioteca.png): una biblioteca vacía no
 // es un error, es el principio. Tres pasos numerados y, abajo, la salida para
@@ -96,15 +98,21 @@ export const LibraryOnboarding = (): React.JSX.Element => {
 
   return (
     <div className="mx-auto flex w-full max-w-240 flex-col items-center text-center">
-      <h2 className="font-display text-[64px] leading-[1.05] font-bold text-bone">
+      {/* El título se enciende y los tres pasos entran escalonados. */}
+      <GlowText
+        as="h2"
+        tone="bone"
+        flicker
+        className="font-display text-[64px] leading-[1.05] font-bold text-bone"
+      >
         Your library starts here
-      </h2>
+      </GlowText>
       <p className="mt-3 max-w-160 text-lead text-dust">
         Afterplay keeps your games, sessions and notes in one place, and times your play on its own.
         Three steps fill it.
       </p>
 
-      <ol className="mt-9 grid w-full gap-4 text-left md:grid-cols-3">
+      <Stagger as="ol" step={70} className="mt-9 grid w-full gap-4 text-left md:grid-cols-3">
         {steps.map((step, index) => {
           const highlighted = index === current;
           return (
@@ -138,7 +146,7 @@ export const LibraryOnboarding = (): React.JSX.Element => {
             </li>
           );
         })}
-      </ol>
+      </Stagger>
 
       <p className="mt-7 text-small text-dust">
         Already use Afterplay on another PC?{' '}

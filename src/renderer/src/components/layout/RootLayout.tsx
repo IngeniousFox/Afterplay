@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { GameId } from '../../../../shared/entityIds';
 import { useCredentials } from '../../hooks/settings';
 import { useMemoryArrivalToast } from '../../hooks/useMemoryArrivalToast';
 import { useSessionClosedToast } from '../../hooks/useSessionClosedToast';
+import { CrtReveal } from '../fx/CrtReveal';
+import { useTiltRegion } from '../fx/tilt';
 import { CommandPalette } from '../shell/CommandPalette';
 import {
   INITIAL_LIBRARY_VIEW,
@@ -37,6 +39,13 @@ export const RootLayout = (): React.JSX.Element => {
   // navega al Journey.
   useMemoryArrivalToast();
   const navigate = useNavigate();
+  // Cambiar de pantalla «re-enciende» el tubo: un destello de brillo de 240 ms
+  // (CrtReveal "screen": sin geometría, nada mide cajas a medio escalar). Las
+  // secciones de Ajustes y el ?game= de Stats son la misma pantalla.
+  const { pathname } = useLocation();
+  const screenKey = pathname.startsWith('/settings') ? '/settings' : pathname;
+  // Un solo listener de ratón para inclinar TODAS las portadas (fx/TiltCover).
+  const tiltRegion = useTiltRegion();
 
   const [addGameOpen, setAddGameOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -101,8 +110,10 @@ export const RootLayout = (): React.JSX.Element => {
           onOpenPalette={() => setPaletteOpen(true)}
           onAddGame={() => setAddGameOpen(true)}
         />
-        <main className="relative min-h-0 flex-1">
-          <Outlet />
+        <main ref={tiltRegion} className="relative min-h-0 flex-1">
+          <CrtReveal variant="screen" replayKey={screenKey} className="h-full">
+            <Outlet />
+          </CrtReveal>
         </main>
         <NowPlayingCard />
       </div>

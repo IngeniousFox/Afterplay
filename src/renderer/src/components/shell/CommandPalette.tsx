@@ -11,6 +11,7 @@ import { GameCover } from '../GameCover';
 import { statusKeyOf as gameStatusKey } from '../../lib/gameFilters';
 import { STATUS_META } from '../../lib/gameStatus';
 import { StatusLed } from '../library/statusLed';
+import { useStagger } from '../fx/useStagger';
 import { buttonSize, kbdClass, secondaryButtonClass } from './controls';
 
 // LA PALETA DE CTRL K (concepto: sistema-controles-botones.png y
@@ -24,8 +25,10 @@ import { buttonSize, kbdClass, secondaryButtonClass } from './controls';
 // FILTRA esa pantalla (?game=), con una fila "All games" para volver al
 // conjunto. Ctrl+Enter abre la ficha también ahí.
 //
-// Sin animación de entrada: es algo que el teclado abre una y otra vez
-// (README-sistema, principio 8).
+// Entrada: el encendido de tubo en su versión rápida (150 ms) y los
+// resultados escalonados SOLO al abrir; escribir no vuelve a animarlos. Es
+// algo que el teclado abre una y otra vez (README-sistema, principio 8), así
+// que se queda por debajo de lo que se nota como espera. Cerrar es inmediato.
 
 const RECENT_COUNT = 8;
 const RESULT_LIMIT = 40;
@@ -61,7 +64,7 @@ export const CommandPalette = ({
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-scrim" />
         <DialogPrimitive.Popup
           initialFocus={inputRef}
-          className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[min(640px,calc(100vw-48px))] -translate-x-1/2 flex-col overflow-hidden rounded-md border border-line bg-overlay text-bone shadow-modal outline-hidden"
+          className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[min(640px,calc(100vw-48px))] -translate-x-1/2 animate-crt-in-fast flex-col overflow-hidden rounded-md border border-line bg-overlay text-bone shadow-modal outline-hidden motion-reduce:animate-fade-in"
         >
           <DialogPrimitive.Title className="sr-only">Jump to a game</DialogPrimitive.Title>
           <PaletteBody
@@ -95,7 +98,8 @@ const PaletteBody = ({
   const { data: planned = [] } = usePlannedGames();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  // Los resultados entran escalonados una vez, al abrir (la clave no cambia).
+  const listRef = useStagger<HTMLDivElement>({ step: 28, max: 8, duration: 200 });
 
   const trimmed = query.trim();
   const items: Item[] = [];

@@ -1159,3 +1159,212 @@ test('capturas del modo TV', async () => {
     sandbox.cleanup();
   }
 });
+
+// MOVIMIENTO («rock and roll», components/fx). Las capturas son estáticas, así
+// que aquí se congelan las animaciones a mitad de camino y se fotografían
+// fotograma a fotograma: la paleta encendiéndose, el power-on de Now playing,
+// la rejilla de Library entrando y una portada inclinada bajo el ratón. Van a
+// docs/redesign/screens/motion/ (no dependen de SHOTS_SET).
+test('capturas de movimiento', async () => {
+  test.setTimeout(240_000);
+  const MOTION = join(process.cwd(), 'docs', 'redesign', 'screens', 'motion');
+  mkdirSync(MOTION, { recursive: true });
+  const { app, window, sandbox } = await launchAfterplay();
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await window.waitForTimeout(1500);
+
+    // Las animaciones WAAPI nuevas (Stagger, CrtReveal) nacen en pausa, para
+    // poder llevarlas al instante que se quiera; las CSS se pausan al
+    // congelar. `release` las suelta todas.
+    const holdNew = (): Promise<void> =>
+      window.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        proto.heldAnimate ??= proto.animate;
+        const original = proto.heldAnimate;
+        proto.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+          const animation = original.apply(this, args);
+          animation.pause();
+          return animation;
+        };
+      });
+    const freezeAt = (ms: number): Promise<void> =>
+      window.evaluate((time) => {
+        for (const animation of document.getAnimations()) {
+          animation.pause();
+          animation.currentTime = time;
+        }
+      }, ms);
+    const release = (): Promise<void> =>
+      window.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        if (proto.heldAnimate) proto.animate = proto.heldAnimate;
+        for (const animation of document.getAnimations()) animation.play();
+      });
+    const frames = async (
+      name: string,
+      times: number[],
+      clip: { x: number; y: number; width: number; height: number },
+    ): Promise<void> => {
+      for (const time of times) {
+        await freezeAt(time);
+        await window.waitForTimeout(80);
+        await window.screenshot({
+          path: join(MOTION, `${name}-${String(time).padStart(4, '0')}ms.png`),
+          clip,
+        });
+      }
+      await release();
+    };
+
+    // 1. La paleta de Ctrl K: encendido de tubo (150 ms) y filas escalonadas.
+    await goTo(window, '/home');
+    await window.waitForTimeout(1200);
+    await holdNew();
+    await window.keyboard.press('Control+k');
+    const palette = window.getByRole('dialog', { name: 'Jump to a game' });
+    await palette.waitFor();
+    await frames('palette-open', [20, 60, 110, 180, 260, 420], {
+      x: 440,
+      y: 90,
+      width: 720,
+      height: 640,
+    });
+    await window.keyboard.press('Escape');
+    await palette.waitFor({ state: 'detached' });
+    await window.waitForTimeout(400);
+
+    // 2. Now playing al arrancar una sesión: power-on (760 ms).
+    const detailId = gameIdOf(sandbox, 'Strange Horticulture');
+    const session = await window.evaluate(
+      (id) => globalThis.api.sessions.startForGame(id as never),
+      detailId,
+    );
+    await window.getByTestId('now-playing').waitFor();
+    await frames('now-playing-power-on', [40, 150, 260, 420, 520, 640, 900], {
+      x: 0,
+      y: 880,
+      width: 1600,
+      height: 120,
+    });
+    // El héroe de Home con la sesión en marcha (haz, Ken Burns, cronómetro).
+    await window.waitForTimeout(1200);
+    await window.screenshot({ path: join(MOTION, 'home-hero-live.png') });
+
+    // 3. Library: la rejilla entra con un pop escalonado.
+    await holdNew();
+    await goTo(window, '/games');
+    await window.getByTestId('library-grid').waitFor();
+    await frames('library-stagger', [60, 160, 280, 420], {
+      x: 0,
+      y: 56,
+      width: 1600,
+      height: 640,
+    });
+
+    // 4. Una portada inclinada bajo el ratón (arriba a la izquierda y luego
+    // abajo a la derecha), con su reflejo.
+    await window.waitForTimeout(600);
+    const card = window.locator('[data-game-card] [data-tilt]').nth(2);
+    const box = await card.boundingBox();
+    if (box) {
+      const clip = {
+        x: Math.max(0, box.x - 40),
+        y: Math.max(0, box.y - 40),
+        width: box.width + 80,
+        height: box.height + 80,
+      };
+      await window.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await window.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2, { steps: 6 });
+      await window.waitForTimeout(500);
+      await window.screenshot({ path: join(MOTION, 'tilt-top-left.png'), clip });
+      await window.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.85, {
+        steps: 8,
+      });
+      await window.waitForTimeout(500);
+      await window.screenshot({ path: join(MOTION, 'tilt-bottom-right.png'), clip });
+      await window.mouse.move(10, 500);
+    }
+
+    if (session) {
+      await window.evaluate((id) => globalThis.api.sessions.close(id, new Date()), session.id);
+    }
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});
+
+// RENDIMIENTO con una biblioteca del tamaño de la real (331 juegos): cuántas
+// animaciones siguen corriendo tras la entrada y cómo van los frames al hacer
+// scroll por Library con el ratón encima de las portadas (tilt). No guarda
+// imágenes: escribe las cifras en la salida del test.
+test('rendimiento de Library con 331 juegos', async () => {
+  test.setTimeout(240_000);
+  const games: SeedGame[] = Array.from({ length: 331 }, (_, index) => ({
+    title: `Benchmark Game ${String(index + 1).padStart(3, '0')}`,
+  }));
+  const { app, window, sandbox } = await launchAfterplay({ games });
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await goTo(window, '/games');
+    await window.getByTestId('library-grid').waitFor();
+    const entering = await window.evaluate(() => document.getAnimations().length);
+    await window.waitForTimeout(1500);
+    const settled = await window.evaluate(
+      () => document.getAnimations().filter((a) => a.playState === 'running').length,
+    );
+
+    // Ratón encima de la rejilla mientras se desplaza: el tilt delegado entra
+    // y sale de portadas en cada frame.
+    await window.mouse.move(800, 500);
+    const frames = await window.evaluate(async () => {
+      const grid = document.querySelector('[data-testid="library-grid"]')!;
+      let scroller = grid.parentElement;
+      while (scroller && getComputedStyle(scroller).overflowY !== 'auto') {
+        scroller = scroller.parentElement;
+      }
+      const deltas: number[] = [];
+      let last = performance.now();
+      const end = last + 3000;
+      await new Promise<void>((resolve) => {
+        const step = (now: number): void => {
+          deltas.push(now - last);
+          last = now;
+          scroller!.scrollTop += 40;
+          if (scroller!.scrollTop + scroller!.clientHeight >= scroller!.scrollHeight - 1) {
+            scroller!.scrollTop = 0;
+          }
+          if (now < end) requestAnimationFrame(step);
+          else resolve();
+        };
+        requestAnimationFrame(step);
+      });
+      return deltas.slice(1);
+    });
+    const sorted = [...frames].sort((a, b) => a - b);
+    const p = (q: number): number => sorted[Math.floor((sorted.length - 1) * q)];
+    console.log(
+      JSON.stringify({
+        cards: games.length,
+        animationsWhileEntering: entering,
+        animationsRunningAfterEntry: settled,
+        frames: frames.length,
+        medianMs: p(0.5).toFixed(1),
+        p95Ms: p(0.95).toFixed(1),
+        over34ms: frames.filter((d) => d > 34).length,
+      }),
+    );
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});
