@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Square, TriangleAlert, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { beatTimer, beatTimerOnHide, fetchActiveTimer, stopTimer } from '../api';
 import { useLiveSeconds } from '../hooks/useLiveSeconds';
@@ -9,6 +9,11 @@ import { formatElapsed } from '../lib/format';
 import { iconButtonClass } from '../lib/styles';
 import { Cover } from './Cover';
 import { LiveDot } from './Figure';
+import { GlowText } from './fx/GlowText';
+import { PressButton } from './fx/PressButton';
+import { flashAt } from './fx/press';
+import { Odometer } from './fx/Ticker';
+import { VuMeter } from './fx/VuMeter';
 
 // El cronómetro del hub trae las fechas en ISO 8601 (api/v2/writes.ts).
 const startedAtMs = (iso: string): number => Date.parse(iso);
@@ -26,15 +31,20 @@ const BEAT_MS = 60_000;
 // lleva el compilador de React (eso es del escritorio), así que la hoja es la
 // memoización: mismo DOM y mismas clases, pero el tick re-renderiza 1
 // componente con 1 div.
+//
+// El cronómetro respira (GlowText: una mancha de luz detrás que sube y baja
+// de opacidad) y sus dígitos caen al cambiar (Odometer). El textContent sigue
+// siendo el tiempo tal cual.
 const ElapsedTime = ({ since }: { since: number }): React.JSX.Element => {
   const seconds = useLiveSeconds(since);
   return (
-    <span
+    <GlowText
+      breathe
       role="timer"
-      className="animate-timer-breathe font-display text-[34px] leading-none font-bold text-phosphor tabular-nums motion-reduce:animate-none"
+      className="font-display text-[34px] leading-none font-bold text-phosphor tabular-nums"
     >
-      {formatElapsed(seconds)}
-    </span>
+      <Odometer value={formatElapsed(seconds)} />
+    </GlowText>
   );
 };
 
@@ -118,9 +128,16 @@ export const TimerBar = (): React.JSX.Element | null => {
     };
   }, [sessionId, queryClient]);
 
+  // Dónde estaba el botón de parar al pulsarlo: al confirmar el parar la
+  // barra desaparece, y el destello de confirmación sale de ahí.
+  const stopRect = useRef<DOMRect | null>(null);
+
   const stop = useMutation({
     mutationFn: (id: string) => stopTimer(id),
     onSuccess: () => {
+      // El destello de «hecho»: una luz de fósforo que se apaga donde estaba
+      // la barra. Se lanza fuera de React porque la barra se va con él.
+      if (stopRect.current) flashAt(stopRect.current, 'phosphor');
       // Todo lo que acaba de cambiar: la sesión ya cuenta horas.
       void queryClient.invalidateQueries({ queryKey: ['stats'] });
       void queryClient.invalidateQueries({ queryKey: ['sessions'] });
@@ -188,6 +205,7 @@ export const TimerBar = (): React.JSX.Element | null => {
                 <div className="mt-0.5 flex items-center gap-1.5 text-micro text-dust">
                   <LiveDot />
                   Running
+                  <VuMeter bars={4} className="ml-0.5 h-3" />
                 </div>
               </div>
             </Link>
@@ -196,20 +214,24 @@ export const TimerBar = (): React.JSX.Element | null => {
               <ElapsedTime since={startedAtMs(active.startedAt)} />
             </span>
 
-            <button
-              type="button"
-              onClick={() => stop.mutate(active.sessionId)}
+            {/* Parar: se hunde, rebota y suelta un anillo con destello Live. */}
+            <PressButton
+              burst="live"
+              onClick={(event) => {
+                stopRect.current = event.currentTarget.getBoundingClientRect();
+                stop.mutate(active.sessionId);
+              }}
               disabled={stop.isPending}
               aria-label="Stop the timer"
               aria-busy={stop.isPending}
-              className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-sm bg-live text-ink-live transition-[transform,scale,background-color] duration-150 hover:bg-live-hi focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] active:bg-live-lo disabled:opacity-40 motion-reduce:active:scale-100"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm bg-live text-ink-live hover:bg-live-hi focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:bg-live-lo disabled:opacity-40"
             >
               {stop.isPending ? (
                 <Loader2 size={15} className="animate-spin" />
               ) : (
                 <Square size={14} fill="currentColor" />
               )}
-            </button>
+            </PressButton>
           </div>
         )}
 

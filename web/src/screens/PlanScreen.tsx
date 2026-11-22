@@ -27,6 +27,10 @@ import { Cover } from '../components/Cover';
 import { Figure } from '../components/Figure';
 import { PageHeader, SectionTitle } from '../components/PageHeader';
 import { AddGameSheet } from '../components/plan/AddGameSheet';
+import { useReorderTrail } from '../components/plan/useReorderTrail';
+import { GlowText } from '../components/fx/GlowText';
+import { loopPlayClass } from '../components/fx/motion';
+import { useOffscreenPause } from '../components/fx/viewport';
 import { EmptyState, ErrorState, Loading, StateMessage } from '../components/States';
 import { cn } from '../lib/cn';
 import { formatHours, formatRelease, pluralize } from '../lib/format';
@@ -94,6 +98,7 @@ const PlanRow = ({
   onPin,
   onUnpin,
   reorder,
+  moved = false,
 }: {
   game: PlannedGame;
   order: number;
@@ -105,14 +110,23 @@ const PlanRow = ({
   // dentro de una lista que además scrollea es un gesto que falla más de lo que
   // acierta, y aquí el orden importa demasiado para dejarlo a la suerte.
   reorder?: { onUp: () => void; onDown: () => void; isFirst: boolean; isLast: boolean };
+  // La última fila que se movió con las flechas: deja estela al llegar.
+  moved?: boolean;
 }): React.JSX.Element => {
   const pinned = game.pinnedAt !== null;
+  const { rowRef, trailRef } = useReorderTrail(position, reorder !== undefined, moved);
 
   return (
     <li
-      className={cn(revealClass, 'flex items-center gap-2 border-b border-line py-2')}
+      ref={rowRef}
+      className={cn(revealClass, 'relative flex items-center gap-2 border-b border-line py-2')}
       style={revealDelay(order, 25, 15)}
     >
+      <span
+        ref={trailRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 opacity-0"
+      />
       {/* El cuerpo entra en la ficha; los controles NO — un botón dentro de un
           Link se lleva el toque al navegar. */}
       <Link
@@ -180,44 +194,63 @@ const NextUpCard = ({
 }: {
   game: PlannedGame;
   onUnpin: (game: PlannedGame) => void;
-}): React.JSX.Element => (
-  <div
-    className={cn(
-      revealClass,
-      'flex gap-4 rounded-md border border-line-strong bg-panel p-3 shadow-[inset_2px_0_0_var(--color-phosphor)]',
-    )}
-  >
-    <Link to={`/game/${game.id}`} className="shrink-0" tabIndex={-1} aria-hidden="true">
-      <Cover url={game.coverUrl} title={game.title} className="w-20" />
-    </Link>
-    <div className="flex min-w-0 flex-1 flex-col">
-      <span className="text-small font-semibold text-phosphor">Next up</span>
-      <Link
-        to={`/game/${game.id}`}
-        className="mt-0.5 rounded-sm font-display text-title font-bold text-bone focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
-      >
-        {game.title}
-      </Link>
-      <PlanMeta game={game} />
-      {game.hltbMain !== null && game.hltbMain > 0 && (
-        <span className="mt-0.5 text-small text-dust">HLTB Main {formatHours(game.hltbMain)}</span>
+}): React.JSX.Element => {
+  const { observe, playState } = useOffscreenPause();
+  return (
+    <div
+      ref={observe}
+      className={cn(
+        revealClass,
+        'relative flex gap-4 overflow-hidden rounded-md border border-line-strong bg-panel p-3',
+        'shadow-[inset_2px_0_0_var(--color-phosphor),0_0_24px_-10px_rgb(255_179_71/0.45)]',
       )}
-      <div className="mt-auto flex items-center gap-2 pt-2">
-        <Link to={`/game/${game.id}`} className={cn(primaryButtonClass, 'flex-1')}>
-          Open game
-        </Link>
-        <button
-          type="button"
-          onClick={() => onUnpin(game)}
-          aria-label={`Unpin ${game.title}`}
-          className={cn(iconButtonClass, 'text-phosphor')}
+    >
+      {/* El brillo del Next up: un reflejo que cruza la tarjeta cada pocos
+        segundos (transform) y se para fuera de la vista. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-y-0 left-0 w-1/3',
+          'bg-[linear-gradient(90deg,transparent,rgb(255_214_150/0.09)_45%,rgb(255_214_150/0.14)_50%,rgb(255_214_150/0.09)_55%,transparent)]',
+          'animate-[fx-shine_7s_var(--ease-in-out)_1.2s_infinite_both] motion-reduce:hidden',
+          loopPlayClass,
+        )}
+        style={{ animationPlayState: playState }}
+      />
+      <Link to={`/game/${game.id}`} className="relative shrink-0" tabIndex={-1} aria-hidden="true">
+        <Cover url={game.coverUrl} title={game.title} className="w-20 shadow-lift" />
+      </Link>
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <GlowText className="text-small font-semibold text-phosphor">Next up</GlowText>
+        <Link
+          to={`/game/${game.id}`}
+          className="mt-0.5 rounded-sm font-display text-title font-bold text-bone focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
         >
-          <PinOff size={17} />
-        </button>
+          {game.title}
+        </Link>
+        <PlanMeta game={game} />
+        {game.hltbMain !== null && game.hltbMain > 0 && (
+          <span className="mt-0.5 text-small text-dust">
+            HLTB Main {formatHours(game.hltbMain)}
+          </span>
+        )}
+        <div className="mt-auto flex items-center gap-2 pt-2">
+          <Link to={`/game/${game.id}`} className={cn(primaryButtonClass, 'flex-1')}>
+            Open game
+          </Link>
+          <button
+            type="button"
+            onClick={() => onUnpin(game)}
+            aria-label={`Unpin ${game.title}`}
+            className={cn(iconButtonClass, 'text-phosphor')}
+          >
+            <PinOff size={17} />
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Collapsible = ({
   label,
@@ -265,6 +298,8 @@ export const PlanScreen = (): React.JSX.Element => {
   const [horizonOpen, setHorizonOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [adding, setAdding] = useState(false);
+  // La fila que se acaba de mover con las flechas (deja estela al llegar).
+  const [movedId, setMovedId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const plan = useQuery({ queryKey: ['plan'], queryFn: fetchPlan });
@@ -372,6 +407,7 @@ export const PlanScreen = (): React.JSX.Element => {
     if (from < 0 || to < 0 || to >= ids.length) return;
     const [moved] = ids.splice(from, 1);
     ids.splice(to, 0, moved);
+    setMovedId(gameId);
     // Todo el orden en UNA petición, no N pines sueltos: es un solo gesto, y
     // partirlo permitiría aplicar la mitad y dejar un orden que nadie pidió.
     change.mutate({ type: 'reorder', orderedIds: ids });
@@ -492,6 +528,7 @@ export const PlanScreen = (): React.JSX.Element => {
                         position={index + (showNextUp ? 2 : 1)}
                         onPin={pin}
                         onUnpin={unpin}
+                        moved={game.id === movedId}
                         reorder={
                           reordering
                             ? {

@@ -1,5 +1,5 @@
 import { Check, Flame, Gamepad2, Loader2, MonitorPlay, Timer, Trophy, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { GameCover } from '../components/GameCover';
@@ -38,6 +38,15 @@ import {
 } from '../lib/format';
 import { getGameStatusMeta } from '../lib/gameStatus';
 import { cn } from '@/lib/utils';
+import {
+  celebrate,
+  EASE,
+  GlowText,
+  Odometer,
+  prefersReducedMotion,
+  SlidingIndicator,
+  VuMeter,
+} from '../components/fx';
 import { OverlayToaster } from './OverlayToaster';
 import type {
   AchievementEntry,
@@ -71,7 +80,15 @@ import type { SessionId } from '../../../shared/entityIds';
 // el listener ya puesto. Y al montar se envía 'ready', que es lo que el main
 // espera para enseñar la ventana.
 //
-// ENTRADA SIN VIAJE VERTICAL: solo un fade corto. La cascada escalonada
+// ENTRADA: el panel «se enciende» como un tubo (scaleY desde una línea, con un
+// destello de brillo) mientras se desliza unos píxeles DESDE LA DERECHA, el
+// borde al que está pegado, y un destello ámbar barre su canto. Una vez por
+// apertura (WAAPI, fill 'backwards': no queda nada puesto) y sin bucles: los
+// únicos que corren con el HUD abierto son la respiración del cronómetro
+// (opacidad de un halo) y el VuMeter (scaleY), los dos en el compositor.
+//
+// SIN VIAJE VERTICAL (el tubo se abre desde su centro, no se desplaza). La
+// cascada escalonada
 // original (paneles deslizándose 12px con hasta 270ms de retardo) se leía
 // sobre un juego en marcha como "abre desplazada y se recoloca" — sobre
 // contenido ajeno, cualquier movimiento vertical parece un error de
@@ -104,6 +121,24 @@ type Phase = 'hidden' | 'open' | 'closing';
 // borde. En px y no en vh: la ventana ya es del tamaño del monitor, y en px es
 // un número que se lee y se ajusta sin hacer cuentas.
 const OVERLAY_VERTICAL_MARGIN = 44;
+
+// La entrada del panel (ver la cabecera): tubo que se abre, deslizándose desde
+// la derecha, con un destello de brillo que se asienta. El filter solo vive
+// los 340 ms de la entrada; con fill 'backwards' no queda puesto.
+const PANEL_IN: Keyframe[] = [
+  { opacity: 0.35, transform: 'translateX(28px) scaleY(0.02)', filter: 'brightness(2.4)' },
+  { offset: 0.5, opacity: 1, transform: 'translateX(6px) scaleY(1)', filter: 'brightness(1.5)' },
+  { opacity: 1, transform: 'none', filter: 'none' },
+];
+const playPanelIn = (element: HTMLElement): Animation | null => {
+  if (typeof element.animate !== 'function') return null;
+  const reduced = prefersReducedMotion();
+  return element.animate(reduced ? [{ opacity: 0 }, { opacity: 1 }] : PANEL_IN, {
+    duration: reduced ? 160 : 340,
+    easing: EASE.out,
+    fill: 'backwards',
+  });
+};
 
 // Un título de sección dentro del panel: Barlow semibold en Bone, con su dato
 // a la derecha en Dust.
@@ -375,7 +410,17 @@ const HltbPanel = ({
 // pasa de 281 ms a 241 ms de trabajo repartido. Es el 15%, y crece con el
 // cuadrado del catálogo — que es justo lo que no se quiere sobre un juego.
 const AchievementRow = memo(
-  ({ entry, unlocked }: { entry: AchievementEntry; unlocked: boolean }): React.JSX.Element => {
+  ({
+    entry,
+    unlocked,
+    fresh = false,
+  }: {
+    entry: AchievementEntry;
+    unlocked: boolean;
+    // Desbloqueado EN ESTA SESIÓN: la fila brilla (borde y halo de fósforo
+    // fijos, sin bucle) y el nombre lleva bloom.
+    fresh?: boolean;
+  }): React.JSX.Element => {
     const src = useImageSrc(
       unlocked ? entry.iconUrl : (entry.iconGrayUrl ?? entry.iconUrl),
       'achievements',
@@ -399,7 +444,13 @@ const AchievementRow = memo(
       // con altura acotada, un hijo se encoge antes que desbordar — y una fila
       // de logro estrujada pierde su icono y su texto en vez de provocar el
       // scroll que toca.
-      <div className="group -mx-2 flex flex-none items-center gap-2.5 rounded-sm px-2 py-1.5 transition-colors duration-150 hover:bg-bone/5">
+      <div
+        className={cn(
+          'group -mx-2 flex flex-none items-center gap-2.5 rounded-sm px-2 py-1.5 transition-colors duration-150 hover:bg-bone/5',
+          fresh &&
+            'bg-phosphor-tint shadow-[inset_0_0_0_1px_rgb(255_179_71/0.4),0_0_18px_-6px_rgb(255_179_71/0.5)] hover:bg-phosphor-tint',
+        )}
+      >
         <span
           className={cn(
             'relative size-8.5 flex-none overflow-hidden rounded-sm bg-inset transition-[opacity,filter] duration-150',
@@ -427,11 +478,22 @@ const AchievementRow = memo(
         <span className="min-w-0 flex-1">
           <span
             className={cn(
-              'block truncate text-small font-semibold',
+              'flex items-center gap-1.5 text-small font-semibold',
               unlocked ? 'text-bone' : 'text-dust group-hover:text-bone/80',
             )}
           >
-            {entry.displayName}
+            {fresh ? (
+              <GlowText tone="bone" className="truncate">
+                {entry.displayName}
+              </GlowText>
+            ) : (
+              <span className="truncate">{entry.displayName}</span>
+            )}
+            {fresh && (
+              <span className="flex-none rounded-xs bg-phosphor px-1 text-micro leading-4 font-semibold text-ink">
+                Tonight
+              </span>
+            )}
           </span>
           <span className="block truncate text-micro text-dust">
             {entry.description ?? (entry.hidden ? 'Hidden achievement' : '')}
@@ -507,8 +569,11 @@ const scheduleIdle = (run: () => void): (() => void) => {
 // coste vuelve entero y sin avisar.
 const AchievementsPanel = ({
   entries,
+  freshIds,
 }: {
   entries: AchievementEntry[];
+  // Los logros desbloqueados en la sesión abierta (los de esta noche).
+  freshIds: ReadonlySet<string>;
 }): React.JSX.Element | null => {
   const [rowLimit, setRowLimit] = useState(INITIAL_ACHIEVEMENT_ROWS);
 
@@ -577,7 +642,7 @@ const AchievementsPanel = ({
       </div>
       <div className="mt-2 h-1 flex-none overflow-hidden rounded-full bg-inset">
         <div
-          className="h-full rounded-full bg-phosphor shadow-glow-bar transition-[width] duration-700 ease-out motion-reduce:transition-none"
+          className="h-full origin-left animate-grow-x rounded-full bg-phosphor shadow-glow-bar transition-[width] duration-700 ease-out motion-reduce:animate-none motion-reduce:transition-none"
           style={{ width: `${achievementsPercent}%` }}
         />
       </div>
@@ -590,7 +655,12 @@ const AchievementsPanel = ({
             <div className="text-micro font-semibold text-dust">Unlocked · {unlocked.length}</div>
             <div className="mt-1 mb-3 flex flex-col">
               {shownUnlocked.map((entry) => (
-                <AchievementRow key={entry.id} entry={entry} unlocked />
+                <AchievementRow
+                  key={entry.id}
+                  entry={entry}
+                  unlocked
+                  fresh={freshIds.has(entry.id)}
+                />
               ))}
             </div>
           </>
@@ -779,20 +849,37 @@ const HudTabs = ({
   history: React.ReactNode;
 }): React.JSX.Element => {
   const [tab, setTab] = useState<HudTab>('session');
+  // El contenedor como ESTADO (ref de callback) y no como useRef: con un
+  // useRef, el indicador medía antes de tener nodo en el primer montaje del
+  // HUD y se quedaba sin colocar (comprobado en el banco de Electron). Con el
+  // nodo en estado, su efecto vuelve a medir en cuanto existe.
+  const [tabsNode, setTabsNode] = useState<HTMLDivElement | null>(null);
+  const tabsRef = useMemo(() => ({ current: tabsNode }), [tabsNode]);
   const panelClass = 'min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain';
   return (
     <>
-      <Tabs<HudTab>
-        items={[
-          { key: 'session', label: 'Session' },
-          { key: 'history', label: 'History', count: String(sessionCount) },
-        ]}
-        value={tab}
-        onChange={setTab}
-        label="Overlay sections"
-        idPrefix={HUD_TABS_ID}
-        className="flex-none border-b border-line px-1.5"
-      />
+      {/* La raya de la pestaña activa se DESLIZA con muelle (SlidingIndicator)
+          en vez de saltar: la raya fija de cada pestaña (su ::after) se apaga
+          aquí para que no haya dos. */}
+      <div ref={setTabsNode} className="relative flex-none">
+        <Tabs<HudTab>
+          items={[
+            { key: 'session', label: 'Session' },
+            { key: 'history', label: 'History', count: String(sessionCount) },
+          ]}
+          value={tab}
+          onChange={setTab}
+          label="Overlay sections"
+          idPrefix={HUD_TABS_ID}
+          className="border-b border-line px-1.5 *:after:hidden"
+        />
+        <SlidingIndicator
+          containerRef={tabsRef}
+          activeKey={tab}
+          selector='[role="tab"][aria-selected="true"]'
+          className="bottom-0 h-0.5 rounded-full bg-phosphor shadow-glow-bar"
+        />
+      </div>
       <div
         role="tabpanel"
         id={tabPanelId(HUD_TABS_ID, 'session')}
@@ -1056,6 +1143,49 @@ export const OverlayHud = (): React.JSX.Element | null => {
   // Los logros de CADA sesión, indexados por sessionId. El cruce lo hace el
   // main (cada desbloqueo lleva su sessionId); aquí solo se agrupa, igual
   // que en la pantalla de Sesiones y el historial de la ficha.
+  // Los logros sacados EN ESTA SESIÓN (los de la abierta): brillan en la
+  // lista. Memo con identidad estable: entra en AchievementsPanel, que no
+  // debe rehacerse con el tic del cronómetro.
+  const openSessionId = openSession?.id ?? null;
+  const freshIds = useMemo(
+    () =>
+      new Set<string>(
+        openSessionId === null
+          ? []
+          : sessionUnlocks
+              .filter((unlock) => unlock.sessionId === openSessionId)
+              .map((unlock) => unlock.achievementId),
+      ),
+    [sessionUnlocks, openSessionId],
+  );
+  // Y cuando llega uno NUEVO con el HUD abierto, chispas de fósforo saliendo
+  // del panel (celebrate). Solo los que llegan después de abrir: los que ya
+  // estaban al abrir no se celebran otra vez. Llega por el mismo aviso de
+  // logros que ya refresca esta ventana (onActivity → sessionUnlocks).
+  const asideRef = useRef<HTMLElement | null>(null);
+  const celebratedCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (phase !== 'open') {
+      celebratedCount.current = null;
+      return;
+    }
+    const previous = celebratedCount.current;
+    celebratedCount.current = freshIds.size;
+    if (previous !== null && freshIds.size > previous) {
+      celebrate('achievement', { origin: asideRef.current });
+    }
+  }, [phase, freshIds]);
+
+  // La entrada del panel en cada apertura (ver PANEL_IN). El árbol se
+  // remonta con key={openCount}, así que el aside es nuevo cada vez.
+  useLayoutEffect(() => {
+    if (phase !== 'open' || !asideRef.current) return undefined;
+    const animation = playPanelIn(asideRef.current);
+    return () => animation?.cancel();
+    // `phase` fuera a propósito: al cerrar no se repite.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCount]);
+
   const unlocksBySession = useMemo(() => {
     const map = new Map<SessionId, SessionAchievementEntry[]>();
     for (const unlock of sessionUnlocks) {
@@ -1184,6 +1314,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
           único tramo elástico es la pestaña activa, que hace scroll por dentro
           — nunca un scroll de la ventana entera. */}
       <aside
+        ref={asideRef}
         aria-label={`Afterplay overlay: ${live.title}`}
         className={cn(
           'absolute right-11 flex w-[440px] max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-md',
@@ -1198,6 +1329,12 @@ export const OverlayHud = (): React.JSX.Element | null => {
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-(image:--scan) opacity-60"
+        />
+        {/* El destello de la entrada: luz ámbar que barre el panel desde su
+            canto derecho y se apaga (opacidad, una vez por apertura). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-20 animate-[press-flash_560ms_var(--ease-out)_60ms_both] bg-[linear-gradient(270deg,rgb(255_214_150/0.32),rgb(255_179_71/0.12)_35%,transparent_70%)]"
         />
 
         {/* Cabecera: la marca y la hora del día, que jugando se pierde. */}
@@ -1243,6 +1380,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
                 <span className="tabular-nums">
                   Session since {live.liveSince ? formatTime(live.liveSince, timeFormat) : '—'}
                 </span>
+                <VuMeter bars={5} className="ml-1 h-3" />
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro text-dust">
                 {live.releaseYear !== null && (
@@ -1274,12 +1412,21 @@ export const OverlayHud = (): React.JSX.Element | null => {
               pantalla de 1080 y menos en una baja, para dejar sitio a la
               pestaña. */}
           <div className="relative px-4 pt-2 pb-3">
-            <div
-              className="font-display text-[clamp(64px,11vh,104px)] leading-[0.9] font-bold text-phosphor tabular-nums [text-shadow:0_0_28px_rgb(255_179_71/.35)]"
+            {/* Bloom fijo en el texto (GlowText) y, detrás, un halo que
+                RESPIRA cambiando de opacidad: lo mismo que el breathe de
+                GlowText pero sin repintar 100 px de text-shadow cada frame
+                sobre el juego. Los dígitos que cambian caen (Odometer). */}
+            <GlowText
+              as="div"
+              className="relative isolate w-fit font-display text-[clamp(64px,11vh,104px)] leading-[0.9] font-bold text-phosphor tabular-nums"
               aria-label={`This session: ${formatElapsed(elapsed)}`}
             >
-              {formatElapsed(elapsed)}
-            </div>
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 bg-[radial-gradient(closest-side,rgb(255_179_71/0.22),transparent)] animate-[led-live_3.6s_var(--ease-in-out)_infinite] motion-reduce:animate-none motion-reduce:opacity-70"
+              />
+              <Odometer value={formatElapsed(elapsed)} />
+            </GlowText>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-micro text-dust">
               <span>
                 <span className="font-semibold text-bone tabular-nums">
@@ -1367,7 +1514,7 @@ export const OverlayHud = (): React.JSX.Element | null => {
                 </div>
               </section>
 
-              <AchievementsPanel entries={entries} />
+              <AchievementsPanel entries={entries} freshIds={freshIds} />
             </>
           }
           history={

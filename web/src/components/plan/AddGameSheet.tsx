@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { ApiFailure, addToPlan, searchGames } from '../../api';
 import type { IgdbSearchResult } from '../../api';
 import { Cover } from '../Cover';
+import { Stagger } from '../fx/Stagger';
 import { cn } from '../../lib/cn';
 import { fieldClass, iconButtonClass } from '../../lib/styles';
 
@@ -135,7 +136,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
         ) : results.data.length === 0 ? (
           message(<>Nothing found for “{debounced}”.</>)
         ) : (
-          <ul className="flex flex-col gap-2">
+          <Stagger as="ul" replayKey={debounced} step={40} className="flex flex-col gap-2">
             {results.data.map((game) => {
               const done = added.has(game.igdbId);
               const busy = add.isPending && add.variables?.igdbId === game.igdbId;
@@ -207,7 +208,7 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
                 </li>
               );
             })}
-          </ul>
+          </Stagger>
         )}
 
         {add.isError && (

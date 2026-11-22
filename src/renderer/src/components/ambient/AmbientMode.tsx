@@ -18,6 +18,7 @@ import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
 import { formatTime } from '../../lib/format';
 import { useTimeFormat } from '../../hooks/settings';
 import { isLiveElsewhere } from '../../../../shared/liveSession';
+import { Glitch, Grain, ScanBeam, useCrtReveal } from '../fx';
 import type { GameId } from '../../../../shared/entityIds';
 
 // El modo ambiente: cuando dejas de tocar la app, la biblioteca se pone a
@@ -252,6 +253,9 @@ export const AmbientMode = (): React.JSX.Element | null => {
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-(image:--scan) opacity-70"
       />
+      {/* Grano de fósforo sobre toda la escena: el «ruido» de un tubo
+          encendido. A saltos (5 por segundo), no a 60 fps. */}
+      <Grain className="opacity-10" />
       <AmbientShow games={candidates} />
       <AmbientClock />
       {/* La pista de salida: se queda unos segundos y se desvanece sola. Con
@@ -279,12 +283,28 @@ const AmbientClock = (): React.JSX.Element => {
   return (
     <div className="pointer-events-none absolute top-10 right-14 text-right">
       <div className="font-display text-[72px] leading-none font-bold text-bone/90 tabular-nums [text-shadow:0_2px_20px_rgb(3_6_7/.6)]">
-        {formatTime(now, timeFormat)}
+        <BlinkingTime text={formatTime(now, timeFormat)} />
       </div>
       <div className="mt-2 text-small text-dust">
         {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
       </div>
     </div>
+  );
+};
+
+// La hora con los dos puntos parpadeando, como un reloj de mesilla: un
+// segundo encendidos, otro apagados (opacidad a saltos, nada que repintar
+// más que dos puntos). El texto sigue entero en el DOM. Con reduced motion,
+// quietos.
+const BlinkingTime = ({ text }: { text: string }): React.JSX.Element => {
+  const colon = text.indexOf(':');
+  if (colon < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, colon)}
+      <span className="animate-[blink_2s_steps(1)_infinite] motion-reduce:animate-none">:</span>
+      {text.slice(colon + 1)}
+    </>
   );
 };
 
@@ -594,9 +614,27 @@ const AmbientSlide = ({
   const line = lines.length > 0 ? lines[Math.abs(lineSeed) % lines.length] : null;
 
   const slideVar = { ['--afterplay-slide-ms' as string]: `${SLIDE_MS + 4000}ms` };
+  // El «cambio de canal»: el panel se enciende desde una línea como un tubo
+  // (CrtReveal) mientras un Glitch breve lo sacude, y una ráfaga de estática
+  // tapa el salto y se apaga. Una vez por diapositiva (se remonta por key).
+  const panelRef = useCrtReveal<HTMLDivElement>('panel', undefined, 120);
+  // La estática se retira al apagarse: su grano no sigue corriendo a opacidad
+  // cero el resto de la diapositiva.
+  const [staticOn, setStaticOn] = useState(true);
 
   return (
-    <div className="afterplay-ambient-slide animate-[afterplay-fade-in_2.2s_cubic-bezier(0.4,0,0.2,1)_backwards] absolute inset-0">
+    <div className="afterplay-ambient-slide animate-[afterplay-fade-in_200ms_cubic-bezier(0.4,0,0.2,1)_backwards] absolute inset-0">
+      {staticOn && (
+        <span
+          aria-hidden
+          onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget) setStaticOn(false);
+          }}
+          className="pointer-events-none absolute inset-0 animate-[press-flash_900ms_var(--ease-out)_both] bg-bone/6"
+        >
+          <Grain className="opacity-60" />
+        </span>
+      )}
       {/* Sin hero de fondo: el fondo es la propia app desenfocada por la capa
           de arriba (ver AmbientMode), con su viñeta y sus líneas de escaneo. */}
       {/* Composición centrada: carátula a la izquierda, texto a la derecha,
@@ -605,84 +643,93 @@ const AmbientSlide = ({
           que separa "esto es el contenido" de "eso es lo que había detrás" —
           sin él, texto y carátula competían con lo que se intuyera detrás. */}
       <div className="absolute inset-0 flex items-center justify-center px-24">
-        <div
-          className="relative max-w-[1240px] overflow-hidden rounded-md"
-          style={{
-            background: 'rgb(16 20 22 / .62)',
-            backdropFilter: 'blur(30px) saturate(1.15)',
-            // Tres sombras, cada una con su trabajo: la línea clara de arriba
-            // simula la luz que pega en el canto de un cristal, el contorno
-            // interior dibuja el borde (Line de Fósforo) sin la dureza de un
-            // `border`, y la grande de fuera despega el panel de la app.
-            boxShadow: [
-              'inset 0 1px 0 rgba(233,228,216,.12)',
-              'inset 0 0 0 1px rgba(233,228,216,.09)',
-              '0 44px 110px -24px rgba(3,6,7,.8)',
-            ].join(', '),
-          }}
-        >
-          {/* El color del panel SALE DE LA CARÁTULA: la misma imagen, ampliada
+        <Glitch active as="div" className="flex max-w-[1240px]">
+          <div
+            ref={panelRef}
+            className="relative max-w-[1240px] overflow-hidden rounded-md"
+            style={{
+              background: 'rgb(16 20 22 / .62)',
+              backdropFilter: 'blur(30px) saturate(1.15)',
+              // Tres sombras, cada una con su trabajo: la línea clara de arriba
+              // simula la luz que pega en el canto de un cristal, el contorno
+              // interior dibuja el borde (Line de Fósforo) sin la dureza de un
+              // `border`, y la grande de fuera despega el panel de la app.
+              boxShadow: [
+                'inset 0 1px 0 rgba(233,228,216,.12)',
+                'inset 0 0 0 1px rgba(233,228,216,.09)',
+                '0 44px 110px -24px rgba(3,6,7,.8)',
+              ].join(', '),
+            }}
+          >
+            {/* El color del panel SALE DE LA CARÁTULA: la misma imagen, ampliada
               y desenfocada hasta ser solo color, deriva despacio por detrás
               del contenido. Cada juego tiñe su propia tarjeta — es lo que
               hace que no sean 300 diapositivas iguales con distinta foto.
               Reaprovecha la animación del hero, que quedó libre al quitarlo. */}
-          {coverSrc && (
-            <img
-              src={coverSrc}
-              alt=""
-              aria-hidden
-              className="afterplay-ambient-backdrop animate-[afterplay-ambient-backdrop_var(--afterplay-slide-ms,26s)_ease-in-out_forwards] will-change-transform motion-reduce:animate-none motion-reduce:[transform:scale(1.3)] motion-reduce:will-change-auto absolute inset-0 h-full w-full object-cover"
-              style={{ ...slideVar, filter: 'blur(70px) saturate(1.9)', opacity: 0.55 }}
-            />
-          )}
-
-          {/* Encima del tinte: un velo en diagonal que devuelve el contraste
-              al texto, y un brillo suave en la esquina superior para que el
-              cristal tenga dirección de luz en vez de estar plano. */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: [
-                'linear-gradient(160deg, rgba(233,228,216,.07), transparent 38%)',
-                'linear-gradient(115deg, rgba(12,16,18,.5), rgba(12,16,18,.3) 45%, rgba(12,16,18,.78))',
-              ].join(', '),
-            }}
-          />
-
-          <div className="relative flex items-center gap-16 px-20 py-16">
+            {/* Ken Burns MARCADO: el tinte se acerca y deriva bastante más que
+              antes (hasta ~1,7x y un 6 %), que al estar desenfocado no pierde
+              nada. La escala base va en el envoltorio y el recorrido en la
+              imagen (animate-ken-burns de fosforo.css con sus variables). */}
             {coverSrc && (
-              <div
-                className="afterplay-ambient-cover animate-[afterplay-ambient-cover_var(--afterplay-slide-ms,26s)_cubic-bezier(0.22,0.61,0.36,1)_forwards] will-change-[transform,opacity] motion-reduce:[animation-name:afterplay-fade-in] relative flex-none"
-                style={{ ...slideVar, width: COVER_WIDTH }}
-              >
-                {/* Copia desenfocada justo detrás: la carátula parece emitir
-                    su propia luz sobre el panel en vez de estar pegada. */}
+              <div aria-hidden className="absolute inset-0 scale-[1.3]">
                 <img
                   src={coverSrc}
                   alt=""
-                  aria-hidden
-                  className="absolute inset-0 w-full rounded-sm"
-                  style={{
-                    filter: 'blur(26px) saturate(1.7)',
-                    opacity: 0.65,
-                    transform: 'translateY(14px) scale(1.03)',
-                  }}
-                />
-                <img
-                  src={coverSrc}
-                  alt=""
-                  className="relative w-full rounded-sm"
-                  style={{
-                    boxShadow: [
-                      'inset 0 0 0 1px rgba(233,228,216,.14)',
-                      '0 28px 60px -12px rgba(3,6,7,.8)',
-                    ].join(', '),
-                  }}
+                  className="afterplay-ambient-backdrop absolute inset-0 h-full w-full animate-ken-burns object-cover [--ken-scale:1.3] [--ken-x:-6%] [--ken-y:-4%] motion-reduce:animate-none"
+                  style={{ filter: 'blur(70px) saturate(1.9)', opacity: 0.55 }}
                 />
               </div>
             )}
 
-            {/* Ancho FIJO, no `max-w`: con ancho máximo el panel se encogía
+            {/* Encima del tinte: un velo en diagonal que devuelve el contraste
+              al texto, y un brillo suave en la esquina superior para que el
+              cristal tenga dirección de luz en vez de estar plano. */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: [
+                  'linear-gradient(160deg, rgba(233,228,216,.07), transparent 38%)',
+                  'linear-gradient(115deg, rgba(12,16,18,.5), rgba(12,16,18,.3) 45%, rgba(12,16,18,.78))',
+                ].join(', '),
+              }}
+            />
+            {/* Un haz de luz que barre el panel cada pocos segundos. */}
+            <ScanBeam every={8} />
+
+            <div className="relative flex items-center gap-16 px-20 py-16">
+              {coverSrc && (
+                <div
+                  className="afterplay-ambient-cover animate-[afterplay-ambient-cover_var(--afterplay-slide-ms,26s)_cubic-bezier(0.22,0.61,0.36,1)_forwards] will-change-[transform,opacity] motion-reduce:[animation-name:afterplay-fade-in] relative flex-none"
+                  style={{ ...slideVar, width: COVER_WIDTH }}
+                >
+                  {/* Copia desenfocada justo detrás: la carátula parece emitir
+                    su propia luz sobre el panel en vez de estar pegada. */}
+                  <img
+                    src={coverSrc}
+                    alt=""
+                    aria-hidden
+                    className="absolute inset-0 w-full rounded-sm"
+                    style={{
+                      filter: 'blur(26px) saturate(1.7)',
+                      opacity: 0.65,
+                      transform: 'translateY(14px) scale(1.03)',
+                    }}
+                  />
+                  <img
+                    src={coverSrc}
+                    alt=""
+                    className="relative w-full rounded-sm"
+                    style={{
+                      boxShadow: [
+                        'inset 0 0 0 1px rgba(233,228,216,.14)',
+                        '0 28px 60px -12px rgba(3,6,7,.8)',
+                      ].join(', '),
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Ancho FIJO, no `max-w`: con ancho máximo el panel se encogía
                 al contenido y un juego de título corto salía casi cuadrado
                 mientras el de al lado salía apaisado — el desfile parecía
                 descuadrado. Reservando siempre el mismo hueco, todas las
@@ -691,51 +738,52 @@ const AmbientSlide = ({
                 carátula, que siempre mide igual.
                 `min-w-0` + encogible para que en una ventana estrecha ceda en
                 vez de desbordar. */}
-            <div className="w-[42rem] min-w-0">
-              <div
-                className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in]"
-                style={{ animationDelay: '600ms' }}
-              >
-                {game.isLive && (
-                  // En Tube, el color de lo que pasa en otro PC: aquí nunca hay
-                  // una sesión de ESTE PC (el modo ambiente no entra con una).
-                  <div className="mb-4 flex items-center gap-2">
-                    <span className="afterplay-ambient-halo size-2 animate-[afterplay-ambient-halo_2.8s_ease-in-out_infinite] rounded-full bg-tube shadow-[0_0_14px_var(--color-tube)] motion-reduce:animate-none" />
-                    <span className="text-micro font-semibold tracking-[.08em] text-tube">
-                      {playingLabel}
-                    </span>
+              <div className="w-[42rem] min-w-0">
+                <div
+                  className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in]"
+                  style={{ animationDelay: '600ms' }}
+                >
+                  {game.isLive && (
+                    // En Tube, el color de lo que pasa en otro PC: aquí nunca hay
+                    // una sesión de ESTE PC (el modo ambiente no entra con una).
+                    <div className="mb-4 flex items-center gap-2">
+                      <span className="afterplay-ambient-halo size-2 animate-[afterplay-ambient-halo_2.8s_ease-in-out_infinite] rounded-full bg-tube shadow-[0_0_14px_var(--color-tube)] motion-reduce:animate-none" />
+                      <span className="text-micro font-semibold tracking-[.08em] text-tube">
+                        {playingLabel}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* El título se apaga de arriba a abajo: el ojo entra por la
+                    primera línea y no por un bloque de blanco macizo. */}
+                  <h2
+                    // Big Shoulders hasta 104 px en Bone macizo. Sin el degradado
+                    // de texto de antes: aquel cortaba la cola de las minúsculas
+                    // con descendente (g, y, p) si la caja de línea era más baja
+                    // que la letra; en color sólido el interlineado ajustado ya
+                    // no recorta nada. Escala con la ventana para que los
+                    // títulos largos no se coman el panel.
+                    className="font-display text-[clamp(56px,6.2vw,104px)] leading-[0.95] font-bold break-words text-bone [text-shadow:0_2px_20px_rgb(3_6_7/.6)]"
+                  >
+                    {game.title}
+                  </h2>
+                </div>
+
+                {line && (
+                  <div
+                    className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in] mt-6"
+                    style={{ animationDelay: '1400ms' }}
+                  >
+                    {/* Filete corto en Phosphor: separa el dato del título y ata
+                      la diapositiva al resto de Afterplay. */}
+                    <div className="mb-5 h-0.5 w-20 bg-linear-to-r from-phosphor to-transparent" />
+                    <p className="text-[22px] leading-relaxed font-medium text-bone/80">{line}</p>
                   </div>
                 )}
-
-                {/* El título se apaga de arriba a abajo: el ojo entra por la
-                    primera línea y no por un bloque de blanco macizo. */}
-                <h2
-                  // Big Shoulders hasta 104 px en Bone macizo. Sin el degradado
-                  // de texto de antes: aquel cortaba la cola de las minúsculas
-                  // con descendente (g, y, p) si la caja de línea era más baja
-                  // que la letra; en color sólido el interlineado ajustado ya
-                  // no recorta nada. Escala con la ventana para que los
-                  // títulos largos no se coman el panel.
-                  className="font-display text-[clamp(56px,6.2vw,104px)] leading-[0.95] font-bold break-words text-bone [text-shadow:0_2px_20px_rgb(3_6_7/.6)]"
-                >
-                  {game.title}
-                </h2>
               </div>
-
-              {line && (
-                <div
-                  className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in] mt-6"
-                  style={{ animationDelay: '1400ms' }}
-                >
-                  {/* Filete corto en Phosphor: separa el dato del título y ata
-                      la diapositiva al resto de Afterplay. */}
-                  <div className="mb-5 h-0.5 w-20 bg-linear-to-r from-phosphor to-transparent" />
-                  <p className="text-[22px] leading-relaxed font-medium text-bone/80">{line}</p>
-                </div>
-              )}
             </div>
           </div>
-        </div>
+        </Glitch>
       </div>
     </div>
   );

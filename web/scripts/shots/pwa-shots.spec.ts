@@ -455,21 +455,30 @@ type Options = {
   hangLibrary?: boolean;
   startConflict?: boolean;
   emptyPlan?: boolean;
+  // Parar el cronómetro funciona (y después ya no queda ninguno).
+  stopOk?: boolean;
 };
 
 const json = (route: Route, body: unknown, status = 200): Promise<void> =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 const mockApi = async (page: Page, options: Options = {}): Promise<void> => {
+  let stopped = false;
   await page.route('**/api/v2/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace('/api/v2', '');
     const method = route.request().method();
 
     if (path === '/timer' && method === 'GET')
-      return json(route, options.timer === false ? null : timer);
+      return json(route, options.timer === false || stopped ? null : timer);
     if (path === '/timer/beat') return json(route, { alive: true });
-    if (path === '/timer/stop') return route.abort('internetdisconnected');
+    if (path === '/timer/stop') {
+      if (!options.stopOk) return route.abort('internetdisconnected');
+      // Un poco de red: el destello de confirmación llega después del clic.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      stopped = true;
+      return json(route, { sessionId: timer.sessionId, durationSec: 72 * 60 });
+    }
     if (path === '/timer/start') {
       if (options.startConflict)
         return json(
@@ -533,8 +542,10 @@ const mockApi = async (page: Page, options: Options = {}): Promise<void> => {
 };
 
 const shot = async (page: Page, name: string, fullPage = false): Promise<void> => {
-  // Deja terminar las animaciones de entrada (240-420 ms).
-  await page.waitForTimeout(700);
+  // Deja terminar las animaciones de entrada: el encendido del tubo (720 ms),
+  // las cifras que cuentan (700 ms) y los medidores que se rellenan al entrar
+  // en la vista (hasta ~1,4 s el de How long to beat).
+  await page.waitForTimeout(1600);
   await page.screenshot({ path: join(OUT, `${name}.png`), fullPage });
 };
 
@@ -689,5 +700,89 @@ test.describe('PWA', () => {
     await page.goto('/');
     await page.getByRole('heading', { name: 'Tonight' }).waitFor();
     await shot(page, '22-home-reduced-motion');
+  });
+  // MOVIMIENTO (components/fx de la PWA). Las capturas son estáticas, así que
+  // se congelan las animaciones y se fotografían fotograma a fotograma: el
+  // TimerBar con un dígito cayendo, el Stop con su anillo y el destello de
+  // confirmación al parar. Van a $PWA_MOTION_DIR (o a out/motion).
+  test('motion: timer bar', async ({ page }) => {
+    const MOTION = process.env.PWA_MOTION_DIR ?? join(OUT, 'motion');
+    mkdirSync(MOTION, { recursive: true });
+    await mockApi(page, { stopOk: true });
+    await page.goto('/library');
+    await page.getByText('Copper Saints').waitFor();
+    await page.waitForTimeout(1600);
+
+    const stopButton = page.getByRole('button', { name: 'Stop the timer' });
+    const box = await stopButton.boundingBox();
+    if (!box) throw new Error('No hay TimerBar');
+    const clip = { x: 0, y: box.y - 46, width: 390, height: 140 };
+
+    // Las animaciones WAAPI nuevas nacen en pausa para llevarlas al instante
+    // que se quiera; las CSS se pausan al congelar. `release` las suelta.
+    const holdNew = (): Promise<void> =>
+      page.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        proto.heldAnimate ??= proto.animate;
+        const original = proto.heldAnimate;
+        proto.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+          const animation = original.apply(this, args);
+          animation.pause();
+          return animation;
+        };
+      });
+    const freezeAt = (ms: number): Promise<void> =>
+      page.evaluate((time) => {
+        for (const animation of document.getAnimations()) {
+          // Las entradas que ya acabaron (la barra, las filas) no se tocan:
+          // rebobinarlas vaciaría la pantalla.
+          if (animation.playState === 'finished') continue;
+          animation.pause();
+          // Los bucles (VuMeter, halo) se quedan donde estén: solo se llevan
+          // al instante pedido las animaciones de un solo disparo.
+          const timing = animation.effect?.getComputedTiming();
+          if (timing && timing.iterations !== Infinity) animation.currentTime = time;
+        }
+      }, ms);
+    const release = (): Promise<void> =>
+      page.evaluate(() => {
+        const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+        if (proto.heldAnimate) proto.animate = proto.heldAnimate;
+        for (const animation of document.getAnimations()) animation.play();
+      });
+    const frames = async (name: string, times: number[]): Promise<void> => {
+      for (const time of times) {
+        await freezeAt(time);
+        await page.waitForTimeout(60);
+        await page.screenshot({
+          path: join(MOTION, `${name}-${String(time).padStart(4, '0')}ms.png`),
+          clip,
+        });
+      }
+    };
+
+    // 1. Un segundo que cambia: el dígito nuevo cae (Odometer) con el
+    // cronómetro respirando y el VuMeter bailando.
+    await holdNew();
+    await page.waitForFunction(() =>
+      document.getAnimations().some((animation) => animation.playState === 'paused'),
+    );
+    await frames('pwa-timerbar-tick', [0, 50, 100, 160, 280]);
+    await release();
+
+    // 2. Stop: se hunde, rebota y suelta un anillo con destello Live. Las
+    // WAAPI nuevas siguen retenidas: el destello del paso 3 nace en pausa.
+    await holdNew();
+    await stopButton.click();
+    await frames('pwa-timerbar-stop', [30, 90, 160, 260, 420]);
+
+    // 3. Al confirmarse el parar, el destello de «hecho» donde estaba la barra.
+    await page.waitForFunction(() =>
+      [...document.body.children].some(
+        (node) => node instanceof HTMLElement && node.style.background.includes('radial-gradient'),
+      ),
+    );
+    await frames('pwa-timerbar-stopped-flash', [0, 120, 260, 480]);
+    await release();
   });
 });

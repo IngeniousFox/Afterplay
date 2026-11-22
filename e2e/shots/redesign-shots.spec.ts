@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { _electron, test } from '@playwright/test';
+import { _electron, test, type Page } from '@playwright/test';
 import { openLocalDatabase } from '../../src/main/db/v2/connection';
 import { buildSplashHtml, SPLASH_SIZE } from '../../src/main/splash/splashHtml';
 import {
@@ -25,6 +25,64 @@ import { createSandbox, type SeedGame } from '../sandbox';
 
 const SET = process.env.SHOTS_SET ?? 'before';
 const OUT = join(process.cwd(), 'docs', 'redesign', 'screens', SET);
+const MOTION_DIR = join(process.cwd(), 'docs', 'redesign', 'screens', 'motion');
+
+// Fotogramas de movimiento sobre una página cualquiera (el overlay, el modo
+// ambiente): las WAAPI nuevas nacen en pausa (`holdNew`), `freezeAt` lleva
+// las de un solo disparo que siguen vivas a un instante (las ya acabadas no
+// se rebobinan; los bucles se quedan donde estén) y `release` lo suelta todo.
+const motionTools = (
+  page: Page,
+): {
+  holdNew: () => Promise<void>;
+  release: () => Promise<void>;
+  frames: (
+    name: string,
+    times: number[],
+    clip?: { x: number; y: number; width: number; height: number },
+  ) => Promise<void>;
+} => {
+  const holdNew = (): Promise<void> =>
+    page.evaluate(() => {
+      const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+      proto.heldAnimate ??= proto.animate;
+      const original = proto.heldAnimate;
+      proto.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+        const animation = original.apply(this, args);
+        animation.pause();
+        return animation;
+      };
+    });
+  const release = (): Promise<void> =>
+    page.evaluate(() => {
+      const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+      if (proto.heldAnimate) proto.animate = proto.heldAnimate;
+      for (const animation of document.getAnimations()) animation.play();
+    });
+  const frames = async (
+    name: string,
+    times: number[],
+    clip?: { x: number; y: number; width: number; height: number },
+  ): Promise<void> => {
+    mkdirSync(MOTION_DIR, { recursive: true });
+    for (const time of times) {
+      await page.evaluate((at) => {
+        for (const animation of document.getAnimations()) {
+          if (animation.playState === 'finished') continue;
+          animation.pause();
+          const timing = animation.effect?.getComputedTiming();
+          if (timing && timing.iterations !== Infinity) animation.currentTime = at;
+        }
+      }, time);
+      await page.waitForTimeout(80);
+      await page.screenshot({
+        path: join(MOTION_DIR, `${name}-${String(time).padStart(4, '0')}ms.png`),
+        clip,
+      });
+    }
+  };
+  return { holdNew, release, frames };
+};
 
 test('capturas de escritorio', async () => {
   test.setTimeout(240_000);
@@ -845,6 +903,20 @@ test('capturas de overlay, ambiente y migración', async () => {
     await window.screenshot({ path: join(OUT, 't9-ambient.png') });
     await window.waitForTimeout(4000);
     await window.screenshot({ path: join(OUT, 't9-ambient-later.png') });
+    // El «cambio de canal» de la siguiente diapositiva (cada 26 s): estática,
+    // glitch y el panel encendiéndose como un tubo, fotograma a fotograma.
+    {
+      const motion = motionTools(window);
+      await window.waitForTimeout(14_500);
+      await motion.holdNew();
+      await window.waitForFunction(
+        () => document.getAnimations().some((animation) => animation.playState === 'paused'),
+        undefined,
+        { timeout: 15_000 },
+      );
+      await motion.frames('ambient-channel', [0, 70, 140, 220, 320, 480, 760]);
+      await motion.release();
+    }
     await window.mouse.move(400, 400);
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('settings:getAmbientIdleMinutes');
@@ -881,6 +953,9 @@ test('capturas de overlay, ambiente y migración', async () => {
       if (message.type() === 'error') console.log('[overlay]', message.text());
     });
     await hud.waitForLoadState('domcontentloaded');
+    // La entrada del panel se fotografía: sus animaciones nacen en pausa.
+    const hudMotion = motionTools(hud);
+    await hudMotion.holdNew();
     // El "juego" de detrás: un degradado de escena oscura.
     await hud.evaluate(() => {
       document.documentElement.style.background =
@@ -898,6 +973,14 @@ test('capturas de overlay, ambiente y migración', async () => {
       await hud.waitForTimeout(500);
     }
     await sessionTab.waitFor();
+    // El panel entrando: tubo que se abre desde la derecha con su destello.
+    await hudMotion.frames('overlay-panel-in', [0, 60, 120, 200, 280, 420], {
+      x: 1080,
+      y: 20,
+      width: 520,
+      height: 960,
+    });
+    await hudMotion.release();
     await hud.waitForTimeout(1500);
     await hud.screenshot({ path: join(OUT, 't9-overlay.png') });
     await hud.keyboard.type('Past the second bridge. Find the keycard before the next boss');

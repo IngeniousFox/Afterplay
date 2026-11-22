@@ -26,6 +26,9 @@ import {
   RatingsCard,
 } from '../components/detail/sections';
 import { Cover } from '../components/Cover';
+import { ScanBeam } from '../components/fx/Backdrop';
+import { GlowText } from '../components/fx/GlowText';
+import { loopPlayClass } from '../components/fx/motion';
 import { Led, LiveDot } from '../components/Figure';
 import { LiveBadge, LiveTimer } from '../components/LiveBadge';
 import { ErrorState, Loading } from '../components/States';
@@ -109,17 +112,15 @@ const FiguresRow = ({ game }: { game: GameDetail }): React.JSX.Element => {
   return (
     <div className="flex border-y border-line py-3">
       <FigureCell
-        value={formatHours(game.totalHours)}
+        value={game.totalHours}
+        format={formatHours}
         label="Played"
         accent
         hint={game.isLive ? `+${Math.floor(liveSeconds / 60)}m now` : undefined}
       />
-      <FigureCell value={String(sessionCount)} label="Sessions" />
-      <FigureCell value={formatMoney(game.totalSpend)} label="Spent" />
-      <FigureCell
-        value={game.costPerHour !== null ? formatMoney(game.costPerHour) : '—'}
-        label="Per hour"
-      />
+      <FigureCell value={sessionCount} label="Sessions" />
+      <FigureCell value={game.totalSpend} format={formatMoney} label="Spent" />
+      <FigureCell value={game.costPerHour ?? '—'} format={formatMoney} label="Per hour" />
     </div>
   );
 };
@@ -254,19 +255,35 @@ export const GameDetailScreen = (): React.JSX.Element => {
 
       {/* ── El héroe: arte a sangre con líneas de escaneo y el degradado que
           protege el texto, para no depender de la suerte del arte que toque. */}
+      {/* Ken Burns lento sobre el arte (solo transform) y un haz de luz que lo
+          barre cada pocos segundos; los dos se paran fuera de la vista y con
+          la pestaña oculta. */}
       <div className="relative h-60 overflow-hidden bg-raised">
         {detail.heroUrl ? (
-          <img src={detail.heroUrl} alt="" className="h-full w-full object-cover brightness-75" />
+          <img
+            src={detail.heroUrl}
+            alt=""
+            className={cn(
+              'h-full w-full object-cover brightness-75',
+              'animate-ken-burns motion-reduce:animate-none',
+              loopPlayClass,
+            )}
+          />
         ) : detail.coverUrl ? (
           // Sin hero, la carátula DESENFOCADA de fondo: borrosa da igual su
           // resolución y siempre trae la paleta del juego.
           <img
             src={detail.coverUrl}
             alt=""
-            className="h-full w-full scale-110 object-cover blur-lg brightness-[.55]"
+            className={cn(
+              'h-full w-full scale-110 object-cover blur-lg brightness-[.55]',
+              'animate-ken-burns motion-reduce:animate-none',
+              loopPlayClass,
+            )}
           />
         ) : null}
         <div aria-hidden="true" className="absolute inset-0 bg-(image:--scan)" />
+        <ScanBeam every={9} />
         <div aria-hidden="true" className="absolute inset-0 bg-(image:--protect-bottom)" />
       </div>
 
@@ -274,9 +291,14 @@ export const GameDetailScreen = (): React.JSX.Element => {
         <div className={revealClass}>
           <div className="flex items-end gap-3.5">
             <Cover url={detail.coverUrl} title={detail.title} className="w-20 shadow-lift" />
-            <h1 className="min-w-0 flex-1 font-display text-[34px] leading-[36px] font-bold tracking-[0.005em] text-bone">
+            <GlowText
+              as="h1"
+              tone="bone"
+              flicker
+              className="min-w-0 flex-1 font-display text-[34px] leading-[36px] font-bold tracking-[0.005em] text-bone"
+            >
               {detail.title}
-            </h1>
+            </GlowText>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-dust">
             <span className="inline-flex items-center gap-1.5 font-semibold">

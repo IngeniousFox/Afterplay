@@ -7,6 +7,15 @@ import { Cover } from '../components/Cover';
 import { Figure, Led } from '../components/Figure';
 import { LiveBadge, LiveTimer } from '../components/LiveBadge';
 import { PageHeader, SectionTitle } from '../components/PageHeader';
+import { useCrtReveal } from '../components/fx/crt';
+import { CrtFlash } from '../components/fx/CrtReveal';
+import { chartGroup, growX } from '../components/fx/chart';
+import { ScanBeam } from '../components/fx/Backdrop';
+import { GlowText } from '../components/fx/GlowText';
+import { loopPlayClass } from '../components/fx/motion';
+import { Ticker } from '../components/fx/Ticker';
+import { useInView } from '../components/fx/viewport';
+import { VuMeter } from '../components/fx/VuMeter';
 import { ErrorState, Loading } from '../components/States';
 import { cn } from '../lib/cn';
 import { formatHours, pluralize, relativeDay } from '../lib/format';
@@ -29,56 +38,93 @@ const todayLabel = (): string =>
 // sin que el PC de casa esté encendido ni haya que inventar ningún canal
 // (§2.1). Zona héroe de Fósforo: la carátula de fondo, líneas de escaneo y el
 // degradado que protege el texto.
-const LiveCard = ({ live }: { live: NonNullable<StatsSummary['live']> }): React.JSX.Element => (
-  <section
-    aria-label="Playing now"
-    className={cn(revealClass, 'overflow-hidden rounded-md border border-line-strong bg-panel')}
-  >
-    <div className="relative h-36 overflow-hidden bg-raised">
-      {live.coverUrl && (
-        <img
-          src={live.coverUrl}
-          alt=""
-          className="h-full w-full scale-110 object-cover blur-md brightness-[.55]"
-        />
-      )}
-      <div aria-hidden="true" className="absolute inset-0 bg-(image:--scan)" />
-      <div aria-hidden="true" className="absolute inset-0 bg-(image:--protect-bottom)" />
-      <div className="absolute right-4 bottom-3 left-4 flex items-end gap-3">
-        <Cover url={live.coverUrl} title={live.gameTitle} className="w-16 shadow-lift" />
-        <div className="min-w-0 flex-1 pb-0.5">
-          <LiveBadge label="Session running" />
-          <h2 className="mt-1 font-display text-title font-bold text-bone">{live.gameTitle}</h2>
+const LiveCard = ({ live }: { live: NonNullable<StatsSummary['live']> }): React.JSX.Element => {
+  // La tarjeta «se enciende» como un tubo (scaleY y opacidad) con su destello.
+  const ref = useCrtReveal<HTMLElement>('panel');
+  return (
+    <section
+      ref={ref}
+      aria-label="Playing now"
+      className="relative overflow-hidden rounded-md border border-line-strong bg-panel"
+    >
+      <CrtFlash />
+      <div className="relative h-36 overflow-hidden bg-raised">
+        {live.coverUrl && (
+          <img
+            src={live.coverUrl}
+            alt=""
+            className={cn(
+              'h-full w-full scale-110 object-cover blur-md brightness-[.55]',
+              'animate-ken-burns [--ken-scale:1.22] motion-reduce:animate-none',
+              loopPlayClass,
+            )}
+          />
+        )}
+        <div aria-hidden="true" className="absolute inset-0 bg-(image:--scan)" />
+        <ScanBeam every={7} />
+        <div aria-hidden="true" className="absolute inset-0 bg-(image:--protect-bottom)" />
+        <div className="absolute right-4 bottom-3 left-4 flex items-end gap-3">
+          <Cover url={live.coverUrl} title={live.gameTitle} className="w-16 shadow-lift" />
+          <div className="min-w-0 flex-1 pb-0.5">
+            <span className="flex items-center gap-2">
+              <LiveBadge label="Session running" />
+              <VuMeter bars={5} />
+            </span>
+            <GlowText
+              as="h2"
+              tone="bone"
+              className="mt-1 font-display text-title font-bold text-bone"
+            >
+              {live.gameTitle}
+            </GlowText>
+          </div>
         </div>
       </div>
-    </div>
-    <div className="flex items-center justify-between gap-3 p-4">
-      <LiveTimer since={live.since} />
-      <Link to={`/game/${live.gameId}`} className={primaryButtonClass}>
-        Open game
-      </Link>
-    </div>
-  </section>
-);
+      <div className="flex items-center justify-between gap-3 p-4">
+        <LiveTimer since={live.since} />
+        <Link to={`/game/${live.gameId}`} className={primaryButtonClass}>
+          Open game
+        </Link>
+      </div>
+    </section>
+  );
+};
 
 // Cifra de la fila de arriba: número en Big Shoulders y su etiqueta debajo.
+// Entra contando como un marcador (Ticker); la de las horas, con bloom.
 const Stat = ({
   value,
+  format,
   label,
   accent = false,
 }: {
-  value: string;
+  value: number;
+  format: (value: number) => string;
   label: string;
   accent?: boolean;
 }): React.JSX.Element => (
   <div className="min-w-0 flex-1 border-l border-line pl-3 first:border-l-0 first:pl-0">
-    <Figure
+    <Ticker
       value={value}
-      className={cn('block text-[40px] leading-[42px]', accent ? 'text-phosphor' : 'text-bone')}
+      format={format}
+      className="block"
+      render={(text) => (
+        <Figure
+          value={text}
+          className={cn(
+            'block text-[40px] leading-[42px]',
+            accent
+              ? 'text-phosphor [text-shadow:0_0_1px_rgb(255_179_71/0.45),0_0_16px_rgb(255_179_71/0.32)]'
+              : 'text-bone',
+          )}
+        />
+      )}
     />
     <div className="mt-1 text-micro text-dust">{label}</div>
   </div>
 );
+
+const wholeNumber = (value: number): string => String(Math.round(value));
 
 // El reparto por estado, en una barra apilada: cuánto has terminado frente a
 // cuánto te queda, de un vistazo.
@@ -97,18 +143,25 @@ const StatusBar = ({ stats }: { stats: StatsSummary }): React.JSX.Element | null
   ];
   const segments = counted.filter(({ count, always }) => always || count > 0);
 
+  const { observe, inView } = useInView();
   const known = stats.totalGames;
   if (known === 0) return null;
 
   return (
     <section className={revealClass} style={revealDelay(2, 60)}>
       <SectionTitle aside={pluralize(known, 'game')}>Your library</SectionTitle>
-      <div className="flex h-2 gap-px overflow-hidden rounded-xs bg-bone/8">
-        {segments.map(({ state, count }) => (
+      {/* La barra crece al entrar en la vista, tramo a tramo de izquierda a
+          derecha (scaleX desde su borde izquierdo). */}
+      <div
+        ref={observe}
+        data-inview={inView || undefined}
+        className={cn(chartGroup, 'flex h-2 gap-px overflow-hidden rounded-xs bg-bone/8')}
+      >
+        {segments.map(({ state, count }, index) => (
           <div
             key={state}
-            className={ledClass(state)}
-            style={{ width: `${(count / known) * 100}%` }}
+            className={cn(ledClass(state), growX)}
+            style={{ width: `${(count / known) * 100}%`, animationDelay: `${120 + index * 110}ms` }}
           />
         ))}
       </div>
@@ -176,9 +229,18 @@ export const Home = (): React.JSX.Element => {
         {/* Las horas del año siguen la misma regla que Stats filtrado por año:
             sesiones de ese año MÁS las horas manuales atribuidas a él. */}
         <div className={cn(revealClass, 'flex border-t border-line pt-4')}>
-          <Stat value={formatHours(summary.hoursThisYear)} label={`in ${summary.year}`} accent />
-          <Stat value={String(summary.gamesThisYear)} label={`games in ${summary.year}`} />
-          <Stat value={String(summary.totalSessions)} label="sessions" />
+          <Stat
+            value={summary.hoursThisYear}
+            format={formatHours}
+            label={`in ${summary.year}`}
+            accent
+          />
+          <Stat
+            value={summary.gamesThisYear}
+            format={wholeNumber}
+            label={`games in ${summary.year}`}
+          />
+          <Stat value={summary.totalSessions} format={wholeNumber} label="sessions" />
         </div>
       </div>
 

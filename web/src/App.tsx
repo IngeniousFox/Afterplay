@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { ApiFailure } from './api';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useCrtReveal } from './components/fx/crt';
+import { PowerOn } from './components/fx/PowerOn';
 import { OfflineBand } from './components/OfflineBand';
 import { Loading } from './components/States';
 import { TabBar } from './components/TabBar';
@@ -81,6 +83,8 @@ const queryClient = new QueryClient({
 });
 
 const Shell = (): React.JSX.Element => {
+  const { pathname } = useLocation();
+  const screenRef = useCrtReveal<HTMLElement>('screen', pathname);
   // Los chunks partidos se calientan cuando el hilo queda libre tras pintar la
   // Home: así el primer pintado no los paga pero el primer toque en una
   // pestaña tampoco espera a la red. requestIdleCallback con red de seguridad
@@ -117,7 +121,9 @@ const Shell = (): React.JSX.Element => {
       />
       <div className="pt-[env(safe-area-inset-top)]">
         <OfflineBand />
-        <main className="mx-auto max-w-lg">
+        {/* Cada pantalla «se enciende» al llegar (solo opacidad: una pantalla
+            tiene hijos fixed que un transform descolocaría). */}
+        <main ref={screenRef} className="mx-auto max-w-lg">
           {/* El fallback es el MISMO spinner que las pantallas enseñan mientras
               piden datos, para que un chunk que aún baja no se distinga de una
               query en vuelo. Con la navegación normal casi nunca se ve: React
@@ -146,6 +152,9 @@ const Shell = (): React.JSX.Element => {
         <TimerBar />
       </div>
       <TabBar />
+      {/* El encendido del tubo, una vez por carga: una tapa por encima que se
+          abre y se retira sola (la app ya está pintada debajo). */}
+      <PowerOn />
     </>
   );
 };
