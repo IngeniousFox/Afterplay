@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from './fixtures';
 
-// AJUSTES -> CONNECTIONS -> SYNC, sin hub.
+// AJUSTES -> SYNC, sin hub.
 //
 // El sync 2.0 no existe en un test E2E (src/main/lib/e2e.ts + SyncRuntime): ni
 // arranca, ni deja emparejar, ni hay hub contra el que hacerlo. Lo que sí se
@@ -18,13 +18,14 @@ test.describe('sync en Ajustes', () => {
   }) => {
     const { window, sandbox } = afterplay;
 
-    await window.getByRole('button', { name: 'Settings', exact: true }).click();
-    const dialog = window.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    await window.getByRole('link', { name: 'Settings', exact: true }).click();
+    const dialog = window.getByTestId('settings-page');
+    await dialog.getByRole('link', { name: 'Sync', exact: true }).click();
+    await expect(dialog.getByRole('heading', { name: 'Sync', exact: true })).toBeVisible();
 
     // La tarjeta, en su estado de fábrica.
     await expect(dialog.getByText('Not paired.')).toBeVisible();
-    // El formulario nace plegado: no añade campos de texto a la pestaña.
+    // El formulario nace plegado: no añade campos de texto a la sección.
     await expect(dialog.getByPlaceholder('https://your-hub.example')).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Pair this PC…' }).click();
     await expect(dialog.getByText('Sync is turned off in this session.')).toBeVisible();

@@ -1,12 +1,10 @@
 import {
-  AlertTriangle,
   Check,
   ChevronDown,
   Eye,
   EyeOff,
   FolderOpen,
   HardDriveDownload,
-  KeyRound,
   Save,
   Upload,
 } from 'lucide-react';
@@ -25,14 +23,22 @@ import {
   useSaveStorageProvider,
   useSyncFailure,
 } from '../../hooks/settings';
-import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
-import { accentGradientStyle, expandClass, floatingPanelClass } from '../../lib/styles';
-import { AMBER, BLUE } from '../../lib/colors';
+import { fieldLabelClass, textInputClass } from '../library/add-game/styles';
+import { expandClass, floatingPanelClass } from '../../lib/styles';
 import { cn } from '../../lib/utils';
+import {
+  buttonSize,
+  focusRingInset,
+  iconButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from '../shell/controls';
+import { SegmentedControl } from '../ui/segmented-control';
+import { SettingsCard, SettingsNotice, StatusLine } from './SettingsCard';
 
 type CredentialsSectionProps = {
   // Primer arranque sin credenciales de IGDB: el grupo de IGDB nace
-  // desplegado (NavRail decide cuándo, vía SettingsModal).
+  // desplegado (RootLayout decide cuándo, vía la navegación a Integrations).
   spotlight: boolean;
 };
 
@@ -45,25 +51,25 @@ type FieldKey = keyof CredentialsValues;
 // fila plegada, no N campos a la vista.
 //
 // El nombre del servicio va en la cabecera del grupo, así que las etiquetas
-// de dentro no lo repiten ("API KEY", no "STEAMGRIDDB API KEY").
+// de dentro no lo repiten ("API key", no "SteamGridDB API key").
 type ServiceId = 'igdb' | 'sgdb' | 'turso' | 'storage' | 'anthropic' | 'steam' | 'ra';
 
 type CredentialField = { key: FieldKey; label: string };
 
 const R2_FIELDS: CredentialField[] = [
-  { key: 'r2AccountId', label: 'ACCOUNT ID' },
-  { key: 'r2Bucket', label: 'BUCKET' },
-  { key: 'r2AccessKeyId', label: 'ACCESS KEY ID' },
-  { key: 'r2SecretAccessKey', label: 'SECRET ACCESS KEY' },
+  { key: 'r2AccountId', label: 'Account ID' },
+  { key: 'r2Bucket', label: 'Bucket' },
+  { key: 'r2AccessKeyId', label: 'Access key ID' },
+  { key: 'r2SecretAccessKey', label: 'Secret access key' },
 ];
 
 const S3_FIELDS: CredentialField[] = [
-  { key: 's3Endpoint', label: 'ENDPOINT URL' },
-  { key: 's3Region', label: 'REGION' },
-  { key: 's3Bucket', label: 'BUCKET' },
-  { key: 's3AccessKeyId', label: 'ACCESS KEY ID' },
-  { key: 's3SecretAccessKey', label: 'SECRET ACCESS KEY' },
-  { key: 's3AddressingMode', label: 'ADDRESSING' },
+  { key: 's3Endpoint', label: 'Endpoint URL' },
+  { key: 's3Region', label: 'Region' },
+  { key: 's3Bucket', label: 'Bucket' },
+  { key: 's3AccessKeyId', label: 'Access key ID' },
+  { key: 's3SecretAccessKey', label: 'Secret access key' },
+  { key: 's3AddressingMode', label: 'Addressing' },
 ];
 
 const S3_ADDRESSING_OPTIONS = [
@@ -100,8 +106,8 @@ const SERVICES: Service[] = [
     detail: 'Game search & metadata',
     where: 'dev.twitch.tv',
     fields: [
-      { key: 'twitchClientId', label: 'TWITCH CLIENT ID' },
-      { key: 'twitchClientSecret', label: 'TWITCH CLIENT SECRET' },
+      { key: 'twitchClientId', label: 'Twitch client ID' },
+      { key: 'twitchClientSecret', label: 'Twitch client secret' },
     ],
     isReady: (creds) => Boolean(creds.twitchClientId && creds.twitchClientSecret),
   },
@@ -110,19 +116,8 @@ const SERVICES: Service[] = [
     label: 'SteamGridDB',
     detail: 'Covers & heroes',
     where: 'steamgriddb.com/profile/preferences/api',
-    fields: [{ key: 'steamGridDbApiKey', label: 'API KEY' }],
+    fields: [{ key: 'steamGridDbApiKey', label: 'API key' }],
     isReady: (creds) => Boolean(creds.steamGridDbApiKey),
-  },
-  {
-    id: 'turso',
-    label: 'Turso',
-    detail: 'Cloud sync across PCs · optional',
-    where: 'turso.tech',
-    fields: [
-      { key: 'databaseUrl', label: 'DATABASE URL' },
-      { key: 'databaseAuthToken', label: 'AUTH TOKEN' },
-    ],
-    isReady: (creds) => Boolean(creds.databaseUrl && creds.databaseAuthToken),
   },
   {
     id: 'storage',
@@ -139,7 +134,7 @@ const SERVICES: Service[] = [
     label: 'Anthropic',
     detail: 'Game trivia · optional',
     where: 'console.anthropic.com → API keys',
-    fields: [{ key: 'anthropicApiKey', label: 'API KEY' }],
+    fields: [{ key: 'anthropicApiKey', label: 'API key' }],
     isReady: (creds) => Boolean(creds.anthropicApiKey),
   },
   {
@@ -152,8 +147,8 @@ const SERVICES: Service[] = [
     // TUS desbloqueos de juegos de tu cuenta (y exige perfil con "detalles
     // de juego" en público). isReady con la key basta.
     fields: [
-      { key: 'steamApiKey', label: 'API KEY' },
-      { key: 'steamUserId64', label: 'STEAMID64 (FOR YOUR UNLOCKS)' },
+      { key: 'steamApiKey', label: 'API key' },
+      { key: 'steamUserId64', label: 'SteamID64 (for your unlocks)' },
     ],
     isReady: (creds) => Boolean(creds.steamApiKey),
   },
@@ -165,10 +160,25 @@ const SERVICES: Service[] = [
     // Los dos o nada: la key autentica la API, pero sin usuario no se sabe
     // DE QUIÉN leer los desbloqueos — media configuración no trae nada.
     fields: [
-      { key: 'raUsername', label: 'USERNAME' },
-      { key: 'raApiKey', label: 'WEB API KEY' },
+      { key: 'raUsername', label: 'Username' },
+      { key: 'raApiKey', label: 'Web API key' },
     ],
     isReady: (creds) => Boolean(creds.raUsername && creds.raApiKey),
+  },
+  {
+    id: 'turso',
+    // La base de la 1.x. La 2.0 ya no sincroniza por aquí, pero el corte de
+    // la migración (main/migration/legacyCutover.ts) todavía LEE estas dos
+    // claves para hablar con la base antigua, así que siguen a la vista y
+    // al final, rotuladas como lo que son.
+    label: 'Turso (1.x)',
+    detail: 'Old cloud database · only read while moving from 1.x',
+    where: 'turso.tech',
+    fields: [
+      { key: 'databaseUrl', label: 'Database URL' },
+      { key: 'databaseAuthToken', label: 'Auth token' },
+    ],
+    isReady: (creds) => Boolean(creds.databaseUrl && creds.databaseAuthToken),
   },
 ];
 
@@ -197,16 +207,25 @@ const destinationLabel = (provider: SaveStorageProvider, values: CredentialsValu
     : `S3 · ${values.s3Endpoint ?? 'no server'} · ${values.s3Bucket ?? 'no bucket'}`;
 
 // Los tres botones del traslado son SECUNDARIOS: la acción principal de esta
-// sección sigue siendo Save keys (el único con el degradado de acento).
-// Mismo botón de contorno que el "Back up now" de Data backups, que es el
-// gesto hermano — escribir/leer un fichero fuera de la app.
-const transferButtonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3 py-1.75 text-[12px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
+// sección sigue siendo Save keys (el único primario).
+const transferButtonClass = cn(secondaryButtonClass, buttonSize.md);
+
+// Lo que desbloquea cada servicio, para el panel lateral (estados-ajustes-
+// integrations.png): la respuesta a "¿necesito esta clave?" sin abrir nada.
+const UNLOCKS: Record<ServiceId, string> = {
+  igdb: 'Search, summaries, ratings and release dates',
+  sgdb: 'Covers and heroes',
+  storage: 'Save backups in your own bucket',
+  anthropic: 'Game trivia and monthly stories',
+  steam: 'Achievements and Steam reviews',
+  ra: 'Achievements on retro games',
+  turso: 'Moving your library over from Afterplay 1.x',
+};
 
 // Credenciales de APIs externas, editables sin .env (main/config/credentials
-// las guarda cifradas en userData). Vive en su propia pestaña de Ajustes
-// (Connections), así que ya no se pliega entera como antes — lo que se
-// pliega es cada servicio, en acordeón.
+// las guarda cifradas en userData). Sección Integrations de Ajustes: un
+// acordeón de servicios (uno abierto a la vez) y, al lado, qué desbloquea
+// cada uno y cómo llevarse las claves a otro PC.
 export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): React.JSX.Element => {
   const { data: creds } = useCredentials();
   const { data: savedProvider } = useSaveStorageProvider();
@@ -326,391 +345,391 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
     }
   };
 
+  const provider = savedProvider ?? 'cloudflare';
+
   return (
-    <div className="rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.75">
-      {/* Cabecera estática (esta sección ya no se pliega — vive en su propia
-          pestaña): título + qué servicios están listos, de un vistazo. */}
-      <div className="flex items-start justify-between gap-3">
-        {/* min-w-0: deja que la descripción envuelva en líneas normales (nada
-            de truncate, eso cortaría texto) en vez de exigir su ancho de una
-            sola línea y dejar a los servicios sin sitio donde repartirse. */}
-        <div className="flex min-w-0 items-center gap-2">
-          <div
-            className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-            style={{ background: `${BLUE}1f` }}
-          >
-            <KeyRound size={13} style={{ color: BLUE }} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[13.5px] font-semibold text-foreground">API keys</div>
-            <div className="mt-0.25 text-xs text-muted-foreground">
-              Each service below unlocks one feature — game search, artwork, sync… The app works
-              without any of them; add only the ones you want.
-            </div>
-          </div>
-        </div>
-        {/* flex-wrap: los servicios van seguidos en una línea y van saltando
-            a la siguiente según hagan falta, en vez de amontonarse uno por
-            fila. min-w-0 es lo que permite que esta columna ceda ancho al
-            texto de la izquierda en lugar de exigir el suyo entero. */}
-        {creds && (
-          <div className="flex min-w-0 max-w-44 flex-wrap items-center justify-end gap-x-2.5 gap-y-1 pt-1">
-            {SERVICES.map((service) => ({
-              ...service,
-              ready: service.isReady(creds, savedProvider ?? 'cloudflare'),
-            })).map((service) => (
-              <span
-                key={service.id}
-                title={service.detail}
-                // whitespace-nowrap: cada etiqueta es una unidad
-                // ("Cloud saves" son dos palabras) — sin esto el texto
-                // se parte a mitad en vez de saltar la etiqueta entera.
-                className="flex items-center gap-1.5 whitespace-nowrap text-micro font-bold"
-                style={{ color: service.ready ? '#ffb347' : 'var(--muted-foreground)' }}
-              >
-                <span
-                  className="h-1.5 w-1.5 flex-none rounded-full"
-                  style={{
-                    background: service.ready ? '#ffb347' : 'rgba(233,228,216,.22)',
-                  }}
-                />
-                {service.label}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Un sync roto se enseña SIEMPRE, arriba del todo. Antes esto solo
-          salía por consola y un desajuste de esquema estuvo horas fallando
-          cada minuto sin que nada lo dijera. */}
-      {syncFailure && (
-        <div
-          className="mt-2.5 flex items-start gap-2 rounded-[9px] border px-2.75 py-2"
-          style={{ borderColor: `${AMBER}44`, background: `${AMBER}0f` }}
-        >
-          <AlertTriangle size={13} className="mt-0.5 flex-none" style={{ color: AMBER }} />
-          <div className="min-w-0">
-            <div className="text-[12px] font-semibold" style={{ color: AMBER }}>
-              {syncFailure.schemaMismatch
-                ? "Cloud sync is stuck — the remote database doesn't match this one"
-                : syncFailure.walOutOfStep
-                  ? 'Cloud sync is stuck — changes from your other devices are not coming in'
-                  : 'Cloud sync is failing'}
-              {syncFailure.consecutive > 1 && ` · ${syncFailure.consecutive} tries`}
-            </div>
-            <div className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-              {/* Un desajuste de esquema NO se cura reintentando: hay que
-                  aplicar la migración que falta en el remoto. Decirlo evita
-                  esperar en vano a que "ya se arreglará". */}
-              {/* Un WAL descuadrado tampoco: el push sigue subiendo, así que
-                  lo tuyo está a salvo en Turso, pero el pull no vuelve a
-                  completar. El "will upload once the connection recovers" de
-                  abajo mentía dos veces en este caso. */}
-              {syncFailure.schemaMismatch
-                ? 'A table or column is missing on Turso, so nothing new is being uploaded. Retrying will not fix it — the pending migration has to be applied there. Your data is safe locally.'
-                : syncFailure.walOutOfStep
-                  ? 'Your changes are still uploading to Turso, but nothing from your other devices can download. Retrying will not fix it — the local copy has to be rebuilt from Turso once.'
-                  : 'Your data is safe locally and will upload once the connection recovers.'}
-            </div>
-            <div className="mt-1 font-mono text-micro break-all text-muted-foreground/60">
-              {syncFailure.message}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-col gap-2.5 border-t border-border pt-3">
-        <div className="flex items-center justify-between">
-          <div className="text-[11px] text-muted-foreground">
-            Open a service to add its keys — they save encrypted on this PC and apply right away.
-          </div>
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      <SettingsCard
+        title="API keys"
+        description="Each service unlocks one feature. The app works without any of them; add only the ones you want. Open a service to add its keys: they save encrypted on this PC and apply right away."
+        action={
           <button
             type="button"
             onClick={() => setShowValues((current) => !current)}
+            aria-label={showValues ? 'Hide values' : 'Show values'}
             title={showValues ? 'Hide values' : 'Show values'}
-            className="flex flex-none items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+            aria-pressed={showValues}
+            className={iconButtonClass}
           >
-            {showValues ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showValues ? <EyeOff aria-hidden size={16} /> : <Eye aria-hidden size={16} />}
           </button>
-        </div>
+        }
+        flush
+      >
+        {/* Un sync roto se enseña SIEMPRE, arriba del todo. Hoy el main ya no
+            lo publica (settings:getSyncFailure responde null desde que el
+            sync de Turso salió del escritorio), así que en la práctica no
+            aparece; se conserva mientras exista el canal. */}
+        {syncFailure && (
+          <div className="border-b border-line px-5 py-3.5">
+            <SettingsNotice>
+              <div className="font-semibold">
+                {syncFailure.schemaMismatch
+                  ? "Cloud sync is stuck: the remote database doesn't match this one"
+                  : syncFailure.walOutOfStep
+                    ? 'Cloud sync is stuck: changes from your other devices are not coming in'
+                    : 'Cloud sync is failing'}
+                {syncFailure.consecutive > 1 && ` · ${syncFailure.consecutive} tries`}
+              </div>
+              <div className="mt-0.5 font-normal text-dust">
+                {syncFailure.schemaMismatch
+                  ? 'A table or column is missing on Turso, so nothing new is being uploaded. Retrying will not fix it: the pending migration has to be applied there. Your data is safe locally.'
+                  : syncFailure.walOutOfStep
+                    ? 'Your changes are still uploading to Turso, but nothing from your other devices can download. Retrying will not fix it: the local copy has to be rebuilt from Turso once.'
+                    : 'Your data is safe locally and will upload once the connection recovers.'}
+              </div>
+              <div className="mt-1 font-mono text-micro font-normal break-all text-dust">
+                {syncFailure.message}
+              </div>
+            </SettingsNotice>
+          </div>
+        )}
 
-        {SERVICES.map((service) => {
-          const ready = creds ? service.isReady(creds, savedProvider ?? 'cloudflare') : false;
-          const isOpen = openService === service.id;
-          const fields =
-            service.id === 'storage'
-              ? selectedProvider === 'cloudflare'
-                ? R2_FIELDS
-                : S3_FIELDS
-              : service.fields;
-          return (
-            <div
-              key={service.id}
-              className="overflow-hidden rounded-[9px] border border-border bg-bone/[0.02]"
-            >
-              <button
-                type="button"
-                onClick={() => setOpenService(isOpen ? null : service.id)}
-                className="flex w-full items-center gap-2 px-2.75 py-2.25 text-left transition-colors duration-150 hover:bg-bone/[0.03]"
+        <ul>
+          {SERVICES.map((service) => {
+            const ready = creds ? service.isReady(creds, provider) : false;
+            const isOpen = openService === service.id;
+            const fields =
+              service.id === 'storage'
+                ? selectedProvider === 'cloudflare'
+                  ? R2_FIELDS
+                  : S3_FIELDS
+                : service.fields;
+            return (
+              <li
+                key={service.id}
+                className={cn(
+                  'border-t border-line first:border-t-0',
+                  isOpen && 'bg-phosphor-tint/40',
+                )}
               >
-                <ChevronDown
-                  size={13}
-                  className="flex-none text-muted-foreground transition-transform duration-150"
-                  style={isOpen ? undefined : { transform: 'rotate(-90deg)' }}
-                />
-                <span
-                  className="h-1.5 w-1.5 flex-none rounded-full"
-                  style={{ background: ready ? '#ffb347' : 'rgba(233,228,216,.22)' }}
-                />
-                <span className="text-[12.5px] font-semibold text-foreground">{service.label}</span>
-                <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
-                  {service.id === 'storage'
-                    ? `${(savedProvider ?? 'cloudflare') === 'cloudflare' ? 'Cloudflare R2' : 'S3 compatible'} · backups`
-                    : service.detail}
-                </span>
-                <span
-                  className="flex-none text-micro font-bold"
-                  style={{ color: ready ? '#ffb347' : 'var(--muted-foreground)' }}
-                >
-                  {ready ? 'Configured' : 'Not set'}
-                </span>
-              </button>
-
-              {isOpen && (
-                <div
-                  className={`flex flex-col gap-2.5 border-t border-border px-2.75 pt-2.5 pb-3 ${expandClass}`}
-                >
-                  {service.id === 'storage' && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {(['cloudflare', 's3'] as const).map((provider) => (
-                        <button
-                          key={provider}
-                          type="button"
-                          aria-pressed={selectedProvider === provider}
-                          onClick={() => {
-                            setSelectedProvider(provider);
-                            setPendingStorageChange(null);
-                            setSavedFlash(false);
-                          }}
-                          className={`rounded-[8px] border px-3 py-1.75 text-[12px] font-semibold transition-colors ${
-                            selectedProvider === provider
-                              ? 'border-primary/50 bg-primary/10 text-primary'
-                              : 'border-border bg-bone/[0.02] text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          {provider === 'cloudflare' ? 'Cloudflare R2' : 'S3 compatible'}
-                        </button>
-                      ))}
-                    </div>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpenService(isOpen ? null : service.id)}
+                  className={cn(
+                    'flex w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-150 hover:bg-bone/4',
+                    focusRingInset,
                   )}
-                  {service.id === 'storage' &&
-                    selectedProvider !== (savedProvider ?? 'cloudflare') && (
-                      <p className="text-[11px] text-amber-300">
+                >
+                  <ChevronDown
+                    aria-hidden
+                    size={15}
+                    className={cn(
+                      'flex-none text-dust transition-transform duration-150 motion-reduce:transition-none',
+                      !isOpen && '-rotate-90',
+                    )}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-body font-semibold text-bone">{service.label}</span>
+                    <span className="block text-small text-dust">
+                      {service.id === 'storage'
+                        ? `${provider === 'cloudflare' ? 'Cloudflare R2' : 'S3 compatible'} · backups`
+                        : service.detail}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      'flex flex-none items-center gap-1.5 text-small font-semibold',
+                      ready ? 'text-tube' : 'text-dust',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'size-2 flex-none rounded-full',
+                        ready ? 'bg-tube' : 'border-2 border-dust',
+                      )}
+                    />
+                    {ready ? 'Configured' : 'Not set'}
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className={cn('flex flex-col gap-3.5 px-5 pt-1 pb-5 pl-12', expandClass)}>
+                    {service.id === 'storage' && (
+                      <SegmentedControl
+                        aria-label="Cloud save destination"
+                        value={selectedProvider}
+                        options={[
+                          { value: 'cloudflare', label: 'Cloudflare R2' },
+                          { value: 's3', label: 'S3 compatible' },
+                        ]}
+                        onChange={(next) => {
+                          setSelectedProvider(next);
+                          setPendingStorageChange(null);
+                          setSavedFlash(false);
+                        }}
+                        className="self-start"
+                      />
+                    )}
+                    {service.id === 'storage' && selectedProvider !== provider && (
+                      <p className="text-small text-phosphor">
                         The current destination stays active until saved.
                       </p>
                     )}
-                  <div
-                    className={
-                      service.id === 'storage'
-                        ? 'grid grid-cols-1 gap-x-2.5 gap-y-2.5 min-[700px]:grid-cols-2'
-                        : 'flex flex-col gap-2.5'
-                    }
-                  >
-                    {fields.map((field) => (
-                      <div
-                        key={field.key}
-                        className={
-                          field.key === 's3Endpoint' || field.key === 's3AddressingMode'
-                            ? 'min-[700px]:col-span-2'
-                            : undefined
-                        }
-                      >
-                        {field.key === 's3AddressingMode' ? (
-                          <Select.Root
-                            items={S3_ADDRESSING_OPTIONS}
-                            value={draft.s3AddressingMode === 'virtual' ? 'virtual' : 'path'}
-                            onValueChange={(value) => {
-                              if (!value) return;
-                              setDraft((current) => ({ ...current, s3AddressingMode: value }));
-                              setPendingStorageChange(null);
-                              setSavedFlash(false);
-                            }}
-                          >
-                            <Select.Label className={fieldLabelClass}>Addressing</Select.Label>
-                            <Select.Trigger
-                              className={cn(
-                                textInputClass,
-                                textInputFocusClass,
-                                'flex items-center justify-between text-left text-[12px]',
-                              )}
-                            >
-                              <Select.Value />
-                              <Select.Icon>
-                                <ChevronDown size={15} className="text-muted-foreground" />
-                              </Select.Icon>
-                            </Select.Trigger>
-                            <Select.Portal>
-                              <Select.Positioner
-                                alignItemWithTrigger={false}
-                                sideOffset={4}
-                                className="isolate z-60"
-                              >
-                                <Select.Popup
-                                  className={`w-(--anchor-width) rounded-[9px] border ${floatingPanelClass} p-1 outline-hidden`}
-                                >
-                                  <Select.List className="flex flex-col gap-0.5">
-                                    {S3_ADDRESSING_OPTIONS.map((option) => (
-                                      <Select.Item
-                                        key={option.value}
-                                        value={option.value}
-                                        className="flex cursor-default items-center justify-between rounded-[7px] px-2.75 py-2 text-[12px] text-foreground outline-hidden data-highlighted:bg-bone/[0.07] data-selected:text-primary"
-                                      >
-                                        <Select.ItemText>{option.label}</Select.ItemText>
-                                        <Select.ItemIndicator>
-                                          <Check size={14} className="text-primary" />
-                                        </Select.ItemIndicator>
-                                      </Select.Item>
-                                    ))}
-                                  </Select.List>
-                                </Select.Popup>
-                              </Select.Positioner>
-                            </Select.Portal>
-                          </Select.Root>
-                        ) : (
-                          <>
-                            <div className={fieldLabelClass}>{field.label}</div>
-                            <input
-                              type={
-                                showValues ||
-                                field.key === 's3Endpoint' ||
-                                field.key === 's3Region' ||
-                                field.key === 's3Bucket'
-                                  ? 'text'
-                                  : 'password'
-                              }
-                              value={draft[field.key]}
-                              onChange={(event) => {
-                                setDraft((current) => ({
-                                  ...current,
-                                  [field.key]: event.target.value,
-                                }));
+                    <div
+                      className={
+                        service.id === 'storage' || fields.length === 2
+                          ? 'grid grid-cols-1 gap-3.5 min-[900px]:grid-cols-2'
+                          : 'flex flex-col gap-3.5'
+                      }
+                    >
+                      {fields.map((field) => (
+                        <div
+                          key={field.key}
+                          className={
+                            field.key === 's3Endpoint' || field.key === 's3AddressingMode'
+                              ? 'min-[900px]:col-span-2'
+                              : undefined
+                          }
+                        >
+                          {field.key === 's3AddressingMode' ? (
+                            <Select.Root
+                              items={S3_ADDRESSING_OPTIONS}
+                              value={draft.s3AddressingMode === 'virtual' ? 'virtual' : 'path'}
+                              onValueChange={(value) => {
+                                if (!value) return;
+                                setDraft((current) => ({ ...current, s3AddressingMode: value }));
                                 setPendingStorageChange(null);
                                 setSavedFlash(false);
                               }}
-                              autoComplete="off"
-                              spellCheck={false}
-                              className={`${textInputClass} ${textInputFocusClass} font-mono text-[11.5px]`}
-                            />
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {service.id === 'storage' && selectedProvider === 's3' && (
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      Path style is recommended for private S3 servers.
-                    </p>
-                  )}
-                  {service.id === 'storage' &&
-                    selectedProvider === 's3' &&
-                    draft.s3Endpoint.trim().toLowerCase().startsWith('http://') && (
-                      <p className="text-[11px] leading-relaxed text-amber-300">
-                        HTTP sends backup data without transport encryption. Use HTTPS for Plexy.
+                            >
+                              <Select.Label className={cn(fieldLabelClass, 'block')}>
+                                Addressing
+                              </Select.Label>
+                              <Select.Trigger
+                                className={cn(
+                                  textInputClass,
+                                  'flex items-center justify-between text-left',
+                                )}
+                              >
+                                <Select.Value />
+                                <Select.Icon>
+                                  <ChevronDown aria-hidden size={15} className="text-dust" />
+                                </Select.Icon>
+                              </Select.Trigger>
+                              <Select.Portal>
+                                <Select.Positioner
+                                  alignItemWithTrigger={false}
+                                  sideOffset={4}
+                                  className="isolate z-60"
+                                >
+                                  <Select.Popup
+                                    className={cn(
+                                      'w-(--anchor-width) rounded-sm border p-1 outline-hidden',
+                                      floatingPanelClass,
+                                    )}
+                                  >
+                                    <Select.List className="flex flex-col gap-0.5">
+                                      {S3_ADDRESSING_OPTIONS.map((option) => (
+                                        <Select.Item
+                                          key={option.value}
+                                          value={option.value}
+                                          className="flex cursor-default items-center justify-between rounded-xs px-3 py-2 text-small text-bone outline-hidden data-highlighted:bg-bone/7 data-selected:text-phosphor"
+                                        >
+                                          <Select.ItemText>{option.label}</Select.ItemText>
+                                          <Select.ItemIndicator>
+                                            <Check
+                                              aria-hidden
+                                              size={14}
+                                              className="text-phosphor"
+                                            />
+                                          </Select.ItemIndicator>
+                                        </Select.Item>
+                                      ))}
+                                    </Select.List>
+                                  </Select.Popup>
+                                </Select.Positioner>
+                              </Select.Portal>
+                            </Select.Root>
+                          ) : (
+                            <label className="block">
+                              <div className={fieldLabelClass}>{field.label}</div>
+                              <input
+                                type={
+                                  showValues ||
+                                  field.key === 's3Endpoint' ||
+                                  field.key === 's3Region' ||
+                                  field.key === 's3Bucket'
+                                    ? 'text'
+                                    : 'password'
+                                }
+                                value={draft[field.key]}
+                                onChange={(event) => {
+                                  setDraft((current) => ({
+                                    ...current,
+                                    [field.key]: event.target.value,
+                                  }));
+                                  setPendingStorageChange(null);
+                                  setSavedFlash(false);
+                                }}
+                                autoComplete="off"
+                                spellCheck={false}
+                                className={cn(textInputClass, 'font-mono')}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {service.id === 'storage' && selectedProvider === 's3' && (
+                      <p className="text-small text-dust">
+                        Path style is recommended for private S3 servers.
                       </p>
                     )}
-                  <div className="text-[11px] text-muted-foreground">
-                    Get it at{' '}
-                    {service.id === 'storage' && selectedProvider === 's3'
-                      ? 'your S3 server’s admin panel'
-                      : service.where}
+                    {service.id === 'storage' &&
+                      selectedProvider === 's3' &&
+                      draft.s3Endpoint.trim().toLowerCase().startsWith('http://') && (
+                        <p className="text-small text-phosphor">
+                          HTTP sends backup data without transport encryption. Use HTTPS for Plexy.
+                        </p>
+                      )}
+                    <div className="text-small text-dust">
+                      Get it at{' '}
+                      <span className="text-bone">
+                        {service.id === 'storage' && selectedProvider === 's3'
+                          ? 'your S3 server’s admin panel'
+                          : service.where}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                )}
+              </li>
+            );
+          })}
+        </ul>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={setCredentials.isPending}
-            className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
-            style={accentGradientStyle}
-          >
-            <Save size={14} />
-            {setCredentials.isPending
-              ? migrationProgress
-                ? 'Migrating…'
-                : 'Saving…'
-              : 'Save keys'}
-          </button>
-          {savedFlash && !setCredentials.isPending && (
-            <span className="text-[12px] font-semibold text-primary">
-              Saved — applied immediately, no restart needed.
-            </span>
+        <div className="flex flex-col gap-3 border-t border-line px-5 py-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={setCredentials.isPending}
+              className={cn(primaryButtonClass, buttonSize.md)}
+            >
+              <Save aria-hidden size={15} />
+              {setCredentials.isPending
+                ? migrationProgress
+                  ? 'Migrating…'
+                  : 'Saving…'
+                : 'Save keys'}
+            </button>
+            {savedFlash && !setCredentials.isPending && (
+              <span className="text-small font-semibold text-tube">
+                Saved — applied immediately, no restart needed.
+              </span>
+            )}
+            {setCredentials.isError && (
+              <span className="text-small text-live">
+                Couldn&apos;t save — {setCredentials.error.message}
+              </span>
+            )}
+          </div>
+
+          {pendingStorageChange && !setCredentials.isPending && (
+            <div ref={migrationPromptRef}>
+              <SettingsNotice
+                action={
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void saveValues(pendingStorageChange.values, pendingStorageChange.provider)
+                      }
+                      className={cn(primaryButtonClass, buttonSize.md)}
+                    >
+                      Migrate backups and switch
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingStorageChange(null)}
+                      className={cn(secondaryButtonClass, buttonSize.md)}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                }
+              >
+                <div className="font-semibold">Move cloud saves to the new destination?</div>
+                <div className="mt-1 font-normal text-bone">
+                  {pendingStorageChange.from} → {pendingStorageChange.to}
+                </div>
+                <p className="mt-1.5 font-normal text-dust">
+                  Afterplay will copy and verify every object before activating the new destination.
+                  The original bucket will remain intact. Close Afterplay on other PCs during the
+                  move, then switch each PC before using it again.
+                </p>
+              </SettingsNotice>
+            </div>
           )}
-          {setCredentials.isError && (
-            <span className="text-[12px] text-destructive">
-              Couldn&apos;t save — {setCredentials.error.message}
-            </span>
+          {setCredentials.isPending && migrationProgress && (
+            <div className="text-small text-tube">
+              {migrationProgress.phase === 'listing'
+                ? 'Checking objects in both buckets…'
+                : `${migrationProgress.phase === 'copying' ? 'Copying' : 'Verifying'} ${migrationProgress.completed} of ${migrationProgress.total} objects`}
+            </div>
           )}
         </div>
+      </SettingsCard>
 
-        {pendingStorageChange && !setCredentials.isPending && (
-          <div
-            ref={migrationPromptRef}
-            className="rounded-[9px] border border-amber-400/35 bg-amber-400/[0.07] px-3 py-3 text-[12px] text-foreground"
-          >
-            <div className="font-semibold">Move cloud saves to the new destination?</div>
-            <div className="mt-1 text-muted-foreground">
-              {pendingStorageChange.from} → {pendingStorageChange.to}
-            </div>
-            <p className="mt-2 leading-relaxed text-muted-foreground">
-              Afterplay will copy and verify every object before activating the new destination. The
-              original bucket will remain intact. Close Afterplay on other PCs during the move, then
-              switch each PC before using it again.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  void saveValues(pendingStorageChange.values, pendingStorageChange.provider)
-                }
-                className="rounded-[8px] border border-primary/40 bg-primary/10 px-3 py-1.75 font-semibold text-primary"
-              >
-                Migrate backups and switch
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingStorageChange(null)}
-                className="rounded-[8px] border border-border px-3 py-1.75 font-semibold text-muted-foreground"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-        {setCredentials.isPending && migrationProgress && (
-          <div className="text-[12px] text-muted-foreground">
-            {migrationProgress.phase === 'listing'
-              ? 'Checking objects in both buckets…'
-              : `${migrationProgress.phase === 'copying' ? 'Copying' : 'Verifying'} ${migrationProgress.completed} of ${migrationProgress.total} objects`}
-          </div>
-        )}
+      <div className="flex min-w-0 flex-col gap-5">
+        <SettingsCard title="What each key unlocks" flush>
+          <ul>
+            {SERVICES.map((service) => {
+              const ready = creds ? service.isReady(creds, provider) : false;
+              return (
+                <li
+                  key={service.id}
+                  className="flex items-start justify-between gap-3 border-t border-line px-5 py-3 first:border-t-0"
+                >
+                  <div className="min-w-0">
+                    <div className="text-body font-semibold text-bone">{service.label}</div>
+                    <div className="text-small text-dust">{UNLOCKS[service.id]}</div>
+                  </div>
+                  {ready && (
+                    <span className="mt-0.5 flex flex-none items-center gap-1.5 text-micro font-semibold text-tube">
+                      <Check aria-hidden size={13} />
+                      Ready
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </SettingsCard>
 
-        {/* Llevarse las claves a otro PC. Debajo del guardado y separado por
-            una línea: no es parte de rellenar claves, es lo que se hace
-            DESPUÉS — y una sola vez por instalación. */}
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
-          <div className="text-[11px] leading-relaxed text-muted-foreground">
-            Moving to another PC? Export puts every key above into a single{' '}
-            <span className="font-mono text-micro text-foreground/70">afterplay-keys.json</span>. On
-            the other one, import it here — or just drop it into the app folder and it loads itself
-            on the next start. That file is readable, so keep it somewhere safe and delete it when
-            you&apos;re done.
-          </div>
+        {/* Llevarse las claves a otro PC: no es parte de rellenar claves, es
+            lo que se hace DESPUÉS — y una sola vez por instalación. */}
+        <SettingsCard
+          title="Moving to another PC?"
+          description={
+            <>
+              Export puts every key above into a single{' '}
+              <span className="font-mono text-bone">afterplay-keys.json</span>. On the other one,
+              import it here, or just drop it into the app folder and it loads itself on the next
+              start. That file is readable, so keep it somewhere safe and delete it when you&apos;re
+              done.
+            </>
+          }
+          extra={
+            transferFlash && (
+              <StatusLine tone={transferFlash.ok ? 'info' : 'error'}>
+                <span className="break-all">{transferFlash.text}</span>
+              </StatusLine>
+            )
+          }
+        >
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -718,7 +737,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
               disabled={transferBusy}
               className={transferButtonClass}
             >
-              <HardDriveDownload size={13} />
+              <HardDriveDownload aria-hidden size={15} />
               {exportCredentials.isPending ? 'Exporting…' : 'Export keys'}
             </button>
             <button
@@ -727,7 +746,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
               disabled={transferBusy}
               className={transferButtonClass}
             >
-              <Upload size={13} />
+              <Upload aria-hidden size={15} />
               {importCredentials.isPending ? 'Importing…' : 'Import from file'}
             </button>
             {/* La ruta de userData no se la sabe nadie de memoria, y sin ella
@@ -737,18 +756,11 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
               onClick={() => void window.api.settings.openDataFolder()}
               className={transferButtonClass}
             >
-              <FolderOpen size={13} />
+              <FolderOpen aria-hidden size={15} />
               Open app folder
             </button>
           </div>
-          {transferFlash && (
-            <div
-              className={`text-[11.5px] break-all ${transferFlash.ok ? 'text-primary' : 'text-destructive'}`}
-            >
-              {transferFlash.text}
-            </div>
-          )}
-        </div>
+        </SettingsCard>
       </div>
     </div>
   );

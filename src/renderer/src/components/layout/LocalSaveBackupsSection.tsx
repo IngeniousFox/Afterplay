@@ -1,9 +1,10 @@
-import { Archive, Check, Trash2 } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useCleanLocalBackups, useLocalBackupsUsage } from '../../hooks/saves';
-import { AMBER, GRAY, TEAL } from '../../lib/colors';
 import { formatBytes } from '../../lib/format';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
 import { SettingsCard } from './SettingsCard';
 import { UsageBreakdownBar } from './UsageBreakdownBar';
 
@@ -19,8 +20,7 @@ import { UsageBreakdownBar } from './UsageBreakdownBar';
 // lo desinstalas, apagas su backup— se queda con su carpeta entera
 // congelada para siempre: sin esto, nada lo vuelve a mirar jamás.
 
-const buttonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
+const buttonClass = cn(secondaryButtonClass, buttonSize.md);
 
 // Lo que dura la confirmación de la limpieza antes de devolverle el renglón
 // al estado real — mismo criterio que ImagesSection y el mismo motivo: un
@@ -58,18 +58,17 @@ export const LocalSaveBackupsSection = (): React.JSX.Element => {
     // devolvía el renglón a "412 MB reclaimable" con el botón otra vez
     // activo — indistinguible de no haber pulsado nunca, y aquí lo que no se
     // ha hecho es borrar ficheros.
-    if (clean.error)
-      return { text: `Failed — ${clean.error.message}`, color: 'var(--destructive)' };
-    if (clean.isPending) return { text: 'Cleaning up…', color: AMBER };
+    if (clean.error) return { text: `Failed — ${clean.error.message}`, color: 'var(--color-live)' };
+    if (clean.isPending) return { text: 'Cleaning up…', color: 'var(--color-phosphor)' };
     if (freed) {
       return freed.files === 0 && freed.folders === 0
-        ? { text: 'Nothing to free', color: 'var(--muted-foreground)', icon: Check }
-        : { text: `Freed ${formatBytes(freed.bytes)}`, color: TEAL, icon: Check };
+        ? { text: 'Nothing to free', color: 'var(--color-dust)', icon: Check }
+        : { text: `Freed ${formatBytes(freed.bytes)}`, color: 'var(--color-success)', icon: Check };
     }
     if (!usage) return null;
     return reclaimableBytes > 0
-      ? { text: `${formatBytes(reclaimableBytes)} reclaimable`, color: AMBER }
-      : { text: 'All in use', color: 'var(--muted-foreground)' };
+      ? { text: `${formatBytes(reclaimableBytes)} reclaimable`, color: 'var(--color-phosphor)' }
+      : { text: 'All in use', color: 'var(--color-dust)' };
   })();
 
   // Reparto en dos: lo que se queda (mantiene una copia que aún no está
@@ -80,46 +79,50 @@ export const LocalSaveBackupsSection = (): React.JSX.Element => {
   const keptBytes = Math.max(0, (usage?.totalBytes ?? 0) - reclaimableBytes);
   const segments = usage
     ? [
-        { key: 'kept', label: 'Still needed', bytes: keptBytes, color: TEAL },
-        { key: 'reclaimable', label: 'Reclaimable', bytes: reclaimableBytes, color: GRAY },
+        { key: 'kept', label: 'Still needed', bytes: keptBytes, color: 'var(--color-tube)' },
+        {
+          key: 'reclaimable',
+          label: 'Reclaimable',
+          bytes: reclaimableBytes,
+          color: 'var(--color-dust)',
+        },
       ].filter((segment) => segment.bytes > 0)
     : [];
 
   return (
     <SettingsCard
-      layout="column"
       title="Local copies"
-      description="The working copy of your cloud saves on this PC's disk. Restores always come from the cloud, so anything already uploaded — or left behind by deleted games — can be cleaned up safely."
-      icon={Archive}
-      color={TEAL}
-      headerRight={
+      description="The working copy of your cloud saves on this PC's disk. Restores always come from the cloud, so anything already uploaded, or left behind by deleted games, can be cleaned up safely."
+      action={
         <button
           type="button"
           onClick={handleClean}
           disabled={clean.isPending || usage === undefined || reclaimableBytes === 0}
           className={buttonClass}
         >
-          <Trash2 size={14} />
+          <Trash2 aria-hidden size={15} />
           Clean up
         </button>
       }
     >
-      <div className="flex flex-col gap-2.75">
-        <div className="flex items-baseline justify-between gap-3 text-[11px]">
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-semibold tabular-nums text-foreground">
+      <div className="flex flex-col gap-3.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-title font-bold text-bone tabular-nums">
               {usage ? formatBytes(usage.totalBytes) : '—'}
             </span>
-            <span className="text-muted-foreground">
-              {usage ? `across ${usage.totalFiles.toLocaleString()} files` : 'measuring…'}
+            <span className="text-small text-dust">
+              {usage
+                ? `on this PC, across ${usage.totalFiles.toLocaleString()} files`
+                : 'measuring…'}
             </span>
           </div>
           {badge && (
             <span
-              className="flex flex-none items-center gap-1 font-semibold tabular-nums"
+              className="flex flex-none items-center gap-1 text-small font-semibold tabular-nums"
               style={{ color: badge.color }}
             >
-              {badge.icon && <badge.icon size={11} strokeWidth={3} />}
+              {badge.icon && <badge.icon aria-hidden size={13} strokeWidth={3} />}
               {badge.text}
             </span>
           )}
@@ -129,17 +132,17 @@ export const LocalSaveBackupsSection = (): React.JSX.Element => {
           <UsageBreakdownBar segments={segments} />
         ) : (
           usage && (
-            <div className="text-[11px] text-muted-foreground">
-              Nothing here yet — this fills up once cloud backup uploads a first save.
+            <div className="text-small text-dust">
+              Nothing here yet. This fills up once cloud backup uploads a first save.
             </div>
           )
         )}
 
         {/* Lo que un botón que borra ficheros tiene que decir ANTES de que
             lo pulses: qué se va y por qué eso no pierde ninguna versión. */}
-        <div className="text-micro leading-[1.45] text-muted-foreground/70">
+        <div className="text-micro text-dust">
           Cleaning up removes local copies already confirmed in the cloud, plus folders no game
-          claims anymore — never a version that only exists here.
+          claims anymore. Never a version that only exists here.
         </div>
       </div>
     </SettingsCard>

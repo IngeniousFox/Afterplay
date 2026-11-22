@@ -94,17 +94,19 @@ test.describe('notes and deferred renderer content', () => {
     expect((await loadedScripts(page)).some((name) => name.startsWith('SettingsContent-'))).toBe(
       false,
     );
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const settings = page.getByRole('dialog');
+    // Ajustes es una página: el engranaje lleva a /settings (General).
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    const settings = page.getByTestId('settings-page');
     await expect(settings.getByText('Time format', { exact: true })).toBeVisible();
     expect((await loadedScripts(page)).some((name) => name.startsWith('SettingsContent-'))).toBe(
       true,
     );
-    await settings.getByRole('button', { name: 'Connections', exact: true }).click();
+    await settings.getByRole('link', { name: 'Integrations', exact: true }).click();
     await expect(settings.getByRole('button', { name: /^Anthropic\b/ })).toBeVisible();
-    await page.keyboard.press('Escape');
+    // Salir y volver: el fragmento ya está cargado y la sección se pinta sin esperar.
+    await page.getByRole('link', { name: 'Home', exact: true }).click();
     await expect(settings).toHaveCount(0);
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.goBack();
     await expect(settings.getByRole('button', { name: /^Anthropic\b/ })).toBeVisible();
   });
 

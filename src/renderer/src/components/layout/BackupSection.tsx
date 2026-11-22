@@ -1,4 +1,5 @@
 import { FolderOpen, HardDriveDownload } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { useCreateManualBackup } from '../../hooks/backup';
 import {
@@ -8,8 +9,8 @@ import {
   useSetBackupIntervalHours,
 } from '../../hooks/settings';
 import { Dropdown } from '../library/add-game/Dropdown';
-import { SettingsCard } from './SettingsCard';
-import { TEAL } from '../../lib/colors';
+import { buttonSize, primaryButtonClass } from '../shell/controls';
+import { SettingsCard, SettingsRow, StatusLine } from './SettingsCard';
 
 // Cada cuántas HORAS toca una copia nueva. Horas concretas y no un campo
 // libre, mismo criterio que AmbientSection: lo que importa es elegir entre
@@ -76,81 +77,78 @@ export const BackupSection = (): React.JSX.Element => {
   };
 
   return (
-    // 'column' y no 'row' como antes — con el intervalo y la rotación ahora
-    // elegibles, el botón manual solo ya no basta para llenar la fila de la
-    // derecha del layout viejo, y dos desplegables más ahí habrían quedado
-    // apretados contra el título. El botón manual se queda en headerRight,
-    // que es justo donde vive el gesto equivalente en Emulators/Game saves —
-    // sigue siendo LA acción principal de la card, arriba y a la vista.
     <SettingsCard
-      layout="column"
       title="Data backups"
-      description="Your library, sessions and stats live in one small database file. Afterplay keeps a rotating local copy automatically, on the cadence below — this button saves an extra one right now, wherever you want. Game save files are separate — see the Game saves tab."
-      icon={HardDriveDownload}
-      color={TEAL}
-      headerRight={
+      description="Your library, sessions and stats live in one small database file. Afterplay keeps a rotating local copy automatically, on the cadence below. Back up now saves an extra one right now, wherever you want. Game save files are separate: see Saves."
+      action={
         <button
           type="button"
           onClick={handleBackupNow}
           disabled={createManualBackup.isPending}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(primaryButtonClass, buttonSize.md)}
         >
           {createManualBackup.isPending ? (
-            <HardDriveDownload size={14} className="animate-pulse" />
+            <HardDriveDownload
+              aria-hidden
+              size={15}
+              className="animate-pulse motion-reduce:animate-none"
+            />
           ) : (
-            <FolderOpen size={14} />
+            <FolderOpen aria-hidden size={15} />
           )}
           {createManualBackup.isPending ? 'Saving…' : 'Back up now'}
         </button>
       }
+      extra={
+        <>
+          {savedPath && (
+            <StatusLine tone="info">
+              <span className="font-mono font-normal break-all">Saved to {savedPath}</span>
+            </StatusLine>
+          )}
+          {createManualBackup.isError && (
+            <StatusLine tone="error">
+              Couldn&apos;t create the backup: {createManualBackup.error.message}
+            </StatusLine>
+          )}
+        </>
+      }
+      flush
     >
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 border-t border-line pt-2.75">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">Automatic backups</span>
-          {/* Sin prop `disabled` propia: Dropdown no la tiene y no vale la
-              pena sumarla al componente compartido por un solo caso — con
-              backups apagados, el intervalo simplemente no significa nada,
-              así que aquí basta con apagarlo VISUALMENTE.
-              openDirection="up": esta card vive cerca del final de un modal
-              que scrollea, y hacia abajo se sale de él — mismo criterio fijo
-              a mano que AmbientSection/PlaythroughDatesHoursStatus con sus
-              propios dropdowns. */}
-          <div className={`w-33 flex-none ${backupsOff ? 'pointer-events-none opacity-45' : ''}`}>
-            <Dropdown
-              value={intervalValue}
-              options={[...INTERVAL_OPTIONS]}
-              onChange={(next) => setIntervalHours.mutate(Number(next))}
-              renderOption={(option) => INTERVAL_LABELS[option]}
-              openDirection="up"
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Sin su propia etiqueta ("Keep"): el desplegable de al lado ya la
-              trae en cada opción ("Keep 5", "Turned off") — repetirla aquí
-              sería la misma palabra dos veces seguidas. */}
-          <div className="w-28.5 flex-none">
+      <SettingsRow
+        label="Automatic backups"
+        description="How many copies to keep in rotation. Turned off stops the automatic copy."
+        control={
+          <div className="w-44 flex-none">
             <Dropdown
               value={countValue}
               options={[...COUNT_OPTIONS]}
               onChange={(next) => setCount.mutate(Number(next))}
               renderOption={(option) => COUNT_LABELS[option]}
-              openDirection="up"
             />
           </div>
-        </div>
-      </div>
-
-      {savedPath && (
-        <div className="truncate font-mono text-micro text-primary" title={savedPath}>
-          Saved to {savedPath}
-        </div>
-      )}
-      {createManualBackup.isError && (
-        <div className="text-[11px] text-destructive">
-          Couldn&apos;t create the backup — {createManualBackup.error.message}
-        </div>
-      )}
+        }
+      />
+      <SettingsRow
+        label="How often"
+        description="A new copy replaces the oldest one each time."
+        control={
+          // Sin prop `disabled` propia: Dropdown no la tiene. Con las copias
+          // apagadas el intervalo no significa nada, así que basta con
+          // apagarlo a la vista.
+          <div
+            aria-disabled={backupsOff}
+            className={cn('w-44 flex-none', backupsOff && 'pointer-events-none opacity-45')}
+          >
+            <Dropdown
+              value={intervalValue}
+              options={[...INTERVAL_OPTIONS]}
+              onChange={(next) => setIntervalHours.mutate(Number(next))}
+              renderOption={(option) => INTERVAL_LABELS[option]}
+            />
+          </div>
+        }
+      />
     </SettingsCard>
   );
 };

@@ -380,18 +380,24 @@ test('un Unplayed comprado vuelve al Plan desde su ficha; uno jugado no ofrece e
 // está entre las garantizadas de .env.test — CREDENCIALES GARANTIZADAS del
 // encargo): así el valor de partida es indiferente, el test escribe su
 // propio marcador y comprueba que ESE marcador es el que vuelve.
-const settingsButton = (page: Page): Locator => page.getByRole('button', { name: 'Settings' });
+// Ajustes es una página (Fósforo): el engranaje de la barra superior es un
+// enlace a /settings y las claves viven en la sección Integrations.
+const openIntegrations = async (page: Page): Promise<Locator> => {
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  const settings = page.getByTestId('settings-page');
+  await expect(settings).toBeVisible();
+  await settings.getByRole('link', { name: 'Integrations', exact: true }).click();
+  await expect(settings.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  return settings;
+};
 
-test.describe('Ajustes — conexiones', () => {
-  test('la pestaña de Connections enseña el badge de un servicio ya configurado', async ({
+test.describe('Ajustes — integraciones', () => {
+  test('la sección Integrations enseña el estado de un servicio ya configurado', async ({
     afterplay,
   }) => {
     const { window: page } = afterplay;
 
-    await settingsButton(page).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    const dialog = await openIntegrations(page);
 
     // El sandbox SIEMPRE deja algo en twitchClientId/Secret — reales de
     // .env.test si existe, o el relleno de PLACEHOLDER_CREDENTIALS si no
@@ -407,13 +413,11 @@ test.describe('Ajustes — conexiones', () => {
     const { window: page } = afterplay;
     const marker = `e2e-anthropic-${Date.now()}`;
 
-    await settingsButton(page).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Connections' }).click();
+    const dialog = await openIntegrations(page);
 
     // Anthropic empieza cerrado (el acordeón solo abre uno a la vez, y
     // ninguno arranca abierto sin el spotlight de IGDB del primer arranque) —
-    // al abrirlo, su input de API KEY es el ÚNICO <input> de todo el modal.
+    // al abrirlo, su input de API key es el ÚNICO <input> de la página.
     await dialog.getByRole('button', { name: 'Anthropic' }).click();
     const input = dialog.locator('input');
     await expect(input).toHaveCount(1);

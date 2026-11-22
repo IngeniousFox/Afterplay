@@ -1,6 +1,6 @@
-import { AlertTriangle, Keyboard, MonitorUp } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
-import { GREEN } from '../../lib/colors';
+import { cn } from '@/lib/utils';
 import {
   useOverlayEnabled,
   useOverlayShortcut,
@@ -8,8 +8,9 @@ import {
   useSetOverlayEnabled,
   useSetOverlayShortcut,
 } from '../../hooks/settings';
-import { CheckboxRow } from '../library/add-game/CheckboxRow';
-import { SettingsCard } from './SettingsCard';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
+import { Switch } from '../ui/switch';
+import { SettingsCard, SettingsRow } from './SettingsCard';
 
 // Ajustes del overlay in-game (OVERLAY.md §12): toggle maestro (off por
 // defecto, §14.13) + atajo configurable con la colisión A LA VISTA — si otro
@@ -49,59 +50,65 @@ export const OverlaySection = (): React.JSX.Element => {
   const [recording, setRecording] = useState(false);
 
   return (
-    <div className="flex flex-col gap-2">
-      <CheckboxRow
-        checked={enabled}
-        onToggle={() => setEnabled.mutate(!enabled)}
-        title="In-game overlay"
-        description="A Steam-style layer over your game: live session timer, achievements at a glance and a quick note. Summon it with the shortcut — or the Guide button on your controller, which games can't see."
-        accent="green"
-        icon={MonitorUp}
+    <SettingsCard
+      title="In-game overlay"
+      description="A Steam-style layer over your game: live session timer, achievements at a glance and a quick note. Summon it with the shortcut, or the Guide button on your controller, which games can't see."
+      flush
+    >
+      <SettingsRow
+        labelId="settings-overlay-enabled"
+        label="Show the overlay in games"
+        control={
+          <Switch
+            checked={enabled}
+            onCheckedChange={(next) => setEnabled.mutate(next)}
+            aria-labelledby="settings-overlay-enabled"
+          />
+        }
       />
       {enabled && (
-        <SettingsCard
-          layout="row"
-          title="Overlay shortcut"
+        <SettingsRow
+          label="Shortcut"
           description="Works only while a game is running. Click the combo and press a new one to change it."
-          icon={Keyboard}
-          color={GREEN}
-          extra={
-            status === 'conflict' ? (
-              <div className="mt-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-400">
-                <AlertTriangle size={12} className="flex-none" />
-                Shortcut in use by another app — pick a different combo.
-              </div>
-            ) : undefined
+          control={
+            <button
+              type="button"
+              onClick={() => setRecording(true)}
+              onBlur={() => setRecording(false)}
+              onKeyDown={(event) => {
+                if (!recording) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.key === 'Escape') {
+                  setRecording(false);
+                  return;
+                }
+                const accelerator = acceleratorFrom(event);
+                if (accelerator) {
+                  setShortcut.mutate(accelerator);
+                  setRecording(false);
+                }
+              }}
+              className={cn(
+                secondaryButtonClass,
+                buttonSize.md,
+                'tabular-nums',
+                recording &&
+                  'border-phosphor bg-phosphor-tint text-phosphor hover:bg-phosphor-tint',
+              )}
+            >
+              {recording ? 'Press a combo…' : humanize(shortcut)}
+            </button>
           }
         >
-          <button
-            type="button"
-            onClick={() => setRecording(true)}
-            onBlur={() => setRecording(false)}
-            onKeyDown={(event) => {
-              if (!recording) return;
-              event.preventDefault();
-              event.stopPropagation();
-              if (event.key === 'Escape') {
-                setRecording(false);
-                return;
-              }
-              const accelerator = acceleratorFrom(event);
-              if (accelerator) {
-                setShortcut.mutate(accelerator);
-                setRecording(false);
-              }
-            }}
-            className={`rounded-[9px] border px-3 py-1.5 text-[12.5px] font-bold tabular-nums transition-colors duration-150 ${
-              recording
-                ? 'border-primary/60 bg-primary/10 text-primary'
-                : 'border-line-strong bg-raised text-foreground hover:bg-raised-hover'
-            }`}
-          >
-            {recording ? 'Press a combo…' : humanize(shortcut)}
-          </button>
-        </SettingsCard>
+          {status === 'conflict' && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-small font-semibold text-phosphor">
+              <AlertTriangle aria-hidden size={13} className="flex-none" />
+              Shortcut in use by another app. Pick a different combo.
+            </div>
+          )}
+        </SettingsRow>
       )}
-    </div>
+    </SettingsCard>
   );
 };

@@ -1,7 +1,8 @@
-import { FolderPlus, FolderSearch, HardDrive, X } from 'lucide-react';
+import { Folder, FolderPlus, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useScanFolders, useSetScanFolders } from '../../hooks/scan';
-import { BLUE } from '../../lib/colors';
-import { SettingsCard } from './SettingsCard';
+import { buttonSize, iconButtonClass, secondaryButtonClass } from '../shell/controls';
+import { SettingsCard, StatusLine } from './SettingsCard';
 
 // Las carpetas del modo "Scan my game folders" de Add Game. La MISMA lista
 // que se puede tocar dentro del escaneo (mismos hooks, misma config): allí
@@ -22,50 +23,52 @@ export const GameFoldersSection = (): React.JSX.Element => {
 
   return (
     <SettingsCard
-      layout="column"
       title="Game folders"
-      description="The folders where your games are installed. When you add a game, Afterplay can scan these to find it — folder, executable and all — instead of you browsing for it by hand."
-      icon={FolderSearch}
-      color={BLUE}
-      headerRight={
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={setFolders.isPending}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <FolderPlus size={14} />
-          Add folder
-        </button>
+      description="Where your games are installed. When you add a game, Afterplay scans these to find its folder and executable instead of you browsing for it by hand. Each subfolder inside is one game. The list belongs to this PC."
+      action={
+        <>
+          <span className="rounded-xs bg-raised px-1.5 py-0.5 text-micro font-semibold text-bone">
+            This PC
+          </span>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={setFolders.isPending}
+            className={cn(secondaryButtonClass, buttonSize.md)}
+          >
+            <FolderPlus aria-hidden size={15} />
+            Add folder
+          </button>
+        </>
       }
+      extra={
+        // setFolders.isError no se miraba antes en ningún sitio: una
+        // escritura fallida (fichero bloqueado, permisos) dejaba la fila tal
+        // cual, como si añadir o quitar la carpeta hubiera funcionado.
+        setFolders.isError && (
+          <StatusLine tone="error">
+            Couldn&apos;t update your folders: {setFolders.error.message}
+          </StatusLine>
+        )
+      }
+      flush
     >
-      {/* setFolders.isError no se miraba antes en ningún sitio (a diferencia
-          de EmulatorsSection/CredentialsSection en esta misma pantalla) —
-          una escritura fallida (fichero bloqueado, permisos) dejaba la fila
-          tal cual, como si añadir o quitar la carpeta hubiera funcionado. */}
-      {setFolders.isError && (
-        <div className="mb-2 text-[11.5px] text-destructive">
-          Couldn&apos;t update your folders — {setFolders.error.message}
-        </div>
-      )}
       {folders.length === 0 ? (
-        <div className="text-[11.5px] text-muted-foreground">
-          No folders yet. Point at the folder that <em>contains</em> your games — each subfolder
+        <div className="px-5 py-4 text-small text-dust">
+          No folders yet. Point at the folder that <em>contains</em> your games: each subfolder
           inside it is treated as one game.
         </div>
       ) : (
-        <div className="flex flex-col gap-1">
+        <ul>
           {folders.map((folder) => (
-            <div
+            <li
               key={folder}
-              className="flex items-center gap-2 rounded-[8px] border px-2.75 py-1.75"
-              style={{ borderColor: `${BLUE}2e`, background: `${BLUE}0d` }}
+              className="flex items-center gap-3 border-t border-line px-5 py-2.5 first:border-t-0"
             >
-              <HardDrive size={12} className="flex-none" style={{ color: BLUE }} />
-              <span
-                className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground"
-                title={folder}
-              >
+              <span className="flex size-7.5 flex-none items-center justify-center rounded-sm bg-raised text-dust">
+                <Folder aria-hidden size={15} />
+              </span>
+              <span className="min-w-0 flex-1 font-mono text-small break-all text-bone">
                 {folder}
               </span>
               <button
@@ -76,14 +79,15 @@ export const GameFoldersSection = (): React.JSX.Element => {
                     .catch(() => undefined)
                 }
                 disabled={setFolders.isPending}
+                aria-label={`Stop scanning ${folder}`}
                 title="Stop scanning this folder"
-                className="flex-none rounded p-1 text-muted-foreground transition-colors duration-150 hover:text-destructive disabled:opacity-50"
+                className={cn(iconButtonClass, 'hover:text-live')}
               >
-                <X size={12} />
+                <X aria-hidden size={15} />
               </button>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </SettingsCard>
   );

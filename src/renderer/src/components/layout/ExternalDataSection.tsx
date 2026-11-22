@@ -1,4 +1,5 @@
-import { Globe, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { ExternalDataStatus } from '../../../../shared/types';
 import {
   externalRefreshBar,
@@ -8,10 +9,9 @@ import {
   useRefreshAllExternalData,
 } from '../../hooks/external';
 import { useCredentials } from '../../hooks/settings';
-import { AMBER, GREEN, TEAL, VIOLET } from '../../lib/colors';
-import { STEAM_BLUE } from '../../lib/ratings';
 import { missingKeyHint } from '../../lib/settingsTabs';
-import { SettingsCard } from './SettingsCard';
+import { buttonSize, secondaryButtonClass } from '../shell/controls';
+import { SettingsCard, StatusLine } from './SettingsCard';
 
 // Ajustes → External data (PLAN-TO-PLAY.md §5.1, la puerta de mantenimiento).
 //
@@ -33,10 +33,7 @@ import { SettingsCard } from './SettingsCard';
 // de texto para contarlo se queda corta — hace falta el ancho entero para una
 // barra, igual que en Images.
 
-const BAR_CLASS = 'h-1.5 flex-1 overflow-hidden rounded-full bg-bone/[0.07]';
-
-const buttonClass =
-  'flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50';
+const BAR_CLASS = 'h-1.5 overflow-hidden rounded-full bg-inset';
 
 // Un renglón de cobertura: cuánta biblioteca tiene YA cada dato. Mismo
 // lenguaje que los Split de la card de Backlog debt (etiqueta, barra
@@ -50,15 +47,18 @@ const CoverageRow = ({
   label,
   have,
   total,
-  color,
 }: {
   label: string;
   have: number;
   total: number;
-  color: string;
 }): React.JSX.Element => (
-  <div className="flex items-center gap-2.5">
-    <span className="w-26 flex-none text-[11px] text-muted-foreground">{label}</span>
+  <div className="flex flex-col gap-1.5">
+    <div className="flex items-baseline justify-between gap-3 text-small">
+      <span className="text-bone">{label}</span>
+      <span className="text-dust tabular-nums">
+        {have} of {total}
+      </span>
+    </div>
     <div className={BAR_CLASS}>
       {/* width y no transform A PROPÓSITO (a diferencia de la barra de
           progreso de abajo): estas son frías — solo transicionan cuando
@@ -67,37 +67,23 @@ const CoverageRow = ({
           encoge los casquetes y el truco del relleno desplazado ya no es
           idéntico píxel a píxel. */}
       <div
-        className="h-full rounded-full transition-[width] duration-500 ease-[cubic-bezier(.16,1,.3,1)]"
-        style={{ width: `${total > 0 ? (have / total) * 100 : 0}%`, background: color }}
+        className="h-full rounded-full bg-phosphor transition-[width] duration-500 ease-out motion-reduce:transition-none"
+        style={{ width: `${total > 0 ? (have / total) * 100 : 0}%` }}
       />
     </div>
-    <span className="w-20 flex-none text-right text-[11px] font-semibold text-foreground tabular-nums">
-      {have}
-      <span className="font-normal text-muted-foreground"> / {total}</span>
-    </span>
   </div>
 );
 
 const Coverage = ({ status }: { status: ExternalDataStatus }): React.JSX.Element => (
-  <div className="flex flex-col gap-1.5">
-    <CoverageRow label="Ratings" have={status.withRatings} total={status.total} color={TEAL} />
-    <CoverageRow label="Summaries" have={status.withSummary} total={status.total} color={VIOLET} />
-    <CoverageRow
-      label="Release dates"
-      have={status.withFullDate}
-      total={status.total}
-      color={AMBER}
-    />
+  <div className="flex flex-col gap-3">
+    <CoverageRow label="Ratings" have={status.withRatings} total={status.total} />
+    <CoverageRow label="Summaries" have={status.withSummary} total={status.total} />
+    <CoverageRow label="Release dates" have={status.withFullDate} total={status.total} />
     {/* Denominador propio: solo los juegos con appid pueden tener etiquetas.
         Medirlas contra la biblioteca entera daría siempre un suspenso por
         culpa de todo lo emulado de consola, que no es un fallo que arreglar. */}
     {status.steamEligible > 0 && (
-      <CoverageRow
-        label="Steam tags"
-        have={status.withSteamData}
-        total={status.steamEligible}
-        color={STEAM_BLUE}
-      />
+      <CoverageRow label="Steam tags" have={status.withSteamData} total={status.steamEligible} />
     )}
     {/* Contra la biblioteca entera, sin denominador propio: a diferencia de
         las etiquetas, cualquier juego puede tener tiempos de HLTB. Lo que
@@ -105,7 +91,7 @@ const Coverage = ({ status }: { status: ExternalDataStatus }): React.JSX.Element
         curar cada semana — esta fila es donde se ve que lo consigue. En el
         verde de la casa, que además es el color del tramo 100% en la card
         de la ficha. */}
-    <CoverageRow label="HLTB times" have={status.withHltb} total={status.total} color={GREEN} />
+    <CoverageRow label="HowLongToBeat times" have={status.withHltb} total={status.total} />
   </div>
 );
 
@@ -205,103 +191,85 @@ export const ExternalDataSection = (): React.JSX.Element => {
 
   return (
     <SettingsCard
-      layout="column"
       title="External data"
-      description="Ratings, summaries, full release dates, Steam tags and Steam reviews for every game — from IGDB and Steam, in one pass. Your plan has its own refresh button for just the games you're deciding between."
-      icon={Globe}
-      color={TEAL}
-      headerRight={
+      description="Ratings, summaries, full release dates, Steam tags and Steam reviews for every game, from IGDB and Steam in one pass. Your plan has its own refresh button for just the games you're deciding between."
+      action={
         <button
           type="button"
           onClick={() => refresh.mutate()}
           disabled={!hasKey || running}
-          className={buttonClass}
+          className={cn(secondaryButtonClass, buttonSize.md)}
         >
-          <RefreshCw size={14} className={running ? 'animate-spin' : undefined} />
+          <RefreshCw
+            aria-hidden
+            size={15}
+            className={cn(running && 'animate-spin motion-reduce:animate-none')}
+          />
           {running ? 'Refreshing…' : 'Refresh all'}
         </button>
       }
     >
-      <div className="flex flex-col gap-2.5">
-        {/* El progreso se SUMA a la cobertura en vez de sustituirla. Probado
-            de las dos formas: sustituyéndola, la tarjeta encogía 68px de golpe
-            justo al pulsar el botón y el resto del modal pegaba un salto — el
-            mismo tipo de brinco que ya hubo que quitar de Ajustes. Y además la
-            cobertura sigue siendo verdad durante la pasada: es precisamente lo
-            que esas barras están a punto de llenar. Así el único cambio de
-            altura es un renglón que aparece, y se ve crecer lo de abajo
-            mientras corre lo de arriba. */}
+      <div className="flex flex-col gap-3.5">
+        {/* El progreso se SUMA a la cobertura en vez de sustituirla: así la
+            tarjeta no encoge de golpe al pulsar el botón, y la cobertura
+            sigue siendo verdad durante la pasada (es lo que esas barras están
+            a punto de llenar). */}
         {running && (
-          <div className="flex animate-in items-center gap-2.5 duration-250 fade-in-0">
+          <div className="flex animate-fade-in flex-col gap-1.5 text-tube">
             {/* En GERUNDIO y no "Steam tags" a secas: justo debajo hay un
-                renglón de cobertura que se llama así, y dos "Steam tags" uno
-                encima del otro con cifras distintas (97/194 y 71/194) se leen
-                como una contradicción en vez de como "esto es lo que hay" y
-                "esto es lo que estoy haciendo". */}
-            <span className="w-26 flex-none text-[11px] font-semibold" style={{ color: TEAL }}>
-              {progress?.phase === 'saving'
-                ? 'Saving'
-                : progress?.phase === 'hltb'
-                  ? 'Fetching HLTB'
-                  : measurable
-                    ? 'Fetching tags'
-                    : 'Fetching IGDB'}
-            </span>
+                renglón de cobertura que se llama así, y dos iguales con
+                cifras distintas se leen como una contradicción. */}
+            <div className="flex items-baseline justify-between gap-3 text-small font-semibold">
+              <span>
+                {progress?.phase === 'saving'
+                  ? 'Saving'
+                  : progress?.phase === 'hltb'
+                    ? 'Fetching HowLongToBeat'
+                    : measurable
+                      ? 'Fetching tags'
+                      : 'Fetching IGDB'}
+              </span>
+              <span className="tabular-nums">
+                {measurable && progress ? `${progress.done} of ${progress.total}` : '…'}
+              </span>
+            </div>
             <div className={BAR_CLASS}>
-              {/* transform y no width: en la fase de Steam llega un evento
-                  por juego con appid (emit('steam', index, …) en
-                  external/refresh.ts, cientos en esta biblioteca, con la
-                  pasada durando minutos) y cada evento redirige esta
-                  transición de 500ms, así que la barra está en transición
-                  casi continua — con width eso era layout + paint en el hilo
-                  principal en cada frame; translateX corre entero en el
-                  compositor. Idéntico en pantalla: el relleno va a ancho
-                  completo y se desplaza a la izquierda lo que le falte, y el
-                  overflow-hidden + rounded-full del contenedor recorta su
-                  borde izquierdo con el mismo radio (3px, mitad de h-1.5)
-                  que tenía el casquete propio del relleno cuando era width. */}
+              {/* transform y no width: en la fase de Steam llega un evento por
+                  juego y cada uno redirige esta transición, así que la barra
+                  está en transición casi continua; translateX corre en el
+                  compositor. El overflow-hidden + rounded-full del contenedor
+                  recorta el borde con el mismo radio. */}
               <div
-                className={`h-full w-full rounded-full transition-transform duration-500 ease-out ${
-                  measurable ? '' : 'animate-pulse'
-                }`}
-                style={{
-                  transform: `translateX(${measurable ? percent - 100 : 0}%)`,
-                  background: TEAL,
-                }}
+                className={cn(
+                  'h-full w-full rounded-full bg-tube transition-transform duration-500 ease-out motion-reduce:transition-none',
+                  !measurable && 'animate-pulse motion-reduce:animate-none',
+                )}
+                style={{ transform: `translateX(${measurable ? percent - 100 : 0}%)` }}
               />
             </div>
-            <span
-              className="w-20 flex-none text-right text-[11px] font-semibold tabular-nums"
-              style={{ color: TEAL }}
-            >
-              {measurable && progress ? `${progress.done} / ${progress.total}` : '…'}
-            </span>
           </div>
         )}
         {status && (
           // Con la pasada en marcha, una línea separa lo que está pasando
           // AHORA (arriba, en color) de lo que ya hay (abajo, en reposo).
-          <div className={running ? 'border-t border-line pt-2.5' : undefined}>
+          <div className={running ? 'border-t border-line pt-3.5' : undefined}>
             <Coverage status={status} />
           </div>
         )}
 
         {statusLine && (
-          <div
-            className="text-[11px] font-semibold"
-            style={{ color: running ? TEAL : 'var(--muted-foreground)' }}
-          >
+          <div className={cn('text-small', running ? 'font-semibold text-tube' : 'text-dust')}>
             {statusLine}
           </div>
         )}
         {/* El fallo de ARRANCAR (mutation) y el de la pasada (evento) son dos
             momentos distintos y los dos tienen que verse: sin esto, un rechazo
             antes del primer evento devolvía el botón a su reposo sin dejar ni
-            rastro de por qué — el mismo agujero que ya se tapó en Trivia. */}
+            rastro de por qué. */}
         {(refresh.isError || progress?.error) && (
-          <div className="text-[11px] font-semibold text-destructive">
-            Couldn&apos;t refresh — {refresh.error?.message ?? progress?.error}
-          </div>
+          <StatusLine tone="error">
+            Couldn&apos;t refresh: {refresh.error?.message ?? progress?.error}
+          </StatusLine>
         )}
       </div>
     </SettingsCard>

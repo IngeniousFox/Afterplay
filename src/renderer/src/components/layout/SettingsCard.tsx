@@ -1,97 +1,155 @@
-import type { LucideIcon } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-type SettingsCardBaseProps = {
+// LOS BLOQUES DE LA PÁGINA DE AJUSTES (Fósforo: estados-ajustes-*.png).
+//
+// Cada bloque es un panel: título, descripción y acción arriba a la derecha;
+// debajo, separado por una línea, su cuerpo (filas de ajuste, una lista, unas
+// barras). Antes cada sección pintaba su propia tarjeta con icono y color de
+// identidad; en Fósforo el color se reserva para el estado (Phosphor para lo
+// pendiente y la acción principal, Tube para sync e información, Live para el
+// error) y la jerarquía la dan el panel y la tipografía.
+
+type Tone = 'default' | 'notice' | 'danger';
+
+const toneClass: Record<Tone, string> = {
+  default: 'border-line bg-panel',
+  // Algo que decidir (identidad duplicada, bucket sin mirar): filo Phosphor.
+  notice: 'border-phosphor/45 bg-panel',
+  danger: 'border-live/45 bg-live/6',
+};
+
+type SettingsCardProps = {
   title: React.ReactNode;
-  description: React.ReactNode;
-  // Icono + color de identidad de la sección — mismo lenguaje que FormSection
-  // en Add/Edit Game, adaptado a la tipografía de Settings (título en frase,
-  // no eyebrow en mayúsculas). Opcional: sin ellos, título suelto de siempre.
-  icon?: LucideIcon;
-  color?: string;
-  // Para la entrada escalonada (revealClass/revealStyle) del modal.
+  description?: React.ReactNode;
+  // Acción (o acciones) a la derecha del título.
+  action?: React.ReactNode;
+  // Líneas de estado bajo la descripción (progreso, avisos, errores).
+  extra?: React.ReactNode;
+  // Cuerpo bajo la línea. `flush` lo deja sin relleno para filas y listas
+  // que llevan el suyo (SettingsRow, tablas).
+  children?: React.ReactNode;
+  flush?: boolean;
+  bodyClassName?: string;
+  tone?: Tone;
   className?: string;
-  style?: React.CSSProperties;
+  'data-testid'?: string;
 };
 
-type SettingsCardProps =
-  | (SettingsCardBaseProps & {
-      // Fila: título+descripción a la izquierda, un control fijo a la
-      // derecha (Time format de Settings, botón de Backups).
-      layout: 'row';
-      // Clase del contenedor de título+descripción — por defecto 'flex-1'.
-      // Backups pasa 'min-w-0 flex-1': necesita poder encoger para truncar
-      // la ruta guardada.
-      textClassName?: string;
-      // Contenido extra tras la descripción, dentro de la misma columna de
-      // texto (Backups: ruta guardada / error de la copia).
-      extra?: React.ReactNode;
-      children: React.ReactNode;
-    })
-  | (SettingsCardBaseProps & {
-      // Columna: título+descripción arriba, cuerpo debajo (Emulators).
-      layout: 'column';
-      // Control a la derecha de la CABECERA, no del cuerpo (Game saves: el
-      // botón de escanear). Con layout 'row' el control se centra
-      // verticalmente respecto a todo el contenido, así que en cuanto debajo
-      // hay una lista larga el botón acaba flotando a media altura.
-      headerRight?: React.ReactNode;
-      children: React.ReactNode;
-    });
+export const SettingsCard = ({
+  title,
+  description,
+  action,
+  extra,
+  children,
+  flush = false,
+  bodyClassName,
+  tone = 'default',
+  className,
+  'data-testid': testId,
+}: SettingsCardProps): React.JSX.Element => (
+  <section
+    data-testid={testId}
+    className={cn('min-w-0 rounded-md border', toneClass[tone], className)}
+  >
+    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-5 pt-4.5 pb-4">
+      <div className="min-w-0 flex-[1_1_320px]">
+        <h3 className="text-lead font-semibold text-bone">{title}</h3>
+        {description && (
+          <p className="mt-1 max-w-[68ch] text-small text-pretty text-dust">{description}</p>
+        )}
+        {extra}
+      </div>
+      {action && <div className="flex flex-none flex-wrap items-center gap-2">{action}</div>}
+    </header>
+    {children && (
+      <div className={cn('border-t border-line', !flush && 'px-5 py-4', bodyClassName)}>
+        {children}
+      </div>
+    )}
+  </section>
+);
 
-const CARD_CLASS = 'rounded-[10px] border border-border bg-bone/[0.02] px-3.25 py-2.75';
+// Una fila de ajuste dentro de un panel: nombre y explicación a la izquierda,
+// el control a la derecha. Varias seguidas se separan con una línea.
+export const SettingsRow = ({
+  label,
+  description,
+  control,
+  children,
+  labelId,
+}: {
+  label: React.ReactNode;
+  description?: React.ReactNode;
+  control?: React.ReactNode;
+  // Debajo de la explicación (un aviso de conflicto, por ejemplo).
+  children?: React.ReactNode;
+  // Para que el control se nombre con la etiqueta (aria-labelledby).
+  labelId?: string;
+}): React.JSX.Element => (
+  <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2.5 border-t border-line px-5 py-3.5 first:border-t-0">
+    <div className="min-w-0 flex-[1_1_280px]">
+      <div id={labelId} className="text-body font-semibold text-bone">
+        {label}
+      </div>
+      {description && <div className="mt-0.5 text-small text-pretty text-dust">{description}</div>}
+      {children}
+    </div>
+    {control && <div className="flex flex-none items-center gap-2">{control}</div>}
+  </div>
+);
 
-// Card de sección de Ajustes — el wrapper con borde/fondo + título/descripción
-// que hoy repiten Time format, Emulators y Backups. El borde va en clase
-// (border border-border) en vez del style inline con var(--border) de hoy:
-// mismo resultado visual, sin el objeto inline.
-export const SettingsCard = (props: SettingsCardProps): React.JSX.Element => {
-  const { title, description, icon: Icon, color, className, style } = props;
-
-  const heading = (
-    <div className="flex items-center gap-2">
-      {Icon && color && (
-        <div
-          className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-          style={{ background: `${color}1f` }}
-        >
-          <Icon size={13} style={{ color }} />
-        </div>
+// Aviso en línea: triángulo y texto en Phosphor (no hay color "caution"; el
+// icono lleva el significado). `danger` lo pasa a Live para los errores.
+export const SettingsNotice = ({
+  children,
+  action,
+  danger = false,
+  className,
+}: {
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  danger?: boolean;
+  className?: string;
+}): React.JSX.Element => (
+  <div
+    className={cn(
+      'flex flex-wrap items-center gap-x-4 gap-y-2 rounded-sm border px-3.5 py-2.5',
+      danger ? 'border-live/40 bg-live/8' : 'border-phosphor/40 bg-phosphor-tint',
+      className,
+    )}
+  >
+    <div
+      className={cn(
+        'flex min-w-0 flex-[1_1_260px] items-start gap-2 text-small font-medium',
+        danger ? 'text-live' : 'text-phosphor',
       )}
-      <div className="text-[13.5px] font-semibold text-foreground">{title}</div>
+    >
+      <TriangleAlert aria-hidden size={14} className="mt-0.5 flex-none" />
+      <div className="min-w-0">{children}</div>
     </div>
-  );
+    {action && <div className="flex flex-none items-center gap-2">{action}</div>}
+  </div>
+);
 
-  if (props.layout === 'row') {
-    return (
-      <div
-        className={`flex items-center justify-between gap-3 ${CARD_CLASS} ${className ?? ''}`}
-        style={style}
-      >
-        <div className={props.textClassName ?? 'flex-1'}>
-          {heading}
-          <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-          {props.extra}
-        </div>
-        {props.children}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`flex flex-col gap-3 ${CARD_CLASS} ${className ?? ''}`} style={style}>
-      {/* items-center para que el control quede a la misma altura visual que
-          en el layout 'row' (Backups): centrado respecto al bloque de
-          título+descripción, no pegado arriba. Lo que va DEBAJO (la lista de
-          resultados del escaneo) ocupa el ancho completo, que es justo lo
-          que el layout 'row' no permitía. */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          {heading}
-          <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-        </div>
-        {props.headerRight}
-      </div>
-      {props.children}
-    </div>
-  );
-};
+// Línea de estado bajo la descripción de un panel: progreso (Phosphor), dato
+// en reposo (Dust) o error (Live).
+export const StatusLine = ({
+  children,
+  tone = 'muted',
+}: {
+  children: React.ReactNode;
+  tone?: 'muted' | 'active' | 'error' | 'info';
+}): React.JSX.Element => (
+  <div
+    className={cn(
+      'mt-1.5 text-small font-semibold',
+      tone === 'muted' && 'text-dust',
+      tone === 'active' && 'text-phosphor',
+      tone === 'info' && 'text-tube',
+      tone === 'error' && 'text-live',
+    )}
+  >
+    {children}
+  </div>
+);

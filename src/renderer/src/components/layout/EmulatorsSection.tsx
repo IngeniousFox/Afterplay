@@ -1,10 +1,17 @@
-import { Cpu, FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { FolderOpen, Gamepad2, Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { useCreateEmulator, useDeleteEmulator, useEmulators } from '../../hooks/emulators';
-import { accentGradientStyle, revealClass, revealStyle } from '../../lib/styles';
-import { fieldLabelClass, textInputClass, textInputFocusClass } from '../library/add-game/styles';
-import { SettingsCard } from './SettingsCard';
-import { VIOLET } from '../../lib/colors';
+import { usePendingSessions } from '../../hooks/sessions';
+import { fieldLabelClass, textInputClass } from '../library/add-game/styles';
+import {
+  buttonSize,
+  iconButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from '../shell/controls';
+import { SettingsCard, StatusLine } from './SettingsCard';
 
 // EMULADORES.md §8 — "UI sencilla para registrar un emulador (nombre + ruta
 // del .exe)", viviendo en Ajustes. El watcher los vigila con el mismo
@@ -35,104 +42,135 @@ export const EmulatorsSection = (): React.JSX.Element => {
   };
 
   return (
-    <SettingsCard
-      layout="column"
-      title="Emulators"
-      description="Add your emulators here and Afterplay will watch them like any other game. Time played in one lands in Sessions as pending, for you to assign to the right game."
-      icon={Cpu}
-      color={VIOLET}
-    >
-      {emulators.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {emulators.map((emulator, index) => (
-            <div
-              key={emulator.id}
-              className={`group/emu flex items-center gap-2.5 rounded-[9px] border border-border bg-bone/[0.02] px-2.75 py-2 transition-colors duration-150 hover:border-line-strong hover:bg-bone/[0.035] ${revealClass}`}
-              style={revealStyle(Math.min(index, 4))}
-            >
-              <div
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-md"
-                style={{ background: `${VIOLET}1a` }}
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <SettingsCard
+        title="Emulators"
+        description="Add your emulators and Afterplay watches them like any other game. Time played in one lands in Sessions as pending, for you to assign to the right game. The path is this PC's."
+        extra={
+          // El borrado no se miraba en ningún sitio: si el DELETE se rechaza
+          // (un fallo de IPC), la fila sigue donde estaba, idéntico a no
+          // haber pulsado. Quitar algo tiene la obligación de decir que no
+          // se hizo.
+          deleteEmulator.isError && (
+            <StatusLine tone="error">
+              Couldn&apos;t remove the emulator: {deleteEmulator.error.message}
+            </StatusLine>
+          )
+        }
+        flush
+      >
+        {emulators.length === 0 ? (
+          <div className="px-5 py-4 text-small text-dust">
+            No emulators yet. Add the first one with the form.
+          </div>
+        ) : (
+          <ul>
+            {emulators.map((emulator) => (
+              <li
+                key={emulator.id}
+                className="flex items-center gap-3.5 border-t border-line px-5 py-3 first:border-t-0"
               >
-                <Cpu size={13} style={{ color: VIOLET }} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold text-foreground">
-                  {emulator.name}
+                <span className="flex size-9 flex-none items-center justify-center rounded-sm bg-raised text-phosphor">
+                  <Gamepad2 aria-hidden size={17} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-body font-semibold text-bone">{emulator.name}</div>
+                  <div className="font-mono text-micro break-all text-dust">
+                    {emulator.executablePath}
+                  </div>
                 </div>
-                <div className="truncate font-mono text-micro text-muted-foreground">
-                  {emulator.executablePath}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => deleteEmulator.mutate(emulator.id)}
-                disabled={deleteEmulator.isPending}
-                title="Remove emulator"
-                className="flex-none rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/emu:opacity-100 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+                <button
+                  type="button"
+                  onClick={() => deleteEmulator.mutate(emulator.id)}
+                  disabled={deleteEmulator.isPending}
+                  aria-label={`Remove ${emulator.name}`}
+                  title="Remove emulator"
+                  className={cn(iconButtonClass, 'hover:text-live')}
+                >
+                  <X aria-hidden size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SettingsCard>
 
-      <div className="flex flex-col gap-2">
-        <div>
-          <div className={fieldLabelClass}>Name</div>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. DuckStation, RetroArch…"
-            className={`${textInputClass} ${textInputFocusClass}`}
-          />
-        </div>
-        <div>
-          <div className={fieldLabelClass}>Executable</div>
-          <div className="flex gap-1.5">
-            <input
-              value={executablePath}
-              onChange={(event) => setExecutablePath(event.target.value)}
-              placeholder="Path to the emulator's .exe"
-              className={`${textInputClass} ${textInputFocusClass} min-w-0 flex-1 font-mono text-[11.5px]`}
-            />
+      <div className="flex min-w-0 flex-col gap-5">
+        <SettingsCard title="Add emulator" description="Pick the program that launches your games.">
+          <form
+            className="flex flex-col gap-3.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleAdd().catch(() => undefined);
+            }}
+          >
+            <label className="block">
+              <div className={fieldLabelClass}>Name</div>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="e.g. DuckStation, RetroArch…"
+                className={textInputClass}
+              />
+            </label>
+            <div>
+              <label htmlFor="settings-emulator-path" className={cn(fieldLabelClass, 'block')}>
+                Executable
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="settings-emulator-path"
+                  value={executablePath}
+                  onChange={(event) => setExecutablePath(event.target.value)}
+                  placeholder="Path to the emulator's .exe"
+                  className={cn(textInputClass, 'min-w-0 flex-1 font-mono')}
+                />
+                <button
+                  type="button"
+                  onClick={handleBrowse}
+                  className={cn(secondaryButtonClass, buttonSize.md, 'h-auto')}
+                >
+                  <FolderOpen aria-hidden size={15} />
+                  Browse
+                </button>
+              </div>
+            </div>
             <button
-              type="button"
-              onClick={handleBrowse}
-              title="Browse for the executable"
-              className="flex flex-none items-center justify-center rounded-[9px] border border-line-strong bg-raised px-3 text-muted-foreground transition-colors duration-150 hover:border-line-hover hover:text-foreground"
+              type="submit"
+              disabled={!canAdd}
+              className={cn(primaryButtonClass, buttonSize.md, 'self-start')}
             >
-              <FolderOpen size={15} />
+              <Plus aria-hidden size={15} />
+              {createEmulator.isPending ? 'Adding…' : 'Add emulator'}
             </button>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={!canAdd}
-          className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
-          style={accentGradientStyle}
-        >
-          <Plus size={14} />
-          {createEmulator.isPending ? 'Adding…' : 'Add emulator'}
-        </button>
-        {createEmulator.isError && (
-          <div className="text-[12px] text-destructive">
-            Couldn&apos;t add the emulator — {createEmulator.error.message}
-          </div>
-        )}
-        {/* El borrado se miraba en ningún sitio: si el DELETE se rechaza (la
-            BD en pleno cambio de conexión, un fallo de IPC), la lista no se
-            invalida y la fila del emulador sigue exactamente donde estaba —
-            idéntico a no haber pulsado. El alta ya avisaba; quitar algo tiene
-            la misma obligación de decir que no se hizo. */}
-        {deleteEmulator.isError && (
-          <div className="text-[12px] text-destructive">
-            Couldn&apos;t remove the emulator — {deleteEmulator.error.message}
-          </div>
-        )}
+            {createEmulator.isError && (
+              <div className="text-small text-live">
+                Couldn&apos;t add the emulator: {createEmulator.error.message}
+              </div>
+            )}
+          </form>
+        </SettingsCard>
+        <PendingSessionsNotice />
       </div>
-    </SettingsCard>
+    </div>
+  );
+};
+
+// Las sesiones de emulador que esperan juego (también de otros PCs): el
+// mismo recuento que la cifra ámbar de la pestaña Sessions, con el acceso.
+const PendingSessionsNotice = (): React.JSX.Element | null => {
+  const { data: pending = [] } = usePendingSessions();
+  if (pending.length === 0) return null;
+  return (
+    <SettingsCard
+      tone="notice"
+      title={`${pending.length} ${pending.length === 1 ? 'session' : 'sessions'} waiting`}
+      description="Emulator time with no game yet. Assign each one to the game you played."
+      action={
+        <Link to="/sessions" className={cn(secondaryButtonClass, buttonSize.md)}>
+          Open Sessions
+        </Link>
+      }
+    />
   );
 };

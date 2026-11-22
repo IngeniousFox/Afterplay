@@ -10,7 +10,7 @@ import { buttonSize, focusRing, primaryButtonClass, textLinkClass } from './cont
 // La pastilla de sync de la barra superior (AFTERPLAY-2.0.md §15.7, concepto
 // estados-sync.png). Solo LEE el estado que ya publica el main
 // (useSyncStatus) y ofrece las dos acciones que ya existían en Ajustes: Sync
-// now y abrir Ajustes. No hay lógica nueva de sync aquí.
+// now y abrir Ajustes en la sección Sync. No hay lógica nueva de sync aquí.
 //
 // Con el sync sin emparejar (o en un test E2E, donde no existe) no se pinta:
 // con un único PC la interfaz se ve como siempre (§15.7, principio común).
@@ -162,7 +162,7 @@ export const SyncLed = ({
                 Sync now
               </button>
               <PopoverPrimitive.Close onClick={onOpenSettings} className={textLinkClass}>
-                Open settings
+                Open sync settings
               </PopoverPrimitive.Close>
             </div>
           </PopoverPrimitive.Popup>

@@ -1,4 +1,5 @@
-import { RefreshCw, RotateCcw, Trophy } from 'lucide-react';
+import { RefreshCw, RotateCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   useAchievementsActivity,
   useAchievementsStatus,
@@ -7,9 +8,9 @@ import {
   useSyncAchievements,
 } from '../../hooks/achievements';
 import { ACHIEVEMENT_SOURCE_LABEL } from '../../lib/achievementSources';
-import { AMBER } from '../../lib/colors';
 import { missingKeyHint } from '../../lib/settingsTabs';
-import { SettingsCard } from './SettingsCard';
+import { buttonSize, primaryButtonClass, secondaryButtonClass } from '../shell/controls';
+import { SettingsCard, StatusLine } from './SettingsCard';
 
 // Ajustes → Achievements: la pasada que trae el catálogo de logros de tus
 // juegos y tus desbloqueos — de Steam (con los emuladores de cracks detrás)
@@ -79,67 +80,108 @@ export const AchievementsSettingsSection = (): React.JSX.Element => {
           })
       : [];
 
+  // Las tres cifras de cabecera (estados-ajustes-achievements.png): las
+  // mismas que la línea de estado, en Big Shoulders. Solo con datos y sin la
+  // pasada en marcha, que entonces manda la línea de progreso.
+  const figures =
+    status && !running && (hasKey || hasRa)
+      ? [
+          {
+            value: status.syncedGames,
+            label: `games synced of ${status.eligibleGames.toLocaleString()}`,
+            accent: true,
+          },
+          { value: status.unlockedAchievements, label: 'achievements unlocked', accent: false },
+          { value: status.failedGames, label: 'games failed', accent: false },
+        ]
+      : [];
+
   return (
     <SettingsCard
-      layout="row"
       title="Achievements"
-      description="Pulls each game's achievements from Steam and RetroAchievements and matches your unlocks against your play sessions — so a trophy becomes a moment in your history, not just a checkbox."
-      textClassName="min-w-0 flex-1"
+      description="Pulls each game's achievements from Steam and RetroAchievements and matches your unlocks against your play sessions, so a trophy becomes a moment in your history, not just a checkbox."
       extra={
         <>
-          {statusLine && (
-            <div
-              className="mt-1 text-[11px] font-semibold"
-              style={{ color: running ? AMBER : 'var(--muted-foreground)' }}
-            >
-              {statusLine}
-            </div>
-          )}
-          {sourceLines.map((line) => (
-            <div
-              key={line.source}
-              className="mt-0.5 text-[11px] text-muted-foreground/75 tabular-nums"
-            >
-              {line.text}
-            </div>
-          ))}
+          {statusLine && <StatusLine tone={running ? 'active' : 'muted'}>{statusLine}</StatusLine>}
           {/* Ni sync.isError ni retry.isError se miraban antes: un rechazo
               (clave revocada, sin red) antes del primer evento de progreso
               volvía el botón a su reposo sin dejar ni rastro de por qué. */}
           {(sync.error ?? retry.error) && (
-            <div className="mt-1 text-[11px] font-semibold text-destructive">
-              Couldn&apos;t start — {(sync.error ?? retry.error)?.message}
-            </div>
+            <StatusLine tone="error">
+              Couldn&apos;t start: {(sync.error ?? retry.error)?.message}
+            </StatusLine>
           )}
         </>
       }
-      icon={Trophy}
-      color={AMBER}
-    >
-      <div className="flex flex-none items-center gap-2">
-        {/* Reintentar solo los fallidos: repetir los 300 y pico por 3 que
-            fallaron es minutos de espera para nada. */}
-        {!running && (status?.failedGames ?? 0) > 0 && (
+      action={
+        <>
+          {/* Reintentar solo los fallidos: repetir los 300 y pico por 3 que
+              fallaron es minutos de espera para nada. */}
+          {!running && (status?.failedGames ?? 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => retry.mutate()}
+              className={cn(
+                secondaryButtonClass,
+                buttonSize.md,
+                'border-phosphor/60 text-phosphor hover:border-phosphor',
+              )}
+            >
+              <RotateCcw aria-hidden size={15} />
+              Retry {status?.failedGames}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => retry.mutate()}
-            className="flex flex-none items-center gap-1.75 rounded-[9px] border px-3.25 py-2 text-[12.5px] font-semibold transition-colors duration-150"
-            style={{ borderColor: `${AMBER}55`, color: AMBER, background: `${AMBER}12` }}
+            onClick={() => (running ? stop.mutate() : sync.mutate(true))}
+            disabled={!hasKey && !hasRa}
+            className={cn(running ? secondaryButtonClass : primaryButtonClass, buttonSize.md)}
           >
-            <RotateCcw size={14} />
-            Retry {status?.failedGames}
+            <RefreshCw
+              aria-hidden
+              size={15}
+              className={cn(running && 'animate-spin motion-reduce:animate-none')}
+            />
+            {running ? 'Stop' : 'Sync now'}
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => (running ? stop.mutate() : sync.mutate(true))}
-          disabled={!hasKey && !hasRa}
-          className="flex flex-none items-center gap-1.75 rounded-[9px] border border-line-strong bg-raised px-3.25 py-2 text-[12.5px] font-semibold text-foreground transition-colors duration-150 hover:border-line-hover hover:bg-raised-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={running ? 'animate-spin' : undefined} />
-          {running ? 'Stop' : 'Sync now'}
-        </button>
-      </div>
+        </>
+      }
+      flush={figures.length > 0 || sourceLines.length > 0}
+    >
+      {(figures.length > 0 || sourceLines.length > 0) && (
+        <>
+          {figures.length > 0 && (
+            <dl className="grid grid-cols-3">
+              {figures.map((figure) => (
+                <div
+                  key={figure.label}
+                  className="flex flex-col-reverse gap-1 border-l border-line px-5 py-4 first:border-l-0"
+                >
+                  <dt className="text-small text-dust">{figure.label}</dt>
+                  <dd
+                    className={cn(
+                      'font-display text-title font-bold tabular-nums',
+                      figure.accent ? 'text-phosphor' : 'text-bone',
+                    )}
+                  >
+                    {figure.value.toLocaleString()}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {/* Las cifras de cada catálogo por separado (R-11): un 100 % de
+              Steam y uno de RetroAchievements son hitos distintos. */}
+          {sourceLines.map((line) => (
+            <div
+              key={line.source}
+              className="border-t border-line px-5 py-3 text-small text-bone tabular-nums"
+            >
+              {line.text}
+            </div>
+          ))}
+        </>
+      )}
     </SettingsCard>
   );
 };

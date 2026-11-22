@@ -53,15 +53,12 @@ export const UsageBreakdownBar = ({
               key={segment.key}
               onMouseEnter={() => setHoveredKey(segment.key)}
               onMouseLeave={() => setHoveredKey(null)}
-              className="flex items-center gap-1.75 text-[11px] transition-opacity duration-200"
+              className="flex items-center gap-1.75 text-small transition-opacity duration-200"
               style={{ opacity: isDimmed ? 0.45 : 1 }}
             >
-              <div
-                className="h-1.5 w-1.5 flex-none rounded-full"
-                style={{ background: segment.color }}
-              />
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{segment.label}</span>
-              <span className="flex-none font-semibold tabular-nums text-foreground">
+              <div className="size-2 flex-none rounded-xs" style={{ background: segment.color }} />
+              <span className="min-w-0 flex-1 text-dust">{segment.label}</span>
+              <span className="flex-none font-semibold text-bone tabular-nums">
                 {formatBytes(segment.bytes)}
               </span>
             </div>
