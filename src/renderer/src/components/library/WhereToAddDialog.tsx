@@ -37,7 +37,7 @@ const DoorButton = ({
   <button
     type="button"
     onClick={onClick}
-    className="group flex flex-1 flex-col items-center gap-2 rounded-md border px-3 pt-4.5 pb-3.5 transition-[transform,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5"
+    className="group flex flex-1 flex-col items-center gap-2 rounded-md border px-3 pt-4.5 pb-3.5 transition-[transform,scale,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5"
     style={{ borderColor: `${color}30`, background: `${color}0d` }}
     onMouseEnter={(event) => {
       event.currentTarget.style.borderColor = `${color}6b`;

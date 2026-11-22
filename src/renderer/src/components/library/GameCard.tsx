@@ -75,7 +75,7 @@ export const GameCard = ({
         <span
           ref={observeCard}
           className={cn(
-            'relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 transition-[transform,box-shadow] duration-180 ease-out',
+            'relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 transition-[transform,scale,box-shadow] duration-180 ease-out',
             'group-hover:-translate-y-0.5 group-hover:shadow-lift motion-reduce:group-hover:translate-y-0',
             selected ? 'ring-2 ring-phosphor' : 'ring-line group-hover:ring-bone/30',
           )}

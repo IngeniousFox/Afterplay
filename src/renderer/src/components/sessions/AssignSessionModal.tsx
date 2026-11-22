@@ -225,7 +225,7 @@ export const AssignSessionModal = ({
                     aria-hidden
                     size={16}
                     className={cn(
-                      'flex-none transition-[transform,color] duration-150 group-hover/row:translate-x-0.5 group-hover/row:text-phosphor motion-reduce:transition-none',
+                      'flex-none transition-[transform,scale,color] duration-150 group-hover/row:translate-x-0.5 group-hover/row:text-phosphor motion-reduce:transition-none',
                       isHighlighted ? 'translate-x-0.5 text-phosphor' : 'text-dust',
                     )}
                   />

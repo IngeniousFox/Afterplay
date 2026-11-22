@@ -83,7 +83,7 @@ export const AchievementMiniIcon = ({
       aria-label={`Open achievement: ${entry.displayName}`}
       // La crecida y la sombra al pasar son lo que dice "esto se pulsa" sin
       // añadir un solo pixel en reposo: quieta, es idéntica a la decorativa.
-      className="h-5.5 w-5.5 flex-none cursor-pointer overflow-hidden rounded-[5px] border-0 bg-transparent p-0 transition-[transform,box-shadow] duration-150 ease-[cubic-bezier(.2,.7,.3,1)] hover:-translate-y-0.5 hover:scale-110"
+      className="h-5.5 w-5.5 flex-none cursor-pointer overflow-hidden rounded-[5px] border-0 bg-transparent p-0 transition-[transform,scale,box-shadow] duration-150 ease-[cubic-bezier(.2,.7,.3,1)] hover:-translate-y-0.5 hover:scale-110"
       style={{ boxShadow: ring }}
       onMouseEnter={(event) => {
         // El aro sube a pleno color bajo el ratón — también en los comunes,

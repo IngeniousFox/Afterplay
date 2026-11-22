@@ -202,7 +202,7 @@ export const TimerBar = (): React.JSX.Element | null => {
               disabled={stop.isPending}
               aria-label="Stop the timer"
               aria-busy={stop.isPending}
-              className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-sm bg-live text-ink-live transition-[transform,background-color] duration-150 hover:bg-live-hi focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] active:bg-live-lo disabled:opacity-40 motion-reduce:active:scale-100"
+              className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-sm bg-live text-ink-live transition-[transform,scale,background-color] duration-150 hover:bg-live-hi focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] active:bg-live-lo disabled:opacity-40 motion-reduce:active:scale-100"
             >
               {stop.isPending ? (
                 <Loader2 size={15} className="animate-spin" />

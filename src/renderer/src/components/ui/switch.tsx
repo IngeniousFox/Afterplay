@@ -42,7 +42,7 @@ export const Switch = ({
     <span
       aria-hidden
       className={cn(
-        'absolute left-0.5 size-4 rounded-full transition-[transform,background-color] duration-200 ease-out motion-reduce:transition-none',
+        'absolute left-0.5 size-4 rounded-full transition-[transform,scale,background-color] duration-200 ease-out motion-reduce:transition-none',
         checked ? 'translate-x-4 bg-ink' : 'translate-x-0 bg-dust',
       )}
     />

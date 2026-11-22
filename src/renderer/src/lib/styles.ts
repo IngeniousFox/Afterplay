@@ -17,9 +17,9 @@ const controlFocusPressClass =
 // Botones de Fósforo (hoja 4) para los sitios que no usan components/ui/button:
 // primario ámbar (uno por vista), secundario Raised + Line strong y peligro
 // Live sólido con tinta oscura.
-export const primaryButtonClass = `flex items-center justify-center gap-2 rounded-sm bg-phosphor px-5 py-2.5 text-[13.5px] font-semibold text-ink transition-[background-color,transform] duration-150 enabled:hover:bg-phosphor-hi enabled:active:bg-phosphor-lo ${controlFocusPressClass}`;
-export const secondaryButtonClass = `flex items-center justify-center gap-2 rounded-sm border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-bone transition-[background-color,border-color,transform] duration-150 enabled:hover:border-line-hover enabled:hover:bg-raised-hover enabled:active:bg-raised-active ${controlFocusPressClass}`;
-export const dangerButtonClass = `flex items-center justify-center gap-2 rounded-sm bg-live px-5 py-2.5 text-[13.5px] font-semibold text-ink-live transition-[background-color,transform] duration-150 enabled:hover:bg-live-hi enabled:active:bg-live-lo ${controlFocusPressClass}`;
+export const primaryButtonClass = `flex items-center justify-center gap-2 rounded-sm bg-phosphor px-5 py-2.5 text-[13.5px] font-semibold text-ink transition-[background-color,transform,scale] duration-150 enabled:hover:bg-phosphor-hi enabled:active:bg-phosphor-lo ${controlFocusPressClass}`;
+export const secondaryButtonClass = `flex items-center justify-center gap-2 rounded-sm border border-line-strong bg-raised px-4.5 py-2.5 text-[13.5px] font-semibold text-bone transition-[background-color,border-color,transform,scale] duration-150 enabled:hover:border-line-hover enabled:hover:bg-raised-hover enabled:active:bg-raised-active ${controlFocusPressClass}`;
+export const dangerButtonClass = `flex items-center justify-center gap-2 rounded-sm bg-live px-5 py-2.5 text-[13.5px] font-semibold text-ink-live transition-[background-color,transform,scale] duration-150 enabled:hover:bg-live-hi enabled:active:bg-live-lo ${controlFocusPressClass}`;
 
 // Clase compartida por los paneles flotantes (dropdowns, popovers, tooltips)
 // que hoy repiten el mismo trío borde/fondo/sombra — cada sitio conserva el
@@ -31,24 +31,24 @@ export const floatingPanelClass = 'border-line-strong bg-overlay shadow-float';
 // Botón "outline" secundario (Open game / All games / All sessions) —
 // idéntico byte a byte en Sessions.tsx y GameStats.tsx, cada uno le añade
 // sus propias clases de color según el estado activo/inactivo.
-export const outlineButtonClass = `flex items-center gap-1.75 rounded-sm border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 ${controlFocusPressClass}`;
+export const outlineButtonClass = `flex items-center gap-1.75 rounded-sm border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,transform,scale] duration-150 ${controlFocusPressClass}`;
 
 // Botón cuadrado de icono (cambiar carátula, editar notas...) — idéntico
 // byte a byte entre ActionBar (ficha normal) y PlanGameDetail (ficha de
 // Plan to Play). Fósforo: secundario de 44 px.
-export const squareIconButtonClass = `flex h-11 w-11 flex-none items-center justify-center rounded-sm border border-line-strong bg-raised text-bone transition-[background-color,border-color,transform] duration-150 hover:border-line-hover hover:bg-raised-hover active:bg-raised-active ${controlFocusPressClass}`;
+export const squareIconButtonClass = `flex h-11 w-11 flex-none items-center justify-center rounded-sm border border-line-strong bg-raised text-bone transition-[background-color,border-color,transform,scale] duration-150 hover:border-line-hover hover:bg-raised-hover active:bg-raised-active ${controlFocusPressClass}`;
 
 // Misma forma que squareIconButtonClass pero en Live — el botón de borrar,
 // en los mismos dos sitios. Fantasma en Live (no sólido): es un icono junto a
 // otros y el sólido se reserva para la confirmación.
-export const destructiveIconButtonClass = `flex h-11 w-11 flex-none items-center justify-center rounded-sm border border-live/40 bg-live/8 text-live transition-[background-color,border-color,transform] duration-150 hover:border-live/60 hover:bg-live/16 ${controlFocusPressClass}`;
+export const destructiveIconButtonClass = `flex h-11 w-11 flex-none items-center justify-center rounded-sm border border-live/40 bg-live/8 text-live transition-[background-color,border-color,transform,scale] duration-150 hover:border-live/60 hover:bg-live/16 ${controlFocusPressClass}`;
 
 // Botón grande de la cabecera del detalle (Play / Add to library) — mismo
 // tamaño/forma en ActionBar y PlanGameDetail; el color sale de
 // accentGradientStyle (o del estilo "en marcha" propio de ActionBar) por
 // fuera, vía `style`. ActionBar es el único de los dos con estado
 // deshabilitado — añade sus propias clases disabled: encima de esta.
-export const heroCtaButtonClass = `flex h-11 items-center gap-2.25 rounded-sm px-7 text-[15px] font-semibold transition-[background-color,filter,transform] duration-150 hover:brightness-110 ${controlFocusPressClass}`;
+export const heroCtaButtonClass = `flex h-11 items-center gap-2.25 rounded-sm px-7 text-[15px] font-semibold transition-[background-color,filter,transform,scale] duration-150 hover:brightness-110 ${controlFocusPressClass}`;
 
 // Prose de las notas — el MISMO en el editor (NotesEditor) y en la vista de
 // lectura (NotesSection), para que escribir y leer se vean idénticos. Añade

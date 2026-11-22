@@ -19,7 +19,7 @@ const press = 'active:scale-[.97] motion-reduce:active:scale-100';
 
 const buttonBase = cn(
   'inline-flex flex-none items-center justify-center gap-2 rounded-sm font-semibold whitespace-nowrap select-none',
-  'transition-[background-color,border-color,color,transform] duration-150 ease-out',
+  'transition-[background-color,border-color,color,transform,scale] duration-150 ease-out',
   'disabled:cursor-not-allowed disabled:opacity-40',
   press,
   focusRing,

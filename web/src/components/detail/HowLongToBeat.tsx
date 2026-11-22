@@ -156,7 +156,7 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
               disabled={threshold === 0}
               className={cn(
                 'flex min-h-16 flex-col items-start rounded-sm border px-2.5 py-2 text-left',
-                'transition-[transform,background-color,border-color,opacity] duration-150 active:scale-[.97] motion-reduce:active:scale-100',
+                'transition-[transform,scale,background-color,border-color,opacity] duration-150 active:scale-[.97] motion-reduce:active:scale-100',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:opacity-40',
                 active
                   ? 'border-phosphor bg-phosphor-tint'

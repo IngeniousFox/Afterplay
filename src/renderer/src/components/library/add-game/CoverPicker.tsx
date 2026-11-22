@@ -110,7 +110,7 @@ export const CoverPicker = ({
               // SteamGridDB, un delay por índice libre dejaría la última
               // apareciendo un segundo tarde.
               className={cn(
-                'group/tile overflow-hidden rounded-lg border border-input bg-muted transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-[0_8px_20px_rgba(3,6,7,.4)]',
+                'group/tile overflow-hidden rounded-lg border border-input bg-muted transition-[border-color,box-shadow,transform,scale] duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-[0_8px_20px_rgba(3,6,7,.4)]',
                 TILE_CLASS[target],
                 revealClass,
               )}

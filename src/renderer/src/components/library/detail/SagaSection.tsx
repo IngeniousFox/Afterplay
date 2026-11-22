@@ -66,7 +66,7 @@ const SagaSlide = ({
       className={`group/saga ${slideShellClass} text-left ${isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
     >
       <div
-        className={`relative aspect-3/4 overflow-hidden rounded-sm border transition-[transform,border-color,box-shadow] duration-200 ${
+        className={`relative aspect-3/4 overflow-hidden rounded-sm border transition-[transform,scale,border-color,box-shadow] duration-200 ${
           isCurrent
             ? ''
             : 'border-border group-hover/saga:-translate-y-1 group-hover/saga:border-line-strong group-hover/saga:shadow-[0_10px_28px_rgba(3,6,7,.45)]'

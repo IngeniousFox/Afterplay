@@ -162,7 +162,7 @@ export const PlaythroughPanel = ({ game, selected, onSelect }: Props): React.JSX
                     onClick={() => onSelect(iteration.id)}
                     className={cn(
                       'inline-flex min-h-11 items-center gap-2 rounded-sm border px-3 text-small font-medium',
-                      'transition-[transform,background-color,border-color] duration-150 active:scale-[.96] motion-reduce:active:scale-100',
+                      'transition-[transform,scale,background-color,border-color] duration-150 active:scale-[.96] motion-reduce:active:scale-100',
                       'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
                       active
                         ? 'border-phosphor bg-phosphor-tint text-bone'

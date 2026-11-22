@@ -373,7 +373,7 @@ const CandidateRow = ({
             ? onSelect(proposed, { ...entry, executablePath })
             : onPromotePlanned?.(plannedGameId, { ...entry, executablePath })
         }
-        className={`group/result flex w-full items-start gap-3.25 rounded-md border bg-bone/[0.02] p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+        className={`group/result flex w-full items-start gap-3.25 rounded-md border bg-bone/[0.02] p-2.75 text-left transition-[transform,scale,border-color,background-color,box-shadow] duration-150 ${
           isLocked
             ? 'cursor-default border-border opacity-55'
             : `hover:-translate-y-0.5 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
@@ -450,7 +450,7 @@ const CandidateRow = ({
 
         <ArrowRight
           size={15}
-          className="mt-1 flex-none text-muted-foreground transition-[transform,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary"
+          className="mt-1 flex-none text-muted-foreground transition-[transform,scale,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary"
         />
       </button>
 
@@ -674,7 +674,7 @@ const MatchCardGrid = ({
           type="button"
           disabled={isLocked}
           onClick={() => (owned && canPromote ? onPickPlanned?.(owned.gameId) : onPick(match))}
-          className={`group/alt relative overflow-hidden rounded-sm border border-border bg-muted text-left outline-hidden transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] ${
+          className={`group/alt relative overflow-hidden rounded-sm border border-border bg-muted text-left outline-hidden transition-[transform,scale,border-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] ${
             isLocked
               ? 'cursor-default opacity-45'
               : 'hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_12px_28px_rgba(3,6,7,.5)] focus-visible:border-primary/60'

@@ -243,7 +243,7 @@ export const SearchStep = ({
                 // se ve entera), así que vale con llamarlo al pintar la fila
                 // resaltada — sin efectos ni refs que mantener.
                 ref={isHighlighted ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-                className={`group/result flex items-start gap-3.25 rounded-md border p-2.75 text-left transition-[transform,border-color,background-color,box-shadow] duration-150 ${
+                className={`group/result flex items-start gap-3.25 rounded-md border p-2.75 text-left transition-[transform,scale,border-color,background-color,box-shadow] duration-150 ${
                   isLocked
                     ? 'cursor-default border-border bg-bone/[0.02] opacity-55'
                     : `hover:-translate-y-0.5 hover:border-primary/35 hover:bg-bone/[0.05] hover:shadow-[0_8px_20px_rgba(3,6,7,.35)] ${
@@ -318,7 +318,7 @@ export const SearchStep = ({
                 {!isLocked && (
                   <ArrowRight
                     size={15}
-                    className={`mt-1 flex-none transition-[transform,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary ${
+                    className={`mt-1 flex-none transition-[transform,scale,color] duration-150 group-hover/result:translate-x-0.75 group-hover/result:text-primary ${
                       isHighlighted ? 'translate-x-0.75 text-primary' : 'text-muted-foreground'
                     }`}
                   />

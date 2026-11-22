@@ -7,7 +7,7 @@ import { cn } from './cn';
 // Todas literales para que Tailwind las encuentre.
 
 const pressable = cn(
-  'transition-[transform,background-color,border-color,color] duration-150 ease-out',
+  'transition-[transform,scale,background-color,border-color,color] duration-150 ease-out',
   'active:scale-[.97] motion-reduce:active:scale-100',
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
   'disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100',

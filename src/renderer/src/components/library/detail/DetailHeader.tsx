@@ -337,7 +337,7 @@ export const HeaderUtilityButton = ({
     style={style}
     className={cn(
       'flex size-8.5 flex-none items-center justify-center rounded-sm border border-line-strong bg-cabinet/70 text-bone backdrop-blur-sm',
-      'transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[.97] motion-reduce:active:scale-100',
+      'transition-[background-color,border-color,color,transform,scale] duration-150 ease-out active:scale-[.97] motion-reduce:active:scale-100',
       'disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100',
       danger
         ? 'enabled:hover:border-live/60 enabled:hover:bg-live/14 enabled:hover:text-live'

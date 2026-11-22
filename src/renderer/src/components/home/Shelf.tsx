@@ -90,7 +90,7 @@ const ShelfCover = ({ item }: { item: ShelfItem }): React.JSX.Element => (
     )}
   >
     <TiltCover className="rounded-sm">
-      <span className="relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 ring-line transition-[transform,box-shadow] duration-180 ease-out group-hover:-translate-y-0.5 group-hover:shadow-lift group-hover:ring-bone/30 motion-reduce:group-hover:translate-y-0">
+      <span className="relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 ring-line transition-[transform,scale,box-shadow] duration-180 ease-out group-hover:-translate-y-0.5 group-hover:shadow-lift group-hover:ring-bone/30 motion-reduce:group-hover:translate-y-0">
         <GameCover
           url={item.coverUrl}
           className="h-full w-full"

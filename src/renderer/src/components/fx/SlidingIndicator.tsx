@@ -86,7 +86,7 @@ export const SlidingIndicator = ({
       className={cn(
         'pointer-events-none absolute left-0 block origin-left',
         ready &&
-          'transition-[transform,opacity] duration-420 ease-spring-soft motion-reduce:transition-none',
+          'transition-[transform,scale,opacity] duration-420 ease-spring-soft motion-reduce:transition-none',
         box?.shown ? 'opacity-100' : 'opacity-0',
         className,
       )}

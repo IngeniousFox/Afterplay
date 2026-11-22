@@ -40,7 +40,7 @@ const ScreenshotSlide = ({
       // group + hover:-translate-y — mismo lenguaje que las carátulas de
       // Completed (Stats): la fila entera "levanta" al pasar el ratón, no
       // solo cambia de color, para que se sienta clicable de verdad.
-      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,scale,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
     >
       {/* useImageSrc resuelve por IPC (caché local o descarga) — mientras no
           hay src, un esqueleto propio con el tamaño exacto de la miniatura,
@@ -100,7 +100,7 @@ const TrailerSlide = ({
       type="button"
       onClick={onClick}
       title={slide.name ?? 'Trailer'}
-      className={`group/shot relative overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
+      className={`group/shot relative overflow-hidden transition-[transform,scale,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_28px_rgba(3,6,7,.45)] outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor motion-reduce:hover:translate-y-0 ${slideShellClass}`}
     >
       {src ? (
         <img

@@ -187,7 +187,7 @@ export const Library = (): React.JSX.Element => {
                   onClick={() => setFilter(option.key)}
                   className={cn(
                     'relative inline-flex h-9 items-center gap-2 rounded-sm border px-3 text-small font-medium',
-                    'transition-[transform,background-color,border-color,color] duration-150 active:scale-[.96] motion-reduce:active:scale-100',
+                    'transition-[transform,scale,background-color,border-color,color] duration-150 active:scale-[.96] motion-reduce:active:scale-100',
                     'after:absolute after:-inset-y-1 after:inset-x-0',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
                     active

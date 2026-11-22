@@ -39,7 +39,7 @@ export const TiltCover = ({
     data-tilt=""
     className={cn(
       'group/tilt relative block',
-      'transition-[transform,box-shadow] duration-450 ease-out',
+      'transition-[transform,scale,box-shadow] duration-450 ease-out',
       'data-tilting:duration-150',
       'data-tilting:[transform:perspective(700px)_rotateX(var(--tilt-rx,0deg))_rotateY(var(--tilt-ry,0deg))_translateY(-3px)]',
       'data-tilting:shadow-[0_22px_32px_-12px_rgb(3_6_7/0.9)]',
