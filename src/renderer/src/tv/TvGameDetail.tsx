@@ -1,24 +1,10 @@
-import {
-  CalendarPlus,
-  CalendarRange,
-  Check,
-  ChevronLeft,
-  Clock3,
-  Coins,
-  History,
-  Hourglass,
-  Lightbulb,
-  Play,
-  Repeat,
-  TriangleAlert,
-  Trophy,
-} from 'lucide-react';
+import { Check, ChevronLeft, Info, Play, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { parseEntityId } from '../../../shared/entityIds';
 import type { GameDetail } from '../../../shared/types';
-import { GameCover } from '../components/GameCover';
 import { useGameAchievements } from '../hooks/achievements';
 import { useGame } from '../hooks/games';
 import { useCuriosities } from '../hooks/curiosities';
@@ -29,7 +15,7 @@ import { useLiveTimer } from '../hooks/useLiveTimer';
 import { celebrateCompletion } from '../lib/celebrate';
 import { humanizeAgoDays } from './tvFormat';
 import { formatElapsed, formatHours, formatMoney } from '../lib/format';
-import type { PastStatusKey } from '../lib/gameStatus';
+import type { PastStatusKey, StatusKey } from '../lib/gameStatus';
 import {
   ENDLESS_STATUS_OPTIONS,
   getGameStatusMeta,
@@ -47,8 +33,18 @@ import { useTvBackdrop } from './backdropContext';
 import { TV_MODAL_SWALLOW, useTvButtons, useTvLegend } from './tvInput';
 import { TvFocusLayer } from './focus';
 import { useTvFocusable } from './focusContext';
+import { useTvInputDevice } from './inputDevice';
 import { tvSound } from './sound';
-import { tvRevealClass, tvRevealStyle } from './styles';
+import {
+  tvButtonHalo,
+  tvFocusHalo,
+  tvFocusMotion,
+  tvFocusScale,
+  tvLabelClass,
+  tvRevealClass,
+  tvRevealStyle,
+} from './styles';
+import { TvButton, TvCoverArt, TvFigure, TvLed } from './tvUi';
 import { TvDetailAchievements } from './detail/TvDetailAchievements';
 import { TvDetailHistory } from './detail/TvDetailHistory';
 import { TvDetailNotes } from './detail/TvDetailNotes';
@@ -86,15 +82,18 @@ const DETAIL_TABS = [
 ] as const;
 type DetailTabKey = (typeof DETAIL_TABS)[number]['key'];
 
-// La pestaña: el mismo lenguaje que los FilterPill de Library (verde para la
-// activa, luz interior para la enfocada). Silenciada en el reparto genérico:
-// cambiar de sección suena el tick de moverse, no el confirmar de actuar.
+// La pestaña de sección de tvpwa-tv-detail.png: caja con borde, la activa en
+// Raised con su filo Phosphor abajo, y el recuento en Dust. Silenciada en el
+// reparto genérico: cambiar de sección suena el tick de moverse, no el
+// confirmar de actuar.
 const TabPill = ({
   label,
+  count,
   active,
   onSelect,
 }: {
   label: string;
+  count?: string;
   active: boolean;
   onSelect: () => void;
 }): React.JSX.Element => {
@@ -105,117 +104,23 @@ const TabPill = ({
       type="button"
       onClick={onSelect}
       data-tv-sound="none"
-      // Base oscura SÓLIDA, sin backdrop-blur: la fila entra con la cascada
-      // de reveal (transform+opacity) y un blur ahí dentro no puede
-      // muestrear hasta que la animación acaba — el "cristal que de pronto
-      // se oscurece". Regla de la casa (la del RecapPanel del Journey).
-      className="relative overflow-hidden rounded-full px-[0.95em] py-[0.32em] text-[0.7em] font-bold transition-[background-color,color,box-shadow,translate] duration-200"
-      style={{
-        ...(active
-          ? {
-              background:
-                'linear-gradient(180deg, rgba(255,179,71,.26), rgba(255,179,71,.12)), rgba(8,11,12,.6)',
-              color: '#ffb347',
-              boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.4)',
-            }
-          : {
-              background: 'rgba(8,11,12,.5)',
-              color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.1)',
-            }),
-        ...(focused
-          ? {
-              background:
-                'linear-gradient(180deg, rgba(255,179,71,.18), rgba(255,179,71,.1)), rgba(8,11,12,.6)',
-              color: '#ffb347',
-              translate: '0 -0.1em',
-            }
-          : {}),
-      }}
-    >
-      {focused && (
-        <span
-          aria-hidden
-          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.8)' }}
-        />
+      aria-pressed={active}
+      className={cn(
+        'relative flex h-[2.15em] items-center gap-[0.5em] rounded-sm border px-[0.9em] text-[1.05em] font-medium',
+        tvFocusMotion,
+        active
+          ? 'border-line-strong bg-raised text-bone after:absolute after:inset-x-[0.3em] after:-bottom-px after:h-[0.12em] after:rounded-full after:bg-phosphor after:shadow-glow-bar'
+          : 'border-line bg-panel/70 text-dust',
+        focused && ['text-bone', tvFocusScale, tvButtonHalo],
       )}
-      <span className="relative">{label}</span>
-    </button>
-  );
-};
-
-const ActionButton = ({
-  label,
-  icon,
-  color = '#ffb347',
-  solid = false,
-  autoFocus = false,
-  silent = false,
-  onSelect,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  color?: string;
-  solid?: boolean;
-  autoFocus?: boolean;
-  // silent: para acciones cuya consecuencia ya suena sola (abrir un panel →
-  // pushLayer) — el confirmar genérico encima sería doble.
-  silent?: boolean;
-  onSelect: () => void;
-}): React.JSX.Element => {
-  const { ref, focused } = useTvFocusable({ onSelect, autoFocus });
-  return (
-    <button
-      ref={ref}
-      type="button"
-      data-tv-sound={silent ? 'none' : undefined}
-      onClick={onSelect}
-      // overflow-hidden para que el sheen viva DENTRO de la píldora; la
-      // elevación va por CLASE (translate) y no inline para que el active:
-      // del ratón pueda hundirla — el press-feedback lo resuelve la cascada.
-      className={`relative flex items-center gap-[0.5em] overflow-hidden rounded-full px-[1.3em] py-[0.55em] text-[0.9em] font-extrabold transition-[background-color,box-shadow,translate,color,filter] duration-200 ease-[cubic-bezier(.22,1,.36,1)] ${
-        focused ? '-translate-y-[0.15em] active:translate-y-[0.02em] active:brightness-90' : ''
-      }`}
-      style={
-        focused
-          ? solid
-            ? {
-                background: color,
-                color: '#1a1100',
-                boxShadow: `0 0.6em 1.8em ${color}59, 0 0 0 3px ${color}40, inset 0 1px 0 rgba(233,228,216,.35)`,
-              }
-            : {
-                background: `${color}1f`,
-                color,
-                boxShadow: `inset 0 0 0 2px ${color}80, 0 0 1.4em ${color}33`,
-              }
-          : {
-              // Base oscura sólida (sin blur): estos botones viven sobre el
-              // hero nítido y el white translúcido se perdía contra arte claro.
-              background: 'rgba(12,16,14,.62)',
-              color: 'var(--foreground)',
-              boxShadow:
-                'inset 0 0 0 1px rgba(233,228,216,.13), inset 0 1px 0 rgba(233,228,216,.09)',
-            }
-      }
     >
-      {/* El barrido de luz al recibir el foco: la píldora te saluda una vez. */}
-      {focused && (
-        <span
-          aria-hidden
-          className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-bone/30 to-transparent"
-        />
-      )}
-      {icon}
       {label}
+      {count !== undefined && <span className="text-[0.86em] text-dust tabular-nums">{count}</span>}
     </button>
   );
 };
 
 // Volver, visible: el mando tiene B, el ratón necesita una puerta que se vea.
-// Cristal como el resto de superficies; al enfocarse, el anillo RESPIRA y el
-// chevrón se asoma hacia la salida — la puerta te señala el camino.
 const BackButton = ({
   onSelect,
   autoFocus,
@@ -235,33 +140,13 @@ const BackButton = ({
       // contrario de lo que hace — el back() lo pone quien lo usa (abajo).
       data-tv-sound="none"
       aria-label="Back"
-      className="relative flex h-[1.9em] w-[1.9em] items-center justify-center rounded-full transition-[background-color,box-shadow] duration-200 ease-[cubic-bezier(.22,1,.36,1)]"
-      style={
-        focused
-          ? {
-              background: 'rgba(233,228,216,.14)',
-              boxShadow: '0 0 1.2em rgba(233,228,216,.14)',
-            }
-          : {
-              background: 'rgba(12,16,14,.6)',
-              boxShadow:
-                'inset 0 0 0 1px rgba(233,228,216,.14), inset 0 1px 0 rgba(233,228,216,.08)',
-            }
-      }
-    >
-      {/* El anillo late solo con el foco encima: "esto te espera", no "esto está". */}
-      {focused && (
-        <span
-          aria-hidden
-          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(233,228,216,.55)' }}
-        />
+      className={cn(
+        'flex size-[1.9em] flex-none items-center justify-center rounded-sm border border-line-strong bg-raised text-bone',
+        tvFocusMotion,
+        focused && [tvFocusScale, tvButtonHalo],
       )}
-      <ChevronLeft
-        className={`h-[1.1em] w-[1.1em] transition-[translate] duration-200 ${
-          focused ? '-translate-x-[0.07em]' : ''
-        }`}
-      />
+    >
+      <ChevronLeft className="size-[1.1em]" />
     </button>
   );
 };
@@ -341,30 +226,23 @@ const StatusPicker = ({
     <TvFocusLayer>
       <div className="absolute inset-0 z-30 flex items-center justify-center">
         <div
-          className="animate-in fade-in-0 absolute inset-0 bg-inset/65 duration-200"
+          className="absolute inset-0 animate-[fade-in_200ms_var(--ease-out)_both] bg-scrim"
           onClick={onClose}
         />
-        {/* El panel nace con el pop de la casa: pequeño y subiendo, con su
-            hairline de luz arriba — cristal que llega, no que aparece. */}
-        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[16em] rounded-[0.7em] border border-line-strong bg-overlay/95 px-[1em] py-[1em] shadow-[inset_0_1px_0_rgba(233,228,216,.10),0_2em_4em_rgba(3,6,7,.6)]">
-          <div className="mb-[0.6em] border-b border-line px-[0.4em] pb-[0.55em] text-[0.68em] font-extrabold tracking-[.18em] text-muted-foreground">
-            SET STATUS
+        <div className="relative w-[19em] animate-dialog-in rounded-md border border-line-strong bg-overlay px-[0.9em] pt-[1em] pb-[0.9em] shadow-modal">
+          <div className="mb-[0.6em] px-[0.5em] font-display text-[1.6em] leading-none font-bold text-bone">
+            Set status
           </div>
-          <div className="flex flex-col gap-[0.35em]">
-            {options.map((key, index) => {
-              const meta = STATUS_META[key];
-              return (
-                <StatusOption
-                  key={key}
-                  label={meta.label}
-                  color={meta.color}
-                  Icon={meta.Icon}
-                  current={key === currentKey}
-                  autoFocus={index === 0}
-                  onSelect={() => void save(key)}
-                />
-              );
-            })}
+          <div className="flex flex-col gap-[0.3em]">
+            {options.map((key, index) => (
+              <StatusOption
+                key={key}
+                status={key}
+                current={key === currentKey}
+                autoFocus={index === 0}
+                onSelect={() => void save(key)}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -373,16 +251,12 @@ const StatusPicker = ({
 };
 
 const StatusOption = ({
-  label,
-  color,
-  Icon,
+  status,
   current,
   autoFocus,
   onSelect,
 }: {
-  label: string;
-  color: string;
-  Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  status: PastStatusKey;
   current: boolean;
   autoFocus: boolean;
   onSelect: () => void;
@@ -396,31 +270,15 @@ const StatusOption = ({
       // Elegir SIEMPRE cierra el picker, y ese cierre ya suena (popLayer):
       // confirmar + cierre a la vez eran dos gestos sonoros contradictorios.
       data-tv-sound="none"
-      className="flex w-full items-center gap-[0.6em] rounded-[0.45em] px-[0.8em] py-[0.55em] text-[0.9em] font-bold transition-[background-color,box-shadow,translate,color] duration-150 ease-[cubic-bezier(.22,1,.36,1)]"
-      style={
-        focused
-          ? {
-              background: `${color}1c`,
-              color,
-              boxShadow: `inset 0 0 0 2px ${color}66, 0 0 1.1em ${color}26`,
-              translate: '0.25em 0',
-            }
-          : { color: current ? color : 'var(--muted-foreground)' }
-      }
-    >
-      <Icon
-        className="h-[1em] w-[1em] transition-[filter] duration-150"
-        // La gotita de luz del icono solo con el foco: vida sin ruido.
-        style={{ color, filter: focused ? `drop-shadow(0 0 0.4em ${color}b3)` : undefined }}
-      />
-      {label}
-      {/* El estado que ya tienes LATE despacio: elegirlo de nuevo solo cierra. */}
-      {current && (
-        <span
-          className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] ml-auto h-[0.4em] w-[0.4em] rounded-full"
-          style={{ background: color, boxShadow: `0 0 0.5em ${color}` }}
-        />
+      className={cn(
+        'flex w-full items-center gap-[0.65em] rounded-md border border-transparent px-[0.7em] py-[0.5em] text-[1.15em] font-semibold text-bone',
+        tvFocusMotion,
+        focused && ['border-phosphor bg-phosphor-tint', tvFocusHalo],
       )}
+    >
+      <TvLed status={status} />
+      {STATUS_META[status].label}
+      {current && <span className="ml-auto text-[0.8em] font-medium text-dust">Current</span>}
     </button>
   );
 };
@@ -438,6 +296,8 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const [statusOpen, setStatusOpen] = useState(false);
   const [tab, setTab] = useState<DetailTabKey>('overview');
   const [launching, setLaunching] = useState(false);
+  // Las chapas LB/RB junto a las pestañas solo se enseñan con mando.
+  const device = useTvInputDevice();
 
   // Los totales de logros alimentan la pestaña condicional y la ficha de
   // vitales del Overview. Cero entries = juego sin catálogo = ni rastro.
@@ -556,7 +416,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   if (gameLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="text-[0.9em] font-semibold text-muted-foreground">Loading…</span>
+        <span className="text-[1em] text-dust">Loading…</span>
       </div>
     );
   }
@@ -573,16 +433,10 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   if (!game) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-[1.1em] text-center">
-        <div
-          className="flex h-[3.2em] w-[3.2em] items-center justify-center rounded-full"
-          style={{
-            background: 'rgba(255,94,87,.12)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,94,87,.3)',
-          }}
-        >
-          <TriangleAlert className="h-[1.4em] w-[1.4em]" style={{ color: '#ff5e57' }} />
+        <div className="flex size-[3.2em] items-center justify-center rounded-md border border-line bg-panel">
+          <TriangleAlert className="size-[1.4em] text-phosphor" />
         </div>
-        <div className="text-[1.1em] font-extrabold text-foreground">
+        <div className="font-display text-[1.8em] font-bold text-bone">
           {gameFailed ? 'Couldn’t load this game' : 'This game is no longer in your library'}
         </div>
         <BackButton
@@ -606,7 +460,7 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   // memoria escrita no se quede en el escritorio.
   const gameNotes = game.notes?.trim() ? game.notes.trim() : null;
   const noteText = lastNote ?? gameNotes;
-  const noteLabel = lastNote ? 'WHERE YOU LEFT OFF' : 'YOUR NOTES';
+  const noteLabel = lastNote ? 'Where you left off' : 'Your notes';
 
   // HLTB con la geometría del escritorio: tres tramos sobre una escala común
   // (el mayor de los tres tiempos) y tus horas aterrizando como marcador.
@@ -615,20 +469,10 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const hltbComp = game.hltbCompletionist ?? 0;
   const hasHltb = hltbMain > 0 || hltbExtra > 0 || hltbComp > 0;
   const hltbScale = Math.max(hltbMain, hltbExtra, hltbComp, 1);
-  const segMain = (hltbMain / hltbScale) * 100;
-  const segExtra = (Math.max(0, hltbExtra - hltbMain) / hltbScale) * 100;
-  // El último tramo se calcula como RESTO para que la suma cierre exacta.
-  const segComp = hltbComp > 0 ? Math.max(0, (hltbComp / hltbScale) * 100 - segMain - segExtra) : 0;
-  const hltbSegments = [
-    { key: 'main', pct: segMain, color: '#5fd3e0' },
-    { key: 'extra', pct: segExtra, color: '#8ce4ee' },
-    { key: 'comp', pct: segComp, color: '#ffb347' },
-  ].filter((segment) => segment.pct > 0);
-  const hltbMarkerPct = Math.min(100, (game.totalHours / hltbScale) * 100);
   const hltbTiers = [
-    { label: 'STORY', hours: hltbMain, color: '#5fd3e0' },
-    { label: '+ EXTRAS', hours: hltbExtra, color: '#5fd3e0' },
-    { label: '100%', hours: hltbComp, color: '#ffb347' },
+    { label: 'Story', hours: hltbMain },
+    { label: '+ Extras', hours: hltbExtra },
+    { label: '100%', hours: hltbComp },
   ].filter((tier) => tier.hours > 0);
 
   const launch = async (): Promise<void> => {
@@ -652,524 +496,384 @@ export const TvGameDetail = (): React.JSX.Element | null => {
     setTimeout(() => setLaunching(false), 2_500);
   };
 
+  const statusKey: StatusKey = game.currentState
+    ? STATE_TO_STATUS_KEY[game.currentState]
+    : 'unplayed';
+  const compact = activeTab !== 'overview';
+
+  // El medidor HLTB del sistema: un segmento por hora (con tope de 60 para
+  // juegos largos: entonces cada segmento vale scale/60 h), relleno Phosphor,
+  // la hora parcial proporcional y marcas para Story / + Extras / 100%.
+  const hltbSegmentCount = Math.min(60, Math.max(12, Math.ceil(hltbScale)));
+  const hltbFilled = (game.totalHours / hltbScale) * hltbSegmentCount;
+
+  const figures: { key: string; node: React.ReactNode; label: string }[] = [
+    {
+      key: 'hours',
+      node: <TvFigure value={formatHours(game.totalHours)} className="text-phosphor" />,
+      label: 'Hours',
+    },
+    { key: 'sessions', node: <TvFigure value={String(sessionCount)} />, label: 'Sessions' },
+    ...(achievementsTotal > 0
+      ? [
+          {
+            key: 'trophies',
+            node: (
+              <span className="font-display leading-none font-bold tabular-nums">
+                {achievementsUnlocked}
+                <span className="text-[0.55em] font-semibold text-dust">/{achievementsTotal}</span>
+              </span>
+            ),
+            label: 'Trophies',
+          },
+        ]
+      : []),
+    ...(lastPlayed
+      ? [
+          {
+            key: 'last',
+            node: (
+              <span className="font-display leading-none font-bold">
+                {humanizeAgoDays(lastPlayed)}
+              </span>
+            ),
+            label: 'Last played',
+          },
+        ]
+      : []),
+    ...(game.totalSpend > 0
+      ? [
+          {
+            key: 'spent',
+            node: (
+              <span className="font-display leading-none font-bold tabular-nums">
+                {formatMoney(game.totalSpend)}
+              </span>
+            ),
+            label:
+              game.costPerHour !== null ? `Spent · ${formatMoney(game.costPerHour)}/h` : 'Spent',
+          },
+        ]
+      : []),
+    {
+      key: 'library',
+      node: (
+        <span className="font-display leading-none font-bold tabular-nums">
+          {game.addedAt.getFullYear()}
+        </span>
+      ),
+      label: 'In library since',
+    },
+  ];
+
+  // Las acciones: lanzar, el aviso de "jugándose en otro PC" y Set status.
+  const actions = (
+    <div
+      className={cn('flex flex-wrap items-center gap-[0.9em]', tvRevealClass)}
+      style={tvRevealStyle(2)}
+    >
+      {ownLive !== null ? (
+        // El juego ESTÁ corriendo: el botón de lanzar se convierte en el
+        // estado en vivo — LED rojo latiendo y el contador de la sesión. (No
+        // hay "Stop" honesto: Afterplay observa el proceso, no lo posee.)
+        <div className="flex h-[2.6em] items-center gap-[0.55em] rounded-md border border-live/50 bg-live/10 px-[1.1em] text-[1.08em] font-semibold text-bone">
+          <span className="relative flex size-[0.55em] flex-none">
+            <span className="absolute inset-0 animate-led-ring rounded-full bg-live motion-reduce:hidden" />
+            <span className="relative size-[0.55em] rounded-full bg-live" />
+          </span>
+          Playing
+          {liveSince && (
+            <span className="font-display text-[1.25em] leading-none font-bold text-phosphor tabular-nums">
+              {formatElapsed(liveSeconds)}
+            </span>
+          )}
+        </div>
+      ) : (
+        game.executablePath && (
+          <TvButton
+            label={launching ? 'Launching…' : 'Play'}
+            icon={<Play className="size-[0.85em]" fill="currentColor" />}
+            variant="primary"
+            autoFocus
+            onSelect={() => void launch()}
+          />
+        )
+      )}
+      {/* Jugándose en OTRO PC (§10.8): el aviso, sin Stop y sin quitar Play.
+          Con "No signal for X" (punto hueco ámbar) si lleva rato callada. */}
+      {remoteLive !== null && (
+        <div className="flex h-[2.6em] items-center gap-[0.55em] rounded-md border border-line-strong bg-panel px-[1.1em] text-[1.08em] font-semibold text-bone">
+          <span
+            className={cn(
+              'size-[0.55em] flex-none rounded-full',
+              remoteNoSignal === null ? 'bg-live' : 'border-[0.13em] border-phosphor',
+            )}
+          />
+          Playing on {nameOf(remoteLive.deviceId)}
+          {remoteNoSignal !== null && (
+            <span className="text-[0.92em] text-phosphor">· {remoteNoSignal}</span>
+          )}
+        </div>
+      )}
+      {ownLive === null && !game.executablePath && !game.isEmulated && (
+        <span className="text-[1em] text-dust">Not installed on this PC</span>
+      )}
+      <TvButton
+        label="Set status"
+        autoFocus={!game.executablePath || ownLive !== null}
+        // La apertura del picker ya suena por pushLayer.
+        silent
+        onSelect={() => setStatusOpen(true)}
+      />
+    </div>
+  );
+
+  // La línea de identidad: LED + estado, géneros, plataforma y año.
+  const identity = [
+    ...(game.genres ?? []).slice(0, 2),
+    game.officialPlatforms?.[0] ?? null,
+    game.releaseYear !== null ? String(game.releaseYear) : null,
+  ].filter((part): part is string => part !== null && part.length > 0);
+
   return (
-    <div className="isolate relative flex h-full flex-col pb-[0.6em]">
-      {/* EL HERO COMO ESCENARIO: el arte NÍTIDO ocupa la pantalla ENTERA de
-          la ficha, derivando en Ken Burns, y se oscurece progresivamente
-          hacia abajo hasta ser la base del contenido. La primera versión era
-          una banda que moría a mitad de pantalla y debajo asomaba el mundo
-          de luciérnagas — dos fondos pegados con una costura visible;
-          full-bleed es UNA sola atmósfera. Velo izquierdo para el texto de
-          cabecera, oscuridad creciente para la zona de pestañas. -z-10 +
-          isolate: detrás de todo lo de esta pantalla, delante del backdrop
-          global. */}
-      {heroSrc && (
+    <div className="relative isolate flex h-full flex-col pb-[0.6em]">
+      {/* El arte del juego arriba a la derecha, muy apagado y fundido hacia
+          el Cabinet: atmósfera detrás del título, nunca encima del texto. */}
+      {(heroSrc ?? coverSrc) && (
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-[3.2vh] -right-[4vw] -bottom-[0.2em] -left-[4vw] -z-10 overflow-hidden"
+          className="pointer-events-none absolute -top-[4em] -right-[4vw] -z-10 h-[24em] w-[62%] overflow-hidden"
         >
           <img
-            src={heroSrc}
+            src={heroSrc ?? coverSrc ?? undefined}
             alt=""
-            className="afterplay-tv-hero-art animate-[afterplay-tv-hero-drift_24s_ease-in-out_infinite_alternate] h-full w-full object-cover"
+            className="h-full w-full object-cover opacity-35"
           />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(90deg, rgba(8,11,12,.92) 0%, rgba(8,11,12,.58) 38%, rgba(8,11,12,.2) 68%, rgba(8,11,12,.5) 100%)',
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(8,11,12,.32) 0%, rgba(8,11,12,.12) 22%, rgba(8,11,12,.55) 52%, rgba(10,12,11,.84) 74%, rgba(11,13,12,.93) 100%)',
-            }}
-          />
+          <div className="absolute inset-0 bg-(image:--scan)" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,var(--color-cabinet)_0%,transparent_45%),linear-gradient(0deg,var(--color-cabinet)_0%,transparent_60%)]" />
         </div>
       )}
 
-      {/* CABECERA fija: volver, estado, título e identidad — lo que no
-          cambia con la sección. Debajo, el cuerpo reparte contenido de
-          pestaña (izquierda) y la pieza física con sus vueltas (derecha). */}
-      <div className="flex flex-none flex-col gap-[0.5em]">
-        <div className={tvRevealClass} style={tvRevealStyle(0)}>
-          <BackButton
-            onSelect={() => {
-              // La misma firma sonora que B: nota cayendo, no confirmar.
-              tvSound.back();
-              void navigate(-1);
-            }}
-          />
-        </div>
-
-        <div
-          className={`flex flex-wrap items-center gap-x-[0.6em] gap-y-[0.25em] text-[0.72em] font-extrabold tracking-[.14em] ${tvRevealClass}`}
-          style={tvRevealStyle(1)}
-        >
-          <status.Icon className="h-[1.15em] w-[1.15em]" style={{ color: status.color }} />
-          <span style={{ color: status.color }}>{status.label.toUpperCase()}</span>
-          {game.releaseYear !== null && (
-            <span className="text-muted-foreground">· {game.releaseYear}</span>
-          )}
-          {game.endless && (
-            <span
-              className="rounded-full px-[0.55em] py-[0.08em] text-[0.8em]"
-              style={{
-                color: '#a9b3e8',
-                background: 'rgba(185,166,255,.12)',
-                boxShadow: 'inset 0 0 0 1px rgba(185,166,255,.35)',
-              }}
-            >
-              ∞ ENDLESS
-            </span>
-          )}
-          {game.isEmulated && (
-            <span
-              className="rounded-full px-[0.55em] py-[0.08em] text-[0.8em]"
-              style={{
-                color: '#a6c1e8',
-                background: 'rgba(95,211,224,.12)',
-                boxShadow: 'inset 0 0 0 1px rgba(95,211,224,.35)',
-              }}
-            >
-              EMULATED
-            </span>
-          )}
-        </div>
-
-        <h1
-          className={`max-w-[95%] text-[2em] leading-[1.06] font-extrabold tracking-[-.018em] drop-shadow-[0_2px_20px_rgba(3,6,7,.6)] ${tvRevealClass}`}
-          style={tvRevealStyle(2)}
-        >
-          {game.title}
-        </h1>
-
-        {/* La línea de identidad bajo el título — quién lo hizo y de qué
-            va, como la cabecera del hero de escritorio. Vive en la cabecera
-            (es identidad, no contenido de sección) y así el Overview respira. */}
-        {(game.developer || game.publisher || (game.genres?.length ?? 0) > 0) && (
-          <div
-            className={`flex max-w-[70%] flex-wrap items-center gap-x-[0.55em] gap-y-[0.3em] text-[0.68em] font-semibold text-dust ${tvRevealClass}`}
-            style={tvRevealStyle(3)}
-          >
-            {game.developer && <span>{game.developer}</span>}
-            {game.publisher && game.publisher !== game.developer && (
-              <span className="text-bone/35">· {game.publisher}</span>
-            )}
-            {(game.genres ?? []).slice(0, 3).map((genre) => (
-              <span
-                key={genre}
-                className="rounded-full bg-inset/55 px-[0.6em] py-[0.1em] text-[0.85em] text-dust shadow-[inset_0_0_0_1px_rgba(233,228,216,.12)]"
-              >
-                {genre}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex min-h-0 flex-1 gap-[2.2em] pt-[0.6em]">
+      <div className="flex min-h-0 flex-1 gap-[2.4em]">
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Las acciones viven SOBRE las pestañas: lanzar y cambiar estado
-              valen para cualquier sección. */}
+          {/* CABECERA: en Overview, título enorme y las acciones debajo; en
+              las demás secciones el héroe se compacta (título más bajo y
+              las acciones a la derecha) y la sección gana la pantalla. */}
           <div
-            className={`flex items-center gap-[0.8em] ${tvRevealClass}`}
-            style={tvRevealStyle(3)}
+            className={cn(
+              'flex flex-none gap-[1.2em]',
+              compact ? 'items-end justify-between' : 'flex-col',
+            )}
           >
-            {ownLive !== null ? (
-              // El juego ESTÁ corriendo: el botón de lanzar se convierte en
-              // el estado en vivo — píldora sólida con el punto latiendo y
-              // el contador de la sesión subiendo. (No hay "Stop" honesto:
-              // Afterplay observa el proceso, no lo posee — matarlo desde
-              // aquí podría llevarse una partida sin guardar.)
-              <div
-                className="relative flex items-center gap-[0.5em] rounded-full px-[1.3em] py-[0.55em] text-[0.9em] font-extrabold"
-                style={{
-                  background: 'rgba(255,179,71,.16)',
-                  color: '#ffb347',
-                  boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.55), 0 0 1.4em rgba(255,179,71,.18)',
-                }}
+            <div className="flex min-w-0 flex-col gap-[0.35em]">
+              <h1
+                className={cn(
+                  'font-display leading-[0.92] font-bold text-bone',
+                  compact ? 'text-[3.4em]' : 'text-[4.6em]',
+                  tvRevealClass,
+                )}
+                style={tvRevealStyle(0)}
               >
-                <span className="relative flex h-[0.55em] w-[0.55em] flex-none">
-                  <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-phosphor shadow-[0_0_0.6em_#ffb347]" />
+                {game.title}
+              </h1>
+              <div
+                className={cn(
+                  'flex flex-wrap items-center gap-x-[0.75em] gap-y-[0.3em] text-[1.05em] text-bone',
+                  tvRevealClass,
+                )}
+                style={tvRevealStyle(1)}
+              >
+                <BackButton
+                  onSelect={() => {
+                    // La misma firma sonora que B: nota cayendo, no confirmar.
+                    tvSound.back();
+                    void navigate(-1);
+                  }}
+                />
+                <span className="flex items-center gap-[0.45em] font-semibold">
+                  <TvLed status={statusKey} />
+                  {status.label}
                 </span>
-                Playing
-                {liveSince && (
-                  <span className="text-[0.85em] font-bold text-phosphor-hi tabular-nums">
-                    · {formatElapsed(liveSeconds)}
+                {identity.map((part) => (
+                  <span key={part} className="flex items-center gap-[0.75em]">
+                    <span aria-hidden className="h-[0.9em] w-px bg-line-strong" />
+                    {part}
+                  </span>
+                ))}
+                {game.endless && (
+                  <span className="rounded-sm border border-line-strong px-[0.45em] text-[0.88em] text-dust">
+                    Endless
+                  </span>
+                )}
+                {game.isEmulated && (
+                  <span className="rounded-sm border border-line-strong px-[0.45em] text-[0.88em] text-dust">
+                    Emulated
                   </span>
                 )}
               </div>
-            ) : (
-              game.executablePath && (
-                <ActionButton
-                  label={launching ? 'Launching…' : 'Play'}
-                  icon={<Play className="h-[1em] w-[1em]" fill="currentColor" />}
-                  solid
-                  autoFocus
-                  onSelect={() => void launch()}
-                />
-              )
-            )}
-            {/* Jugándose en OTRO PC (§10.8): el aviso, sin Stop y sin quitar
-                Play. Con "No signal for X" si lleva más de 3 minutos callada. */}
-            {remoteLive !== null && (
-              <div
-                className="flex items-center gap-[0.5em] rounded-full px-[1.1em] py-[0.5em] text-[0.8em] font-bold text-bone"
-                style={{ boxShadow: 'inset 0 0 0 2px rgba(233,228,216,.18)' }}
-              >
-                <span
-                  className="h-[0.55em] w-[0.55em] flex-none rounded-full"
-                  style={{ background: remoteNoSignal === null ? '#ffb347' : '#ffb347' }}
-                />
-                Playing on {nameOf(remoteLive.deviceId)}
-                {remoteNoSignal !== null && (
-                  <span className="text-[0.9em] text-phosphor">· {remoteNoSignal}</span>
-                )}
-              </div>
-            )}
-            {ownLive === null && !game.executablePath && !game.isEmulated && (
-              <span className="text-[0.8em] font-semibold text-dust">Not installed on this PC</span>
-            )}
-            <ActionButton
-              label="Set status"
-              autoFocus={!game.executablePath || ownLive !== null}
-              // La apertura del picker ya suena por pushLayer.
-              silent
-              onSelect={() => setStatusOpen(true)}
-            />
+            </div>
+            {actions}
           </div>
 
           {/* La barra de secciones — ver DETAIL_TABS arriba. */}
           <div
-            className={`mt-[0.7em] flex items-center gap-[0.4em] ${tvRevealClass}`}
-            style={tvRevealStyle(4)}
+            className={cn(
+              'mt-[1em] flex flex-none flex-wrap items-center gap-[0.5em]',
+              tvRevealClass,
+            )}
+            style={tvRevealStyle(3)}
           >
             {tabs.map((entry) => (
               <TabPill
                 key={entry.key}
                 label={entry.label}
+                count={
+                  entry.key === 'achievements'
+                    ? `${achievementsUnlocked}/${achievementsTotal}`
+                    : entry.key === 'sessions' && sessionCount > 0
+                      ? String(sessionCount)
+                      : undefined
+                }
                 active={activeTab === entry.key}
                 onSelect={() => selectTab(entry.key)}
               />
             ))}
-            {/* El recordatorio del atajo, con cuerpo de chapa (sobre el arte
-                un texto suelto se evaporaba). */}
-            <span className="ml-[0.4em] flex items-center gap-[0.3em] rounded-full bg-inset/55 px-[0.55em] py-[0.18em] text-[0.5em] font-extrabold tracking-[.08em] text-dust shadow-[inset_0_0_0_1px_rgba(233,228,216,.1)]">
-              LB
-              <span className="text-bone/25">·</span>
-              RB
-            </span>
+            {/* LB/RB solo con mando: con teclado son Q/E y ya lo dice el pie. */}
+            {device === 'gamepad' && (
+              <span className="ml-[0.4em] flex items-center gap-[0.3em]">
+                {['LB', 'RB'].map((glyph) => (
+                  <span
+                    key={glyph}
+                    className="flex h-[1.4em] items-center rounded-sm border-[0.09em] border-dust px-[0.3em] text-[0.85em] font-semibold text-dust"
+                  >
+                    {glyph}
+                  </span>
+                ))}
+              </span>
+            )}
           </div>
 
-          {/* El contenido de la sección activa: remonta con key para que
-              cada llegada tenga su pequeña entrada. */}
-          <div
-            key={activeTab}
-            className="animate-in fade-in-0 slide-in-from-bottom-2 mt-[0.85em] min-h-0 flex-1 duration-300"
-          >
+          {/* El contenido de la sección activa: remonta con key (cambiar de
+              pestaña no se anima: el sistema no anima lo que el mando repite). */}
+          <div key={activeTab} className="mt-[1em] min-h-0 flex-1">
             {activeTab === 'overview' ? (
               <div
-                className="flex h-full flex-col gap-[0.95em] overflow-y-auto pr-[0.3em] pt-[0.15em]"
+                className="-mx-[0.6em] flex h-full flex-col gap-[1.2em] overflow-y-auto px-[0.6em] pt-[0.2em]"
                 style={{ scrollbarWidth: 'none' }}
               >
-                {/* Los VITALES como fichas de cristal: cada número con su
-                    casa, su color y su brillo de esquina — legibles sobre
-                    cualquier arte, nada de texto flotando en el fondo. */}
+                {/* Las cifras del vistazo, separadas por filetes. */}
                 <div
-                  className={`flex flex-wrap gap-[0.55em] ${tvRevealClass}`}
-                  style={tvRevealStyle(1)}
+                  className={cn('flex flex-wrap items-end gap-y-[0.8em]', tvRevealClass)}
+                  style={tvRevealStyle(4)}
                 >
-                  {(
-                    [
-                      {
-                        label: 'HOURS',
-                        value: formatHours(game.totalHours),
-                        accent: '#ffb347',
-                        Icon: Clock3,
-                      },
-                      {
-                        label: 'SESSIONS',
-                        value: String(sessionCount),
-                        accent: '#5fd3e0',
-                        Icon: CalendarRange,
-                      },
-                      // Los trofeos entre los vitales: el "cuánto es tuyo" en
-                      // un vistazo, con la invitación implícita de RB para
-                      // llegar a la pestaña con el detalle.
-                      ...(achievementsTotal > 0
-                        ? [
-                            {
-                              label: 'TROPHIES',
-                              value: `${achievementsUnlocked}/${achievementsTotal}`,
-                              sub: `${Math.round((achievementsUnlocked / achievementsTotal) * 100)}%`,
-                              accent: '#ffb347',
-                              Icon: Trophy,
-                            },
-                          ]
-                        : []),
-                      ...(lastPlayed
-                        ? [
-                            {
-                              label: 'LAST PLAYED',
-                              value: humanizeAgoDays(lastPlayed),
-                              accent: '#b9a6ff',
-                              Icon: History,
-                            },
-                          ]
-                        : []),
-                      ...(game.totalSpend > 0
-                        ? [
-                            {
-                              label: 'SPENT',
-                              value: formatMoney(game.totalSpend),
-                              sub:
-                                game.costPerHour !== null
-                                  ? `${formatMoney(game.costPerHour)}/h`
-                                  : undefined,
-                              accent: '#ffb347',
-                              Icon: Coins,
-                            },
-                          ]
-                        : []),
-                      {
-                        label: 'IN LIBRARY',
-                        value: `since ${game.addedAt.getFullYear()}`,
-                        accent: '#8a9496',
-                        Icon: CalendarPlus,
-                      },
-                    ] as {
-                      label: string;
-                      value: string;
-                      sub?: string;
-                      accent: string;
-                      Icon: typeof Clock3;
-                    }[]
-                  ).map((stat) => (
+                  {figures.map((figure, index) => (
                     <div
-                      key={stat.label}
-                      className="relative min-w-[7.2em] overflow-hidden rounded-[0.55em] bg-inset/70 px-[0.75em] py-[0.5em]"
-                      style={{
-                        boxShadow:
-                          'inset 0 0 0 1px rgba(233,228,216,.07), inset 0 1px 0 rgba(233,228,216,.07)',
-                      }}
-                    >
-                      {/* El brillo del acento en la esquina, tan tenue que
-                          solo colorea el aire de la ficha. */}
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute -top-[1.2em] -right-[1.2em] h-[3em] w-[3em] rounded-full"
-                        style={{ background: stat.accent, opacity: 0.12, filter: 'blur(0.7em)' }}
-                      />
-                      <div
-                        className="relative flex items-center gap-[0.4em] text-[0.5em] font-extrabold tracking-[.16em]"
-                        style={{ color: `${stat.accent}d9` }}
-                      >
-                        <stat.Icon className="h-[1.25em] w-[1.25em]" />
-                        {stat.label}
-                      </div>
-                      <div className="relative mt-[0.1em] text-[0.95em] font-extrabold tabular-nums">
-                        {stat.value}
-                      </div>
-                      {stat.sub && (
-                        <div className="relative text-[0.55em] font-semibold text-dust tabular-nums">
-                          {stat.sub}
-                        </div>
+                      key={figure.key}
+                      className={cn(
+                        'flex flex-col gap-[0.3em] pr-[1.3em]',
+                        index > 0 && 'border-l border-line-strong pl-[1.3em]',
                       )}
+                    >
+                      <span className="text-[2.6em] text-bone">{figure.node}</span>
+                      <span className="text-[0.92em] text-dust">{figure.label}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* HowLongToBeat con la barra de TRES TRAMOS del escritorio:
-                    Story, +Extras y 100% creciendo en cascada, tus horas
-                    aterrizando como marcador encima, y los hitos alcanzados
-                    encendidos con su check. */}
-                {hasHltb && (
-                  <div
-                    className={`relative max-w-[94%] overflow-hidden rounded-[0.6em] bg-inset/70 px-[0.9em] pt-[0.65em] pb-[0.7em] ${tvRevealClass}`}
-                    style={{
-                      ...tvRevealStyle(2),
-                      boxShadow:
-                        'inset 0 0 0 1px rgba(233,228,216,.07), inset 0 1px 0 rgba(233,228,216,.06)',
-                    }}
-                  >
-                    <div className="flex items-center gap-[0.4em] text-[0.55em] font-extrabold tracking-[.18em] text-dust">
-                      <Hourglass className="h-[1.2em] w-[1.2em] text-tube" />
-                      HOW LONG TO BEAT
-                      {game.totalHours > 0 && (
-                        <span className="ml-auto font-bold tracking-[.04em] text-dust tabular-nums">
-                          you · {formatHours(game.totalHours)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative mt-[1.25em]">
-                      {game.totalHours > 0 && (
-                        <div
-                          className="absolute -top-[1.3em] z-[1]"
-                          style={{
-                            left: `${hltbMarkerPct}%`,
-                            animation:
-                              'afterplay-drop-in 420ms cubic-bezier(.22,1,.36,1) 620ms both',
-                          }}
-                        >
-                          <span className="rounded-[0.3em] bg-raised px-[0.4em] py-[0.12em] text-[0.5em] font-extrabold tabular-nums shadow-[0_0.2em_0.6em_rgba(3,6,7,.55),inset_0_0_0_1px_rgba(233,228,216,.16)]">
-                            {formatHours(game.totalHours)}
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        className="flex h-[0.5em] w-full gap-[2px] overflow-hidden rounded-[0.25em] bg-bone/[0.06]"
-                        style={{ boxShadow: 'inset 0 1px 2px rgba(3,6,7,.5)' }}
-                      >
-                        {hltbSegments.map((segment, index) => (
-                          <div
-                            key={segment.key}
-                            style={{
-                              width: `${segment.pct}%`,
-                              background: segment.color,
-                              transformOrigin: 'left',
-                              animation: `afterplay-grow-x 520ms cubic-bezier(.22,1,.36,1) ${index * 110}ms both`,
-                            }}
-                          />
-                        ))}
+                <div
+                  className={cn('grid grid-cols-2 items-start gap-[2em]', tvRevealClass)}
+                  style={tvRevealStyle(5)}
+                >
+                  {hasHltb ? (
+                    <div className="min-w-0">
+                      <div className="flex items-baseline justify-between">
+                        <span className={tvLabelClass}>How long to beat</span>
+                        <span className="text-[0.88em] text-dust">HowLongToBeat</span>
                       </div>
-                      {game.totalHours > 0 && (
-                        <div
-                          className="absolute top-0 h-[0.5em] w-[3px] -translate-x-1/2 rounded-full bg-bone"
-                          style={{
-                            left: `${hltbMarkerPct}%`,
-                            boxShadow:
-                              '0 0 0.4em rgba(233,228,216,.8), 0 0 0 2px rgba(11,13,12,.7)',
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div className="mt-[0.55em] flex gap-[0.45em]">
-                      {hltbTiers.map((tier) => {
-                        const done = game.totalHours >= tier.hours;
-                        return (
-                          <div
-                            key={tier.label}
-                            className="flex flex-1 items-center justify-between gap-[0.4em] rounded-[0.4em] px-[0.55em] py-[0.32em] text-[0.55em] font-bold"
-                            style={
-                              done
-                                ? {
-                                    color: tier.color,
-                                    background: `${tier.color}17`,
-                                    boxShadow: `inset 0 0 0 1px ${tier.color}5c`,
-                                  }
-                                : {
-                                    color: 'var(--muted-foreground)',
-                                    background: 'rgba(233,228,216,.03)',
-                                    boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.06)',
-                                  }
-                            }
-                          >
-                            <span className="flex items-center gap-[0.4em]">
-                              {done ? (
-                                <Check className="h-[1em] w-[1em]" strokeWidth={3.5} />
-                              ) : (
+                      <div className="mt-[0.6em] flex h-[1.5em] gap-[2px]">
+                        {Array.from({ length: hltbSegmentCount }, (_, index) => {
+                          const fill = Math.max(0, Math.min(1, hltbFilled - index));
+                          return (
+                            <span
+                              key={index}
+                              className="relative flex-1 overflow-hidden rounded-xs bg-raised"
+                            >
+                              {fill > 0 && (
                                 <span
-                                  className="h-[0.5em] w-[0.5em] rounded-[2px]"
-                                  style={{ background: tier.color }}
+                                  className="absolute inset-y-0 left-0 bg-phosphor"
+                                  style={{ width: `${fill * 100}%` }}
                                 />
                               )}
-                              {tier.label}
                             </span>
-                            <span className="font-extrabold tabular-nums">
-                              {Math.round(tier.hours)}h
-                            </span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
+                      <div className="relative mt-[0.2em] h-[2.6em]">
+                        {hltbTiers.map((tier) => {
+                          const pct = (tier.hours / hltbScale) * 100;
+                          const done = game.totalHours >= tier.hours;
+                          return (
+                            <div
+                              key={tier.label}
+                              className={cn(
+                                'absolute top-0 flex flex-col',
+                                pct > 90 ? 'items-end' : 'items-center',
+                              )}
+                              style={
+                                pct > 90
+                                  ? { right: `${100 - pct}%` }
+                                  : { left: `${pct}%`, transform: 'translateX(-50%)' }
+                              }
+                            >
+                              <span aria-hidden className="h-[0.35em] w-px bg-dust" />
+                              <span
+                                className={cn(
+                                  'flex items-center gap-[0.25em] text-[0.95em] leading-tight font-semibold tabular-nums',
+                                  done ? 'text-phosphor' : 'text-bone',
+                                )}
+                              >
+                                {done && <Check className="size-[0.85em]" strokeWidth={3} />}
+                                {Math.round(tier.hours)}h
+                              </span>
+                              <span className="text-[0.88em] leading-tight text-dust">
+                                {tier.label}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div />
+                  )}
 
-                {noteText && (
-                  <div
-                    className={`relative mt-[0.4em] max-w-[85%] overflow-hidden rounded-[0.55em] border border-line bg-inset/70 px-[1em] py-[0.75em] ${tvRevealClass}`}
-                    style={{
-                      ...tvRevealStyle(3),
-                      boxShadow:
-                        'inset 0 1px 0 rgba(233,228,216,.10), 0 0.9em 2.2em rgba(3,6,7,.35)',
-                    }}
-                  >
-                    {/* El aliento violeta del panel: la nota es memoria, y la
-                  memoria en esta casa es violeta. */}
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0"
-                      style={{
-                        background:
-                          'radial-gradient(120% 170% at 0% 0%, rgba(185,166,255,.14), transparent 55%)',
-                      }}
-                    />
-                    {/* El lomo del cuaderno, respirando despacio; su luz sangra
-                  hacia dentro del cristal (el overflow recorta lo demás). */}
-                    <span
-                      aria-hidden
-                      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
-                      style={{
-                        background: 'linear-gradient(180deg, #b9a6ff, #b9a6ff26)',
-                        boxShadow: '0 0 0.8em rgba(185,166,255,.55)',
-                      }}
-                    />
-                    {/* Unas comillas de agua como marca del panel, medio recortadas
-                  a propósito — filigrana, no rótulo. */}
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute -top-[0.12em] right-[0.3em] text-[2.3em] leading-none font-extrabold text-st-resting/15"
-                    >
-                      ”
-                    </span>
-                    <div className="relative text-[0.6em] font-extrabold tracking-[.18em] text-st-resting/85">
-                      {noteLabel}
+                  {noteText && (
+                    <div className="min-w-0">
+                      <span className={tvLabelClass}>{noteLabel}</span>
+                      <p className="mt-[0.6em] border-l-[0.12em] border-phosphor pl-[0.9em] text-[1.08em] leading-relaxed text-bone">
+                        {noteText}
+                      </p>
                     </div>
-                    <p className="relative mt-[0.25em] line-clamp-3 text-[0.95em] leading-snug font-medium text-bone italic">
-                      “{noteText}”
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* La curiosidad ancla el PIE del Overview (mt-auto): con
-                    pocos bloques, el hueco central queda como aire
-                    intencionado en vez de contenido colgando a media
-                    pantalla. */}
+                {/* La curiosidad ancla el pie del Overview; rota cada docena
+                    de segundos con un fundido. */}
                 {curiosity && (
                   <p
                     key={curiosity}
-                    className="animate-in fade-in-0 slide-in-from-bottom-2 mt-auto flex max-w-[80%] items-start gap-[0.5em] pt-[0.8em] pb-[0.3em] text-[0.7em] leading-relaxed text-dust transition-[opacity,translate] duration-500 ease-out"
-                    style={
-                      curiosityLeaving
-                        ? { opacity: 0, translate: '0 0.35em', transitionDuration: '340ms' }
-                        : undefined
-                    }
+                    className="mt-auto flex max-w-[48em] animate-fade-in items-start gap-[0.6em] self-start rounded-md border border-line bg-panel px-[1em] py-[0.7em] text-[0.95em] leading-relaxed text-dust transition-opacity duration-300"
+                    style={curiosityLeaving ? { opacity: 0 } : undefined}
                   >
-                    {/* La bombilla parpadea despacio: una idea que se le ocurre a
-                  la pantalla, no un bullet point. */}
-                    <Lightbulb className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] mt-[0.15em] h-[1.1em] w-[1.1em] flex-none text-tube/80" />
+                    <Info className="mt-[0.2em] size-[1em] flex-none text-tube" />
                     {curiosity}
                   </p>
                 )}
               </div>
             ) : activeTab === 'achievements' ? (
-              // El cristal se lo pone el shell: la pestaña trae contenido.
-              <div
-                className="relative h-full overflow-hidden rounded-[0.7em] border border-line bg-inset/75 px-[1em] py-[0.8em]"
-                style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.10)' }}
-              >
-                <TvDetailAchievements gameId={game.id} />
-              </div>
+              <TvDetailAchievements gameId={game.id} />
             ) : activeTab === 'sessions' ? (
-              <div
-                className="relative h-full overflow-hidden rounded-[0.7em] border border-line bg-inset/75 px-[1em] py-[0.8em]"
-                style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.10)' }}
-              >
-                <TvDetailSessions game={game} />
-              </div>
+              <TvDetailSessions game={game} />
             ) : activeTab === 'history' ? (
               <TvDetailHistory game={game} />
             ) : activeTab === 'notes' ? (
@@ -1180,121 +884,63 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           </div>
         </div>
 
-        {/* La pieza física: carátula nítida flotando con sus vueltas debajo
-            — constante sea cual sea la sección (el ancla visual). */}
-        <div
-          className={`relative flex w-[10.5em] flex-none flex-col gap-[0.9em] self-center ${tvRevealClass}`}
-          style={tvRevealStyle(2)}
-        >
-          {/* La pieza entera FLOTA (es el objeto físico de la pantalla) y
-                el halo del color de estado respira detrás; la carátula queda
-                nítida encima con su propia sombra profunda. Dos contenedores
-                porque reveal y float no pueden compartir animation. */}
-          <div className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative">
-            <span
-              aria-hidden
-              className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.9em]"
-              style={{
-                background: `radial-gradient(closest-side, ${status.color}50, transparent 72%)`,
-                filter: 'blur(0.6em)',
-              }}
-            />
-            <div
-              className="relative"
-              style={{ filter: 'drop-shadow(0 1.6em 3em rgba(3,6,7,.65))' }}
-            >
-              <GameCover
-                url={game.coverUrl}
-                className="aspect-[264/374] w-full overflow-hidden rounded-[0.6em]"
-                iconSize={34}
-              />
-              {/* El vidrio de la carátula: hairline y luz superior en vez
-                    de un border plano. */}
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-[0.6em]"
-                style={{
-                  boxShadow:
-                    'inset 0 0 0 1px rgba(233,228,216,.16), inset 0 1px 0 rgba(233,228,216,.26)',
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Las vueltas al juego bajo la carátula — el PlaythroughPanel
-                de escritorio en versión lectura: ordinal, estado, horas y
-                el arco de fechas de cada una. */}
-          {playthroughs.length > 0 && (
-            <div
-              className="relative overflow-hidden rounded-[0.6em] border border-line bg-inset/70"
-              style={{ boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)' }}
-            >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background:
-                    'radial-gradient(120% 130% at 0% 0%, rgba(185,166,255,.1), transparent 55%)',
-                }}
-              />
-              <div className="relative flex items-center gap-[0.4em] border-b border-line px-[0.7em] py-[0.4em]">
-                <Repeat
-                  className="h-[0.85em] w-[0.85em] flex-none text-st-resting"
-                  style={{ filter: 'drop-shadow(0 0 0.4em rgba(185,166,255,.5))' }}
-                />
-                <span className="text-[0.52em] font-extrabold tracking-[.18em] text-muted-foreground">
-                  PLAYTHROUGHS
-                </span>
-                <span className="ml-auto text-[0.55em] font-bold text-st-resting/80 tabular-nums">
-                  {playthroughs.length}
-                </span>
-              </div>
-              <div className="relative flex flex-col gap-[0.15em] px-[0.7em] py-[0.4em]">
+        {/* La columna física del Overview: carátula y sus vueltas. En las
+            demás secciones se retira para que la sección gane el ancho. */}
+        {!compact && (
+          <div
+            className={cn(
+              'flex w-[11.5em] flex-none flex-col gap-[1.2em] pt-[0.4em]',
+              tvRevealClass,
+            )}
+            style={tvRevealStyle(2)}
+          >
+            <TvCoverArt game={game} className="w-full border border-line-strong shadow-lift" />
+            {playthroughs.length > 0 && (
+              <div className="flex flex-col gap-[0.5em]">
+                <div className="flex items-baseline gap-[0.5em]">
+                  <span className={tvLabelClass}>Playthroughs</span>
+                  <span className="text-[0.92em] text-dust tabular-nums">
+                    {playthroughs.length}
+                  </span>
+                </div>
                 {playthroughs.slice(0, 3).map(({ iteration, ordinal }) => {
-                  const meta = getGameStatusMeta(iteration.currentState);
+                  const key: StatusKey = iteration.currentState
+                    ? STATE_TO_STATUS_KEY[iteration.currentState]
+                    : 'unplayed';
                   const range = iteration.startedAt
                     ? `${monthYear(iteration.startedAt)}${
                         iteration.endedAt
-                          ? ` → ${monthYear(iteration.endedAt)}`
+                          ? ` to ${monthYear(iteration.endedAt)}`
                           : iteration.currentState === 'started'
-                            ? ' → now'
+                            ? ' to now'
                             : ''
                       }`
                     : null;
                   return (
-                    <div key={iteration.id} className="py-[0.15em]">
-                      <div className="flex items-center gap-[0.4em] text-[0.58em] font-bold">
-                        <span className="text-bone/35 tabular-nums">#{ordinal}</span>
-                        <meta.Icon
-                          className="h-[1.05em] w-[1.05em] flex-none"
-                          style={{ color: meta.color }}
-                        />
-                        <span className="truncate" style={{ color: meta.color }}>
-                          {meta.label}
+                    <div key={iteration.id} className="flex flex-col">
+                      <div className="flex items-center gap-[0.45em] text-[1em] font-semibold text-bone">
+                        <span className="font-display text-[1.3em] leading-none font-bold text-dust">
+                          #{ordinal}
                         </span>
+                        <TvLed status={key} />
+                        {STATUS_META[key].label}
                         {iteration.hours > 0 && (
-                          <span className="ml-auto flex-none text-dust tabular-nums">
+                          <span className="ml-auto text-[0.92em] font-medium text-dust tabular-nums">
                             {formatHours(iteration.hours)}
                           </span>
                         )}
                       </div>
-                      {range && (
-                        <div className="pl-[1.6em] text-[0.5em] font-semibold text-dust tabular-nums">
-                          {range}
-                        </div>
-                      )}
+                      {range && <div className="text-[0.88em] text-dust tabular-nums">{range}</div>}
                     </div>
                   );
                 })}
                 {playthroughs.length > 3 && (
-                  <div className="text-[0.5em] font-semibold text-bone/30">
-                    +{playthroughs.length - 3} earlier
-                  </div>
+                  <div className="text-[0.88em] text-dust">+{playthroughs.length - 3} earlier</div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {statusOpen && <StatusPicker game={game} onClose={() => setStatusOpen(false)} />}

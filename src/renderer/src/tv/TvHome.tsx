@@ -1,10 +1,10 @@
-import { BookOpen, CalendarRange, ChevronRight, Clock3, Gamepad2, Play } from 'lucide-react';
+import { BookOpen, ChevronRight, Gamepad2, Play } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { isLiveElsewhere } from '../../../shared/liveSession';
 import type { GameListItem, GeneratedMemorySummary } from '../../../shared/types';
-import { GameCover } from '../components/GameCover';
 import { useDeviceContext } from '../hooks/devices';
 import { useGames } from '../hooks/games';
 import { useMemories } from '../hooks/memories';
@@ -13,12 +13,14 @@ import { useStateEvents } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useLiveTimer } from '../hooks/useLiveTimer';
 import { formatElapsed, formatHours } from '../lib/format';
-import { getGameStatusMeta } from '../lib/gameStatus';
+import { statusKeyOf } from '../lib/gameFilters';
+import { STATUS_META } from '../lib/gameStatus';
 import { hasMeasuredDuration } from '../../../shared/domain/sessionMeasure';
 import { useTvBackdrop } from './backdropContext';
 import { useTvFocusable } from './focusContext';
 import { forgetHome, recallHome, rememberHome } from './screenMemory';
-import { tvRevealClass, tvRevealStyle } from './styles';
+import { tvFocusHalo, tvFocusMotion, tvFocusScale, tvRevealClass, tvRevealStyle } from './styles';
+import { TvButton, TvCoverArt, TvFigure, TvLed } from './tvUi';
 import { TvGameTile } from './TvGameTile';
 import type { GameId } from '../../../shared/entityIds';
 
@@ -33,117 +35,21 @@ import type { GameId } from '../../../shared/entityIds';
 // sobre su propio charco de luz, y el contenido entra en dos cascadas
 // encadenadas (la sección primero, sus líneas después).
 
-const HeroButton = ({
-  label,
-  icon,
-  autoFocus = false,
-  primary = false,
-  onSelect,
-  onFocusSpot,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  autoFocus?: boolean;
-  // El botón protagonista (Play) lleva tinte verde en reposo: el ojo debe
-  // aterrizar ahí antes incluso de que el foco lo encienda.
-  primary?: boolean;
-  onSelect: () => void;
-  // Volver el foco aquí arriba devuelve el fondo al hero de la card.
-  onFocusSpot?: () => void;
-}): React.JSX.Element => {
-  const { ref, focused } = useTvFocusable({ onSelect, autoFocus });
-  const onFocusSpotRef = useRef(onFocusSpot);
-  useEffect(() => {
-    onFocusSpotRef.current = onFocusSpot;
-  });
-  useEffect(() => {
-    if (focused) onFocusSpotRef.current?.();
-  }, [focused]);
-  return (
-    // scroll-mt desmedido a propósito: estos botones viven al PIE del hero,
-    // y el scrollIntoView 'nearest' del motor de foco paraba en cuanto el
-    // botón asomaba — el arte de arriba quedaba decapitado al volver de las
-    // estanterías. Con el margen gigante, "enséñame el botón" significa
-    // "enséñame el hero entero": el navegador clampa el scroll a 0.
-    <button
-      ref={ref}
-      type="button"
-      onClick={onSelect}
-      className="relative flex scroll-mt-[60em] items-center gap-[0.55em] rounded-full px-[1.6em] py-[0.65em] text-[0.95em] font-extrabold transition-[background-color,box-shadow,translate,color] duration-200 ease-[cubic-bezier(.22,1,.36,1)]"
-      style={
-        focused
-          ? {
-              background: '#ffb347',
-              color: '#1a1100',
-              // El hairline interior superior es lo que hace el botón "mojado"
-              // — cristal encendido, no plástico plano.
-              boxShadow:
-                '0 0.6em 2em rgba(255,179,71,.45), 0 0 0 3px rgba(255,179,71,.35), inset 0 1px 0 rgba(233,228,216,.4)',
-              translate: '0 -0.18em',
-            }
-          : primary
-            ? {
-                // Base oscura bajo el tinte (sin blur — la fila entra con la
-                // cascada de reveal y el blur no muestrea hasta el final).
-                background:
-                  'linear-gradient(180deg, rgba(255,179,71,.16), rgba(255,179,71,.1)), rgba(8,14,11,.6)',
-                color: '#ffc266',
-                boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.4)',
-              }
-            : {
-                background: 'rgba(12,16,14,.6)',
-                color: 'var(--foreground)',
-                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.14)',
-              }
-      }
-    >
-      {icon}
-      {label}
-      {focused && (
-        <>
-          {/* Barrido de luz al recibir el foco, en su propio clip redondo:
-              el botón no lleva overflow-hidden para que el halo exterior
-              (que es sombra, no caja) respire libre. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
-          >
-            <span
-              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
-              style={{
-                background:
-                  'linear-gradient(105deg, transparent, rgba(233,228,216,.5), transparent)',
-              }}
-            />
-          </span>
-          <span
-            aria-hidden
-            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute -inset-[2px] rounded-full"
-            style={{ boxShadow: '0 0 1.6em rgba(255,179,71,.5)' }}
-          />
-        </>
-      )}
-    </button>
-  );
-};
-
 const Shelf = ({
   title,
-  accent,
+  subtitle,
   games,
   onOpen,
   revealIndex,
-  live = false,
   autoFocusId = null,
   trailing,
   onFocusGame,
 }: {
   title: string;
-  accent: string;
+  subtitle?: string;
   games: GameListItem[];
   onOpen: (game: GameListItem) => void;
   revealIndex: number;
-  live?: boolean;
   // Qué carátula tiene el foco — el Home reparte con ella el fondo del modo.
   onFocusGame?: (game: GameListItem) => void;
   // La carátula que debe heredar el foco al remontar (vuelta de una ficha,
@@ -153,48 +59,17 @@ const Shelf = ({
 }): React.JSX.Element | null => {
   if (games.length === 0 && !trailing) return null;
   return (
-    <section className={`min-w-0 ${tvRevealClass}`} style={tvRevealStyle(revealIndex)}>
-      <div className="mb-[0.55em] flex items-center gap-[0.7em]">
-        {/* El piloto de la estantería: en la fila viva late (anillo) y además
-            respira un halo — dos ritmos distintos, como un LED de verdad. */}
-        <span className="relative h-[0.45em] w-[0.45em] flex-none">
-          {live && (
-            <span
-              aria-hidden
-              className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.35em] rounded-full"
-              style={{ background: `radial-gradient(closest-side, ${accent}59, transparent)` }}
-            />
-          )}
-          <span
-            className={`absolute inset-0 rounded-full ${live ? 'afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite]' : ''}`}
-            style={{ background: accent, boxShadow: `0 0 0.6em ${accent}99` }}
-          />
-        </span>
-        <h2 className="text-[0.82em] font-extrabold tracking-[.16em] text-foreground/85">
-          {title}
-        </h2>
-        {/* El recuento como chapa del color de la estantería: la cabecera
-            dice cuánto hay antes de que empieces a desplazarte. */}
+    <section className={cn('min-w-0', tvRevealClass)} style={tvRevealStyle(revealIndex)}>
+      {/* Cabecera de estantería como en tv.png: título en Barlow semibold y
+          un apunte en Dust; el recuento, en cifra. */}
+      <div className="flex items-baseline gap-[0.6em]">
+        <h2 className="text-[1.15em] font-semibold text-bone">{title}</h2>
+        {subtitle && <span className="text-[0.92em] text-dust">{subtitle}</span>}
         {games.length > 0 && (
-          <span
-            className="rounded-full px-[0.55em] py-[0.1em] text-[0.6em] font-extrabold tabular-nums"
-            style={{
-              color: accent,
-              background: `${accent}14`,
-              boxShadow: `inset 0 0 0 1px ${accent}33`,
-            }}
-          >
+          <span className="font-display text-[1.05em] font-bold text-dust tabular-nums">
             {games.length}
           </span>
         )}
-        {/* La línea de luz arranca encendida y se apaga hacia la derecha —
-            más viva que un hairline plano y sigue sin competir con el arte. */}
-        <span
-          className="h-px flex-1"
-          style={{
-            background: `linear-gradient(90deg, ${accent}66, ${accent}1a 45%, transparent)`,
-          }}
-        />
       </div>
       <ShelfRow>
         {games.map((game, index) => (
@@ -224,19 +99,21 @@ const Shelf = ({
 // sigue disponible y sin código nuestro — Chromium ya mapea Shift+rueda (y
 // el desplazamiento horizontal del trackpad) al contenedor horizontal que
 // haya bajo el cursor.
+//
+// El colchón de 1.2em alrededor deja sitio al foco (escala 1.06 + halo) sin
+// que el clip del scroll lo corte.
 const ShelfRow = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
   <div
-    className="-mx-[0.6em] flex gap-[0.85em] overflow-x-auto px-[0.6em] pt-[0.6em] pb-[0.95em]"
+    className="-mx-[1.2em] flex items-start gap-[0.9em] overflow-x-auto px-[1.2em] pt-[1em] pb-[0.6em]"
     style={{ scrollbarWidth: 'none' }}
   >
     {children}
   </div>
 );
 
-// "See all →" al final de la estantería de biblioteca: la puerta a la
-// parrilla completa sin robarle el sitio a una carátula. Vestida como una
-// invitación — moneda de luz con la flecha, recuento total debajo y barrido
-// al enfocar — para que cruzar la puerta apetezca de verdad.
+// "See all" al final de la estantería de biblioteca: la puerta a la parrilla
+// completa sin robarle el sitio a una carátula. Placa Raised del tamaño de una
+// portada, con el mismo foco.
 const SeeAllTile = ({
   onSelect,
   count,
@@ -250,63 +127,17 @@ const SeeAllTile = ({
       ref={ref}
       type="button"
       onClick={onSelect}
-      className="relative flex aspect-[264/374] w-[7.2em] flex-none flex-col items-center justify-center gap-[0.5em] overflow-hidden rounded-[0.55em] text-[0.75em] font-bold transition-[box-shadow,background-color,translate,color] duration-200 ease-[cubic-bezier(.22,1,.36,1)]"
-      style={
-        focused
-          ? {
-              background: 'rgba(255,179,71,.1)',
-              color: '#ffb347',
-              // Nada fuera del marco — como las carátulas vecinas: ni halo
-              // de color ni sombra de elevación (mancha gris en el backdrop).
-              boxShadow: 'inset 0 0 0 3px rgba(255,179,71,.8)',
-              // La misma elevación que las carátulas vecinas: la fila entera
-              // habla el mismo idioma al recibir el foco.
-              translate: '0 -0.22em',
-            }
-          : {
-              background: 'linear-gradient(160deg, rgba(233,228,216,.05), rgba(233,228,216,.02))',
-              color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.1)',
-            }
-      }
+      className={cn(
+        'flex aspect-3/4 w-[7.2em] flex-none flex-col items-center justify-center gap-[0.4em] rounded-sm border border-line-strong bg-raised text-bone',
+        tvFocusMotion,
+        focused && ['border-phosphor', tvFocusHalo, tvFocusScale],
+      )}
     >
-      {/* La flecha en su moneda: al enfocar se tiñe de verde y empuja un
-          pelín hacia la derecha — el gesto de "por aquí". */}
-      <span
-        className="flex h-[2.3em] w-[2.3em] items-center justify-center rounded-full transition-[background-color,box-shadow,translate] duration-200"
-        style={
-          focused
-            ? {
-                background: 'rgba(255,179,71,.16)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.5)',
-                translate: '0.18em 0',
-              }
-            : {
-                background: 'rgba(233,228,216,.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.12)',
-              }
-        }
-      >
-        <ChevronRight className="h-[1.25em] w-[1.25em]" />
-      </span>
-      See all
-      <span
-        className="text-[0.72em] font-semibold tabular-nums transition-colors duration-200"
-        style={{ color: focused ? 'rgba(255,179,71,.8)' : 'rgba(138,148,150,.7)' }}
-      >
+      <ChevronRight className={cn('size-[1.6em]', focused ? 'text-phosphor' : 'text-dust')} />
+      <span className="text-[1em] font-semibold">See all</span>
+      <span className="text-[0.88em] text-dust tabular-nums">
         {count} {count === 1 ? 'game' : 'games'}
       </span>
-      {/* El barrido vive directamente en el botón: su overflow-hidden ya
-          hace de clip. */}
-      {focused && (
-        <span
-          aria-hidden
-          className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%]"
-          style={{
-            background: 'linear-gradient(105deg, transparent, rgba(233,228,216,.14), transparent)',
-          }}
-        />
-      )}
     </button>
   );
 };
@@ -343,57 +174,36 @@ const RecapDoor = ({
       onClick={onSelect}
       // scroll-my: el conductor de scroll respeta scroll-margin (ver
       // glideIntoView), así que esta tarjeta nunca queda pegada al borde del
-      // clip — el levantamiento del foco cabe dentro del margen en vez de
-      // salirse por arriba.
-      className={`relative w-full flex-none scroll-my-[0.9em] overflow-hidden rounded-[0.7em] px-[1.2em] py-[0.85em] text-left transition-[box-shadow,background-color,translate] duration-200 ease-[cubic-bezier(.22,1,.36,1)] ${tvRevealClass}`}
-      style={{
-        ...tvRevealStyle(7),
-        background: focused
-          ? 'linear-gradient(125deg, rgba(185,166,255,.22), rgba(185,166,255,.08) 55%, rgba(11,13,12,.85))'
-          : 'linear-gradient(125deg, rgba(185,166,255,.12), rgba(185,166,255,.04) 55%, rgba(11,13,12,.8))',
-        boxShadow: focused
-          ? 'inset 0 0 0 2px rgba(185,166,255,.7), 0 0.5em 1.6em rgba(3,6,7,.4)'
-          : 'inset 0 0 0 1px rgba(233,228,216,.08)',
-        translate: focused ? '0 -0.15em' : undefined,
-      }}
-    >
-      {focused && (
-        <>
-          <span
-            aria-hidden
-            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.7em]"
-            style={{ boxShadow: 'inset 0 0 0 2px rgba(185,166,255,.85)' }}
-          />
-          <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-            <span
-              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[40%]"
-              style={{
-                background:
-                  'linear-gradient(105deg, transparent, rgba(233,228,216,.1), transparent)',
-              }}
-            />
-          </span>
-        </>
+      // clip — el halo del foco cabe dentro del margen.
+      className={cn(
+        'w-full flex-none scroll-my-[1.2em] rounded-md border border-l-[0.12em] border-line border-l-phosphor bg-panel px-[1.2em] py-[0.9em] text-left',
+        tvFocusMotion,
+        tvRevealClass,
+        focused && ['bg-raised', tvFocusHalo],
       )}
-      <div className="relative flex items-center gap-[0.45em] text-[0.55em] font-extrabold tracking-[.2em] text-st-resting/90">
-        <BookOpen className="h-[1.2em] w-[1.2em]" />
-        YOUR STORY · {label}
+      style={tvRevealStyle(6)}
+    >
+      <div className="flex items-center gap-[0.45em] text-[0.92em] font-semibold text-dust">
+        <BookOpen className="size-[1.1em] text-phosphor" />
+        Your story · {label}
       </div>
-      <div className="relative mt-[0.3em] flex items-baseline gap-[1em]">
+      <div className="mt-[0.3em] flex items-baseline gap-[1em]">
         <div className="min-w-0">
-          <div className="truncate text-[0.95em] font-extrabold tracking-[-.01em]">
+          <div className="font-display text-[1.6em] leading-tight font-bold text-bone">
             {recap.payload.headline}
           </div>
-          <p className="mt-[0.2em] line-clamp-2 max-w-[85%] text-[0.68em] leading-relaxed text-muted-foreground">
+          <p className="mt-[0.25em] max-w-[52em] text-[0.95em] leading-relaxed text-dust">
             {recap.payload.narrative}
           </p>
         </div>
         <span
-          className="ml-auto flex flex-none items-center gap-[0.3em] text-[0.62em] font-bold whitespace-nowrap transition-colors duration-200"
-          style={{ color: focused ? '#c3cbf2' : 'rgba(163,171,216,.5)' }}
+          className={cn(
+            'ml-auto flex flex-none items-center gap-[0.3em] text-[0.92em] font-semibold whitespace-nowrap',
+            focused ? 'text-phosphor' : 'text-dust',
+          )}
         >
           Open journey
-          <ChevronRight className="h-[1.1em] w-[1.1em]" />
+          <ChevronRight className="size-[1.1em]" />
         </span>
       </div>
     </button>
@@ -539,7 +349,7 @@ export const TvHome = (): React.JSX.Element => {
       hours: seconds / 3600,
       count: rows.length,
       games: new Set(rows.map((session) => session.gameId)).size,
-      label: now.toLocaleDateString('en-US', { month: 'long' }).toUpperCase(),
+      label: now.toLocaleDateString('en-US', { month: 'long' }),
     };
   }, [monthSessions]);
 
@@ -554,9 +364,10 @@ export const TvHome = (): React.JSX.Element => {
     if (!latestRecap) return null;
     const [year, month] = latestRecap.scopeKey.split('-').map(Number);
     if (!year || !month) return null;
-    return new Date(year, month - 1, 1)
-      .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-      .toUpperCase();
+    return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
   }, [latestRecap]);
 
   const hasRestoredTile =
@@ -635,36 +446,25 @@ export const TvHome = (): React.JSX.Element => {
   };
 
   if (games.length === 0) {
-    // El vacío también tiene alma: un mando flotando sobre su charco de luz,
-    // como esperando a que alguien lo recoja, y el texto entrando en cascada.
     return (
       <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className={`relative mb-[1.3em] ${tvRevealClass}`} style={tvRevealStyle(0)}>
-          {/* El charco se queda quieto mientras el mando flota: es el
-              contraste entre ambos lo que vende la levitación. */}
-          <span
-            aria-hidden
-            className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -bottom-[0.8em] left-1/2 h-[1.1em] w-[5em] -translate-x-1/2 rounded-[50%]"
-            style={{
-              background: 'radial-gradient(closest-side, rgba(255,179,71,.35), transparent 72%)',
-              filter: 'blur(5px)',
-            }}
-          />
-          <div
-            className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] flex h-[3.8em] w-[3.8em] items-center justify-center rounded-full"
-            style={{
-              background: 'rgba(233,228,216,.05)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.12), 0 0.9em 2em rgba(3,6,7,.45)',
-            }}
-          >
-            <Gamepad2 className="h-[1.7em] w-[1.7em] text-phosphor" />
-          </div>
+        <div
+          className={cn(
+            'mb-[1em] flex size-[3.6em] items-center justify-center rounded-md border border-line bg-panel bg-(image:--scan)',
+            tvRevealClass,
+          )}
+          style={tvRevealStyle(0)}
+        >
+          <Gamepad2 className="size-[1.7em] text-phosphor" />
         </div>
-        <div className={`text-[1.15em] font-extrabold ${tvRevealClass}`} style={tvRevealStyle(1)}>
+        <div
+          className={cn('font-display text-[2em] font-bold text-bone', tvRevealClass)}
+          style={tvRevealStyle(1)}
+        >
           Your shelves are waiting
         </div>
         <div
-          className={`mt-[0.45em] max-w-[26em] text-[0.8em] leading-relaxed text-muted-foreground ${tvRevealClass}`}
+          className={cn('mt-[0.4em] max-w-[26em] text-[1em] text-dust', tvRevealClass)}
           style={tvRevealStyle(2)}
         >
           Add games from the desktop app — press F11 to switch back.
@@ -673,248 +473,151 @@ export const TvHome = (): React.JSX.Element => {
     );
   }
 
-  const heroStatus = hero ? getGameStatusMeta(hero.currentState) : null;
+  const heroStatusKey = hero ? statusKeyOf(hero) : null;
 
   return (
     // El -mx/px es el mismo truco que ShelfRow: este contenedor es quien
     // RECORTA (overflow-y-auto también recorta en X), y con el clip justo en
-    // el borde del contenido los pilotos de las estanterías aparecían con el
-    // halo CORTADO por la izquierda. Empujar el clip 1em hacia fuera les da
-    // aire — el padding del layout (4vw) lo absorbe de sobra.
+    // el borde del contenido el halo del foco salía cortado. Empujar el clip
+    // hacia fuera le da aire — el padding del layout (4vw) lo absorbe.
     <div
       ref={scrollRef}
-      // El pt/-mt es el COLCHÓN del clip: sin él, la card del hero se apoya
-      // en el borde exacto donde recorta el contenedor, y como el foco
-      // levanta lo enfocado unos píxeles (translate) el borde de arriba
-      // asomaba fuera y se veía cortado. El margen negativo devuelve el
-      // colchón para que la composición no baje.
-      className="-mx-[1em] -mt-[0.55em] flex h-full flex-col gap-[1.15em] overflow-y-auto px-[1em] pt-[0.55em] pb-[1.5em]"
+      className="-mx-[1.2em] -mt-[0.6em] flex h-full flex-col gap-[1.3em] overflow-y-auto px-[1.2em] pt-[0.6em] pb-[1.5em]"
       style={{ scrollbarWidth: 'none' }}
     >
-      {hero && heroStatus && (
+      {hero && heroStatusKey && (
+        // El héroe de tv.png: banner con el arte a la derecha (protección
+        // lateral y escaneo), el estado o "Playing now", el título enorme en
+        // Big Shoulders, las cifras y las acciones.
         <section
-          className={`relative min-h-[18em] flex-none overflow-hidden rounded-[0.85em] border border-line ${tvRevealClass}`}
-          style={{
-            ...tvRevealStyle(0),
-            // Solo el hairline de luz de arriba. La sombra de elevación
-            // (0 1.6em 3.2em negro) se fue: es la MISMA lección que ya
-            // aprendieron las carátulas — una sombra negra muy difuminada
-            // sobre el backdrop no se lee como profundidad, se lee como una
-            // mancha gris rodeando la card. Fuera del marco, nada.
-            boxShadow: 'inset 0 1px 0 rgba(233,228,216,.08)',
-          }}
+          className={cn(
+            'relative min-h-[13em] flex-none overflow-hidden rounded-md border border-line bg-panel',
+            tvRevealClass,
+          )}
+          style={tvRevealStyle(0)}
         >
-          {/* Hero art con deriva Ken Burns; sin él, la carátula ampliada y
-              difuminada (el truco del modo ambiente: borrosa, la resolución
-              da igual). */}
           {heroImage ? (
             <img
               src={heroImage}
               alt=""
-              className="afterplay-tv-hero-art animate-[afterplay-tv-hero-drift_24s_ease-in-out_infinite_alternate] absolute inset-0 h-full w-full object-cover"
-              // El arte se oscurece EN ORIGEN, no con un velo encima: un
-              // negro translúcido sobre un arte claro (Pragmata, Forza) da
-              // gris lavado por definición — era el "fondo gris raro" de la
-              // card. Bajando el brillo de la propia imagen, el arte claro
-              // se vuelve arte oscuro y el color se conserva.
-              style={{ filter: 'saturate(1.28) contrast(1.08) brightness(.6)' }}
+              className="absolute inset-y-0 right-0 h-full w-[70%] object-cover opacity-80"
             />
           ) : heroCoverBackdrop ? (
             <img
               src={heroCoverBackdrop}
               alt=""
-              className="afterplay-tv-hero-art animate-[afterplay-tv-hero-drift_24s_ease-in-out_infinite_alternate] absolute inset-0 h-full w-full object-cover blur-lg brightness-[.55]"
+              className="absolute inset-y-0 right-0 h-full w-[70%] object-cover opacity-50 blur-lg"
             />
           ) : null}
-          {/* El scrim, ahora LIGERO: solo tiene que dar fondo al texto de la
-              izquierda y fundir el canto derecho. El trabajo pesado lo hace
-              el brightness del arte de arriba — apilar velo sobre velo era
-              lo que grisaba la card entera. */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(90deg, rgba(8,11,12,.94) 0%, rgba(8,11,12,.66) 42%, rgba(8,11,12,0) 70%, rgba(8,11,12,.55) 100%)',
-            }}
-          />
-          {/* Vignette vertical suave: asienta el titular arriba y los botones
-              abajo sin robarle color al arte. */}
+          <div aria-hidden className="absolute inset-0 bg-(image:--scan)" />
           <div
             aria-hidden
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(11,13,12,.32), transparent 32%, transparent 68%, rgba(11,13,12,.5))',
-            }}
+            className="absolute inset-0 bg-[linear-gradient(90deg,var(--color-panel)_30%,rgb(23_29_32/0.75)_55%,transparent_85%)]"
           />
-          {/* El estado de la tarjeta, dicho DOS veces y no cuatro: el baño
-              ancho de color respirando hacia el contenido, y el filo del
-              canto izquierdo. La franja que llevaba la carátula se jubiló —
-              la que tiene estado es la TARJETA entera, no la portada, y
-              marcar la portada aparte era repetir lo mismo en pequeño. El
-              filo va DENTRO del marco (la card recorta) para que las
-              esquinas redondeadas lo corten limpio. */}
-          <div
-            aria-hidden
-            className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[38%]"
-            style={{ background: `linear-gradient(90deg, ${heroStatus.color}2e, transparent)` }}
-          />
-          <div
-            aria-hidden
-            className="absolute inset-y-0 left-0 w-[0.28em]"
-            style={{
-              background: `linear-gradient(180deg, ${heroStatus.color}, ${heroStatus.color}b3)`,
-              boxShadow: `0 0 1.4em ${heroStatus.color}66`,
-            }}
-          />
+          {hero.isLive && (
+            <div aria-hidden className="absolute inset-0 bg-(image:--glow-ambient)" />
+          )}
 
-          <div className="relative flex h-full items-center gap-[1.8em] px-[2.2em] py-[1.6em]">
-            {/* La carátula como ficha física — nace con pop, flota sobre un
-                charco de luz del color del estado que se queda quieto: el
-                contraste entre ambos es lo que vende la levitación. */}
-            <div
-              className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[8.5em] flex-none"
-              style={{ animationDelay: '90ms' }}
-            >
-              <span
-                aria-hidden
-                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -bottom-[0.75em] left-1/2 h-[1.3em] w-[115%] -translate-x-1/2 rounded-[50%]"
-                style={{
-                  background: `radial-gradient(closest-side, ${heroStatus.color}4a, transparent 72%)`,
-                  filter: 'blur(6px)',
-                }}
-              />
-              <div
-                className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative"
-                style={{ filter: 'drop-shadow(0 1.2em 2.4em rgba(3,6,7,.6))' }}
-              >
-                <GameCover
-                  url={hero.coverUrl}
-                  className="aspect-[264/374] w-full overflow-hidden rounded-[0.5em] border border-line-strong"
-                  iconSize={30}
-                />
-              </div>
-            </div>
+          <div className="relative flex h-full items-center gap-[1.8em] px-[1.8em] py-[1.4em]">
+            <TvCoverArt game={hero} className="w-[7.4em] flex-none border border-line-strong" />
 
-            {/* La columna de texto entra en su propia cascada, línea a línea:
-                estado → título → cifras → nota → botones. Cine, no repintado. */}
-            <div className="flex min-w-0 flex-1 flex-col gap-[0.55em]">
+            <div className="flex min-w-0 flex-1 flex-col gap-[0.45em]">
               {hero.isLive ? (
                 <div
-                  className={`flex items-center gap-[0.55em] self-start rounded-full px-[0.9em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] text-phosphor ${tvRevealClass}`}
-                  style={{
-                    ...tvRevealStyle(1),
-                    background: 'rgba(255,179,71,.12)',
-                    boxShadow:
-                      'inset 0 0 0 1px rgba(255,179,71,.4), 0 0 1.6em rgba(255,179,71,.15)',
-                  }}
+                  className={cn(
+                    'flex items-center gap-[0.5em] text-[1em] text-bone',
+                    tvRevealClass,
+                  )}
+                  style={tvRevealStyle(1)}
                 >
-                  {/* El punto late con DOS ritmos: el anillo (2.2s) y un halo
-                      que respira (2.6s) — desincronizados a propósito, como
-                      un pulso de verdad. */}
-                  <span className="relative h-[0.6em] w-[0.6em] flex-none">
-                    <span
-                      aria-hidden
-                      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute -inset-[0.4em] rounded-full"
-                      style={{
-                        background:
-                          'radial-gradient(closest-side, rgba(255,179,71,.6), transparent)',
-                      }}
-                    />
-                    <span className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] absolute inset-0 rounded-full bg-phosphor shadow-[0_0_0.7em_#ffb347]" />
+                  <span className="relative flex size-[0.55em] flex-none">
+                    <span className="absolute inset-0 animate-led-ring rounded-full bg-live motion-reduce:hidden" />
+                    <span className="relative size-[0.55em] rounded-full bg-live" />
                   </span>
                   {heroElsewhere && hero.liveDeviceId
-                    ? `PLAYING ON ${nameOf(hero.liveDeviceId).toUpperCase()}`
-                    : 'PLAYING NOW'}
-                  <span aria-hidden className="h-[0.9em] w-px bg-phosphor/30" />
-                  <HeroLiveClock since={hero.liveSince ?? null} />
+                    ? `Playing now on ${nameOf(hero.liveDeviceId)}`
+                    : 'Playing now'}
                 </div>
               ) : (
                 <div
-                  className={`flex items-center gap-[0.5em] self-start rounded-full px-[0.85em] py-[0.4em] text-[0.68em] font-extrabold tracking-[.18em] ${tvRevealClass}`}
-                  style={{
-                    ...tvRevealStyle(1),
-                    color: heroStatus.color,
-                    background: `${heroStatus.color}14`,
-                    boxShadow: `inset 0 0 0 1px ${heroStatus.color}40`,
-                  }}
+                  className={cn(
+                    'flex items-center gap-[0.5em] text-[1em] text-bone',
+                    tvRevealClass,
+                  )}
+                  style={tvRevealStyle(1)}
                 >
-                  <heroStatus.Icon className="h-[1.15em] w-[1.15em]" />
-                  {heroStatus.label.toUpperCase()}
+                  <TvLed status={heroStatusKey} />
+                  {STATUS_META[heroStatusKey].label}
                 </div>
               )}
-              {/* El titular con gradiente de plata (clip al texto): coge luz
-                  arriba y se apaga un punto abajo — tipografía de cartel, no
-                  de formulario. La sombra va en filter, que sí funciona con
-                  texto transparente. */}
-              {/* El degradado va CLIPADO al texto, y ahí está la trampa: lo
-                  que se pinta es el fondo de la CAJA recortado por los
-                  glifos, así que todo lo que asome por debajo de la caja se
-                  queda sin pintar — la "g" de Pragmata salía cortada. Con
-                  leading apretado (1.05) el descendente caía justo fuera.
-                  El pb + un pelo más de interlineado meten la caja por
-                  debajo de la línea base y el rabito vuelve a existir. */}
               <h1
-                className={`max-w-[80%] pb-[0.14em] text-[2.35em] leading-[1.16] font-extrabold tracking-[-.02em] ${tvRevealClass}`}
-                style={{
-                  ...tvRevealStyle(1),
-                  backgroundImage: 'linear-gradient(180deg, #ffffff 52%, rgba(233,228,216,.66))',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  filter: 'drop-shadow(0 2px 18px rgba(3,6,7,.55))',
-                }}
+                className={cn(
+                  'max-w-[85%] font-display text-[3.6em] leading-[0.95] font-bold text-bone',
+                  tvRevealClass,
+                )}
+                style={tvRevealStyle(1)}
               >
                 {hero.title}
               </h1>
 
               <div
-                className={`flex items-center gap-[1.1em] text-[0.74em] font-semibold text-dust ${tvRevealClass}`}
+                className={cn('mt-[0.2em] flex items-baseline gap-[1.1em]', tvRevealClass)}
                 style={tvRevealStyle(2)}
               >
-                {hero.totalHours > 0 && (
-                  <span className="flex items-center gap-[0.4em] tabular-nums">
-                    <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#ffb347' }} />
-                    {formatHours(hero.totalHours)}
+                {hero.isLive && (
+                  <span className="font-display text-[2.6em] leading-none font-bold text-phosphor [text-shadow:0_0_18px_rgb(255_179_71/0.35)]">
+                    <HeroLiveClock since={hero.liveSince ?? null} />
                   </span>
                 )}
-                {hero.sessionCount > 0 && (
-                  <span className="flex items-center gap-[0.4em] tabular-nums">
-                    <CalendarRange className="h-[1.05em] w-[1.05em]" style={{ color: '#5fd3e0' }} />
-                    {hero.sessionCount} sessions
-                  </span>
-                )}
+                <span className="text-[1em] text-dust tabular-nums">
+                  {[
+                    hero.totalHours > 0 ? `${formatHours(hero.totalHours)} played` : null,
+                    hero.sessionCount > 0
+                      ? `${hero.sessionCount} ${hero.sessionCount === 1 ? 'session' : 'sessions'}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
               </div>
 
-              {/* La nota con el filo del color del estado: es SU recuerdo,
-                  teñido de dónde está ese juego en tu vida. */}
+              {/* La última nota de sesión: "dónde lo dejé", dicho por ti. */}
               {heroNote && (
                 <p
-                  className={`max-w-[60%] border-l-2 pl-[0.85em] text-[0.85em] leading-relaxed text-bone italic ${tvRevealClass}`}
-                  style={{ ...tvRevealStyle(2), borderColor: `${heroStatus.color}59` }}
+                  className={cn(
+                    'max-w-[42em] border-l-[0.12em] border-phosphor pl-[0.8em] text-[1em] leading-relaxed text-bone',
+                    tvRevealClass,
+                  )}
+                  style={tvRevealStyle(2)}
                 >
-                  “{heroNote}”
+                  {heroNote}
                 </p>
               )}
 
               <div
-                className={`mt-[0.45em] flex items-center gap-[0.8em] ${tvRevealClass}`}
+                className={cn('mt-[0.5em] flex items-center gap-[1em]', tvRevealClass)}
                 style={tvRevealStyle(3)}
               >
-                {/* Con el juego CORRIENDO no hay botón de lanzar (el pill de
-                    PLAYING NOW de arriba ya cuenta la sesión en vivo): Play
-                    sobre un juego abierto lo relanzaría. */}
+                {/* Con el juego CORRIENDO aquí no hay botón de lanzar: Play
+                    sobre un juego abierto lo relanzaría. El scroll-mt
+                    desmedido es a propósito: estos botones viven al PIE del
+                    hero, y "enséñame el botón" debe ser "enséñame el hero
+                    entero" (el navegador clampa el scroll a 0). */}
                 {hero.executablePath && !heroOwnLive && (
-                  <HeroButton
+                  <TvButton
                     label={launching ? 'Launching…' : 'Play'}
-                    icon={<Play className="h-[1em] w-[1em]" fill="currentColor" />}
+                    icon={<Play className="size-[0.9em]" fill="currentColor" />}
+                    variant="primary"
+                    className="scroll-mt-[60em]"
                     autoFocus={!hasRestoredTile}
-                    primary
                     onSelect={() => void launchHero()}
                     onFocusSpot={() => setSpotId(null)}
                   />
                 )}
-                <HeroButton
-                  label="Details"
+                <TvButton
+                  label={hero.isLive ? 'Open game' : 'Details'}
+                  variant={hero.executablePath && !heroOwnLive ? 'secondary' : 'primary'}
+                  className="scroll-mt-[60em]"
                   autoFocus={(!hero.executablePath || heroOwnLive) && !hasRestoredTile}
                   // Saliste DEL HERO: al volver, el foco es de estos botones
                   // (HomeSnapshot.focusGameId = null), no de la carátula del
@@ -924,41 +627,50 @@ export const TvHome = (): React.JSX.Element => {
                 />
               </div>
             </div>
+
+            {/* Los números del mes, a la derecha del héroe: solo aparecen
+                cuando el mes ya cuenta algo. */}
+            {monthStats.count > 0 && (
+              <div
+                className={cn(
+                  'ml-auto flex flex-none flex-col items-end gap-[0.5em] self-end',
+                  tvRevealClass,
+                )}
+                style={tvRevealStyle(3)}
+              >
+                <span className="text-[0.92em] text-dust">{monthStats.label} so far</span>
+                <div className="flex items-end gap-[1.1em]">
+                  {[
+                    { value: formatHours(monthStats.hours), label: 'played', hot: true },
+                    {
+                      value: String(monthStats.count),
+                      label: monthStats.count === 1 ? 'session' : 'sessions',
+                      hot: false,
+                    },
+                    {
+                      value: String(monthStats.games),
+                      label: monthStats.games === 1 ? 'game' : 'games',
+                      hot: false,
+                    },
+                  ].map((stat) => (
+                    <div key={stat.label} className="flex flex-col items-end">
+                      <TvFigure
+                        value={stat.value}
+                        className={cn('text-[1.9em]', stat.hot ? 'text-phosphor' : 'text-bone')}
+                      />
+                      <span className="text-[0.88em] text-dust">{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
 
-      {/* Los números del mes: una línea de sala, no un panel de contables —
-          solo aparece cuando el mes ya cuenta algo. */}
-      {monthStats.count > 0 && (
-        <div
-          className={`flex flex-none flex-wrap items-baseline gap-x-[0.9em] gap-y-[0.2em] px-[0.2em] text-[0.7em] font-semibold text-dust ${tvRevealClass}`}
-          style={tvRevealStyle(2)}
-        >
-          <span className="font-extrabold tracking-[.2em] text-bone/35">
-            {monthStats.label} SO FAR
-          </span>
-          <span>
-            <span className="font-extrabold text-phosphor">{formatHours(monthStats.hours)}</span>{' '}
-            played
-          </span>
-          <span className="text-bone/25">·</span>
-          <span>
-            <span className="font-extrabold text-tube tabular-nums">{monthStats.count}</span>{' '}
-            {monthStats.count === 1 ? 'session' : 'sessions'}
-          </span>
-          <span className="text-bone/25">·</span>
-          <span>
-            <span className="font-extrabold text-st-resting tabular-nums">{monthStats.games}</span>{' '}
-            {monthStats.games === 1 ? 'game' : 'games'}
-          </span>
-        </div>
-      )}
-
       <Shelf
-        title="PLAYING NOW"
-        accent="#ffb347"
-        live
+        title="Playing"
+        subtitle="games in progress"
         games={playing}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
@@ -966,8 +678,7 @@ export const TvHome = (): React.JSX.Element => {
         revealIndex={3}
       />
       <Shelf
-        title="RECENTLY PLAYED"
-        accent="#5fd3e0"
+        title="Recently played"
         games={recent}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
@@ -975,8 +686,7 @@ export const TvHome = (): React.JSX.Element => {
         revealIndex={4}
       />
       <Shelf
-        title="RECENTLY FINISHED"
-        accent="#ffb347"
+        title="Recently finished"
         games={finished}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}
@@ -984,8 +694,8 @@ export const TvHome = (): React.JSX.Element => {
         revealIndex={5}
       />
       <Shelf
-        title="YOUR LIBRARY"
-        accent="#b9a6ff"
+        title="Your library"
+        subtitle="most played"
         games={shelf}
         onOpen={openGame}
         onFocusGame={(game) => setSpotId(game.id)}

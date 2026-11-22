@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { isLiveElsewhere } from '../../../shared/liveSession';
@@ -7,7 +8,6 @@ import { useDeviceContext } from '../hooks/devices';
 import { useGames } from '../hooks/games';
 import { queryKeys } from '../hooks/queryKeys';
 import { consumeAmbientWake } from '../lib/ambientWake';
-import { BLUE, GREEN, TEAL, VIOLET } from '../lib/colors';
 import { useTimeFormat } from '../hooks/settings';
 import { TvFocusProvider } from './focus';
 import { useTvFocusActions } from './focusContext';
@@ -34,6 +34,8 @@ import type {
   TvLegendSlot,
 } from './tvInput';
 import { TvButtonsContext, TvLegendContext } from './tvInput';
+import { tvFocusVars } from './styles';
+import { TvHeader } from './TvChrome';
 import { TvSessionPanel } from './TvSessionPanel';
 import { TvStartMenu } from './TvStartMenu';
 
@@ -125,65 +127,41 @@ const KEY_GLYPHS: Record<TvHintAction, string> = {
   ltrt: 'PgUp·PgDn',
 };
 
-// LAS LUCIÉRNAGAS SON TU BIBLIOTECA: cada luz del cielo es UN JUEGO, con el
-// color de su estado rebajado a tono de brasa — los terminados brillan
-// champán dorado, los playing verde menta, los dropped un rosa apagado que
-// no chilla, los aparcados gris azulado, los resting lavanda, los unplayed
-// perla. Nadie te lo cuenta en ningún sitio: es de esas cosas que un día
-// notas ("¿por qué hay tantas doradas?") y ya no puedes dejar de ver.
-// Geometría/ritmo deterministas por índice (el compilador de React prohíbe
-// Math.random en render, y así cada arranque enseña el mismo cielo).
-const ORB_COLORS = ['#f5d98a', '#e8c97a', '#fbe7b2', '#ffb347'] as const;
-// La tabla de brasas por estado — SIEMPRE versiones suaves, nunca el color
-// de UI puro (un enjambre de #ff5e57 puros sería una alarma, no un cielo).
-const ORB_STATE_COLORS: Record<string, string> = {
-  started: '#ffd08a',
-  completed: '#c3e6ad',
-  dropped: '#b5bcbd',
-  on_hold: '#d5caff',
-  resting: '#d5caff',
-  plan_to_play: '#a6e6ee',
-  unplayed: '#a6e6ee',
+// LAS MOTAS DE FÓSFORO SON TU BIBLIOTECA (README-tvpwa.md): una luz por
+// juego, del color de su LED de estado — ámbar la mayoría (playing y on hold),
+// verde los terminados, cian lo pendiente, violeta los que descansan y gris
+// los abandonados. Detrás de todo y sin competir con el texto: 2-6 px, halo
+// corto y opacidad entre .25 y .7 (FireflyCanvas). Geometría determinista por
+// índice (el compilador de React prohíbe Math.random en render, y así cada
+// arranque enseña el mismo cielo).
+const MOTE_STATE_COLORS: Record<string, string> = {
+  started: '#ffb347',
+  on_hold: '#ffb347',
+  completed: '#9bd67a',
+  dropped: '#8a9496',
+  resting: '#b9a6ff',
+  plan_to_play: '#5fd3e0',
+  unplayed: '#5fd3e0',
 };
-// Sin tope ni mínimo, a propósito: el cielo enseña EXACTAMENTE tu
-// biblioteca — un juego, una luz. La ley de conservación de energía de
-// FireflyCanvas (intensidad ∝ 1/√n, auroras fijas en ~13) hace que
-// cualquier tamaño se vea bien y cueste casi lo mismo, así que un cap
-// sería mentirle al cielo sin ganar nada.
 
-// La geometría base de una luciérnaga por su índice. Módulos distintos (100
-// y 97) a propósito: con los dos a 100, la pareja (i, i+100) caía SIEMPRE
-// en el mismo punto — luces apiladas invisibles. Con periodos coprimos no
-// hay dos iguales. Cada décima es un brillo GRANDE de aurora. La DERIVA ya
-// no vive aquí: la calcula FireflyCanvas por índice, frame a frame.
-const buildOrb = (index: number, color: string, sizeBonus: number): FireflySpec => ({
+// Módulos distintos (100 y 97) a propósito: con los dos a 100, la pareja
+// (i, i+100) caía SIEMPRE en el mismo punto. El tamaño, en px (2-6).
+const buildMote = (index: number, color: string): FireflySpec => ({
   left: (index * 37 + 13) % 100,
   top: (index * 53 + 7) % 97,
-  size: 0.45 + ((index * 7) % 12) / 8.2 + sizeBonus,
+  size: 2 + ((index * 7) % 9) / 2,
   color,
-  big: index % 10 === 0,
 });
 
-// LA LUZ DE IDENTIDAD POR PANTALLA: cada ruta del modo tiñe el ambiente con
-// su color de la casa — Home verde, Library azul, Journey violeta, la ficha
-// de juego teal (los mismos acentos que llevan sus entradas en el menú
-// Start). Es lo que hacen las consolas de verdad: no cambias de pantalla,
-// cambias de HABITACIÓN, y cada habitación tiene su propia luz. El orden
-// importa: el prefijo más específico se comprueba primero.
-const routeAccent = (pathname: string): string => {
-  if (pathname.startsWith('/tv/library')) return BLUE;
-  if (pathname.startsWith('/tv/journey')) return VIOLET;
-  if (pathname.startsWith('/tv/game')) return TEAL;
-  return GREEN;
-};
-// Las cuatro luces existen SIEMPRE montadas y solo se les funde la opacidad:
-// los gradientes de background no saben interpolar colores, pero la opacidad
-// sí sabe fundirse — así el cambio de habitación es un crossfade de luz de
-// verdad, no un repintado.
-const ROOM_ACCENTS = [GREEN, BLUE, VIOLET, TEAL] as const;
-
-const PadGlyph = ({ label }: { label: string }): React.JSX.Element => (
-  <span className="flex h-[1.4em] min-w-[1.4em] items-center justify-center rounded-full border border-line-strong bg-bone/[0.05] px-[0.35em] text-[0.6em] font-extrabold tracking-[.04em] text-foreground/90">
+// La chapa de un botón del mando en la leyenda: círculo para los de una
+// letra, píldora para LB/RB y las teclas. A va en Phosphor, como en el mando.
+const PadGlyph = ({ label, primary }: { label: string; primary?: boolean }): React.JSX.Element => (
+  <span
+    className={cn(
+      'flex h-[1.45em] min-w-[1.45em] items-center justify-center rounded-full border-[0.09em] px-[0.35em] text-[0.92em] leading-none font-semibold',
+      primary ? 'border-phosphor text-phosphor' : 'border-dust text-bone',
+    )}
+  >
     {label}
   </span>
 );
@@ -220,18 +198,13 @@ const TvShell = (): React.JSX.Element => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: games = [], isFetched: gamesFetched } = useGames();
 
-  // El cielo derivado de la biblioteca (ver ORB_STATE_COLORS): un juego =
+  // El cielo derivado de la biblioteca (ver MOTE_STATE_COLORS): un juego =
   // una luciérnaga con la brasa suave de su estado. Tal cual, sin tope ni
   // relleno: el cielo es un censo honesto.
   const orbs = useMemo(
     () =>
       games.map((game, index) =>
-        buildOrb(
-          index,
-          ORB_STATE_COLORS[game.currentState ?? 'unplayed'] ??
-            ORB_COLORS[index % ORB_COLORS.length],
-          game.currentState === 'completed' ? 0.2 : 0,
-        ),
+        buildMote(index, MOTE_STATE_COLORS[game.currentState ?? 'unplayed'] ?? '#ffb347'),
       ),
     [games],
   );
@@ -492,9 +465,6 @@ const TvShell = (): React.JSX.Element => {
     });
   }, [queryClient]);
 
-  // La luz de la habitación actual (ver routeAccent arriba).
-  const accent = routeAccent(location.pathname);
-
   const glyphs = device === 'gamepad' ? PAD_GLYPHS[padBrand] : KEY_GLYPHS;
   const baseHints: TvHint[] = [
     { action: 'a', label: 'Select' },
@@ -515,14 +485,12 @@ const TvShell = (): React.JSX.Element => {
       <TvLegendContext.Provider value={legendRegistry}>
         <TvBackdropContext.Provider value={setBackdrop}>
           <div
-            // Base #0c1012 y no el #101416 del escritorio: la tele arranca
-            // desde un negro más hondo — la viñeta muere ahí y los paneles
-            // de cristal tienen algo oscuro de verdad detrás.
-            className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-inset text-foreground"
+            className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-cabinet text-bone"
             // La escala 10-foot entera cuelga de esta base (§6): proporcional
             // al alto del display que negocie Moonlight — ni enana en 4K ni
-            // gigante en 720p. Todo lo interno va en em/rem.
-            style={{ fontSize: 'clamp(18px, 2.2vh, 30px)' }}
+            // gigante en 720p. Todo lo interno va en em. Aquí también se
+            // publican la escala y los tiempos del foco (styles.ts).
+            style={{ fontSize: 'clamp(18px, 2.2vh, 30px)', ...tvFocusVars }}
             // El confirmar para el RATÓN, en un solo sitio: el select() del
             // mando no despacha click DOM y el Enter del espejo hace
             // preventDefault, así que aquí solo llegan clicks de puntero de
@@ -533,27 +501,16 @@ const TvShell = (): React.JSX.Element => {
               tvSound.select();
             }}
           >
-            {/* EL FONDO VIVO: el arte de lo que estés mirando, difuminado a
-              pantalla completa y derivando despacio, con crossfade al
-              cambiar (doble búfer: el anterior aguanta debajo mientras el
-              nuevo entra). Encima, los velos que devuelven el contraste y
-              las auroras de la casa. Es lo que separa "modo TV" de
-              "rectángulo negro con botones". */}
+            {/* EL FONDO, en Fósforo: Cabinet con el arte de lo que estés
+              mirando muy apagado y difuminado (crossfade con doble búfer),
+              un velo ámbar muy suave arriba a la izquierda y las motas de
+              fósforo de la biblioteca. Nada compite con el texto. */}
             <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-              {/* El arte, VIVO: saturado por encima de sí mismo y con luz de
-                verdad (antes brightness .34 — todo acababa en la misma sopa
-                gris). El contraste que el brillo devuelve lo recupera la
-                VIÑETA de abajo, no el arte: el cuadro brilla en el centro y
-                la sala está a oscuras, que es como se ve el cine. */}
               {backdrop.previous && (
                 <img
                   src={backdrop.previous}
                   alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                  style={{
-                    filter: 'blur(24px) saturate(1.55) brightness(.44) contrast(1.12)',
-                    transform: 'scale(1.14)',
-                  }}
+                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-2xl saturate-[.8]"
                 />
               )}
               {backdrop.current && (
@@ -561,101 +518,33 @@ const TvShell = (): React.JSX.Element => {
                   key={backdrop.current}
                   src={backdrop.current}
                   alt=""
-                  className="afterplay-tv-backdrop animate-[afterplay-fade-in_900ms_ease-out_both,afterplay-tv-backdrop-drift_28s_ease-in-out_infinite_alternate] absolute inset-0 h-full w-full object-cover"
-                  style={{ filter: 'blur(24px) saturate(1.55) brightness(.44) contrast(1.12)' }}
+                  className="absolute inset-0 h-full w-full scale-110 animate-[fade-in_900ms_var(--ease-out)_both] object-cover opacity-25 blur-2xl saturate-[.8]"
                 />
               )}
-              {/* Velo de asiento: ancla arriba y abajo (títulos y leyenda) y
-                deja el centro casi limpio — ahí es donde el arte respira. */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(8,11,12,.52) 0%, rgba(8,11,12,.26) 40%, rgba(8,11,12,.62) 100%)',
-                }}
-              />
-              {/* La luz de la habitación (routeAccent): un baño cenital del
-                color de la pantalla + su eco tenue en la esquina opuesta.
-                Las cuatro luces viven montadas a la vez y solo se funde la
-                opacidad — cambiar de pantalla es un crossfade de luz. */}
-              {ROOM_ACCENTS.map((color) => (
-                <div
-                  key={color}
-                  className="absolute inset-0 transition-opacity duration-1000"
-                  style={{
-                    opacity: color === accent ? 1 : 0,
-                    background: `radial-gradient(85% 62% at 50% -8%, ${color}42, transparent 62%), radial-gradient(58% 44% at 88% 108%, ${color}26, transparent 70%)`,
-                  }}
-                />
-              ))}
-              {/* Degradado radial en vez de círculo sólido + blur: el blur
-                  se recortaba de golpe contra el overflow-hidden del
-                  viewport y las luces de esquina se veían CORTADAS. El
-                  radial muere a transparente antes de su propio borde, así
-                  que da igual dónde lo recorte la pantalla. */}
-              <div
-                className="afterplay-tv-aurora-a animate-[afterplay-tv-aurora-a_26s_ease-in-out_infinite] absolute -top-[30%] -left-[22%] h-[95vh] w-[70vw]"
-                style={{
-                  background:
-                    'radial-gradient(closest-side, rgba(255,179,71,.14), rgba(255,179,71,.055) 55%, transparent 78%)',
-                }}
-              />
-              <div
-                className="afterplay-tv-aurora-b animate-[afterplay-tv-aurora-b_32s_ease-in-out_infinite] absolute -right-[20%] -bottom-[34%] h-[100vh] w-[66vw]"
-                style={{
-                  background:
-                    'radial-gradient(closest-side, rgba(185,166,255,.15), rgba(185,166,255,.06) 55%, transparent 78%)',
-                }}
-              />
-              {/* Las luciérnagas y los brillos-aurora vagando — tu
-                  biblioteca, contada en brasas de colores, pintada entera
-                  en UN canvas (ver FireflyCanvas). */}
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(16_20_22/0.55)_0%,rgb(16_20_22/0.35)_40%,rgb(16_20_22/0.8)_100%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(60%_55%_at_0%_0%,rgb(255_179_71/0.08),transparent_70%)]" />
               <FireflyCanvas orbs={orbs} />
-              {/* LA VIÑETA DE CINE: mucho más honda que antes — los bordes de
-                la pantalla mueren en negro casi puro. Aquí es donde vive el
-                contraste que le devolvimos al arte: centro encendido, sala a
-                oscuras. Sin negros de verdad no hay intensidad, solo gris. */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    'radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(4,5,4,.55) 66%, rgba(2,3,2,.92) 100%)',
-                }}
-              />
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-hidden px-[4vw] pt-[3.2vh]">
-              {/* Cada ruta entra con su propio fundido+subida: navegar es
-                moverse por un sitio, no repintar un formulario. */}
-              <div
-                key={location.pathname}
-                className="afterplay-tv-screen animate-[afterplay-tv-screen-in_420ms_cubic-bezier(0.22,1,0.36,1)_both] h-full min-h-0"
-              >
+            <TvHeader pathname={location.pathname} clock={clock} />
+
+            <div className="relative min-h-0 flex-1 overflow-hidden px-[4vw] pt-[0.6em]">
+              {/* Cada ruta entra con el screen-in del sistema. */}
+              <div key={location.pathname} className="h-full min-h-0 animate-screen-in">
                 <Outlet />
               </div>
             </div>
 
             {/* La leyenda: el manual permanente, en el idioma del dispositivo
-              que hablara último. El item de menú es un BOTÓN de verdad — el
+              que hablara último. "Start menu" es un BOTÓN de verdad — el
               ratón también merece su puerta al menú. */}
-            <div className="relative flex h-[2.7em] flex-none items-center gap-[1.5em] bg-inset/45 px-[4vw] text-[0.72em] font-bold text-muted-foreground backdrop-blur-[10px]">
-              {/* Filete de luz en vez de un border plano — y del COLOR de la
-                habitación (routeAccent): la luz de la pantalla llega hasta
-                el pie. Cambia seco al navegar, pero un pelo de luz de 1px
-                bajo la transición de pantalla entera no se ve saltar. */}
-              <span
-                aria-hidden
-                className="absolute inset-x-0 top-0 h-px"
-                style={{
-                  background: `linear-gradient(90deg, transparent, ${accent}59 30%, ${accent}59 70%, transparent)`,
-                }}
-              />
+            <div className="relative flex h-[2.9em] flex-none items-center gap-[1.6em] border-t border-line bg-cabinet/70 px-[4vw] text-[0.92em] text-dust">
               {mergedHints.map((hint) => (
                 <span
                   key={`${hint.action}-${hint.label}`}
-                  className="flex items-center gap-[0.5em] transition-opacity duration-300"
+                  className="flex items-center gap-[0.5em]"
                 >
-                  <PadGlyph label={glyphs[hint.action]} />
+                  <PadGlyph label={glyphs[hint.action]} primary={hint.action === 'a'} />
                   {hint.label}
                 </span>
               ))}
@@ -666,19 +555,11 @@ const TvShell = (): React.JSX.Element => {
                 // suena por el ciclo de capa (pushLayer/popLayer) — sin esto
                 // el click apilaba confirmar + apertura.
                 data-tv-sound="none"
-                className="flex items-center gap-[0.5em] transition-colors duration-150 hover:text-foreground"
+                className="ml-auto flex items-center gap-[0.5em] rounded-sm outline-hidden transition-colors duration-150 hover:text-bone"
               >
                 <PadGlyph label={glyphs.start} />
-                Menu
+                Start menu
               </button>
-              <span className="ml-auto flex items-center gap-[0.9em]">
-                <span className="text-[0.85em] font-extrabold tracking-[.24em] text-muted-foreground/45">
-                  AFTERPLAY
-                </span>
-                <span className="text-[1em] font-bold text-foreground/70 tabular-nums">
-                  {clock}
-                </span>
-              </span>
             </div>
 
             {menuOpen && <TvStartMenu onClose={() => setMenuOpen(false)} />}

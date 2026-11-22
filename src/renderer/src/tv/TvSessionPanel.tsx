@@ -6,14 +6,12 @@ import type { SessionClosedEvent } from '../../../shared/types';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { celebrateCompletion } from '../lib/celebrate';
-import { AMBER, GREEN } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
 import { quickStatusOptions, STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
-import { GameCover } from '../components/GameCover';
 import { TV_MODAL_SWALLOW, useTvButtons } from './tvInput';
 import { TvFocusLayer } from './focus';
-import { useTvFocusable } from './focusContext';
+import { TvButton, TvCoverArt, TvFigure } from './tvUi';
 
 // El cierre de sesión, versión sofá (BIG-PICTURE.md §5.4): el mismo remate
 // que el toast de escritorio — duración, total, récord y los botones rápidos
@@ -27,64 +25,6 @@ import { useTvFocusable } from './focusContext';
 // (lib/gameStatus). Las dos reglas estaban copiadas aquí a mano, así que el
 // sofá y el escritorio podían acabar contando el mismo cierre de sesión de
 // dos maneras sin que nada lo cantara — no se ven nunca a la vez.
-
-const PanelButton = ({
-  label,
-  icon,
-  color,
-  autoFocus = false,
-  silent = false,
-  onSelect,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  color?: string;
-  autoFocus?: boolean;
-  // silent: para Continue, que solo cierra — el cierre ya suena (popLayer).
-  // Los botones de estado SÍ confirman: marcan de verdad y el panel sigue.
-  silent?: boolean;
-  onSelect: () => void;
-}): React.JSX.Element => {
-  const { ref, focused } = useTvFocusable({ onSelect, autoFocus });
-  const accent = color ?? GREEN;
-  return (
-    <button
-      ref={ref}
-      type="button"
-      data-tv-sound={silent ? 'none' : undefined}
-      onClick={onSelect}
-      className="relative flex items-center gap-[0.5em] rounded-full px-[1.1em] py-[0.5em] text-[0.85em] font-bold transition-[background-color,box-shadow,translate] duration-150"
-      style={
-        focused
-          ? {
-              // El color del estado, PRESENTE: fondo más denso, anillo más
-              // firme y un halo exterior — el botón se enciende, no se marca.
-              background: `${accent}2e`,
-              color: accent,
-              boxShadow: `inset 0 0 0 2px ${accent}8c, 0 0 1.1em ${accent}47`,
-              translate: '0 -0.15em',
-            }
-          : {
-              background: 'rgba(3,6,7,.35)',
-              color: 'var(--foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.14)',
-            }
-      }
-    >
-      {icon}
-      {label}
-      {focused && (
-        // El latido del foco, fuera del marco solo como sombra (regla de la
-        // casa): un halo que respira alrededor de la píldora encendida.
-        <span
-          aria-hidden
-          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute -inset-[2px] rounded-full"
-          style={{ boxShadow: `0 0 1.2em ${accent}40` }}
-        />
-      )}
-    </button>
-  );
-};
 
 export const TvSessionPanel = ({
   event,
@@ -126,145 +66,101 @@ export const TvSessionPanel = ({
     <TvFocusLayer>
       <div className="absolute inset-0 z-30 flex items-center justify-center">
         <div
-          className="animate-in fade-in-0 absolute inset-0 bg-inset/70 duration-250"
+          className="absolute inset-0 animate-[fade-in_220ms_var(--ease-out)_both] bg-scrim"
           onClick={onClose}
         />
-        {/* El panel nace con el pop de la casa (pequeño-y-sube) en vez de un
-            fade plano: es el remate de una sesión, no un diálogo cualquiera. */}
-        <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative w-[28em] overflow-hidden rounded-[0.9em] border border-line-strong bg-overlay shadow-[0_2em_5em_rgba(3,6,7,.7)]">
+        {/* El panel de tvpwa-tv-menus.png: Overlay con sombra de modal, la
+            carátula a la izquierda y la duración enorme en Phosphor. No se
+            cierra solo: B o Continue. */}
+        <div className="relative w-[44em] max-w-[90vw] animate-dialog-in overflow-hidden rounded-md border border-line-strong bg-overlay shadow-modal">
           {heroSrc && (
             <>
-              <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    'linear-gradient(90deg, rgba(36,44,49,.97) 0%, rgba(36,44,49,.9) 50%, rgba(36,44,49,.72) 100%)',
-                }}
+              <img
+                src={heroSrc}
+                alt=""
+                className="absolute inset-y-0 right-0 h-full w-[60%] object-cover opacity-30"
               />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,var(--color-overlay)_45%,rgb(36_44_49/0.6)_100%)]" />
             </>
           )}
-          {/* Hairline de luz en el canto superior: el borde plano cuenta el
-              marco, este pelo de luz cuenta que el panel flota. */}
-          <span
-            aria-hidden
-            className="absolute inset-x-0 top-0 h-px"
-            style={{
-              background: 'linear-gradient(90deg, transparent, rgba(233,228,216,.28), transparent)',
-            }}
-          />
 
-          <div className="relative flex flex-col gap-[0.9em] px-[1.5em] py-[1.3em]">
-            <div className="flex items-center gap-[1em]">
-              <GameCover
-                url={event.coverUrl}
-                className="h-[5.2em] w-[3.7em] flex-none overflow-hidden rounded-[0.4em] border border-line-strong"
-                iconSize={20}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-[0.4em] text-[0.62em] font-bold tracking-[.14em] text-muted-foreground">
-                  <Timer className="h-[1.1em] w-[1.1em]" />
-                  SESSION ENDED
-                </div>
-                <div className="mt-[0.2em] truncate text-[1.15em] font-extrabold">
-                  {event.gameTitle}
-                </div>
-                <div className="mt-[0.15em] flex items-baseline gap-[0.45em]">
-                  {/* La cifra es la protagonista del panel: un aliento de luz
-                      verde detrás para que se lea como logro, no como dato. */}
-                  <span
-                    className="text-[1.5em] leading-none font-extrabold text-primary tabular-nums"
-                    style={{ textShadow: `0 0 1.1em ${GREEN}59` }}
-                  >
-                    {formatSessionDuration(event.durationSec)}
-                  </span>
-                  <span className="text-[0.75em] text-muted-foreground">
-                    · {formatHours(event.totalHours)} total
-                  </span>
-                </div>
+          <div className="relative flex gap-[1.6em] px-[1.8em] py-[1.7em]">
+            <TvCoverArt
+              game={{ title: event.gameTitle, coverUrl: event.coverUrl }}
+              className="w-[8.2em] flex-none self-start border border-line-strong shadow-lift"
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-[0.7em]">
+              <div className="flex items-center gap-[0.45em] text-[1.05em] text-dust">
+                <Timer className="size-[1em]" />
+                Session ended
               </div>
-            </div>
-
-            {event.isLongest && (
-              // La banda de récord, de fiesta: nace con pop, un halo ámbar
-              // respira detrás del icono y un barrido de luz la cruza una vez
-              // al aparecer. Todo DENTRO del marco (overflow-hidden).
-              <div
-                className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] relative flex items-center gap-[0.55em] overflow-hidden rounded-[0.5em] px-[0.85em] py-[0.55em] text-[0.8em] font-bold"
-                style={{
-                  background: `linear-gradient(90deg, ${AMBER}29, ${AMBER}0f)`,
-                  color: AMBER,
-                  boxShadow: `inset 0 0 0 1px ${AMBER}40`,
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] pointer-events-none absolute inset-0"
-                  style={{
-                    background: `radial-gradient(ellipse at 10% 50%, ${AMBER}38, transparent 62%)`,
-                  }}
-                />
-                <span
-                  aria-hidden
-                  className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] pointer-events-none absolute inset-y-0 left-0 w-[45%]"
-                  style={{
-                    background: `linear-gradient(105deg, transparent, ${AMBER}3d, transparent)`,
-                  }}
-                />
-                <Flame
-                  className="relative h-[1.05em] w-[1.05em] flex-none"
-                  style={{ filter: `drop-shadow(0 0 0.45em ${AMBER}aa)` }}
-                />
-                <span className="relative">Your longest session with this game</span>
+              <div className="-mt-[0.3em] font-display text-[2em] leading-tight font-bold text-bone">
+                {event.gameTitle}
               </div>
-            )}
+              <div className="flex flex-wrap items-baseline gap-x-[0.6em]">
+                <TvFigure
+                  value={formatSessionDuration(event.durationSec)}
+                  className="text-[5em] text-phosphor [text-shadow:0_0_18px_rgb(255_179_71/0.35)]"
+                  unitClassName="text-[0.6em] font-bold text-phosphor"
+                />
+                <span className="text-[1.05em] text-dust tabular-nums">
+                  · {formatHours(event.totalHours)} total
+                </span>
+              </div>
 
-            {marked !== null ? (
-              <div className="flex items-center gap-[0.6em]">
-                {/* El acuse entra con pop: el "hecho" se planta en el panel
-                    con el mismo gesto vivo con que nació el panel entero. */}
-                <div
-                  className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex items-center gap-[0.5em] rounded-[0.5em] px-[0.85em] py-[0.5em] text-[0.85em] font-bold"
-                  style={{
-                    background: `${STATUS_META[marked].color}1f`,
-                    color: STATUS_META[marked].color,
-                    boxShadow: `inset 0 0 0 1px ${STATUS_META[marked].color}4d`,
-                  }}
-                >
-                  <Check
-                    className="h-[1em] w-[1em]"
-                    style={{ filter: `drop-shadow(0 0 0.4em ${STATUS_META[marked].color}99)` }}
+              {event.isLongest && (
+                <div className="flex items-center gap-[0.5em] self-start rounded-md border border-phosphor/40 bg-phosphor-tint px-[0.9em] py-[0.5em] text-[1.05em] font-semibold text-phosphor">
+                  <Flame className="size-[1em] flex-none" />
+                  Your longest session with this game
+                </div>
+              )}
+
+              {marked !== null ? (
+                <div className="mt-[0.3em] flex items-center gap-[0.8em]">
+                  <div className="flex items-center gap-[0.5em] rounded-md border border-line-strong bg-raised px-[0.9em] py-[0.55em] text-[1.05em] font-semibold text-bone">
+                    <Check className="size-[1em] text-success" />
+                    Marked as {STATUS_META[marked].label}
+                  </div>
+                  <div className="flex-1" />
+                  {/* La salida sigue AQUI tras marcar: sin este boton, un
+                      usuario de solo raton quedaba encerrado. autoFocus: los
+                      botones de estado acaban de desmontarse y el foco quedo
+                      suelto. */}
+                  <TvButton
+                    label="Continue"
+                    variant="primary"
+                    autoFocus
+                    silent
+                    onSelect={onClose}
                   />
-                  Marked as {STATUS_META[marked].label}
                 </div>
-                <div className="flex-1" />
-                {/* La salida sigue AQUI tras marcar: sin este boton, un
-                    usuario de solo raton quedaba encerrado (el velo cierra,
-                    pero que la puerta se vea). autoFocus: los botones de
-                    estado acaban de desmontarse y el foco quedo suelto. */}
-                <PanelButton label="Continue" autoFocus silent onSelect={onClose} />
-              </div>
-            ) : (
-              <div className="flex items-center gap-[0.6em]">
-                {quickStatusOptions(event.endless).map((key) => {
-                  const meta = STATUS_META[key];
-                  return (
-                    <PanelButton
-                      key={key}
-                      label={meta.label}
-                      color={meta.color}
-                      icon={<meta.Icon className="h-[1em] w-[1em]" />}
-                      onSelect={() => void markState(key)}
-                    />
-                  );
-                })}
-                <div className="flex-1" />
-                <PanelButton label="Continue" autoFocus silent onSelect={onClose} />
-              </div>
-            )}
+              ) : (
+                <div className="mt-[0.3em] flex items-center gap-[0.8em]">
+                  {quickStatusOptions(event.endless).map((key) => {
+                    const meta = STATUS_META[key];
+                    return (
+                      <TvButton
+                        key={key}
+                        label={meta.label}
+                        icon={<meta.Icon className="size-[0.9em]" />}
+                        onSelect={() => void markState(key)}
+                      />
+                    );
+                  })}
+                  <div className="flex-1" />
+                  <TvButton
+                    label="Continue"
+                    variant="primary"
+                    autoFocus
+                    silent
+                    onSelect={onClose}
+                  />
+                </div>
+              )}
 
-            <div className="text-[0.68em] font-semibold text-muted-foreground/70">
-              You can write the session note from your desk.
+              <div className="text-[0.95em] text-dust">
+                You can write the session note from your desk.
+              </div>
             </div>
           </div>
         </div>
