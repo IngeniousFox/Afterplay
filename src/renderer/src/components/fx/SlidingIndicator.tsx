@@ -47,9 +47,17 @@ export const SlidingIndicator = ({
   const [ready, setReady] = useState(false);
   const placedOnce = useRef(false);
 
+  // Re-run once after mount: when the indicator mounts together with its
+  // container, this child effect runs before React attaches the parent's ref.
+  const [retry, setRetry] = useState(0);
+
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return undefined;
+    if (!container) {
+      if (retry > 0) return undefined;
+      const raf = requestAnimationFrame(() => setRetry(1));
+      return () => cancelAnimationFrame(raf);
+    }
     const measure = (): void => {
       const active = container.querySelector<HTMLElement>(selector);
       if (!active) {
@@ -68,7 +76,7 @@ export const SlidingIndicator = ({
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [containerRef, activeKey, selector, inset]);
+  }, [containerRef, activeKey, selector, inset, retry]);
 
   useLayoutEffect(() => {
     if (box && !placedOnce.current) {
