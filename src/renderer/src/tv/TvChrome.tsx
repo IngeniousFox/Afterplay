@@ -59,6 +59,28 @@ const TvSyncStatus = (): React.JSX.Element | null => {
   );
 };
 
+// El reloj del salón con los dos puntos latiendo cada segundo, como el de un
+// vídeo o una recreativa. El texto sigue siendo el de siempre (los dos puntos
+// solo bajan de opacidad); con reduced motion no laten.
+const TvClock = ({ clock }: { clock: string }): React.JSX.Element => {
+  const colon = clock.indexOf(':');
+  return (
+    <span className="text-[0.95em] font-medium text-dust tabular-nums">
+      {colon < 0 ? (
+        clock
+      ) : (
+        <>
+          {clock.slice(0, colon)}
+          <span className="animate-[afterplay-tv-colon_1s_linear_infinite] motion-reduce:animate-none">
+            :
+          </span>
+          {clock.slice(colon + 1)}
+        </>
+      )}
+    </span>
+  );
+};
+
 export const TvHeader = ({
   pathname,
   clock,
@@ -110,7 +132,7 @@ export const TvHeader = ({
       </nav>
       <span className="ml-auto flex items-center gap-[1.4em]">
         <TvSyncStatus />
-        <span className="text-[0.95em] font-medium text-dust tabular-nums">{clock}</span>
+        <TvClock clock={clock} />
       </span>
     </header>
   );

@@ -10,8 +10,9 @@ import { TvCoverArt, TvLed } from './tvUi';
 
 // La portada del modo TV en Fósforo (tvpwa-tv-library.png): 3:4, radio 4, LED
 // de estado en la esquina y franja de horas al pie. El foco es el del sistema
-// a 10 pies: borde Phosphor de 4 px, halo ámbar y escala 1.06 (sin escala con
-// reduced motion).
+// a 10 pies: borde Phosphor de 4 px, halo ámbar y escala 1.06 con muelle
+// (sin escala con reduced motion), y un reflejo que la cruza cada pocos
+// segundos mientras siga enfocada.
 //
 // EL TÍTULO VA EN EL FLUJO, DEBAJO, y fuera de lo que escala: así nunca se
 // monta sobre la fila de abajo (el fallo del concepto, donde la etiqueta de
@@ -77,6 +78,9 @@ export const TvGameTile = ({
       style={revealIndex !== undefined ? tvRevealStyle(revealIndex) : undefined}
     >
       <span
+        // La geometría que usan la estela y la chispa (focusFx): la portada,
+        // no la portada más el título.
+        data-tv-fx-ring
         className={cn(
           'relative block rounded-sm ring-1 ring-line',
           tvFocusMotion,
@@ -84,6 +88,17 @@ export const TvGameTile = ({
         )}
       >
         <TvCoverArt game={game} />
+        {/* El reflejo que cruza la portada enfocada cada pocos segundos
+            mientras siga enfocada (styles.ts: TV_SHEEN_*). Solo existe en la
+            enfocada: un único bucle en pantalla. Sin él con reduced motion. */}
+        {focused && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm motion-reduce:hidden"
+          >
+            <span className="absolute inset-y-0 left-0 w-[40%] animate-[afterplay-tv-sheen_var(--tv-sheen-period)_linear_var(--tv-sheen-delay)_infinite_both] bg-[linear-gradient(90deg,transparent,rgb(255_244_222/0.34),transparent)] mix-blend-screen" />
+          </span>
+        )}
         {game.isLive ? (
           <span
             aria-hidden

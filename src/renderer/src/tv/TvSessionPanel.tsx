@@ -1,16 +1,17 @@
 import { Check, Flame, Timer } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { formatSessionDuration } from '../../../shared/sessionDuration';
 import type { SessionClosedEvent } from '../../../shared/types';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
-import { celebrateCompletion } from '../lib/celebrate';
+import { celebrate, GlowText, Ticker } from '../components/fx';
 import { formatHours } from '../lib/format';
 import type { PastStatusKey } from '../lib/gameStatus';
 import { quickStatusOptions, STATUS_META, STATUS_TO_STATE_TYPE } from '../lib/gameStatus';
 import { TV_MODAL_SWALLOW, useTvButtons } from './tvInput';
 import { TvFocusLayer } from './focus';
+import { TV_CELEBRATE_DELAY_MS, TV_LONG_SESSION_SEC, TV_TICKER_MS } from './styles';
 import { TvButton, TvCoverArt, TvFigure } from './tvUi';
 
 // El cierre de sesión, versión sofá (BIG-PICTURE.md §5.4): el mismo remate
@@ -59,8 +60,27 @@ export const TvSessionPanel = ({
       return;
     }
     setMarked(key);
-    if (key === 'beaten') celebrateCompletion();
+    if (key === 'beaten') celebrate('beaten');
   };
+
+  // EL REMATE: la duración entra contando y, cuando aterriza, las chispas
+  // salen de ella — las de récord si es tu sesión más larga con el juego,
+  // las de sesión si pasó de una hora (styles.ts: TV_LONG_SESSION_SEC). Una
+  // vez por panel; si se cierra antes, no hay chispas.
+  const durationRef = useRef<HTMLSpanElement>(null);
+  const kind = event.isLongest
+    ? 'record'
+    : event.durationSec >= TV_LONG_SESSION_SEC
+      ? 'session'
+      : null;
+  useEffect(() => {
+    if (kind === null) return undefined;
+    const timer = setTimeout(
+      () => celebrate(kind, { origin: durationRef.current }),
+      TV_CELEBRATE_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [kind]);
 
   return (
     <TvFocusLayer>
@@ -98,11 +118,22 @@ export const TvSessionPanel = ({
                 {event.gameTitle}
               </div>
               <div className="flex flex-wrap items-baseline gap-x-[0.6em]">
-                <TvFigure
-                  value={formatSessionDuration(event.durationSec)}
-                  className="text-[5em] text-phosphor [text-shadow:0_0_18px_rgb(255_179_71/0.35)]"
-                  unitClassName="text-[0.6em] font-bold text-phosphor"
-                />
+                <span ref={durationRef} className="text-[5em]">
+                  <Ticker
+                    value={event.durationSec}
+                    format={(seconds) => formatSessionDuration(Math.round(seconds))}
+                    duration={TV_TICKER_MS}
+                    render={(seconds) => (
+                      <GlowText flicker>
+                        <TvFigure
+                          value={formatSessionDuration(Math.round(seconds))}
+                          className="text-phosphor"
+                          unitClassName="text-[0.6em] font-bold text-phosphor"
+                        />
+                      </GlowText>
+                    )}
+                  />
+                </span>
                 <span className="text-[1.05em] text-dust tabular-nums">
                   · {formatHours(event.totalHours)} total
                 </span>

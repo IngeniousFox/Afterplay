@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { tvFocusGlow } from './focusFx';
+import { TV_MOTE_BRIGHTEN, TV_MOTE_PULL, TV_MOTE_REACH } from './styles';
 
 // EL ENJAMBRE EN UN SOLO LIENZO. La versión DOM pagaba, POR LUCIÉRNAGA, un
 // nodo + una capa compuesta en GPU + un box-shadow difuminado (y las
@@ -19,6 +21,13 @@ import { useEffect, useRef } from 'react';
 //   · DPR capado a 1.5: es un fondo de luces difusas, no tipografía.
 //   · 'lighter' al componer: dos luces que se cruzan SUMAN luz, como en el
 //     mundo real — el cruce es un destello, no una mancha.
+//
+// EL FOCO TIRA UN POCO (fase B): las motas cercanas a lo enfocado se acercan
+// una fracción de su distancia y brillan más (styles.ts: TV_MOTE_*). El punto
+// (focusFx.tvFocusGlow) se persigue con un lerp por frame, así que al mover
+// el foco la nube se desplaza despacio detrás, como limaduras tras un imán.
+// Coste: una resta, un producto y una comparación por mota; sin raíz ni exp.
+// Con reduced motion no hay tirón, solo el brillo.
 //
 // Los datos (posición base, color por estado, tamaño, cuáles son auroras)
 // vienen del layout, que es quien conoce la biblioteca.
@@ -106,6 +115,9 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       return sprite;
     };
 
+    // El imán: dónde está ahora (persiguiendo al foco) y con qué fuerza (0-1).
+    const magnet = { x: 0, y: 0, k: 0, placed: false };
+
     let raf = 0;
     let last = 0;
     const draw = (now: number): void => {
@@ -134,6 +146,22 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       // cae con 1/√n por encima de ~200.
       const damp = Math.min(1, Math.sqrt(200 / total));
 
+      // El imán persigue el foco (o se apaga sin él). La primera vez aparece
+      // ya en su sitio, sin cruzar la pantalla.
+      if (tvFocusGlow.active) {
+        if (!magnet.placed) {
+          magnet.x = tvFocusGlow.x;
+          magnet.y = tvFocusGlow.y;
+          magnet.placed = true;
+        }
+        magnet.x += (tvFocusGlow.x - magnet.x) * 0.08;
+        magnet.y += (tvFocusGlow.y - magnet.y) * 0.08;
+      }
+      magnet.k += ((tvFocusGlow.active ? 1 : 0) - magnet.k) * 0.06;
+      const reach = TV_MOTE_REACH * Math.min(width, height);
+      const reach2 = reach * reach;
+      const pulls = magnet.k > 0.01;
+
       for (let i = 0; i < total; i++) {
         const orb = list[i];
         // La deriva: dos senos por eje con fase áurea (i * 2.399) — órbitas
@@ -144,20 +172,38 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
         const p2 = i * 1.111;
         const ax = (2.2 + (i % 4)) * (width / 100);
         const ay = (2.6 + (i % 3)) * (height / 100);
-        const x =
+        let x =
           (orb.left / 100) * width +
           Math.sin(t * w1 + p1) * ax +
           Math.sin(t * w2 + p2 * 0.7) * ax * 0.4;
-        const y =
+        let y =
           (orb.top / 100) * height +
           Math.cos(t * w2 + p2) * ay +
           Math.sin(t * w1 * 0.8 + p1 * 1.3) * ay * 0.35;
         // Opacidad entre .25 y .7, respirando despacio (quieta con reduced
         // motion: el valor medio).
         const breath = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * (0.25 + (i % 6) * 0.05) + i);
-        context.globalAlpha = (0.25 + 0.45 * breath) * damp;
+        // La influencia del foco: (1 - d²/R²)², suave en el borde y nula fuera.
+        let near = 0;
+        if (pulls) {
+          const dx = magnet.x - x;
+          const dy = magnet.y - y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < reach2) {
+            const f = 1 - d2 / reach2;
+            near = f * f * magnet.k;
+            if (!still) {
+              x += dx * TV_MOTE_PULL * near;
+              y += dy * TV_MOTE_PULL * near;
+            }
+          }
+        }
+        context.globalAlpha = Math.min(
+          1,
+          (0.25 + 0.45 * breath) * damp * (1 + TV_MOTE_BRIGHTEN * near),
+        );
         // El sprite mide 2,4 veces el núcleo (el núcleo es el 30 % central).
-        const radius = orb.size * 1.65;
+        const radius = orb.size * 1.65 * (1 + 0.3 * near);
         context.drawImage(spriteFor(orb.color), x - radius, y - radius, radius * 2, radius * 2);
       }
 

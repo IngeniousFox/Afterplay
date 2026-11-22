@@ -1160,6 +1160,129 @@ test('capturas del modo TV', async () => {
   }
 });
 
+// MOVIMIENTO DEL MODO TV («rock and roll», fase B): el power-on de la
+// cortina al entrar, el foco saltando de fila con su estela de fósforo y el
+// pase de página del Journey como cambio de canal. Fotogramas congelados a
+// 1920 x 1080 en docs/redesign/screens/motion/ (no dependen de SHOTS_SET).
+test('capturas de movimiento del modo TV', async () => {
+  test.setTimeout(240_000);
+  const MOTION = join(process.cwd(), 'docs', 'redesign', 'screens', 'motion');
+  mkdirSync(MOTION, { recursive: true });
+  const { window, sandbox, app } = await launchAfterplay();
+  // Lleva a `ms` las animaciones de `selector` (o, sin él, las que nacieron
+  // después de `mark`: lo que ya estaba asentado no se rebobina).
+  const mark = (): Promise<void> =>
+    window.evaluate(() => {
+      (globalThis as { settledAnimations?: Set<Animation> }).settledAnimations = new Set(
+        document.getAnimations(),
+      );
+    });
+  const freezeAt = (ms: number, selector?: string): Promise<void> =>
+    window.evaluate(
+      ({ time, root }) => {
+        const host = root ? document.querySelector(root) : null;
+        const settled =
+          (globalThis as { settledAnimations?: Set<Animation> }).settledAnimations ?? new Set();
+        const list = host
+          ? host.getAnimations({ subtree: true })
+          : document.getAnimations().filter((animation) => !settled.has(animation));
+        for (const animation of list) {
+          animation.pause();
+          animation.currentTime = time;
+        }
+      },
+      { time: ms, root: selector ?? null },
+    );
+  const release = (): Promise<void> =>
+    window.evaluate(() => {
+      const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+      if (proto.heldAnimate) proto.animate = proto.heldAnimate;
+      for (const animation of document.getAnimations()) animation.play();
+    });
+  // Las WAAPI nuevas (la estela) nacen en pausa hasta `release`.
+  const holdNew = (): Promise<void> =>
+    window.evaluate(() => {
+      const proto = Element.prototype as Element & { heldAnimate?: Element['animate'] };
+      proto.heldAnimate ??= proto.animate;
+      const original = proto.heldAnimate;
+      proto.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+        const animation = original.apply(this, args);
+        animation.pause();
+        return animation;
+      };
+    });
+  const shoot = async (name: string, ms: number, selector?: string): Promise<void> => {
+    await freezeAt(ms, selector);
+    await window.waitForTimeout(60);
+    // JPEG: el grano de fósforo de toda la pantalla hace que un PNG de
+    // 1080p pese ~1 MB; a calidad 85 se ve igual y pesa una cuarta parte.
+    await window.screenshot({
+      path: join(MOTION, `${name}-${String(ms).padStart(4, '0')}ms.jpg`),
+      type: 'jpeg',
+      quality: 85,
+    });
+  };
+  const press = async (key: string): Promise<void> => {
+    await window.keyboard.press(key);
+    await window.waitForTimeout(140);
+  };
+  try {
+    await window.getByText("Assassin's Creed II").first().waitFor({ state: 'visible' });
+
+    // 1. El power-on al entrar: la cortina se congela en cuanto aparece (se
+    //    retira al acabar su animación, así que espera quieta).
+    await window.evaluate(() => globalThis.api.window.bigPicture.enter());
+    await window.waitForFunction(
+      () => {
+        const curtain = document.querySelector('[data-tv-curtain="enter"]');
+        if (!curtain) return false;
+        for (const animation of curtain.getAnimations({ subtree: true })) animation.pause();
+        return true;
+      },
+      undefined,
+      { polling: 'raf', timeout: 20_000 },
+    );
+    await window.setViewportSize({ width: 1920, height: 1080 });
+    for (const ms of [90, 200, 470, 760, 1100]) {
+      await shoot('tv-power-on', ms, '[data-tv-curtain="enter"]');
+    }
+    await release();
+    await window.locator('[data-tv-curtain]').waitFor({ state: 'detached', timeout: 10_000 });
+    await window.waitForTimeout(1800);
+
+    // 2. El foco baja del héroe a la primera estantería: muelle, halo y la
+    //    estela de fósforo (el fantasma que se queda y el que viaja).
+    await mark();
+    await holdNew();
+    await window.keyboard.press('ArrowDown');
+    await window.waitForTimeout(120);
+    for (const ms of [30, 90, 240]) await shoot('tv-focus-move', ms);
+    await release();
+    await window.waitForTimeout(1500);
+    // Y la portada enfocada con su reflejo cruzándola.
+    await mark();
+    await press('ArrowRight');
+    await window.waitForTimeout(400);
+    await shoot('tv-focus-sheen', 650 + 4200 * 0.12);
+    await release();
+
+    // 3. Journey: pasar página es cambiar de canal.
+    await window.evaluate(() => {
+      globalThis.location.hash = '#/tv/journey';
+    });
+    await window.waitForTimeout(2400);
+    await mark();
+    await window.keyboard.press('e');
+    await window.waitForFunction(() => document.querySelector('[data-tv-channel]') !== null);
+    for (const ms of [0, 110, 260]) await shoot('tv-journey-channel', ms);
+    await release();
+  } finally {
+    await window.evaluate(() => globalThis.api.window.bigPicture.exit()).catch(() => {});
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});
+
 // MOVIMIENTO («rock and roll», components/fx). Las capturas son estáticas, así
 // que aquí se congelan las animaciones a mitad de camino y se fotografían
 // fotograma a fotograma: la paleta encendiéndose, el power-on de Now playing,

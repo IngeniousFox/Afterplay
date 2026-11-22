@@ -125,6 +125,8 @@ const Key = ({
       // de escritura (typeChar/backspace) — el confirmar de la casa sobre
       // cada letra convertiría escribir en una fanfarria.
       data-tv-sound="none"
+      // Ni la chispa genérica de A (focusFx): la tecla trae su destello.
+      data-tv-spark="none"
       onClick={press}
       // La tecla de tvpwa-tv-library.png: Raised con borde, 92 × 84 a 1080p.
       // Enfocada: anillo ámbar con halo y sube 3 px (translate, sin escala:
@@ -144,14 +146,15 @@ const Key = ({
       )}
       style={{ width: width ?? '2.95em' }}
     >
-      {/* El flash de pulsación: nace encendido y se apaga. Vive DENTRO del
-          overflow-hidden de la tecla. */}
+      {/* El destello de pulsación: un velo ámbar que se apaga y un núcleo
+          de luz que se abre desde el centro (320 ms, transform y opacity).
+          Vive DENTRO del overflow-hidden de la tecla. Con reduced motion,
+          solo el velo. */}
       {pressCount > 0 && (
-        <span
-          key={pressCount}
-          aria-hidden
-          className="pointer-events-none absolute inset-0 animate-[fade-in_300ms_var(--ease-out)_reverse_both] bg-phosphor/25"
-        />
+        <span key={pressCount} aria-hidden className="pointer-events-none absolute inset-0">
+          <span className="absolute inset-0 animate-[fade-in_300ms_var(--ease-out)_reverse_both] bg-phosphor/25" />
+          <span className="absolute inset-[-30%] animate-[afterplay-tv-key-flash_320ms_var(--ease-out)_both] bg-[radial-gradient(closest-side,rgb(255_236_200/0.85),rgb(255_179_71/0.35)_55%,transparent)] mix-blend-screen motion-reduce:hidden" />
+        </span>
       )}
       <span className="relative">{children ?? label}</span>
     </button>

@@ -36,6 +36,9 @@ import type {
 import { TvButtonsContext, TvLegendContext } from './tvInput';
 import { tvFocusVars } from './styles';
 import { TvHeader } from './TvChrome';
+import { Grain, Vignette } from '../components/fx';
+import { findTvFocused, sparkTvFocus } from './focusFx';
+import { TvFocusFx } from './TvFocusFx';
 import { TvSessionPanel } from './TvSessionPanel';
 import { TvStartMenu } from './TvStartMenu';
 
@@ -323,9 +326,18 @@ const TvShell = (): React.JSX.Element => {
         return;
       }
       switch (action.button) {
-        case 'a':
+        case 'a': {
+          // La chispa de A sale de lo enfocado, ANTES de seleccionar (la
+          // selección puede navegar y desmontarlo). Solo si A hace algo ahí:
+          // las filas de solo lectura no chisporrotean. Las teclas del OSK
+          // traen su propio destello (data-tv-spark="none").
+          const focused = findTvFocused();
+          if (focused?.dataset.tvFxFocus === 'select' && focused.dataset.tvSpark !== 'none') {
+            sparkTvFocus(focused);
+          }
           select();
           break;
+        }
         case 'b':
           goBack();
           break;
@@ -497,7 +509,12 @@ const TvShell = (): React.JSX.Element => {
             // verdad. El mismo reparto data-tv-sound que focus.tsx.
             onClickCapture={(event) => {
               const button = (event.target as HTMLElement).closest?.('button');
-              if (!button || button.dataset.tvSound === 'none') return;
+              if (!button) return;
+              // La misma chispa que A para el clic sobre lo enfocado.
+              if (button.dataset.tvFxFocus === 'select' && button.dataset.tvSpark !== 'none') {
+                sparkTvFocus(button);
+              }
+              if (button.dataset.tvSound === 'none') return;
               tvSound.select();
             }}
           >
@@ -566,6 +583,14 @@ const TvShell = (): React.JSX.Element => {
             {sessionEvent && (
               <TvSessionPanel event={sessionEvent} onClose={() => setSessionEvent(null)} />
             )}
+
+            {/* El cristal del tubo, encima de TODO (paneles incluidos):
+              viñeta fija y grano de fósforo que salta 5 veces por segundo.
+              Intensidades en styles.ts (TV_GRAIN_OPACITY, TV_VIGNETTE_OPACITY).
+              Sin eventos; con reduced motion el grano se queda quieto. */}
+            <Vignette className="z-[50] opacity-(--tv-vignette-opacity)" />
+            <Grain className="z-[50] opacity-(--tv-grain-opacity)" />
+            <TvFocusFx />
           </div>
         </TvBackdropContext.Provider>
       </TvLegendContext.Provider>

@@ -6,8 +6,18 @@ import { requestExitBigPicture } from '../hooks/useBigPicture';
 import { TV_MODAL_SWALLOW, useTvButtons } from './tvInput';
 import { TvFocusLayer } from './focus';
 import { useTvFocusable } from './focusContext';
-import { tvFocusHalo, tvFocusMotion, tvRevealClass, tvRevealStyle } from './styles';
+import { useCrtReveal } from '../components/fx';
+import { tvFocusHalo, tvFocusMotion } from './styles';
 import { TvLogo } from './TvChrome';
+
+// Las entradas llegan escalonadas DESPUÉS de que el panel se encienda
+// (CrtReveal, 300 ms): 55 ms entre una y otra, deslizando desde el lomo.
+// Con reduced motion, solo fundido (la distancia es una variable).
+const MENU_ITEM_DELAY_MS = 140;
+const MENU_ITEM_STEP_MS = 55;
+const menuItemStyle = (index: number): React.CSSProperties => ({
+  animationDelay: `${MENU_ITEM_DELAY_MS + index * MENU_ITEM_STEP_MS}ms`,
+});
 
 // El menú del modo (BIG-PICTURE.md §5.6): Start en cualquier pantalla TV.
 // Cinco entradas y ni una más — un menú de tele se recorre entero de un
@@ -43,11 +53,11 @@ const MenuItem = ({
       className={cn(
         'flex w-full items-center gap-[0.75em] rounded-md border border-transparent px-[0.5em] py-[0.45em] text-left text-[1.3em] font-semibold',
         tvFocusMotion,
-        tvRevealClass,
+        'animate-[afterplay-tv-menu-item_260ms_var(--ease-out)_both] [--menu-x:-0.8em] motion-reduce:[--menu-x:0px]',
         danger ? 'text-live' : 'text-bone',
         focused && ['border-phosphor bg-phosphor-tint', tvFocusHalo, !danger && 'text-phosphor'],
       )}
-      style={tvRevealStyle(revealIndex)}
+      style={menuItemStyle(revealIndex)}
     >
       <span
         className={cn(
@@ -68,6 +78,9 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
   // no atraviesan hacia la pantalla de debajo (B y Start los maneja el
   // goBack del shell, que mira menuOpen antes que la pila).
   useTvButtons(TV_MODAL_SWALLOW);
+  // El panel se ENCIENDE como un tubo (CrtReveal 'panel': línea que se abre
+  // en vertical con un destello).
+  const panelRef = useCrtReveal<HTMLDivElement>('panel');
   const go = (path: string): void => {
     navigate(path);
     onClose();
@@ -75,13 +88,14 @@ export const TvStartMenu = ({ onClose }: { onClose: () => void }): React.JSX.Ele
 
   return (
     <TvFocusLayer>
-      {/* Velo + panel lateral de 600 px (a 1080p) que entra deslizando desde
-          la izquierda en 300 ms: el contenido de detrás se intuye, que el
-          menú es un aparte y no otra pantalla. */}
+      {/* Velo + panel lateral de 600 px (a 1080p) que se enciende como un
+          tubo en 300 ms: el contenido de detrás se intuye, que el menú es un
+          aparte y no otra pantalla. */}
       <div className="absolute inset-0 z-30 flex" onClick={onClose}>
         <div className="absolute inset-0 animate-[fade-in_220ms_var(--ease-out)_both] bg-scrim" />
         <div
-          className="relative flex h-full w-[25em] animate-[sheet-in_300ms_var(--ease-drawer)_both] flex-col gap-[0.5em] border-r border-line bg-panel px-[1.3em] pt-[2.4em] shadow-modal [--sheet-x:-100%] motion-reduce:[--sheet-x:0px]"
+          ref={panelRef}
+          className="relative flex h-full w-[25em] flex-col gap-[0.5em] border-r border-line bg-panel bg-(image:--scan) px-[1.3em] pt-[2.4em] shadow-modal"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="mb-[0.9em] flex items-center gap-[0.55em] px-[0.3em]">

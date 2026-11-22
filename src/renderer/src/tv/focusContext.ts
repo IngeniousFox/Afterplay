@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef } from 'react';
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import type { TvDirection } from './gamepad';
 import { pointerMovedRecently } from './inputDevice';
 import { tvSound } from './sound';
@@ -119,11 +119,25 @@ export const useTvFocusable = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.register, context.focusId, context.getFocusedId, id, layer, autoFocus, disabled]);
 
+  const focused = context.focusedId === id && context.activeLayer === layer;
+  // La marca para los efectos de foco (focusFx.ts: la estela, la chispa de A
+  // y las motas del fondo): un atributo en el nodo enfocado, 'select' si A
+  // hace algo y 'view' si es de solo lectura. Solo DOM: no toca el motor.
+  const hasSelect = onSelect !== undefined;
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (!element || !focused) return undefined;
+    element.dataset.tvFxFocus = hasSelect ? 'select' : 'view';
+    return () => {
+      delete element.dataset.tvFxFocus;
+    };
+  }, [focused, hasSelect]);
+
   return {
     ref: (element) => {
       elementRef.current = element;
     },
-    focused: context.focusedId === id && context.activeLayer === layer,
+    focused,
   };
 };
 

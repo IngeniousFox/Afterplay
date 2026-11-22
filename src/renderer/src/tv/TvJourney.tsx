@@ -17,7 +17,9 @@ import { useTvFocusable } from './focusContext';
 import { forgetJourneyPage, recallJourneyPage, rememberJourneyPage } from './screenMemory';
 import { TvActivityHeatmap } from './TvActivityHeatmap';
 import { tvSound } from './sound';
+import { GlowText, Ticker } from '../components/fx';
 import {
+  TV_TICKER_MS,
   tvButtonHalo,
   tvFocusHalo,
   tvFocusMotion,
@@ -173,14 +175,20 @@ const RecapPanel = ({
   </div>
 );
 
-// Una cifra de página: número en Big Shoulders y la palabra debajo.
+// Una cifra de página: número en Big Shoulders y la palabra debajo. Entra
+// contando con cada página (Ticker; el valor final en data-value y en el
+// texto accesible), y la caliente con el bloom del fósforo.
+const countFormat = (value: number): string => String(Math.round(value));
+
 const PageFigure = ({
   value,
+  format = countFormat,
   label,
   hot = false,
   divided = false,
 }: {
-  value: string;
+  value: number;
+  format?: (value: number) => string;
   label: string;
   hot?: boolean;
   divided?: boolean;
@@ -191,7 +199,19 @@ const PageFigure = ({
       divided && 'border-l border-line-strong pl-[1.2em]',
     )}
   >
-    <TvFigure value={value} className={cn('text-[3em]', hot ? 'text-phosphor' : 'text-bone')} />
+    <Ticker
+      value={value}
+      format={format}
+      duration={TV_TICKER_MS}
+      render={(current) => (
+        <GlowText tone={hot ? 'phosphor' : 'bone'}>
+          <TvFigure
+            value={format(current)}
+            className={cn('text-[3em]', hot ? 'text-phosphor' : 'text-bone')}
+          />
+        </GlowText>
+      )}
+    />
     <span className="text-[0.95em] text-dust">{label}</span>
   </div>
 );
@@ -294,6 +314,9 @@ export const TvJourney = (): React.JSX.Element => {
     forgetJourneyPage();
   }, []);
   const [pageIndex, setPageIndex] = useState(restoredPage ?? 0);
+  // Cuántas veces se ha pasado página en esta visita: la primera página entra
+  // con el fundido de la pantalla; las siguientes, con el cambio de canal.
+  const [turns, setTurns] = useState(0);
 
   const recapByScope = useMemo(
     () =>
@@ -369,6 +392,7 @@ export const TvJourney = (): React.JSX.Element => {
     if (next === clamp(pageIndex)) return;
     tvSound.pageTurn();
     setPageIndex(next);
+    setTurns((count) => count + 1);
   };
   const jumpYear = (step: number): void => {
     const current = pages[clamp(pageIndex)];
@@ -383,6 +407,7 @@ export const TvJourney = (): React.JSX.Element => {
     if (!target || target.position === clamp(pageIndex)) return;
     tvSound.pageTurn();
     setPageIndex(target.position);
+    setTurns((count) => count + 1);
   };
 
   useTvButtons({
@@ -428,9 +453,10 @@ export const TvJourney = (): React.JSX.Element => {
   return (
     // EL LIBRO (tvpwa-tv-notes-journey.png): el lomo a la izquierda, los
     // cantos de las páginas que quedan a la derecha y las flechas en los
-    // bordes. key por página: cada paso remonta con su fundido de entrada
-    // (sin giro 3D: el sistema no anima lo que el mando repite). Las flechas
-    // viven FUERA del key para no re-montarse con cada paso.
+    // bordes. key por página: cada paso remonta y la página nueva entra como
+    // un cambio de canal (glitch breve, scanlines y la página que se
+    // enciende, ~400 ms; sin giro 3D). Las flechas viven FUERA del key para
+    // no re-montarse con cada paso.
     <div className="relative mx-[0.6em] h-full">
       <span
         aria-hidden
@@ -451,9 +477,34 @@ export const TvJourney = (): React.JSX.Element => {
       <PageArrow side="left" disabled={current === 0} onSelect={() => turnPage(-1)} />
       <PageArrow side="right" disabled={current >= pages.length - 1} onSelect={() => turnPage(1)} />
 
+      {/* CAMBIO DE CANAL al pasar página: nieve y scanlines que se apagan,
+          la barra de sincronía rodando y dos franjas RGB que saltan (380 ms,
+          todo transform y opacity; keyframes afterplay-tv-channel-* en
+          main.css). Remonta con cada paso; sus animaciones son finitas, así
+          que en reposo no queda nada corriendo. Sin ello con reduced motion. */}
+      {turns > 0 && (
+        <div
+          key={turns}
+          data-tv-channel
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[5] animate-[afterplay-tv-channel-static_420ms_var(--ease-out)_both] overflow-hidden rounded-md motion-reduce:hidden"
+        >
+          <span className="absolute -inset-[10%] block animate-[grain_420ms_steps(5)_both] bg-(image:--grain) bg-size-[160px] opacity-70" />
+          <span className="absolute inset-0 block bg-[repeating-linear-gradient(0deg,rgb(233_228_216/0.1)_0_2px,transparent_2px_4px)]" />
+          <span className="absolute inset-x-0 top-0 block h-[18%] animate-[afterplay-tv-channel-roll_380ms_linear_both] bg-[linear-gradient(180deg,transparent,rgb(255_222_176/0.24),transparent)]" />
+          <span className="absolute inset-x-0 top-[34%] block h-[2.5%] animate-[afterplay-tv-channel-split_380ms_steps(4)_both] bg-live/45 mix-blend-screen" />
+          <span className="absolute inset-x-0 top-[62%] block h-[1.6%] animate-[afterplay-tv-channel-split_380ms_steps(4)_reverse_both] bg-tube/45 mix-blend-screen" />
+        </div>
+      )}
+
       <div
         key={pageIndex}
-        className="relative flex h-full animate-fade-in flex-col gap-[1.1em] px-[2.6em] pb-[0.6em]"
+        className={cn(
+          'relative flex h-full flex-col gap-[1.1em] px-[2.6em] pb-[0.6em]',
+          turns > 0
+            ? 'animate-[afterplay-tv-channel-page_400ms_linear_both] motion-reduce:animate-fade-in'
+            : 'animate-fade-in',
+        )}
       >
         {page.kind !== 'intro' && (
           <div
@@ -469,23 +520,23 @@ export const TvJourney = (): React.JSX.Element => {
               )}
             </h1>
             <div className="flex items-end">
-              <PageFigure value={formatHours(page.hours)} label="played" hot />
+              <PageFigure value={page.hours} format={formatHours} label="played" hot />
               {page.kind === 'year' ? (
                 <>
                   <PageFigure
-                    value={String(page.games)}
+                    value={page.games}
                     label={page.games === 1 ? 'game' : 'games'}
                     divided
                   />
                   <PageFigure
-                    value={String(page.sessionCount)}
+                    value={page.sessionCount}
                     label={page.sessionCount === 1 ? 'session' : 'sessions'}
                     divided
                   />
                 </>
               ) : (
                 <PageFigure
-                  value={String(page.entries.length)}
+                  value={page.entries.length}
                   label={page.entries.length === 1 ? 'game' : 'games'}
                   divided
                 />
@@ -520,17 +571,9 @@ export const TvJourney = (): React.JSX.Element => {
               games you came back to when nobody was looking. Turn the pages and walk it back.
             </p>
             <div className={cn('flex items-end', tvRevealClass)} style={tvRevealStyle(3)}>
-              <PageFigure value={formatHours(page.hours)} label="played" hot />
-              <PageFigure
-                value={String(page.games)}
-                label={page.games === 1 ? 'game' : 'games'}
-                divided
-              />
-              <PageFigure
-                value={String(page.years)}
-                label={page.years === 1 ? 'year' : 'years'}
-                divided
-              />
+              <PageFigure value={page.hours} format={formatHours} label="played" hot />
+              <PageFigure value={page.games} label={page.games === 1 ? 'game' : 'games'} divided />
+              <PageFigure value={page.years} label={page.years === 1 ? 'year' : 'years'} divided />
             </div>
             {/* EL SECRETO, DICHO UNA VEZ: las motas que flotan detrás de
                 todo el modo TV son el censo de tu biblioteca — una por juego,

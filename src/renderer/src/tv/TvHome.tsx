@@ -19,7 +19,16 @@ import { hasMeasuredDuration } from '../../../shared/domain/sessionMeasure';
 import { useTvBackdrop } from './backdropContext';
 import { useTvFocusable } from './focusContext';
 import { forgetHome, recallHome, rememberHome } from './screenMemory';
-import { tvFocusHalo, tvFocusMotion, tvFocusScale, tvRevealClass, tvRevealStyle } from './styles';
+import { GlowText, Odometer, ScanBeam, Ticker } from '../components/fx';
+import {
+  TV_HERO_BEAM_EVERY_S,
+  TV_TICKER_MS,
+  tvFocusHalo,
+  tvFocusMotion,
+  tvFocusScale,
+  tvRevealClass,
+  tvRevealStyle,
+} from './styles';
 import { TvButton, TvCoverArt, TvFigure, TvLed } from './tvUi';
 import { TvGameTile } from './TvGameTile';
 import type { GameId } from '../../../shared/entityIds';
@@ -148,9 +157,11 @@ const SeeAllTile = ({
 // juegos contando fibers que trabajaron en cada commit). Aquí el tick
 // re-renderiza SOLO este span: 1 componente. Mismo texto, misma clase —
 // cero cambio visual.
+//
+// Odómetro: cada segundo nuevo cae desde arriba, como un marcador.
 const HeroLiveClock = ({ since }: { since: Date | null }): React.JSX.Element => {
   const seconds = useLiveTimer(since);
-  return <span className="tabular-nums">{formatElapsed(seconds)}</span>;
+  return <Odometer value={formatElapsed(seconds)} />;
 };
 
 // La puerta al Journey al pie del Home: el recap más reciente del Loop en
@@ -496,12 +507,16 @@ export const TvHome = (): React.JSX.Element => {
           )}
           style={tvRevealStyle(0)}
         >
+          {/* El arte deriva en Ken Burns lento (28 s, ida y vuelta) dentro de
+              su propio recorte; quieto con reduced motion. */}
           {heroImage ? (
-            <img
-              src={heroImage}
-              alt=""
-              className="absolute inset-y-0 right-0 h-full w-[70%] object-cover opacity-80"
-            />
+            <span aria-hidden className="absolute inset-y-0 right-0 w-[70%] overflow-hidden">
+              <img
+                src={heroImage}
+                alt=""
+                className="h-full w-full animate-ken-burns object-cover opacity-80 motion-reduce:animate-none"
+              />
+            </span>
           ) : heroCoverBackdrop ? (
             <img
               src={heroCoverBackdrop}
@@ -510,6 +525,8 @@ export const TvHome = (): React.JSX.Element => {
             />
           ) : null}
           <div aria-hidden className="absolute inset-0 bg-(image:--scan)" />
+          {/* El haz que barre el héroe, sobre el arte y bajo el fundido. */}
+          <ScanBeam every={TV_HERO_BEAM_EVERY_S} />
           <div
             aria-hidden
             className="absolute inset-0 bg-[linear-gradient(90deg,var(--color-panel)_30%,rgb(23_29_32/0.75)_55%,transparent_85%)]"
@@ -565,9 +582,12 @@ export const TvHome = (): React.JSX.Element => {
                 style={tvRevealStyle(2)}
               >
                 {hero.isLive && (
-                  <span className="font-display text-[2.6em] leading-none font-bold text-phosphor [text-shadow:0_0_18px_rgb(255_179_71/0.35)]">
+                  <GlowText
+                    breathe
+                    className="font-display text-[2.6em] leading-none font-bold text-phosphor"
+                  >
                     <HeroLiveClock since={hero.liveSince ?? null} />
-                  </span>
+                  </GlowText>
                 )}
                 <span className="text-[1em] text-dust tabular-nums">
                   {[
@@ -640,23 +660,44 @@ export const TvHome = (): React.JSX.Element => {
               >
                 <span className="text-[0.92em] text-dust">{monthStats.label} so far</span>
                 <div className="flex items-end gap-[1.1em]">
+                  {/* Las cifras entran contando, como un marcador; la de horas
+                      con el bloom del fósforo. */}
                   {[
-                    { value: formatHours(monthStats.hours), label: 'played', hot: true },
                     {
-                      value: String(monthStats.count),
+                      value: monthStats.hours,
+                      format: formatHours,
+                      label: 'played',
+                      hot: true,
+                    },
+                    {
+                      value: monthStats.count,
+                      format: (value: number) => String(Math.round(value)),
                       label: monthStats.count === 1 ? 'session' : 'sessions',
                       hot: false,
                     },
                     {
-                      value: String(monthStats.games),
+                      value: monthStats.games,
+                      format: (value: number) => String(Math.round(value)),
                       label: monthStats.games === 1 ? 'game' : 'games',
                       hot: false,
                     },
                   ].map((stat) => (
                     <div key={stat.label} className="flex flex-col items-end">
-                      <TvFigure
+                      <Ticker
                         value={stat.value}
-                        className={cn('text-[1.9em]', stat.hot ? 'text-phosphor' : 'text-bone')}
+                        format={stat.format}
+                        duration={TV_TICKER_MS}
+                        render={(value) => (
+                          <GlowText tone={stat.hot ? 'phosphor' : 'bone'}>
+                            <TvFigure
+                              value={stat.format(value)}
+                              className={cn(
+                                'text-[1.9em]',
+                                stat.hot ? 'text-phosphor' : 'text-bone',
+                              )}
+                            />
+                          </GlowText>
+                        )}
                       />
                       <span className="text-[0.88em] text-dust">{stat.label}</span>
                     </div>

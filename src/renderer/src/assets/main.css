@@ -383,9 +383,12 @@
   }
 }
 
+/* MODO TV, «rock and roll»: el power-on de la cortina de entrada (1650 ms en
+   total, TvModeTransition). Línea que se abre en horizontal, destello que la
+   abre en vertical, scanlines que se asientan y el velo que se retira. */
 @keyframes afterplay-tv-intro-veil {
   0%,
-  72% {
+  76% {
     opacity: 1;
   }
   100% {
@@ -393,68 +396,289 @@
   }
 }
 
-@keyframes afterplay-tv-intro-mark {
-  0% {
-    opacity: 0;
-    letter-spacing: 0.34em;
-    filter: blur(6px);
-  }
-  35% {
-    opacity: 1;
-    filter: blur(0);
-  }
-  62% {
-    opacity: 1;
-    letter-spacing: 0.42em;
-  }
-  100% {
-    opacity: 0;
-    letter-spacing: 0.46em;
-    filter: blur(3px);
-  }
-}
-
-@keyframes afterplay-tv-intro-line {
+@keyframes afterplay-tv-power-line {
   0%,
-  28% {
-    transform: scaleX(0);
+  6% {
     opacity: 0;
+    transform: scale(0, 1);
   }
-  55% {
-    transform: scaleX(1);
+  9% {
     opacity: 1;
+    transform: scale(0.04, 1);
   }
-  100% {
-    transform: scaleX(1);
-    opacity: 0;
-  }
-}
-
-@keyframes afterplay-tv-outro-mark {
-  0% {
-    opacity: 0;
-    letter-spacing: 0.34em;
+  20% {
+    opacity: 1;
+    transform: scale(1, 1);
   }
   30% {
-    opacity: 0.85;
+    opacity: 1;
+    transform: scale(1, 1.6);
   }
-  70% {
-    opacity: 0.85;
-    letter-spacing: 0.4em;
-  }
+  40%,
   100% {
     opacity: 0;
-    letter-spacing: 0.44em;
+    transform: scale(1, 6);
   }
 }
 
-@keyframes afterplay-tv-outro-veil-full {
+@keyframes afterplay-tv-power-flash {
   0%,
-  55% {
+  21% {
+    opacity: 0;
+    transform: scaleY(0.004);
+  }
+  24% {
+    opacity: 1;
+    transform: scaleY(0.02);
+  }
+  34% {
+    opacity: 0.85;
+    transform: scaleY(1);
+  }
+  52%,
+  100% {
+    opacity: 0;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes afterplay-tv-power-scan {
+  0%,
+  26% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  36% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.35;
+    transform: translateY(-12px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+}
+
+/* El logo se enciende como un attract mode: apagado, chispazos y luz. */
+@keyframes afterplay-tv-attract {
+  0%,
+  34% {
+    opacity: 0;
+  }
+  37% {
+    opacity: 0.9;
+  }
+  39% {
+    opacity: 0.1;
+  }
+  43% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.35;
+  }
+  47%,
+  86% {
     opacity: 1;
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* El rótulo de debajo parpadea como un «insert coin». */
+@keyframes afterplay-tv-attract-caption {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  51%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  66% {
+    opacity: 0;
+  }
+  67%,
+  84% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: la marca aparece y se va con un fundido, sin chispazos. */
+@keyframes afterplay-tv-intro-calm {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* La salida: power-off de tubo (720 ms). La pantalla se apaga en una línea,
+   la línea en un punto y el punto se funde; luego el velo se retira. */
+@keyframes afterplay-tv-outro-veil-full {
+  0%,
+  62% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes afterplay-tv-power-off {
+  0% {
+    opacity: 0.9;
+    transform: scale(1, 1);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1, 0.006);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.006, 0.006);
+  }
+  58%,
+  100% {
+    opacity: 0;
+    transform: scale(0, 0);
+  }
+}
+
+/* El reflejo que cruza la portada enfocada: pasa en el primer cuarto del
+   ciclo y descansa el resto. */
+@keyframes afterplay-tv-sheen {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+    animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+  }
+  24%,
+  100% {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
+
+/* Los dos puntos del reloj de la cabecera. */
+@keyframes afterplay-tv-colon {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.35;
+  }
+}
+
+/* Pasar página en Journey como cambiar de canal: la página nueva llega con
+   un temblor horizontal y se enciende a saltos (380 ms, lineal a pasos). */
+@keyframes afterplay-tv-channel-page {
+  0% {
+    opacity: 0;
+    transform: translateX(0.7em) skewX(-4deg);
+  }
+  10% {
+    opacity: 0.55;
+    transform: translateX(-0.5em) skewX(3deg);
+  }
+  20% {
+    opacity: 0.15;
+    transform: translateX(0.3em) skewX(-1deg);
+  }
+  32% {
+    opacity: 0.85;
+    transform: translateX(-0.15em);
+  }
+  42% {
+    opacity: 0.5;
+    transform: none;
+  }
+  56%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* La estática del cambio de canal: nieve y scanlines que se apagan. */
+@keyframes afterplay-tv-channel-static {
+  0% {
+    opacity: 0.95;
+  }
+  30% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* La barra de sincronía que rueda de arriba abajo durante el cambio. */
+@keyframes afterplay-tv-channel-roll {
+  from {
+    transform: translateY(-120%);
+  }
+  to {
+    transform: translateY(520%);
+  }
+}
+
+/* Las dos franjas RGB del glitch: saltan de lado a saltos y se apagan. */
+@keyframes afterplay-tv-channel-split {
+  0% {
+    opacity: 0.9;
+    transform: translateX(-3%);
+  }
+  25% {
+    transform: translateX(4%);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateX(-2%);
+  }
+  75% {
+    transform: translateX(1%);
+  }
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+/* Las entradas del menú Start llegan desde el lomo. */
+@keyframes afterplay-tv-menu-item {
+  from {
+    opacity: 0;
+    transform: translateX(var(--menu-x, -0.8em));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* El destello de una tecla del teclado en pantalla: un núcleo de luz que se
+   abre desde el centro y se apaga. */
+@keyframes afterplay-tv-key-flash {
+  from {
+    opacity: 1;
+    transform: scale(0.35);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
   }
 }
 
