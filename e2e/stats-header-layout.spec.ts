@@ -1,6 +1,8 @@
 import { expect, goTo, launchAfterplay, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
+// La barra superior de 56 px (Fósforo) va pegada a la TitleBar nativa, sin
+// hueco, y el armazón llena la ventana hasta abajo.
 const expectJoinedChrome = async (page: Page): Promise<void> => {
   await expect(page.getByTestId('app-titlebar')).toBeVisible();
   await expect
@@ -9,20 +11,25 @@ const expectJoinedChrome = async (page: Page): Promise<void> => {
         const title = document
           .querySelector('[data-testid="app-titlebar"]')!
           .getBoundingClientRect();
-        const shell = document.querySelector('[data-testid="desktop-layout"]')!;
-        return Array.from(shell.children).map(
-          (column) => Math.round((column.getBoundingClientRect().top - title.bottom) * 100) / 100,
-        );
+        const top = document.querySelector('[data-testid="app-topbar"]')!.getBoundingClientRect();
+        const shell = document
+          .querySelector('[data-testid="desktop-layout"]')!
+          .getBoundingClientRect();
+        return [
+          Math.round((top.top - title.bottom) * 100) / 100,
+          Math.round(top.height),
+          Math.round(window.innerHeight - shell.bottom),
+        ];
       }),
     )
-    .toEqual([0, 0, 0]);
+    .toEqual([0, 56, 0]);
 };
 
-test('sidebar dividers meet the title bar on each desktop view and after fullscreen', async ({
+test('the top bar meets the title bar on each desktop view and after fullscreen', async ({
   afterplay,
 }, testInfo) => {
   const { window } = afterplay;
-  for (const route of ['/games', '/plan', '/sessions', '/stats'] as const) {
+  for (const route of ['/home', '/games', '/plan', '/sessions', '/stats'] as const) {
     await goTo(window, route);
     await expectJoinedChrome(window);
   }

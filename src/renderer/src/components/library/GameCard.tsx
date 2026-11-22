@@ -1,5 +1,4 @@
-import { CalendarRange, Clock3, Gamepad2, Play } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 import type { GameListItem } from '../../../../shared/types';
 import { isLiveElsewhere } from '../../../../shared/liveSession';
 import { useDeviceContext } from '../../hooks/devices';
@@ -7,384 +6,134 @@ import { useImageSrc } from '../../hooks/useImageSrc';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import { useNearViewport } from '../../hooks/useNearViewport';
 import { useOffscreenAnimation } from '../../hooks/useOffscreenAnimation';
-import { DAY_MS, humanizeSpan, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours } from '../../lib/format';
-import { getGameStatusMeta } from '../../lib/gameStatus';
-import { StatusIcon } from '../StatusIcon';
-import { BLUE, GREEN, TEAL } from '../../lib/colors';
+import { focusRing } from '../shell/controls';
+import { statusKeyOf as gameStatusKey } from '../../lib/gameFilters';
+import { STATUS_META } from '../../lib/gameStatus';
+import { StatusLed } from './statusLed';
+
+// LA PORTADA DE LA BIBLIOTECA (Fósforo, library.png y sistema-medios.png).
+//
+// Carátula 3:4 con radio de 4 px, el LED de estado en la esquina y la franja
+// de horas al pie; el título debajo, entero (sin recortar). Es un botón: se
+// abre con clic, Enter o Espacio, y la rejilla mueve el foco con las flechas.
+//
+// En marcha: el LED pasa a rojo con pulso y la franja enseña el cronómetro;
+// en otro PC, anillo cian y el nombre del PC (§10.8). El resto de la ficha
+// (géneros, HLTB, sesiones) vive en la ficha, no en la tarjeta.
 
 type GameCardProps = {
   game: GameListItem;
   onSelect: () => void;
+  // El último juego abierto desde la rejilla: borde Phosphor al volver.
+  selected?: boolean;
 };
 
-// Máximo de chips de género en la trasera + un "+N" con el resto: pintarlos
-// todos desbordaría la card con juegos de 4-5 géneros (el espacio es el que
-// es, formato 3/4).
-const MAX_GENRES = 2;
-
-// Cuánto sobrevive la trasera al ratón que se va. Holgado sobre los 700ms del
-// giro: lo que no puede pasar es que se desmonte con la card todavía dándole
-// la espalda al usuario (ver everFlipped).
-const BACK_RELEASE_MS = 900;
-
-// "Last played 3 weeks ago" — el lazo con el juego dicho en humano, no una
-// fecha que obliga a restar de cabeza.
-//
-// Días de CALENDARIO (medianoche local), no tramos de 24 h: una sesión de
-// ayer a las 20:00 es "yesterday" aunque no hayan pasado 24 horas — que es
-// como lo cuenta cualquiera, y la misma regla que ya usan los cubos de la
-// pantalla de Sessions. Medir horas transcurridas hacía decir "today" a lo
-// jugado ayer por la noche.
-const lastPlayedLabel = (lastPlayedAt: Date): string => {
-  const days = Math.round((startOfDayMs(new Date()) - startOfDayMs(lastPlayedAt)) / DAY_MS);
-  if (days <= 0) return 'Last played today';
-  if (days === 1) return 'Last played yesterday';
-  return `Last played ${humanizeSpan(days)} ago`;
-};
-
-// Cara trasera de la card (se ve al voltearla): la ficha del juego SOBRE su
-// arte a sangre completa — el mismo lenguaje de "arte tras un velo" del toast
-// de cierre y del panel del Journey. La versión anterior era un sándwich de
-// franjas (cabecera sólida, tira de hero al 26%, cuerpo sólido) que troceaba
-// la card en tres; ahora el hero llena la trasera entera, el título y el
-// estado viven arriba, los datos flotan abajo, y el centro queda para que el
-// arte respire.
-//
-// La legibilidad sobre arte impredecible la resuelve el velo (denso arriba y
-// abajo, tenue en el centro), no la suerte. Y la cadena de respaldo es la del
-// modo ambiente: sin hero, la CARÁTULA desenfocada de fondo — borrosa da
-// igual su resolución y siempre trae la paleta del juego —; sin nada, lienzo.
-const CardBack = ({
+export const GameCard = ({
   game,
-  elapsedSeconds,
-  coverSrc,
-}: {
-  game: GameListItem;
-  elapsedSeconds: number;
-  // Resuelta por el FRENTE (GameCard, siempre montado) y pasada aquí en vez
-  // de que la trasera vuelva a llamar a useImageSrc con la misma url+type:
-  // eran dos resoluciones de la misma carátula por card, una por cada hover.
-  coverSrc: string | null;
-}): React.JSX.Element => {
-  const status = getGameStatusMeta(game.currentState);
-  const heroSrc = useImageSrc(game.heroUrl, 'heroes');
-
-  const hltbPct =
-    game.hltbMain !== null && game.hltbMain > 0 && game.totalHours > 0
-      ? Math.min(100, (game.totalHours / game.hltbMain) * 100)
-      : null;
-
-  return (
-    <div className="relative flex h-full flex-col">
-      {/* ── El arte, a sangre completa ─────────────────────────────────── */}
-      <div className="absolute inset-0">
-        {heroSrc ? (
-          <img src={heroSrc} alt="" className="h-full w-full object-cover brightness-[.66]" />
-        ) : coverSrc ? (
-          // scale-110: el blur difumina los bordes hacia fuera y sin margen
-          // asomarían las esquinas transparentes de la propia imagen (mismo
-          // truco que el fondo del modo ambiente).
-          <img
-            src={coverSrc}
-            alt=""
-            className="h-full w-full scale-110 object-cover blur-lg brightness-[.5]"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[#151716]">
-            <Gamepad2 size={26} strokeWidth={1.5} className="text-muted-foreground/25" />
-          </div>
-        )}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(13,15,14,.82) 0%, rgba(13,15,14,.42) 26%, rgba(13,15,14,.30) 48%, rgba(13,15,14,.88) 78%, rgba(13,15,14,.96) 100%)',
-          }}
-        />
-      </div>
-
-      {/* ── Cabecera: quién es y cómo estás con él ─────────────────────── */}
-      <div className="relative flex-none px-3 pt-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <span className="line-clamp-2 text-[13.5px] leading-tight font-extrabold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,.75)]">
-            {game.title}
-          </span>
-          {game.releaseYear !== null && (
-            <span className="flex-none pt-0.25 text-[10.5px] font-semibold text-white/55 tabular-nums">
-              {game.releaseYear}
-            </span>
-          )}
-        </div>
-        <div className="mt-1.25 flex items-center gap-1.5">
-          <StatusIcon meta={status} size={13} />
-          <span
-            className="truncate text-[11.5px] font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]"
-            style={{ color: status.color }}
-          >
-            {status.label}
-          </span>
-          {game.isLive && (
-            <span className="ml-auto flex-none text-[11px] font-bold text-primary tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
-              {formatElapsed(elapsedSeconds)}
-            </span>
-          )}
-        </div>
-        {/* El recuerdo, no el dato: cuándo fue la última vez. En vivo sobra
-            — el contador de arriba ya dice que es AHORA. */}
-        {!game.isLive && game.lastPlayedAt !== null && (
-          <div className="mt-1 text-[10.5px] leading-4 font-bold text-white/75">
-            {lastPlayedLabel(game.lastPlayedAt)}
-          </div>
-        )}
-      </div>
-
-      {/* El centro queda libre a propósito: es donde el arte se luce. */}
-      <div className="min-h-0 flex-1" />
-
-      {/* ── Los datos, flotando al pie ─────────────────────────────────── */}
-      <div className="relative flex flex-none flex-col gap-2 px-3 pb-3">
-        {game.totalHours > 0 ? (
-          // leading-4 (16px) + iconos de 12: el centrado vertical da 2px
-          // EXACTOS. Con el line-height heredado (19,5px) e iconos de 12,5
-          // caía en medio píxel — invisible mientras el giro 3D mantiene la
-          // cara rasterizada como textura, pero al terminar la animación el
-          // navegador vuelve a pintar normal, redondea al píxel entero y el
-          // icono daba un saltito hacia abajo.
-          <div className="flex items-center gap-3">
-            {/* Sin drop-shadow aquí a propósito: cada filtro es un nodo de
-                efecto que Chromium puede re-ajustar por su cuenta al acabar
-                el giro, y el velo del pie ya es casi opaco — la sombra no
-                aportaba contraste, solo otro sitio donde saltar. */}
-            <span className="flex items-center gap-1.5 text-[13px] leading-4 font-extrabold text-white tabular-nums">
-              <Clock3 size={12} style={{ color: GREEN }} />
-              {formatHours(game.totalHours)}
-            </span>
-            {game.sessionCount > 0 && (
-              <span className="flex items-center gap-1.5 text-[12px] leading-4 font-bold text-white/80 tabular-nums">
-                <CalendarRange size={12} style={{ color: BLUE }} />
-                {game.sessionCount} {game.sessionCount === 1 ? 'session' : 'sessions'}
-              </span>
-            )}
-          </div>
-        ) : (
-          // Un juego sin tocar no enseña cifras a cero — lo dice con palabras.
-          <div className="text-[11.5px] font-semibold text-white/60 drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
-            Not played yet.
-          </div>
-        )}
-
-        {hltbPct !== null && (
-          <div>
-            <div className="mb-1 flex items-baseline justify-between">
-              <span
-                className="text-[9px] font-bold tracking-[.11em] drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]"
-                style={{ color: `${TEAL}d8` }}
-              >
-                MAIN STORY
-              </span>
-              <span className="text-[10.5px] font-semibold text-white/60 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
-                {formatHours(game.hltbMain ?? 0)}
-              </span>
-            </div>
-            <div className="h-1.25 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${hltbPct}%`,
-                  background: `linear-gradient(90deg, ${TEAL}, ${TEAL}99)`,
-                  boxShadow: `0 0 6px ${TEAL}66`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {game.genres && game.genres.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {game.genres.slice(0, MAX_GENRES).map((genre) => (
-              <span
-                key={genre}
-                className="rounded-md border border-white/12 bg-black/35 px-1.75 py-0.5 text-[10px] font-semibold text-white/75"
-              >
-                {genre}
-              </span>
-            ))}
-            {game.genres.length > MAX_GENRES && (
-              <span className="self-center text-[10px] font-semibold text-white/45 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,.8)]">
-                +{game.genres.length - MAX_GENRES}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* La firma de color del estado al pie — el mismo remate que las
-          carátulas del Journey. */}
-      <div className="absolute inset-x-0 bottom-0 h-0.75" style={{ background: status.color }} />
-    </div>
-  );
-};
-
-// SPEC 10.6/10.7 — carátula 3/4, borde 13px. Rediseño: la card se VOLTEA al
-// pasar el ratón (flip 3D CSS puro: perspectiva en el padre, preserve-3d en
-// el rotador, backface-visibility en las dos caras) y la trasera enseña la
-// ficha del juego — título, estado, horas, HLTB, géneros. Por eso el frente
-// es carátula limpia, sin texto encima: la info vive en la vuelta, y
-// repetirla delante solo taparía el arte (además ya está en la columna de
-// navegación). Lo de "en marcha" (badge LIVE, glow, contador) SÍ se queda en
-// el frente — saber qué se está jugando no puede depender de un hover — y el
-// contador reaparece en la trasera para no perderlo al voltear.
-export const GameCard = ({ game, onSelect }: GameCardProps): React.JSX.Element => {
+  onSelect,
+  selected = false,
+}: GameCardProps): React.JSX.Element => {
   const coverSrc = useImageSrc(game.coverUrl, 'covers');
-  // Desestructurado: ver el porqué en PlanRow, mismo caso.
+  // Suelta la carátula descodificada cuando la tarjeta se aleja de la vista:
+  // la rejilla monta toda la biblioteca y recorrerla entera dejaría una
+  // imagen viva por juego. La caja no cambia de tamaño.
   const { observe: observeCard, near: cardNear } = useNearViewport();
-  // Pausa lo de EN MARCHA cuando la card sale de la vista: glow-card y
-  // pulse-badge animan box-shadow (categoría paint — style+paint en el main
-  // thread CADA frame, estén donde estén). Medido en el estado típico (333
-  // cards, 3 live bajo el fold): las 9 animaciones seguían `running`
-  // invisibles; con esto quedan 0 fuera y las mismas 9, idénticas y en su
-  // fase, dentro. El observador solo se engancha en las cards live (el ref
-  // vive en el overlay condicional), así que las otras 330 no pagan nada.
+  // El pulso del LED en marcha se pausa fuera de la vista.
   const { observe: observeLive, playState: livePlayState } = useOffscreenAnimation();
   const elapsedSeconds = useLiveTimer(game.isLive ? game.liveSince : null);
-  // §10.8: en vivo en OTRO PC la etiqueta dice dónde, no un "LIVE" que parece
-  // de este PC.
   const { thisDeviceId, nameOf } = useDeviceContext();
-  const liveLabel =
-    isLiveElsewhere(game, thisDeviceId) && game.liveDeviceId
-      ? `ON ${nameOf(game.liveDeviceId).toUpperCase()}`
-      : 'LIVE';
-  const [flipped, setFlipped] = useState(false);
-  // La trasera se monta en el PRIMER hover y se suelta cuando el giro de
-  // vuelta ha TERMINADO. Los dos extremos estaban descartados por su motivo:
-  // montada desde el principio dispararía la carga del hero (imagen 1080p) de
-  // todos los juegos del grid a la vez; desmontarla en el mouseleave dejaría
-  // la animación de vuelta enseñando un hueco vacío durante su primera mitad
-  // (la card aún da la espalda cuando el ratón ya se fue).
-  //
-  // Antes se quedaba montada PARA SIEMPRE, y esa era la tercera opción mala:
-  // en una biblioteca de cientos, pasear el ratón por la parrilla iba dejando
-  // un hero 1080p vivo por cada card tocada (~8 MB de bitmap descodificado
-  // cada uno) más su capa de compositor de will-change, y nada de eso se
-  // soltaba nunca. Con la ventana de gracia se conserva la animación intacta
-  // y la memoria vuelve sola en cuanto apartas el ratón.
-  const [everFlipped, setEverFlipped] = useState(false);
-  const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => clearTimeout(releaseTimer.current ?? undefined), []);
+  const remote = game.isLive && isLiveElsewhere(game, thisDeviceId);
+  const status = gameStatusKey(game);
+
+  const strip = game.isLive
+    ? remote && game.liveDeviceId
+      ? `On ${nameOf(game.liveDeviceId)}`
+      : formatElapsed(elapsedSeconds)
+    : game.totalHours > 0
+      ? formatHours(game.totalHours)
+      : 'Not played';
 
   return (
-    <div
-      ref={observeCard}
+    <button
+      type="button"
       onClick={onSelect}
-      onMouseEnter={() => {
-        clearTimeout(releaseTimer.current ?? undefined);
-        setFlipped(true);
-        setEverFlipped(true);
-      }}
-      onMouseLeave={() => {
-        setFlipped(false);
-        releaseTimer.current = setTimeout(() => setEverFlipped(false), BACK_RELEASE_MS);
-      }}
-      className="group relative cursor-pointer [perspective:1100px]"
+      data-game-card={game.id}
+      aria-label={`${game.title}. ${game.isLive ? (remote ? 'Playing on another PC' : 'Playing now') : STATUS_META[status].label}. ${strip}`}
+      className={cn(
+        'group block w-full rounded-sm text-left',
+        focusRing,
+        'focus-visible:outline-offset-3',
+      )}
     >
-      {/* will-change SOLO tras el primer volteo: al terminar el giro, sin él,
-          Chromium re-rasteriza las caras y las ajusta al píxel entero — y como
-          la altura de la card es fraccionaria (aspect-3/4 de una columna de
-          grid), los iconos de la trasera daban un saltito de medio píxel al
-          aterrizar. Con la capa fijada, lo que se ve durante el giro y al
-          posarse es la MISMA rasterización. Las cards nunca volteadas no
-          pagan la memoria de la capa, y las que ya volvieron la devuelven
-          con la trasera (everFlipped). */}
-      <div
-        className="relative aspect-3/4 transition-transform duration-700 ease-[cubic-bezier(.35,.9,.3,1)] [transform-style:preserve-3d]"
-        style={{
-          transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-          willChange: everFlipped ? 'transform' : undefined,
-        }}
-      >
-        {/* Cara frontal — la carátula. Se suelta al alejarse de la vista
-            (useNearViewport): la parrilla monta TODAS las cards de la
-            biblioteca, y sin esto recorrerla entera dejaba una carátula
-            descodificada por juego viva para el resto de la sesión. La caja
-            no cambia de tamaño, así que la parrilla no se entera. */}
-        <div className="absolute inset-0 overflow-hidden rounded-[13px] border border-border bg-card [backface-visibility:hidden]">
-          {!cardNear ? null : coverSrc ? (
-            <img
-              src={coverSrc}
-              loading="lazy"
-              alt={game.title}
-              className="block h-full w-full object-cover brightness-90"
-            />
-          ) : (
-            // Sin carátula, el título en texto — es lo único que identifica
-            // al juego cuando no hay arte que enseñar.
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted px-3 text-center">
-              <Gamepad2 size={40} strokeWidth={1.5} className="text-muted-foreground/40" />
-              <span className="line-clamp-3 text-[12px] font-semibold text-muted-foreground">
-                {game.title}
-              </span>
-            </div>
-          )}
-
-          {game.isLive && (
-            <>
-              <div
-                ref={observeLive}
-                className="absolute inset-0 rounded-[13px]"
-                style={{
-                  animation: 'afterplay-glow-card 2.6s ease-in-out infinite',
-                  animationPlayState: livePlayState,
-                }}
-              />
-              <div
-                className="absolute top-2.75 right-2.75 flex max-w-[85%] items-center gap-1.25 rounded-[7px] border px-2 py-0.75"
-                style={{
-                  background: 'rgba(8,20,13,.78)',
-                  borderColor: 'rgba(47,220,126,.55)',
-                  animation: 'afterplay-pulse-badge 2.4s infinite',
-                  animationPlayState: livePlayState,
-                }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-primary"
-                  style={{
-                    animation: 'afterplay-pulse-dot 1.4s infinite',
-                    animationPlayState: livePlayState,
-                  }}
-                />
-                <span className="text-[9.5px] font-extrabold tracking-widest text-primary [overflow-wrap:anywhere]">
-                  {liveLabel}
-                </span>
-              </div>
-              <div
-                className="absolute top-1/2 left-1/2 flex h-13.5 w-13.5 items-center justify-center rounded-full border-[1.5px] shadow-[0_6px_22px_rgba(0,0,0,0.4)]"
-                style={{
-                  transform: 'translate(-50%, -50%)',
-                  background: 'rgba(8,12,10,.68)',
-                  borderColor: 'rgba(47,220,126,.7)',
-                }}
-              >
-                <Play size={20} color="#2fdc7e" fill="#2fdc7e" />
-              </div>
-              <div
-                className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg border border-border px-2.5 py-0.75 text-[12.5px] font-bold tracking-[.02em] text-primary tabular-nums"
-                style={{ background: 'rgba(8,12,10,.78)' }}
-              >
-                {formatElapsed(elapsedSeconds)}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Cara trasera — la ficha. Pre-rotada 180º: al girar el rotador
-            queda mirando al frente. Mismo tamaño que la card, sin crecido. */}
-        {everFlipped && (
-          <div className="absolute inset-0 overflow-hidden rounded-[13px] border border-white/14 bg-[#151716] [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <CardBack game={game} elapsedSeconds={elapsedSeconds} coverSrc={coverSrc} />
-          </div>
+      <span
+        ref={observeCard}
+        className={cn(
+          'relative block aspect-3/4 overflow-hidden rounded-sm bg-raised ring-1 transition-[transform,box-shadow] duration-180 ease-out',
+          'group-hover:-translate-y-0.5 group-hover:shadow-lift motion-reduce:group-hover:translate-y-0',
+          selected ? 'ring-2 ring-phosphor' : 'ring-line group-hover:ring-bone/30',
         )}
-      </div>
-    </div>
+      >
+        {!cardNear ? null : coverSrc ? (
+          <img
+            src={coverSrc}
+            loading="lazy"
+            alt=""
+            className="block h-full w-full object-cover transition-transform duration-180 ease-out group-hover:scale-104 motion-reduce:group-hover:scale-100"
+          />
+        ) : (
+          // Sin carátula: placa Raised con las iniciales en Big Shoulders.
+          <span className="flex h-full w-full items-center justify-center bg-[repeating-linear-gradient(135deg,transparent_0_10px,rgb(233_228_216/0.03)_10px_11px)] px-3 text-center font-display text-[32px] leading-none font-bold text-dust">
+            {initialsOf(game.title)}
+          </span>
+        )}
+
+        {/* El LED: 9 px a 7 px de la esquina, con anillo Cabinet. */}
+        {game.isLive ? (
+          <span
+            ref={observeLive}
+            aria-hidden
+            className="absolute top-1.75 right-1.75 flex size-2.25 items-center justify-center"
+          >
+            {!remote && (
+              <span
+                className="absolute inset-0 animate-led-ring rounded-full bg-live motion-reduce:hidden"
+                style={{ animationPlayState: livePlayState }}
+              />
+            )}
+            <span
+              className={cn(
+                'relative size-2.25 rounded-full ring-2 ring-cabinet',
+                remote ? 'border-2 border-tube bg-cabinet' : 'bg-live',
+              )}
+            />
+          </span>
+        ) : (
+          <StatusLed
+            status={status}
+            className="absolute top-1.75 right-1.75 size-2.25 ring-2 ring-cabinet"
+          />
+        )}
+
+        {/* La franja de horas: 20 px, Cabinet al 80 %. */}
+        <span
+          className={cn(
+            'absolute inset-x-0 bottom-0 flex h-5 items-center bg-cabinet/80 px-2 text-micro font-medium tabular-nums',
+            game.isLive ? (remote ? 'text-tube' : 'text-live') : 'text-bone',
+          )}
+        >
+          {strip}
+        </span>
+      </span>
+      <span className="mt-2 block text-small text-bone">{game.title}</span>
+    </button>
   );
 };
+
+const initialsOf = (title: string): string =>
+  title
+    .split(/\s+/)
+    .filter((word) => /[a-z0-9]/i.test(word[0] ?? ''))
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('');

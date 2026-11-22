@@ -1,5 +1,6 @@
-import { ArrowUpDown, SlidersHorizontal, X } from 'lucide-react';
+import { Check, LayoutGrid } from 'lucide-react';
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import {
   countActiveFilters,
   ERA_LABELS,
@@ -14,13 +15,17 @@ import {
   type SortKey,
 } from '../../lib/gameFilters';
 import { STATUS_META, type StatusKey } from '../../lib/gameStatus';
-import { expandClass } from '../../lib/styles';
-import { StatusIcon } from '../StatusIcon';
+import { StatusLed } from '../library/statusLed';
+import { focusRingInset, textLinkClass } from '../shell/controls';
 
-// Panel de filtros de las columnas de navegación. Va PLEGADO por defecto y
-// detrás de un botón: la columna mide 312px y su trabajo principal es
-// enseñar la lista — un panel siempre desplegado se comería la mitad del
-// alto útil para algo que no se usa en la mayoría de visitas.
+// EL PANEL DE FILTROS DE LIBRARY (Fósforo, library.png): una columna fija a la
+// izquierda de la rejilla, siempre a la vista. Estados con su LED y su
+// recuento, las banderas, horas, década y género, y el orden.
+//
+// Semántica de siempre (lib/gameFilters): OR dentro de cada grupo, AND entre
+// grupos; géneros y banderas en AND. El orden es de selección única. Todas
+// las filas son botones con aria-pressed: se recorren con Tab y se activan
+// con Enter o Espacio.
 
 const STATUS_ORDER: StatusKey[] = [
   'playing',
@@ -32,47 +37,26 @@ const STATUS_ORDER: StatusKey[] = [
 ];
 const PLAYTIME_ORDER: PlaytimeBucket[] = ['none', 'short', 'medium', 'long'];
 const ERA_ORDER: EraBucket[] = ['now', 'tens', 'aughts', 'retro'];
+// Los géneros que se ven sin desplegar: una biblioteca variada pasa de veinte.
+const GENRES_FOLDED = 8;
 
-// Alterna un valor dentro de un grupo. Todos los grupos son multi-selección:
-// que marcar "Beaten" desmarcase "Playing" obligaría a mirar dos veces para
-// una pregunta tan normal como "¿qué he jugado y qué he dejado?".
 const toggle = <T,>(values: T[], value: T): T[] =>
   values.includes(value) ? values.filter((current) => current !== value) : [...values, value];
 
-const Chip = ({
-  active,
-  color,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  color?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}): React.JSX.Element => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`flex items-center gap-1.25 rounded-[7px] border px-1.75 py-1 text-[10.5px] font-semibold transition-colors duration-150 ${
-      active
-        ? 'text-foreground'
-        : 'border-input text-muted-foreground hover:border-primary/45 hover:text-foreground'
-    }`}
-    // Cada estado tiñe su propio chip con SU color (el mismo de la fila y de
-    // la ficha), así que el filtro se reconoce por color antes que por
-    // texto. Los grupos sin color propio caen al verde de acento.
-    style={
-      active
-        ? {
-            borderColor: `${color ?? 'var(--primary)'}59`,
-            background: `${color ?? 'var(--primary)'}1f`,
-            color: color ?? 'var(--primary)',
-          }
-        : undefined
-    }
-  >
-    {children}
-  </button>
+const rowClass = cn(
+  'relative flex h-8.5 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-body text-dust transition-colors duration-150',
+  'hover:bg-raised hover:text-bone disabled:pointer-events-none disabled:opacity-40',
+  'aria-pressed:bg-raised aria-pressed:text-bone',
+  focusRingInset,
+);
+
+// La barra Phosphor de 2 px de la fila activa.
+const ActiveEdge = (): React.JSX.Element => (
+  <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-phosphor" />
+);
+
+const Count = ({ value }: { value: number }): React.JSX.Element => (
+  <span className="ml-auto flex-none text-small text-dust tabular-nums">{value}</span>
 );
 
 const Group = ({
@@ -82,29 +66,75 @@ const Group = ({
   label: string;
   children: React.ReactNode;
 }): React.JSX.Element => (
-  <div className="mt-2.5 first:mt-0">
-    <div className="mb-1.25 text-[9px] font-bold tracking-[.12em] text-muted-foreground/70">
-      {label}
-    </div>
-    <div className="flex flex-wrap gap-1">{children}</div>
+  <div role="group" aria-label={label} className="mt-5 first:mt-0">
+    <div className="mb-1 px-2.5 text-small font-semibold text-dust">{label}</div>
+    <div className="flex flex-col gap-px">{children}</div>
   </div>
+);
+
+const Box = ({
+  checked,
+  round = false,
+}: {
+  checked: boolean;
+  round?: boolean;
+}): React.JSX.Element => (
+  <span
+    aria-hidden
+    className={cn(
+      'flex size-4 flex-none items-center justify-center border',
+      round ? 'rounded-full' : 'rounded-xs',
+      checked ? 'border-phosphor bg-phosphor text-ink' : 'border-edge',
+    )}
+  >
+    {checked &&
+      (round ? (
+        <span className="size-1.5 rounded-full bg-ink" />
+      ) : (
+        <Check size={11} strokeWidth={3} />
+      ))}
+  </span>
+);
+
+const CheckRow = ({
+  checked,
+  onClick,
+  disabled,
+  round,
+  children,
+}: {
+  checked: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  round?: boolean;
+  children: React.ReactNode;
+}): React.JSX.Element => (
+  <button
+    type="button"
+    aria-pressed={checked}
+    onClick={onClick}
+    disabled={disabled}
+    className={rowClass}
+  >
+    <Box checked={checked} round={round} />
+    <span className="min-w-0">{children}</span>
+  </button>
 );
 
 type Props = {
   filters: GameFilters;
   onChange: (filters: GameFilters) => void;
-  // Qué grupos ofrece esta columna — ver FilterGroup en lib/gameFilters.
   groups: FilterGroup[];
-  // Qué banderas y qué órdenes tienen sentido AQUÍ. En Plan to Play, por
-  // ejemplo, "Playing now" o "Most played" no significan nada: esos juegos
-  // no se han tocado por definición.
   flags: FlagKey[];
   sorts: SortKey[];
   genres: string[];
-  // Para el "N de M" — sin él no hay forma de saber cuánto se está
-  // escondiendo, que es justo lo que angustia de un filtro puesto.
+  // Recuento por estado con el resto de filtros y la búsqueda ya aplicados.
+  statusCounts: Record<StatusKey, number>;
+  // Cuántos se ven y cuántos hay: "Showing 12 of 331".
   shown: number;
   total: number;
+  // Biblioteca vacía: el panel está, a cero y atenuado.
+  disabled?: boolean;
 };
 
 export const GameFilterPanel = ({
@@ -114,160 +144,166 @@ export const GameFilterPanel = ({
   flags,
   sorts,
   genres,
+  statusCounts,
   shown,
   total,
+  disabled = false,
 }: Props): React.JSX.Element => {
-  const [open, setOpen] = useState(false);
+  const [allGenres, setAllGenres] = useState(false);
   const activeCount = countActiveFilters(filters);
   const has = (group: FilterGroup): boolean => groups.includes(group);
-
   const set = <K extends keyof GameFilters>(key: K, value: GameFilters[K]): void =>
     onChange({ ...filters, [key]: value });
+  const statusTotal = STATUS_ORDER.reduce((sum, status) => sum + statusCounts[status], 0);
+  // Los géneros marcados se ven siempre, aunque el grupo esté plegado.
+  const visibleGenres = allGenres
+    ? genres
+    : [
+        ...genres.slice(0, GENRES_FOLDED),
+        ...filters.genres.filter((genre) => genres.indexOf(genre) >= GENRES_FOLDED),
+      ];
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className={`flex flex-1 items-center gap-1.5 rounded-[8px] border px-2.25 py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
-            activeCount > 0
-              ? 'border-primary/45 bg-primary/10 text-primary'
-              : 'border-input text-muted-foreground hover:border-primary/45 hover:text-foreground'
-          }`}
-        >
-          <SlidersHorizontal size={12} className="flex-none" />
-          Filters
-          {activeCount > 0 && (
-            <span className="rounded-full bg-primary/20 px-1.5 text-[9.5px] font-bold tabular-nums">
-              {activeCount}
-            </span>
-          )}
-          {/* El recuento vive en el propio botón y no dentro del panel: con
-              el panel cerrado sigue siendo la única pista de que la lista
-              está recortada. */}
-          {activeCount > 0 && (
-            <span className="ml-auto text-[10px] font-normal tabular-nums opacity-80">
-              {shown}/{total}
-            </span>
-          )}
-        </button>
+    <aside
+      aria-label="Filters"
+      className="flex w-58 flex-none flex-col overflow-y-auto border-r border-line bg-cabinet px-3.5 pt-5 pb-6"
+    >
+      {has('status') && (
+        <Group label="Status">
+          <button
+            type="button"
+            aria-pressed={filters.statuses.length === 0}
+            onClick={() => set('statuses', [])}
+            disabled={disabled}
+            className={cn(rowClass, 'font-semibold')}
+          >
+            {filters.statuses.length === 0 && <ActiveEdge />}
+            <LayoutGrid aria-hidden size={15} className="flex-none" />
+            All games
+            <Count value={statusTotal} />
+          </button>
+          {STATUS_ORDER.map((status) => {
+            const active = filters.statuses.includes(status);
+            return (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={active}
+                onClick={() => set('statuses', toggle(filters.statuses, status))}
+                disabled={disabled}
+                className={rowClass}
+              >
+                {active && <ActiveEdge />}
+                <StatusLed status={status} className={cn(!active && 'opacity-80')} />
+                {STATUS_META[status].label}
+                <Count value={statusCounts[status]} />
+              </button>
+            );
+          })}
+        </Group>
+      )}
 
-        {activeCount > 0 && (
+      {has('flags') && flags.length > 0 && (
+        <Group label="Kind">
+          {flags.map((flag) => (
+            <CheckRow
+              key={flag}
+              checked={filters.flags.includes(flag)}
+              onClick={() => set('flags', toggle(filters.flags, flag))}
+              disabled={disabled}
+            >
+              {FLAG_LABELS[flag]}
+            </CheckRow>
+          ))}
+        </Group>
+      )}
+
+      {has('playtime') && (
+        <Group label="Time played">
+          {PLAYTIME_ORDER.map((bucket) => (
+            <CheckRow
+              key={bucket}
+              checked={filters.playtime.includes(bucket)}
+              onClick={() => set('playtime', toggle(filters.playtime, bucket))}
+              disabled={disabled}
+            >
+              {PLAYTIME_LABELS[bucket]}
+            </CheckRow>
+          ))}
+        </Group>
+      )}
+
+      {has('era') && (
+        <Group label="Released">
+          {ERA_ORDER.map((era) => (
+            <CheckRow
+              key={era}
+              checked={filters.eras.includes(era)}
+              onClick={() => set('eras', toggle(filters.eras, era))}
+              disabled={disabled}
+            >
+              {ERA_LABELS[era]}
+            </CheckRow>
+          ))}
+        </Group>
+      )}
+
+      {/* Solo los géneros que existen en esta biblioteca (availableGenres). */}
+      {has('genre') && genres.length > 0 && (
+        <Group label="Genre">
+          {visibleGenres.map((genre) => (
+            <CheckRow
+              key={genre}
+              checked={filters.genres.includes(genre)}
+              onClick={() => set('genres', toggle(filters.genres, genre))}
+              disabled={disabled}
+            >
+              {genre}
+            </CheckRow>
+          ))}
+          {genres.length > GENRES_FOLDED && (
+            <button
+              type="button"
+              onClick={() => setAllGenres(!allGenres)}
+              aria-expanded={allGenres}
+              className={cn(textLinkClass, 'mt-1 self-start px-2.5')}
+            >
+              {allGenres ? 'Show fewer' : `Show all ${genres.length}`}
+            </button>
+          )}
+        </Group>
+      )}
+
+      <Group label="Order">
+        {sorts.map((sort) => (
+          <CheckRow
+            key={sort}
+            round
+            checked={filters.sort === sort}
+            onClick={() => set('sort', sort)}
+            disabled={disabled}
+          >
+            {SORT_LABELS[sort]}
+          </CheckRow>
+        ))}
+      </Group>
+
+      {activeCount > 0 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-line px-2.5 pt-4 text-small text-dust">
+          <span className="tabular-nums">
+            Showing {shown} of {total}
+          </span>
           <button
             type="button"
             onClick={() =>
               onChange({ ...filters, statuses: [], genres: [], playtime: [], eras: [], flags: [] })
             }
-            title="Clear filters"
-            className="flex-none rounded-[8px] border border-input p-1.5 text-muted-foreground transition-colors duration-150 hover:border-destructive/45 hover:text-destructive"
+            className={textLinkClass}
           >
-            <X size={12} />
+            Clear filters
           </button>
-        )}
-      </div>
-
-      {open && (
-        <div
-          className={`mt-1.5 rounded-[9px] border border-border bg-white/[0.02] p-2.5 ${expandClass}`}
-        >
-          {has('status') && (
-            <Group label="STATUS">
-              {STATUS_ORDER.map((status) => {
-                const meta = STATUS_META[status];
-                return (
-                  <Chip
-                    key={status}
-                    active={filters.statuses.includes(status)}
-                    color={meta.color}
-                    onClick={() => set('statuses', toggle(filters.statuses, status))}
-                  >
-                    <StatusIcon meta={meta} size={10} />
-                    {meta.label}
-                  </Chip>
-                );
-              })}
-            </Group>
-          )}
-
-          {has('flags') && flags.length > 0 && (
-            <Group label="QUICK">
-              {flags.map((flag) => (
-                <Chip
-                  key={flag}
-                  active={filters.flags.includes(flag)}
-                  onClick={() => set('flags', toggle(filters.flags, flag))}
-                >
-                  {FLAG_LABELS[flag]}
-                </Chip>
-              ))}
-            </Group>
-          )}
-
-          {has('playtime') && (
-            <Group label="PLAYTIME">
-              {PLAYTIME_ORDER.map((bucket) => (
-                <Chip
-                  key={bucket}
-                  active={filters.playtime.includes(bucket)}
-                  onClick={() => set('playtime', toggle(filters.playtime, bucket))}
-                >
-                  {PLAYTIME_LABELS[bucket]}
-                </Chip>
-              ))}
-            </Group>
-          )}
-
-          {has('era') && (
-            <Group label="RELEASED">
-              {ERA_ORDER.map((era) => (
-                <Chip
-                  key={era}
-                  active={filters.eras.includes(era)}
-                  onClick={() => set('eras', toggle(filters.eras, era))}
-                >
-                  {ERA_LABELS[era]}
-                </Chip>
-              ))}
-            </Group>
-          )}
-
-          {/* Solo los géneros que existen en ESTA lista (ver
-              availableGenres), y con scroll: una biblioteca variada pasa de
-              veinte géneros y sin tope el panel se volvería la pantalla. */}
-          {has('genre') && genres.length > 0 && (
-            <Group label="GENRE">
-              <div className="flex max-h-27 w-full flex-wrap gap-1 overflow-y-auto">
-                {genres.map((genre) => (
-                  <Chip
-                    key={genre}
-                    active={filters.genres.includes(genre)}
-                    onClick={() => set('genres', toggle(filters.genres, genre))}
-                  >
-                    {genre}
-                  </Chip>
-                ))}
-              </div>
-            </Group>
-          )}
-
-          <Group label="SORT BY">
-            {sorts.map((sort) => (
-              <Chip
-                key={sort}
-                active={filters.sort === sort}
-                // El orden es de selección ÚNICA (no toggle): una lista solo
-                // puede estar ordenada de una manera, y volver a pulsar el
-                // activo no debe dejarla sin orden.
-                onClick={() => set('sort', sort)}
-              >
-                {filters.sort === sort && <ArrowUpDown size={9} />}
-                {SORT_LABELS[sort]}
-              </Chip>
-            ))}
-          </Group>
         </div>
       )}
-    </div>
+    </aside>
   );
 };

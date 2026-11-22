@@ -1,8 +1,6 @@
 import { expect, test } from './fixtures';
 
-test('statistics are prepared while the library is visible, before navigating', async ({
-  afterplay,
-}) => {
+test('statistics are prepared while Home is visible, before navigating', async ({ afterplay }) => {
   const { window } = afterplay;
   const cdp = await window.context().newCDPSession(window);
   const parsed: string[] = [];
@@ -12,7 +10,7 @@ test('statistics are prepared while the library is visible, before navigating', 
   // Enabling the debugger also reports modules already parsed before attachment.
   await cdp.send('Debugger.enable');
   await expect.poll(() => parsed.length).toBe(1);
-  await expect(window.getByRole('link', { name: 'Games', exact: true })).toHaveAttribute(
+  await expect(window.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );

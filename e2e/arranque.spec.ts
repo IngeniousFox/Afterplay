@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, goTo, test } from './fixtures';
 
 // EL ARRANQUE, DE VERDAD Y ENTERO.
 //
@@ -16,8 +16,11 @@ test.describe('arranque de la app', () => {
 
     // Los tres juegos del sandbox, pintados por la app de verdad. Que sus
     // títulos estén ahí demuestra la cadena entera: la base que sembramos
-    // desde fuera se abrió, cruzó el IPC y llegó al DOM.
+    // desde fuera se abrió, cruzó el IPC y llegó al DOM. La app arranca en
+    // Home, que ya enseña uno (Recently beaten); los otros dos se buscan en
+    // Library, que los tiene todos.
     await expect(window.getByText("Assassin's Creed II").first()).toBeVisible();
+    await goTo(window, '/games');
     await expect(window.getByText('Terraria').first()).toBeVisible();
     await expect(window.getByText('Alan Wake').first()).toBeVisible();
   });

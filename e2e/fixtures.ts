@@ -70,8 +70,9 @@ export const launchAfterplay = async (options: SandboxOptions = {}): Promise<Lau
   // pintable). Esperar a que el shell exista es lo que evita que un test
   // empiece a buscar botones sobre un documento vacío.
   await window.waitForLoadState('domcontentloaded');
-  await window.getByRole('link', { name: 'Games', exact: true }).waitFor({ state: 'visible' });
-  await window.waitForFunction(() => globalThis.location.hash === '#/games');
+  // Desde Fósforo la app arranca en Home (#/home), bajo la barra superior.
+  await window.getByRole('link', { name: 'Home', exact: true }).waitFor({ state: 'visible' });
+  await window.waitForFunction(() => globalThis.location.hash === '#/home');
   return { app, window, sandbox };
 };
 
@@ -79,14 +80,15 @@ export const launchAfterplay = async (options: SandboxOptions = {}): Promise<Lau
 //
 // La app usa createHashRouter (router.tsx), así que la ruta vive en
 // location.hash y se puede poner directamente. Es MUCHO más robusto que
-// pinchar el rail lateral: un test de Stats no debería ponerse rojo porque
-// alguien cambió el icono de Games, y llegar a la ficha de un juego a base de
+// pinchar las pestañas: un test de Stats no debería ponerse rojo porque
+// alguien cambió la pestaña de Library, y llegar a la ficha de un juego a base de
 // clics obliga a que la card esté visible (o sea, a pelearse con el
 // content-visibility de la parrilla).
 //
-// Los clics del rail SÍ hay que probarlos — pero en UN test que pruebe el
-// rail, no en los treinta que solo quieren estar en otra pantalla.
+// Los clics de las pestañas SÍ hay que probarlos — pero en UN test que pruebe
+// la barra, no en los treinta que solo quieren estar en otra pantalla.
 export type Route =
+  | '/home'
   | '/games'
   | '/plan'
   | '/sessions'
