@@ -193,12 +193,14 @@ test.describe('Modo TV (Big Picture)', () => {
     await window.evaluate(() => globalThis.api.window.bigPicture.exit());
 
     // ModeBridge (tv/ModeBridge.tsx) devuelve a la última ruta de escritorio
-    // pisada — aquí '/games', la que trae el arranque — y RootLayout vuelve
-    // a montarse con la biblioteca dentro.
-    await expect(window.getByText("Assassin's Creed II").first()).toBeVisible({ timeout: 20_000 });
+    // pisada — aquí '/home', la que trae el arranque — y RootLayout vuelve
+    // a montarse con Home dentro.
+    await expect(window.getByRole('heading', { level: 1, name: 'Tonight' })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect
       .poll(() => window.evaluate(() => globalThis.location.hash), { timeout: 5_000 })
-      .toBe('#/games');
+      .toBe('#/home');
 
     const isFullScreen = await app.evaluate(({ BrowserWindow }) => {
       const main = BrowserWindow.getAllWindows().find((candidate) =>

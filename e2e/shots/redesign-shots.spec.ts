@@ -39,6 +39,7 @@ test('capturas de escritorio', async () => {
 
     const detailId = gameIdOf(sandbox, 'Strange Horticulture');
     const routes: [string, Route][] = [
+      ['home', '/home'],
       ['library', '/games'],
       ['detail', `/games/${detailId}` as Route],
       ['plan', '/plan'],
@@ -49,6 +50,27 @@ test('capturas de escritorio', async () => {
     for (const [name, route] of routes) {
       await goTo(window, route);
       await shot(name);
+    }
+
+    // La paleta de Ctrl K, con resultados y sin ellos.
+    await goTo(window, '/home');
+    await window.keyboard.press('Control+k');
+    await shot('palette');
+    await window.keyboard.type('zzqx');
+    await shot('palette-empty');
+    await window.keyboard.press('Escape');
+
+    // Una sesión en marcha: Home, Library y la barra "Now playing" acoplada.
+    const session = await window.evaluate(
+      (id) => globalThis.api.sessions.startForGame(id as never),
+      detailId,
+    );
+    await goTo(window, '/home');
+    await shot('home-live');
+    await goTo(window, '/games');
+    await shot('library-live');
+    if (session) {
+      await window.evaluate((id) => globalThis.api.sessions.close(id, new Date()), session.id);
     }
 
     // Ajustes: hoy un modal que abre el engranaje; en 2.0, una página.
@@ -68,5 +90,48 @@ test('capturas de escritorio', async () => {
   } finally {
     await app.close().catch(() => {});
     sandbox.cleanup();
+  }
+});
+
+// La biblioteca vacía del primer arranque (estados-vacio-biblioteca.png) y la
+// ventana mínima de la app (1000 x 700, src/main/windows/mainWindow.ts).
+test('capturas de biblioteca vacía y ventana mínima', async () => {
+  test.setTimeout(240_000);
+  mkdirSync(OUT, { recursive: true });
+  const empty = await launchAfterplay({ games: [] });
+  try {
+    await empty.app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await empty.window.waitForTimeout(1500);
+    await empty.window.screenshot({ path: join(OUT, 'home-empty.png') });
+    await goTo(empty.window, '/games');
+    await empty.window.waitForTimeout(1500);
+    await empty.window.screenshot({ path: join(OUT, 'library-empty.png') });
+  } finally {
+    await empty.app.close().catch(() => {});
+    empty.sandbox.cleanup();
+  }
+
+  const small = await launchAfterplay();
+  try {
+    await small.app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1000, 700);
+      }
+    });
+    for (const [name, route] of [
+      ['home-min', '/home'],
+      ['library-min', '/games'],
+    ] as [string, Route][]) {
+      await goTo(small.window, route);
+      await small.window.waitForTimeout(1500);
+      await small.window.screenshot({ path: join(OUT, `${name}.png`) });
+    }
+  } finally {
+    await small.app.close().catch(() => {});
+    small.sandbox.cleanup();
   }
 });

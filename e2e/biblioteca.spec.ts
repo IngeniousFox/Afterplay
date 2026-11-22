@@ -4,12 +4,12 @@ import type { GameId } from '../src/shared/entityIds';
 
 // LOS GESTOS DE LA BIBLIOTECA, EN LA UI REAL.
 //
-// Lo que blindan estos siete tests es la mitad de la app que más se toca:
+// Lo que blindan estos ocho tests es la mitad de la app que más se toca:
 // cambiar el estado de un juego (con su guarda contra duplicados en el log,
 // la regla de SPEC 4.5 que existía por un bug real de "Playing" repetido),
 // el botón Play que no debe ofrecer nada que no pueda cumplir, un borrado
 // que exige teclear el nombre para no perder una biblioteca por un clic, el
-// buscador y los filtros de la columna, y que la ficha de un juego con dos
+// buscador y los filtros de Library, la paleta de Ctrl K, y que la ficha de un juego con dos
 // playthroughs los enseñe los DOS — no solo el último, que es la trampa fácil
 // de una vista "sencilla".
 //
@@ -158,52 +158,69 @@ test.describe('biblioteca', () => {
     expect(titles).not.toContain('112 Operator');
   });
 
-  test('el buscador de la columna filtra por parte del título', async ({ afterplay }) => {
+  test('el buscador de Library filtra la rejilla por parte del título', async ({ afterplay }) => {
     const { window: page } = afterplay;
     await goTo(page, '/games');
 
-    // La parrilla grande de la derecha (Library.tsx) es OTRA lista, con su
-    // propio buscador — no se entera de lo que se teclee aquí. Lo que este
-    // test prueba es la columna de navegación, así que las comprobaciones
-    // van ancladas a SU lista: el único elemento de toda la pantalla con
-    // tabIndex=0 (MiddleColumn.tsx), puesto ahí para que las flechas muevan
-    // la selección — no un enganche de test, un enganche de teclado real.
-    const navList = page.locator('[tabindex="0"]');
+    // Desde Fósforo la búsqueda y los filtros de la antigua columna viven en
+    // la propia Library: las aserciones van ancladas a su rejilla.
+    const grid = page.getByTestId('library-grid');
+    await expect(grid.getByText('Terraria', { exact: true })).toBeVisible();
 
     // "torment" es un fragmento que solo aparece en un título de los ocho de
-    // biblioteca (los tres planeados no viven en esta columna) — filterByTitle
-    // pliega acentos y separa mayúsculas, así que basta con minúsculas.
-    await page.getByPlaceholder('Search games…').fill('torment');
+    // biblioteca (los tres planeados no viven aquí) — filterByTitle pliega
+    // acentos y separa mayúsculas, así que basta con minúsculas.
+    await page.getByPlaceholder('Filter by title…').fill('torment');
 
-    await expect(navList.getByText('Halls of Torment', { exact: true })).toBeVisible();
-    await expect(navList.getByText('Terraria', { exact: true })).toHaveCount(0);
-    await expect(navList.getByText("Assassin's Creed II", { exact: true })).toHaveCount(0);
+    await expect(grid.getByText('Halls of Torment', { exact: true })).toBeVisible();
+    await expect(grid.getByText('Terraria', { exact: true })).toHaveCount(0);
+    await expect(grid.getByText("Assassin's Creed II", { exact: true })).toHaveCount(0);
+
+    // El recuento grande dice cuántos se ven de cuántos hay.
+    await expect(page.getByText('of 8 games', { exact: true })).toBeVisible();
   });
 
-  test('filtrar por estado reduce la lista a los juegos que corresponden', async ({
+  test('filtrar por estado reduce la rejilla a los juegos que corresponden', async ({
     afterplay,
   }) => {
     const { window: page } = afterplay;
     await goTo(page, '/games');
-
-    // Misma razón que en el test del buscador: la parrilla de la derecha no
-    // filtra con estos chips, así que las aserciones van ancladas a la
-    // columna de navegación (el único tabIndex=0 de la pantalla).
-    const navList = page.locator('[tabindex="0"]');
+    const grid = page.getByTestId('library-grid');
 
     // Dropped, según el seed: Alan Wake (started+dropped el mismo día) y The
     // Legend of Zelda: Link's Awakening (started -> on_hold -> dropped, el
-    // evento más reciente manda). Ninguno de los otros seis está en ese
-    // estado.
-    await page.getByRole('button', { name: /Filters/ }).click();
-    await page.getByRole('button', { name: 'Dropped', exact: true }).click();
+    // evento más reciente manda). Terraria y Assassin's Creed II no lo están.
+    const filters = page.getByRole('complementary', { name: 'Filters' });
+    await filters.getByRole('button', { name: /^Dropped \d/ }).click();
 
-    await expect(navList.getByText('Alan Wake', { exact: true })).toBeVisible();
+    await expect(grid.getByText('Alan Wake', { exact: true })).toBeVisible();
     await expect(
-      navList.getByText("The Legend of Zelda: Link's Awakening", { exact: true }),
+      grid.getByText("The Legend of Zelda: Link's Awakening", { exact: true }),
     ).toBeVisible();
-    await expect(navList.getByText('Terraria', { exact: true })).toHaveCount(0);
-    await expect(navList.getByText("Assassin's Creed II", { exact: true })).toHaveCount(0);
+    await expect(grid.getByText('Terraria', { exact: true })).toHaveCount(0);
+    await expect(grid.getByText("Assassin's Creed II", { exact: true })).toHaveCount(0);
+
+    // Los filtros sobreviven a abrir una ficha y volver: la vista vive en el
+    // armazón, como antes vivía en la columna.
+    await grid.getByText('Alan Wake', { exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Alan Wake' })).toBeVisible();
+    await page.getByRole('link', { name: 'Library', exact: true }).click();
+    await expect(grid.getByText('Terraria', { exact: true })).toHaveCount(0);
+    await expect(grid.getByRole('button', { name: /^Alan Wake\./ })).toBeFocused();
+  });
+
+  test('Ctrl K abre la paleta y salta a la ficha de un juego', async ({ afterplay }) => {
+    const { window: page } = afterplay;
+
+    await page.keyboard.press('Control+k');
+    const palette = page.getByRole('dialog', { name: 'Jump to a game' });
+    await expect(palette).toBeVisible();
+    await page.keyboard.type('terra');
+    await expect(palette.getByRole('option', { name: /Terraria/ })).toBeVisible();
+    await page.keyboard.press('Enter');
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Terraria' })).toBeVisible();
+    await expect(palette).toHaveCount(0);
   });
 
   test("la ficha de Assassin's Creed II pinta sus DOS playthroughs", async ({ afterplay }) => {

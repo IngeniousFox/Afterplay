@@ -46,7 +46,7 @@ const shot = async (window: Page, name: string): Promise<void> => {
 };
 
 const gamesLink = (window: Page): Locator =>
-  window.getByRole('link', { name: 'Games', exact: true });
+  window.getByRole('link', { name: 'Library', exact: true });
 
 test.describe('pantalla de migración', () => {
   test('la puerta enseña la pantalla en lugar de la biblioteca', async ({ afterplay }) => {

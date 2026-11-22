@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { Suspense } from 'react';
 import { createHashRouter, Navigate } from 'react-router-dom';
 import { RootLayout } from './components/layout/RootLayout';
+import { Home } from './screens/Home';
 import { Library } from './screens/Library';
 import { loadStatsRoute } from './lib/statsRoute';
 import { ModeBridge } from './tv/ModeBridge';
@@ -49,15 +50,16 @@ const tvFallback = (
 //
 // Dos árboles hermanos bajo un puente común (ModeBridge, BIG-PICTURE.md §3):
 //
-//   · El de ESCRITORIO cuelga de RootLayout, que pinta el rail y las
-//     columnas fijas — navegar cambia solo el panel de la derecha.
+//   · El de ESCRITORIO cuelga de RootLayout, que pinta la barra superior y
+//     la barra "Now playing" acoplada abajo; navegar cambia lo de en medio.
 //   · El de TV (/tv) cuelga de BigPictureLayout: pantalla completa, escala
 //     10-foot, mando. RootLayout ni se monta ahí — fuera todo el chrome.
 //
 // ModeBridge es lo único montado SIEMPRE: escucha el estado de Big Picture
 // del main y mueve el router de un árbol al otro (recordando la ruta de
-// escritorio para la vuelta). La raíz redirige a /games porque la
-// biblioteca es la pantalla de entrada.
+// escritorio para la vuelta). La raíz redirige a /home ("Tonight"), la
+// pantalla de entrada desde Fósforo. Library sigue en /games (la ficha cuelga
+// de ahí, y los e2e la usan).
 export const router = createHashRouter([
   {
     element: <ModeBridge />,
@@ -66,7 +68,8 @@ export const router = createHashRouter([
         path: '/',
         element: <RootLayout />,
         children: [
-          { index: true, element: <Navigate to="/games" replace /> },
+          { index: true, element: <Navigate to="/home" replace /> },
+          { path: 'home', element: <Home /> },
           {
             path: 'games',
             children: [

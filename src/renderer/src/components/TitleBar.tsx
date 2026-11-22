@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 
 import { useFullscreen } from '../hooks/useFullscreen';
 import { requestEnterBigPicture } from '../hooks/useBigPicture';
-import { cn } from '@/lib/utils';
+import { cn } from './shell/cn';
 
 const controlButtonClass = cn(
-  'flex h-full w-11 items-center justify-center text-muted-foreground outline-none',
-  'hover:bg-muted focus-visible:bg-muted',
+  'flex h-full w-11 items-center justify-center text-dust outline-none transition-colors duration-150',
+  'hover:bg-raised hover:text-bone focus-visible:bg-raised focus-visible:text-bone',
 );
 
 const TitleBar = (): React.JSX.Element | null => {
@@ -28,11 +28,13 @@ const TitleBar = (): React.JSX.Element | null => {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-60 flex h-(--titlebar-height) items-center justify-between border-b border-border bg-card pl-3 text-foreground select-none"
+      className="fixed inset-x-0 top-0 z-60 flex h-(--titlebar-height) items-center justify-between bg-inset pl-3 text-dust select-none"
       data-testid="app-titlebar"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      <span className="text-sm font-semibold">Afterplay</span>
+      {/* El nombre ya está en el logotipo de la barra superior, justo debajo:
+          aquí solo queda la zona de arrastre y los controles de la ventana. */}
+      <span />
       <div className="flex h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* Big Picture (BIG-PICTURE.md §2): el disparador descubrible sin
             leer ningún manual — los otros tres (F11, --bigpicture, segunda
@@ -72,7 +74,7 @@ const TitleBar = (): React.JSX.Element | null => {
           onClick={() => window.api.window.close()}
           className={cn(
             controlButtonClass,
-            'hover:bg-destructive/20 hover:text-destructive focus-visible:bg-destructive/20 focus-visible:text-destructive',
+            'hover:bg-live hover:text-ink-live focus-visible:bg-live focus-visible:text-ink-live',
           )}
         >
           <X className="size-4.5" strokeWidth={2} />

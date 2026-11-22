@@ -1,38 +1,61 @@
-import { Joystick, Square } from 'lucide-react';
+import { Joystick, Link2, Lock, Monitor, Square, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '../shell/cn';
 import type { GameListItem, PendingSession, SessionWithGame } from '../../../../shared/types';
+import {
+  canStopLiveSession,
+  isLiveElsewhere,
+  isOwnLiveSession,
+} from '../../../../shared/liveSession';
+import type { GameId } from '../../../../shared/entityIds';
 import { useDeviceContext } from '../../hooks/devices';
 import { useGames } from '../../hooks/games';
 import { useCloseSession, useOpenSessions, usePendingSessions } from '../../hooks/sessions';
-import { useImageSrc } from '../../hooks/useImageSrc';
+import { useSessionDevice, type SessionDeviceInfo } from '../../hooks/sessionDevice';
+import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
-import { AMBER, GREEN } from '../../lib/colors';
-import { formatElapsed } from '../../lib/format';
-import { canStopLiveSession, isOwnLiveSession } from '../../../../shared/liveSession';
+import { formatElapsed, formatTime } from '../../lib/format';
 import { GameCover } from '../GameCover';
 import { AssignSessionModal } from '../sessions/AssignSessionModal';
-import { useSessionDevice } from '../../hooks/sessionDevice';
-import type { GameId } from '../../../../shared/entityIds';
+import {
+  buttonSize,
+  focusRing,
+  ghostButtonClass,
+  liveButtonClass,
+  primaryButtonClass,
+} from '../shell/controls';
 
-// Lo que estás jugando AHORA, anclado al fondo de la columna de navegación —
-// que vive en RootLayout, así que la tarjeta te acompaña por toda la app.
+// "NOW PLAYING", ACOPLADO ABAJO (Fósforo, estados-nowplaying.png).
 //
-// Antes esto solo existía como una etiqueta "LIVE" dentro de una fila de la
-// lista: en cuanto te ibas a Stats, a Ajustes o a otra sección, la partida en
-// curso desaparecía de la vista. Y dentro de una biblioteca de 300 juegos, esa
-// etiqueta había que ir a buscarla.
+// Una barra de 72 px bajo todas las pantallas de escritorio mientras haya algo
+// en marcha; sin nada en marcha NO se pinta y la página recupera el sitio (un
+// hueco fijo con "lo último jugado" repetiría lo que ya dice Home). Entra
+// deslizándose (animate-np-in; con reduced motion es un fundido).
 //
-// Sin nada en marcha NO se pinta: un hueco fijo con "lo último jugado" sería
-// peaje de espacio permanente a cambio de información que ya está en la lista.
+// Lo que enseña y hace es lo de siempre (§10.8, §15.7):
+//   · Sesión de este PC: pulso rojo, cronómetro, Stop.
+//   · Sesión de otro PC: anillo cian y "on PC-A"; sin Stop (salvo que sea un
+//     cronómetro, que cualquier PC puede parar) y dicho con palabras.
+//   · Más de 3 min sin señal: todo apagado y "No signal for X".
+//   · Emulador sin asignar: tinte ámbar y Assign en lugar de Stop.
+//   · Dos a la vez: la de este PC arriba, la otra en una tira de 40 px; con
+//     tres o más, la tira suma "+N more".
 
 type LiveEntry =
-  | { kind: 'game'; startedAt: Date; game: GameListItem; session: SessionWithGame | null }
-  // Sesión de emulador todavía sin asignar: está viva y estás jugando ALGO,
-  // pero no hay juego, ni carátula, ni título — solo el emulador. Se enseña
-  // igualmente porque es el empujón natural para asignarla (si no, se queda
-  // en la bandeja de pendientes y no te enteras).
+  | {
+      kind: 'game';
+      startedAt: Date;
+      game: GameListItem;
+      session: SessionWithGame | null;
+      own: boolean;
+    }
+  // Sesión de emulador todavía sin asignar: estás jugando ALGO, pero no hay
+  // juego, ni carátula, ni título — solo el emulador. Se enseña igual porque
+  // es el empujón natural para asignarla.
   | { kind: 'pending'; startedAt: Date; session: PendingSession };
+
+const rank = (entry: LiveEntry): number => (entry.kind === 'pending' ? 1 : entry.own ? 0 : 2);
 
 export const NowPlayingCard = (): React.JSX.Element | null => {
   const { data: games = [] } = useGames();
@@ -41,10 +64,9 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
   const [assigning, setAssigning] = useState<PendingSession | null>(null);
   const { thisDeviceId } = useDeviceContext();
 
-  // La sesión abierta de cada juego, para poder pararla desde aquí sin ir a
-  // su ficha (GameListItem sabe que está vivo, pero no con qué sesión). Con
-  // dos abiertas (una por PC, §10.4) manda la de ESTE PC, que es la que la
-  // tarjeta puede parar; así coincide con el `liveSince` del juego.
+  // La sesión abierta de cada juego, para poder pararla desde aquí. Con dos
+  // abiertas (una por PC, §10.4) manda la de ESTE PC, que es la que la barra
+  // puede parar; así coincide con el `liveSince` del juego.
   const openSessionByGame = new Map<GameId, SessionWithGame>();
   for (const session of sessions) {
     if (session.endedAt !== null) continue;
@@ -57,46 +79,65 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
     }
   }
 
+  // La de ESTE PC primero (D-15), luego la del emulador, luego las ajenas; y
+  // dentro de cada grupo, la más reciente arriba.
   const entries: LiveEntry[] = [
     ...games
       .filter((game) => game.isLive && game.liveSince !== null)
-      .map((game): LiveEntry => ({
-        kind: 'game',
-        startedAt: game.liveSince as Date,
-        game,
-        session: openSessionByGame.get(game.id) ?? null,
-      })),
+      .map((game): LiveEntry => {
+        const session = openSessionByGame.get(game.id) ?? null;
+        return {
+          kind: 'game',
+          startedAt: game.liveSince as Date,
+          game,
+          session,
+          own: session
+            ? isOwnLiveSession(session, thisDeviceId)
+            : !isLiveElsewhere(game, thisDeviceId),
+        };
+      }),
     ...pending
       .filter((session) => session.endedAt === null)
       .map((session): LiveEntry => ({ kind: 'pending', startedAt: session.startedAt, session })),
-  ].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+  ].sort((a, b) => rank(a) - rank(b) || b.startedAt.getTime() - a.startedAt.getTime());
 
   // La guarda mira TAMBIÉN el modal: cerrar el emulador con "Assign" abierto
-  // le pone endedAt a la pendiente, `entries` se vaciaba y la tarjeta devolvía
-  // null llevándose por delante a su hijo — el modal desaparecía con la
-  // búsqueda a medias y sin decir nada, saltándose incluso su propia guarda de
-  // "no cerrar con la asignación en vuelo" (AssignSessionModal). Sin nada vivo
-  // Y sin modal abierto sí se despinta, que es el trato de siempre.
+  // le pone endedAt a la pendiente y la barra devolvía null llevándose el
+  // modal por delante, con la búsqueda a medias. Sin nada vivo Y sin modal
+  // abierto sí se despinta.
   if (entries.length === 0 && !assigning) return null;
 
-  // La más reciente manda; el resto se resume en un "+N" discreto en vez de
-  // apilar tarjetas y comerse la lista.
-  const [current, ...rest] = entries;
+  const [current, second, ...rest] = entries;
 
   return (
     <>
-      {entries.length > 0 && (
-        <div className="flex-none border-t border-border">
-          {current.kind === 'game' ? (
-            <GameEntry entry={current} extra={rest.length} />
-          ) : (
-            <PendingEntry
-              entry={current}
-              extra={rest.length}
-              onAssign={() => setAssigning(current.session)}
-            />
-          )}
-        </div>
+      {current && (
+        <section
+          aria-label="Now playing"
+          data-testid="now-playing"
+          className="relative flex-none animate-np-in overflow-hidden border-t border-line bg-panel"
+        >
+          {/* Zona héroe: líneas de escaneo y el brillo ámbar, solo aquí. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-(image:--scan)" />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-(image:--glow-ambient) opacity-50"
+          />
+          <div className="relative">
+            {current.kind === 'game' ? (
+              <GameBar entry={current} />
+            ) : (
+              <PendingBar entry={current} onAssign={() => setAssigning(current.session)} />
+            )}
+            {second && (
+              <SecondStrip
+                entry={second}
+                more={rest.length}
+                onAssign={(session) => setAssigning(session)}
+              />
+            )}
+          </div>
+        </section>
       )}
 
       {assigning && (
@@ -106,9 +147,9 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
           onOpenChange={(open) => {
             if (!open) setAssigning(null);
           }}
-          // Crear el juego desde aquí abriría el Add Game por encima de la
-          // columna, que es otra pantalla — para eso está la bandeja de
-          // pendientes de la vista de Sesiones, con su flujo completo.
+          // Crear el juego desde aquí abriría el Add Game por encima de otra
+          // pantalla: para eso está la bandeja de pendientes de Sessions, con
+          // su flujo completo.
           onAddNewGame={() => setAssigning(null)}
         />
       )}
@@ -116,46 +157,11 @@ export const NowPlayingCard = (): React.JSX.Element | null => {
   );
 };
 
-// Cabecera común: puntito verde pulsante + "NOW PLAYING" + cuántas más hay.
-const Header = ({
-  extra,
-  color,
-  label = 'NOW PLAYING',
-}: {
-  extra: number;
-  color: string;
-  label?: string;
-}): React.JSX.Element => (
-  <div className="flex items-center gap-1.5">
-    <span
-      className="h-1.5 w-1.5 flex-none rounded-full"
-      style={{ background: color, animation: 'afterplay-pulse-dot 1.4s infinite' }}
-    />
-    <span className="text-[9.5px] font-extrabold tracking-[.11em]" style={{ color }}>
-      {label}
-    </span>
-    {extra > 0 && (
-      <span className="text-[9.5px] font-bold text-muted-foreground">+{extra} more</span>
-    )}
-  </div>
-);
-
-const GameEntry = ({
-  entry,
-  extra,
-}: {
-  entry: Extract<LiveEntry, { kind: 'game' }>;
-  extra: number;
-}): React.JSX.Element => {
-  const navigate = useNavigate();
-  const closeSession = useCloseSession();
-  const elapsed = useLiveTimer(entry.startedAt);
-  const heroSrc = useImageSrc(entry.game.heroUrl, 'heroes');
+// El dispositivo de una entrada, con la misma regla que las filas de sesión:
+// sin la sesión todavía cargada se usa el que dice el propio juego.
+const useEntryDevice = (entry: Extract<LiveEntry, { kind: 'game' }>): SessionDeviceInfo => {
   const { thisDeviceId } = useDeviceContext();
-  // §10.8: abierta en otro PC = "Playing on PC-A", sin Stop salvo cronómetro, y
-  // "No signal for X" si lleva más de 3 minutos callada. Sin la sesión (aún no
-  // cargó la lista) se usa el dispositivo que dice el propio juego.
-  const device = useSessionDevice(
+  return useSessionDevice(
     entry.session ?? {
       deviceId: entry.game.liveDeviceId ?? thisDeviceId ?? '',
       startedAt: entry.startedAt,
@@ -164,126 +170,250 @@ const GameEntry = ({
       isManual: false,
     },
   );
-  const canStop = entry.session !== null && canStopLiveSession(entry.session, thisDeviceId);
+};
+
+const useSince = (startedAt: Date): string => {
+  const { data: timeFormat = '24h' } = useTimeFormat();
+  return formatTime(startedAt, timeFormat);
+};
+
+// El LED de la barra: pulso rojo aquí, anillo cian hueco en otro PC, gris sin
+// señal. El anillo que se expande es decorativo y se apaga con reduced motion.
+const LiveLed = ({ tone }: { tone: 'here' | 'remote' | 'silent' }): React.JSX.Element => (
+  <span aria-hidden className="relative inline-flex size-2.5 flex-none items-center justify-center">
+    {tone === 'here' && (
+      <span className="absolute inset-0 animate-led-ring rounded-full bg-live motion-reduce:hidden" />
+    )}
+    <span
+      className={cn(
+        'relative size-2.5 rounded-full',
+        tone === 'here' && 'animate-led-live bg-live motion-reduce:animate-none',
+        tone === 'remote' && 'border-2 border-tube',
+        tone === 'silent' && 'border-2 border-dust',
+      )}
+    />
+  </span>
+);
+
+const coverButtonClass = cn(
+  'flex-none rounded-xs transition-transform duration-200 ease-out hover:-translate-y-0.5 motion-reduce:hover:translate-y-0',
+  focusRing,
+);
+
+const GameBar = ({ entry }: { entry: Extract<LiveEntry, { kind: 'game' }> }): React.JSX.Element => {
+  const navigate = useNavigate();
+  const closeSession = useCloseSession();
+  const elapsed = useLiveTimer(entry.startedAt);
+  const device = useEntryDevice(entry);
+  const { thisDeviceId } = useDeviceContext();
+  const since = useSince(entry.startedAt);
   const session = entry.session;
+  const canStop = session !== null && canStopLiveSession(session, thisDeviceId);
+  const silent = device.noSignal !== null;
+  const open = (): void => {
+    navigate(`/games/${entry.game.id}`);
+  };
 
   return (
-    <div className="relative overflow-hidden">
-      {/* Hero de fondo tras un velo — mismo lenguaje que la ficha y que el
-          aviso de cierre: la tarjeta lleva la identidad del juego, no es un
-          recuadro genérico con un texto dentro. */}
-      {heroSrc && (
-        <>
-          <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(90deg, rgba(15,17,16,.96) 0%, rgba(15,17,16,.9) 55%, rgba(15,17,16,.62) 100%)',
-            }}
-          />
-        </>
-      )}
+    <div className="flex h-18 items-center gap-4 px-5">
+      <button type="button" onClick={open} title="Open game" className={coverButtonClass}>
+        <GameCover
+          url={entry.game.coverUrl}
+          className={cn(
+            'h-14 w-10.5 overflow-hidden rounded-xs border border-line-strong bg-raised',
+            silent && 'opacity-50 grayscale',
+          )}
+          iconSize={14}
+        />
+      </button>
 
-      <div className="relative flex items-center gap-2.75 px-3.5 py-3">
+      <div className="min-w-0 flex-[0_1_auto]">
         <button
           type="button"
-          onClick={() => navigate(`/games/${entry.game.id}`)}
-          title="Open game"
-          className="flex-none transition-transform duration-200 ease-[cubic-bezier(.16,1,.3,1)] hover:-translate-y-0.5"
+          onClick={open}
+          className={cn(
+            'block max-w-full rounded-xs text-left text-lead font-semibold hover:underline underline-offset-2',
+            silent ? 'text-dust' : 'text-bone',
+            focusRing,
+          )}
         >
-          <GameCover
-            url={entry.game.coverUrl}
-            className="h-13 w-9.5 overflow-hidden rounded-[7px] border border-white/15 shadow-[0_6px_16px_rgba(0,0,0,.45)]"
-            iconSize={14}
-          />
+          {entry.game.title}
         </button>
-
-        <div className="min-w-0 flex-1">
-          <Header
-            extra={extra}
-            color={device.noSignal !== null ? AMBER : GREEN}
-            label={device.remote ? `PLAYING ON ${device.deviceName.toUpperCase()}` : undefined}
-          />
-          <button
-            type="button"
-            onClick={() => navigate(`/games/${entry.game.id}`)}
-            className="mt-0.5 block max-w-full truncate text-left text-[13px] font-bold text-foreground hover:underline"
-          >
-            {entry.game.title}
-          </button>
-          <div className="mt-0.25 text-[14px] font-extrabold tabular-nums" style={{ color: GREEN }}>
-            {formatElapsed(elapsed)}
-          </div>
-          {device.noSignal !== null && (
-            <div className="mt-0.5 text-[11px] font-semibold" style={{ color: AMBER }}>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-small text-dust">
+          <LiveLed tone={silent ? 'silent' : device.remote ? 'remote' : 'here'} />
+          {device.remote ? (
+            <span className={cn('inline-flex items-center gap-1', !silent && 'text-tube')}>
+              <Monitor aria-hidden size={13} />
+              on {device.deviceName}
+            </span>
+          ) : (
+            <span>{thisDeviceId ? `Playing on ${device.deviceName}` : 'Playing on this PC'}</span>
+          )}
+          <span>· since {since}</span>
+          {silent && (
+            <span className="inline-flex items-center gap-1 text-bone">
+              · <TriangleAlert aria-hidden size={13} className="text-phosphor" />
               {device.noSignal}
-            </div>
+            </span>
           )}
         </div>
-
-        {/* Parar sin tener que navegar hasta la ficha, que es lo que obligaba
-            a hacer hasta ahora. Solo si conocemos su sesión abierta, y si se
-            puede parar desde este PC: una sesión de otro PC no, salvo que sea
-            un cronómetro (§10.8). */}
-        {session !== null && canStop && (
-          <button
-            type="button"
-            onClick={() => closeSession.mutate({ id: session.id, endedAt: new Date() })}
-            disabled={closeSession.isPending}
-            title="Stop session"
-            className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] border border-input bg-white/[0.04] text-muted-foreground transition-colors duration-150 hover:border-destructive/45 hover:text-destructive disabled:opacity-50"
-            aria-label="Stop session"
-          >
-            <Square size={13} fill="currentColor" />
-          </button>
-        )}
       </div>
+
+      <span
+        className={cn(
+          'flex-none font-display text-[44px] leading-none font-bold tabular-nums',
+          silent ? 'text-dust' : 'animate-timer-breathe text-phosphor motion-reduce:animate-none',
+        )}
+      >
+        {formatElapsed(elapsed)}
+      </span>
+
+      {session !== null && canStop ? (
+        <button
+          type="button"
+          onClick={() => closeSession.mutate({ id: session.id, endedAt: new Date() })}
+          disabled={closeSession.isPending}
+          aria-label="Stop session"
+          title="Stop session"
+          className={cn(liveButtonClass, buttonSize.md)}
+        >
+          <Square aria-hidden size={12} fill="currentColor" />
+          Stop
+        </button>
+      ) : device.remote ? (
+        <span className="flex min-w-0 items-center gap-1.5 text-small text-dust">
+          <Lock aria-hidden size={13} className="flex-none" />
+          Only {device.deviceName} can stop this session
+        </span>
+      ) : null}
     </div>
   );
 };
 
-const PendingEntry = ({
+const PendingBar = ({
   entry,
-  extra,
   onAssign,
 }: {
   entry: Extract<LiveEntry, { kind: 'pending' }>;
-  extra: number;
   onAssign: () => void;
 }): React.JSX.Element => {
   const elapsed = useLiveTimer(entry.startedAt);
+  const since = useSince(entry.startedAt);
 
   return (
-    // En ámbar y no en verde: el ámbar es el color de "pendiente" en toda la
-    // app (rachas, gasto, sesiones sin asignar), y esto lo está — se está
-    // midiendo tiempo que todavía no pertenece a ningún juego.
-    <div className="flex items-center gap-2.75 px-3.5 py-3" style={{ background: `${AMBER}0d` }}>
-      <div
-        className="flex h-13 w-9.5 flex-none items-center justify-center rounded-[7px]"
-        style={{ background: `${AMBER}1a` }}
-      >
-        <Joystick size={17} color={AMBER} />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <Header extra={extra} color={AMBER} />
-        <div className="mt-0.5 truncate text-[13px] font-bold text-foreground">
-          {entry.session.emulatorName}
-        </div>
-        <div className="mt-0.25 text-[14px] font-extrabold tabular-nums" style={{ color: AMBER }}>
-          {formatElapsed(elapsed)}
+    // Ámbar: es el color de "pendiente". Se mide tiempo que todavía no
+    // pertenece a ningún juego.
+    <div className="flex h-18 items-center gap-4 bg-phosphor-tint px-5">
+      <span className="flex h-14 w-10.5 flex-none items-center justify-center rounded-xs border border-phosphor/40 bg-phosphor/10">
+        <Joystick aria-hidden size={17} className="text-phosphor" />
+      </span>
+      <div className="min-w-0 flex-[0_1_auto]">
+        <div className="text-lead font-semibold text-bone">{entry.session.emulatorName}</div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-small text-dust">
+          <span aria-hidden className="size-2 flex-none rounded-full bg-phosphor" />
+          Emulator session · not assigned to a game yet · since {since}
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={onAssign}
-        className="flex-none rounded-[8px] border px-2.5 py-1.5 text-[11px] font-bold transition-colors duration-150"
-        style={{ borderColor: `${AMBER}55`, color: AMBER }}
-      >
+      <span className="flex-none font-display text-[44px] leading-none font-bold text-phosphor tabular-nums">
+        {formatElapsed(elapsed)}
+      </span>
+      <button type="button" onClick={onAssign} className={cn(primaryButtonClass, buttonSize.md)}>
+        <Link2 aria-hidden size={15} />
         Assign
       </button>
     </div>
+  );
+};
+
+// La segunda sesión, en una tira de 40 px bajo la barra.
+const SecondStrip = ({
+  entry,
+  more,
+  onAssign,
+}: {
+  entry: LiveEntry;
+  more: number;
+  onAssign: (session: PendingSession) => void;
+}): React.JSX.Element => (
+  <div className="flex h-10 animate-np-in items-center gap-3 border-t border-line bg-cabinet/40 px-5 text-small">
+    {entry.kind === 'game' ? (
+      <GameStripBody entry={entry} />
+    ) : (
+      <PendingStripBody entry={entry} onAssign={onAssign} />
+    )}
+    {more > 0 && <span className="flex-none text-dust">+{more} more</span>}
+  </div>
+);
+
+const GameStripBody = ({
+  entry,
+}: {
+  entry: Extract<LiveEntry, { kind: 'game' }>;
+}): React.JSX.Element => {
+  const navigate = useNavigate();
+  const elapsed = useLiveTimer(entry.startedAt);
+  const device = useEntryDevice(entry);
+  const silent = device.noSignal !== null;
+  return (
+    <>
+      <GameCover
+        url={entry.game.coverUrl}
+        className={cn(
+          'h-7 w-5.5 flex-none overflow-hidden rounded-xs bg-raised',
+          silent && 'opacity-50 grayscale',
+        )}
+        iconSize={10}
+      />
+      <LiveLed tone={silent ? 'silent' : device.remote ? 'remote' : 'here'} />
+      <span className="flex-none text-dust">Also playing</span>
+      <span className="min-w-0 font-semibold text-bone">{entry.game.title}</span>
+      {device.remote && (
+        <span className="inline-flex flex-none items-center gap-1 text-dust">
+          <Monitor aria-hidden size={13} />
+          on {device.deviceName}
+        </span>
+      )}
+      {silent && <span className="flex-none text-dust">· {device.noSignal}</span>}
+      <span className="flex-none font-display text-[24px] leading-none font-bold text-bone tabular-nums">
+        {formatElapsed(elapsed)}
+      </span>
+      <span className="flex-1" />
+      <button
+        type="button"
+        onClick={() => navigate(`/games/${entry.game.id}`)}
+        className={cn(ghostButtonClass, buttonSize.sm)}
+      >
+        Open game
+      </button>
+    </>
+  );
+};
+
+const PendingStripBody = ({
+  entry,
+  onAssign,
+}: {
+  entry: Extract<LiveEntry, { kind: 'pending' }>;
+  onAssign: (session: PendingSession) => void;
+}): React.JSX.Element => {
+  const elapsed = useLiveTimer(entry.startedAt);
+  return (
+    <>
+      <Joystick aria-hidden size={15} className="flex-none text-phosphor" />
+      <span className="flex-none text-dust">Also running</span>
+      <span className="min-w-0 font-semibold text-bone">{entry.session.emulatorName}</span>
+      <span className="flex-none text-dust">· not assigned yet</span>
+      <span className="flex-none font-display text-[24px] leading-none font-bold text-phosphor tabular-nums">
+        {formatElapsed(elapsed)}
+      </span>
+      <span className="flex-1" />
+      <button
+        type="button"
+        onClick={() => onAssign(entry.session)}
+        className={cn(ghostButtonClass, buttonSize.sm)}
+      >
+        Assign
+      </button>
+    </>
   );
 };

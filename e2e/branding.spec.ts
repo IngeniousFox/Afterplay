@@ -4,16 +4,19 @@ import { buildSplashHtml, SPLASH_SIZE } from '../src/main/splash/splashHtml';
 import { expect, test } from './fixtures';
 
 test.describe('identidad de Afterplay', () => {
-  test('la luciérnaga abre Ajustes con ratón y teclado', async ({ afterplay }, testInfo) => {
+  // Fósforo: el logotipo vive en la barra superior y lleva a Home; Ajustes se
+  // abre con el engranaje de la derecha (antes era la luciérnaga del rail).
+  test('el engranaje abre Ajustes con ratón y teclado', async ({ afterplay }, testInfo) => {
     const { window } = afterplay;
+    const logo = window.getByRole('link', { name: 'Afterplay', exact: true });
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute('href', '#/home');
     await expect(window.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
+    // Por title y no por rol: con el diálogo abierto el resto de la página
+    // queda inerte y fuera del árbol de accesibilidad.
     const settings = window.getByTitle('Settings', { exact: true });
-    const image = settings.locator('img');
-    await expect(image).toBeVisible();
-    expect(await image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(512);
     await expect(settings).toHaveAttribute('aria-expanded', 'false');
-    await settings.screenshot({ path: testInfo.outputPath('settings-firefly.png') });
-    await window.screenshot({ path: testInfo.outputPath('library-firefly.png') });
+    await window.getByTestId('app-topbar').screenshot({ path: testInfo.outputPath('top-bar.png') });
 
     await settings.click();
     await expect(window.getByRole('dialog')).toBeVisible();
@@ -26,12 +29,6 @@ test.describe('identidad de Afterplay', () => {
     await expect(window.getByRole('dialog')).toBeVisible();
     await window.keyboard.press('Escape');
     await expect(settings).toHaveAttribute('aria-expanded', 'false');
-    await window.emulateMedia({ reducedMotion: 'reduce' });
-    await settings.hover();
-    expect(await image.evaluate((element) => getComputedStyle(element).transitionProperty)).toBe(
-      'none',
-    );
-    await expect(image).toBeVisible();
   });
 
   test('la ventana y el favicon ya no se llaman Electron', async ({ afterplay }) => {

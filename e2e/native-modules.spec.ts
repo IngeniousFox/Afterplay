@@ -36,5 +36,5 @@ test('los binarios nativos y safeStorage funcionan dentro del Electron instalado
     controllerApiLoaded: true,
   });
   // Y la app de verdad ya abrió con él la base 2.0 de este sandbox.
-  await expect(afterplay.window.getByRole('link', { name: 'Games', exact: true })).toBeVisible();
+  await expect(afterplay.window.getByRole('link', { name: 'Library', exact: true })).toBeVisible();
 });

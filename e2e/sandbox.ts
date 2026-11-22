@@ -57,7 +57,7 @@ import { DEFAULT_SEED } from './seed';
 //
 // Si no hay .env.test, se escriben dos claves de IGDB inservibles: no es
 // capricho, es que sin ninguna la app abre Ajustes sola en el primer arranque
-// (NavRail lo hace cuando faltan las de IGDB) y todos los tests empezarían
+// (el armazón de escritorio lo hace cuando faltan las de IGDB) y todos los tests empezarían
 // con un modal delante. Con ellas la app se comporta como una instalación
 // configurada, y los tests que necesiten red se saltan solos.
 

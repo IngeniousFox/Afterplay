@@ -54,7 +54,8 @@ test.describe('notes and deferred renderer content', () => {
     afterplay,
   }) => {
     const { window: page } = afterplay;
-    await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+    // La app arranca en Home ("Tonight") desde Fósforo.
+    await expect(page.getByRole('heading', { name: 'Tonight', exact: true })).toBeVisible();
     const initialScripts = await loadedScripts(page);
     const markdownChunk = markdownScript();
     expect(initialScripts.some((name) => name.startsWith('Afterplay-'))).toBe(true);
