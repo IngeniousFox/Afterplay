@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Afterplay - TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=Bebas+Neue&family=Archivo+Black&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap"><link rel="stylesheet" href="styles.css"><style>
+  body{width:1920px;height:1080px;position:relative;overflow:hidden}
+  .bg{position:absolute;inset:0}
+  .bg .cv{width:1920px;height:1080px;border-radius:0;box-shadow:none;aspect-ratio:auto}
+  .bg::before{content:"";position:absolute;inset:0;z-index:5;background:linear-gradient(90deg,rgba(15,21,28,.94) 0,rgba(15,21,28,.8) 40%,rgba(15,21,28,.15) 80%),linear-gradient(0deg,#0F151C 0,rgba(15,21,28,.92) 26%,transparent 55%)}
+  .top{position:absolute;z-index:10;left:88px;right:88px;top:50px;display:flex;align-items:center;gap:48px}
+  .top .logo{padding:0;font-size:40px}
+  .top .tabs{display:flex;gap:6px}
+  .top .tabs span{height:46px;padding:0 24px;display:flex;align-items:center;font-size:22px;font-weight:500;color:var(--graphite);border-radius:23px}
+  .top .tabs span.on{background:var(--sheet);color:var(--ink);box-shadow:0 0 0 1px var(--hair)}
+  .top .clk{margin-left:auto;font-size:26px;font-weight:500;display:flex;gap:26px;align-items:center}
+  .top .clk .ic{width:30px;height:30px}
+  .hero{position:absolute;z-index:10;left:88px;top:130px;width:1150px}
+  .hero .m{display:flex;align-items:center;gap:18px;font-size:26px;color:#C9D2DB;margin-bottom:12px}
+  .hero .m i{width:5px;height:5px;border-radius:50%;background:currentColor;display:block;opacity:.7}
+  .hero h1{font:400 156px/.92 var(--serif);letter-spacing:-.02em;color:#F2F4F6}
+  .hero .btns{display:flex;gap:20px;margin-top:36px}
+  .big{height:68px;padding:0 36px;border-radius:10px;font-size:28px;font-weight:600;display:inline-flex;align-items:center;gap:14px;border:1px solid var(--hair)}
+  .big .ic{width:26px;height:26px}
+  .big.signal{background:var(--signal);color:#0F151C;border-color:var(--signal)}
+  .big.d{background:rgba(247,248,248,.08);color:var(--ink)}
+  .shelf{position:absolute;z-index:10;left:88px;right:0;top:598px}
+  .shelf .lb{font-size:26px;font-weight:600;margin-bottom:14px;display:flex;gap:16px;align-items:baseline}
+  .shelf .lb span{font-size:22px;color:var(--graphite);font-weight:400}
+  .row{display:flex;gap:30px;align-items:center;height:330px}
+  .it{position:relative;flex:none}
+  .it .cv{border-radius:6px;box-shadow:0 0 0 1px rgba(255,255,255,.1)}
+  .it:not(.foc){opacity:.82}
+  .it.foc .cv{outline:6px solid var(--signal);outline-offset:6px;border-radius:6px;box-shadow:0 0 0 1px #000,0 24px 60px rgba(228,87,46,.35)}
+  .fl{position:absolute;left:0;top:100%;margin-top:22px;font-size:22px;font-weight:600;white-space:nowrap}
+  .hints{position:absolute;z-index:10;left:88px;right:88px;bottom:34px;display:flex;gap:40px;font-size:22px;color:var(--graphite);align-items:center}
+  .hints .h{display:flex;align-items:center;gap:12px}
+  .hints i{width:34px;height:34px;border-radius:50%;border:2px solid var(--graphite);display:grid;place-items:center;font-style:normal;font-size:18px;font-weight:600;color:var(--ink)}
+  </style></head><body class="night">
+  <div class="bg"><div class="cv p-rays wide" style="--c1:#c9a24b;--c2:#15110b;--c3:#f1dc9a;--ff:'Cormorant Garamond';--tc:#fff6dc"></div></div>
+  <div class="top"><div class="logo">Afterplay<i></i></div><div class="tabs"><span class="on">Home</span><span>Library</span><span>Plan</span><span>Sessions</span></div>
+    <div class="clk"><span style="font-size:22px;color:#E6EAEE">Desk PC</span><svg class="ic " viewBox="0 0 24 24"><path d="M7 8h10a4 4 0 0 1 4 4.2l-.6 4a2 2 0 0 1-3.4 1l-2-2.2h-4l-2 2.2a2 2 0 0 1-3.4-1l-.6-4A4 4 0 0 1 7 8zM8 11v3M6.5 12.5h3"/></svg><span>21:14</span></div></div>
+  <div class="hero">
+    <div class="m"><span>Playing</span><i></i><span>38h 10m played</span><i></i><span>Last played yesterday</span></div>
+    <h1>Clair Obscur:<br>Expedition 33</h1>
+    <div class="btns"><span class="big signal"><svg class="ic " viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>Play</span><span class="big d">Details</span></div>
+  </div>
+  <div class="shelf"><div class="lb">Continue playing<span>5 games</span></div><div class="row"><div class="it "><div class="cv p-rings" style="--c1:#8f1226;--c2:#2a0610;--c3:#eadfc8;--ff:'Cinzel';--tc:#f4ead4;width:196px"><b>Silksong</b><i class="dotlive"></i></div></div><div class="it foc"><div class="cv p-rays" style="--c1:#c9a24b;--c2:#15110b;--c3:#f1dc9a;--ff:'Cormorant Garamond';--tc:#fff6dc;width:232px"><b>Expedition 33</b></div></div><div class="it "><div class="cv p-moon" style="--c1:#1d8a6b;--c2:#04100d;--c3:#8ff0c6;--ff:'Cinzel';width:196px"><b>Hades II</b></div></div><div class="it "><div class="cv p-diamond" style="--c1:#cc2f2a;--c2:#1b3a8c;--c3:#ffd9a0;--ff:'Archivo Black';--fw:400;--tt:uppercase;--fs:15cqw;width:196px"><b>Balatro</b></div></div><div class="it "><div class="cv p-tri" style="--c1:#2c6bed;--c2:#f08a24;--c3:#fff3d6;--ff:'Bebas Neue';--fw:400;--tt:uppercase;--fs:19cqw;width:196px"><b>Split Fiction</b></div></div><div class="it "><div class="cv p-rings" style="--c1:#e38a3c;--c2:#1c2a55;--c3:#ffd08a;--ff:'Space Grotesk';width:196px"><b>Outer Wilds</b></div></div><div class="it "><div class="cv p-tri" style="--c1:#e8689b;--c2:#3c2b7a;--c3:#ffd0e4;--ff:'Playfair Display';width:196px"><b>Celeste</b></div></div><div class="it "><div class="cv p-stripes" style="--c1:#d9a441;--c2:#3d2a22;--c3:#f0d79a;--ff:'Archivo Black';--fw:400;--tt:uppercase;--fs:12cqw;width:196px"><b>Disco Elysium</b></div></div></div></div>
+  <div class="hints"><span class="h"><i>A</i>Play</span><span class="h"><i>B</i>Back</span><span class="h"><i>X</i>Add note</span><span class="h"><i>Y</i>Plan</span><span style="margin-left:auto" class="h"><span class="dot"></span>Up to date</span></div>
+  </body></html>

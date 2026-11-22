@@ -9,6 +9,8 @@ import { defineConfig } from '@playwright/test';
 // `test:e2e:only` para iterar sin recompilar.
 export default defineConfig({
   testDir: './e2e',
+  // Las capturas del rediseño tienen su propia config (playwright.shots.config.ts).
+  testIgnore: '**/shots/**',
   // De uno en uno: cada test levanta un Electron entero (main + renderer +
   // GPU), y varias instancias a la vez en un portátil se pelean por la CPU
   // hasta que los timeouts empiezan a mentir sobre lo que falla.

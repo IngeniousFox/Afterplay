@@ -1,0 +1,256 @@
+<title>Afterplay 2.0 Fósforo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Big+Shoulders+Display:wght@600;800&display=swap">
+<style>
+/* Layout: cabecera tipo mueble arcade, decisiones en lista, galería por áreas con visor a pantalla completa. Solo oscuro, como la app. */
+:root{
+  --cabinet:#101416; --panel:#171D20; --raised:#1F272B; --line:rgba(233,228,216,.09);
+  --bone:#E9E4D8; --dust:#8A9496; --phosphor:#FFB347; --tube:#5FD3E0; --live:#FF5E57; --beaten:#9BD67A;
+  --display:"Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --ui:Barlow, "Segoe UI", system-ui, sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--cabinet);color:var(--bone);font:16px/1.55 var(--ui);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.wrap{max-width:1240px;margin:0 auto;padding-block:40px 80px}
+header.hero{position:relative;padding-block:28px 36px;border-bottom:1px solid var(--line);overflow:hidden}
+header.hero::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg, rgba(233,228,216,.025) 0 1px, transparent 1px 3px)}
+.brand{display:flex;align-items:center;gap:12px;color:var(--dust);font-weight:500}
+.led{width:9px;height:9px;border-radius:50%;background:var(--phosphor);box-shadow:0 0 10px var(--phosphor)}
+h1{font:800 clamp(48px, 9vw, 112px)/.9 var(--display);margin:18px 0 14px;letter-spacing:.005em;text-wrap:balance;
+  text-shadow:0 0 28px rgba(255,179,71,.18)}
+h1 span{color:var(--phosphor)}
+.lede{max-width:62ch;color:var(--dust);font-size:18px;margin:0}
+.facts{display:flex;flex-wrap:wrap;gap:28px 44px;margin-top:28px}
+.fact b{display:block;font:800 44px/1 var(--display);color:var(--bone);font-variant-numeric:tabular-nums}
+.fact span{color:var(--dust);font-size:14px}
+h2{font:600 34px/1.1 var(--display);margin:56px 0 6px;text-wrap:balance}
+.sub{color:var(--dust);margin:0 0 22px;max-width:70ch}
+.status{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  padding:6px 12px;font-size:14px;color:var(--bone);margin-top:22px}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--beaten)}
+/* Decisiones */
+ol.dec{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+ol.dec li{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;min-width:0}
+ol.dec .n{grid-row:span 2;font:800 30px/1 var(--display);color:var(--phosphor);font-variant-numeric:tabular-nums}
+ol.dec h3{margin:0;font-size:16px;font-weight:600}
+ol.dec p{margin:0;color:var(--dust);font-size:15px}
+/* Paleta */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.sw{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.sw div{height:54px}
+.sw p{margin:0;padding:8px 10px;font-size:14px}
+.sw small{display:block;color:var(--dust);font-variant-numeric:tabular-nums}
+/* Navegación de áreas */
+nav.areas{position:sticky;top:env(safe-area-inset-top, 0px);z-index:5;background:rgba(16,20,22,.94);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);margin:48px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0;
+  padding:10px max(16px, env(safe-area-inset-left, 0px));display:flex;gap:6px;overflow-x:auto}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top, 0px);z-index:10;background:var(--cabinet)}
+nav.areas a{flex:none;color:var(--dust);text-decoration:none;font-weight:500;padding:7px 12px;border-radius:4px;font-size:15px}
+nav.areas a:hover{color:var(--bone);background:var(--raised)}
+nav.areas a:focus-visible,button:focus-visible{outline:2px solid var(--phosphor);outline-offset:2px}
+nav.areas a b{font:600 15px var(--display);color:var(--phosphor);margin-left:6px;font-variant-numeric:tabular-nums}
+section.area{scroll-margin-top:70px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:22px}
+figure{margin:0;min-width:0}
+figure button{all:unset;cursor:zoom-in;display:block;width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--line);
+  background:var(--panel);transition:border-color .16s ease, transform .2s cubic-bezier(.2,.8,.2,1)}
+figure button:hover{border-color:rgba(255,179,71,.45)}
+figure button:active{transform:scale(.99)}
+figure button:focus-visible{outline:2px solid var(--phosphor);outline-offset:3px}
+figure img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:top;background:var(--raised)}
+figcaption{padding:10px 2px 0}
+figcaption strong{display:block;font-weight:600}
+figcaption span{color:var(--dust);font-size:15px}
+/* Visor */
+dialog{border:0;padding:0;background:transparent;max-width:none;max-height:none;width:100vw;height:100dvh;margin:0;color:var(--bone)}
+dialog::backdrop{background:rgba(8,10,11,.92)}
+.viewer{height:100%;display:grid;grid-template-rows:auto 1fr;gap:10px;
+  padding:calc(12px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+.vbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.vbar .t{flex:1;min-width:0}
+.vbar .t strong{display:block}
+.vbar .t span{color:var(--dust);font-size:15px}
+.vbar button{background:var(--raised);color:var(--bone);border:1px solid var(--line);border-radius:4px;font:500 15px var(--ui);padding:8px 14px;cursor:pointer}
+.vbar button:hover{border-color:rgba(255,179,71,.5)}
+.vimg{min-height:0;overflow:auto;display:flex;align-items:flex-start;justify-content:center}
+.vimg img{max-width:100%;height:auto;border-radius:6px}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--dust);font-size:14px}
+@media (prefers-reduced-motion:reduce){figure button{transition:none}figure button:active{transform:none}}
+@media (max-width:520px){.facts{gap:18px 28px}.fact b{font-size:36px}}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="brand"><i class="led"></i>Afterplay 2.0.0 · rediseño</div>
+    <h1>Fósforo</h1>
+    <p class="lede">La dirección elegida para el nuevo aspecto de Afterplay en escritorio, TV y la app del móvil. Fondo petróleo, ámbar de pantalla de fósforo y cifras grandes, como el marcador de una recreativa. Solo modo oscuro.</p>
+    <div class="facts">
+      <div class="fact"><b>67</b><span>maquetas</span></div>
+      <div class="fact"><b>6</b><span>áreas</span></div>
+      <div class="fact"><b>8</b><span>decisiones cerradas</span></div>
+    </div>
+    <div class="status"><i></i>Decisiones aceptadas el 22 nov 2026. Implementación en marcha por tandas.</div>
+  </header>
+
+  <h2>Decisiones cerradas</h2>
+  <p class="sub">Puntos que quedaban abiertos tras la exploración y cómo se resuelven al implementar.</p>
+  <ol class="dec">
+    <li><span class="n">1</span><h3>Overlay dentro del juego</h3><p>Panel compacto con tiempo de sesión, nota rápida y logros. Una segunda pestaña guarda HLTB e historial para no perder nada.</p></li>
+    <li><span class="n">2</span><h3>Pasos de la migración</h3><p>Se quedan los nombres actuales del código. Solo cambia el aspecto: la lógica de migración no se toca.</p></li>
+    <li><span class="n">3</span><h3>Barra Now playing</h3><p>Desaparece cuando no hay sesión en marcha. El último juego ya aparece arriba en Home.</p></li>
+    <li><span class="n">4</span><h3>Ajustes en 9 secciones</h3><p>General, Library, Emulators, Saves, Integrations, Sync, Achievements, Backups y About. Las claves de Turso desaparecen.</p></li>
+    <li><span class="n">5</span><h3>Pestañas de la TV</h3><p>Home, Library y Journey, como en el código. Plan y Sessions no existen en TV.</p></li>
+    <li><span class="n">6</span><h3>Aviso del mes</h3><p>Se mantiene el texto real de la app, «Your October story is ready».</p></li>
+    <li><span class="n">7</span><h3>Añadidos nuevos</h3><p>Código QR en Add device y banda de «sin conexión» en la PWA. Insignias globales y «Sign in again» quedan fuera por ahora.</p></li>
+    <li><span class="n">8</span><h3>Color de aviso</h3><p>Se quita el amarillo Caution. Los avisos usan el ámbar con un icono de triángulo.</p></li>
+  </ol>
+
+  <h2>Paleta</h2>
+  <p class="sub">Tres superficies, dos textos y un acento principal. El cian marca sincronización y el rojo, lo que está en directo.</p>
+  <div class="swatches">
+    <div class="sw"><div style="background:#101416;border-bottom:1px solid var(--line)"></div><p>Cabinet<small>#101416 · fondo</small></p></div>
+    <div class="sw"><div style="background:#171D20;border-bottom:1px solid var(--line)"></div><p>Panel<small>#171D20</small></p></div>
+    <div class="sw"><div style="background:#1F272B"></div><p>Raised<small>#1F272B</small></p></div>
+    <div class="sw"><div style="background:#E9E4D8"></div><p>Bone<small>#E9E4D8 · texto</small></p></div>
+    <div class="sw"><div style="background:#8A9496"></div><p>Dust<small>#8A9496 · secundario</small></p></div>
+    <div class="sw"><div style="background:#FFB347"></div><p>Phosphor<small>#FFB347 · acento</small></p></div>
+    <div class="sw"><div style="background:#5FD3E0"></div><p>Tube<small>#5FD3E0 · sync</small></p></div>
+    <div class="sw"><div style="background:#FF5E57"></div><p>Live<small>#FF5E57 · en directo</small></p></div>
+  </div>
+
+  <nav class="areas" aria-label="Áreas" id="areas"></nav>
+  <div id="gallery"></div>
+
+  <footer>Maquetas HTML renderizadas a imagen con datos de ejemplo; no son capturas de la app. Haz clic en una para verla a tamaño completo y usa las flechas para pasar.</footer>
+</div>
+
+<dialog id="viewer" aria-label="Maqueta a tamaño completo">
+  <div class="viewer">
+    <div class="vbar">
+      <div class="t"><strong id="vt"></strong><span id="vd"></span></div>
+      <button id="prev" type="button" aria-label="Anterior">← Anterior</button>
+      <button id="next" type="button" aria-label="Siguiente">Siguiente →</button>
+      <button id="close" type="button">Cerrar</button>
+    </div>
+    <div class="vimg"><img id="vimg" alt=""></div>
+  </div>
+</dialog>
+
+<script>
+const AREAS = [
+ ["principales","Pantallas principales","La estructura nueva: barra de pestañas arriba, Now playing acoplado abajo y una Home nueva.",[
+  ["home","Home","Tonight: el juego en marcha, el plan y la semana de un vistazo."],
+  ["library","Library","Rejilla de portadas con filtros por estado, plataforma y dispositivo."],
+  ["detail","Ficha de juego","Cabecera con banner, cifras grandes y pestañas Overview, Sessions, Achievements, Saves y Notes."],
+  ["sessions","Sessions","Historial de sesiones agrupado por día, con el PC donde se jugó."],
+  ["plan","Plan","La cola de lo próximo que vas a jugar, ordenable."],
+  ["settings","Ajustes","Página completa en lugar de modal."],
+  ["tv","TV","Modo sofá para mando, con foco grande."],
+  ["pwa","PWA","La app del móvil: Home, Library, Plan y Sessions."]]],
+ ["ficha","Ficha y modales","Todas las pestañas de la ficha, sus variantes según el PC y los modales de añadir, editar y restaurar.",[
+  ["ficha-sesiones","Pestaña Sessions","Sesiones del juego con duración, dispositivo y notas."],
+  ["ficha-logros","Pestaña Achievements","Logros con progreso, rareza y fecha."],
+  ["ficha-saves","Pestaña Saves","Versiones de las partidas guardadas entre PCs, como un grafo."],
+  ["ficha-saves-estados","Estados de los saves","Sincronizado, pendiente, en conflicto y sin copia."],
+  ["ficha-notas","Pestaña Notes","Notas del juego con la tipografía del editor."],
+  ["ficha-sin-instalacion","Sin instalar aquí","El juego existe en la biblioteca pero no en este PC."],
+  ["ficha-otro-pc","En marcha en otro PC","Aviso en directo cuando el juego corre en otra máquina."],
+  ["ficha-avisos","Avisos de la ficha","Fusionar duplicados y otros avisos del mismo juego."],
+  ["ficha-add-buscar","Add game: buscar","Buscar un juego por nombre para añadirlo."],
+  ["ficha-add-escanear","Add game: escanear","Escanear carpetas y lanzadores en busca de juegos."],
+  ["ficha-editar","Edit game","Editar datos, portada y ejecutable."],
+  ["ficha-restaurar","Restore save","Elegir qué versión de la partida restaurar."]]],
+ ["stats","Stats","Estadísticas globales, de un juego y el Journey mensual.",[
+  ["stats-overview","Resumen","Horas, sesiones y racha del periodo."],
+  ["stats-rhythm","Ritmo","Cuándo juegas: días y horas."],
+  ["stats-library","Biblioteca","Reparto por estado, plataforma y género."],
+  ["stats-pace","Ritmo de juego","Tiempo para terminar frente a HLTB."],
+  ["stats-cabinet","Vitrina","Lo más jugado, como un marcador."],
+  ["stats-game","Stats de un juego","Horas, coste por hora y progreso."],
+  ["stats-game-signature","Firma del juego","El patrón de sesiones de un juego."],
+  ["stats-game-rhythm","Ritmo del juego","Cuándo juegas a ese juego."],
+  ["stats-journey","Journey","La historia del mes."]]],
+ ["estados","Estados, ajustes, migración y overlay","Lo que no es una pantalla fija: estados de sync, avisos, vacíos, cada sección de Ajustes y la migración.",[
+  ["estados-nowplaying","Now playing","Variantes de la barra acoplada abajo."],
+  ["estados-sync","Sincronización","El indicador de sync en sus cuatro estados."],
+  ["estados-avisos","Toasts","Avisos breves de éxito, error e información."],
+  ["estados-pendientes","Sesiones pendientes","Sesiones por revisar antes de guardar."],
+  ["estados-asignar","Asignar sesión","Elegir a qué juego pertenece una sesión."],
+  ["estados-vacio-biblioteca","Biblioteca vacía","La primera vez que abres la app."],
+  ["estados-vacios","Otros vacíos y errores","Sin resultados, sin conexión y errores."],
+  ["estados-ajustes-general","Ajustes: General","Arranque, idioma y comportamiento."],
+  ["estados-ajustes-library","Ajustes: Library","Carpetas, lanzadores e imágenes."],
+  ["estados-ajustes-emulators","Ajustes: Emulators","Emuladores y sus rutas."],
+  ["estados-ajustes-saves","Ajustes: Saves","Copias de partidas y sincronización."],
+  ["estados-ajustes-integrations","Ajustes: Integrations","Steam, RetroAchievements y demás."],
+  ["estados-ajustes-backups","Ajustes: Backups","Copias de seguridad."],
+  ["estados-ajustes-achievements","Ajustes: Achievements","Antes Journey."],
+  ["estados-ajustes-about","Ajustes: About","Versión y actualizaciones."],
+  ["estados-migracion-pasos","Migración: pasos","Check, Copy, Connect, Upload y Finish."],
+  ["estados-migracion-decisiones","Migración: decisiones","Qué hacer con los datos de cada PC."],
+  ["estados-overlay","Overlay","El panel compacto dentro del juego."],
+  ["estados-ambient","Modo ambiente","Pantalla en reposo mientras juegas."]]],
+ ["tvpwa","TV y PWA","El modo TV para mando y la app del móvil en detalle.",[
+  ["tvpwa-tv-library","TV: Library","Biblioteca navegable con el mando."],
+  ["tvpwa-tv-detail","TV: ficha","La ficha a distancia de sofá."],
+  ["tvpwa-tv-sections-1","TV: secciones (1)","Sesiones y logros en TV."],
+  ["tvpwa-tv-sections-2","TV: secciones (2)","Saves y estadísticas en TV."],
+  ["tvpwa-tv-notes-journey","TV: notas y Journey","Notas y la historia del mes."],
+  ["tvpwa-tv-menus","TV: menús","Menús contextuales y teclado en pantalla."],
+  ["tvpwa-pwa-sessions-settings","PWA: Sessions y Ajustes","Sesiones, dispositivos e invitar a alguien."],
+  ["tvpwa-pwa-sheets","PWA: hojas","Hojas inferiores para acciones rápidas."],
+  ["tvpwa-pwa-detail","PWA: ficha","La ficha de un juego en el móvil."],
+  ["tvpwa-pwa-states","PWA: estados","Sin conexión, sesión caducada y carga."]]],
+ ["sistema","Sistema de diseño","Tokens, controles y movimiento para llevar a Tailwind.",[
+  ["sistema-tokens-color","Color","Superficies, textos, acentos y estados de juego."],
+  ["sistema-tokens-tipo","Tipografía","Big Shoulders para cifras y títulos, Barlow para la interfaz."],
+  ["sistema-tokens-capas","Capas","Elevación, bordes y sombras."],
+  ["sistema-controles-botones","Botones","Variantes y estados: hover, foco, pulsado y desactivado."],
+  ["sistema-controles-seleccion","Selección","Checkbox, switch, select, tabs y slider."],
+  ["sistema-superficies","Superficies","Paneles, tarjetas, modales y hojas."],
+  ["sistema-medios","Medios","Portadas, banners y su tratamiento."],
+  ["sistema-movimiento","Movimiento","Curvas y duraciones."],
+  ["sistema-movimiento-fotogramas","Fotogramas","Cada animación paso a paso."]]]
+];
+const flat = [];
+const nav = document.getElementById('areas');
+const gal = document.getElementById('gallery');
+for (const [id, title, sub, items] of AREAS) {
+  nav.insertAdjacentHTML('beforeend', `<a href="#${id}">${title}<b>${items.length}</b></a>`);
+  const sec = document.createElement('section');
+  sec.className = 'area'; sec.id = id;
+  sec.innerHTML = `<h2>${title}</h2><p class="sub">${sub}</p><div class="grid"></div>`;
+  const grid = sec.querySelector('.grid');
+  for (const [file, t, d] of items) {
+    const i = flat.push({ file, t, d }) - 1;
+    grid.insertAdjacentHTML('beforeend',
+      `<figure><button type="button" data-i="${i}" aria-label="Ver ${t} a tamaño completo"><img src="${file}.png" alt="${t}: ${d}" loading="lazy" width="1600" height="1000"></button><figcaption><strong>${t}</strong><span>${d}</span></figcaption></figure>`);
+  }
+  gal.appendChild(sec);
+}
+const dlg = document.getElementById('viewer'), vimg = document.getElementById('vimg');
+let cur = 0;
+function show(i) {
+  cur = (i + flat.length) % flat.length;
+  const it = flat[cur];
+  vimg.src = it.file + '.png'; vimg.alt = it.t + ': ' + it.d;
+  document.getElementById('vt').textContent = it.t;
+  document.getElementById('vd').textContent = it.d + ' · ' + (cur + 1) + ' de ' + flat.length;
+}
+gal.addEventListener('click', e => {
+  const b = e.target.closest('button[data-i]'); if (!b) return;
+  show(+b.dataset.i); dlg.showModal();
+});
+document.getElementById('prev').onclick = () => show(cur - 1);
+document.getElementById('next').onclick = () => show(cur + 1);
+document.getElementById('close').onclick = () => dlg.close();
+dlg.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') show(cur - 1);
+  if (e.key === 'ArrowRight') show(cur + 1);
+});
+dlg.addEventListener('click', e => { if (e.target.classList.contains('vimg')) dlg.close(); });
+</script>
