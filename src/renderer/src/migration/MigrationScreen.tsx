@@ -1,13 +1,7 @@
-import { Check, CircleAlert, Loader2, MonitorSmartphone } from 'lucide-react';
+import { Check, Loader2, MonitorPlay, MonitorSmartphone, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CutoverAction, CutoverState } from '../../../shared/cutover';
-import {
-  BRAND_VEIL_BACKGROUND,
-  BRAND_WORDMARK,
-  BRAND_WORDMARK_SHADOW,
-  BRAND_WORDMARK_TRACKING,
-  BRAND_WORDMARK_WEIGHT,
-} from '../../../shared/branding';
+import { BRAND_NAME } from '../../../shared/branding';
 import { Button } from '@/components/ui/button';
 import {
   fieldLabelClass,
@@ -51,11 +45,11 @@ const ProgressBar = ({
     aria-valuemin={0}
     aria-valuemax={100}
     aria-valuenow={fraction === null ? undefined : Math.round(fraction * 100)}
-    className="h-1.5 w-full overflow-hidden rounded-full bg-bone/8"
+    className="h-1.5 w-full overflow-hidden rounded-full bg-inset"
   >
     <div
       className={cn(
-        'h-full rounded-full bg-primary transition-[width] duration-500 motion-reduce:transition-none',
+        'h-full rounded-full bg-phosphor shadow-glow-bar transition-[width] duration-500 motion-reduce:transition-none',
         fraction === null && 'w-2/5 animate-pulse motion-reduce:animate-none',
       )}
       style={fraction === null ? undefined : { width: `${Math.max(2, fraction * 100)}%` }}
@@ -63,34 +57,52 @@ const ProgressBar = ({
   </div>
 );
 
-// La lista de pasos del camino normal. `aria-current="step"` en el activo.
+// La lista de pasos del camino normal, como stepper de Fósforo: hecho = círculo
+// Phosphor con check, activo = anillo con halo, pendiente = gris. Los pasos se
+// unen con un filete que se enciende al dejarlos atrás. `aria-current="step"`
+// en el activo.
 const Steps = ({ current }: { current: number }): React.JSX.Element => (
-  <ol aria-label="Progress" className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+  <ol aria-label="Progress" className="flex w-full items-start">
     {CUTOVER_STEPS.map((step, index) => {
       const done = index < current;
       const active = index === current;
+      const last = index === CUTOVER_STEPS.length - 1;
       return (
         <li
           key={step.id}
           aria-current={active ? 'step' : undefined}
-          className={cn(
-            'flex items-center gap-1.5 text-[12px] font-semibold',
-            active ? 'text-foreground' : done ? 'text-primary' : 'text-muted-foreground/70',
-          )}
+          className="relative flex min-w-0 flex-1 flex-col items-center gap-2 px-1"
         >
+          {!last && (
+            <span
+              aria-hidden
+              className={cn(
+                'absolute top-3.25 right-[calc(-50%+18px)] left-[calc(50%+18px)] h-0.5 rounded-full',
+                done ? 'bg-phosphor' : 'bg-line-strong',
+              )}
+            />
+          )}
           <span
             aria-hidden
             className={cn(
-              'flex size-4.5 items-center justify-center rounded-full border text-micro',
-              active && 'border-primary bg-primary/15 text-primary',
-              done && 'border-primary/50 bg-primary/10',
-              !active && !done && 'border-line-strong',
+              'flex size-7 flex-none items-center justify-center rounded-full font-display text-[15px] font-bold tabular-nums',
+              done && 'bg-phosphor text-ink',
+              active &&
+                'border-2 border-phosphor bg-cabinet text-phosphor shadow-[0_0_0_3px_rgb(255_179_71/.18),0_0_18px_rgb(255_179_71/.35)]',
+              !active && !done && 'border border-line-strong bg-cabinet text-dust',
             )}
           >
-            {done ? <Check className="size-3" strokeWidth={3} /> : index + 1}
+            {done ? <Check className="size-3.5" strokeWidth={3} /> : index + 1}
           </span>
-          {step.label}
-          {done && <span className="sr-only"> (done)</span>}
+          <span
+            className={cn(
+              'text-center text-micro leading-tight',
+              active ? 'font-semibold text-bone' : done ? 'text-bone/80' : 'text-dust',
+            )}
+          >
+            {step.label}
+            {done && <span className="sr-only"> (done)</span>}
+          </span>
         </li>
       );
     })}
@@ -114,26 +126,24 @@ const LaggingQuestion = ({
           <li
             key={device.deviceId}
             className={cn(
-              'flex items-start gap-3 rounded-[12px] border px-3.5 py-3',
-              device.self ? 'border-destructive/40 bg-destructive/6' : 'border-border bg-bone/3',
+              'flex items-start gap-3 rounded-sm border px-3.5 py-3',
+              device.self ? 'border-live/45 bg-live/6' : 'border-line bg-inset',
             )}
           >
             <MonitorSmartphone
               aria-hidden
-              className="mt-0.5 size-4.5 flex-none text-muted-foreground"
+              className={cn('mt-0.5 size-4.5 flex-none', device.self ? 'text-live' : 'text-dust')}
             />
             <div className="min-w-0">
-              <div className="text-[13.5px] font-bold break-words text-foreground">
+              <div className="text-body font-semibold break-words text-bone">
                 {device.self ? `${device.deviceName} (this PC)` : device.deviceName}
               </div>
-              <div className="text-[12.5px] leading-snug text-muted-foreground">
-                {laggingReason(device, now)}
-              </div>
+              <div className="text-small text-dust">{laggingReason(device, now)}</div>
             </div>
           </li>
         ))}
       </ul>
-      <p className="text-[12.5px] leading-snug text-muted-foreground">
+      <p className="text-small text-dust">
         {hasSelf
           ? 'If you continue, the changes on this PC that were never uploaded are left behind. A copy stays in this PC’s backups folder.'
           : 'If you continue, their missing changes can be recovered later from their own copy. Nothing is lost.'}
@@ -151,7 +161,7 @@ const LaggingQuestion = ({
           Continue anyway
         </Button>
       </div>
-      <div role="status" className="min-h-5 text-[12px] text-muted-foreground">
+      <div role="status" className="min-h-5 text-micro text-dust">
         {state.rechecking ? 'Checking again…' : 'We check again by ourselves every 30 seconds.'}
       </div>
     </div>
@@ -179,7 +189,7 @@ const PairingForm = ({
       {state.error && (
         <div
           role="alert"
-          className="rounded-[10px] border border-destructive/40 bg-destructive/8 px-3 py-2 text-[12.5px] text-destructive"
+          className="rounded-sm border border-live/40 border-l-2 border-l-live bg-live/8 px-3 py-2 text-small text-bone"
         >
           {state.error}
         </div>
@@ -197,7 +207,7 @@ const PairingForm = ({
           className={cn(textInputClass, textInputFocusClass)}
         />
         {urlMessage && (
-          <div role="alert" className="mt-1 text-[11.5px] text-destructive">
+          <div role="alert" className="mt-1.5 text-micro text-live">
             {urlMessage}
           </div>
         )}
@@ -211,7 +221,11 @@ const PairingForm = ({
           placeholder="Code from Add device"
           spellCheck={false}
           autoComplete="off"
-          className={cn(textInputClass, textInputFocusClass)}
+          className={cn(
+            textInputClass,
+            textInputFocusClass,
+            'py-1.5 font-display text-[22px] font-bold tracking-[.08em] placeholder:font-sans placeholder:text-[13px] placeholder:font-normal placeholder:tracking-normal',
+          )}
         />
       </label>
       <div className="flex flex-wrap justify-center gap-2.5 pt-1">
@@ -240,19 +254,27 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
       return <PairingForm state={state} />;
     case 'seeding': {
       const text = seedingProgress(state.rowsLeft, state.rowsTotal);
+      const fraction = seedingFraction(state.rowsLeft, state.rowsTotal);
       return (
         <div className="flex w-full flex-col gap-2.5">
-          <ProgressBar
-            fraction={seedingFraction(state.rowsLeft, state.rowsTotal)}
-            label="Upload progress"
-          />
-          {text && (
-            <div role="status" className="text-[12.5px] text-muted-foreground">
-              {text}
-            </div>
-          )}
+          <ProgressBar fraction={fraction} label="Upload progress" />
+          <div className="flex items-baseline justify-between gap-4 text-left">
+            {text && (
+              <div role="status" className="text-small text-dust">
+                {text}
+              </div>
+            )}
+            {fraction !== null && (
+              <span
+                aria-hidden
+                className="ml-auto font-display text-figure font-bold text-phosphor tabular-nums"
+              >
+                {Math.round(fraction * 100)}%
+              </span>
+            )}
+          </div>
           {state.problem && (
-            <div className="rounded-[10px] border border-line bg-bone/4 px-3 py-2 text-[12.5px] leading-snug text-foreground">
+            <div className="rounded-sm border border-line bg-inset px-3 py-2 text-small text-bone/85">
               {state.problem} The upload picks up again by itself.
             </div>
           )}
@@ -265,12 +287,12 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
         <div className="flex w-full flex-col gap-2.5">
           <ProgressBar fraction={null} label="Download progress" />
           {text && (
-            <div role="status" className="text-[12.5px] text-muted-foreground">
+            <div role="status" className="text-left text-small text-dust">
               {text}
             </div>
           )}
           {state.problem && (
-            <div className="rounded-[10px] border border-line bg-bone/4 px-3 py-2 text-[12.5px] leading-snug text-foreground">
+            <div className="rounded-sm border border-line bg-inset px-3 py-2 text-small text-bone/85">
               {state.problem} The download picks up again by itself.
             </div>
           )}
@@ -281,7 +303,7 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
       return (
         <div className="flex w-full flex-col gap-2.5">
           <ProgressBar fraction={null} label="Waiting for the other PC" />
-          <div className="text-[12.5px] text-muted-foreground">
+          <div className="text-small text-dust">
             {state.deviceName} started at {sinceText(state.since)}.
           </div>
         </div>
@@ -290,9 +312,7 @@ const Details = ({ state }: { state: CutoverState }): React.JSX.Element | null =
       return (
         <div className="flex w-full flex-col items-center gap-3.5">
           {errorKeepsOldData(state.code) && (
-            <p className="text-[12.5px] leading-snug text-muted-foreground">
-              Your Afterplay 1 library has not been changed.
-            </p>
+            <p className="text-small text-dust">Your Afterplay 1 library has not been changed.</p>
           )}
           <Button size="lg" onClick={() => act({ type: 'retry' })}>
             Try again
@@ -332,43 +352,47 @@ export const MigrationScreen = ({ state }: { state: CutoverState }): React.JSX.E
     <main
       data-testid="migration-screen"
       data-state={state.kind}
-      className="flex h-full w-full overflow-y-auto"
-      style={{ background: BRAND_VEIL_BACKGROUND }}
+      className="relative flex h-full w-full overflow-y-auto bg-cabinet"
     >
-      <div className="m-auto flex w-full max-w-130 flex-col items-center gap-6 px-6 py-10 text-center">
-        <div
-          aria-hidden
-          className="text-[15px] text-foreground"
-          style={{
-            fontWeight: BRAND_WORDMARK_WEIGHT,
-            letterSpacing: BRAND_WORDMARK_TRACKING,
-            paddingLeft: BRAND_WORDMARK_TRACKING,
-            textShadow: BRAND_WORDMARK_SHADOW,
-          }}
-        >
-          {BRAND_WORDMARK}
+      {/* El velo de la ventana: tinte petróleo en el centro y líneas de
+          escaneo, como el resto de pantallas de estado de Fósforo. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_40%,rgb(95_211_224/.07),transparent_72%)]"
+      />
+      <div aria-hidden className="pointer-events-none fixed inset-0 bg-(image:--scan) opacity-70" />
+      <div className="relative m-auto flex w-full max-w-140 flex-col items-center gap-7 px-6 py-10 text-center">
+        <div aria-hidden className="flex items-center gap-2.5 text-bone">
+          <MonitorPlay className="size-6 text-phosphor" />
+          <span className="font-display text-title font-bold">{BRAND_NAME}</span>
         </div>
         {step !== null && <Steps current={step} />}
-        <div className="flex w-full flex-col items-center gap-3">
+        <div className="flex w-full flex-col items-center gap-3.5">
           {state.kind === 'error' ? (
-            <CircleAlert aria-hidden className="size-7 text-destructive" />
+            <span
+              aria-hidden
+              className="flex size-14 items-center justify-center rounded-full border-2 border-live/70 bg-live/8"
+            >
+              <TriangleAlert className="size-6 text-live" />
+            </span>
           ) : (
             copy.busy && (
               <Loader2
                 aria-hidden
-                className="size-6 animate-spin text-primary motion-reduce:animate-none"
+                className="size-8 animate-spin text-phosphor motion-reduce:animate-none"
+                strokeWidth={1.75}
               />
             )
           )}
           <h1
             ref={headingRef}
             tabIndex={-1}
-            className="text-[21px] leading-tight font-bold text-foreground outline-none"
+            className="font-display text-page font-bold text-bone outline-hidden"
           >
             {copy.title}
           </h1>
           {/* El texto cambia con el estado: se anuncia sin robar el foco. */}
-          <div aria-live="polite" className="text-[13.5px] leading-relaxed text-muted-foreground">
+          <div aria-live="polite" className="max-w-120 text-lead text-dust">
             {copy.body}
           </div>
         </div>

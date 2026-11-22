@@ -1,7 +1,14 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { _electron, test } from '@playwright/test';
 import { openLocalDatabase } from '../../src/main/db/v2/connection';
+import { buildSplashHtml, SPLASH_SIZE } from '../../src/main/splash/splashHtml';
+import {
+  buildOverlayHtml,
+  OVERLAY_HEIGHT,
+  OVERLAY_WIDTH,
+} from '../../src/main/steam/notifications/overlayHtml';
 import { createQueryContext } from '../../src/main/db/v2/queries/common/context';
 import { seedEmulator, seedSession } from '../../src/main/db/v2/queries/common/__tests__/fixtures';
 import { gameIdOf, goTo, launchAfterplay, type Route } from '../fixtures';
@@ -731,6 +738,303 @@ test('capturas de Stats', async () => {
     await goTo(window, '/stats');
     await window.getByRole('button', { name: 'Journey', exact: true }).click();
     await scrollShots('stats-journey', '.afterplay-stats-screen');
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});
+
+// Tanda 9: el overlay in-game, el modo ambiente y la pantalla de migración
+// (estados-overlay, estados-ambient y estados-migracion-*).
+//   · Overlay: su ventana real solo existe con un juego vivo detectado por el
+//     watcher, así que se abre una ventana de prueba con la MISMA SPA en
+//     #/overlay y el mismo preload, con un degradado de fondo que hace de
+//     juego, y se le manda 'overlay:state' como haría el main.
+//   · Ambiente: se acorta la espera de Ajustes a 3 s sustituyendo su handler.
+//   · Migración: el gancho e2e del main (cutoverE2eHook), como en
+//     migration-screen.spec.ts.
+test('capturas de overlay, ambiente y migración', async () => {
+  test.setTimeout(300_000);
+  mkdirSync(OUT, { recursive: true });
+  const { app, window, sandbox } = await launchAfterplay();
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+
+    // Carátulas y un hero de prueba: la biblioteca desechable no trae imágenes
+    // y el modo ambiente solo enseña juegos con carátula. Se pintan en un
+    // canvas del renderer y se dejan en la caché de imágenes del sandbox con
+    // el nombre que el main espera para su URL (sha256 de la URL), así que
+    // nunca se descarga nada: la URL es de un dominio .invalid.
+    const art = async (
+      title: string,
+      width: number,
+      height: number,
+      colors: [string, string],
+    ): Promise<Buffer> => {
+      const base64 = await window.evaluate(
+        async ({ title, width, height, colors }) => {
+          const canvas = new OffscreenCanvas(width, height);
+          const ctx = canvas.getContext('2d')!;
+          const gradient = ctx.createLinearGradient(0, 0, width, height);
+          gradient.addColorStop(0, colors[0]);
+          gradient.addColorStop(1, colors[1]);
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, width, height);
+          ctx.strokeStyle = 'rgba(255,255,255,.12)';
+          for (let r = 20; r < width; r += 18) {
+            ctx.beginPath();
+            ctx.arc(width / 2, height * 0.4, r, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = 'rgba(255,240,220,.92)';
+          ctx.font = `bold ${Math.round(width / 9)}px Georgia, serif`;
+          ctx.fillText(title, Math.round(width * 0.08), Math.round(height * 0.88));
+          const blob = await canvas.convertToBlob({ type: 'image/png' });
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          let binary = '';
+          for (const byte of bytes) binary += String.fromCharCode(byte);
+          return btoa(binary);
+        },
+        { title, width, height, colors },
+      );
+      return Buffer.from(base64, 'base64');
+    };
+    const seedArt = async (
+      kind: 'covers' | 'heroes',
+      slug: string,
+      image: Buffer,
+    ): Promise<string> => {
+      const url = `https://images.example.invalid/shots/${kind}/${slug}.png`;
+      const dir = join(sandbox.userDataDir, kind);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, `${createHash('sha256').update(url).digest('hex')}.png`), image);
+      return url;
+    };
+    for (const [title, colors] of [
+      ['007 First Light', ['#1d2a3a', '#0b0f16']],
+      ['Halls of Torment', ['#3a1a1a', '#120708']],
+      ['Terraria', ['#1f3a22', '#0a140c']],
+      ['Alan Wake', ['#2a2f3a', '#090b10']],
+    ] as [string, [string, string]][]) {
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const coverUrl = await seedArt('covers', slug, await art(title, 264, 374, colors));
+      const patch: { coverUrl: string; heroUrl?: string } = { coverUrl };
+      if (title === '007 First Light') {
+        patch.heroUrl = await seedArt('heroes', slug, await art('', 960, 310, colors));
+      }
+      await window.evaluate(({ id, patch }) => globalThis.api.games.update(id as never, patch), {
+        id: gameIdOf(sandbox, title),
+        patch,
+      });
+    }
+
+    // Modo ambiente: sin sesión en marcha y sin tocar el ratón.
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('settings:getAmbientIdleMinutes');
+      ipcMain.handle('settings:getAmbientIdleMinutes', () => 0.05);
+    });
+    await window.reload();
+    await window.waitForLoadState('domcontentloaded');
+    await goTo(window, '/games');
+    await window.locator('[data-afterplay-ambient]').waitFor({ timeout: 30_000 });
+    await window.waitForTimeout(5500);
+    await window.screenshot({ path: join(OUT, 't9-ambient.png') });
+    await window.waitForTimeout(4000);
+    await window.screenshot({ path: join(OUT, 't9-ambient-later.png') });
+    await window.mouse.move(400, 400);
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('settings:getAmbientIdleMinutes');
+      ipcMain.handle('settings:getAmbientIdleMinutes', () => 0);
+    });
+    await window.reload();
+    await window.waitForLoadState('domcontentloaded');
+
+    // Overlay: una sesión viva de un juego con logros, HLTB e historial.
+    const liveId = gameIdOf(sandbox, '007 First Light');
+    const session = await window.evaluate(
+      (id) => globalThis.api.sessions.startForGame(id as never),
+      liveId,
+    );
+    const hudUrl = `${window.url().split('#')[0]}#/overlay`;
+    const opened = app.waitForEvent('window');
+    const hudWindowId = await app.evaluate(
+      ({ BrowserWindow }, { url, preload }) => {
+        const hud = new BrowserWindow({
+          width: 1600,
+          height: 1000,
+          frame: false,
+          backgroundColor: '#1d1418',
+          webPreferences: { preload, sandbox: false },
+        });
+        hud.setContentSize(1600, 1000);
+        void hud.loadURL(url);
+        return hud.id;
+      },
+      { url: hudUrl, preload: join(process.cwd(), 'out', 'preload', 'index.js') },
+    );
+    const hud = await opened;
+    hud.on('console', (message) => {
+      if (message.type() === 'error') console.log('[overlay]', message.text());
+    });
+    await hud.waitForLoadState('domcontentloaded');
+    // El "juego" de detrás: un degradado de escena oscura.
+    await hud.evaluate(() => {
+      document.documentElement.style.background =
+        'radial-gradient(circle at 28% 30%, #6b3a46 0 6%, transparent 7%), linear-gradient(180deg, #2a1622 0%, #4a1f2c 45%, #12090d 72%, #070405 100%)';
+    });
+    const showHud = (): Promise<void> =>
+      app.evaluate(({ BrowserWindow }, id) => {
+        BrowserWindow.fromId(id)?.webContents.send('overlay:state', true);
+      }, hudWindowId);
+    // El aviso puede llegar antes de que React monte (el main real espera al
+    // 'overlay:ready'): se repite hasta que el HUD aparece.
+    const sessionTab = hud.getByRole('tab', { name: /^Session/ });
+    for (let attempt = 0; attempt < 30 && !(await sessionTab.isVisible()); attempt++) {
+      await showHud();
+      await hud.waitForTimeout(500);
+    }
+    await sessionTab.waitFor();
+    await hud.waitForTimeout(1500);
+    await hud.screenshot({ path: join(OUT, 't9-overlay.png') });
+    await hud.keyboard.type('Past the second bridge. Find the keycard before the next boss');
+    await hud.screenshot({ path: join(OUT, 't9-overlay-note.png') });
+    await hud.getByRole('tab', { name: /^History/ }).click();
+    await hud.waitForTimeout(1200);
+    await hud.screenshot({ path: join(OUT, 't9-overlay-history.png') });
+    await hud.getByRole('tab', { name: /^History/ }).focus();
+    await hud.waitForTimeout(300);
+    await hud.screenshot({ path: join(OUT, 't9-overlay-history-focus.png') });
+    // Una pantalla pequeña (1280 x 720): el panel tiene que caber.
+    await app.evaluate(({ BrowserWindow }, id) => {
+      BrowserWindow.fromId(id)?.setContentSize(1280, 720);
+    }, hudWindowId);
+    await hud.waitForFunction(() => globalThis.innerWidth === 1280);
+    await hud.getByRole('tab', { name: /^Session/ }).click();
+    await hud.waitForTimeout(800);
+    await hud.screenshot({ path: join(OUT, 't9-overlay-720.png') });
+    await app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.destroy(), hudWindowId);
+    if (session) {
+      await window.evaluate((id) => globalThis.api.sessions.close(id, new Date()), session.id);
+    }
+
+    // Lo que pinta el main: el splash de arranque y el aviso de logro de Steam,
+    // con su HTML de producción en una ventana de prueba.
+    const iconPng = readFileSync(join(process.cwd(), 'resources', 'icon.png')).toString('base64');
+    const mainPages: [string, string, { width: number; height: number }, string | null][] = [
+      ['t9-splash', buildSplashHtml(`data:image/png;base64,${iconPng}`), SPLASH_SIZE, null],
+      [
+        't9-steam-toast',
+        buildOverlayHtml(),
+        { width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT },
+        `window.showAchievement(${JSON.stringify({
+          token: 'shots',
+          title: 'Licence to Kill',
+          subtitle: 'Achievement unlocked',
+          gameTitle: '007 First Light',
+          iconDataUri: null,
+          heroDataUri: null,
+          accent: '#ffc266',
+          rarity: 'Only 4.1% of players have this',
+          durationMs: 20_000,
+          rare: false,
+        })})`,
+      ],
+    ];
+    for (const [name, html, size, script] of mainPages) {
+      const opened = app.waitForEvent('window');
+      const pageId = await app.evaluate(
+        ({ BrowserWindow }, { html, size }) => {
+          const preview = new BrowserWindow({
+            ...size,
+            frame: false,
+            backgroundColor: '#2a1622',
+            webPreferences: { sandbox: true, backgroundThrottling: false },
+          });
+          preview.setContentSize(size.width, size.height);
+          void preview.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+          return preview.id;
+        },
+        { html, size },
+      );
+      const page = await opened;
+      await page.waitForLoadState('load');
+      if (script) await page.evaluate(script);
+      await page.waitForTimeout(1400);
+      await page.screenshot({ path: join(OUT, `${name}.png`) });
+      await app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.destroy(), pageId);
+    }
+
+    // Migración: los pasos y las decisiones.
+    type Hook = { force(state: unknown): void };
+    const force = (state: unknown): Promise<void> =>
+      app.evaluate((_electron, next) => {
+        (globalThis as unknown as { __afterplayE2ECutover: Hook }).__afterplayE2ECutover.force(
+          next,
+        );
+      }, state);
+    const migrationShot = async (name: string, state: unknown): Promise<void> => {
+      await force(state);
+      await window.waitForTimeout(900);
+      await window.screenshot({ path: join(OUT, `t9-migration-${name}.png`) });
+    };
+    await force({ kind: 'importing', phase: 'importing' });
+    await window.reload();
+    await window.getByTestId('migration-screen').waitFor();
+    await migrationShot('copy', { kind: 'importing', phase: 'importing' });
+    await migrationShot('pairing', {
+      kind: 'needs-pairing',
+      reason: 'first-pc',
+      hubUrl: 'https://sync.example.org',
+      error: null,
+      canRetrySecret: true,
+    });
+    await window.getByLabel('One-time code').fill('7KQF 92MX');
+    await window.waitForTimeout(300);
+    await window.screenshot({ path: join(OUT, 't9-migration-pairing-filled.png') });
+    await migrationShot('upload', {
+      kind: 'seeding',
+      rowsLeft: 229_000,
+      rowsTotal: 641_000,
+      problem: 'Connection dropped for a moment.',
+    });
+    await migrationShot('lagging', {
+      kind: 'question-lagging',
+      rechecking: false,
+      devices: [
+        {
+          deviceId: 'd-living',
+          deviceName: 'Living room PC',
+          reason: 'stale',
+          self: false,
+          lastReportAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+          pendingChanges: 0,
+        },
+        {
+          deviceId: 'd-self',
+          deviceName: 'Study PC',
+          reason: 'pending-changes',
+          self: true,
+          lastReportAt: Date.now(),
+          pendingChanges: 12,
+        },
+      ],
+    });
+    await migrationShot('waiting-other', {
+      kind: 'waiting-other',
+      deviceName: 'Desk PC',
+      since: Date.now() - 4 * 60_000,
+    });
+    await migrationShot('error', {
+      kind: 'error',
+      code: 'import-failed',
+      message: "Couldn't copy your library.",
+    });
+    await migrationShot('finishing', { kind: 'finishing' });
+    await force(null);
   } finally {
     await app.close().catch(() => {});
     sandbox.cleanup();

@@ -21,7 +21,7 @@ export type OverlayPayload = {
   // Es lo que hace que el aviso se lea como una ficha del juego y no como un
   // mensaje de sistema. null = fondo liso.
   heroDataUri: string | null;
-  // Color del acento (verde normal, ámbar/violeta si es raro).
+  // Color del acento (Phosphor normal, Phosphor hi/violeta si es raro).
   accent: string;
   // "2.4% of players" — solo si aporta.
   rarity: string | null;
@@ -90,6 +90,14 @@ function playChime(rare) {
 }
 `;
 
+// Fósforo, a mano: esta ventana es HTML suelto en una data: URL, sin Tailwind ni
+// las fuentes de la app (su origen opaco no puede pedir ficheros). Los colores
+// son los de src/shared/theme/fosforo.css y la letra una pila del sistema
+// parecida a Barlow / Big Shoulders: Bahnschrift (Windows 10+) y, si falta,
+// las condensadas habituales.
+const FONT_STACK = `'Bahnschrift', 'Barlow', 'Segoe UI', system-ui, sans-serif`;
+const DISPLAY_STACK = `'Bahnschrift SemiCondensed', 'Bahnschrift', 'Barlow Condensed', 'Arial Narrow', sans-serif`;
+
 export const buildOverlayHtml = (): string => `<!doctype html>
 <html>
 <head><meta charset="utf-8" />
@@ -102,17 +110,17 @@ export const buildOverlayHtml = (): string => `<!doctype html>
     /* Sin interacción: la ventana ya ignora el ratón desde el main, esto
        evita además cualquier selección o arrastre accidental. */
     user-select:none; -webkit-user-select:none;
-    font-family:'Segoe UI', system-ui, sans-serif;
+    font-family:${FONT_STACK};
   }
   #card {
     position:absolute; inset:8px;
     display:flex; align-items:center; gap:13px;
     padding:0 16px 0 14px;
-    border-radius:14px;
+    border-radius:8px;
     overflow:hidden;
-    background:#141614;
-    border:1px solid rgba(255,255,255,.09);
-    box-shadow:0 20px 55px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.07);
+    background:#101416;
+    border:1px solid rgba(233,228,216,.17);
+    box-shadow:0 20px 55px rgba(3,6,7,.7), inset 0 1px 0 rgba(233,228,216,.06);
     /* Entra deslizando desde la derecha. translateX y opacity solamente:
        las dos son propiedades que el compositor anima sin repintar. */
     transform:translateX(120%);
@@ -126,44 +134,47 @@ export const buildOverlayHtml = (): string => `<!doctype html>
   #hero { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   #veil {
     position:absolute; inset:0;
-    background:linear-gradient(90deg, rgba(18,20,19,.97) 0%, rgba(18,20,19,.93) 45%, rgba(18,20,19,.68) 100%);
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
+      linear-gradient(90deg, rgba(16,20,22,.97) 0%, rgba(16,20,22,.93) 45%, rgba(16,20,22,.7) 100%);
   }
   #iconwrap { position:relative; flex:none; width:52px; height:52px; }
   #glow {
-    position:absolute; inset:-3px; border-radius:13px;
+    position:absolute; inset:-3px; border-radius:6px;
     filter:blur(7px); opacity:.55;
   }
   #icon {
     position:relative; width:52px; height:52px;
-    border-radius:11px; object-fit:cover;
-    border:1px solid rgba(255,255,255,.14);
-    background:#1b1e1c;
+    border-radius:4px; object-fit:cover;
+    border:1px solid rgba(233,228,216,.17);
+    background:#0c1012;
   }
   #fallback {
-    position:relative; width:52px; height:52px; border-radius:11px;
-    border:1px solid rgba(255,255,255,.14); background:#1b1e1c;
+    position:relative; width:52px; height:52px; border-radius:4px;
+    border:1px solid rgba(233,228,216,.17); background:#0c1012;
     display:flex; align-items:center; justify-content:center;
     font-size:24px;
   }
   #text { position:relative; min-width:0; flex:1; }
   #sub {
     display:flex; align-items:center; gap:5px;
-    font-size:10px; font-weight:800; letter-spacing:.13em; text-transform:uppercase;
+    font-size:12px; line-height:16px; font-weight:600;
     opacity:.95;
   }
   #title {
-    margin-top:3px;
-    font-size:14.5px; font-weight:800; color:#f2f5f3;
+    margin-top:2px;
+    font-family:${DISPLAY_STACK};
+    font-size:19px; line-height:21px; font-weight:700; color:#e9e4d8;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  #rarity { margin-top:2px; font-size:10.5px; font-weight:700; opacity:.8; }
+  #rarity { margin-top:1px; font-size:12px; line-height:16px; font-weight:600; opacity:.9; }
   #game {
-    margin-top:2px; font-size:10.5px; color:rgba(255,255,255,.42);
+    margin-top:1px; font-size:12px; line-height:16px; color:#8a9496;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   /* Cuenta atrás abajo, igual que el aviso de sesión cerrada: dice cuánto le
      queda en pantalla en vez de desaparecer de golpe. */
-  #countdown { position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(255,255,255,.08); }
+  #countdown { position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(233,228,216,.09); }
   #bar { height:100%; width:100%; transform-origin:left center; }
   #bar.run { transition:transform linear; transform:scaleX(0); }
 </style></head>

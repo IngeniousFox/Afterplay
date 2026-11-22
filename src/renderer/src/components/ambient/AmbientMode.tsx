@@ -15,7 +15,8 @@ import { useImageSrc } from '../../hooks/useImageSrc';
 import { useWindowVisible } from '../../hooks/useWindowVisible';
 import { useAchievementsOverview } from '../../hooks/achievements';
 import { ambientLines, type AmbientContext } from '../../lib/ambientLines';
-import { GREEN } from '../../lib/colors';
+import { formatTime } from '../../lib/format';
+import { useTimeFormat } from '../../hooks/settings';
 import { isLiveElsewhere } from '../../../../shared/liveSession';
 import type { GameId } from '../../../../shared/entityIds';
 
@@ -228,7 +229,7 @@ export const AmbientMode = (): React.JSX.Element | null => {
       data-afterplay-ambient={idle ? '' : undefined}
       className="fixed inset-0 z-[60]"
       style={{
-        background: 'rgba(8,9,8,.42)',
+        background: 'rgb(12 16 18 / .45)',
         backdropFilter: 'blur(15px) saturate(0.95) brightness(0.78)',
         opacity: shown && idle ? 1 : 0,
         transition: `opacity ${idle ? 1100 : 420}ms ${idle ? 'ease-out' : 'cubic-bezier(.4,0,1,1)'}`,
@@ -242,7 +243,47 @@ export const AmbientMode = (): React.JSX.Element | null => {
         if (!idle) setMounted(false);
       }}
     >
+      {/* Viñeta y líneas de escaneo de Fósforo sobre la app desenfocada. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgb(8_11_12/.6))]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-(image:--scan) opacity-70"
+      />
       <AmbientShow games={candidates} />
+      <AmbientClock />
+      {/* La pista de salida: se queda unos segundos y se desvanece sola. Con
+          reduced motion no se anima: simplemente se queda, discreta. */}
+      <div className="pointer-events-none absolute right-14 bottom-10 flex items-center gap-1.5 text-micro text-dust animate-out fade-out-0 fill-mode-forwards delay-[6s] duration-1000 motion-reduce:animate-none">
+        Move the mouse to go back
+        <kbd className="rounded-sm border border-line-strong bg-inset px-1.5 py-px text-micro font-medium text-dust">
+          any key
+        </kbd>
+      </div>
+    </div>
+  );
+};
+
+// El reloj grande de arriba a la derecha. Solo presentación: lee la hora y el
+// formato 12/24 h de Ajustes, y se refresca cada pocos segundos mientras el
+// modo ambiente está montado (al salir, se desmonta con él).
+const AmbientClock = (): React.JSX.Element => {
+  const { data: timeFormat = '24h' } = useTimeFormat();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 5000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="pointer-events-none absolute top-10 right-14 text-right">
+      <div className="font-display text-[72px] leading-none font-bold text-bone/90 tabular-nums [text-shadow:0_2px_20px_rgb(3_6_7/.6)]">
+        {formatTime(now, timeFormat)}
+      </div>
+      <div className="mt-2 text-small text-dust">
+        {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+      </div>
     </div>
   );
 };
@@ -490,21 +531,41 @@ const AmbientShow = ({ games }: { games: GameListItem[] }): React.JSX.Element =>
     })(),
   };
 
+  // La línea de abajo: en qué diapositiva va el desfile y cuánto le queda a
+  // esta. Pura presentación del mismo `index` y del mismo SLIDE_MS.
+  const progress = (
+    <div className="pointer-events-none absolute right-14 bottom-[72px] left-14 flex items-center gap-5">
+      <span className="flex-none text-micro text-dust tabular-nums">
+        Slide {(index % queue.length) + 1} of {queue.length}
+      </span>
+      <div className="h-0.5 min-w-0 flex-1 overflow-hidden rounded-full bg-bone/8">
+        <div
+          key={index}
+          className="h-full origin-left rounded-full bg-phosphor shadow-glow-bar motion-reduce:animate-none"
+          style={{ animation: `afterplay-grow-x ${SLIDE_MS}ms linear both` }}
+        />
+      </div>
+    </div>
+  );
+
   // Las frases se sortean sobre la lista que haya al montar: sin esperar a las
   // sesiones, una que llegara después cambiaría el número de frases y, con él,
   // la elegida, a media diapositiva.
-  if (sessionsPending) return <></>;
+  if (sessionsPending) return progress;
 
   return (
-    <AmbientSlide
-      key={`${game.id}-${index}`}
-      game={game}
-      context={context}
-      // Semilla propia de ESTA diapositiva para sortear la frase. Sin ella se
-      // vería siempre la primera de la lista y un juego con quince cosas que
-      // contar acabaría diciendo siempre la misma.
-      lineSeed={seed + index * 7919}
-    />
+    <>
+      <AmbientSlide
+        key={`${game.id}-${index}`}
+        game={game}
+        context={context}
+        // Semilla propia de ESTA diapositiva para sortear la frase. Sin ella se
+        // vería siempre la primera de la lista y un juego con quince cosas que
+        // contar acabaría diciendo siempre la misma.
+        lineSeed={seed + index * 7919}
+      />
+      {progress}
+    </>
   );
 };
 
@@ -536,17 +597,8 @@ const AmbientSlide = ({
 
   return (
     <div className="afterplay-ambient-slide animate-[afterplay-fade-in_2.2s_cubic-bezier(0.4,0,0.2,1)_backwards] absolute inset-0">
-      {/* Sin hero de fondo: el fondo ahora es la propia app desenfocada por la
-          capa de arriba (ver AmbientMode). Solo queda la viñeta, que apaga los
-          bordes para que la carátula y el texto del centro no compitan con lo
-          que se intuya detrás. */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: 'radial-gradient(ellipse at center, transparent 35%, rgba(8,9,8,.55))',
-        }}
-      />
-
+      {/* Sin hero de fondo: el fondo es la propia app desenfocada por la capa
+          de arriba (ver AmbientMode), con su viñeta y sus líneas de escaneo. */}
       {/* Composición centrada: carátula a la izquierda, texto a la derecha,
           el conjunto enmarcado en un panel de cristal.
           Ahora que se ve la app de fondo (ver AmbientMode), el panel es lo
@@ -554,17 +606,17 @@ const AmbientSlide = ({
           sin él, texto y carátula competían con lo que se intuyera detrás. */}
       <div className="absolute inset-0 flex items-center justify-center px-24">
         <div
-          className="relative overflow-hidden rounded-[34px]"
+          className="relative max-w-[1240px] overflow-hidden rounded-md"
           style={{
-            background: 'rgba(9,10,9,.5)',
+            background: 'rgb(16 20 22 / .62)',
             backdropFilter: 'blur(30px) saturate(1.15)',
             // Tres sombras, cada una con su trabajo: la línea clara de arriba
             // simula la luz que pega en el canto de un cristal, el contorno
-            // interior dibuja el borde sin la dureza de un `border`, y la
-            // grande de fuera despega el panel de la app.
+            // interior dibuja el borde (Line de Fósforo) sin la dureza de un
+            // `border`, y la grande de fuera despega el panel de la app.
             boxShadow: [
-              'inset 0 1px 0 rgba(233,228,216,.18)',
-              'inset 0 0 0 1px rgba(233,228,216,.07)',
+              'inset 0 1px 0 rgba(233,228,216,.12)',
+              'inset 0 0 0 1px rgba(233,228,216,.09)',
               '0 44px 110px -24px rgba(3,6,7,.8)',
             ].join(', '),
           }}
@@ -591,13 +643,13 @@ const AmbientSlide = ({
             className="absolute inset-0"
             style={{
               background: [
-                'linear-gradient(160deg, rgba(233,228,216,.10), transparent 38%)',
-                'linear-gradient(115deg, rgba(6,7,6,.58), rgba(6,7,6,.22) 45%, rgba(6,7,6,.62))',
+                'linear-gradient(160deg, rgba(233,228,216,.07), transparent 38%)',
+                'linear-gradient(115deg, rgba(12,16,18,.5), rgba(12,16,18,.3) 45%, rgba(12,16,18,.78))',
               ].join(', '),
             }}
           />
 
-          <div className="relative flex items-center gap-14 px-16 py-12">
+          <div className="relative flex items-center gap-16 px-20 py-16">
             {coverSrc && (
               <div
                 className="afterplay-ambient-cover animate-[afterplay-ambient-cover_var(--afterplay-slide-ms,26s)_cubic-bezier(0.22,0.61,0.36,1)_forwards] will-change-[transform,opacity] motion-reduce:[animation-name:afterplay-fade-in] relative flex-none"
@@ -609,7 +661,7 @@ const AmbientSlide = ({
                   src={coverSrc}
                   alt=""
                   aria-hidden
-                  className="absolute inset-0 w-full rounded-[16px]"
+                  className="absolute inset-0 w-full rounded-sm"
                   style={{
                     filter: 'blur(26px) saturate(1.7)',
                     opacity: 0.65,
@@ -619,7 +671,7 @@ const AmbientSlide = ({
                 <img
                   src={coverSrc}
                   alt=""
-                  className="relative w-full rounded-[16px]"
+                  className="relative w-full rounded-sm"
                   style={{
                     boxShadow: [
                       'inset 0 0 0 1px rgba(233,228,216,.14)',
@@ -645,15 +697,11 @@ const AmbientSlide = ({
                 style={{ animationDelay: '600ms' }}
               >
                 {game.isLive && (
-                  <div className="mb-3.5 flex items-center gap-2">
-                    <span
-                      className="afterplay-ambient-halo animate-[afterplay-ambient-halo_2.8s_ease-in-out_infinite] h-2 w-2 rounded-full"
-                      style={{ background: GREEN, boxShadow: `0 0 14px ${GREEN}` }}
-                    />
-                    <span
-                      className="text-[11px] font-extrabold tracking-[.16em]"
-                      style={{ color: GREEN }}
-                    >
+                  // En Tube, el color de lo que pasa en otro PC: aquí nunca hay
+                  // una sesión de ESTE PC (el modo ambiente no entra con una).
+                  <div className="mb-4 flex items-center gap-2">
+                    <span className="afterplay-ambient-halo size-2 animate-[afterplay-ambient-halo_2.8s_ease-in-out_infinite] rounded-full bg-tube shadow-[0_0_14px_var(--color-tube)] motion-reduce:animate-none" />
+                    <span className="text-micro font-semibold tracking-[.08em] text-tube">
                       {playingLabel}
                     </span>
                   </div>
@@ -662,17 +710,13 @@ const AmbientSlide = ({
                 {/* El título se apaga de arriba a abajo: el ojo entra por la
                     primera línea y no por un bloque de blanco macizo. */}
                 <h2
-                  // leading-[1.06] cortaba la cola de las minúsculas con
-                  // descendente (g, y, p): el degradado de texto pinta el
-                  // glifo entero pero la CAJA de línea era más baja que la
-                  // letra. 1.2 le da aire de sobra sin que se note más
-                  // separado.
-                  className="text-[46px] leading-[1.2] font-display font-bold drop-shadow-[0_2px_20px_rgba(3,6,7,.6)] tabular-nums"
-                  style={{
-                    backgroundImage: 'linear-gradient(180deg, #ffffff 25%, rgba(233,228,216,.72))',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
+                  // Big Shoulders hasta 104 px en Bone macizo. Sin el degradado
+                  // de texto de antes: aquel cortaba la cola de las minúsculas
+                  // con descendente (g, y, p) si la caja de línea era más baja
+                  // que la letra; en color sólido el interlineado ajustado ya
+                  // no recorta nada. Escala con la ventana para que los
+                  // títulos largos no se coman el panel.
+                  className="font-display text-[clamp(56px,6.2vw,104px)] leading-[0.95] font-bold break-words text-bone [text-shadow:0_2px_20px_rgb(3_6_7/.6)]"
                 >
                   {game.title}
                 </h2>
@@ -683,13 +727,10 @@ const AmbientSlide = ({
                   className="afterplay-ambient-text animate-[afterplay-ambient-text_1.5s_cubic-bezier(0.16,1,0.3,1)_backwards] motion-reduce:[animation-name:afterplay-fade-in] mt-6"
                   style={{ animationDelay: '1400ms' }}
                 >
-                  {/* Filete corto en el verde de la app: separa el dato del
-                      título y ata la diapositiva al resto de Afterplay. */}
-                  <div
-                    className="mb-4 h-px w-16"
-                    style={{ background: `linear-gradient(90deg, ${GREEN}, transparent)` }}
-                  />
-                  <p className="text-[17.5px] leading-relaxed font-medium text-dust">{line}</p>
+                  {/* Filete corto en Phosphor: separa el dato del título y ata
+                      la diapositiva al resto de Afterplay. */}
+                  <div className="mb-5 h-0.5 w-20 bg-linear-to-r from-phosphor to-transparent" />
+                  <p className="text-[22px] leading-relaxed font-medium text-bone/80">{line}</p>
                 </div>
               )}
             </div>
