@@ -12,7 +12,7 @@ import { useCreateIteration } from '../hooks/iterations';
 import { useAddStateEvent } from '../hooks/stateEvents';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useLiveTimer } from '../hooks/useLiveTimer';
-import { celebrateCompletion } from '../lib/celebrate';
+import { celebrate, GlowText, Odometer, ScanBeam, ScanLines, Ticker } from '../components/fx';
 import { humanizeAgoDays } from './tvFormat';
 import { formatElapsed, formatHours, formatMoney } from '../lib/format';
 import type { PastStatusKey, StatusKey } from '../lib/gameStatus';
@@ -36,6 +36,8 @@ import { useTvFocusable } from './focusContext';
 import { useTvInputDevice } from './inputDevice';
 import { tvSound } from './sound';
 import {
+  TV_HERO_BEAM_EVERY_S,
+  TV_TICKER_MS,
   tvButtonHalo,
   tvFocusHalo,
   tvFocusMotion,
@@ -214,7 +216,7 @@ const StatusPicker = ({
         occurredAt: new Date(),
         datePrecision: 'datetime',
       });
-      if (key === 'beaten') celebrateCompletion();
+      if (key === 'beaten') celebrate('beaten');
     } catch {
       toast.error('Could not save the status.');
       return;
@@ -510,17 +512,40 @@ export const TvGameDetail = (): React.JSX.Element | null => {
   const figures: { key: string; node: React.ReactNode; label: string }[] = [
     {
       key: 'hours',
-      node: <TvFigure value={formatHours(game.totalHours)} className="text-phosphor" />,
+      // Las cifras del vistazo entran contando (Ticker): el valor final
+      // está en data-value y en el texto accesible desde el primer frame.
+      node: (
+        <Ticker
+          value={game.totalHours}
+          format={formatHours}
+          duration={TV_TICKER_MS}
+          render={(value) => (
+            <GlowText>
+              <TvFigure value={formatHours(value)} className="text-phosphor" />
+            </GlowText>
+          )}
+        />
+      ),
       label: 'Hours',
     },
-    { key: 'sessions', node: <TvFigure value={String(sessionCount)} />, label: 'Sessions' },
+    {
+      key: 'sessions',
+      node: (
+        <Ticker
+          value={sessionCount}
+          duration={TV_TICKER_MS}
+          render={(value) => <TvFigure value={String(Math.round(value))} />}
+        />
+      ),
+      label: 'Sessions',
+    },
     ...(achievementsTotal > 0
       ? [
           {
             key: 'trophies',
             node: (
               <span className="font-display leading-none font-bold tabular-nums">
-                {achievementsUnlocked}
+                <Ticker value={achievementsUnlocked} duration={TV_TICKER_MS} />
                 <span className="text-[0.55em] font-semibold text-dust">/{achievementsTotal}</span>
               </span>
             ),
@@ -583,9 +608,12 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           </span>
           Playing
           {liveSince && (
-            <span className="font-display text-[1.25em] leading-none font-bold text-phosphor tabular-nums">
-              {formatElapsed(liveSeconds)}
-            </span>
+            <GlowText
+              breathe
+              className="font-display text-[1.25em] leading-none font-bold text-phosphor tabular-nums"
+            >
+              <Odometer value={formatElapsed(liveSeconds)} />
+            </GlowText>
           )}
         </div>
       ) : (
@@ -644,12 +672,16 @@ export const TvGameDetail = (): React.JSX.Element | null => {
           aria-hidden
           className="pointer-events-none absolute -top-[4em] -right-[4vw] -z-10 h-[24em] w-[62%] overflow-hidden"
         >
+          {/* Ken Burns lento, scanlines que reptan y el haz: el arte vive
+              detrás del título sin pisarlo (el fundido de debajo lo apaga
+              hacia el texto). Quieto con reduced motion. */}
           <img
             src={heroSrc ?? coverSrc ?? undefined}
             alt=""
-            className="h-full w-full object-cover opacity-35"
+            className="h-full w-full animate-ken-burns object-cover opacity-35 motion-reduce:animate-none"
           />
-          <div className="absolute inset-0 bg-(image:--scan)" />
+          <ScanLines crawl />
+          <ScanBeam every={TV_HERO_BEAM_EVERY_S} />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,var(--color-cabinet)_0%,transparent_45%),linear-gradient(0deg,var(--color-cabinet)_0%,transparent_60%)]" />
         </div>
       )}
