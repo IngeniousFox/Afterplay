@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Settings } from 'lucide-react';
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ApiFailure } from './api';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OfflineBand } from './components/OfflineBand';
 import { Loading } from './components/States';
 import { TabBar } from './components/TabBar';
 import { TimerBar } from './components/TimerBar';
@@ -80,34 +80,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// La cabecera solo en las pantallas de nivel superior: la ficha de juego tiene
-// su propio arte a sangre arriba y una barra encima lo estropearía.
-const Header = (): React.JSX.Element | null => {
-  const { pathname } = useLocation();
-  if (pathname.startsWith('/game/')) return null;
-
-  return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-cabinet/90 px-4 py-3 backdrop-blur-lg">
-      <span className="text-[15px] font-extrabold tracking-tight">
-        After<span className="text-primary">play</span>
-      </span>
-      {/* Ajustes no es una pestaña: se usa una vez cada mucho (emparejar un
-          PC), así que no se come un hueco de la barra de abajo. */}
-      <NavLink
-        to="/settings"
-        aria-label="Settings"
-        className={({ isActive }) =>
-          `-my-2 -mr-2 flex h-11 w-11 items-center justify-center transition-colors ${
-            isActive ? 'text-primary' : 'text-muted-foreground'
-          }`
-        }
-      >
-        <Settings size={20} strokeWidth={1.8} />
-      </NavLink>
-    </header>
-  );
-};
-
 const Shell = (): React.JSX.Element => {
   // Los chunks partidos se calientan cuando el hilo queda libre tras pintar la
   // Home: así el primer pintado no los paga pero el primer toque en una
@@ -134,28 +106,45 @@ const Shell = (): React.JSX.Element => {
 
   return (
     <>
-      <Header />
-      <main className="mx-auto max-w-lg">
-        {/* El fallback es el MISMO spinner que las pantallas enseñan mientras
-            piden datos, para que un chunk que aún baja no se distinga de una
-            query en vuelo. Con la navegación normal casi nunca se ve: React
-            Router navega dentro de una transición, así que la pantalla vieja
-            se queda hasta que el chunk llega. Aparece al entrar por URL
-            directa a una ruta lazy (un enlace compartido a /game/…). */}
-        <Suspense fallback={<Loading />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/plan" element={<PlanScreen />} />
-            <Route path="/sessions" element={<SessionsScreen />} />
-            <Route path="/settings" element={<SettingsScreen />} />
-            <Route path="/game/:id" element={<GameDetailScreen />} />
-          </Routes>
-        </Suspense>
-      </main>
-      {/* El cronómetro, si hay uno en marcha: encima de las pestañas y visible
-          desde cualquier pantalla. Ahí es también donde late (§7.4). */}
-      <TimerBar />
+      {/* La franja de la zona segura de arriba (el notch, con la barra de
+          estado translúcida de iOS): el contenido scrollea por debajo sin
+          asomar detrás de la hora. No hay barra global con la marca: cada
+          pantalla se presenta con su propio título (Fósforo). Ajustes se
+          abre desde el engranaje de la cabecera de Home. */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-x-0 top-0 z-40 h-[env(safe-area-inset-top)] bg-cabinet"
+      />
+      <div className="pt-[env(safe-area-inset-top)]">
+        <OfflineBand />
+        <main className="mx-auto max-w-lg">
+          {/* El fallback es el MISMO spinner que las pantallas enseñan mientras
+              piden datos, para que un chunk que aún baja no se distinga de una
+              query en vuelo. Con la navegación normal casi nunca se ve: React
+              Router navega dentro de una transición, así que la pantalla vieja
+              se queda hasta que el chunk llega. Aparece al entrar por URL
+              directa a una ruta lazy (un enlace compartido a /game/…). */}
+          <Suspense
+            fallback={
+              <div className="px-4">
+                <Loading />
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/library" element={<Library />} />
+              <Route path="/plan" element={<PlanScreen />} />
+              <Route path="/sessions" element={<SessionsScreen />} />
+              <Route path="/settings" element={<SettingsScreen />} />
+              <Route path="/game/:id" element={<GameDetailScreen />} />
+            </Routes>
+          </Suspense>
+        </main>
+        {/* El cronómetro, si hay uno en marcha: encima de las pestañas y
+            visible desde cualquier pantalla. Ahí es también donde late (§7.4). */}
+        <TimerBar />
+      </div>
       <TabBar />
     </>
   );

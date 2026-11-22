@@ -1,30 +1,26 @@
 import { useLiveSeconds } from '../hooks/useLiveSeconds';
 import { formatElapsed } from '../lib/format';
+import { LiveDot } from './Figure';
 
-// El distintivo LIVE del escritorio, mismo aro verde y mismo latido del punto
-// (SPEC 10.5). Es la única pieza de la interfaz que se mueve sola, y a
-// propósito: significa "esto está pasando ahora mismo".
-export const LiveBadge = (): React.JSX.Element => (
-  <span
-    className="inline-flex items-center gap-1.25 rounded-[7px] border px-2 py-0.75"
-    style={{
-      background: 'rgba(8,11,12,.78)',
-      borderColor: 'rgba(255,179,71,.55)',
-      animation: 'afterplay-pulse-badge 2.4s infinite',
-    }}
-  >
-    <span
-      className="h-1.5 w-1.5 rounded-full bg-live"
-      style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
-    />
-    <span className="text-micro font-extrabold tracking-widest text-primary">LIVE</span>
+// "Esto está pasando ahora mismo": el punto rojo de Fósforo con su palabra.
+// Es la única pieza de la interfaz que se mueve sola, y a propósito.
+export const LiveBadge = ({ label = 'Live' }: { label?: string }): React.JSX.Element => (
+  <span className="inline-flex items-center gap-1.5 text-micro font-semibold text-live">
+    <LiveDot />
+    {label}
   </span>
 );
 
-export const LiveTimer = ({ since }: { since: number }): React.JSX.Element => {
+export const LiveTimer = ({
+  since,
+  className = 'font-display text-[28px] leading-none font-bold text-phosphor',
+}: {
+  since: number;
+  className?: string;
+}): React.JSX.Element => {
   const seconds = useLiveSeconds(since);
   return (
-    <span className="text-[13px] font-bold text-primary tabular-nums">
+    <span role="timer" className={`${className} tabular-nums`}>
       {formatElapsed(seconds)}
     </span>
   );

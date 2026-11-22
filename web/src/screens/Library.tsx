@@ -3,11 +3,23 @@ import { Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchLibrary } from '../api';
-import type { LibraryGame } from '../api';
+import type { LibraryGame, StateType } from '../api';
 import { Cover } from '../components/Cover';
+import { Figure, Led } from '../components/Figure';
+import { LiveBadge } from '../components/LiveBadge';
+import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState, Loading } from '../components/States';
+import { cn } from '../lib/cn';
 import { formatHours, pluralize } from '../lib/format';
 import { statusOf } from '../lib/status';
+import {
+  fieldClass,
+  iconButtonClass,
+  revealClass,
+  revealDelay,
+  rowLinkClass,
+  statusTextClass,
+} from '../lib/styles';
 
 // La búsqueda es LOCAL, sobre la lista entera que ya está en memoria.
 //
@@ -16,109 +28,195 @@ import { statusOf } from '../lib/status';
 // siente roto. La lista completa va ligera a propósito (ver LibraryGame en
 // worker/src/api-types.ts: sin géneros, sin HLTB, sin arte grande), así que
 // cabe de sobra y a cambio la búsqueda es instantánea aunque se caiga la red.
+// Los filtros por estado son lo mismo: un recorte en memoria de esa lista.
 const matches = (game: LibraryGame, query: string): boolean =>
   game.title.toLowerCase().includes(query);
 
-const GameTile = ({ game, order }: { game: LibraryGame; order: number }): React.JSX.Element => {
+type FilterKey = 'all' | 'playing' | 'beaten' | 'unplayed' | 'resting' | 'dropped';
+
+const FILTERS: {
+  key: FilterKey;
+  label: string;
+  led: StateType | null;
+  states?: (StateType | null)[];
+}[] = [
+  { key: 'all', label: 'All', led: null },
+  { key: 'playing', label: 'Playing', led: 'started', states: ['started'] },
+  { key: 'beaten', label: 'Beaten', led: 'completed', states: ['completed'] },
+  { key: 'unplayed', label: 'Unplayed', led: null, states: [null, 'plan_to_play'] },
+  { key: 'resting', label: 'Resting', led: 'resting', states: ['resting', 'on_hold'] },
+  { key: 'dropped', label: 'Dropped', led: 'dropped', states: ['dropped'] },
+];
+
+const GameRow = ({ game, order }: { game: LibraryGame; order: number }): React.JSX.Element => {
   const status = statusOf(game.currentState);
 
   return (
-    <Link
-      to={`/game/${game.id}`}
-      className="afterplay-reveal flex flex-col gap-1.5"
-      // Cascada de entrada, como el revealClass del escritorio. El retraso se
-      // topa a las ~24 primeras: con 333 juegos, un escalonado sin tope
-      // dejaría la última carátula entrando veinte segundos después de abrir
-      // la pantalla. Las de más abajo ni se ven al entrar, así que aparecen ya
-      // puestas y nadie lo nota.
-      style={{ animationDelay: `${Math.min(order, 23) * 22}ms` }}
-    >
-      <div className="relative">
-        <Cover url={game.coverUrl} title={game.title} />
-        {game.isLive && (
-          <span
-            className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-            style={{ animation: 'afterplay-pulse-dot 1.4s infinite' }}
+    <li className="border-b border-line">
+      <Link
+        to={`/game/${game.id}`}
+        // Cascada de entrada topada a las primeras filas: con 333 juegos, un
+        // escalonado sin tope dejaría la última entrando segundos después.
+        className={cn(rowLinkClass, revealClass)}
+        style={revealDelay(order, 22, 14)}
+      >
+        <Cover url={game.coverUrl} title={game.title} className="w-11" />
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-2 text-body font-semibold text-bone">{game.title}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-small">
+            {game.isLive ? (
+              <LiveBadge label="Playing now" />
+            ) : (
+              <>
+                <Led state={game.currentState} />
+                <span className={statusTextClass(game.currentState)}>{status.label}</span>
+              </>
+            )}
+          </div>
+        </div>
+        {game.totalHours > 0 && (
+          <Figure
+            value={formatHours(game.totalHours)}
+            className="shrink-0 text-[26px] leading-none text-bone"
           />
         )}
-        {/* La firma de color del estado al pie de la carátula — el mismo
-            remate que las cards del escritorio y del Journey. */}
-        <div
-          className="absolute inset-x-0 bottom-0 h-0.75 rounded-b-[13px]"
-          style={{ background: status.color }}
-        />
-      </div>
-      <div className="line-clamp-2 text-[11.5px] leading-tight font-bold">{game.title}</div>
-      {game.totalHours > 0 && (
-        <div className="text-micro font-semibold text-muted-foreground tabular-nums">
-          {formatHours(game.totalHours)}
-        </div>
-      )}
-    </Link>
+      </Link>
+    </li>
   );
 };
 
 export const Library = (): React.JSX.Element => {
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<FilterKey>('all');
   const library = useQuery({ queryKey: ['library'], queryFn: fetchLibrary });
+
+  const counts = useMemo(() => {
+    const result = {} as Record<FilterKey, number>;
+    for (const option of FILTERS) {
+      result[option.key] = option.states
+        ? (library.data ?? []).filter((game) => option.states?.includes(game.currentState)).length
+        : (library.data?.length ?? 0);
+    }
+    return result;
+  }, [library.data]);
 
   const filtered = useMemo(() => {
     if (!library.data) return [];
     const needle = query.trim().toLowerCase();
-    return needle ? library.data.filter((game) => matches(game, needle)) : library.data;
-  }, [library.data, query]);
+    const states = FILTERS.find((option) => option.key === filter)?.states;
+    return library.data.filter(
+      (game) =>
+        (!states || states.includes(game.currentState)) && (!needle || matches(game, needle)),
+    );
+  }, [library.data, query, filter]);
 
-  if (library.isPending) return <Loading label="Reading your library" />;
+  const header = (
+    <PageHeader
+      title="Library"
+      aside={library.data ? pluralize(library.data.length, 'game') : undefined}
+    />
+  );
+
+  const search = (
+    <div className="relative">
+      <Search
+        size={16}
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-dust"
+      />
+      <input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search your library"
+        aria-label="Search your library"
+        // type="search" para que el teclado del móvil traiga la tecla de
+        // buscar; autoCorrect fuera porque los títulos de juego no son
+        // palabras y el corrector los destroza.
+        type="search"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        className={cn(fieldClass, 'pr-11 pl-9 [&::-webkit-search-cancel-button]:hidden')}
+      />
+      {query && (
+        <button
+          type="button"
+          onClick={() => setQuery('')}
+          aria-label="Clear search"
+          className={cn(iconButtonClass, 'absolute top-0 right-0')}
+        >
+          <X size={16} />
+        </button>
+      )}
+    </div>
+  );
+
+  if (library.isPending)
+    return (
+      <div className="px-4">
+        {header}
+        {search}
+        <Loading label="Reading your library" />
+      </div>
+    );
   if (library.isError)
-    return <ErrorState error={library.error} onRetry={() => library.refetch()} />;
+    return (
+      <div className="px-4">
+        {header}
+        <ErrorState error={library.error} onRetry={() => library.refetch()} />
+      </div>
+    );
 
   return (
-    <div className="px-4 pt-4">
-      <div className="relative mb-4">
-        <Search
-          size={15}
-          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-        />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search your library"
-          // type="search" para que el teclado del móvil traiga la tecla de
-          // buscar; autoCorrect fuera porque los títulos de juego no son
-          // palabras y el corrector los destroza.
-          type="search"
-          autoCorrect="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          className="w-full rounded-xl border border-border bg-card py-2.5 pr-9 pl-9 text-[14px] font-semibold outline-none placeholder:text-muted-foreground focus:border-primary/50"
-        />
-        {query && (
-          <button
-            onClick={() => setQuery('')}
-            aria-label="Clear search"
-            className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground"
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
+    <div className="px-4 pb-6">
+      {header}
+      {search}
 
-      <div className="mb-3 text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
-        {pluralize(filtered.length, 'game')}
+      {/* Filtros por estado: fila que se desliza en horizontal. Cada chip
+          mide 36 px a la vista y 44 de diana (el ::after amplía la zona). */}
+      <div className="-mx-4 mt-3 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label="Filter by status" className="flex w-max gap-2 py-1">
+          {FILTERS.filter((option) => option.key === 'all' || counts[option.key] > 0).map(
+            (option) => {
+              const active = filter === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFilter(option.key)}
+                  className={cn(
+                    'relative inline-flex h-9 items-center gap-2 rounded-sm border px-3 text-small font-medium',
+                    'transition-[transform,background-color,border-color,color] duration-150 active:scale-[.96] motion-reduce:active:scale-100',
+                    'after:absolute after:-inset-y-1 after:inset-x-0',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
+                    active
+                      ? 'border-phosphor bg-phosphor-tint text-bone'
+                      : 'border-line-strong bg-panel text-dust',
+                  )}
+                >
+                  {option.key !== 'all' && <Led state={option.led} />}
+                  {option.label}
+                  <span className="text-micro text-dust tabular-nums">{counts[option.key]}</span>
+                </button>
+              );
+            },
+          )}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState>Nothing matches “{query}”.</EmptyState>
+        <EmptyState>
+          {query ? <>Nothing matches “{query}”.</> : 'No games with this status.'}
+        </EmptyState>
       ) : (
-        // key sobre la consulta de búsqueda: al filtrar, la parrilla se
-        // remonta y la cascada vuelve a lanzarse — el mismo recurso que usa
-        // Stats al cambiar de año. Sin él, filtrar reordena las carátulas en
-        // silencio y no se ve que la lista ha cambiado.
-        <div key={query} className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4">
+        // key sobre la consulta y el filtro: al cambiar, la lista se remonta
+        // y la cascada vuelve a lanzarse, así se ve que ha cambiado.
+        <ul key={`${filter}:${query}`} className="mt-2 border-t border-line">
           {filtered.map((game, index) => (
-            <GameTile key={game.id} game={game} order={index} />
+            <GameRow key={game.id} game={game} order={index} />
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

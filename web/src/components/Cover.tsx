@@ -1,4 +1,5 @@
 import { Gamepad2 } from 'lucide-react';
+import { cn } from '../lib/cn';
 
 type CoverProps = {
   url: string | null;
@@ -6,9 +7,9 @@ type CoverProps = {
   className?: string;
 };
 
-// La carátula, con el mismo acabado que el escritorio: formato 3/4, esquinas
-// a 13px, borde tenue y `brightness-90` para que el arte no compita con el
-// texto de al lado (GameCard.tsx).
+// La carátula, con el acabado de Fósforo: formato 3/4, esquinas de 4 px (las
+// de los controles), filo tenue y `brightness-90` para que el arte no compita
+// con el texto de al lado.
 //
 // Aquí las URLs se cargan DIRECTAS del CDN de IGDB/SteamGridDB. En el
 // escritorio hace falta el protocolo afterplay-image: y una caché en disco,
@@ -16,7 +17,10 @@ type CoverProps = {
 // aplica (REMOTO.md §2.1). Un regalo, no un descuido.
 export const Cover = ({ url, title, className = '' }: CoverProps): React.JSX.Element => (
   <div
-    className={`relative aspect-3/4 shrink-0 overflow-hidden rounded-[13px] border border-border bg-card ${className}`}
+    className={cn(
+      'relative aspect-3/4 shrink-0 overflow-hidden rounded-sm border border-line bg-raised',
+      className,
+    )}
   >
     {url ? (
       <img
@@ -26,10 +30,11 @@ export const Cover = ({ url, title, className = '' }: CoverProps): React.JSX.Ele
         className="block h-full w-full object-cover brightness-90"
       />
     ) : (
-      // Sin arte, el título en texto: es lo único que identifica al juego.
-      <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-muted px-2 text-center">
-        <Gamepad2 size={22} strokeWidth={1.5} className="text-muted-foreground/40" />
-        <span className="line-clamp-3 text-micro font-semibold text-muted-foreground">{title}</span>
+      // Sin arte, un mando: en Fósforo las carátulas van siempre junto a su
+      // título, así que repetirlo dentro (a 30 px de ancho) solo estorbaba.
+      <div className="flex h-full w-full items-center justify-center bg-raised">
+        <Gamepad2 size={18} strokeWidth={1.5} className="w-1/2 max-w-6 text-dust/60" />
+        <span className="sr-only">{title}</span>
       </div>
     )}
   </div>

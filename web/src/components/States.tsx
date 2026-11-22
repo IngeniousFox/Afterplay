@@ -1,11 +1,42 @@
-import { CloudOff, Loader2, LockKeyhole, RefreshCw, SearchX } from 'lucide-react';
+import { CloudOff, Loader2, Lock, LockKeyhole, SearchX, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ApiFailure } from '../api';
+import { useOnline } from '../hooks/useOnline';
+import { cn } from '../lib/cn';
+import { secondaryButtonClass } from '../lib/styles';
 
-export const Loading = ({ label = 'Loading' }: { label?: string }): React.JSX.Element => (
-  <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
-    <Loader2 size={22} className="animate-spin" />
-    <span className="text-[12px] font-semibold">{label}</span>
+// El esqueleto: Raised con una franja más clara que lo recorre (animate-sweep
+// mueve el background-position de 100 % a 0).
+const skeletonClass =
+  'animate-sweep bg-raised bg-[linear-gradient(90deg,transparent_30%,rgb(233_228_216/0.06)_50%,transparent_70%)] bg-size-[200%_100%] motion-reduce:animate-none';
+
+// Carga: spinner ámbar con su frase y, debajo, filas esqueleto con un brillo
+// que barre de izquierda a derecha (quieto con movimiento reducido). Las filas
+// imitan la lista que va a llegar, así que el salto al pintar es mínimo.
+export const Loading = ({
+  label = 'Loading',
+  rows = 6,
+}: {
+  label?: string;
+  rows?: number;
+}): React.JSX.Element => (
+  <div aria-busy="true" className="animate-fade-in">
+    <div className="flex flex-col items-center gap-2 pt-6 pb-4 text-dust" role="status">
+      <Loader2 size={22} className="animate-spin text-phosphor" aria-hidden="true" />
+      <span className="text-micro font-semibold">{label}</span>
+    </div>
+    <div aria-hidden="true">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="flex items-center gap-3 border-b border-line py-2.5">
+          <div className={cn(skeletonClass, 'h-14 w-11 rounded-sm')} />
+          <div className="flex flex-1 flex-col gap-2">
+            <div className={cn(skeletonClass, 'h-3 w-3/5 rounded-xs')} />
+            <div className={cn(skeletonClass, 'h-2.5 w-2/5 rounded-xs')} />
+          </div>
+          <div className={cn(skeletonClass, 'h-4 w-12 rounded-xs')} />
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -46,7 +77,7 @@ const describe = (error: unknown): Described => {
       return {
         title: 'Session expired',
         hint: error.message,
-        Icon: RefreshCw,
+        Icon: Lock,
         recover: 'none',
       };
     }
@@ -92,37 +123,67 @@ export const ErrorState = ({
   error: unknown;
   onRetry?: () => void;
 }): React.JSX.Element => {
-  const { title, hint, Icon, recover } = describe(error);
+  // Sin red, el fallo genérico se dice como lo que es. Los demás (sesión
+  // caducada, 404…) no dependen de la conexión y mantienen su texto.
+  const online = useOnline();
+  const described = describe(error);
+  const { title, hint, Icon, recover } =
+    !online && described.recover === 'retry'
+      ? {
+          ...described,
+          title: 'No connection',
+          hint: 'Afterplay on the web needs a connection to read and write your library. It reloads by itself when you are back.',
+          Icon: WifiOff,
+        }
+      : described;
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-8 py-20 text-center">
-      <Icon size={26} className="text-muted-foreground/50" />
-      <span className="text-[15px] font-bold">{title}</span>
-      <span className="max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">{hint}</span>
-      {recover === 'retry' && onRetry && (
-        <button
-          onClick={onRetry}
-          className="mt-2 rounded-lg border border-border px-3.5 py-1.5 text-[12px] font-bold text-foreground"
-        >
-          Try again
-        </button>
-      )}
-      {recover === 'library' && (
-        <Link
-          to="/library"
-          className="mt-2 rounded-lg border border-border px-3.5 py-1.5 text-[12px] font-bold text-foreground"
-        >
-          Go to your library
-        </Link>
-      )}
-    </div>
+    <StateMessage
+      Icon={Icon}
+      title={title}
+      hint={hint}
+      action={
+        recover === 'retry' && onRetry ? (
+          <button type="button" onClick={onRetry} className={secondaryButtonClass}>
+            Try again
+          </button>
+        ) : recover === 'library' ? (
+          <Link to="/library" className={secondaryButtonClass}>
+            Go to your library
+          </Link>
+        ) : undefined
+      }
+    />
   );
 };
+
+// El molde común de error, vacío y sin conexión: icono en un círculo, título
+// en Big Shoulders, una frase y, si la hay, una salida.
+export const StateMessage = ({
+  Icon,
+  title,
+  hint,
+  action,
+}: {
+  Icon: typeof CloudOff;
+  title: string;
+  hint?: React.ReactNode;
+  action?: React.ReactNode;
+}): React.JSX.Element => (
+  <div className="flex animate-fade-in flex-col items-center px-6 py-14 text-center">
+    <span className="mb-4 flex size-16 items-center justify-center rounded-full border border-line-strong bg-panel text-phosphor">
+      <Icon size={24} aria-hidden="true" />
+    </span>
+    <h2 className="font-display text-[30px] leading-8 font-bold tracking-[0.005em] text-bone">
+      {title}
+    </h2>
+    {hint && <p className="mt-2 max-w-xs text-small text-dust">{hint}</p>}
+    {action && <div className="mt-5">{action}</div>}
+  </div>
+);
 
 // "Show nothing rather than show an empty box" es la regla de la casa, así que
 // esto solo aparece cuando el vacío ES la respuesta a algo que preguntaste
 // (una búsqueda sin resultados), no como relleno de una sección sin datos.
 export const EmptyState = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <div className="py-16 text-center text-[12.5px] font-semibold text-muted-foreground">
-    {children}
-  </div>
+  <div className="animate-fade-in px-6 py-14 text-center text-body text-dust">{children}</div>
 );

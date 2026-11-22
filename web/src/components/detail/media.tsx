@@ -1,8 +1,11 @@
 import { Gamepad2, Play, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import type { GameMedia, SagaEntry } from '../../api';
+import { cn } from '../../lib/cn';
 import { formatHours } from '../../lib/format';
+import { iconButtonClass } from '../../lib/styles';
 import { statusOf } from '../../lib/status';
 import { SectionLabel } from './primitives';
 
@@ -53,19 +56,19 @@ const Lightbox = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-inset/95" role="dialog" aria-modal="true">
       <div className="flex flex-none items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
-        <span className="text-[12.5px] font-bold text-dust tabular-nums">
+        <span className="text-small font-semibold text-dust tabular-nums">
           {index + 1} / {images.length}
         </span>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-line-strong bg-bone/[0.06]"
+          className={cn(iconButtonClass, 'border border-line-strong text-bone')}
         >
-          <X size={17} />
+          <X size={18} />
         </button>
       </div>
 
@@ -83,7 +86,7 @@ const Lightbox = ({
             key={url}
             className="flex w-full flex-none snap-center items-center justify-center p-3"
           >
-            <img src={url} alt="" className="max-h-full max-w-full rounded-[10px] object-contain" />
+            <img src={url} alt="" className="max-h-full max-w-full rounded-md object-contain" />
           </div>
         ))}
       </div>
@@ -93,16 +96,16 @@ const Lightbox = ({
           {images.map((url, dotIndex) => (
             <span
               key={url}
-              className="h-1.5 rounded-full transition-[width,background-color] duration-200"
-              style={{
-                width: dotIndex === index ? 16 : 6,
-                background: dotIndex === index ? '#ffb347' : 'rgba(233,228,216,.28)',
-              }}
+              className={cn(
+                'h-1.5 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
+                dotIndex === index ? 'w-4 bg-phosphor' : 'w-1.5 bg-bone/30',
+              )}
             />
           ))}
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -125,9 +128,9 @@ export const ScreenshotsSection = ({ media }: { media: GameMedia }): React.JSX.E
             href={`https://www.youtube.com/watch?v=${media.videoId}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.25 text-[11.5px] font-bold text-primary"
+            className="-my-3 inline-flex min-h-11 items-center gap-1.5 px-1 text-small font-semibold text-tube"
           >
-            <Play size={11} fill="currentColor" />
+            <Play size={12} fill="currentColor" aria-hidden="true" />
             Trailer
           </a>
         )}
@@ -140,7 +143,8 @@ export const ScreenshotsSection = ({ media }: { media: GameMedia }): React.JSX.E
               key={url}
               type="button"
               onClick={() => setOpenAt(index)}
-              className="w-64 flex-none snap-start overflow-hidden rounded-[12px] border border-border"
+              aria-label={`Open screenshot ${index + 1}`}
+              className="w-64 flex-none snap-start overflow-hidden rounded-md border border-line focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
             >
               <img
                 src={url}
@@ -181,7 +185,7 @@ export const SagaSection = ({
     <section>
       <div className="mb-2.5 flex items-baseline justify-between">
         <SectionLabel>Saga</SectionLabel>
-        <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+        <span className="text-small text-dust tabular-nums">
           {owned} of {entries.length} in your library
         </span>
       </div>
@@ -195,7 +199,7 @@ export const SagaSection = ({
 
             const tile = (
               <>
-                <div className="relative aspect-3/4 w-full overflow-hidden rounded-[11px] border border-border bg-card">
+                <div className="relative aspect-3/4 w-full overflow-hidden rounded-sm border border-line bg-raised">
                   {entry.coverUrl ? (
                     <img
                       src={entry.coverUrl}
@@ -209,8 +213,8 @@ export const SagaSection = ({
                       }`}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-muted">
-                      <Gamepad2 size={18} className="text-muted-foreground/40" />
+                    <div className="flex h-full w-full items-center justify-center bg-raised">
+                      <Gamepad2 size={18} className="text-dust/60" aria-hidden="true" />
                     </div>
                   )}
                   {inLibrary && (
@@ -220,17 +224,18 @@ export const SagaSection = ({
                     />
                   )}
                   {isCurrent && (
-                    <div className="absolute inset-0 rounded-[11px] ring-2 ring-primary ring-inset" />
+                    <div className="absolute inset-0 rounded-sm ring-2 ring-phosphor ring-inset" />
                   )}
                 </div>
                 <div
-                  className={`mt-1.5 line-clamp-2 text-micro leading-tight font-bold ${
-                    inLibrary ? '' : 'text-muted-foreground'
-                  }`}
+                  className={cn(
+                    'mt-1.5 text-small leading-tight font-semibold',
+                    inLibrary ? 'text-bone' : 'text-dust',
+                  )}
                 >
                   {entry.title}
                 </div>
-                <div className="mt-0.5 text-micro font-semibold text-muted-foreground tabular-nums">
+                <div className="mt-0.5 text-micro text-dust tabular-nums">
                   {entry.releaseYear ?? '—'}
                   {entry.totalHours > 0 && ` · ${formatHours(entry.totalHours)}`}
                   {entry.planned && ' · Plan'}
