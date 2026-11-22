@@ -12,7 +12,7 @@ const SPECS: Record<CrtVariant, Spec> = {
   panel: {
     frames: [
       { opacity: 0.4, transform: 'scaleY(0.02)', filter: 'brightness(2.2)' },
-      { offset: 0.55, opacity: 1, filter: 'brightness(1.45)' },
+      { offset: 0.55, opacity: 1, filter: 'brightness(1.45)', easing: EASE.out },
       { opacity: 1, transform: 'none', filter: 'none' },
     ],
     duration: 300,
@@ -20,15 +20,29 @@ const SPECS: Record<CrtVariant, Spec> = {
   },
   'power-on': {
     frames: [
-      { offset: 0, opacity: 0, transform: 'scale(0.5, 0.02)', filter: 'brightness(3)' },
-      { offset: 0.28, opacity: 1, transform: 'scale(1, 0.02)', filter: 'brightness(3)' },
-      { offset: 0.55, transform: 'none', filter: 'brightness(1.6)' },
-      { offset: 0.68, opacity: 0.72 },
-      { offset: 0.78, opacity: 1, filter: 'brightness(1.25)' },
+      {
+        offset: 0,
+        opacity: 0,
+        transform: 'scale(0.5, 0.02)',
+        filter: 'brightness(3)',
+        easing: EASE.out,
+      },
+      {
+        offset: 0.28,
+        opacity: 1,
+        transform: 'scale(1, 0.02)',
+        filter: 'brightness(3)',
+        easing: EASE.out,
+      },
+      { offset: 0.55, transform: 'none', filter: 'brightness(1.6)', easing: EASE.out },
+      { offset: 0.68, opacity: 0.72, easing: EASE.out },
+      { offset: 0.78, opacity: 1, filter: 'brightness(1.25)', easing: EASE.out },
       { offset: 1, opacity: 1, transform: 'none', filter: 'none' },
     ],
     duration: 760,
-    easing: EASE.out,
+    // Linear overall, eased per segment (see frames below): an ease-out on the
+    // whole timeline crammed the dot, line and screen phases into ~100 ms.
+    easing: 'linear',
   },
   screen: {
     frames: [
