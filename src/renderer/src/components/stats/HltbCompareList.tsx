@@ -6,6 +6,7 @@ import type { GameListItem, StateEventSummary } from '../../../../shared/types';
 import { formatHours, pluralize } from '../../lib/format';
 import { GameCover } from '../GameCover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { chartGroup, chartPaused, useInView } from '../fx/chart';
 import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import { StatsPager } from './StatsPager';
@@ -36,6 +37,9 @@ export const HltbCompareList = ({
   onOpenGame,
 }: HltbCompareListProps): React.JSX.Element | null => {
   const { page, direction, goToPage } = usePagedYear(year);
+  // Las barras crecen la primera vez que la lista entra en vista; las de una
+  // página nueva, al montarse (ya en vista).
+  const { observe, inView } = useInView();
 
   const entries = useMemo(() => {
     // El ÚLTIMO evento 'completed' de cada juego dentro de la ventana decide
@@ -187,7 +191,12 @@ export const HltbCompareList = ({
         <span />
       </div>
 
-      <div className="flex flex-1 flex-col" style={{ minHeight: listMinHeight }}>
+      <div
+        ref={observe}
+        data-inview={inView || undefined}
+        className={cn('flex flex-1 flex-col', chartGroup)}
+        style={{ minHeight: listMinHeight }}
+      >
         {shown.length === 0 ? (
           <StatCardEmpty>
             No completed games with HowLongToBeat data{year === 'all' ? '' : ` in ${year}`} yet.
@@ -234,7 +243,8 @@ export const HltbCompareList = ({
                     <span
                       className={cn(
                         'afterplay-hltb-fill absolute inset-y-0 left-0 origin-left rounded-[2px] bg-phosphor',
-                        'animate-[afterplay-grow-x_600ms_var(--ease-out)_backwards] motion-reduce:animate-none',
+                        'animate-[afterplay-grow-x_600ms_var(--ease-out)_backwards]',
+                        chartPaused,
                       )}
                       style={{ width: `${fillPercent}%` }}
                     />

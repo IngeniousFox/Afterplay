@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { SlidingIndicator } from '../fx/SlidingIndicator';
 import { floatingPanelClass } from '../../lib/styles';
 import { cn } from '../../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -76,16 +77,14 @@ const tabClass = (active: boolean): string =>
     'relative flex h-9 items-center rounded-sm px-3 text-body font-semibold whitespace-nowrap tabular-nums',
     'transition-colors duration-150 outline-hidden',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
-    'after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-phosphor after:transition-opacity',
-    active
-      ? 'bg-raised text-bone after:opacity-100'
-      : 'text-dust after:opacity-0 hover:bg-raised/60 hover:text-bone',
+    active ? 'bg-raised text-bone' : 'text-dust hover:bg-raised/60 hover:text-bone',
   );
 
 // Selector de rango de la cabecera de Stats (Fósforo): "All time", los años
 // con actividad más recientes como pestañas y "More years" para el resto. La
-// pestaña activa lleva fondo Raised y subrayado Phosphor; si el año elegido
-// vive en el desplegable, el propio botón lo enseña como activo.
+// pestaña activa lleva fondo Raised y un subrayado Phosphor que se desliza de
+// una pestaña a otra (SlidingIndicator); si el año elegido vive en el
+// desplegable, el propio botón lo enseña como activo y el subrayado va a él.
 export const YearTabs = ({
   years,
   value,
@@ -101,9 +100,14 @@ export const YearTabs = ({
   const visible = years.slice(0, maxTabs);
   const rest = years.slice(maxTabs);
   const restActive = value !== 'all' && rest.includes(value);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <div className="afterplay-stats-years flex items-center gap-1" aria-label="Range">
+    <div
+      ref={tabsRef}
+      className="afterplay-stats-years relative flex items-center gap-1"
+      aria-label="Range"
+    >
       <button
         type="button"
         aria-pressed={value === 'all'}
@@ -126,6 +130,7 @@ export const YearTabs = ({
       {rest.length > 0 && (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger
+            data-active={restActive}
             className={cn(
               'ml-2 flex h-9 items-center gap-1.5 rounded-sm border px-3 text-body font-semibold whitespace-nowrap',
               'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
@@ -158,6 +163,13 @@ export const YearTabs = ({
           </PopoverContent>
         </Popover>
       )}
+      <SlidingIndicator
+        containerRef={tabsRef}
+        activeKey={value}
+        selector='[aria-pressed="true"], [data-active="true"]'
+        inset={8}
+        className="bottom-0 h-0.5 rounded-full bg-phosphor shadow-glow-bar"
+      />
     </div>
   );
 };

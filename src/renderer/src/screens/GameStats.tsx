@@ -16,7 +16,8 @@ import { TimeOfDayCard } from '../components/stats/TimeOfDayCard';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { useGame, useGames } from '../hooks/games';
 import { useSessionStats } from '../hooks/stats';
-import { useCountUp } from '../hooks/useCountUp';
+import { useOffscreenAnimation } from '../hooks/useOffscreenAnimation';
+import { chartGroup, chartPaused, GlowText, ScanBeam, Ticker, useInView } from '../components/fx';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { yearsDesc } from '../lib/dateMath';
 import { formatDateOnly, formatElapsed, formatHours, formatMoney, pluralize } from '../lib/format';
@@ -126,9 +127,43 @@ const GameChapter = ({
   </div>
 );
 
+// Las horas con las unidades pequeñas y apagadas: la cifra se lee primero.
+const HoursFigure = ({ hours }: { hours: number }): React.JSX.Element => (
+  <>
+    {formatHours(hours)
+      .split(/([hm])/)
+      .map((part, index) =>
+        part === 'h' || part === 'm' ? (
+          <span key={index} className="mr-[0.1em] text-[0.4em] text-phosphor-lo">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+  </>
+);
+
+// El arte del banner con un Ken Burns lento, en pausa cuando el banner no se
+// ve (useOffscreenAnimation). Reduced motion: quieto.
+const BannerArt = ({ src }: { src: string }): React.JSX.Element => {
+  const { observe, playState } = useOffscreenAnimation();
+  return (
+    <img
+      ref={observe}
+      src={src}
+      alt=""
+      className="afterplay-game-stats-hero-art absolute inset-0 -z-2 size-full animate-ken-burns object-cover opacity-55 motion-reduce:animate-none"
+      style={{ animationPlayState: playState }}
+    />
+  );
+};
+
 // Anillo del share de horas — el mismo dato que el porcentaje, convertido en
-// la pieza central de la comparativa (sin falsear los shares pequeños).
+// la pieza central de la comparativa (sin falsear los shares pequeños). Se
+// dibuja la primera vez que entra en vista.
 const ShareRing = ({ pct }: { pct: number }): React.JSX.Element => {
+  const { observe, inView } = useInView();
   const size = 104;
   const stroke = 8;
   const radius = (size - stroke) / 2;
@@ -138,7 +173,12 @@ const ShareRing = ({ pct }: { pct: number }): React.JSX.Element => {
   const arc = Math.max(0.02, Math.min(1, pct / 100)) * circumference;
   return (
     <div
-      className="afterplay-game-share-ring relative grid size-26 flex-none place-items-center"
+      ref={observe}
+      data-inview={inView || undefined}
+      className={cn(
+        'afterplay-game-share-ring relative grid size-26 flex-none place-items-center',
+        chartGroup,
+      )}
       role="img"
       aria-label={`${pct.toFixed(1)}% of all playtime`}
     >
@@ -158,7 +198,11 @@ const ShareRing = ({ pct }: { pct: number }): React.JSX.Element => {
           strokeWidth={stroke}
         />
         <circle
-          className="afterplay-game-share-arc animate-[afterplay-game-ring-in_900ms_var(--ease-out)_backwards] motion-reduce:animate-none"
+          className={cn(
+            'afterplay-game-share-arc drop-shadow-[0_0_5px_rgb(255_179_71/0.5)]',
+            'animate-[afterplay-game-ring-in_900ms_var(--ease-out)_backwards]',
+            chartPaused,
+          )}
           cx={size / 2}
           cy={size / 2}
           r={radius}
@@ -366,13 +410,6 @@ export const GameStats = ({
   const sharePct = game && libraryTotalHours > 0 ? (game.totalHours / libraryTotalHours) * 100 : 0;
   const maxIterationHours = Math.max(1, ...(game?.iterations.map((it) => it.hours) ?? [1]));
 
-  // Contadores animados de las 4 métricas — suben de 0 a su valor al entrar
-  // (y al cambiar de juego). Cero fuerza el valor sin animar (useCountUp).
-  const animatedHours = useCountUp(game?.totalHours ?? 0);
-  const animatedSpent = useCountUp(game?.totalSpend ?? 0);
-  const animatedSessions = useCountUp(realSessions.length);
-  const animatedCost = useCountUp(game?.costPerHour ?? 0);
-
   // Comparativas contra la biblioteca entera — frases, no números sueltos.
   const compareLines = useMemo(() => {
     const lines: { key: string; text: React.ReactNode }[] = [];
@@ -537,23 +574,22 @@ export const GameStats = ({
           style={revealStyle(0)}
           data-testid="game-stats-hero"
         >
-          {heroSrc && (
-            <img
-              src={heroSrc}
-              alt=""
-              className="afterplay-game-stats-hero-art absolute inset-0 -z-2 size-full object-cover opacity-55"
-            />
-          )}
+          {heroSrc && <BannerArt src={heroSrc} />}
           <span
             className="absolute inset-0 -z-1 bg-[linear-gradient(90deg,var(--color-cabinet)_8%,rgb(16_20_22/0.7)_48%,rgb(16_20_22/0.35)),linear-gradient(0deg,var(--color-cabinet),transparent_70%)]"
             aria-hidden="true"
           />
           <span className="absolute inset-0 -z-1 bg-(image:--scan) opacity-60" aria-hidden="true" />
+          <ScanBeam every={9} className="-z-1" />
 
           <div className="afterplay-game-stats-identity min-w-0 flex-1">
-            <h1 className="font-display text-[clamp(48px,5.4vw,84px)] leading-[0.95] font-bold text-bone [text-shadow:0_6px_26px_rgb(3_6_7/0.5)]">
+            <GlowText
+              as="h1"
+              tone="bone"
+              className="font-display text-[clamp(48px,5.4vw,84px)] leading-[0.95] font-bold text-bone"
+            >
               {game.title}
-            </h1>
+            </GlowText>
             <div
               className={cn(
                 'afterplay-game-stats-status mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-bone',
@@ -579,9 +615,14 @@ export const GameStats = ({
             className="afterplay-game-stats-rank flex-none text-right max-[900px]:hidden"
             aria-label={`${rankLabel} by playtime`}
           >
-            <strong className="block font-display text-[96px] leading-[0.85] font-bold text-phosphor tabular-nums [text-shadow:0_0_30px_rgb(255_179_71/0.3)]">
+            {/* El puesto se enciende como un tubo, con su parpadeo. */}
+            <GlowText
+              flicker
+              className="block font-display text-[96px] leading-[0.85] font-bold text-phosphor tabular-nums"
+              style={{ animationDelay: '260ms' }}
+            >
               {rankLabel}
-            </strong>
+            </GlowText>
             <small className="mt-1 block text-body text-dust">
               of {allGames.length} games by playtime
             </small>
@@ -601,17 +642,14 @@ export const GameStats = ({
           <GameMetric
             hero
             label={`Total hours${game.iterations.length > 1 ? `, ${game.iterations.length} playthroughs` : ''}`}
-            value={formatHours(animatedHours)
-              .split(/([hm])/)
-              .map((part, index) =>
-                part === 'h' || part === 'm' ? (
-                  <span key={index} className="mr-[0.1em] text-[0.4em] text-phosphor-lo">
-                    {part}
-                  </span>
-                ) : (
-                  <span key={index}>{part}</span>
-                ),
-              )}
+            value={
+              <Ticker
+                value={game.totalHours}
+                duration={1000}
+                format={formatHours}
+                render={(hours) => <HoursFigure hours={hours} />}
+              />
+            }
           />
           <GameMetric
             label={
@@ -619,15 +657,21 @@ export const GameStats = ({
                 ? `Sessions, ${formatElapsed(avgSessionSec)} average`
                 : 'Sessions, no measured time'
             }
-            value={String(Math.round(animatedSessions))}
+            value={<Ticker value={realSessions.length} />}
           />
           <GameMetric
             label="Cost per hour"
-            value={game.costPerHour !== null ? formatMoney(animatedCost) : '—'}
+            value={
+              game.costPerHour !== null ? (
+                <Ticker value={game.costPerHour} format={formatMoney} />
+              ) : (
+                '—'
+              )
+            }
           />
           <GameMetric
             label={game.totalSpend > 0 ? 'Spent' : 'Spent, nothing logged'}
-            value={formatMoney(animatedSpent)}
+            value={<Ticker value={game.totalSpend} format={formatMoney} />}
           />
         </div>
 

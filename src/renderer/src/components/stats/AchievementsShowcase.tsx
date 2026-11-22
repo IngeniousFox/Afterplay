@@ -5,6 +5,9 @@ import type { AchievementsOverview, TimeFormat } from '../../../../shared/types'
 import { useAchievementsOverview } from '../../hooks/achievements';
 import { useTimeFormat } from '../../hooks/settings';
 import { useImageSrc } from '../../hooks/useImageSrc';
+import { useOffscreenAnimation } from '../../hooks/useOffscreenAnimation';
+import { chartGroup, chartPaused, useInView } from '../fx/chart';
+import { GlowText } from '../fx/GlowText';
 import { requestAchievementFlash } from '../../lib/achievementFlash';
 import { percentLabel } from '../../lib/achievements';
 import { RARE, ULTRA_RARE } from '../../../../shared/achievements';
@@ -199,6 +202,30 @@ const RarityMonthChart = ({
 // lo CONSEGUIDO — un salón de la fama con un logro que no tienes sería una
 // vitrina enseñando la pieza que falta (el propio query ya filtra así).
 
+// El destello de los ultra raros: una banda de luz que les cruza la
+// superficie un segundo cada pocos (7 s de ciclo, desfasado por puesto para
+// que no se enciendan todos a la vez). Solo corre en vista
+// (useOffscreenAnimation) y desaparece con reduced motion.
+const UltraGlint = ({ rank }: { rank: number }): React.JSX.Element => {
+  const { observe, playState } = useOffscreenAnimation();
+  return (
+    <span
+      ref={observe}
+      aria-hidden
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-md motion-reduce:hidden"
+    >
+      <span
+        className={cn(
+          'absolute inset-y-0 left-0 block w-1/3 mix-blend-screen',
+          'bg-[linear-gradient(90deg,transparent,rgb(255_226_180/0.3)_50%,transparent)]',
+          'animate-[afterplay-ultra-glint_7s_var(--ease-in-out)_infinite_backwards]',
+        )}
+        style={{ animationDelay: `${0.6 + rank * 1.1}s`, animationPlayState: playState }}
+      />
+    </span>
+  );
+};
+
 const FameMedallion = ({
   entry,
   rank,
@@ -210,6 +237,7 @@ const FameMedallion = ({
 }): React.JSX.Element => {
   const src = useImageSrc(entry.iconUrl, 'achievements');
   const accent = rarityAccent(entry.globalPercent);
+  const ultra = entry.globalPercent !== null && entry.globalPercent < ULTRA_RARE;
   return (
     <button
       type="button"
@@ -302,6 +330,7 @@ const FameMedallion = ({
         {entry.displayName}
       </span>
       <span className="w-full truncate text-micro text-dust">{entry.gameTitle}</span>
+      {ultra && <UltraGlint rank={rank} />}
     </button>
   );
 };
@@ -452,8 +481,17 @@ const RarityDonut = ({
     accumulated += fraction;
   }
 
+  // Los tramos se dibujan uno tras otro la primera vez que el anillo entra en
+  // vista (fx/chart); hasta entonces esperan en su primer fotograma.
+  const { observe, inView } = useInView();
+
   return (
-    <div className="relative flex-none" style={{ width: DONUT_SIZE, height: DONUT_SIZE }}>
+    <div
+      ref={observe}
+      data-inview={inView || undefined}
+      className={cn('relative flex-none', chartGroup)}
+      style={{ width: DONUT_SIZE, height: DONUT_SIZE }}
+    >
       <svg width={DONUT_SIZE} height={DONUT_SIZE} className="-rotate-90 overflow-visible">
         <circle
           cx={DONUT_SIZE / 2}
@@ -463,7 +501,7 @@ const RarityDonut = ({
           stroke="rgba(233,228,216,.05)"
           strokeWidth={DONUT_BASE}
         />
-        {arcs.map(({ segment, length, offset }) => {
+        {arcs.map(({ segment, length, offset }, arcIndex) => {
           const isHovered = hovered === segment.key;
           const dimmed = hovered !== null && !isHovered;
           return (
@@ -476,6 +514,10 @@ const RarityDonut = ({
               stroke={segment.color}
               strokeWidth={isHovered ? DONUT_HOVER : DONUT_BASE}
               strokeLinecap="butt"
+              className={cn(
+                'animate-[afterplay-ring-in_950ms_cubic-bezier(.22,1,.36,1)_backwards]',
+                chartPaused,
+              )}
               onMouseEnter={() => onHover(segment.key)}
               onMouseLeave={() => onHover(null)}
               style={{
@@ -487,7 +529,7 @@ const RarityDonut = ({
                 transition:
                   'stroke-width .22s cubic-bezier(.2,.7,.3,1), opacity .22s ease, filter .22s ease',
                 ['--afterplay-ring-c' as string]: `${DONUT_C}`,
-                animation: 'afterplay-ring-in .95s cubic-bezier(.22,1,.36,1) 120ms backwards',
+                animationDelay: `${120 + arcIndex * 140}ms`,
               }}
             />
           );
@@ -898,10 +940,14 @@ export const AchievementsShowcase = ({
         <div className={CARD_CLASS}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Medal size={15} style={{ color: RARE_COLOR }} />
-              <span className="text-[16px] leading-tight font-semibold text-bone">
+              <Medal
+                size={15}
+                className="drop-shadow-[0_0_5px_rgb(95_211_224/0.6)]"
+                style={{ color: RARE_COLOR }}
+              />
+              <GlowText tone="bone" className="text-[16px] leading-tight font-semibold text-bone">
                 Hall of fame
-              </span>
+              </GlowText>
             </div>
             <span className="text-micro font-semibold text-dust">
               {year === 'all' ? 'your rarest unlocks' : `your rarest unlocks of ${year}`}

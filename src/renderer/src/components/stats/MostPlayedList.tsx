@@ -3,6 +3,7 @@ import { formatHours } from '../../lib/format';
 import type { PlayedEntry } from '../../lib/playedEntries';
 import { topPlayedEntries } from '../../lib/playedEntries';
 import { GameCover } from '../GameCover';
+import { chartGroup, growX, useInView } from '../fx/chart';
 import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import type { GameId } from '../../../../shared/entityIds';
@@ -25,6 +26,8 @@ export const MostPlayedList = ({ entries, onOpenGame }: MostPlayedListProps): Re
   const top = topPlayedEntries(entries, MAX_ENTRIES);
   const maxHours = Math.max(1, ...top.map((entry) => entry.hours));
   const playedCount = entries.filter((entry) => entry.hours > 0).length;
+  // Las barras crecen escalonadas la primera vez que la lista entra en vista.
+  const { observe, inView } = useInView();
 
   return (
     <StatCard className="flex h-full flex-col">
@@ -37,7 +40,11 @@ export const MostPlayedList = ({ entries, onOpenGame }: MostPlayedListProps): Re
           <StatCardEmpty>Nothing tracked yet.</StatCardEmpty>
         </div>
       ) : (
-        <div className="mt-3 flex flex-col">
+        <div
+          ref={observe}
+          data-inview={inView || undefined}
+          className={cn('mt-3 flex flex-col', chartGroup)}
+        >
           {top.map((entry, index) => (
             <button
               key={entry.id}
@@ -62,8 +69,15 @@ export const MostPlayedList = ({ entries, onOpenGame }: MostPlayedListProps): Re
               <span className="truncate text-body font-semibold text-bone">{entry.title}</span>
               <span className="afterplay-most-played-track relative h-2.5 overflow-hidden rounded-[2px] bg-inset">
                 <span
-                  className="absolute inset-y-0 left-0 rounded-[2px] bg-phosphor/80 transition-colors group-hover/played:bg-phosphor"
-                  style={{ width: `${Math.max(2, (entry.hours / maxHours) * 100)}%` }}
+                  className={cn(
+                    'absolute inset-y-0 left-0 rounded-[2px] bg-phosphor/80 transition-[background-color,box-shadow] duration-150',
+                    'group-hover/played:bg-phosphor group-hover/played:shadow-glow-bar',
+                    growX,
+                  )}
+                  style={{
+                    width: `${Math.max(2, (entry.hours / maxHours) * 100)}%`,
+                    animationDelay: `${index * 60}ms`,
+                  }}
                 />
               </span>
               <span className="min-w-20 text-right font-display text-[24px] leading-none font-bold text-bone tabular-nums">

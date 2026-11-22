@@ -83,9 +83,11 @@ test('year comparisons sit under their matching totals, inside the hero', async 
     await expect(window.locator('[data-year-comparison="totalHours"]')).toContainText(
       '5h more than 2025',
     );
-    await expect(
-      window.locator('.afterplay-stats-metric').nth(0).locator(':scope > div').nth(1),
-    ).toHaveText('7h');
+    // The total rolls like a scoreboard (Ticker): its final value is published
+    // at once in data-value, and the visible counter has to land on it.
+    const total = window.locator('.afterplay-stats-metric').nth(0).locator(':scope > div').nth(1);
+    await expect(total.locator('[data-value]')).toHaveAttribute('data-value', '7h');
+    await expect(total.locator('[aria-hidden="true"]')).toHaveText('7h');
     for (const width of [1060, 1400]) {
       await app.evaluate(({ BrowserWindow }, size) => {
         BrowserWindow.getAllWindows()
