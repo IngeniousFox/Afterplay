@@ -286,7 +286,7 @@ const Inventory = ({
                 data-testid="cloud-purge"
                 onClick={() => setPurgeTarget(group)}
                 disabled={busy}
-                className="flex w-fit items-center gap-1.5 rounded-xs py-0.5 text-small font-semibold text-dust transition-colors duration-150 outline-none enabled:hover:text-live focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:opacity-40"
+                className="flex w-fit items-center gap-1.5 rounded-xs py-0.5 text-small font-semibold text-dust transition-colors duration-150 outline-hidden enabled:hover:text-live focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:opacity-40"
               >
                 <Trash2 aria-hidden size={13} />
                 Delete these copies

@@ -63,7 +63,7 @@ export const SegmentedControl = <T extends string>({
             }}
             className={cn(
               'h-8 px-3.5 text-small font-semibold whitespace-nowrap transition-[background-color,color] duration-150',
-              'outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
+              'outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
               index > 0 && 'border-l border-line',
               selected ? 'bg-raised text-phosphor' : 'text-dust hover:bg-bone/6 hover:text-bone',
             )}

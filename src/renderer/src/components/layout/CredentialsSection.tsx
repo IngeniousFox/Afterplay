@@ -527,7 +527,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                                 >
                                   <Select.Popup
                                     className={cn(
-                                      'w-(--anchor-width) rounded-sm border p-1 outline-none',
+                                      'w-(--anchor-width) rounded-sm border p-1 outline-hidden',
                                       floatingPanelClass,
                                     )}
                                   >
@@ -536,7 +536,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                                         <Select.Item
                                           key={option.value}
                                           value={option.value}
-                                          className="flex cursor-default items-center justify-between rounded-xs px-3 py-2 text-small text-bone outline-none data-highlighted:bg-bone/7 data-selected:text-phosphor"
+                                          className="flex cursor-default items-center justify-between rounded-xs px-3 py-2 text-small text-bone outline-hidden data-highlighted:bg-bone/7 data-selected:text-phosphor"
                                         >
                                           <Select.ItemText>{option.label}</Select.ItemText>
                                           <Select.ItemIndicator>
