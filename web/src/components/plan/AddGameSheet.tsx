@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Plus, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ApiFailure, addToPlan, searchGames } from '../../api';
 import type { IgdbSearchResult } from '../../api';
 import { Cover } from '../Cover';
-import { BLUE } from '../../lib/status';
+import { cn } from '../../lib/cn';
+import { fieldClass, iconButtonClass } from '../../lib/styles';
 
 // Panel de alta: buscar en IGDB y añadir al Plan. El hub crea el juego al
 // instante con lo que da la búsqueda (§13.3); el resto lo completa un PC.
@@ -45,6 +47,14 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
     };
   }, []);
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const results = useQuery({
     queryKey: ['search', debounced],
     queryFn: () => searchGames(debounced),
@@ -61,102 +71,114 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
     },
   });
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-cabinet">
-      <div className="flex flex-none items-center gap-2 border-b border-border px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
+  const message = (text: React.ReactNode): React.JSX.Element => (
+    <p className="py-16 text-center text-body text-dust">{text}</p>
+  );
+
+  // En un portal: un `fixed` dentro de un bloque con transform no cubre la
+  // pantalla.
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add a game to your plan"
+      className="fixed inset-0 z-50 flex animate-fade-in flex-col bg-cabinet"
+    >
+      <div className="flex flex-none items-center gap-2 border-b border-line px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3">
         <div className="relative flex-1">
           <Search
-            size={15}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+            size={16}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-dust"
           />
           <input
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search for a game"
+            aria-label="Search for a game"
             type="search"
             autoCorrect="off"
             autoCapitalize="none"
             spellCheck={false}
-            className="w-full rounded-xl border border-border bg-card py-2.5 pr-3 pl-9 text-[14px] font-semibold outline-none placeholder:text-muted-foreground focus:border-primary/50"
+            className={cn(fieldClass, 'pl-9')}
           />
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-line-strong"
+          className={cn(iconButtonClass, 'border border-line-strong text-bone')}
         >
-          <X size={17} />
+          <X size={18} />
         </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {debounced.length < 2 ? (
-          <p className="py-16 text-center text-[12.5px] text-muted-foreground">
-            Type at least two letters.
-          </p>
+          message('Type at least two letters.')
         ) : results.isPending ? (
-          <div className="flex justify-center py-16 text-muted-foreground">
-            <Loader2 size={20} className="animate-spin" />
+          <div className="flex justify-center py-16" role="status" aria-label="Searching">
+            <Loader2 size={22} className="animate-spin text-phosphor" />
           </div>
         ) : results.isError ? (
-          <p className="py-16 text-center text-[12.5px] text-muted-foreground">
-            {/* Los códigos de IGDB traen su frase ("abre Afterplay en tu PC una
-                vez", "IGDB no responde"); el resto, el genérico. */}
-            {results.error instanceof ApiFailure &&
-            ['igdb_not_configured', 'igdb_unavailable', 'session_expired', 'timeout'].includes(
-              results.error.code,
-            )
+          message(
+            // Los códigos de IGDB traen su frase ("abre Afterplay en tu PC una
+            // vez", "IGDB no responde"); el resto, el genérico.
+            results.error instanceof ApiFailure &&
+              ['igdb_not_configured', 'igdb_unavailable', 'session_expired', 'timeout'].includes(
+                results.error.code,
+              )
               ? results.error.message
-              : "Couldn't reach the game catalog."}
-          </p>
+              : "Couldn't reach the game catalog.",
+          )
         ) : results.data.length === 0 ? (
-          <p className="py-16 text-center text-[12.5px] text-muted-foreground">
-            Nothing found for “{debounced}”.
-          </p>
+          message(<>Nothing found for “{debounced}”.</>)
         ) : (
-          <div className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-2">
             {results.data.map((game) => {
               const done = added.has(game.igdbId);
               const busy = add.isPending && add.variables?.igdbId === game.igdbId;
               return (
-                <div
+                <li
                   key={game.igdbId}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-card p-2"
+                  className={cn(
+                    'flex items-center gap-3 rounded-md border border-line bg-panel p-2',
+                    game.owned && 'bg-transparent',
+                  )}
                 >
                   <Cover
                     url={game.coverUrl}
                     title={game.title}
-                    className={`w-10 ${game.owned ? 'opacity-50' : ''}`}
+                    className={cn('w-11', game.owned && 'opacity-50')}
                   />
                   <div className="min-w-0 flex-1">
                     <div
-                      className={`truncate text-[13px] font-bold ${game.owned ? 'text-muted-foreground' : ''}`}
+                      className={cn(
+                        'line-clamp-2 text-body font-semibold',
+                        game.owned ? 'text-dust' : 'text-bone',
+                      )}
                     >
                       {game.title}
                     </div>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      {game.releaseYear !== null && (
-                        <span className="text-micro font-semibold text-muted-foreground tabular-nums">
-                          {game.releaseYear}
-                        </span>
-                      )}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-small text-dust tabular-nums">
+                      {game.releaseYear !== null && <span>{game.releaseYear}</span>}
                       {game.owned && (
                         <span
-                          className="text-micro font-bold tracking-wide"
-                          style={{
-                            color: game.owned === 'library' ? 'var(--muted-foreground)' : BLUE,
-                          }}
+                          className={cn(
+                            'font-semibold',
+                            game.owned === 'plan' ? 'text-tube' : 'text-bone',
+                          )}
                         >
-                          {game.owned === 'plan' ? 'ALREADY PLANNED' : 'IN YOUR LIBRARY'}
+                          {game.owned === 'plan' ? 'Already planned' : 'In your library'}
                         </span>
                       )}
+                      {done && <span className="font-semibold text-tube">Added to your plan</span>}
                     </div>
                   </div>
                   {game.owned ? (
-                    <span className="flex h-9 w-9 flex-none items-center justify-center text-muted-foreground/40">
-                      <Check size={15} />
+                    <span className="flex size-11 shrink-0 items-center justify-center text-dust/60">
+                      <Check size={16} aria-hidden="true" />
                     </span>
                   ) : (
                     <button
@@ -164,41 +186,44 @@ export const AddGameSheet = ({ onClose }: { onClose: () => void }): React.JSX.El
                       disabled={done || busy}
                       onClick={() => add.mutate(game)}
                       aria-label={done ? 'Added' : `Add ${game.title} to your plan`}
-                      className="flex h-9 w-9 flex-none items-center justify-center rounded-full border"
-                      style={
+                      aria-busy={busy}
+                      className={cn(
+                        iconButtonClass,
+                        'border',
                         done
-                          ? { borderColor: `${BLUE}4d`, background: `${BLUE}1f`, color: BLUE }
-                          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.04)' }
-                      }
+                          ? 'border-tube/50 bg-tube/12 text-tube disabled:opacity-100'
+                          : 'border-line-strong bg-raised text-bone',
+                      )}
                     >
                       {busy ? (
-                        <Loader2 size={15} className="animate-spin" />
+                        <Loader2 size={16} className="animate-spin" />
                       ) : done ? (
-                        <Check size={15} />
+                        <Check size={16} />
                       ) : (
-                        <Plus size={16} />
+                        <Plus size={18} />
                       )}
                     </button>
                   )}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
 
         {add.isError && (
-          <p className="mt-3 text-center text-[11.5px] text-destructive">
+          <p role="alert" className="mt-3 text-center text-small text-live">
             {add.error instanceof ApiFailure ? add.error.message : "Couldn't add that one."}
           </p>
         )}
       </div>
 
-      <div className="flex-none border-t border-border px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.85rem)]">
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
+      <div className="flex-none border-t border-line px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+14px)]">
+        <p className="text-small text-dust">
           Games you add show up in your plan right away. Your PC fills in the times and store data
           the next time it syncs.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

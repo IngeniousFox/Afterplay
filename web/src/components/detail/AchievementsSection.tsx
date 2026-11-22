@@ -1,81 +1,59 @@
-import { ChevronDown, Lock, Sparkles, Trophy } from 'lucide-react';
+import { Lock, Sparkles, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import type { AchievementEntry, GameAchievements } from '../../api';
 import type { SourceCompletion } from '../../../../src/shared/api/v2';
-import { isRare, percentLabel, rarityAccent, sortAchievements } from '../../lib/achievements';
+import { isRare, percentLabel, sortAchievements } from '../../lib/achievements';
+import { cn } from '../../lib/cn';
 import { formatDate } from '../../lib/format';
-import { SectionLabel } from './primitives';
+import { SectionLabel, ShowMoreButton } from './primitives';
 
-const RING_SIZE = 68;
-const RING_STROKE = 6;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_C = 2 * Math.PI * RING_RADIUS;
+// El medidor de logros: una barrita por logro (hasta 60), encendidas las
+// desbloqueadas. Con más de 60 no se distinguirían, y pasa a ser una barra
+// continua.
+const SEGMENT_LIMIT = 60;
 
-// SVG y no conic-gradient porque el trazo redondeado y la animación de
-// dibujado solo salen bien con stroke-dashoffset.
-const ProgressRing = ({
-  percent,
-  complete,
-}: {
-  percent: number;
-  complete: boolean;
-}): React.JSX.Element => {
-  const color = complete ? '#ffb347' : '#ffb347';
-  return (
-    <div className="relative flex-none" style={{ width: RING_SIZE, height: RING_SIZE }}>
-      <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90">
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          fill="none"
-          stroke="rgba(233,228,216,.08)"
-          strokeWidth={RING_STROKE}
+const Meter = ({ unlocked, total }: { unlocked: number; total: number }): React.JSX.Element => {
+  if (total > SEGMENT_LIMIT) {
+    return (
+      <div className="h-3 overflow-hidden rounded-xs bg-bone/10" aria-hidden="true">
+        <div
+          className="h-full bg-phosphor shadow-glow-bar"
+          style={{ width: `${(unlocked / total) * 100}%` }}
         />
-        {percent > 0 && (
-          <circle
-            cx={RING_SIZE / 2}
-            cy={RING_SIZE / 2}
-            r={RING_RADIUS}
-            fill="none"
-            stroke={color}
-            strokeWidth={RING_STROKE}
-            strokeLinecap="round"
-            style={{
-              strokeDasharray: RING_C,
-              strokeDashoffset: RING_C * (1 - percent / 100),
-            }}
-          />
-        )}
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[15px] font-extrabold tabular-nums" style={{ color }}>
-          {percent}%
-        </span>
       </div>
+    );
+  }
+  return (
+    <div className="flex h-3 gap-[2px]" aria-hidden="true">
+      {Array.from({ length: total }, (_, index) => (
+        <span
+          key={index}
+          className={cn(
+            'flex-1 rounded-xs',
+            index < unlocked ? 'bg-phosphor shadow-glow-bar' : 'bg-bone/10',
+          )}
+        />
+      ))}
     </div>
   );
 };
 
 const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Element => {
   const unlocked = entry.unlockedAt !== null;
-  const accent = rarityAccent(entry.globalPercent);
   const rare = unlocked && isRare(entry.globalPercent);
 
   return (
-    <div
-      className="flex items-center gap-2.5 rounded-[11px] border px-2.5 py-2"
-      style={
-        rare
-          ? { borderColor: `${accent}3d`, background: `${accent}0f` }
-          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.024)' }
-      }
-    >
-      <div className="relative h-9 w-9 flex-none overflow-hidden rounded-[8px] bg-bone/5">
+    <li className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
+      <div
+        className={cn(
+          'relative size-10 shrink-0 overflow-hidden rounded-sm border bg-raised',
+          rare ? 'border-phosphor/60' : 'border-line',
+        )}
+      >
         {/* El icono GRIS para los pendientes: es el propio Steam quien
-            distingue las dos versiones del arte, y usar el de color apagado
-            con CSS no es lo mismo — muchos logros tienen un gris dibujado
-            aparte que además esconde el dibujo real. */}
+            distingue las dos versiones del arte, y apagar el de color con CSS
+            no es lo mismo — muchos logros tienen un gris dibujado aparte que
+            además esconde el dibujo real. */}
         {unlocked && entry.iconUrl ? (
           <img src={entry.iconUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : entry.iconGrayUrl ? (
@@ -86,33 +64,43 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
             className="h-full w-full object-cover opacity-60"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Trophy size={14} className="text-muted-foreground/40" />
+          <div className="flex h-full w-full items-center justify-center text-dust">
+            <Trophy size={16} aria-hidden="true" />
           </div>
         )}
         {!unlocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-inset/45">
-            <Lock size={11} className="text-dust" />
+          <div className="absolute inset-0 flex items-center justify-center bg-inset/50 text-dust">
+            <Lock size={14} aria-hidden="true" />
           </div>
         )}
       </div>
 
       <div className="min-w-0 flex-1">
-        <div
-          className={`truncate text-[12px] font-bold ${unlocked ? '' : 'text-muted-foreground'}`}
-          style={rare ? { color: accent } : undefined}
-        >
+        <div className={cn('text-body font-semibold', unlocked ? 'text-bone' : 'text-dust')}>
           {entry.displayName}
         </div>
         {entry.description ? (
-          <div className="truncate text-micro text-muted-foreground">{entry.description}</div>
+          <div className="text-small text-dust">{entry.description}</div>
         ) : (
-          entry.hidden && (
-            <div className="text-micro text-muted-foreground/60 italic">Hidden achievement</div>
-          )
+          entry.hidden && <div className="text-small text-dust italic">Hidden achievement</div>
+        )}
+      </div>
+
+      <div className="shrink-0 text-right">
+        {entry.globalPercent !== null && (
+          <div
+            className={cn(
+              'flex items-center justify-end gap-1 font-display text-figure font-bold',
+              rare ? 'text-phosphor' : 'text-bone',
+            )}
+            title={`${entry.globalPercent.toFixed(1)}% of players have this`}
+          >
+            {rare && <Sparkles size={12} aria-hidden="true" />}
+            {percentLabel(entry.globalPercent)}
+          </div>
         )}
         {unlocked && entry.unlockedAt !== null && (
-          <div className="mt-0.5 text-micro font-semibold text-muted-foreground/80 tabular-nums">
+          <div className="text-micro text-dust tabular-nums">
             {/* Una fecha no fiable se dice, no se esconde: es la del rescate
                 (el emulador que selló de golpe logros viejos), no la de la
                 hazaña. Sigue siendo cierto que lo tienes. */}
@@ -120,63 +108,47 @@ const AchievementRow = ({ entry }: { entry: AchievementEntry }): React.JSX.Eleme
           </div>
         )}
       </div>
-
-      {entry.globalPercent !== null && (
-        <span
-          className="flex flex-none items-center gap-1 text-micro font-bold tabular-nums"
-          style={{ color: rare ? accent : 'var(--muted-foreground)' }}
-          title={`${entry.globalPercent.toFixed(1)}% of players have this`}
-        >
-          {rare && <Sparkles size={10} />}
-          {percentLabel(entry.globalPercent)}
-        </span>
-      )}
-    </div>
+    </li>
   );
 };
 
 // El completado de cada catálogo por su cuenta (R-11): un 100 % de Steam y uno
-// de RetroAchievements no se suman. El anillo de arriba cuenta todos los logros
-// juntos; con una sola fuente no se pinta esta línea, repetiría el anillo.
+// de RetroAchievements no se suman. La cifra grande cuenta todos los logros
+// juntos; con una sola fuente no se pinta esta caja, la repetiría.
 const SOURCE_LABEL: Record<SourceCompletion['source'], string> = {
   steam: 'Steam',
   ra: 'RetroAchievements',
 };
 
-const SourceCompletionRow = ({
+const SourceCompletionBox = ({
   completion,
 }: {
   completion: SourceCompletion[];
 }): React.JSX.Element => (
-  <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[11px] border border-border bg-card px-4 py-2.5">
+  <ul className="mt-3 flex flex-col gap-1 rounded-sm border border-line bg-panel px-3 py-2.5">
     {completion.map((source) => (
-      <span
+      <li
         key={source.source}
-        className="flex items-baseline gap-1.5 text-[11.5px] tabular-nums"
+        className="text-small text-dust tabular-nums"
         title={
           source.complete && source.completedAt !== null
             ? `100% since ${formatDate(source.completedAt)}`
             : undefined
         }
       >
-        <span className="text-micro font-bold tracking-[.12em] text-muted-foreground uppercase">
-          {SOURCE_LABEL[source.source]}
-        </span>
+        {SOURCE_LABEL[source.source]}{' '}
         {/* Sin progreso conocido no es un 0 %: nunca se preguntó por tus
             desbloqueos de esta fuente. */}
         {!source.known ? (
-          <span className="text-muted-foreground/60">not synced yet</span>
+          'not synced yet'
         ) : (
-          <span
-            className={source.complete ? 'font-extrabold' : 'font-extrabold text-foreground'}
-            style={source.complete ? { color: '#ffb347' } : undefined}
-          >
+          <span className={cn('font-semibold', source.complete ? 'text-phosphor' : 'text-bone')}>
             {source.complete ? '100%' : `${source.unlocked} of ${source.total}`}
           </span>
         )}
-      </span>
+      </li>
     ))}
-  </div>
+  </ul>
 );
 
 // Cuántos se pintan antes de pedir "ver todos". Un juego puede tener 200
@@ -205,51 +177,43 @@ export const AchievementsSection = ({
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">Achievements</SectionLabel>
+      <SectionLabel>Achievements</SectionLabel>
 
-      <div className="mb-2.5 flex items-center gap-4 rounded-[14px] border border-border bg-card px-4 py-3.5">
-        <ProgressRing percent={percent} complete={percent === 100} />
-        <div className="min-w-0 flex-1">
-          <div className="text-[17px] font-extrabold tabular-nums">
-            {unlockedCount}
-            <span className="text-muted-foreground"> / {sorted.length}</span>
-          </div>
-          <div className="mt-0.5 text-[11px] font-semibold text-muted-foreground">
-            {percent === 100 ? 'Every single one.' : 'unlocked'}
+      <div className="mt-1 flex items-end justify-between gap-3">
+        <span className="font-display font-bold tabular-nums">
+          <span className="text-[56px] leading-[52px] text-phosphor">{unlockedCount}</span>
+          <span className="ml-1 text-[26px] text-dust">/{sorted.length}</span>
+        </span>
+        <div className="pb-1 text-right text-small">
+          <div className="font-semibold text-bone">
+            {percent === 100 ? 'Every single one' : `${percent}% unlocked`}
           </div>
           {rareCount > 0 && (
-            <div
-              className="mt-1.5 flex items-center gap-1 text-micro font-bold"
-              style={{ color: '#e0a3ff' }}
-            >
-              <Sparkles size={10} />
+            <div className="flex items-center justify-end gap-1 text-phosphor">
+              <Sparkles size={12} aria-hidden="true" />
               {rareCount} rare {rareCount === 1 ? 'unlock' : 'unlocks'}
             </div>
           )}
         </div>
       </div>
+      <div className="mt-2">
+        <Meter unlocked={unlockedCount} total={sorted.length} />
+      </div>
 
-      {data.completion.length > 1 && <SourceCompletionRow completion={data.completion} />}
+      {data.completion.length > 1 && <SourceCompletionBox completion={data.completion} />}
 
-      <div className="flex flex-col gap-1.5">
+      <ul className="mt-2">
         {shown.map((entry) => (
           <AchievementRow key={entry.id} entry={entry} />
         ))}
-      </div>
+      </ul>
 
       {sorted.length > PREVIEW_COUNT && (
-        <button
-          type="button"
-          onClick={() => setExpanded((previous) => !previous)}
-          className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-[11px] border border-border bg-card py-2 text-[11.5px] font-bold text-muted-foreground"
-        >
-          {expanded ? 'Show less' : `Show all ${sorted.length}`}
-          <ChevronDown
-            size={12}
-            className="transition-transform duration-200"
-            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          />
-        </button>
+        <ShowMoreButton
+          expanded={expanded}
+          total={sorted.length}
+          onToggle={() => setExpanded((previous) => !previous)}
+        />
       )}
     </section>
   );

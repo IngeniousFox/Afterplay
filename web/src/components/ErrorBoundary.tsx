@@ -1,6 +1,7 @@
-import { AlertTriangle } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
+import { secondaryButtonClass } from '../lib/styles';
 
 // La red de seguridad de la PWA.
 //
@@ -33,17 +34,18 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.error === null) return this.props.children;
 
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-8 text-center">
-        <AlertTriangle size={26} className="text-destructive/70" />
-        <span className="text-[15px] font-bold">Something broke</span>
-        <span className="max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">
-          {this.state.error.message}
+      <div className="flex min-h-dvh flex-col items-center justify-center px-8 text-center">
+        <span className="mb-4 flex size-16 items-center justify-center rounded-full border border-line-strong bg-panel text-live">
+          <TriangleAlert size={24} aria-hidden="true" />
         </span>
+        <h1 className="font-display text-[30px] leading-8 font-bold text-bone">Something broke</h1>
+        <p className="mt-2 max-w-xs text-small text-dust">{this.state.error.message}</p>
         {/* Recargar y no un "reintentar" que vuelva a montar el mismo árbol:
             si el fallo viene de datos cacheados, remontar lo repite igual. */}
         <button
+          type="button"
           onClick={() => window.location.reload()}
-          className="mt-2 rounded-lg border border-border px-3.5 py-1.5 text-[12px] font-bold"
+          className={`${secondaryButtonClass} mt-5`}
         >
           Reload
         </button>

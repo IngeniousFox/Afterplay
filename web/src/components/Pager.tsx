@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { secondaryButtonClass } from '../lib/styles';
 
 type PagerProps = {
   page: number;
@@ -7,13 +8,10 @@ type PagerProps = {
 };
 
 // Paginador — nada que pintar si todo cabe en una sola página. Mismo texto
-// que el del escritorio ("Page N of M"), con las dianas engordadas a 40px de
-// alto porque aquí las pulsa un pulgar y no un ratón.
+// que el del escritorio ("Page N of M"), con dianas de 44 px porque aquí las
+// pulsa un pulgar y no un ratón.
 export const Pager = ({ page, totalPages, onChange }: PagerProps): React.JSX.Element | null => {
   if (totalPages <= 1) return null;
-
-  const buttonClass =
-    'flex items-center gap-1.5 rounded-[9px] border border-line-strong bg-bone/[0.03] px-3.5 py-2.5 text-[12.5px] font-semibold text-foreground disabled:opacity-40';
 
   return (
     <div className="mt-5 flex items-center justify-between gap-3">
@@ -21,22 +19,22 @@ export const Pager = ({ page, totalPages, onChange }: PagerProps): React.JSX.Ele
         type="button"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
-        className={buttonClass}
+        className={secondaryButtonClass}
       >
-        <ChevronLeft size={15} />
+        <ChevronLeft size={16} />
         Previous
       </button>
-      <span className="text-[12px] text-muted-foreground tabular-nums">
+      <span className="text-small text-dust tabular-nums">
         Page {page} of {totalPages}
       </span>
       <button
         type="button"
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
-        className={buttonClass}
+        className={secondaryButtonClass}
       >
         Next
-        <ChevronRight size={15} />
+        <ChevronRight size={16} />
       </button>
     </div>
   );

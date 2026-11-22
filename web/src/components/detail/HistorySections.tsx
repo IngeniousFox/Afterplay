@@ -1,7 +1,6 @@
-import { CalendarPlus, Clock3, Coins, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import type { GameDetail, GameSession, SpendEventRow, StateEventRow } from '../../api';
+import { cn } from '../../lib/cn';
 import {
   formatByPrecision,
   formatHours,
@@ -9,8 +8,11 @@ import {
   formatTime,
   pluralize,
 } from '../../lib/format';
-import { AMBER, GREEN, statusOf } from '../../lib/status';
-import { SectionLabel } from './primitives';
+import { statusOf } from '../../lib/status';
+import { ledClass, statusTextClass } from '../../lib/styles';
+import { Figure } from '../Figure';
+import { LiveBadge } from '../LiveBadge';
+import { SectionLabel, ShowMoreButton } from './primitives';
 
 // ── Historial: estados + gasto, en una sola línea de tiempo ────────────────
 //
@@ -18,6 +20,7 @@ import { SectionLabel } from './primitives';
 // de 300px y sitio para las dos): en móvil, dos listas cortas alternando
 // cabeceras es peor de leer que una sola ordenada por fecha, que además
 // cuenta mejor la historia — "lo compré, lo empecé, le metí 10€, lo dejé".
+// Se pinta como un raíl vertical con el LED de cada estado.
 
 type Entry =
   | { kind: 'state'; at: number; event: StateEventRow }
@@ -34,69 +37,52 @@ const buildEntries = (game: GameDetail): Entry[] => {
 };
 
 const HistoryRow = ({ entry }: { entry: Entry }): React.JSX.Element => {
-  if (entry.kind === 'added') {
-    return (
-      <div className="flex items-center gap-2.5 rounded-[11px] border border-border bg-card px-3 py-2">
-        <CalendarPlus size={13} className="flex-none text-muted-foreground" />
-        <span className="flex-1 text-[12px] font-semibold text-muted-foreground">
-          Added to your library
-        </span>
-        <span className="flex-none text-[11px] font-semibold text-muted-foreground tabular-nums">
-          {formatByPrecision(entry.at, 'day')}
-        </span>
-      </div>
-    );
-  }
+  const date =
+    entry.kind === 'added'
+      ? formatByPrecision(entry.at, 'day')
+      : formatByPrecision(entry.at, entry.event.datePrecision);
 
-  if (entry.kind === 'spend') {
-    const isPurchase = entry.event.type === 'purchase';
-    return (
-      <div className="flex items-center gap-2.5 rounded-[11px] border border-border bg-card px-3 py-2">
-        {isPurchase ? (
-          <ShoppingCart size={13} className="flex-none" style={{ color: AMBER }} />
-        ) : (
-          <Coins size={13} className="flex-none" style={{ color: AMBER }} />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-[12px] font-bold" style={{ color: AMBER }}>
-            {formatMoney(entry.event.amount)}
-            <span className="ml-1.5 font-semibold text-muted-foreground">
-              {isPurchase ? 'purchase' : 'in-game'}
-            </span>
-          </div>
-          {entry.event.note && (
-            <div className="truncate text-micro text-muted-foreground">{entry.event.note}</div>
-          )}
-        </div>
-        <span className="flex-none text-[11px] font-semibold text-muted-foreground tabular-nums">
-          {formatByPrecision(entry.at, entry.event.datePrecision)}
-        </span>
-      </div>
-    );
-  }
+  const dot =
+    entry.kind === 'state'
+      ? ledClass(entry.event.type)
+      : entry.kind === 'spend'
+        ? 'bg-phosphor'
+        : 'bg-dust';
 
-  const status = statusOf(entry.event.type);
-  const StatusIcon = status.Icon;
   return (
-    <div className="flex items-center gap-2.5 rounded-[11px] border border-border bg-card px-3 py-2">
-      <StatusIcon
-        size={13}
-        className="flex-none"
-        color={status.color}
-        fill={status.filled ? status.color : 'none'}
+    <li className="group relative flex gap-3 pb-4 pl-6 last:pb-0">
+      {/* El raíl: una línea que une los puntos, cortada en el último. */}
+      <span
+        aria-hidden="true"
+        className="absolute top-2 bottom-0 left-[5px] w-px bg-line-strong group-last:hidden"
+      />
+      <span
+        aria-hidden="true"
+        className={cn('absolute top-1.5 left-0 size-[11px] rounded-full ring-2 ring-cabinet', dot)}
       />
       <div className="min-w-0 flex-1">
-        <div className="text-[12px] font-bold" style={{ color: status.color }}>
-          {status.label}
-        </div>
-        {entry.event.note && (
-          <div className="truncate text-micro text-muted-foreground">{entry.event.note}</div>
+        {entry.kind === 'state' && (
+          <div className={cn('text-body font-semibold', statusTextClass(entry.event.type))}>
+            {statusOf(entry.event.type).label}
+          </div>
+        )}
+        {entry.kind === 'spend' && (
+          <div className="text-body font-semibold text-bone">
+            {formatMoney(entry.event.amount)}
+            <span className="ml-1.5 font-normal text-dust">
+              {entry.event.type === 'purchase' ? 'Purchase' : 'In-game'}
+            </span>
+          </div>
+        )}
+        {entry.kind === 'added' && (
+          <div className="text-body font-semibold text-dust">Added to your library</div>
+        )}
+        {entry.kind !== 'added' && entry.event.note && (
+          <p className="mt-0.5 text-small text-dust">{entry.event.note}</p>
         )}
       </div>
-      <span className="flex-none text-[11px] font-semibold text-muted-foreground tabular-nums">
-        {formatByPrecision(entry.at, entry.event.datePrecision)}
-      </span>
-    </div>
+      <span className="shrink-0 pt-0.5 text-small text-dust tabular-nums">{date}</span>
+    </li>
   );
 };
 
@@ -109,25 +95,21 @@ export const HistorySection = ({ game }: { game: GameDetail }): React.JSX.Elemen
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">History</SectionLabel>
-      <div className="flex flex-col gap-1.5">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <SectionLabel>History</SectionLabel>
+        <span className="text-small text-dust tabular-nums">{entries.length}</span>
+      </div>
+      <ol>
         {shown.map((entry, index) => (
           <HistoryRow key={`${entry.kind}-${index}`} entry={entry} />
         ))}
-      </div>
+      </ol>
       {entries.length > PREVIEW && (
-        <button
-          type="button"
-          onClick={() => setExpanded((previous) => !previous)}
-          className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-[11px] border border-border bg-card py-2 text-[11.5px] font-bold text-muted-foreground"
-        >
-          {expanded ? 'Show less' : `Show all ${entries.length}`}
-          <ChevronDown
-            size={12}
-            className="transition-transform duration-200"
-            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          />
-        </button>
+        <ShowMoreButton
+          expanded={expanded}
+          total={entries.length}
+          onToggle={() => setExpanded((previous) => !previous)}
+        />
       )}
     </section>
   );
@@ -135,7 +117,7 @@ export const HistorySection = ({ game }: { game: GameDetail }): React.JSX.Elemen
 
 // ── Historial de sesiones ──────────────────────────────────────────────────
 
-const SESSION_PREVIEW = 10;
+const SESSION_PREVIEW = 4;
 
 export const SessionHistorySection = ({
   sessions,
@@ -150,35 +132,33 @@ export const SessionHistorySection = ({
 
   return (
     <section>
-      <div className="mb-2.5 flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <SectionLabel>Session history</SectionLabel>
-        <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+        <span className="text-small text-dust tabular-nums">
           {pluralize(sessions.length, 'session')} · {formatHours(totalSeconds / 3600)}
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <ul className="mt-1">
         {shown.map((session) => (
-          <div key={session.id} className="rounded-[11px] border border-border bg-card px-3 py-2">
-            <div className="flex items-center gap-2.5">
-              <Clock3 size={12} className="flex-none" style={{ color: GREEN }} />
+          <li key={session.id} className="border-b border-line py-2.5 last:border-b-0">
+            <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 {/* La precisión REAL de la fila, no un 'day' fijo: una sesión
                     manual del modelo v1 con precisión de año se pintaba como
-                    "January 1, 2021" — un día concreto que nunca se registró,
-                    justo encima de "Logged manually". Solo se degrada a 'day'
-                    cuando la fila SÍ tiene hora, porque esa hora ya va en la
-                    línea de abajo y repetirla aquí sobra. */}
-                <div className="text-[12px] font-bold">
+                    "January 1, 2021" — un día concreto que nunca se registró.
+                    Solo se degrada a 'day' cuando la fila SÍ tiene hora, porque
+                    esa hora ya va en la línea de abajo. */}
+                <div className="text-body font-semibold text-bone">
                   {session.datePrecision === 'datetime'
                     ? formatByPrecision(session.startedAt, 'day')
                     : formatByPrecision(session.startedAt, session.datePrecision)}
                 </div>
-                <div className="mt-0.5 text-micro font-semibold text-muted-foreground tabular-nums">
+                <div className="text-small text-dust tabular-nums">
                   {session.datePrecision === 'datetime' && (
                     <>
                       {formatTime(session.startedAt)}
-                      {session.endedAt !== null && ` – ${formatTime(session.endedAt)}`}
+                      {session.endedAt !== null ? ` to ${formatTime(session.endedAt)}` : ' to now'}
                     </>
                   )}
                   {/* Una sesión MANUAL del modelo v1 no tiene horas de verdad
@@ -188,36 +168,30 @@ export const SessionHistorySection = ({
                 </div>
               </div>
               {session.durationSec !== null ? (
-                <span className="flex-none text-[12px] font-bold tabular-nums">
-                  {formatHours(session.durationSec / 3600)}
-                </span>
+                <Figure
+                  value={formatHours(session.durationSec / 3600)}
+                  className="shrink-0 text-[26px] leading-none text-bone"
+                />
               ) : (
-                <span className="flex-none text-[11px] font-bold text-primary">in progress</span>
+                <LiveBadge label="now" />
               )}
             </div>
             {/* El diario de sesión: "dónde lo dejé". */}
             {session.note && (
-              <p className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 border-l-2 border-phosphor pl-2.5 text-small text-dust">
                 {session.note}
               </p>
             )}
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {sessions.length > SESSION_PREVIEW && (
-        <button
-          type="button"
-          onClick={() => setExpanded((previous) => !previous)}
-          className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-[11px] border border-border bg-card py-2 text-[11.5px] font-bold text-muted-foreground"
-        >
-          {expanded ? 'Show less' : `Show all ${sessions.length}`}
-          <ChevronDown
-            size={12}
-            className="transition-transform duration-200"
-            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          />
-        </button>
+        <ShowMoreButton
+          expanded={expanded}
+          total={sessions.length}
+          onToggle={() => setExpanded((previous) => !previous)}
+        />
       )}
     </section>
   );

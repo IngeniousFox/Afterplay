@@ -57,8 +57,10 @@
   body {
     background: var(--background);
     color: var(--foreground);
-    /* Sitio para la barra de pestañas fija + el "notch" inferior del móvil. */
-    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+    /* Sitio para la barra de pestañas fija (64 px, TabBar.tsx) + el "notch"
+       inferior del móvil. El mini-reproductor reserva el suyo (TimerBar). */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+    font-variant-numeric: tabular-nums;
     overscroll-behavior-y: none;
   }
 
@@ -84,67 +86,5 @@
     border-radius: 9999px;
     border: 3px solid transparent;
     background-clip: padding-box;
-  }
-}
-
-/* ── Animaciones portadas del escritorio (SPEC 10.5) ─────────────────────
-   Solo las que usa esta web. El punto y el halo del badge LIVE son la firma
-   visual de "esto está pasando AHORA MISMO", que es justo la razón de mirar
-   el móvil desde el sofá. */
-@keyframes afterplay-pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-
-@keyframes afterplay-pulse-badge {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 179, 71, 0.55);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 6px rgba(255, 179, 71, 0);
-  }
-}
-
-@keyframes afterplay-glow-card {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1.5px rgba(255, 179, 71, 0.85),
-      0 0 24px rgba(255, 179, 71, 0.25);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1.5px rgba(255, 179, 71, 0.65),
-      0 0 40px rgba(255, 179, 71, 0.42);
-  }
-}
-
-/* La entrada escalonada de la app: cada bloque sube y aparece. Es el
-   `revealClass` del escritorio, reducido a lo que hace falta aquí. */
-@keyframes afterplay-reveal-in {
-  from {
-    opacity: 0;
-    translate: 0 0.9em;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
-  }
-}
-
-.afterplay-reveal {
-  animation: afterplay-reveal-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .afterplay-reveal {
-    animation: none;
   }
 }

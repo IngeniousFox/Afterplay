@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, Square, X } from 'lucide-react';
+import { Loader2, Square, TriangleAlert, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { beatTimer, beatTimerOnHide, fetchActiveTimer, stopTimer } from '../api';
 import { useLiveSeconds } from '../hooks/useLiveSeconds';
+import { cn } from '../lib/cn';
 import { formatElapsed } from '../lib/format';
+import { iconButtonClass } from '../lib/styles';
 import { Cover } from './Cover';
+import { LiveDot } from './Figure';
 
 // El cronómetro del hub trae las fechas en ISO 8601 (api/v2/writes.ts).
 const startedAtMs = (iso: string): number => Date.parse(iso);
@@ -26,9 +29,12 @@ const BEAT_MS = 60_000;
 const ElapsedTime = ({ since }: { since: number }): React.JSX.Element => {
   const seconds = useLiveSeconds(since);
   return (
-    <div className="text-[15px] font-extrabold text-primary tabular-nums">
+    <span
+      role="timer"
+      className="animate-timer-breathe font-display text-[34px] leading-none font-bold text-phosphor tabular-nums motion-reduce:animate-none"
+    >
       {formatElapsed(seconds)}
-    </div>
+    </span>
   );
 };
 
@@ -153,86 +159,105 @@ export const TimerBar = (): React.JSX.Element | null => {
   if (!active && !stop.isError) return null;
 
   return (
-    <div
-      className="fixed inset-x-0 z-30 border-t border-border bg-cabinet/95 backdrop-blur-lg"
-      // Justo encima de la barra de pestañas, respetando el notch inferior.
-      style={{ bottom: 'calc(4.25rem + env(safe-area-inset-bottom))' }}
-    >
-      {active && (
-        <div
-          className="mx-auto flex max-w-lg items-center gap-3 px-4 py-2"
-          style={{ animation: 'afterplay-glow-card 2.6s ease-in-out infinite' }}
-        >
-          <Link to={`/game/${active.gameId}`} className="flex min-w-0 flex-1 items-center gap-3">
-            <Cover url={active.coverUrl} title={active.title} className="w-8" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] font-bold">{active.title}</div>
+    <>
+      {/* El hueco que ocupa el mini-reproductor fijo, para que el final de la
+          pantalla no quede escondido debajo. El body ya reserva el de las
+          pestañas (index.css). */}
+      <div
+        aria-hidden="true"
+        className={active ? (stop.isError ? 'h-[124px]' : 'h-[68px]') : 'h-14'}
+      />
+
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 animate-np-in border-t border-line-strong bg-panel">
+        {active && (
+          <div className="relative mx-auto flex h-[68px] max-w-lg items-center gap-3 px-4">
+            {/* Líneas de escaneo: la barra Now playing es zona héroe. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-(image:--scan) opacity-60"
+            />
+            <Link
+              to={`/game/${active.gameId}`}
+              className="relative flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+            >
+              <Cover url={active.coverUrl} title={active.title} className="w-[30px]" />
+              <div className="min-w-0 flex-1">
+                <div className="line-clamp-2 text-small leading-4 font-semibold text-bone">
+                  {active.title}
+                </div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-micro text-dust">
+                  <LiveDot />
+                  Running
+                </div>
+              </div>
+            </Link>
+
+            <span className="relative">
               <ElapsedTime since={startedAtMs(active.startedAt)} />
-            </div>
-          </Link>
+            </span>
 
-          <button
-            type="button"
-            onClick={() => stop.mutate(active.sessionId)}
-            disabled={stop.isPending}
-            aria-label="Stop the timer"
-            className="flex h-10 w-10 flex-none items-center justify-center rounded-full border"
-            style={{
-              color: '#ff5e57',
-              borderColor: '#ff5e5755',
-              background: '#ff5e5718',
-            }}
+            <button
+              type="button"
+              onClick={() => stop.mutate(active.sessionId)}
+              disabled={stop.isPending}
+              aria-label="Stop the timer"
+              aria-busy={stop.isPending}
+              className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-sm bg-live text-ink-live transition-[transform,background-color] duration-150 hover:bg-live-hi focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] active:bg-live-lo disabled:opacity-40 motion-reduce:active:scale-100"
+            >
+              {stop.isPending ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Square size={14} fill="currentColor" />
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Un parar que no llegó. El fallo era TOTALMENTE mudo —el botón giraba,
+            volvía a su sitio y el contador seguía subiendo—, el mismo defecto
+            que el buzón del Plan ya tenía cazado, y aquí pesa más porque el
+            parar explícito es la orden que MANDA sobre el latido (§7.5): si se
+            pierde y no se dice, se pierde la hora de fin de verdad.
+
+            Del error no se lee el `message`: los TimerError del Worker están en
+            español ('esa sesión ya estaba parada') y el fallo de red de api.ts
+            también ('No se pudo hablar con Afterplay.'), o sea que pintarlos
+            dejaba una frase en español en una interfaz en inglés. Lo que sí se
+            mira es si QUEDA cronómetro, porque es lo que cambia el consejo: si
+            sigue contando, el parar hay que repetirlo; si ha desaparecido es que
+            el Worker ya no ve ninguna sesión viva y no queda nada que parar. Y
+            se dice así, "sigue contando aquí", y no "sigue en marcha": con la
+            red caída el parar puede haber llegado y haberse perdido solo la
+            respuesta, y afirmar el estado del servidor desde aquí sería
+            inventárselo.
+
+            La X sigue haciendo falta para el caso SIN otra sesión: el descarte
+            automático de arriba solo salta cuando aparece un cronómetro que no
+            es el del aviso. Un fallo de red sobre la sesión que sigue en
+            pantalla se queda escrito —correctamente— hasta que lo leas o
+            reintentes. */}
+        {stop.isError && (
+          <div
+            role="alert"
+            className="mx-auto flex max-w-lg items-start gap-2 border-t border-line px-4 py-1.5"
           >
-            {stop.isPending ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Square size={15} fill="currentColor" />
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Un parar que no llegó. El fallo era TOTALMENTE mudo —el botón giraba,
-          volvía a su sitio y el contador seguía subiendo—, el mismo defecto
-          que el buzón del Plan ya tenía cazado, y aquí pesa más porque el
-          parar explícito es la orden que MANDA sobre el latido (§7.5): si se
-          pierde y no se dice, se pierde la hora de fin de verdad.
-
-          Del error no se lee el `message`: los TimerError del Worker están en
-          español ('esa sesión ya estaba parada') y el fallo de red de api.ts
-          también ('No se pudo hablar con Afterplay.'), o sea que pintarlos
-          dejaba una frase en español en una interfaz en inglés. Lo que sí se
-          mira es si QUEDA cronómetro, porque es lo que cambia el consejo: si
-          sigue contando, el parar hay que repetirlo; si ha desaparecido es que
-          el Worker ya no ve ninguna sesión viva y no queda nada que parar. Y
-          se dice así, "sigue contando aquí", y no "sigue en marcha": con la
-          red caída el parar puede haber llegado y haberse perdido solo la
-          respuesta, y afirmar el estado del servidor desde aquí sería
-          inventárselo.
-
-          La X sigue haciendo falta para el caso SIN otra sesión: el descarte
-          automático de arriba solo salta cuando aparece un cronómetro que no
-          es el del aviso. Un fallo de red sobre la sesión que sigue en
-          pantalla se queda escrito —correctamente— hasta que lo leas o
-          reintentes. */}
-      {stop.isError && (
-        <div className="mx-auto flex max-w-lg items-start gap-2 px-4 py-2">
-          <AlertTriangle size={12} className="mt-0.5 flex-none text-destructive" />
-          <span className="min-w-0 flex-1 text-[11px] leading-relaxed text-muted-foreground">
-            {active
-              ? "Couldn't stop the timer — it's still counting here. Try again."
-              : 'That timer had already stopped, so there was nothing left to stop.'}
-          </span>
-          <button
-            type="button"
-            onClick={() => stop.reset()}
-            aria-label="Dismiss"
-            className="-mt-1 -mr-1 flex h-6 w-6 flex-none items-center justify-center rounded-lg text-muted-foreground"
-          >
-            <X size={13} />
-          </button>
-        </div>
-      )}
-    </div>
+            <TriangleAlert size={15} className="mt-2.5 shrink-0 text-live" aria-hidden="true" />
+            <span className="min-w-0 flex-1 py-2 text-micro text-dust">
+              {active
+                ? "Couldn't stop the timer, it's still counting here. Try again."
+                : 'That timer had already stopped, so there was nothing left to stop.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => stop.reset()}
+              aria-label="Dismiss"
+              className={cn(iconButtonClass, '-mr-3')}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 };

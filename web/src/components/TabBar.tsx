@@ -1,41 +1,43 @@
-import { Bookmark, CalendarRange, Home, Library } from 'lucide-react';
+import { Clock, House, LibraryBig, ListOrdered } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { cn } from '../lib/cn';
 
 const TABS = [
-  { to: '/', label: 'Home', Icon: Home, end: true },
-  { to: '/library', label: 'Library', Icon: Library, end: false },
-  { to: '/plan', label: 'Plan', Icon: Bookmark, end: false },
-  { to: '/sessions', label: 'Sessions', Icon: CalendarRange, end: false },
+  { to: '/', label: 'Home', Icon: House, end: true },
+  { to: '/library', label: 'Library', Icon: LibraryBig, end: false },
+  { to: '/plan', label: 'Plan', Icon: ListOrdered, end: false },
+  { to: '/sessions', label: 'Sessions', Icon: Clock, end: false },
 ];
 
 // Barra de pestañas fija abajo. No es la navegación del escritorio encogida:
-// allí hay columnas laterales porque hay 1400px y un ratón; aquí manda el
-// pulgar (§3.1 — móvil de verdad, sin perseguir la paridad).
+// aquí manda el pulgar (§3.1 — móvil de verdad, sin perseguir la paridad).
 //
-// El `env(safe-area-inset-bottom)` es lo que la separa de la barra de gestos
-// del iPhone; sin él, el último píxel de la pestaña queda debajo del indicador
-// y no se puede tocar.
+// Mide 64 px más la zona segura inferior: el `env(safe-area-inset-bottom)` la
+// separa de la barra de gestos del iPhone. El body reserva ese mismo alto
+// (index.css). La pestaña activa va en Phosphor; las demás en Dust.
 export const TabBar = (): React.JSX.Element => (
   <nav
-    className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-cabinet/95 backdrop-blur-lg"
-    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    aria-label="Main"
+    className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-cabinet pb-[env(safe-area-inset-bottom)]"
   >
-    <div className="mx-auto flex max-w-lg">
+    <div className="mx-auto flex h-16 max-w-lg">
       {TABS.map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}
           to={to}
           end={end}
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-1 py-2.5 transition-colors ${
-              isActive ? 'text-primary' : 'text-muted-foreground'
-            }`
+            cn(
+              'flex flex-1 flex-col items-center justify-center gap-1 transition-colors duration-150',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
+              isActive ? 'text-phosphor' : 'text-dust active:text-bone',
+            )
           }
         >
           {({ isActive }) => (
             <>
-              <Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} />
-              <span className="text-micro font-bold tracking-wide">{label}</span>
+              <Icon size={22} strokeWidth={isActive ? 2.1 : 1.7} aria-hidden="true" />
+              <span className="text-micro font-medium">{label}</span>
             </>
           )}
         </NavLink>

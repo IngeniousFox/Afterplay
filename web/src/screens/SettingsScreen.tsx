@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Monitor, Plus, UserPlus } from 'lucide-react';
+import { Check, Loader2, Monitor, Plus, TriangleAlert, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { createEnrollCode, fetchDevices, fetchMe, inviteByEmail, revokeDevice } from '../api';
 import type { DeviceDto } from '../api';
 import { CopyButton } from '../components/CopyButton';
+import { Figure } from '../components/Figure';
+import { PageHeader, SectionTitle } from '../components/PageHeader';
+import { QrCode } from '../components/QrCode';
 import { ErrorState, Loading } from '../components/States';
 import { useCountdown } from '../hooks/useCountdown';
 import {
@@ -12,15 +15,27 @@ import {
   formatCountdown,
   inviteErrorMessage,
 } from '../lib/account';
+import { cn } from '../lib/cn';
+import {
+  dangerButtonClass,
+  fieldClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from '../lib/styles';
 
-const SectionTitle = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
-  <h2 className="mb-2.5 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
-    {children}
-  </h2>
+const panelClass = 'rounded-md border border-line bg-panel p-4';
+const panelTitleClass = 'text-lead font-semibold text-bone';
+
+// Un aviso de error dentro de un panel: borde y texto Live, con triángulo.
+const ErrorNote = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
+  <p
+    role="alert"
+    className="mt-3 flex items-start gap-2 rounded-sm border border-live/45 bg-live/8 px-3 py-2.5 text-small font-semibold text-live"
+  >
+    <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+    <span>{children}</span>
+  </p>
 );
-
-const primaryButton =
-  'flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-extrabold text-primary-foreground disabled:opacity-50';
 
 // ── Add device ─────────────────────────────────────────────────────────────
 
@@ -39,75 +54,79 @@ const AddDevice = (): React.JSX.Element => {
   const hubAddress = window.location.origin;
 
   return (
-    <section>
-      <SectionTitle>Add device</SectionTitle>
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          On your PC, open Settings, then Sync (or the 2.0 migration screen), and enter the address
-          and this code.
-        </p>
+    <section className={panelClass} aria-labelledby="add-device-title">
+      <h2 id="add-device-title" className={panelTitleClass}>
+        Add device
+      </h2>
+      <p className="mt-1 text-small text-dust">
+        On your PC, open Settings, then Sync (or the 2.0 migration screen), and enter the address
+        and this code.
+      </p>
 
-        {live && (
-          <div className="mt-4 flex flex-col gap-3">
-            <div>
-              <div className="mb-1 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
-                One-time code
+      {live && (
+        <div className="mt-4 flex flex-col gap-3">
+          <code
+            data-testid="enroll-code"
+            aria-label="One-time code"
+            className="block rounded-sm border border-line-strong bg-inset px-3 py-3 text-center font-display text-[46px] leading-[48px] font-bold tracking-[0.06em] break-all text-phosphor select-all [text-shadow:var(--shadow-glow-text)]"
+          >
+            {issued.code}
+          </code>
+
+          <div className="flex items-center gap-4">
+            {/* El QR lleva la dirección y el código, una línea cada uno, para
+                pasarlos a otro dispositivo con la cámara. Es el mismo código
+                de un solo uso: caduca con él. */}
+            <div className="shrink-0 rounded-sm bg-[#f4f0e6] p-1">
+              <QrCode
+                value={`${hubAddress}\n${issued.code}`}
+                label="QR code with the address and the one-time code"
+                className="block size-28"
+              />
+            </div>
+            <div className="flex min-w-0 flex-col items-start gap-1">
+              <div className="flex items-baseline gap-2 text-small text-dust" role="timer">
+                Expires in
+                <Figure
+                  value={formatCountdown(msLeft)}
+                  className="text-[32px] leading-none text-bone"
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <code
-                  data-testid="enroll-code"
-                  className="min-w-0 flex-1 rounded-xl bg-bone/6 px-3 py-3 text-center font-mono text-[19px] font-extrabold tracking-wider break-all select-all"
-                >
-                  {issued.code}
-                </code>
-                <CopyButton value={issued.code} label="code" />
-              </div>
-              <div
-                className="mt-2 text-[12px] font-semibold text-muted-foreground tabular-nums"
-                role="timer"
-              >
-                Expires in <span className="text-foreground">{formatCountdown(msLeft)}</span>
+              <span className="text-small text-dust">Single use</span>
+              <div className="mt-1">
+                <CopyButton value={issued.code} label="code" text="Copy code" />
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {expired && (
-          <p className="mt-4 rounded-xl border border-destructive/40 px-3 py-2.5 text-[12.5px] font-semibold text-destructive">
-            This code has expired. Generate a new one.
-          </p>
-        )}
+      {expired && <ErrorNote>This code has expired. Generate a new one.</ErrorNote>}
 
-        {(live || expired) && (
-          <div className="mt-4">
-            <div className="mb-1 text-micro font-bold tracking-[.11em] text-muted-foreground uppercase">
-              Address
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 rounded-xl bg-bone/6 px-3 py-2.5 font-mono text-[13px] font-semibold break-all select-all">
-                {hubAddress}
-              </code>
-              <CopyButton value={hubAddress} label="address" />
-            </div>
+      {(live || expired) && (
+        <div className="mt-4">
+          <div className="mb-1 text-small text-dust">Address</div>
+          <div className="flex items-center gap-2">
+            <code className="flex min-h-11 min-w-0 flex-1 items-center rounded-sm border border-line-strong bg-inset px-3 py-2 text-small font-semibold break-all text-bone select-all">
+              {hubAddress}
+            </code>
+            <CopyButton value={hubAddress} label="address" />
           </div>
-        )}
+        </div>
+      )}
 
-        {create.isError && (
-          <p role="alert" className="mt-3 text-[12.5px] font-semibold text-destructive">
-            Couldn&apos;t create a code. Try again.
-          </p>
-        )}
+      {create.isError && <ErrorNote>Couldn&apos;t create a code. Try again.</ErrorNote>}
 
-        <button
-          type="button"
-          onClick={() => create.mutate()}
-          disabled={create.isPending}
-          className={`${primaryButton} mt-4 w-full`}
-        >
-          {create.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          {issued === null ? 'Generate a code' : 'Generate a new code'}
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => create.mutate()}
+        disabled={create.isPending}
+        aria-busy={create.isPending}
+        className={cn(primaryButtonClass, 'mt-4 w-full')}
+      >
+        {create.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={17} />}
+        {issued === null ? 'Generate a code' : 'Generate a new code'}
+      </button>
     </section>
   );
 };
@@ -131,42 +150,43 @@ const DeviceRow = ({
   onCancel: () => void;
   onConfirm: () => void;
 }): React.JSX.Element => (
-  <li className="rounded-xl border border-border bg-card px-3.5 py-3">
+  <li
+    className={cn(
+      'rounded-md border bg-panel px-3 py-2.5',
+      confirming ? 'border-live/45' : 'border-line',
+    )}
+  >
     <div className="flex items-center gap-3">
-      <Monitor size={18} className="shrink-0 text-muted-foreground" />
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-raised text-dust">
+        <Monitor size={17} aria-hidden="true" />
+      </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-bold break-words">{device.deviceName}</div>
-        <div className="text-[11.5px] font-semibold text-muted-foreground">
-          {deviceSeenLabel(device)}
-        </div>
+        <div className="text-body font-semibold break-words text-bone">{device.deviceName}</div>
+        <div className="text-small text-dust">{deviceSeenLabel(device)}</div>
       </div>
       {!confirming && (
         <button
           type="button"
           onClick={onAsk}
-          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-[12px] font-bold text-muted-foreground"
+          className={cn(secondaryButtonClass, 'shrink-0 px-3 text-small')}
         >
           Revoke
         </button>
       )}
     </div>
     {confirming && (
-      <div className="mt-3 border-t border-border pt-3">
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          Revoke <span className="font-bold text-foreground">{device.deviceName}</span>? It will
-          stop syncing and will need a new code to come back.
+      <div className="mt-2.5 border-t border-line pt-2.5">
+        <p className="text-small text-dust">
+          Revoke <span className="font-semibold text-bone">{device.deviceName}</span>? It will stop
+          syncing and will need a new code to come back.
         </p>
-        {failed && (
-          <p role="alert" className="mt-2 text-[12.5px] font-semibold text-destructive">
-            Couldn&apos;t revoke it. Try again.
-          </p>
-        )}
+        {failed && <ErrorNote>Couldn&apos;t revoke it. Try again.</ErrorNote>}
         <div className="mt-3 flex gap-2">
           <button
             type="button"
             onClick={onCancel}
             disabled={pending}
-            className="flex-1 rounded-xl border border-border py-2 text-[12.5px] font-bold disabled:opacity-50"
+            className={cn(secondaryButtonClass, 'flex-1')}
           >
             Cancel
           </button>
@@ -174,9 +194,10 @@ const DeviceRow = ({
             type="button"
             onClick={onConfirm}
             disabled={pending}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-destructive py-2 text-[12.5px] font-extrabold text-background disabled:opacity-50"
+            aria-busy={pending}
+            className={cn(dangerButtonClass, 'flex-1')}
           >
-            {pending && <Loader2 size={14} className="animate-spin" />}
+            {pending && <Loader2 size={15} className="animate-spin" />}
             Revoke device
           </button>
         </div>
@@ -201,13 +222,13 @@ const Devices = (): React.JSX.Element => {
 
   return (
     <section>
-      <SectionTitle>Devices</SectionTitle>
-      {devices.isPending && <Loading />}
+      <SectionTitle aside={devices.data ? list.length : undefined}>Devices</SectionTitle>
+      {devices.isPending && <Loading label="Reading your devices" rows={2} />}
       {devices.isError && (
         <ErrorState error={devices.error} onRetry={() => void devices.refetch()} />
       )}
       {devices.data && list.length === 0 && (
-        <p className="rounded-xl border border-border bg-card px-3.5 py-3 text-[12.5px] font-semibold text-muted-foreground">
+        <p className={cn(panelClass, 'text-small text-dust')}>
           No PC is paired yet. Use Add device above.
         </p>
       )}
@@ -256,51 +277,47 @@ const Invite = (): React.JSX.Element => {
   };
 
   return (
-    <section>
-      <SectionTitle>Invite a person</SectionTitle>
-      <form onSubmit={submit} className="rounded-2xl border border-border bg-card p-4">
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          They get their own library, separate from yours. They also need to be allowed by the
-          Cloudflare Access policy to sign in.
-        </p>
-        <label htmlFor="invite-email" className="sr-only">
-          Email address
-        </label>
-        <input
-          id="invite-email"
-          type="email"
-          inputMode="email"
-          autoComplete="off"
-          autoCapitalize="none"
-          placeholder="friend@example.com"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="mt-3 w-full rounded-xl border border-border bg-bone/6 px-3 py-2.5 text-[16px] outline-none placeholder:text-muted-foreground/60 focus:border-primary"
-        />
-        {invited !== null && (
-          <p role="status" className="mt-3 text-[12.5px] font-semibold text-primary">
+    <form onSubmit={submit} className={panelClass} aria-labelledby="invite-title">
+      <h2 id="invite-title" className={panelTitleClass}>
+        Invite a person
+      </h2>
+      <p className="mt-1 text-small text-dust">
+        They get their own library, separate from yours. They also need to be allowed by the
+        Cloudflare Access policy to sign in.
+      </p>
+      <label htmlFor="invite-email" className="sr-only">
+        Email address
+      </label>
+      <input
+        id="invite-email"
+        type="email"
+        inputMode="email"
+        autoComplete="off"
+        autoCapitalize="none"
+        placeholder="friend@example.com"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        className={cn(fieldClass, 'mt-3')}
+      />
+      {invited !== null && (
+        <p role="status" className="mt-3 flex items-start gap-2 text-small font-semibold text-tube">
+          <Check size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
             <span className="break-all">{invited}</span> can now sign in and get their own space.
-          </p>
-        )}
-        {invite.isError && (
-          <p role="alert" className="mt-3 text-[12.5px] font-semibold text-destructive">
-            {inviteErrorMessage(invite.error)}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={invite.isPending || email.trim() === ''}
-          className={`${primaryButton} mt-3 w-full`}
-        >
-          {invite.isPending ? (
-            <Loader2 size={15} className="animate-spin" />
-          ) : (
-            <UserPlus size={15} />
-          )}
-          Invite
-        </button>
-      </form>
-    </section>
+          </span>
+        </p>
+      )}
+      {invite.isError && <ErrorNote>{inviteErrorMessage(invite.error)}</ErrorNote>}
+      <button
+        type="submit"
+        disabled={invite.isPending || email.trim() === ''}
+        aria-busy={invite.isPending}
+        className={cn(primaryButtonClass, 'mt-3 w-full')}
+      >
+        {invite.isPending ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={17} />}
+        Invite
+      </button>
+    </form>
   );
 };
 
@@ -310,13 +327,15 @@ export const SettingsScreen = (): React.JSX.Element => {
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe });
 
   return (
-    <div className="flex flex-col gap-6 px-4 pt-5 pb-6">
-      <h1 className="text-[22px] font-extrabold tracking-tight">Settings</h1>
-      <AddDevice />
-      <Devices />
-      {/* Lo decide el hub: quien no es el anfitrión no ve la sección. Si /me
-          falla, tampoco: la sección es opcional y el resto ya funciona. */}
-      {me.data?.isHost && <Invite />}
+    <div className="px-4 pb-6">
+      <PageHeader title="Settings" back="/" />
+      <div className="flex flex-col gap-6">
+        <AddDevice />
+        <Devices />
+        {/* Lo decide el hub: quien no es el anfitrión no ve la sección. Si /me
+            falla, tampoco: la sección es opcional y el resto ya funciona. */}
+        {me.data?.isHost && <Invite />}
+      </div>
     </div>
   );
 };

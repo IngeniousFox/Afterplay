@@ -1,15 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Clock3,
+  ListPlus,
   Pin,
   PinOff,
   Plus,
   Search,
   Star,
   Telescope,
+  TriangleAlert,
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -24,14 +24,22 @@ import type { PlanShelfReaders } from '../../../src/shared/planShelves';
 import { ApiFailure, fetchPlan, pinGame, reorderPlan, unpinGame } from '../api';
 import type { PlannedGame } from '../api';
 import { Cover } from '../components/Cover';
+import { Figure } from '../components/Figure';
+import { PageHeader, SectionTitle } from '../components/PageHeader';
 import { AddGameSheet } from '../components/plan/AddGameSheet';
-import { EmptyState, ErrorState, Loading } from '../components/States';
+import { EmptyState, ErrorState, Loading, StateMessage } from '../components/States';
+import { cn } from '../lib/cn';
 import { formatHours, formatRelease, pluralize } from '../lib/format';
 import { bestRating } from '../lib/ratings';
 import { countdownLabel, isUnreleased, releaseCountdown, releaseSortKey } from '../lib/releaseDate';
-import { AMBER, BLUE, GREEN, TEAL } from '../lib/status';
-
-const PLAN = BLUE;
+import {
+  fieldClass,
+  ghostButtonClass,
+  iconButtonClass,
+  primaryButtonClass,
+  revealClass,
+  revealDelay,
+} from '../lib/styles';
 
 type PlanChange =
   { type: 'pin' | 'unpin'; gameId: string } | { type: 'reorder'; orderedIds: string[] };
@@ -48,15 +56,49 @@ const READ: PlanShelfReaders<PlannedGame> = {
   releaseSortKey: (game) => releaseSortKey(game),
 };
 
+// La línea de datos de un planeado: lanzamiento, nota y cuenta atrás.
+const PlanMeta = ({ game }: { game: PlannedGame }): React.JSX.Element | null => {
+  const rating = bestRating(game);
+  const release = formatRelease(game);
+  const countdown = releaseCountdown(game);
+  if (!release && rating === null && !countdown) return null;
+
+  const quiet = countdown?.kind === 'soon' && !countdown.imminent;
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-small text-dust tabular-nums">
+      {release && <span>{release}</span>}
+      {rating !== null && (
+        <span className="inline-flex items-center gap-1">
+          <Star size={12} aria-hidden="true" />
+          {rating}
+        </span>
+      )}
+      {countdown && (
+        <span
+          className={cn(
+            'rounded-xs px-1.5 text-micro font-semibold',
+            quiet ? 'bg-bone/6 text-dust' : 'bg-success/12 text-success',
+          )}
+        >
+          {countdownLabel(countdown)}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const PlanRow = ({
   game,
   order,
+  position,
   onPin,
   onUnpin,
   reorder,
 }: {
   game: PlannedGame;
   order: number;
+  // Su puesto en el Up next, que se pinta en grande delante de la carátula.
+  position?: number;
   onPin: (game: PlannedGame) => void;
   onUnpin: (game: PlannedGame) => void;
   // En modo reordenar, el pin se cambia por las flechas: en un móvil, arrastrar
@@ -64,166 +106,156 @@ const PlanRow = ({
   // acierta, y aquí el orden importa demasiado para dejarlo a la suerte.
   reorder?: { onUp: () => void; onDown: () => void; isFirst: boolean; isLast: boolean };
 }): React.JSX.Element => {
-  const rating = bestRating(game);
-  const release = formatRelease(game);
-  const countdown = releaseCountdown(game);
-
-  const body = (
-    <>
-      <Cover url={game.coverUrl} title={game.title} className="w-11" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-bold">{game.title}</span>
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          {release && (
-            <span className="text-micro font-semibold text-muted-foreground tabular-nums">
-              {release}
-            </span>
-          )}
-          {game.hltbMain !== null && game.hltbMain > 0 && (
-            <span
-              className="flex items-center gap-1 text-micro font-semibold tabular-nums"
-              style={{ color: TEAL }}
-            >
-              <Clock3 size={10} />
-              {formatHours(game.hltbMain)}
-            </span>
-          )}
-          {rating !== null && (
-            <span className="flex items-center gap-1 text-micro font-bold tabular-nums">
-              <Star size={10} className="text-muted-foreground" />
-              {rating}
-            </span>
-          )}
-          {countdown && (
-            <span
-              className="rounded-md px-1.5 py-0.25 text-micro font-extrabold tracking-wide"
-              style={{
-                color:
-                  countdown.kind === 'soon' && !countdown.imminent
-                    ? 'var(--muted-foreground)'
-                    : GREEN,
-                background:
-                  countdown.kind === 'soon' && !countdown.imminent
-                    ? 'rgba(233,228,216,.05)'
-                    : `${GREEN}18`,
-              }}
-            >
-              {countdownLabel(countdown)}
-            </span>
-          )}
-        </div>
-      </div>
-    </>
-  );
-
-  const controlClass =
-    'flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-line-strong disabled:opacity-30';
+  const pinned = game.pinnedAt !== null;
 
   return (
-    <div
-      className="afterplay-reveal flex items-center gap-3 rounded-xl border border-border bg-card p-2"
-      style={{ animationDelay: `${Math.min(order, 15) * 25}ms` }}
+    <li
+      className={cn(revealClass, 'flex items-center gap-2 border-b border-line py-2')}
+      style={revealDelay(order, 25, 15)}
     >
       {/* El cuerpo entra en la ficha; los controles NO — un botón dentro de un
           Link se lleva el toque al navegar. */}
-      <Link to={`/game/${game.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-        {body}
+      <Link
+        to={`/game/${game.id}`}
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+      >
+        {position !== undefined && (
+          <span className="w-6 shrink-0 text-center font-display text-[28px] leading-none font-bold text-dust">
+            {position}
+          </span>
+        )}
+        <Cover url={game.coverUrl} title={game.title} className="w-10" />
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-2 text-body font-semibold text-bone">{game.title}</div>
+          <PlanMeta game={game} />
+        </div>
+        {game.hltbMain !== null && game.hltbMain > 0 && (
+          <Figure
+            value={formatHours(game.hltbMain)}
+            className="shrink-0 text-[24px] leading-none text-bone"
+          />
+        )}
       </Link>
 
       {reorder ? (
-        <div className="flex flex-none gap-1">
+        <div className="flex shrink-0">
           <button
             type="button"
             onClick={reorder.onUp}
             disabled={reorder.isFirst}
-            aria-label="Move up"
-            className={controlClass}
+            aria-label={`Move ${game.title} up`}
+            className={iconButtonClass}
           >
-            <ChevronUp size={15} />
+            <ChevronUp size={18} />
           </button>
           <button
             type="button"
             onClick={reorder.onDown}
             disabled={reorder.isLast}
-            aria-label="Move down"
-            className={controlClass}
+            aria-label={`Move ${game.title} down`}
+            className={iconButtonClass}
           >
-            <ChevronDown size={15} />
+            <ChevronDown size={18} />
           </button>
         </div>
       ) : (
         <button
           type="button"
-          onClick={() => (game.pinnedAt !== null ? onUnpin(game) : onPin(game))}
-          aria-label={game.pinnedAt !== null ? `Unpin ${game.title}` : `Pin ${game.title}`}
-          className={controlClass}
-          style={
-            game.pinnedAt !== null
-              ? { color: PLAN, borderColor: `${PLAN}4d`, background: `${PLAN}14` }
-              : { color: 'var(--muted-foreground)' }
-          }
+          onClick={() => (pinned ? onUnpin(game) : onPin(game))}
+          aria-label={pinned ? `Unpin ${game.title}` : `Pin ${game.title} to Up next`}
+          aria-pressed={pinned}
+          className={cn(iconButtonClass, '-mr-2', pinned && 'text-phosphor')}
         >
-          {game.pinnedAt !== null ? <PinOff size={14} /> : <Pin size={14} />}
+          {pinned ? <PinOff size={17} /> : <Pin size={17} />}
         </button>
       )}
-    </div>
+    </li>
   );
 };
 
+// El primero del Up next, en grande: "lo siguiente que vas a jugar".
+const NextUpCard = ({
+  game,
+  onUnpin,
+}: {
+  game: PlannedGame;
+  onUnpin: (game: PlannedGame) => void;
+}): React.JSX.Element => (
+  <div
+    className={cn(
+      revealClass,
+      'flex gap-4 rounded-md border border-line-strong bg-panel p-3 shadow-[inset_2px_0_0_var(--color-phosphor)]',
+    )}
+  >
+    <Link to={`/game/${game.id}`} className="shrink-0" tabIndex={-1} aria-hidden="true">
+      <Cover url={game.coverUrl} title={game.title} className="w-20" />
+    </Link>
+    <div className="flex min-w-0 flex-1 flex-col">
+      <span className="text-small font-semibold text-phosphor">Next up</span>
+      <Link
+        to={`/game/${game.id}`}
+        className="mt-0.5 rounded-sm font-display text-title font-bold text-bone focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+      >
+        {game.title}
+      </Link>
+      <PlanMeta game={game} />
+      {game.hltbMain !== null && game.hltbMain > 0 && (
+        <span className="mt-0.5 text-small text-dust">HLTB Main {formatHours(game.hltbMain)}</span>
+      )}
+      <div className="mt-auto flex items-center gap-2 pt-2">
+        <Link to={`/game/${game.id}`} className={cn(primaryButtonClass, 'flex-1')}>
+          Open game
+        </Link>
+        <button
+          type="button"
+          onClick={() => onUnpin(game)}
+          aria-label={`Unpin ${game.title}`}
+          className={cn(iconButtonClass, 'text-phosphor')}
+        >
+          <PinOff size={17} />
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 const Collapsible = ({
   label,
-  color,
   Icon,
   count,
   open,
   onToggle,
   whisper,
-  action,
   children,
 }: {
   label: string;
-  color?: string;
   Icon: typeof Pin;
   count: number;
   open: boolean;
   onToggle: () => void;
   whisper?: React.ReactNode;
-  action?: React.ReactNode;
   children: React.ReactNode;
 }): React.JSX.Element => (
   <section>
-    <div className="mb-2.5 flex items-center gap-2">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-1"
-      >
-        <Icon
-          size={11}
-          style={color ? { color } : undefined}
-          className={color ? '' : 'text-muted-foreground'}
-        />
-        <span
-          className="text-micro font-bold tracking-[.13em] uppercase"
-          style={{ color: color ?? 'var(--muted-foreground)' }}
-        >
-          {label}
-        </span>
-        <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-          {count}
-        </span>
-        {!open && whisper}
-        <ChevronDown
-          size={14}
-          className="ml-auto flex-none text-muted-foreground transition-transform duration-200"
-          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
-        />
-      </button>
-      {open && action}
-    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="flex min-h-11 w-full items-center gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor"
+    >
+      <Icon size={16} className="shrink-0 text-dust" aria-hidden="true" />
+      <span className="text-lead font-semibold text-bone">{label}</span>
+      <span className="text-small text-dust tabular-nums">{count}</span>
+      {!open && whisper}
+      <ChevronDown
+        size={18}
+        aria-hidden="true"
+        className={cn(
+          'ml-auto shrink-0 text-dust transition-transform duration-200 motion-reduce:transition-none',
+          open && 'rotate-180',
+        )}
+      />
+    </button>
     {open && children}
   </section>
 );
@@ -231,7 +263,6 @@ const Collapsible = ({
 export const PlanScreen = (): React.JSX.Element => {
   const [query, setQuery] = useState('');
   const [horizonOpen, setHorizonOpen] = useState(false);
-  const [upNextOpen, setUpNextOpen] = useState(true);
   const [reordering, setReordering] = useState(false);
   const [adding, setAdding] = useState(false);
 
@@ -275,8 +306,48 @@ export const PlanScreen = (): React.JSX.Element => {
     };
   }, [plan.data, query]);
 
-  if (plan.isPending) return <Loading label="Reading your plan" />;
-  if (plan.isError) return <ErrorState error={plan.error} onRetry={() => plan.refetch()} />;
+  const addButton = (
+    <button
+      type="button"
+      onClick={() => setAdding(true)}
+      aria-label="Add a game to your plan"
+      className={cn(iconButtonClass, '-mr-3 text-phosphor')}
+    >
+      <Plus size={22} />
+    </button>
+  );
+
+  const header = (
+    <PageHeader
+      title="Plan"
+      aside={
+        <>
+          {plan.data && plan.data.length > 0 && (
+            <span>
+              {pluralize(debt.totalGames, 'game')} · about {formatHours(debt.totalHours)}
+            </span>
+          )}
+          {addButton}
+        </>
+      }
+    />
+  );
+
+  if (plan.isPending)
+    return (
+      <div className="px-4">
+        {header}
+        <Loading label="Reading your plan" />
+      </div>
+    );
+  if (plan.isError)
+    return (
+      <div className="px-4">
+        {header}
+        <ErrorState error={plan.error} onRetry={() => plan.refetch()} />
+        {adding && <AddGameSheet onClose={() => setAdding(false)} />}
+      </div>
+    );
 
   const total = upNext.length + queue.length + horizon.length;
 
@@ -306,45 +377,27 @@ export const PlanScreen = (): React.JSX.Element => {
     change.mutate({ type: 'reorder', orderedIds: ids });
   };
 
+  const pin = (game: PlannedGame): void => change.mutate({ type: 'pin', gameId: game.id });
+  const unpin = (game: PlannedGame): void => change.mutate({ type: 'unpin', gameId: game.id });
+
+  // Sin búsqueda ni reordenar, el primero del Up next se presenta en grande.
+  const showNextUp = !reordering && query.trim() === '' && upNext.length > 0;
+  const upNextRows = showNextUp ? upNext.slice(1) : upNext;
+
   return (
-    <div className="px-4 pt-4">
-      <div className="mb-4 flex items-stretch gap-2.5">
-        <div className="flex-1 rounded-xl border border-border bg-card px-3.5 py-3">
-          <div className="flex items-baseline gap-2">
-            <span
-              className="text-[19px] leading-none font-extrabold tabular-nums"
-              style={{ color: AMBER }}
-            >
-              {formatHours(debt.totalHours)}
-            </span>
-            <span className="text-[11.5px] font-semibold text-muted-foreground">
-              across {pluralize(debt.totalGames, 'game')}
-            </span>
-          </div>
-          {debt.withoutEstimate > 0 && (
-            <div className="mt-1 text-micro font-semibold text-muted-foreground/70 tabular-nums">
-              {debt.withoutEstimate} without an estimate
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          aria-label="Add a game to your plan"
-          className="flex w-14 flex-none items-center justify-center rounded-xl border"
-          style={{ borderColor: `${PLAN}4d`, background: `${PLAN}14`, color: PLAN }}
-        >
-          <Plus size={22} />
-        </button>
-      </div>
+    <div className="px-4 pb-6">
+      {header}
 
       {/* Un pin/unpin/reorden que el hub no pudo aplicar. Sin esto el fallo
           sería TOTALMENTE mudo: lo que se ve sale del servidor, así que una
           petición rechazada no produce ningún cambio en pantalla. */}
       {change.isError && (
-        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/[0.07] px-3.5 py-3">
-          <AlertTriangle size={14} className="mt-0.5 flex-none text-destructive" />
-          <span className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-muted-foreground">
+        <div
+          role="alert"
+          className="mb-3 flex items-start gap-2.5 rounded-md border border-live/40 bg-live/8 py-1 pl-3"
+        >
+          <TriangleAlert size={16} className="mt-2.5 shrink-0 text-live" aria-hidden="true" />
+          <span className="min-w-0 flex-1 py-2 text-small text-bone">
             {change.error instanceof ApiFailure
               ? change.error.message
               : "Couldn't save that change. Try again."}
@@ -353,152 +406,169 @@ export const PlanScreen = (): React.JSX.Element => {
             type="button"
             onClick={() => change.reset()}
             aria-label="Dismiss"
-            className="-mt-1 -mr-1 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-muted-foreground"
+            className={iconButtonClass}
           >
-            <X size={14} />
+            <X size={16} />
           </button>
         </div>
       )}
 
-      <div className="relative mb-4">
-        <Search
-          size={15}
-          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+      {plan.data.length === 0 ? (
+        <StateMessage
+          Icon={ListPlus}
+          title="Nothing planned yet"
+          hint="Add the games you want to play next. Your PC fills in the times when it syncs."
+          action={
+            <button type="button" onClick={() => setAdding(true)} className={primaryButtonClass}>
+              <Plus size={18} />
+              Add a game
+            </button>
+          }
         />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search your plan"
-          type="search"
-          autoCorrect="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          className="w-full rounded-xl border border-border bg-card py-2.5 pr-9 pl-9 text-[14px] font-semibold outline-none placeholder:text-muted-foreground focus:border-primary/50"
-        />
-        {query && (
-          <button
-            onClick={() => setQuery('')}
-            aria-label="Clear search"
-            className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground"
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
-
-      {total === 0 ? (
-        <EmptyState>{query ? `Nothing matches “${query}”.` : 'Nothing planned yet.'}</EmptyState>
       ) : (
-        <div className="flex flex-col gap-4">
-          {horizon.length > 0 && (
-            <Collapsible
-              label="On the horizon"
-              Icon={Telescope}
-              count={horizon.length}
-              open={horizonOpen}
-              onToggle={() => setHorizonOpen((previous) => !previous)}
-              whisper={
-                headline && (
-                  <span className="truncate text-micro font-semibold" style={{ color: GREEN }}>
-                    {headline.title} · {headline.label}
-                  </span>
-                )
-              }
-            >
-              <div className="flex flex-col gap-2">
-                {horizon.map((game, index) => (
-                  <PlanRow
-                    key={game.id}
-                    game={game}
-                    order={index}
-                    onPin={(g) => change.mutate({ type: 'pin', gameId: g.id })}
-                    onUnpin={(g) => change.mutate({ type: 'unpin', gameId: g.id })}
-                  />
-                ))}
-              </div>
-            </Collapsible>
-          )}
+        <>
+          <div className="relative mb-4">
+            <Search
+              size={16}
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-dust"
+            />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search your plan"
+              aria-label="Search your plan"
+              type="search"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              className={cn(fieldClass, 'pr-11 pl-9 [&::-webkit-search-cancel-button]:hidden')}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+                className={cn(iconButtonClass, 'absolute top-0 right-0')}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
 
-          {upNext.length > 0 && (
-            <Collapsible
-              label="Up next"
-              color={PLAN}
-              Icon={Pin}
-              count={upNext.length}
-              open={upNextOpen}
-              onToggle={() => setUpNextOpen((previous) => !previous)}
-              action={
-                upNext.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setReordering((previous) => !previous)}
-                    className="flex-none rounded-lg border border-line-strong px-2.5 py-1 text-micro font-bold text-muted-foreground"
-                  >
-                    {reordering ? 'Done' : 'Reorder'}
-                  </button>
-                )
-              }
-            >
-              <div className="flex flex-col gap-2">
-                {upNext.map((game, index) => (
-                  <PlanRow
-                    key={game.id}
-                    game={game}
-                    order={index}
-                    onPin={(g) => change.mutate({ type: 'pin', gameId: g.id })}
-                    onUnpin={(g) => change.mutate({ type: 'unpin', gameId: g.id })}
-                    reorder={
-                      reordering
-                        ? {
-                            onUp: () => move(game.id, -1),
-                            onDown: () => move(game.id, 1),
-                            // Los topes se miden sobre la lista COMPLETA: con
-                            // un filtro puesto, el primero que ves puede no
-                            // ser el primero de verdad.
-                            //
-                            // Y las dos se apagan mientras hay una petición en
-                            // vuelo: nada de esto es optimista, así que la
-                            // lista no se mueve hasta que vuelve el servidor
-                            // — y un segundo toque calculaba desde la lista
-                            // VIEJA y repetía la primera orden. El usuario no
-                            // veía moverse nada, que es justo lo que invita a
-                            // seguir tocando.
-                            isFirst: upNextAll[0]?.id === game.id || change.isPending,
-                            isLast:
-                              upNextAll[upNextAll.length - 1]?.id === game.id || change.isPending,
-                          }
-                        : undefined
+          {total === 0 ? (
+            <EmptyState>Nothing matches “{query}”.</EmptyState>
+          ) : (
+            <div className="flex flex-col gap-5">
+              {showNextUp && <NextUpCard game={upNext[0]} onUnpin={unpin} />}
+
+              {(upNextRows.length > 0 || reordering) && (
+                <section>
+                  <SectionTitle
+                    className="mb-0"
+                    aside={
+                      upNext.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setReordering((previous) => !previous)}
+                          className={cn(ghostButtonClass, '-mr-3 -mb-2 px-3 text-phosphor')}
+                        >
+                          {reordering ? 'Done' : 'Reorder'}
+                        </button>
+                      )
                     }
-                  />
-                ))}
-              </div>
-            </Collapsible>
-          )}
+                  >
+                    {showNextUp ? 'Then' : 'Up next'}
+                  </SectionTitle>
+                  {reordering && (
+                    <p className="text-small text-dust">Move games with the arrows.</p>
+                  )}
+                  <ul className="mt-1 border-t border-line">
+                    {upNextRows.map((game, index) => (
+                      <PlanRow
+                        key={game.id}
+                        game={game}
+                        order={index}
+                        position={index + (showNextUp ? 2 : 1)}
+                        onPin={pin}
+                        onUnpin={unpin}
+                        reorder={
+                          reordering
+                            ? {
+                                onUp: () => move(game.id, -1),
+                                onDown: () => move(game.id, 1),
+                                // Los topes se miden sobre la lista COMPLETA: con
+                                // un filtro puesto, el primero que ves puede no
+                                // ser el primero de verdad.
+                                //
+                                // Y las dos se apagan mientras hay una petición en
+                                // vuelo: nada de esto es optimista, así que la
+                                // lista no se mueve hasta que vuelve el servidor
+                                // — y un segundo toque calculaba desde la lista
+                                // VIEJA y repetía la primera orden.
+                                isFirst: upNextAll[0]?.id === game.id || change.isPending,
+                                isLast:
+                                  upNextAll[upNextAll.length - 1]?.id === game.id ||
+                                  change.isPending,
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
 
-          {queue.length > 0 && (
-            <section>
-              <div className="mb-2.5 flex items-baseline justify-between">
-                <h2 className="text-micro font-bold tracking-[.13em] text-muted-foreground uppercase">
-                  The queue
-                </h2>
-                <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-                  {pluralize(queue.length, 'game')}
-                </span>
-              </div>
-              <div className="flex flex-col gap-2">
-                {queue.map((game, index) => (
-                  <PlanRow
-                    key={game.id}
-                    game={game}
-                    order={index}
-                    onPin={(g) => change.mutate({ type: 'pin', gameId: g.id })}
-                    onUnpin={(g) => change.mutate({ type: 'unpin', gameId: g.id })}
-                  />
-                ))}
-              </div>
-            </section>
+              {queue.length > 0 && (
+                <section>
+                  <SectionTitle className="mb-0" aside={pluralize(queue.length, 'game')}>
+                    The queue
+                  </SectionTitle>
+                  <ul className="mt-1 border-t border-line">
+                    {queue.map((game, index) => (
+                      <PlanRow
+                        key={game.id}
+                        game={game}
+                        order={index}
+                        onPin={pin}
+                        onUnpin={unpin}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {horizon.length > 0 && (
+                <Collapsible
+                  label="On the horizon"
+                  Icon={Telescope}
+                  count={horizon.length}
+                  open={horizonOpen}
+                  onToggle={() => setHorizonOpen((previous) => !previous)}
+                  whisper={
+                    headline && (
+                      <span className="min-w-0 text-small text-success">
+                        {headline.title} · {headline.label}
+                      </span>
+                    )
+                  }
+                >
+                  <ul className="border-t border-line">
+                    {horizon.map((game, index) => (
+                      <PlanRow
+                        key={game.id}
+                        game={game}
+                        order={index}
+                        onPin={pin}
+                        onUnpin={unpin}
+                      />
+                    ))}
+                  </ul>
+                </Collapsible>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {adding && <AddGameSheet onClose={() => setAdding(false)} />}

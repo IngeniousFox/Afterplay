@@ -1,20 +1,31 @@
-import {
-  BookOpen,
-  ChevronDown,
-  HardDrive,
-  Lightbulb,
-  Newspaper,
-  Tag,
-  ThumbsUp,
-  Users,
-} from 'lucide-react';
+import { ChevronDown, HardDrive, Lightbulb, Newspaper, Tag, ThumbsUp, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { GameDetail } from '../../api';
+import { cn } from '../../lib/cn';
 import { formatByPrecision, formatCount, formatRelease } from '../../lib/format';
-import { CRITICS_COLOR, PLAYERS_COLOR, resolveRatings, STEAM_BLUE } from '../../lib/ratings';
+import { resolveRatings } from '../../lib/ratings';
 import { Cell, CardTitle, DetailCard, InfoChip, SectionLabel } from './primitives';
+
+// Un bloque de píldoras con su título dentro de Details.
+const ChipGroup = ({
+  label,
+  Icon,
+  children,
+}: {
+  label: string;
+  Icon?: LucideIcon;
+  children: React.ReactNode;
+}): React.JSX.Element => (
+  <div className="mt-4 border-t border-line pt-3">
+    <div className="mb-2 flex items-center gap-1.5 text-micro text-dust">
+      {Icon && <Icon size={12} aria-hidden="true" />}
+      {label}
+    </div>
+    <div className="flex flex-wrap gap-1.5">{children}</div>
+  </div>
+);
 
 // ── Details ────────────────────────────────────────────────────────────────
 
@@ -31,7 +42,7 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
     <DetailCard>
       <CardTitle>Details</CardTitle>
 
-      <div className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3.5">
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3">
         <Cell label="Developer" value={game.developer ?? '—'} />
         <Cell label="Publisher" value={game.publisher ?? '—'} />
         {/* La fecha COMPLETA cuando de verdad se sabe: "March 17, 2017" si
@@ -52,70 +63,44 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
       </div>
 
       {game.officialPlatforms && game.officialPlatforms.length > 0 && (
-        <div className="mt-4 border-t border-line pt-3.5">
-          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-            PLATFORMS
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {game.officialPlatforms.map((platform) => (
-              <InfoChip key={platform}>{platform}</InfoChip>
-            ))}
-          </div>
-        </div>
+        <ChipGroup label="Platforms">
+          {game.officialPlatforms.map((platform) => (
+            <InfoChip key={platform}>{platform}</InfoChip>
+          ))}
+        </ChipGroup>
       )}
 
       {game.genres && game.genres.length > 0 && (
-        <div className="mt-4 border-t border-line pt-3.5">
-          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-            GENRES
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {game.genres.map((genre) => (
-              <InfoChip key={genre}>{genre}</InfoChip>
-            ))}
-          </div>
-        </div>
+        <ChipGroup label="Genres">
+          {game.genres.map((genre) => (
+            <InfoChip key={genre}>{genre}</InfoChip>
+          ))}
+        </ChipGroup>
       )}
 
       {/* Las etiquetas de Steam, justo debajo de los géneros: son lo mismo
-          —cómo se clasifica este juego— dicho por quien lo ha jugado. IGDB
-          dice "Platform, Adventure" y Steam dice Metroidvania, Souls-like.
-          Vocabulario de jugadores, no de catálogo, y por eso van pegadas y no
-          sustituyen a los géneros: las dos cosas son ciertas. */}
+          —cómo se clasifica este juego— dicho por quien lo ha jugado. Sin
+          cifra: el número que traen es un PESO relativo de Steam, no un
+          recuento de personas. El orden ya dice lo que importa. */}
       {game.steamTags && game.steamTags.length > 0 && (
-        <div className="mt-4 border-t border-line pt-3.5">
-          <div className="mb-2 flex items-center gap-1.25 text-micro font-bold tracking-[.12em] text-muted-foreground">
-            <Tag size={10} />
-            STEAM TAGS
-          </div>
-          {/* Sin cifra: el número que traen es un PESO relativo de Steam, no
-              un recuento de personas — enseñarlo como "N players" sería
-              inventarse un dato. El orden ya dice lo que importa. */}
-          <div className="flex flex-wrap gap-1.5">
-            {game.steamTags.map((tag) => (
-              <InfoChip key={tag.name} title="Player tag on Steam">
-                {tag.name}
-              </InfoChip>
-            ))}
-          </div>
-        </div>
+        <ChipGroup label="Steam tags" Icon={Tag}>
+          {game.steamTags.map((tag) => (
+            <InfoChip key={tag.name} title="Player tag on Steam">
+              {tag.name}
+            </InfoChip>
+          ))}
+        </ChipGroup>
       )}
 
       {/* Dónde está instalado: el dispositivo, nunca su ruta (F-31). */}
       {game.installedOn.length > 0 && (
-        <div className="mt-4 border-t border-line pt-3.5">
-          <div className="mb-2 text-micro font-bold tracking-[.12em] text-muted-foreground">
-            INSTALLED ON
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {game.installedOn.map((device) => (
-              <InfoChip key={device.deviceId}>
-                <HardDrive size={11} className="mr-1.5 inline-block align-[-1px]" />
-                {device.deviceName}
-              </InfoChip>
-            ))}
-          </div>
-        </div>
+        <ChipGroup label="Installed on">
+          {game.installedOn.map((device) => (
+            <InfoChip key={device.deviceId} Icon={HardDrive}>
+              {device.deviceName}
+            </InfoChip>
+          ))}
+        </ChipGroup>
       )}
     </DetailCard>
   );
@@ -127,34 +112,23 @@ export const DetailsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
 // trama entera, más largo y con spoilers de un juego que precisamente aún no
 // has jugado.
 //
-// Siempre nace recogida. Una card gigante de texto plantada en medio de la
-// ficha en cada visita tapa los datos que sí se comparan; quien quiera leerla
-// tiene el "Read more" a un toque.
+// Siempre nace recogida: quien quiera leerla tiene el "Read more" a un toque.
 export const AboutCard = ({ game }: { game: GameDetail }): React.JSX.Element | null => {
   const [expanded, setExpanded] = useState(false);
   if (!game.summary) return null;
 
-  // El "Read more" solo si de verdad hay recorte. En el escritorio esto se
-  // mide con un clon invisible a 3 líneas; aquí basta el largo del texto,
-  // porque el ancho de la columna es conocido (un móvil) y el umbral cae muy
-  // lejos de la frontera: no hay caso ambiguo que medir.
+  // El "Read more" solo si de verdad hay recorte. El ancho de la columna es
+  // conocido (un móvil) y el umbral cae muy lejos de la frontera.
   const clamped = game.summary.length > 180;
 
   return (
-    <DetailCard>
-      <div className="flex items-center gap-1.75">
-        <BookOpen size={13} className="flex-none text-muted-foreground" />
-        <span className="text-[13.5px] font-bold text-foreground">About</span>
-        <span className="ml-auto flex-none text-micro font-semibold text-muted-foreground/70">
-          via IGDB
-        </span>
+    <section>
+      <div className="flex items-baseline justify-between gap-3">
+        <SectionLabel>About</SectionLabel>
+        <span className="text-micro text-dust">via IGDB</span>
       </div>
 
-      <p
-        className={`mt-2.5 text-[12.5px] leading-relaxed text-muted-foreground ${
-          clamped && !expanded ? 'line-clamp-3' : ''
-        }`}
-      >
+      <p className={cn('mt-1.5 text-body text-dust', clamped && !expanded && 'line-clamp-4')}>
         {game.summary}
       </p>
 
@@ -162,17 +136,21 @@ export const AboutCard = ({ game }: { game: GameDetail }): React.JSX.Element | n
         <button
           type="button"
           onClick={() => setExpanded((previous) => !previous)}
-          className="mt-2 flex items-center gap-1 text-[11.5px] font-semibold text-muted-foreground/70"
+          aria-expanded={expanded}
+          className="-ml-1 inline-flex min-h-11 items-center gap-1 rounded-sm px-1 text-small font-semibold text-tube focus-visible:outline-2 focus-visible:outline-phosphor"
         >
           {expanded ? 'Show less' : 'Read more'}
           <ChevronDown
-            size={12}
-            className="transition-transform duration-200"
-            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            size={15}
+            aria-hidden="true"
+            className={cn(
+              'transition-transform duration-200 motion-reduce:transition-none',
+              expanded && 'rotate-180',
+            )}
           />
         </button>
       )}
-    </DetailCard>
+    </section>
   );
 };
 
@@ -181,17 +159,14 @@ export const AboutCard = ({ game }: { game: GameDetail }): React.JSX.Element | n
 const ScoreTile = ({
   icon: Icon,
   label,
-  color,
   score,
   suffix,
   countLabel,
 }: {
   icon: LucideIcon;
   label: string;
-  color: string;
   // null = sin muestra suficiente. El tile se queda apagado con el motivo
-  // debajo en vez de desaparecer, que era lo que hacía que las notas pasaran
-  // desapercibidas cuando vivían dentro de Details.
+  // debajo en vez de desaparecer.
   score: number | null;
   suffix?: string;
   countLabel: string;
@@ -199,29 +174,24 @@ const ScoreTile = ({
   const active = score !== null;
   return (
     <div
-      className="min-w-0 flex-1 rounded-[10px] border px-1.5 py-2.5 text-center"
-      style={
-        active
-          ? { borderColor: `${color}5c`, background: `${color}17` }
-          : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }
-      }
+      className={cn(
+        'min-w-0 flex-1 rounded-sm border px-2.5 py-2',
+        active ? 'border-line-strong bg-raised' : 'border-line bg-panel',
+      )}
     >
-      <div className="mb-1.25 flex items-center justify-center gap-1">
-        <Icon size={11} style={{ color: active ? color : 'var(--muted-foreground)' }} />
-        <span
-          className="text-micro font-bold tracking-[.04em]"
-          style={{ color: active ? color : 'var(--muted-foreground)' }}
-        >
-          {label}
-        </span>
+      <div className="flex items-center gap-1 text-micro text-dust">
+        <Icon size={12} aria-hidden="true" />
+        {label}
       </div>
       <div
-        className="text-[21px] leading-none font-extrabold tabular-nums"
-        style={{ color: active ? color : 'var(--muted-foreground)' }}
+        className={cn(
+          'mt-0.5 font-display text-[30px] leading-8 font-bold',
+          active ? 'text-bone' : 'text-dust',
+        )}
       >
         {active ? `${score}${suffix ?? ''}` : '—'}
       </div>
-      <div className="mt-1.25 truncate text-micro text-muted-foreground">{countLabel}</div>
+      <div className="text-micro text-dust">{countLabel}</div>
     </div>
   );
 };
@@ -237,26 +207,20 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
   const hasAny = ratings.critics !== null || ratings.players !== null || ratings.steam !== null;
 
   return (
-    <DetailCard>
-      <CardTitle
-        aside={
-          <span className="flex-none text-micro font-semibold text-muted-foreground/70">
-            out of 100
-          </span>
-        }
-      >
-        Ratings
-      </CardTitle>
-      <div className="mt-0.5 mb-3.5 text-[11.5px] text-muted-foreground">
-        Critics cover modern releases; players cover the classics.
+    <section>
+      <div className="flex items-baseline justify-between gap-3">
+        <SectionLabel>Ratings</SectionLabel>
+        <span className="text-micro text-dust">out of 100</span>
       </div>
+      <p className="mt-0.5 mb-3 text-small text-dust">
+        Critics cover modern releases; players cover the classics.
+      </p>
 
       {hasAny ? (
         <div className="flex gap-2">
           <ScoreTile
             icon={Newspaper}
             label="Critics"
-            color={CRITICS_COLOR}
             score={ratings.critics}
             countLabel={
               ratings.critics !== null
@@ -267,7 +231,6 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
           <ScoreTile
             icon={Users}
             label="Players"
-            color={PLAYERS_COLOR}
             score={ratings.players}
             countLabel={
               ratings.players !== null
@@ -281,7 +244,6 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
             <ScoreTile
               icon={ThumbsUp}
               label="Steam"
-              color={STEAM_BLUE}
               score={ratings.steam}
               suffix="%"
               countLabel={`${formatCount(ratings.steamCount)} reviews`}
@@ -289,33 +251,42 @@ export const RatingsCard = ({ game }: { game: GameDetail }): React.JSX.Element =
           )}
         </div>
       ) : (
-        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-          No ratings on IGDB yet — check back once more people have played it.
+        <p className="text-small text-dust">
+          No ratings on IGDB yet. Check back once more people have played it.
         </p>
       )}
-    </DetailCard>
+    </section>
   );
 };
 
 // ── Notes ──────────────────────────────────────────────────────────────────
 
 // En markdown, igual que en el escritorio. Solo lectura: la web no escribe
-// (§1.1), así que sin notas la sección no existe — la invitación a escribirlas
-// que sí tiene el escritorio aquí sería un botón que no lleva a ninguna parte.
+// (§1.1), así que sin notas la sección no existe — una invitación a escribirlas
+// aquí sería un botón que no lleva a ninguna parte.
 //
-// Al final del fichero quedaba un `EmptyNotesHint` exportado "para el caso sin
-// nada" que no importaba nadie: era el placeholder que esta decisión ya había
-// rechazado, esperando a que alguien lo montara sin leer estas tres líneas.
+// La PWA no lleva el plugin de tipografía del escritorio (notesProseClass), así
+// que los elementos de markdown se estilan aquí con variantes de hijo.
+const notesClass = cn(
+  'text-body text-bone',
+  '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+  '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5',
+  '[&_li]:marker:text-phosphor [&_a]:text-tube [&_a]:underline [&_strong]:font-semibold',
+  '[&_h1]:mt-3 [&_h1]:font-display [&_h1]:text-[24px] [&_h1]:font-bold',
+  '[&_h2]:mt-3 [&_h2]:font-display [&_h2]:text-[21px] [&_h2]:font-bold',
+  '[&_h3]:mt-3 [&_h3]:font-display [&_h3]:text-[18px] [&_h3]:font-bold',
+  '[&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-3 [&_blockquote]:text-dust',
+  '[&_code]:rounded-sm [&_code]:bg-inset [&_code]:px-1 [&_hr]:my-3 [&_hr]:border-line',
+);
+
 export const NotesSection = ({ notes }: { notes: string | null }): React.JSX.Element | null => {
   if (!notes) return null;
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">Notes</SectionLabel>
-      <div className="rounded-[14px] border border-border bg-card px-4 py-3.5">
-        <div className="prose-afterplay text-[12.5px] leading-relaxed text-muted-foreground">
-          <ReactMarkdown>{notes}</ReactMarkdown>
-        </div>
+      <SectionLabel className="mb-1.5">Notes</SectionLabel>
+      <div className={notesClass}>
+        <ReactMarkdown>{notes}</ReactMarkdown>
       </div>
     </section>
   );
@@ -332,18 +303,18 @@ export const CuriositiesSection = ({
 
   return (
     <section>
-      <SectionLabel className="mb-2.5">Did you know</SectionLabel>
-      <div className="flex flex-col gap-2">
+      <SectionLabel className="mb-2">Did you know</SectionLabel>
+      <ul className="flex flex-col gap-2">
         {curiosities.map((text, index) => (
-          <div
+          <li
             key={index}
-            className="flex gap-2.5 rounded-[12px] border border-border bg-card px-3.5 py-3"
+            className="flex gap-2.5 rounded-md border border-line bg-panel px-3 py-2.5"
           >
-            <Lightbulb size={13} className="mt-0.5 flex-none text-muted-foreground/50" />
-            <p className="text-[12px] leading-relaxed text-muted-foreground">{text}</p>
-          </div>
+            <Lightbulb size={15} className="mt-0.5 shrink-0 text-phosphor" aria-hidden="true" />
+            <p className="text-small text-dust">{text}</p>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 };

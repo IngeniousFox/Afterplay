@@ -1,111 +1,22 @@
-import { Check, Hourglass, PartyPopper } from 'lucide-react';
+import { Check, Hourglass } from 'lucide-react';
 import { useState } from 'react';
 import type { GameDetail } from '../../api';
+import { cn } from '../../lib/cn';
 import { formatHours } from '../../lib/format';
-import { DetailCard } from './primitives';
+import { Figure } from '../Figure';
+import { SectionLabel } from './primitives';
 
 type TierKey = 'main' | 'extra' | 'completionist';
-
-const MAIN = '#5fd3e0';
-const EXTRA = '#8ce4ee'; // --color-tube-hi: distinto de MAIN
-const COMPLETIONIST = '#ffb347';
 
 const TIER_LABEL: Record<TierKey, string> = {
   main: 'Main Story',
   extra: '+ Extra',
   completionist: '100%',
 };
-const TIER_COLOR: Record<TierKey, string> = {
-  main: MAIN,
-  extra: EXTRA,
-  completionist: COMPLETIONIST,
-};
 
-// Cada tramo como tile con su color: el alcanzado se enciende y lleva un
-// check; el seleccionado se realza y el resto se atenúa, para inspeccionar uno
-// sin perder la referencia de los otros dos.
-const TierTile = ({
-  tierKey,
-  color,
-  label,
-  value,
-  reached,
-  active,
-  dimmed,
-  onToggle,
-}: {
-  tierKey: TierKey;
-  color: string;
-  label: string;
-  value: string;
-  reached: boolean;
-  active: boolean;
-  dimmed: boolean;
-  onToggle: (key: TierKey) => void;
-}): React.JSX.Element => (
-  <button
-    type="button"
-    onClick={() => onToggle(tierKey)}
-    className="flex-1 rounded-[10px] border px-1.5 py-2.25 text-center transition-[opacity,box-shadow,border-color] duration-150"
-    style={{
-      opacity: dimmed ? 0.4 : 1,
-      ...(reached || active
-        ? { borderColor: `${color}5c`, background: `${color}17` }
-        : { borderColor: 'var(--border)', background: 'rgba(233,228,216,.02)' }),
-      ...(active ? { boxShadow: `0 0 0 1px ${color}59, 0 0 14px ${color}33` } : {}),
-    }}
-  >
-    <div className="mb-1.25 flex items-center justify-center gap-1">
-      {reached ? (
-        <Check size={10} color={color} strokeWidth={3.5} />
-      ) : (
-        <span className="h-2 w-2 flex-none rounded-[2px]" style={{ background: color }} />
-      )}
-      <span
-        className="text-micro font-bold tracking-[.04em]"
-        style={{ color: reached || active ? color : 'var(--muted-foreground)' }}
-      >
-        {label}
-      </span>
-    </div>
-    <div
-      className="text-[13px] font-extrabold tabular-nums"
-      style={{ color: reached || active ? color : 'var(--foreground)' }}
-    >
-      {value}
-    </div>
-  </button>
-);
-
-// El detalle que sustituye al resumen mientras hay un tramo elegido: su
-// nombre, sus horas y cuánto falta (o cuánto te pasaste).
-const HeaderDetail = ({
-  color,
-  label,
-  threshold,
-  markerHours,
-}: {
-  color: string;
-  label: string;
-  threshold: number;
-  markerHours: number | null;
-}): React.JSX.Element => {
-  const diff = markerHours === null ? null : threshold - markerHours;
-  return (
-    <span
-      className="flex-none text-[11px] font-semibold whitespace-nowrap tabular-nums"
-      style={{ color }}
-    >
-      {label} · {formatHours(threshold)}
-      {diff !== null && Math.abs(diff) >= 1 / 60 && (
-        <span className="opacity-70">
-          {' · '}
-          {diff > 0 ? `${formatHours(diff)} to go` : `+${formatHours(-diff)} past`}
-        </span>
-      )}
-    </span>
-  );
-};
+// Cuántos segmentos tiene el medidor. El medidor HLTB de Fósforo es una fila de
+// barritas (como un VU), encendidas en Phosphor hasta tus horas.
+const SEGMENTS = 48;
 
 type Props = {
   game: GameDetail;
@@ -116,13 +27,9 @@ type Props = {
   markerScope: 'playthrough' | 'total';
 };
 
-// Barra de 3 tramos (main / main+extra / 100%) con un marcador vertical en tus
-// horas. Portada de HowLongToBeatCard.tsx.
-//
-// Lo único que cambia respecto al escritorio es el gesto: allí los tramos y
-// los tiles comparten HOVER, y en un móvil el hover no existe. Aquí se toca
-// para fijar un tramo y se vuelve a tocar para soltarlo — mismo intercambio
-// resumen⇄detalle, distinto dedo.
+// How long to beat: tres tramos (main / main+extra / 100%) y tus horas sobre
+// ellos. Se toca un tramo para fijarlo y ver cuánto falta para él (o cuánto te
+// pasaste); se vuelve a tocar para soltarlo.
 export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.JSX.Element => {
   const [activeTier, setActiveTier] = useState<TierKey | null>(null);
 
@@ -134,47 +41,27 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
   // no exista no explica por qué no existe.
   if (main === 0 && extra === 0 && completionist === 0) {
     return (
-      <DetailCard>
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-bone/[0.04] text-muted-foreground/50">
-            <Hourglass size={14} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] font-bold text-foreground">How long to beat</div>
-            <div className="text-[11.5px] text-muted-foreground">No confident match yet</div>
-          </div>
+      <div className="flex items-center gap-3 rounded-md border border-dashed border-line-strong px-4 py-3">
+        <Hourglass size={18} className="shrink-0 text-dust" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div className="text-body font-semibold text-bone">How long to beat</div>
+          <div className="text-small text-dust">No confident match yet</div>
         </div>
-      </DetailCard>
+      </div>
     );
   }
 
   // Escala al MAYOR de los tres datos conocidos, no siempre a completionist.
   // HLTB no siempre trae los tres, y un dato ausente llega como 0: si fuera
   // justo completionist el que falta (el caso más común), escalar contra él
-  // daría un denominador falso de 1h — los segmentos se salen del 100% y el
-  // marcador se clava en el borde. Con el mayor de los tres, main+extra suman
-  // como mucho 100% y el marcador cae donde toca.
+  // daría un denominador falso de 1h. Con el mayor de los tres, el marcador
+  // cae donde toca.
   const scale = Math.max(main, extra, completionist, 1);
-  const segMain = (main / scale) * 100;
-  const segExtra = (Math.max(0, extra - main) / scale) * 100;
-  // Resto hasta 100, no un tercer cálculo independiente: sumar tres divisiones
-  // en coma flotante podía quedarse una fracción de píxel corta de 100, y ese
-  // hueco contra la esquina redondeada se veía como una barra cortada.
-  const segComp = Math.max(0, 100 - segMain - segExtra);
   const markerPct = Math.max(0, Math.min(100, (markerHours / scale) * 100));
 
-  // Sin horas propias la card es una estimación pura: no hay marcador que
+  // Sin horas propias la sección es una estimación pura: no hay marcador que
   // poner ni tramo alcanzado, y decir "0h" sería ruido.
   const hasOwnHours = markerHours > 0;
-  const reachedTier: TierKey | null = !hasOwnHours
-    ? null
-    : completionist > 0 && markerHours >= completionist
-      ? 'completionist'
-      : extra > 0 && markerHours >= extra
-        ? 'extra'
-        : main > 0 && markerHours >= main
-          ? 'main'
-          : null;
 
   const tiers = [
     { key: 'main' as const, threshold: main },
@@ -182,160 +69,150 @@ export const HowLongToBeat = ({ game, markerHours, markerScope }: Props): React.
     { key: 'completionist' as const, threshold: completionist },
   ].filter((tier) => tier.threshold > 0);
 
+  const reached = (key: TierKey): boolean => {
+    const tier = tiers.find((candidate) => candidate.key === key);
+    return hasOwnHours && tier !== undefined && markerHours >= tier.threshold;
+  };
+
   // El próximo hito sin alcanzar: de él sale el "quedan Xh" que se ve por
-  // defecto, sin tener que tocar nada.
+  // defecto, sin tener que tocar nada. Y el último alcanzado, para decirlo.
   const nextTier = hasOwnHours
     ? (tiers.find((tier) => tier.threshold > markerHours) ?? null)
+    : null;
+  const lastReached = hasOwnHours
+    ? ([...tiers].reverse().find((tier) => markerHours >= tier.threshold) ?? null)
     : null;
   const activeDetail = activeTier ? tiers.find((tier) => tier.key === activeTier) : undefined;
 
   const toggle = (key: TierKey): void => setActiveTier((current) => (current === key ? null : key));
 
-  return (
-    <DetailCard>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[13.5px] font-bold text-foreground">How long to beat</span>
-        {activeDetail ? (
-          <HeaderDetail
-            color={TIER_COLOR[activeDetail.key]}
-            label={TIER_LABEL[activeDetail.key]}
-            threshold={activeDetail.threshold}
-            markerHours={hasOwnHours ? markerHours : null}
-          />
-        ) : hasOwnHours && nextTier ? (
-          <span
-            className="flex-none text-[11px] font-semibold whitespace-nowrap tabular-nums"
-            style={{ color: TIER_COLOR[nextTier.key] }}
-          >
-            {formatHours(nextTier.threshold - markerHours)} to {TIER_LABEL[nextTier.key]}
-          </span>
-        ) : hasOwnHours && reachedTier === 'completionist' ? (
-          <span
-            className="flex flex-none items-center gap-1 rounded-lg border px-2 py-0.75 text-micro font-bold whitespace-nowrap"
-            style={{
-              color: COMPLETIONIST,
-              borderColor: `${COMPLETIONIST}3d`,
-              background: `${COMPLETIONIST}14`,
-            }}
-          >
-            <PartyPopper size={11} />
-            100% complete
-          </span>
-        ) : null}
-      </div>
+  // La frase de abajo: el tramo fijado si lo hay; si no, lo que dice el
+  // marcador por sí solo.
+  const note = ((): React.ReactNode => {
+    if (activeDetail) {
+      const diff = hasOwnHours ? activeDetail.threshold - markerHours : null;
+      return (
+        <>
+          {TIER_LABEL[activeDetail.key]} takes about {formatHours(activeDetail.threshold)}
+          {diff !== null && Math.abs(diff) >= 1 / 60 && (
+            <>
+              {diff > 0
+                ? `, ${formatHours(diff)} to go.`
+                : `, you are ${formatHours(-diff)} past it.`}
+            </>
+          )}
+        </>
+      );
+    }
+    if (!hasOwnHours) return null;
+    if (lastReached) {
+      return (
+        <>
+          <span className="font-semibold text-phosphor">{formatHours(markerHours)}</span>
+          {lastReached.key === 'completionist'
+            ? ', past the 100% estimate.'
+            : `, already past the ${TIER_LABEL[lastReached.key]} estimate of ${formatHours(lastReached.threshold)}.`}
+        </>
+      );
+    }
+    if (nextTier) {
+      return (
+        <>
+          <span className="font-semibold text-phosphor">{formatHours(markerHours)}</span> played,{' '}
+          {formatHours(nextTier.threshold - markerHours)} to {TIER_LABEL[nextTier.key]}.
+        </>
+      );
+    }
+    return null;
+  })();
 
-      <div
-        className={`mt-0.5 text-[11.5px] text-muted-foreground ${hasOwnHours ? 'mb-6.5' : 'mb-4'}`}
-      >
+  const filled = hasOwnHours ? Math.round((markerPct / 100) * SEGMENTS) : 0;
+
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-3">
+        <SectionLabel>How long to beat</SectionLabel>
+        <span className="text-micro text-dust">HowLongToBeat</span>
+      </div>
+      <p className="mt-0.5 text-small text-dust">
         {!hasOwnHours
           ? 'Estimated times for this game'
           : markerScope === 'playthrough'
             ? "Marker shows this playthrough's hours"
             : "Marker shows what you've played"}
-      </div>
+      </p>
 
-      <div className="relative mb-4">
-        {hasOwnHours && (
-          <>
-            {/* El marcador entra el último y "aterriza" desde arriba: sin eso,
-                la barra se anima pero el dato propio —lo único TUYO de esta
-                card— aparece ya puesto.
-                translateX(-50%) para que la etiqueta quede centrada sobre su
-                posición; en los extremos se clampa el left para que no se
-                salga de la card en 375px. */}
-            <div
-              className="absolute -top-5 rounded-md border border-line-strong px-1.5 py-0.5 text-micro font-extrabold whitespace-nowrap text-foreground tabular-nums shadow-[0_4px_10px_rgba(3,6,7,.4)]"
-              style={{
-                left: `${Math.min(92, Math.max(8, markerPct))}%`,
-                transform: 'translateX(-50%)',
-                background: '#1f272b',
-                zIndex: 2,
-              }}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {(['main', 'extra', 'completionist'] as const).map((key) => {
+          const threshold = key === 'main' ? main : key === 'extra' ? extra : completionist;
+          const active = activeTier === key;
+          const done = reached(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggle(key)}
+              aria-pressed={active}
+              disabled={threshold === 0}
+              className={cn(
+                'flex min-h-16 flex-col items-start rounded-sm border px-2.5 py-2 text-left',
+                'transition-[transform,background-color,border-color,opacity] duration-150 active:scale-[.97] motion-reduce:active:scale-100',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:opacity-40',
+                active
+                  ? 'border-phosphor bg-phosphor-tint'
+                  : done
+                    ? 'border-line-strong bg-raised'
+                    : 'border-line bg-panel',
+                activeTier !== null && !active && 'opacity-60',
+              )}
             >
-              {formatHours(markerHours)}
-            </div>
-            <div
-              className="absolute -top-1 rounded-sm bg-bone"
-              style={{
-                left: `${markerPct}%`,
-                width: 3,
-                height: 22,
-                // Halo blanco además del contorno oscuro: separa el marcador
-                // del tramo que tenga debajo, sea del color que sea.
-                boxShadow: '0 0 0 2px rgba(12,16,18,.85), 0 0 12px rgba(233,228,216,.5)',
-                zIndex: 2,
-              }}
-            />
-          </>
-        )}
-        <div
-          className="flex h-3.5 overflow-hidden rounded-[5px] bg-bone/5"
-          style={{ boxShadow: 'inset 0 1px 3px rgba(3,6,7,.4)' }}
-        >
-          {[
-            { key: 'main' as const, width: segMain, background: MAIN },
-            { key: 'extra' as const, width: segExtra, background: EXTRA },
-            { key: 'completionist' as const, width: segComp, background: COMPLETIONIST },
-          ].map((segment, index) => {
-            const isActive = activeTier === segment.key;
-            const isDimmed = activeTier !== null && !isActive;
-            return (
-              <div
-                key={segment.key}
-                onClick={() => toggle(segment.key)}
-                className="transition-[opacity,filter] duration-150"
-                style={{
-                  width: `${segment.width}%`,
-                  background: segment.background,
-                  opacity: isDimmed ? 0.4 : 1,
-                  filter: isActive ? 'brightness(1.25)' : 'none',
-                  boxShadow: isActive ? `inset 0 0 10px ${segment.background}99` : 'none',
-                  // Esquinas exteriores a juego con el contenedor: aunque
-                  // quede un resto de imprecisión, el hueco que se vea está
-                  // redondeado igual, no cuadrado contra una esquina redonda.
-                  borderTopLeftRadius: index === 0 ? 5 : 0,
-                  borderBottomLeftRadius: index === 0 ? 5 : 0,
-                  borderTopRightRadius: index === 2 ? 5 : 0,
-                  borderBottomRightRadius: index === 2 ? 5 : 0,
-                }}
+              <span className="flex items-center gap-1 text-micro text-dust">
+                {done && <Check size={12} className="text-phosphor" aria-hidden="true" />}
+                {TIER_LABEL[key]}
+              </span>
+              <Figure
+                value={threshold > 0 ? formatHours(threshold) : '—'}
+                className={cn('mt-0.5 text-[30px] leading-8', done ? 'text-phosphor' : 'text-bone')}
               />
-            );
-          })}
-        </div>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex gap-2">
-        <TierTile
-          tierKey="main"
-          color={MAIN}
-          label="MAIN"
-          value={formatHours(main)}
-          reached={reachedTier !== null}
-          active={activeTier === 'main'}
-          dimmed={activeTier !== null && activeTier !== 'main'}
-          onToggle={toggle}
-        />
-        <TierTile
-          tierKey="extra"
-          color={EXTRA}
-          label="+ EXTRA"
-          value={formatHours(extra)}
-          reached={reachedTier === 'extra' || reachedTier === 'completionist'}
-          active={activeTier === 'extra'}
-          dimmed={activeTier !== null && activeTier !== 'extra'}
-          onToggle={toggle}
-        />
-        <TierTile
-          tierKey="completionist"
-          color={COMPLETIONIST}
-          label="100%"
-          value={formatHours(completionist)}
-          reached={reachedTier === 'completionist'}
-          active={activeTier === 'completionist'}
-          dimmed={activeTier !== null && activeTier !== 'completionist'}
-          onToggle={toggle}
-        />
+      {/* El medidor: una barrita por segmento, encendida hasta tus horas, y una
+          marca fina en cada tramo. */}
+      <div className="relative mt-3" aria-hidden="true">
+        <div className="flex h-5 gap-[2px]">
+          {Array.from({ length: SEGMENTS }, (_, index) => (
+            <span
+              key={index}
+              className={cn(
+                'flex-1 rounded-xs',
+                index < filled ? 'bg-phosphor shadow-glow-bar' : 'bg-bone/10',
+              )}
+            />
+          ))}
+        </div>
+        {tiers.map((tier) => (
+          <span
+            key={tier.key}
+            className={cn(
+              'absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-full',
+              activeTier === tier.key ? 'bg-phosphor' : 'bg-bone/60',
+            )}
+            style={{ left: `${Math.min(99.5, (tier.threshold / scale) * 100)}%` }}
+          />
+        ))}
       </div>
-    </DetailCard>
+
+      {note && (
+        <p className="mt-3 flex items-start gap-2 rounded-sm border border-phosphor/30 bg-phosphor-tint px-3 py-2.5 text-small text-bone">
+          {lastReached && !activeDetail && (
+            <Check size={15} className="mt-0.5 shrink-0 text-phosphor" aria-hidden="true" />
+          )}
+          <span>{note}</span>
+        </p>
+      )}
+    </section>
   );
 };

@@ -132,6 +132,9 @@ export default defineConfig(({ mode }) => ({
               test: /node_modules[\\/](micromark|mdast|hast|unist|unified|vfile|remark|react-markdown|property-information)/,
               includeDependenciesRecursively: false,
             },
+            // El QR de Ajustes (uqr): solo lo pide la pantalla de Ajustes, así
+            // que no viaja en el vendor del primer pintado.
+            { name: 'qr', test: /node_modules[\\/]uqr/, includeDependenciesRecursively: false },
             { name: 'vendor', test: /node_modules/ },
           ],
         },
