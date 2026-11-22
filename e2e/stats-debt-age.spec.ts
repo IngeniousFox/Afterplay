@@ -2,16 +2,22 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, goTo, launchAfterplay, test } from './fixtures';
 import type { SeedGame } from './sandbox';
 
-const NOW = new Date('2026-09-05T12:00:00.000Z');
-const STARTED = new Date('2026-01-10T12:00:00.000Z');
+const DAY_MS = 24 * 60 * 60 * 1000;
+// The renderer clock is frozen at NOW, but the main process computes the
+// recent pace with the real clock. Anchoring NOW to today (at noon) keeps both
+// clocks agreeing on which sessions are recent, whatever day the suite runs.
+const NOW = new Date(new Date().setUTCHours(12, 0, 0, 0));
+const STARTED = new Date(NOW.getTime() - 238 * DAY_MS);
+const RECENT_SESSION = new Date(NOW.getTime() - 14 * DAY_MS);
+const YEAR = NOW.getUTCFullYear();
 
 // Four dated eras total exactly 100 hours. The smallest reproduces the 2% sector
 // that used to disappear underneath its neighbours' round line caps.
 const ageGames: SeedGame[] = [
-  { title: 'New era sample', releaseYear: 2026, hours: 2 },
-  { title: 'Recent era sample', releaseYear: 2023, hours: 18 },
-  { title: 'Modern era sample', releaseYear: 2018, hours: 37 },
-  { title: 'Classic era sample', releaseYear: 2000, hours: 43 },
+  { title: 'New era sample', releaseYear: YEAR, hours: 2 },
+  { title: 'Recent era sample', releaseYear: YEAR - 3, hours: 18 },
+  { title: 'Modern era sample', releaseYear: YEAR - 8, hours: 37 },
+  { title: 'Classic era sample', releaseYear: YEAR - 26, hours: 43 },
 ].map(({ title, releaseYear, hours }, index) => ({
   title,
   releaseYear,
@@ -19,7 +25,7 @@ const ageGames: SeedGame[] = [
     {
       manualHours: hours - (index === 3 ? 2 : 0),
       events: [{ type: 'started', at: STARTED, precision: 'day' }],
-      sessions: index === 3 ? [{ at: new Date('2026-08-22T12:00:00.000Z'), hours: 2 }] : undefined,
+      sessions: index === 3 ? [{ at: RECENT_SESSION, hours: 2 }] : undefined,
     },
   ],
 }));
