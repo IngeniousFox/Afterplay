@@ -12,7 +12,7 @@ export const accentGradientStyle = {
 // Foco y pulsación comunes a todos los controles de Fósforo: outline de 2 px
 // Phosphor con 2 px de separación y scale(.97) al pulsar.
 const controlFocusPressClass =
-  'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100';
+  'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100';
 
 // Botones de Fósforo (hoja 4) para los sitios que no usan components/ui/button:
 // primario ámbar (uno por vista), secundario Raised + Line strong y peligro

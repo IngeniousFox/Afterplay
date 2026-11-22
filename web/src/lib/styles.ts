@@ -47,7 +47,7 @@ export const iconButtonClass = cn(
 // Campos de texto. 16 px de letra: con menos, Safari de iOS amplía la página
 // al enfocar el campo.
 export const fieldClass = cn(
-  'min-h-11 w-full rounded-sm border border-edge bg-inset px-3 text-[16px] text-bone outline-none',
+  'min-h-11 w-full rounded-sm border border-edge bg-inset px-3 text-[16px] text-bone outline-hidden',
   'transition-[border-color,box-shadow] duration-150 placeholder:text-dust',
   'focus:border-phosphor focus:shadow-focus-field',
 );

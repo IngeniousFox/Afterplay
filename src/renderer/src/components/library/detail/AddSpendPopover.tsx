@@ -104,7 +104,7 @@ export const AddSpendPopover = ({ gameId }: AddSpendPopoverProps): React.JSX.Ele
             type="button"
             onClick={handleSubmit}
             disabled={addSpend.isPending}
-            className="rounded-sm px-4 py-2.25 text-[13px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-sm px-4 py-2.25 text-[13px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-60"
             style={accentGradientStyle}
           >
             {addSpend.isPending ? 'Adding…' : 'Add spend'}

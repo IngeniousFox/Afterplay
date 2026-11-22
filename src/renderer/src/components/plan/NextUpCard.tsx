@@ -74,7 +74,7 @@ export const NextUpCard = ({
           type="button"
           onClick={onOpen}
           aria-label={`Open ${game.title}`}
-          className="group/cover h-56 w-42 flex-none self-start overflow-hidden rounded-sm border border-line-strong bg-raised shadow-lift outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+          className="group/cover h-56 w-42 flex-none self-start overflow-hidden rounded-sm border border-line-strong bg-raised shadow-lift outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
         >
           {coverSrc ? (
             <img

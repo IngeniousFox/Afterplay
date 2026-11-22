@@ -111,7 +111,7 @@ export const EmulatorsSection = (): React.JSX.Element => {
           type="button"
           onClick={handleAdd}
           disabled={!canAdd}
-          className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
           style={accentGradientStyle}
         >
           <Plus size={14} />

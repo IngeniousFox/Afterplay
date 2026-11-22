@@ -105,7 +105,7 @@ export const ModalShell = ({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="flex h-8.5 w-8.5 flex-none items-center justify-center rounded-sm text-dust outline-none transition-[background-color,color,transform] duration-150 hover:bg-bone/6 hover:text-bone focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] active:bg-bone/11"
+              className="flex h-8.5 w-8.5 flex-none items-center justify-center rounded-sm text-dust outline-hidden transition-[background-color,color,transform] duration-150 hover:bg-bone/6 hover:text-bone focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor active:scale-[.97] active:bg-bone/11"
             >
               <X size={18} />
             </button>

@@ -557,14 +557,14 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
                                 className="isolate z-60"
                               >
                                 <Select.Popup
-                                  className={`w-(--anchor-width) rounded-[9px] border ${floatingPanelClass} p-1 outline-none`}
+                                  className={`w-(--anchor-width) rounded-[9px] border ${floatingPanelClass} p-1 outline-hidden`}
                                 >
                                   <Select.List className="flex flex-col gap-0.5">
                                     {S3_ADDRESSING_OPTIONS.map((option) => (
                                       <Select.Item
                                         key={option.value}
                                         value={option.value}
-                                        className="flex cursor-default items-center justify-between rounded-[7px] px-2.75 py-2 text-[12px] text-foreground outline-none data-highlighted:bg-bone/[0.07] data-selected:text-primary"
+                                        className="flex cursor-default items-center justify-between rounded-[7px] px-2.75 py-2 text-[12px] text-foreground outline-hidden data-highlighted:bg-bone/[0.07] data-selected:text-primary"
                                       >
                                         <Select.ItemText>{option.label}</Select.ItemText>
                                         <Select.ItemIndicator>
@@ -636,7 +636,7 @@ export const CredentialsSection = ({ spotlight }: CredentialsSectionProps): Reac
             type="button"
             onClick={handleSave}
             disabled={setCredentials.isPending}
-            className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-fit items-center gap-1.75 rounded-sm px-3.5 py-2 text-[12.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
             style={accentGradientStyle}
           >
             <Save size={14} />

@@ -10,7 +10,7 @@ const buttonVariants = cva(
   [
     'group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm border border-transparent bg-clip-padding text-body font-medium whitespace-nowrap select-none',
     'transition-[background-color,border-color,color,transform] duration-[160ms] ease-out active:scale-[.97] active:duration-[120ms] motion-reduce:active:scale-100',
-    'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
+    'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
     'disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-live',
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   ],

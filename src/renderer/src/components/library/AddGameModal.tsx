@@ -557,7 +557,7 @@ const AddGameModalBody = ({
             type="button"
             onClick={handleSave}
             disabled={!selected || isSaving || !steamAppIdValid}
-            className="flex items-center gap-2 rounded-sm px-5.5 py-2.5 text-[13.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed"
+            className="flex items-center gap-2 rounded-sm px-5.5 py-2.5 text-[13.5px] font-semibold transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed"
             style={
               selected
                 ? accentGradientStyle

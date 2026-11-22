@@ -197,7 +197,7 @@ export const RestoreSaveDialog = ({
                 type="button"
                 onClick={handleConfirm}
                 disabled={restore.isPending}
-                className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13px] font-semibold text-bone transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-sm px-5 py-2.5 text-[13px] font-semibold text-bone transition-[background-color,filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-[.97] motion-reduce:enabled:active:scale-100 outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ background: mode === 'in-place' ? '#ff5e57' : BLUE }}
               >
                 {restore.isPending ? (

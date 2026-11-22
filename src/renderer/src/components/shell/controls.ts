@@ -7,12 +7,12 @@ import { cn } from '@/lib/utils';
 
 // Foco: outline Phosphor de 2 px con 2 px de separación, nunca un relleno.
 export const focusRing =
-  'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor';
+  'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor';
 
 // Dentro de filas, pestañas y menús el outline va hacia dentro para que los
 // vecinos no lo recorten.
 export const focusRingInset =
-  'outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor';
+  'outline-hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor';
 
 // Pulsar = scale(.97); con reduced motion no hay escala.
 const press = 'active:scale-[.97] motion-reduce:active:scale-100';
