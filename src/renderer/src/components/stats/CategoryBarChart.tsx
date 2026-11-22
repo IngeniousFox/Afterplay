@@ -1,6 +1,8 @@
 import { cn } from '../../lib/utils';
 import { type CSSProperties, useState } from 'react';
+import { chartGroup, growY, useInView } from '../fx/chart';
 import { ChartHeading, StatCard } from './StatCard';
+import { barValueClass, barValueStyle } from './chartMotion';
 
 export type CategoryBar = { label: string; value: number };
 
@@ -37,6 +39,9 @@ export const CategoryBarChart = ({
   maxBarWidthClass = 'max-w-8',
 }: CategoryBarChartProps): React.JSX.Element => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // Las barras crecen desde la base, escalonadas, la primera vez que la
+  // gráfica entra en vista (fx/chart). Cambiar de año ya no las repite.
+  const { observe, inView } = useInView();
 
   const maxValue = Math.max(0, ...bars.map((bar) => bar.value));
   const peakIndex = maxValue > 0 ? bars.findIndex((bar) => bar.value === maxValue) : -1;
@@ -94,7 +99,12 @@ export const CategoryBarChart = ({
       </div>
 
       <div
-        className="afterplay-category-stage relative mt-7 flex flex-none items-stretch gap-2 border-b border-line-strong"
+        ref={observe}
+        data-inview={inView || undefined}
+        className={cn(
+          'afterplay-category-stage relative mt-7 flex flex-none items-stretch gap-2 border-b border-line-strong',
+          chartGroup,
+        )}
         style={{ height: BAR_AREA_PX }}
       >
         <span
@@ -118,6 +128,7 @@ export const CategoryBarChart = ({
               role="group"
               aria-label={`${bar.label}, ${formatValue(bar.value)}${totalValue > 0 ? `, ${Math.round((bar.value / totalValue) * 100)}% of this view` : ''}`}
               data-active={isActive}
+              style={{ '--bar-height': `${fillPct}%` } as CSSProperties}
               onMouseEnter={() => {
                 if (bar.value > 0) setHoveredIndex(index);
               }}
@@ -138,27 +149,28 @@ export const CategoryBarChart = ({
                 <span
                   className={cn(
                     'afterplay-category-fill absolute bottom-0 left-1/2 h-(--bar-height) min-h-0.75 w-[74%] -translate-x-1/2',
-                    'origin-bottom rounded-t-[2px]',
+                    'rounded-t-[2px]',
                     'bg-[color-mix(in_srgb,var(--chart-accent)_55%,transparent)]',
-                    'animate-[afterplay-category-rise_520ms_var(--ease-out)_var(--bar-delay)_backwards]',
+                    growY,
                     'transition-[background-color,box-shadow] duration-150',
                     '[.afterplay-category-column.is-active_&]:bg-(--chart-accent)',
-                    '[.afterplay-category-column.is-active_&]:shadow-[0_0_12px_color-mix(in_srgb,var(--chart-accent)_45%,transparent)]',
-                    'motion-reduce:animate-none motion-reduce:transition-none',
+                    // Bloom de fósforo en la barra que estás mirando.
+                    '[.afterplay-category-column.is-active_&]:shadow-[0_0_14px_color-mix(in_srgb,var(--chart-accent)_55%,transparent),0_0_3px_var(--chart-accent)]',
+                    'motion-reduce:transition-none',
                     maxBarWidthClass,
                   )}
-                  style={
-                    {
-                      '--bar-height': `${fillPct}%`,
-                      '--bar-delay': `${index * 35}ms`,
-                    } as CSSProperties
-                  }
-                >
-                  {isActive && (
-                    <span className="absolute -top-5.5 left-1/2 -translate-x-1/2 text-micro font-semibold whitespace-nowrap text-bone tabular-nums">
-                      {formatValue(bar.value)}
-                    </span>
+                  style={{ animationDelay: `${index * 40}ms` }}
+                />
+              )}
+              {bar.value > 0 && isActive && (
+                <span
+                  className={cn(
+                    'text-micro font-semibold whitespace-nowrap text-bone tabular-nums',
+                    barValueClass,
                   )}
+                  style={barValueStyle(index, 40)}
+                >
+                  {formatValue(bar.value)}
                 </span>
               )}
             </div>

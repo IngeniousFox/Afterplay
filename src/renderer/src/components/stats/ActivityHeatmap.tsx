@@ -1,10 +1,12 @@
 import { cn } from '../../lib/utils';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addDays, DAY_MS, startOfDay, startOfDayMs } from '../../lib/dateMath';
 import { formatElapsed, formatHours, formatTime, pluralize } from '../../lib/format';
 import { isMeasuredSession } from '../../../../shared/domain/sessionMeasure';
 import { floatingPanelClass } from '../../lib/styles';
 import { useTimeFormat } from '../../hooks/settings';
+import { chartGroup, chartPaused, useInView } from '../fx/chart';
+import { tooltipPopClass } from './chartMotion';
 import { ChartHeading, StatCard } from './StatCard';
 
 type HeatmapSession = {
@@ -47,6 +49,12 @@ const LEVEL_COLORS = [
 
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
 
+// El encendido: cada celda se enciende en diagonal (semana + día) y un haz
+// de fósforo barre la rejilla de izquierda a derecha al mismo paso. Solo
+// opacidad en las celdas (371 nodos): nada de filtros ni sombras por celda.
+const HEAT_STEP_MS = 12;
+const heatCellClass = `afterplay-heat-cell rounded-[2px] animate-[afterplay-heat-on_380ms_var(--ease-out)_backwards] ${chartPaused}`;
+
 // Lunes de la semana de `date` — semanas empiezan en lunes (SPEC: etiquetas
 // Mon/Wed/Fri), a diferencia de getDay() de JS que empieza en domingo.
 const mondayOf = (date: Date): Date => {
@@ -85,6 +93,15 @@ export const ActivityHeatmap = ({
     cellLeft: number;
   } | null>(null);
   const { data: timeFormat = '24h' } = useTimeFormat();
+  // La primera vez que la tarjeta entra en vista (fx/chart); no se repite.
+  const { observe, inView } = useInView();
+  const measureAndObserve = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      return observe(node);
+    },
+    [observe],
+  );
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -266,11 +283,14 @@ export const ActivityHeatmap = ({
             {label}
           </span>
         ))}
-        {cells.map((cell) => (
+        {cells.map((cell, index) => (
           <div
             key={cell.dayMs}
-            className={cn('afterplay-heat-cell rounded-[2px]')}
-            style={{ background: LEVEL_COLORS[cell.level] }}
+            className={heatCellClass}
+            style={{
+              background: LEVEL_COLORS[cell.level],
+              animationDelay: `${(Math.floor(index / 7) + (index % 7)) * HEAT_STEP_MS}ms`,
+            }}
             // Solo días reales del rango — el futuro y los restos de
             // diciembre anterior no tienen nada que contar.
             onMouseEnter={
@@ -322,9 +342,28 @@ export const ActivityHeatmap = ({
         }
       />
 
-      <div ref={containerRef} className="relative">
+      <div
+        ref={measureAndObserve}
+        data-inview={inView || undefined}
+        className={cn('relative', chartGroup)}
+      >
         {cellPx > 0 && (
           <>
+            {/* El barrido del encendido: una banda de luz que cruza la
+                rejilla al paso de la diagonal y se apaga. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-1 overflow-hidden motion-reduce:hidden"
+            >
+              <span
+                className={cn(
+                  'absolute inset-y-0 left-0 block w-[8%] mix-blend-screen',
+                  'bg-[linear-gradient(90deg,transparent,rgb(255_179_71/0.16)_55%,rgb(255_226_180/0.32)_82%,transparent)]',
+                  'animate-[afterplay-heat-sweep_820ms_linear_both]',
+                  chartPaused,
+                )}
+              />
+            </span>
             {/* Fila de meses — mismas columnas de semana que la rejilla de
                 abajo, con un hueco al principio del ancho de la columna de
                 días. */}
@@ -367,11 +406,15 @@ export const ActivityHeatmap = ({
                 });
                 return (
                   <div
-                    className={`pointer-events-none absolute z-10 w-60 rounded-md border ${floatingPanelClass} px-3.5 py-3`}
+                    className={cn(
+                      'pointer-events-none absolute z-10 w-60 origin-bottom rounded-md border px-3.5 py-3',
+                      floatingPanelClass,
+                      tooltipPopClass,
+                    )}
                     style={{
                       left: hovered.x,
                       top: hovered.y - 9,
-                      transform: 'translate(-50%, -100%)',
+                      translate: '-50% -100%',
                     }}
                   >
                     <span className="block text-small font-semibold text-bone">{dateLabel}</span>

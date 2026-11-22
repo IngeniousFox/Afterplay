@@ -2,6 +2,8 @@ import { cn } from '../../lib/utils';
 import { type CSSProperties, useMemo, useState } from 'react';
 import { formatHours, pluralize } from '../../lib/format';
 import { lengthSummaryFor, type SessionStats } from '../../../../shared/domain/sessionStats';
+import { chartGroup, growY, useInView } from '../fx/chart';
+import { barValueClass, barValueStyle } from './chartMotion';
 import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
@@ -47,6 +49,8 @@ export const SessionLengthHistogram = ({
   variant = 'compact',
 }: SessionLengthHistogramProps): React.JSX.Element => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // El histograma crece desde la base la primera vez que entra en vista.
+  const { observe, inView } = useInView();
 
   const { counts, total, peakIndex, medianSeconds, longestSeconds, underHour } = useMemo(() => {
     const { counts, total, medianSec, longestSec, underHour } = lengthSummaryFor(stats, year);
@@ -125,7 +129,10 @@ export const SessionLengthHistogram = ({
 
           <div className="afterplay-session-chart-body flex min-h-41 flex-1 flex-col justify-center [.afterplay-session-length-card.is-overview_&]:min-h-47.5">
             <div
+              ref={observe}
+              data-inview={inView || undefined}
               className={cn(
+                chartGroup,
                 'afterplay-session-stage relative mt-6 flex h-34 w-full flex-none items-stretch gap-2 border-b border-line-strong',
                 '[.afterplay-session-length-card.is-overview_&]:h-37.5 [.afterplay-session-length-card.is-overview_&]:max-h-37.5',
               )}
@@ -158,6 +165,7 @@ export const SessionLengthHistogram = ({
                       isDimmed ? 'is-dimmed' : '',
                       count === 0 ? 'is-empty' : '',
                     )}
+                    style={{ '--bar-height': `${fillPct}%` } as CSSProperties}
                     onMouseEnter={() => {
                       if (count > 0) setHoveredIndex(index);
                     }}
@@ -169,25 +177,25 @@ export const SessionLengthHistogram = ({
                       <span
                         className={cn(
                           'afterplay-session-fill absolute bottom-0 left-1/2 h-(--bar-height) min-h-0.75 w-[min(66%,_48px)] -translate-x-1/2',
-                          'origin-bottom rounded-t-[2px] bg-phosphor/55',
-                          'animate-[afterplay-category-rise_520ms_var(--ease-out)_var(--bar-delay)_backwards]',
+                          'rounded-t-[2px] bg-phosphor/55',
+                          growY,
                           'transition-[background-color,box-shadow] duration-150',
                           '[.afterplay-session-column.is-active_&]:bg-phosphor',
-                          '[.afterplay-session-column.is-active_&]:shadow-glow-bar',
-                          'motion-reduce:animate-none motion-reduce:transition-none',
+                          '[.afterplay-session-column.is-active_&]:shadow-[0_0_14px_rgb(255_179_71/0.55),0_0_3px_var(--color-phosphor)]',
+                          'motion-reduce:transition-none',
                         )}
-                        style={
-                          {
-                            '--bar-height': `${fillPct}%`,
-                            '--bar-delay': `${index * 55}ms`,
-                          } as CSSProperties
-                        }
+                        style={{ animationDelay: `${index * 55}ms` }}
+                      />
+                    )}
+                    {count > 0 && isActive && (
+                      <span
+                        className={cn(
+                          'text-micro font-semibold text-bone tabular-nums',
+                          barValueClass,
+                        )}
+                        style={barValueStyle(index, 55)}
                       >
-                        {isActive && (
-                          <span className="absolute -top-5.5 left-1/2 -translate-x-1/2 text-micro font-semibold text-bone tabular-nums">
-                            {count}
-                          </span>
-                        )}
+                        {count}
                       </span>
                     )}
                   </div>

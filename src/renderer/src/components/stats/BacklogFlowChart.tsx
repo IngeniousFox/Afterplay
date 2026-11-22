@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { StateEventSummary } from '../../../../shared/types';
 import { monthKey } from '../../lib/dateMath';
 import { floatingPanelClass } from '../../lib/styles';
+import { chartGroup, chartPaused, drawLine, useInView } from '../fx/chart';
+import { markBloomClass, tooltipPopClass } from './chartMotion';
 import { ChartHeading, StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
 import type { Year } from './YearPicker';
@@ -94,6 +96,9 @@ export const BacklogFlowChart = ({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [activeSeries, setActiveSeries] = useState<FlowSeriesKey | null>(null);
   const [width, setWidth] = useState(INITIAL_WIDTH);
+  // Las tres líneas se dibujan (y su relleno se funde) la primera vez que la
+  // gráfica entra en vista; no se repite al cambiar de año.
+  const { observe, inView } = useInView();
   // Keep SVG units equal to screen pixels so labels do not shrink with the card.
   const measureChart = useCallback((node: SVGSVGElement | null) => {
     if (!node) return;
@@ -194,12 +199,7 @@ export const BacklogFlowChart = ({
 
   const hoverPercent =
     hoveredIndex === null ? 0 : Math.round((xAt(hoveredIndex) / WIDTH) * 10_000) / 100;
-  const tooltipTransform =
-    hoverPercent < 24
-      ? 'translateX(0)'
-      : hoverPercent > 80
-        ? 'translateX(-100%)'
-        : 'translateX(-50%)';
+  const tooltipTranslate = hoverPercent < 24 ? '0' : hoverPercent > 80 ? '-100%' : '-50%';
 
   return (
     <StatCard className="afterplay-backlog-flow-card">
@@ -255,8 +255,11 @@ export const BacklogFlowChart = ({
         <StatCardEmpty>Nothing to chart yet.</StatCardEmpty>
       ) : (
         <div
+          ref={observe}
+          data-inview={inView || undefined}
           className={cn(
             'afterplay-backlog-chart-shell relative mt-4 overflow-hidden px-1 pt-2 pb-0.5',
+            chartGroup,
           )}
           onMouseLeave={() => {
             setHoveredIndex(null);
@@ -334,8 +337,15 @@ export const BacklogFlowChart = ({
                   <path
                     d={areaPath(line, lineIndex)}
                     fill={`url(#afterplay-flow-${line.key})`}
-                    className="afterplay-backlog-area [transition:opacity_220ms_ease] animate-[afterplay-fade-in_700ms_ease-out_backwards] motion-reduce:animate-none motion-reduce:transition-none"
-                    style={{ opacity: isDimmed ? 0.04 : 1 }}
+                    className={cn(
+                      'afterplay-backlog-area [transition:opacity_220ms_ease] motion-reduce:transition-none',
+                      'animate-[fade-in_700ms_var(--ease-out)_backwards]',
+                      chartPaused,
+                    )}
+                    style={{
+                      opacity: isDimmed ? 0.04 : 1,
+                      animationDelay: `${lineIndex * 90 + 380}ms`,
+                    }}
                   />
                   <path
                     d={path}
@@ -344,6 +354,9 @@ export const BacklogFlowChart = ({
                     strokeWidth={6}
                     opacity={isDimmed ? 0 : 0.13}
                     filter="url(#afterplay-flow-glow)"
+                    pathLength={1}
+                    className={drawLine}
+                    style={{ animationDelay: `${lineIndex * 90}ms` }}
                   />
                   <path
                     d={path}
@@ -354,10 +367,10 @@ export const BacklogFlowChart = ({
                     strokeLinecap="round"
                     pathLength={1}
                     className={cn(
-                      'afterplay-backlog-line [stroke-dasharray:1] [stroke-dashoffset:0]',
+                      'afterplay-backlog-line',
                       '[transition:opacity_200ms_ease,stroke-width_200ms_ease]',
-                      'animate-[afterplay-flow-line-in_900ms_cubic-bezier(0.22,1,0.36,1)_backwards]',
-                      'motion-reduce:animate-none motion-reduce:transition-none',
+                      'motion-reduce:transition-none',
+                      drawLine,
                     )}
                     data-flow-series={line.key}
                     style={{
@@ -367,7 +380,14 @@ export const BacklogFlowChart = ({
                   />
 
                   {bulkAdd && (
-                    <g className="afterplay-backlog-batch-marker pointer-events-none animate-[afterplay-flow-batch-in_480ms_520ms_ease-out_backwards] motion-reduce:animate-none motion-reduce:transition-none">
+                    <g
+                      className={cn(
+                        'afterplay-backlog-batch-marker pointer-events-none',
+                        'animate-[afterplay-flow-batch-in_480ms_ease-out_backwards]',
+                        chartPaused,
+                      )}
+                      style={{ animationDelay: `${lineIndex * 90 + 620}ms` }}
+                    >
                       <line
                         x1={batchX}
                         x2={batchX}
@@ -391,21 +411,26 @@ export const BacklogFlowChart = ({
                     </g>
                   )}
 
-                  <circle
-                    cx={xAt(points.length - 1)}
-                    cy={yAt(lineIndex, total, total)}
-                    r={6.5}
-                    fill={line.color}
-                    opacity={0.12}
-                  />
-                  <circle
-                    cx={xAt(points.length - 1)}
-                    cy={yAt(lineIndex, total, total)}
-                    r={3.5}
-                    fill={line.color}
-                    stroke="var(--color-panel)"
-                    strokeWidth={1.5}
-                  />
+                  <g
+                    className={cn('animate-[fade-in_240ms_var(--ease-out)_backwards]', chartPaused)}
+                    style={{ animationDelay: `${lineIndex * 90 + 760}ms` }}
+                  >
+                    <circle
+                      cx={xAt(points.length - 1)}
+                      cy={yAt(lineIndex, total, total)}
+                      r={6.5}
+                      fill={line.color}
+                      opacity={0.12}
+                    />
+                    <circle
+                      cx={xAt(points.length - 1)}
+                      cy={yAt(lineIndex, total, total)}
+                      r={3.5}
+                      fill={line.color}
+                      stroke="var(--color-panel)"
+                      strokeWidth={1.5}
+                    />
+                  </g>
                 </g>
               );
             })}
@@ -441,10 +466,12 @@ export const BacklogFlowChart = ({
                       key={`hover-${line.key}`}
                       cx={xAt(hoveredIndex)}
                       cy={yAt(lineIndex, line.valueOf(points[hoveredIndex]), total)}
-                      r={3.5}
+                      r={4}
                       fill="var(--color-panel)"
                       stroke={line.color}
                       strokeWidth={2}
+                      className={markBloomClass}
+                      style={{ color: line.color }}
                     />
                   );
                 })}
@@ -473,12 +500,12 @@ export const BacklogFlowChart = ({
             <div
               className={cn(
                 'afterplay-backlog-tooltip pointer-events-none absolute top-2 z-10 w-48 rounded-md border',
-                'animate-[afterplay-fade-in_130ms_ease-out]',
-                'motion-reduce:animate-none motion-reduce:transition-none',
+                tooltipPopClass,
+                'origin-top',
                 floatingPanelClass,
                 'px-3 py-2.5 text-micro',
               )}
-              style={{ left: `${hoverPercent}%`, transform: tooltipTransform }}
+              style={{ left: `${hoverPercent}%`, translate: tooltipTranslate }}
             >
               <div className="mb-1.5 font-semibold text-bone">
                 {monthLabel(points[hoveredIndex].key)}

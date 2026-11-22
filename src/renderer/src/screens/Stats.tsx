@@ -1,6 +1,6 @@
 import { cn } from '../lib/utils';
 import { BarChart3, Gamepad2, Route } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AchievementsShowcase } from '../components/stats/AchievementsShowcase';
 import { ActivityHeatmap } from '../components/stats/ActivityHeatmap';
@@ -25,12 +25,23 @@ import {
 import type { Year } from '../components/stats/YearPicker';
 import { YearTabs } from '../components/stats/YearPicker';
 import { GameCover } from '../components/GameCover';
+import {
+  chartGroup,
+  drawLine,
+  GlowText,
+  playCrt,
+  SlidingIndicator,
+  Stagger,
+  Ticker,
+  TiltCover,
+  TiltGlare,
+  useInView,
+} from '../components/fx';
 import { useGames, usePlannedGames } from '../hooks/games';
 import { useHeatmapSessions } from '../hooks/sessions';
 import { useSessionStats } from '../hooks/stats';
 import { useSpendEvents } from '../hooks/spend';
 import { useStateEvents } from '../hooks/stateEvents';
-import { useCountUp } from '../hooks/useCountUp';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { yearsDesc } from '../lib/dateMath';
 import { formatHours, formatMoney } from '../lib/format';
@@ -86,8 +97,22 @@ const UnitFigure = ({
 
 // Los récords del archivo, en lista junto al líder (stats-overview.png):
 // nombre y detalle a la izquierda, la cifra en Big Shoulders a la derecha.
-const StatsRecordDeck = ({ records }: { records: StatsRecord[] }): React.JSX.Element => (
-  <section className="afterplay-stats-record-deck flex flex-col" aria-label="Archive records">
+// Entran escalonados, como los récords de una recreativa al encenderse, y
+// vuelven a repartirse al cambiar de año.
+const StatsRecordDeck = ({
+  records,
+  replayKey,
+}: {
+  records: StatsRecord[];
+  replayKey: Year;
+}): React.JSX.Element => (
+  <Stagger
+    as="section"
+    step={60}
+    replayKey={replayKey}
+    className="afterplay-stats-record-deck flex flex-col"
+    aria-label="Archive records"
+  >
     {records.map(({ key, label, value, detail }) => (
       <div
         key={key}
@@ -102,7 +127,7 @@ const StatsRecordDeck = ({ records }: { records: StatsRecord[] }): React.JSX.Ele
         </div>
       </div>
     ))}
-  </section>
+  </Stagger>
 );
 
 // Una cifra secundaria del hero, sin caja: valor en Big Shoulders, rótulo
@@ -113,7 +138,7 @@ const HeroFigure = ({
   comparison,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   comparison?: React.ReactNode;
 }): React.JSX.Element => (
   <div className="afterplay-stats-metric min-w-0">
@@ -127,13 +152,11 @@ const HeroFigure = ({
   </div>
 );
 
-// Las cifras del hero con su contador animado. Componente aparte por
-// RENDIMIENTO, no por orden: useCountUp reprinta a 60 fps durante 700 ms (unos
-// 42 renders) justo mientras entra la pantalla. El compilador de React
-// memoiza POR EXPRESIÓN y toda la rama de overview es una sola expresión, así
-// que con los valores animados leídos ahí dentro esos 42 frames reconstruían
-// las 18 tarjetas de la página para que subieran cuatro números. Encerrados
-// aquí, el árbol de Stats se construye una vez y los frames solo tocan esto.
+// Las cifras del hero, como un marcador: entran contando y, al cambiar de
+// año, ruedan desde lo que se veía hasta el valor nuevo (from="previous").
+// Cada Ticker reprinta solo su propio span durante el conteo; el resto de la
+// página no se entera. El valor final está siempre en data-value y en el
+// texto accesible (components/fx/Ticker).
 const HeroFigures = ({
   totalGames,
   totalHours,
@@ -156,114 +179,132 @@ const HeroFigures = ({
   supporting: string;
   periodLabel: string;
   comparison?: YearComparisonBaseline;
-}): React.JSX.Element => {
-  const animatedGames = useCountUp(totalGames);
-  const animatedHours = useCountUp(totalHours);
-  const animatedSpent = useCountUp(totalSpent);
-  const animatedCost = useCountUp(costPerHour ?? 0);
-
-  return (
-    <div className="afterplay-stats-records flex min-w-0 flex-col">
-      <div className="flex items-center gap-2 text-small text-dust">
-        <span className="size-2 rounded-full bg-phosphor shadow-glow-bar" aria-hidden="true" />
-        {periodLabel}
-      </div>
-      <div className="afterplay-stats-metric afterplay-stats-total min-w-0">
-        <div className="sr-only">Total playtime</div>
-        <div
-          className={cn(
-            'mt-1 font-display text-[clamp(96px,10vw,164px)] leading-[0.86] font-bold whitespace-nowrap text-phosphor tabular-nums',
-            '[text-shadow:0_0_40px_rgb(255_179_71/0.35)]',
-          )}
-        >
-          <UnitFigure
-            text={formatHours(animatedHours)}
-            unitClassName="mr-[0.12em] text-[0.42em] text-phosphor-lo"
-          />
-        </div>
-        {comparison && (
-          <YearMetricComparison
-            metric="totalHours"
-            current={totalHours}
-            previous={comparison.metrics.totalHours}
-            previousYear={comparison.year}
-          />
-        )}
-      </div>
-      <h2 className="mt-4 text-[26px] leading-tight font-semibold text-bone">{headline}</h2>
-      <p className="mt-1 max-w-[640px] text-lead text-dust">{supporting}</p>
-
-      <div className="mt-5 flex flex-wrap gap-x-11 gap-y-4 border-t border-line pt-4">
-        <HeroFigure
-          label={gamesLabel}
-          value={String(Math.round(animatedGames))}
-          comparison={
-            comparison && (
-              <YearMetricComparison
-                metric="totalGames"
-                current={totalGames}
-                previous={comparison.metrics.totalGames}
-                previousYear={comparison.year}
-              />
-            )
-          }
-        />
-        <HeroFigure
-          label={spentLabel}
-          value={formatMoney(animatedSpent)}
-          comparison={
-            comparison && (
-              <YearMetricComparison
-                metric="totalSpent"
-                current={totalSpent}
-                previous={comparison.metrics.totalSpent}
-                previousYear={comparison.year}
-              />
-            )
-          }
-        />
-        <HeroFigure
-          label="Average cost per hour"
-          value={costPerHour !== null ? formatMoney(animatedCost) : '—'}
-          comparison={
-            comparison && (
-              <YearMetricComparison
-                metric="costPerHour"
-                current={costPerHour}
-                previous={comparison.metrics.costPerHour}
-                previousYear={comparison.year}
-              />
-            )
-          }
-        />
-      </div>
+}): React.JSX.Element => (
+  <div className="afterplay-stats-records flex min-w-0 flex-col">
+    <div className="flex items-center gap-2 text-small text-dust">
+      <span className="size-2 rounded-full bg-phosphor shadow-glow-bar" aria-hidden="true" />
+      {periodLabel}
     </div>
-  );
-};
-
-// Anillo pequeño con el porcentaje de horas del líder.
-const ShareRing = ({ percent }: { percent: number }): React.JSX.Element => {
-  const radius = 22;
-  const circumference = 2 * Math.PI * radius;
-  return (
-    <div className="relative grid size-14 flex-none place-items-center">
-      <svg width={56} height={56} viewBox="0 0 56 56" className="absolute inset-0 -rotate-90">
-        <circle
-          cx={28}
-          cy={28}
-          r={radius}
-          fill="none"
-          stroke="var(--color-raised)"
-          strokeWidth={5}
+    <div className="afterplay-stats-metric afterplay-stats-total min-w-0">
+      <div className="sr-only">Total playtime</div>
+      <GlowText
+        as="div"
+        flicker
+        className="mt-1 font-display text-[clamp(96px,10vw,164px)] leading-[0.86] font-bold whitespace-nowrap text-phosphor tabular-nums"
+      >
+        <Ticker
+          value={totalHours}
+          from="previous"
+          duration={1100}
+          format={formatHours}
+          render={(hours) => (
+            <UnitFigure
+              text={formatHours(hours)}
+              unitClassName="mr-[0.12em] text-[0.42em] text-phosphor-lo"
+            />
+          )}
         />
+      </GlowText>
+      {comparison && (
+        <YearMetricComparison
+          metric="totalHours"
+          current={totalHours}
+          previous={comparison.metrics.totalHours}
+          previousYear={comparison.year}
+        />
+      )}
+    </div>
+    <h2 className="mt-4 text-[26px] leading-tight font-semibold text-bone">{headline}</h2>
+    <p className="mt-1 max-w-[640px] text-lead text-dust">{supporting}</p>
+
+    <div className="mt-5 flex flex-wrap gap-x-11 gap-y-4 border-t border-line pt-4">
+      <HeroFigure
+        label={gamesLabel}
+        value={<Ticker value={totalGames} from="previous" duration={900} />}
+        comparison={
+          comparison && (
+            <YearMetricComparison
+              metric="totalGames"
+              current={totalGames}
+              previous={comparison.metrics.totalGames}
+              previousYear={comparison.year}
+            />
+          )
+        }
+      />
+      <HeroFigure
+        label={spentLabel}
+        value={<Ticker value={totalSpent} from="previous" duration={900} format={formatMoney} />}
+        comparison={
+          comparison && (
+            <YearMetricComparison
+              metric="totalSpent"
+              current={totalSpent}
+              previous={comparison.metrics.totalSpent}
+              previousYear={comparison.year}
+            />
+          )
+        }
+      />
+      <HeroFigure
+        label="Average cost per hour"
+        value={
+          costPerHour !== null ? (
+            <Ticker value={costPerHour} from="previous" duration={900} format={formatMoney} />
+          ) : (
+            '—'
+          )
+        }
+        comparison={
+          comparison && (
+            <YearMetricComparison
+              metric="costPerHour"
+              current={costPerHour}
+              previous={comparison.metrics.costPerHour}
+              previousYear={comparison.year}
+            />
+          )
+        }
+      />
+    </div>
+  </div>
+);
+
+// Anillo pequeño con el porcentaje de horas del líder. Se dibuja al entrar en
+// vista (pathLength 1: el trazo va de `share` oculto a entero) con un halo de
+// fósforo; al cambiar de año el arco cambia de largo con una transición.
+const ShareRing = ({ percent }: { percent: number }): React.JSX.Element => {
+  const { observe, inView } = useInView();
+  const share = Math.min(100, Math.max(0, percent)) / 100;
+  return (
+    <div
+      ref={observe}
+      data-inview={inView || undefined}
+      className={cn('relative grid size-14 flex-none place-items-center', chartGroup)}
+    >
+      <svg width={56} height={56} viewBox="0 0 56 56" className="absolute inset-0 -rotate-90">
+        <circle cx={28} cy={28} r={22} fill="none" stroke="var(--color-raised)" strokeWidth={5} />
         <circle
           cx={28}
           cy={28}
-          r={radius}
+          r={22}
           fill="none"
           stroke="var(--color-phosphor)"
           strokeWidth={5}
-          strokeDasharray={`${(Math.min(100, percent) / 100) * circumference} ${circumference}`}
+          pathLength={1}
+          className={cn(
+            'afterplay-stats-share-arc',
+            'drop-shadow-[0_0_4px_rgb(255_179_71/0.55)]',
+            'transition-[stroke-dasharray] duration-500 ease-out motion-reduce:transition-none',
+            drawLine,
+          )}
+          style={
+            {
+              strokeDasharray: `${share} 1`,
+              '--draw-from': share,
+              animationDelay: '280ms',
+            } as React.CSSProperties
+          }
         />
       </svg>
       <span className="relative text-small font-semibold text-bone tabular-nums">{percent}%</span>
@@ -364,32 +405,43 @@ const StatsHero = ({
 
       <div className="flex min-w-0 flex-col gap-4">
         {headlineGame ? (
-          <button
-            type="button"
-            onClick={() => onOpenGame(headlineGame.id)}
-            className={cn(
-              'afterplay-stats-leader flex items-center gap-4 rounded-md border border-line-strong bg-cabinet/70 p-3.5 text-left backdrop-blur-md',
-              'transition-[border-color,background-color] duration-150 hover:border-line-hover hover:bg-raised/80',
-              'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
-            )}
-            aria-label={`Open ${headlineGame.title}`}
-          >
-            <GameCover
-              url={headlineGame.coverUrl}
-              className="afterplay-stats-leader-cover h-24 w-18 flex-none overflow-hidden rounded-sm border border-line-strong"
-              iconSize={22}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="text-small text-dust">Most played</div>
-              <div className="line-clamp-2 text-lead font-semibold text-bone">
-                {headlineGame.title}
+          // La tarjeta del líder se inclina hacia el puntero con su reflejo
+          // (TiltCover, un solo listener en el <main> de RootLayout).
+          <TiltCover className="rounded-md">
+            <button
+              type="button"
+              onClick={() => onOpenGame(headlineGame.id)}
+              className={cn(
+                'afterplay-stats-leader relative flex w-full items-center gap-4 overflow-hidden rounded-md border border-line-strong bg-cabinet/70 p-3.5 text-left backdrop-blur-md',
+                'transition-[border-color,background-color] duration-150 hover:border-line-hover hover:bg-raised/80',
+                'group-data-tilting/tilt:border-phosphor/45',
+                'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor',
+              )}
+              aria-label={`Open ${headlineGame.title}`}
+            >
+              <GameCover
+                url={headlineGame.coverUrl}
+                className="afterplay-stats-leader-cover h-24 w-18 flex-none overflow-hidden rounded-sm border border-line-strong"
+                iconSize={22}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-small text-dust">Most played</div>
+                <div className="line-clamp-2 text-lead font-semibold text-bone">
+                  {headlineGame.title}
+                </div>
+                <div className="mt-1 font-display text-[30px] leading-none font-bold text-bone tabular-nums">
+                  <Ticker
+                    value={headlineGame.hours}
+                    from="previous"
+                    duration={900}
+                    format={formatHours}
+                  />
+                </div>
               </div>
-              <div className="mt-1 font-display text-[30px] leading-none font-bold text-bone tabular-nums">
-                {formatHours(headlineGame.hours)}
-              </div>
-            </div>
-            <ShareRing percent={sharePercent} />
-          </button>
+              <ShareRing percent={sharePercent} />
+              <TiltGlare />
+            </button>
+          </TiltCover>
         ) : (
           <div className="afterplay-stats-leader flex min-h-30 items-center justify-center rounded-md border border-dashed border-line-strong bg-cabinet/50 p-5 text-center">
             <div>
@@ -398,7 +450,7 @@ const StatsHero = ({
             </div>
           </div>
         )}
-        <StatsRecordDeck records={records} />
+        <StatsRecordDeck records={records} replayKey={year} />
       </div>
     </section>
   );
@@ -428,10 +480,7 @@ const viewButtonClass = (active: boolean): string =>
     'afterplay-stats-view-button relative flex h-9 items-center gap-2 px-4 text-body font-semibold',
     'transition-colors duration-150 outline-hidden',
     'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-phosphor',
-    'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-phosphor after:transition-opacity',
-    active
-      ? 'bg-raised text-bone after:opacity-100'
-      : 'text-dust after:opacity-0 hover:bg-raised/60 hover:text-bone',
+    active ? 'bg-raised text-bone' : 'text-dust hover:bg-raised/60 hover:text-bone',
   );
 
 // Bloque 5B/5C/5D/5E — panel global de Stats. Filtrar a un juego concreto
@@ -445,6 +494,21 @@ export const Stats = (): React.JSX.Element => {
 
   const [selectedYear, setSelectedYear] = useState<Year>('all');
   const [view, setView] = useState<'overview' | 'journey'>('overview');
+  const viewSwitchRef = useRef<HTMLDivElement | null>(null);
+  // Cambiar de año ya no remonta el resumen: las cifras ruedan desde lo que
+  // se veía (Ticker from="previous") y las gráficas no repiten su entrada.
+  // A cambio, el contenido se «re-sintoniza» con un CRT sutil (solo brillo y
+  // opacidad, sin geometría: nada que mida cajas lo nota).
+  const overviewRef = useRef<HTMLDivElement | null>(null);
+  const tunedYear = useRef<Year>(selectedYear);
+  useLayoutEffect(() => {
+    if (tunedYear.current === selectedYear) return undefined;
+    tunedYear.current = selectedYear;
+    const element = overviewRef.current;
+    if (!element) return undefined;
+    const animation = playCrt(element, 'screen');
+    return () => animation?.cancel();
+  }, [selectedYear]);
   // Hueco de la cabecera fija donde el Journey pinta sus tres cifras.
   const [journeySlot, setJourneySlot] = useState<HTMLDivElement | null>(null);
   // El toast de "Your June story is ready" llega con /stats?view=journey (y
@@ -654,7 +718,10 @@ export const Stats = (): React.JSX.Element => {
         )}
       >
         <h1 className="font-display text-[44px] leading-none font-bold text-bone">Stats</h1>
-        <div className="afterplay-stats-view-switch flex overflow-hidden rounded-sm border border-line-strong">
+        <div
+          ref={viewSwitchRef}
+          className="afterplay-stats-view-switch relative flex overflow-hidden rounded-sm border border-line-strong"
+        >
           <button
             type="button"
             aria-pressed={view === 'overview'}
@@ -673,6 +740,12 @@ export const Stats = (): React.JSX.Element => {
             <Route size={15} />
             Journey
           </button>
+          <SlidingIndicator
+            containerRef={viewSwitchRef}
+            activeKey={view}
+            selector='[aria-pressed="true"]'
+            className="bottom-0 h-0.5 bg-phosphor shadow-glow-bar"
+          />
         </div>
         <div className="ml-auto flex min-w-0 items-center">
           {view === 'overview' ? (
@@ -683,10 +756,11 @@ export const Stats = (): React.JSX.Element => {
         </div>
       </header>
 
-      {/* key por año: cambiar el filtro remonta el árbol — la cascada de
-          entrada y los contadores vuelven a animar con los datos nuevos. */}
+      {/* key por vista: pasar de Overview a Journey remonta el árbol. El año
+          NO forma parte de la clave (ver overviewRef arriba). */}
       <div
-        key={view === 'overview' ? `${view}-${String(selectedYear)}` : view}
+        key={view}
+        ref={view === 'overview' ? overviewRef : undefined}
         className="relative mx-auto max-w-[1600px] px-8 pt-5 pb-16"
       >
         {view === 'journey' ? (

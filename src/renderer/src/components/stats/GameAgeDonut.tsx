@@ -1,5 +1,6 @@
 import { cn } from '../../lib/utils';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { chartGroup, drawLine, spinIn, useInView } from '../fx/chart';
 import { formatHours, pluralize } from '../../lib/format';
 import { StatCard } from './StatCard';
 import { StatCardEmpty } from './StatCardEmpty';
@@ -69,6 +70,11 @@ const BUCKETS: Bucket[] = [
 export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.Element => {
   const referenceYear = year === 'all' ? new Date().getFullYear() : year;
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // Al entrar en vista la donut gira hasta su sitio (spinIn) mientras una
+  // máscara la va rellenando en el sentido de las agujas del reloj. La
+  // máscara no toca los arcos: su dash (lo que leen los e2e) no cambia.
+  const { observe, inView } = useInView();
+  const fillMaskId = `afterplay-age-fill-${useId().replace(/:/g, '')}`;
 
   const { slices, biggest, totalHours, unknownCount, datedCount } = useMemo(() => {
     const played = entries.filter((entry) => entry.hours > 0);
@@ -141,13 +147,16 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
         ) : (
           <div className="afterplay-age-stage mt-3 flex flex-1 flex-col">
             <div className="flex flex-wrap items-center gap-6">
-              <div className="afterplay-age-orbit-wrap relative mx-auto size-59 flex-none">
+              <div
+                ref={observe}
+                data-inview={inView || undefined}
+                className={cn(
+                  'afterplay-age-orbit-wrap relative mx-auto size-59 flex-none',
+                  chartGroup,
+                )}
+              >
                 <svg
-                  className={cn(
-                    'afterplay-age-orbit relative z-1 block origin-center overflow-visible',
-                    'animate-[afterplay-age-orbit-in_600ms_var(--ease-out)_backwards]',
-                    'motion-reduce:animate-none',
-                  )}
+                  className={cn('afterplay-age-orbit relative z-1 block overflow-visible', spinIn)}
                   width={SIZE}
                   height={SIZE}
                   viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -162,7 +171,23 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                     stroke="var(--color-raised)"
                     strokeWidth={STROKE}
                   />
-                  <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
+                  <defs>
+                    <mask id={fillMaskId} maskUnits="userSpaceOnUse">
+                      <circle
+                        cx={CENTER}
+                        cy={CENTER}
+                        r={RADIUS}
+                        fill="none"
+                        stroke="white"
+                        strokeWidth={STROKE + 12}
+                        pathLength={1}
+                        transform={`rotate(-90 ${CENTER} ${CENTER})`}
+                        className={drawLine}
+                        style={{ animationDelay: '120ms' }}
+                      />
+                    </mask>
+                  </defs>
+                  <g transform={`rotate(-90 ${CENTER} ${CENTER})`} mask={`url(#${fillMaskId})`}>
                     {visibleSlices.map((slice) => {
                       const isActive = slice.key === active.key;
                       // Flat ends stay inside each sector, including very small shares.
@@ -187,6 +212,8 @@ export const GameAgeDonut = ({ entries, year }: GameAgeDonutProps): React.JSX.El
                           className={cn(
                             'afterplay-age-slice cursor-pointer',
                             'transition-[stroke-width,filter] duration-200 hover:brightness-110',
+                            // Bloom en el sector señalado.
+                            isActive && '[filter:drop-shadow(0_0_6px_rgb(255_179_71/0.45))]',
                             'motion-reduce:transition-none',
                           )}
                           data-age-slice={slice.key}

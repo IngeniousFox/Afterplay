@@ -26,12 +26,25 @@ import { landingError } from './scroll';
 // .afterplay-stats-metric es rótulo (primer hijo) y valor (segundo hijo),
 // el contrato que también usan las comparaciones por año. No depende de
 // ninguna clase de Tailwind que pueda cambiar con un retoque visual.
-const readMetricValue = (page: Page, label: string): Promise<string | null> =>
+//
+// Las cifras ruedan como un marcador (components/fx/Ticker): el valor
+// publicado va en data-value desde el primer frame y lo que se VE es el
+// contador (aria-hidden), que tiene que aterrizar en ese mismo valor. Se
+// leen los dos: `final` sin esperar a nada y `shown` cuando acaba de contar.
+const readMetricValue = (
+  page: Page,
+  label: string,
+): Promise<{ final: string | null; shown: string | null }> =>
   page.evaluate((needle) => {
     const metric = Array.from(document.querySelectorAll('.afterplay-stats-metric')).find(
       (element) => element.children[0]?.textContent?.trim() === needle,
     );
-    return metric?.children[1]?.textContent?.trim() ?? null;
+    const value = metric?.children[1];
+    const ticker = value?.querySelector('[data-value]');
+    return {
+      final: (ticker?.getAttribute('data-value') ?? value?.textContent)?.trim() ?? null,
+      shown: (ticker?.querySelector('[aria-hidden="true"]') ?? value)?.textContent?.trim() ?? null,
+    };
   }, label);
 
 type BacklogDebtSnapshot = {
@@ -72,15 +85,15 @@ test.describe('Stats — cifras derivadas', () => {
     const expectedGames = String(games.length);
     const expectedHours = formatHours(games.reduce((sum, game) => sum + game.totalHours, 0));
 
-    // El contador animado (useCountUp, ~700ms) tarda en aterrizar en su
-    // valor final — expect.poll reintenta hasta que lo hace, en vez de un
-    // sleep a ciegas.
+    // El valor final está publicado desde el principio; el contador visible
+    // tarda ~1 s en aterrizar en él — expect.poll reintenta hasta que lo hace,
+    // en vez de un sleep a ciegas.
     await expect
       .poll(() => readMetricValue(window, 'Games tracked'), { timeout: 5_000 })
-      .toBe(expectedGames);
+      .toEqual({ final: expectedGames, shown: expectedGames });
     await expect
       .poll(() => readMetricValue(window, 'Total playtime'), { timeout: 5_000 })
-      .toBe(expectedHours);
+      .toEqual({ final: expectedHours, shown: expectedHours });
   });
 
   test('Backlog debt usa los tiempos de HowLongToBeat del seed', async ({ afterplay }) => {

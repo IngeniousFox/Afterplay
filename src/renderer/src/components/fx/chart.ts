@@ -46,8 +46,13 @@ export const useInView = (): {
 // El grupo que leen las clases de abajo.
 export const chartGroup = 'group/chart';
 
-const paused =
+// La pausa hasta entrar en vista, suelta, para animaciones propias de una
+// gráfica (un barrido, un fundido, una expansión): `animate-[…] ${chartPaused}`.
+// Lleva motion-reduce:animate-none, así que solo vale para entradas cuyo
+// estado final es el de reposo.
+export const chartPaused =
   '[animation-play-state:paused] group-data-inview/chart:[animation-play-state:running] motion-reduce:animate-none';
+const paused = chartPaused;
 
 export const growY = `origin-bottom animate-grow-y ${paused}`;
 export const growX = `origin-left animate-grow-x ${paused}`;

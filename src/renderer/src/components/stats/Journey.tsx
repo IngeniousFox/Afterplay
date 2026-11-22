@@ -1,5 +1,8 @@
 import { BookOpen, CalendarRange, Gamepad2, Route } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { chartGroup, growX, useInView } from '../fx/chart';
+import { playCrt } from '../fx/crt';
+import { SlidingIndicator } from '../fx/SlidingIndicator';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import type { EventDatePrecision, GeneratedMemorySummary } from '../../../../shared/types';
@@ -58,8 +61,40 @@ const JourneyStatTile = ({
 // lomo de libro a la izquierda — la señal de "esto es historia contada", no
 // otra tarjeta de datos. Sin recap, el mes queda exactamente como siempre:
 // las carátulas ya cuentan lo factual.
+// Las historias se encienden como un tubo (CrtReveal, variante panel) la
+// primera vez que entran en vista, no al montar: el Journey monta el viaje
+// entero de golpe y casi todo queda fuera de pantalla. Reduced motion: un
+// fundido (playCrt ya lo resuelve).
+const StoryReveal = ({
+  className,
+  children,
+}: {
+  className: string;
+  children: React.ReactNode;
+}): React.JSX.Element => {
+  const { observe, inView } = useInView();
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      nodeRef.current = node;
+      return observe(node);
+    },
+    [observe],
+  );
+  useLayoutEffect(() => {
+    if (!inView || !nodeRef.current) return undefined;
+    const animation = playCrt(nodeRef.current, 'panel');
+    return () => animation?.cancel();
+  }, [inView]);
+  return (
+    <div ref={attach} className={className}>
+      {children}
+    </div>
+  );
+};
+
 const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Element => (
-  <div className="relative mb-3.5 overflow-hidden rounded-md border border-line bg-panel px-5 py-3.5">
+  <StoryReveal className="relative mb-3.5 overflow-hidden rounded-md border border-line bg-panel px-5 py-3.5">
     <span aria-hidden className="absolute inset-y-0 left-0 w-0.75 bg-phosphor" />
     <div className="flex items-center gap-1.5 text-small font-semibold text-phosphor">
       <BookOpen size={13} />
@@ -82,7 +117,7 @@ const MonthStory = ({ recap }: { recap: GeneratedMemorySummary }): React.JSX.Ele
     {recap.payload.closingLine.length > 0 && (
       <p className="mt-2.5 text-small text-dust italic">{recap.payload.closingLine}</p>
     )}
-  </div>
+  </StoryReveal>
 );
 
 // El recap del año entero — el capítulo grande. Te recibe al entrar en el
@@ -98,7 +133,7 @@ const YearStory = ({
   recap: GeneratedMemorySummary;
   year: number;
 }): React.JSX.Element => (
-  <div className="relative mb-6 overflow-hidden rounded-md border border-line bg-panel px-6 py-4.5">
+  <StoryReveal className="relative mb-6 overflow-hidden rounded-md border border-line bg-panel px-6 py-4.5">
     <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-phosphor shadow-glow-bar" />
     <div className="relative">
       <div className="flex items-center gap-1.5 text-small font-semibold text-phosphor">
@@ -123,8 +158,54 @@ const YearStory = ({
         <p className="mt-3 text-small text-dust italic">{recap.payload.closingLine}</p>
       )}
     </div>
-  </div>
+  </StoryReveal>
 );
+
+// El año como hito: llega apagado y se enciende (parpadeo de tubo y bloom)
+// la primera vez que entra en vista al bajar; la regla de al lado se
+// extiende a la vez. Una sola vez por año. Reduced motion: encendido fijo.
+const YearMilestone = ({
+  year,
+  games,
+  hours,
+}: {
+  year: number;
+  games: number;
+  hours: number;
+}): React.JSX.Element => {
+  const { observe, inView } = useInView();
+  return (
+    <div
+      ref={observe}
+      data-inview={inView || undefined}
+      className={cn('mb-4 flex items-baseline gap-4', chartGroup)}
+    >
+      <span
+        className={cn(
+          'afterplay-journey-year font-display text-[84px] leading-[0.9] font-bold text-bone tabular-nums',
+          'opacity-30 transition-[opacity,text-shadow] duration-500 motion-reduce:opacity-100',
+          'group-data-inview/chart:opacity-100 group-data-inview/chart:animate-glow-flicker motion-reduce:animate-none',
+          'group-data-inview/chart:[text-shadow:0_0_1px_rgb(255_179_71/0.4),0_0_26px_rgb(255_179_71/0.3)]',
+        )}
+      >
+        {year}
+      </span>
+      <span className="text-small text-dust tabular-nums">
+        <strong className="font-semibold text-bone">
+          {games} {games === 1 ? 'game' : 'games'}
+        </strong>
+        , {formatHours(hours)}
+      </span>
+      <span
+        className={cn(
+          'h-px min-w-8 flex-1 self-center bg-[linear-gradient(90deg,var(--color-phosphor),var(--color-line)_45%)]',
+          growX,
+        )}
+        style={{ animationDelay: '220ms' }}
+      />
+    </div>
+  );
+};
 
 type JourneyProps = {
   onOpenGame: (gameId: GameId) => void;
@@ -576,6 +657,9 @@ const JourneyLoaded = ({
   );
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
+  // Los contenedores del índice lateral, para sus SlidingIndicator.
+  const yearIndexRef = useRef<HTMLDivElement | null>(null);
+  const monthIndexRef = useRef<HTMLDivElement | null>(null);
   // Los recaps del Loop (§4): el último por periodo, indexado por scope para
   // colgar cada uno de su mes/año sin recorrer la lista en cada bloque.
   const { data: memories = [] } = useMemories();
@@ -857,18 +941,7 @@ const JourneyLoaded = ({
                 {/* El año como hito, no como rótulo: número grande, sus
                     totales al lado y una regla que se desvanece — la línea
                     temporal respira entre año y año. */}
-                <div className="mb-4 flex items-baseline gap-4">
-                  <span className="font-display text-[84px] leading-[0.9] font-bold text-bone tabular-nums">
-                    {year}
-                  </span>
-                  <span className="text-small text-dust tabular-nums">
-                    <strong className="font-semibold text-bone">
-                      {yearGames} {yearGames === 1 ? 'game' : 'games'}
-                    </strong>
-                    , {formatHours(yearHours)}
-                  </span>
-                  <span className="h-px min-w-8 flex-1 self-center bg-line" />
-                </div>
+                <YearMilestone year={year} games={yearGames} hours={yearHours} />
                 {/* La historia del año completa, antes del primer mes. El
                     titular vive AQUÍ dentro y ya no se repite en cursiva
                     junto al número: dos veces el mismo texto a dos líneas de
@@ -938,7 +1011,19 @@ const JourneyLoaded = ({
                         <span
                           className="absolute top-2.5 -right-[7px] size-3 rounded-full border-2 bg-cabinet transition-[scale] duration-200 group-hover/month:scale-125 motion-reduce:transition-none"
                           style={{ borderColor: nodeColor, boxShadow: `0 0 8px ${nodeColor}80` }}
-                        />
+                        >
+                          {/* El nodo del mes que estás leyendo late con el
+                              color de su protagonista: un anillo que se
+                              expande y se apaga. Solo uno a la vez (el mes
+                              resaltado, que por definición está en vista). */}
+                          {highlightedMonth === `${year}-${month}` && (
+                            <span
+                              aria-hidden
+                              className="absolute -inset-0.5 animate-led-ring rounded-full border-2 motion-reduce:hidden"
+                              style={{ borderColor: nodeColor }}
+                            />
+                          )}
+                        </span>
                       </div>
 
                       {/* min-h fija un alto mínimo por mes: sin él, un mes con
@@ -1000,7 +1085,10 @@ const JourneyLoaded = ({
             años abiertos a la vez la columna se convertía en una lista de
             120 entradas y dejaba de servir para orientarse. */}
         <nav aria-label="Journey date navigation" className="sticky top-21 py-1">
-          <div className="relative flex flex-col gap-1 border-l border-line-strong">
+          <div
+            ref={yearIndexRef}
+            className="relative flex flex-col gap-1 border-l border-line-strong"
+          >
             {byYear.map(({ year, months }) => {
               const active = highlightedYear === year;
               return (
@@ -1014,17 +1102,14 @@ const JourneyLoaded = ({
                     className={cn(
                       'group/year relative w-full py-0.5 pl-3.5 text-left font-display text-[30px] leading-tight font-bold tabular-nums',
                       'transition-colors duration-150 outline-hidden focus-visible:outline-2 focus-visible:outline-phosphor',
-                      'before:absolute before:inset-y-1 before:-left-px before:w-0.75 before:transition-colors',
-                      active
-                        ? 'text-bone before:bg-phosphor'
-                        : 'text-dust before:bg-transparent hover:text-bone',
+                      active ? 'text-bone' : 'text-dust hover:text-bone',
                     )}
                   >
                     {year}
                   </button>
 
                   {active && (
-                    <div className="mb-2 flex flex-col pl-3.5">
+                    <div ref={monthIndexRef} className="relative isolate mb-2 flex flex-col pl-3.5">
                       {months.map(([month, monthEntries]) => {
                         const key = `${year}-${month}`;
                         const monthActive = highlightedMonth === key;
@@ -1039,9 +1124,7 @@ const JourneyLoaded = ({
                             className={cn(
                               'flex items-center justify-between gap-2 rounded-sm px-1.5 py-1 text-left text-small transition-colors duration-150',
                               'outline-hidden focus-visible:outline-2 focus-visible:outline-phosphor',
-                              monthActive
-                                ? 'bg-raised font-semibold text-bone'
-                                : 'text-dust hover:text-bone',
+                              monthActive ? 'font-semibold text-bone' : 'text-dust hover:text-bone',
                             )}
                           >
                             <span>{monthShortLabel(month)}</span>
@@ -1053,11 +1136,28 @@ const JourneyLoaded = ({
                           </button>
                         );
                       })}
+                      {/* La píldora del mes se desliza entre meses. */}
+                      <SlidingIndicator
+                        containerRef={monthIndexRef}
+                        activeKey={highlightedMonth}
+                        selector=':scope > button[aria-current="true"]'
+                        axis="y"
+                        className="right-0 left-3.5 -z-1 rounded-sm bg-raised"
+                      />
                     </div>
                   )}
                 </div>
               );
             })}
+            {/* La barra del año resaltado baja por el lomo del índice. */}
+            <SlidingIndicator
+              containerRef={yearIndexRef}
+              activeKey={`${highlightedYear}-${highlightedMonth}`}
+              selector=':scope > div > button[aria-current="true"]'
+              axis="y"
+              inset={4}
+              className="-left-px w-0.75 bg-phosphor shadow-glow-bar"
+            />
           </div>
         </nav>
       </div>

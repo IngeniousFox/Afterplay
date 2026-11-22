@@ -1782,3 +1782,107 @@ test('capturas de movimiento de Plan, Sessions y Ajustes', async () => {
     sandbox.cleanup();
   }
 });
+
+// MOVIMIENTO DE STATS (fase B): el hero contando, una gráfica dibujándose y
+// el heatmap encendiéndose, en docs/redesign/screens/motion/stats-*.
+//   · El hero cuenta con requestAnimationFrame (Ticker), no con una animación
+//     CSS: se fotografía en tiempo real, en ráfaga, mientras sube.
+//   · Las gráficas son animaciones CSS en pausa hasta entrar en vista: se
+//     llevan a la vista y se congelan fotograma a fotograma (el pause() de la
+//     API manda sobre el animation-play-state del CSS).
+test('capturas de movimiento de Stats', async () => {
+  test.setTimeout(240_000);
+  const MOTION = join(process.cwd(), 'docs', 'redesign', 'screens', 'motion');
+  mkdirSync(MOTION, { recursive: true });
+  const { app, window, sandbox } = await launchAfterplay();
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.isVisible()) w.setContentSize(1600, 1000);
+      }
+    });
+    await window.waitForTimeout(1500);
+
+    const freezeAt = (ms: number): Promise<void> =>
+      window.evaluate((time) => {
+        for (const animation of document.getAnimations()) {
+          animation.pause();
+          animation.currentTime = time;
+        }
+      }, ms);
+    const release = (): Promise<void> =>
+      window.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.play();
+      });
+    const clipOf = async (
+      selector: string,
+      pad = 12,
+    ): Promise<{ x: number; y: number; width: number; height: number }> => {
+      const box = await window.locator(selector).first().boundingBox();
+      if (!box) throw new Error(`sin caja para ${selector}`);
+      return {
+        x: Math.max(0, box.x - pad),
+        y: Math.max(0, box.y - pad),
+        width: Math.min(1600, box.width + pad * 2),
+        height: box.height + pad * 2,
+      };
+    };
+    // Lleva una tarjeta a la vista y congela sus animaciones en cada instante.
+    const chartFrames = async (name: string, selector: string, times: number[]): Promise<void> => {
+      await window
+        .locator(selector)
+        .first()
+        .evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      // Un frame para que el IntersectionObserver marque data-inview.
+      await window.waitForTimeout(60);
+      await freezeAt(0);
+      const clip = await clipOf(selector);
+      for (const time of times) {
+        await freezeAt(time);
+        await window.waitForTimeout(80);
+        await window.screenshot({
+          path: join(MOTION, `${name}-${String(time).padStart(4, '0')}ms.png`),
+          clip,
+        });
+      }
+      await release();
+    };
+
+    // 1. El hero de Stats contando (ráfaga en tiempo real).
+    await goTo(window, '/home');
+    await window.waitForTimeout(600);
+    await goTo(window, '/stats');
+    await window.locator('.afterplay-stats-hero').waitFor();
+    const heroClip = await clipOf('.afterplay-stats-hero', 0);
+    for (let index = 1; index <= 5; index++) {
+      await window.screenshot({
+        path: join(MOTION, `stats-hero-count-${index}.png`),
+        clip: heroClip,
+      });
+    }
+    await window.waitForTimeout(1400);
+    await window.screenshot({ path: join(MOTION, 'stats-hero-count-6-final.png'), clip: heroClip });
+
+    // 2. Una gráfica dibujándose: las barras de horas por mes y el flujo del
+    // backlog.
+    await chartFrames(
+      'stats-bars-grow',
+      '.afterplay-session-length-card',
+      [80, 220, 380, 560, 900],
+    );
+    await chartFrames('stats-age-spin', '.afterplay-age-card', [100, 300, 500, 700, 1000]);
+    await chartFrames(
+      'stats-flow-draw',
+      '.afterplay-backlog-flow-card',
+      [120, 300, 520, 760, 1200],
+    );
+    await chartFrames('stats-radar-expand', '.afterplay-genre-card', [120, 320, 520, 760, 1100]);
+
+    // 3. El heatmap encendiéndose en diagonal con su barrido.
+    const heatCard = '.afterplay-stat-card:has(.afterplay-heat-cell)';
+    await chartFrames('stats-heatmap-on', heatCard, [60, 200, 340, 480, 640, 900]);
+  } finally {
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});

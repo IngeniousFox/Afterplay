@@ -17,4 +17,4 @@ export { SlidingIndicator } from './SlidingIndicator';
 export { celebrate, confirmFlash, type CelebrationKind, type SparkOrigin } from './sparks';
 export { VuMeter } from './VuMeter';
 export { Glitch } from './Glitch';
-export { chartGroup, drawLine, growX, growY, spinIn, useInView } from './chart';
+export { chartGroup, chartPaused, drawLine, growX, growY, spinIn, useInView } from './chart';

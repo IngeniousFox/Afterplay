@@ -2,6 +2,8 @@ import { cn } from '../../lib/utils';
 import { useState } from 'react';
 import { formatHours } from '../../lib/format';
 import { GENRE_AXES } from '../../lib/genreAxes';
+import { chartGroup, chartPaused, drawLine, useInView } from '../fx/chart';
+import { markBloomClass } from './chartMotion';
 import { ChartHeading, StatCard } from './StatCard';
 
 type GenreRadarProps = {
@@ -20,6 +22,14 @@ const OUTER_RADIUS = 88;
 const LABEL_RADIUS = 116;
 const HIT_RADIUS = 130;
 const RING_FRACTIONS = [0.25, 0.5, 0.75, 1];
+
+// La expansión desde el centro del radar (no desde el centro de cada forma):
+// transform-box view-box con el origen en el centro del SVG.
+const fromCenter = {
+  transformBox: 'view-box',
+  transformOrigin: `${CENTER_X}px ${CENTER_Y}px`,
+} as const;
+const expandClass = `animate-[afterplay-radar-expand_720ms_var(--ease-spring-soft)_backwards] ${chartPaused}`;
 
 const angleOf = (index: number, axisCount: number): number =>
   -Math.PI / 2 + (index * 2 * Math.PI) / axisCount;
@@ -56,6 +66,9 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
   const rankedEntries = [...entries].sort((a, b) => b.minutes - a.minutes || a.index - b.index);
   const dominantIndex = totalMinutes > 0 ? rankedEntries[0].index : null;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // Al entrar en vista: los anillos se abren desde el centro, los radios se
+  // dibujan y el polígono se expande con un pequeño rebote. Una vez.
+  const { observe, inView } = useInView();
   const activeIndex = hoveredIndex ?? dominantIndex;
   const activeEntry = activeIndex === null ? null : entries[activeIndex];
 
@@ -69,7 +82,11 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
       <ChartHeading title="Genre spread" right="Hours by main genre" />
 
       <div className="afterplay-genre-body mt-2 flex flex-1 flex-col items-center justify-center">
-        <div className="afterplay-genre-radar relative max-w-full">
+        <div
+          ref={observe}
+          data-inview={inView || undefined}
+          className={cn('afterplay-genre-radar relative max-w-full', chartGroup)}
+        >
           <svg
             width={VIEW_WIDTH}
             height={VIEW_HEIGHT}
@@ -82,13 +99,15 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                 : `${entries[dominantIndex].axis} is the dominant genre at ${entries[dominantIndex].share}%`
             }
           >
-            {RING_FRACTIONS.map((fraction) => (
+            {RING_FRACTIONS.map((fraction, ringIndex) => (
               <polygon
                 key={fraction}
                 points={ringPoints(fraction, axes.length)}
                 fill="none"
                 stroke="var(--color-line-strong)"
                 strokeWidth={1}
+                className={expandClass}
+                style={{ ...fromCenter, animationDelay: `${ringIndex * 60}ms` }}
               />
             ))}
 
@@ -104,15 +123,20 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                   y2={y}
                   stroke={isActive ? 'var(--color-phosphor)' : 'var(--color-line)'}
                   strokeWidth={isActive ? 1.5 : 1}
-                  className="afterplay-genre-spoke transition-[stroke] duration-150 motion-reduce:transition-none"
+                  pathLength={1}
+                  className={cn(
+                    'afterplay-genre-spoke transition-[stroke] duration-150 motion-reduce:transition-none',
+                    drawLine,
+                  )}
+                  style={{ animationDelay: `${120 + entry.index * 40}ms` }}
                 />
               );
             })}
 
             <g
               key={polygonPoints}
-              className="afterplay-genre-shape animate-in duration-500 fade-in-0 zoom-in-75 motion-reduce:animate-none"
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+              className={cn('afterplay-genre-shape', expandClass)}
+              style={{ ...fromCenter, animationDelay: '320ms' }}
             >
               <polygon
                 points={polygonPoints}
@@ -133,7 +157,10 @@ export const GenreRadar = ({ minutesByAxis }: GenreRadarProps): React.JSX.Elemen
                     fill={isActive ? 'var(--color-phosphor)' : 'var(--color-panel)'}
                     stroke="var(--color-phosphor)"
                     strokeWidth={1.5}
-                    className="afterplay-genre-point transition-[r,fill] duration-150 motion-reduce:transition-none"
+                    className={cn(
+                      'afterplay-genre-point text-phosphor transition-[r,fill,filter] duration-150 motion-reduce:transition-none',
+                      isActive && markBloomClass,
+                    )}
                   />
                 );
               })}
