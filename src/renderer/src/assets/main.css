@@ -264,16 +264,6 @@
   }
 }
 
-@keyframes afterplay-pulse-badge {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 179, 71, 0.55);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 6px rgba(255, 179, 71, 0);
-  }
-}
 @keyframes afterplay-grow-x {
   from {
     transform: scaleX(0);
@@ -318,19 +308,6 @@
   }
 }
 
-@keyframes afterplay-glow-card {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1.5px rgba(255, 179, 71, 0.85),
-      0 0 24px rgba(255, 179, 71, 0.25);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1.5px rgba(255, 179, 71, 0.65),
-      0 0 40px rgba(255, 179, 71, 0.42);
-  }
-}
 @keyframes afterplay-flash-gold {
   0%,
   100% {
@@ -345,19 +322,7 @@
     box-shadow: 0 0 26px rgba(255, 179, 71, 0.3);
   }
 }
-@keyframes afterplay-toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(28px) scale(0.94);
-  }
-  60% {
-    transform: translateX(-4px) scale(1.01);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
+
 /* Sonner freezes expanded toast height before asynchronous achievements arrive. Match content height without changing collapsed stack behavior. */
 [data-sonner-toast][data-mounted='true'][data-expanded='true']:has(.afterplay-toast) {
   height: auto;
@@ -406,25 +371,7 @@
     transform: scale(1.4);
   }
 }
-@keyframes afterplay-tv-reveal-in {
-  from {
-    opacity: 0;
-    translate: 0 1.6em;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
-  }
-}
-@keyframes afterplay-tv-ring-breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
-}
+
 @keyframes afterplay-tv-caret-blink {
   0%,
   54% {
@@ -435,33 +382,7 @@
     opacity: 0;
   }
 }
-@keyframes afterplay-tv-hero-drift {
-  from {
-    transform: scale(1.02) translate3d(0, 0, 0);
-  }
-  to {
-    transform: scale(1.07) translate3d(-1.2%, -1%, 0);
-  }
-}
-@keyframes afterplay-tv-aurora-a {
-  0%,
-  100% {
-    transform: translate3d(-8%, -6%, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(6%, 8%, 0) scale(1.15);
-  }
-}
 
-@keyframes afterplay-tv-aurora-b {
-  0%,
-  100% {
-    transform: translate3d(6%, 8%, 0) scale(1.1);
-  }
-  50% {
-    transform: translate3d(-7%, -5%, 0) scale(0.95);
-  }
-}
 @keyframes afterplay-tv-intro-veil {
   0%,
   72% {
@@ -508,73 +429,7 @@
     opacity: 0;
   }
 }
-@keyframes afterplay-tv-screen-in {
-  from {
-    opacity: 0;
-    translate: 0 1.4em;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
-  }
-}
 
-@keyframes afterplay-tv-backdrop-drift {
-  from {
-    transform: scale(1.12) translate3d(0, 0, 0);
-  }
-  to {
-    transform: scale(1.18) translate3d(-1.5%, -1.2%, 0);
-  }
-}
-@keyframes afterplay-tv-sheen {
-  from {
-    transform: translateX(-130%) skewX(-18deg);
-  }
-  to {
-    transform: translateX(230%) skewX(-18deg);
-  }
-}
-@keyframes afterplay-tv-pop-in {
-  from {
-    opacity: 0;
-    scale: 0.96;
-    translate: 0 0.6em;
-  }
-  to {
-    opacity: 1;
-    scale: 1;
-    translate: 0 0;
-  }
-}
-@keyframes afterplay-tv-glow-breathe {
-  0%,
-  100% {
-    opacity: 0.95;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-@keyframes afterplay-tv-float {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 -0.35em;
-  }
-}
-@keyframes afterplay-tv-page-turn-in {
-  from {
-    opacity: 0;
-    transform: perspective(1400px) rotateY(7deg) translateX(2.4em);
-  }
-  to {
-    opacity: 1;
-    transform: perspective(1400px) rotateY(0deg) translateX(0);
-  }
-}
 @keyframes afterplay-tv-outro-mark {
   0% {
     opacity: 0;
