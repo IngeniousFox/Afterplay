@@ -1,18 +1,17 @@
 import { Search, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import type { GameListItem } from '../../../shared/types';
 import { useGames } from '../hooks/games';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { consumeAmbientWake } from '../lib/ambientWake';
-import { BLUE } from '../lib/colors';
 import { formatHours } from '../lib/format';
 import { useTvBackdrop } from './backdropContext';
 import { useTvFocusable, useTvLayerIsActive } from './focusContext';
 import { forgetLibrary, recallLibrary, rememberLibrary } from './screenMemory';
-import { tvRevealClass, tvRevealStyle } from './styles';
+import { tvButtonHalo, tvFocusMotion, tvFocusScale, tvRevealClass, tvRevealStyle } from './styles';
 import { TvGameTile } from './TvGameTile';
-import { TvScreenTitle } from './TvScreenTitle';
 import { TvKeyboard } from './TvKeyboard';
 import { useTvInputDevice } from './inputDevice';
 import { useTvButtons, useTvLegend } from './tvInput';
@@ -68,12 +67,17 @@ const swallowKey = (event: KeyboardEvent): void => {
 // scroll llega más tarde a propósito (es un muelle).
 const FOCUS_NEIGHBOURS = 18;
 
+// La píldora de filtro de tvpwa-tv-library.png: Raised con borde, la activa
+// con su filo Phosphor abajo (como una pestaña) y el recuento en Dust. Foco
+// del sistema: doble anillo, halo y escala.
 const FilterPill = ({
   label,
+  count,
   active,
   onSelect,
 }: {
   label: string;
+  count: number;
   active: boolean;
   onSelect: () => void;
 }): React.JSX.Element => {
@@ -83,67 +87,34 @@ const FilterPill = ({
       ref={ref}
       type="button"
       onClick={onSelect}
-      // El foco se dice como en las carátulas: luz DENTRO (anillo interior
-      // que respira + barrido), y fuera solo una sombra suave. La elevación,
-      // con translate — nunca scale (lección Chromium).
-      className="relative overflow-hidden rounded-full px-[0.85em] py-[0.32em] text-[0.68em] font-bold transition-[background-color,color,box-shadow,translate] duration-200"
-      style={{
-        ...(active
-          ? {
-              background: 'linear-gradient(180deg, rgba(255,179,71,.22), rgba(255,179,71,.1))',
-              color: '#ffb347',
-              boxShadow: 'inset 0 0 0 1px rgba(255,179,71,.35)',
-            }
-          : {
-              color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.06)',
-            }),
-        ...(focused
-          ? {
-              background: 'rgba(255,179,71,.14)',
-              color: '#ffb347',
-              translate: '0 -0.1em',
-              boxShadow: '0 0.2em 1em rgba(255,179,71,.25), 0 0.3em 0.8em rgba(3,6,7,.3)',
-            }
-          : {}),
-      }}
-    >
-      {focused && (
-        <>
-          <span
-            aria-hidden
-            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-            style={{ boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.8)' }}
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
-          >
-            <span
-              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
-              style={{
-                background:
-                  'linear-gradient(105deg, transparent, rgba(233,228,216,.25), transparent)',
-              }}
-            />
-          </span>
-        </>
+      aria-pressed={active}
+      className={cn(
+        'relative flex h-[2.1em] items-center gap-[0.5em] rounded-sm border px-[0.85em] text-[1.02em] font-medium',
+        tvFocusMotion,
+        active
+          ? 'border-line-strong bg-raised text-bone after:absolute after:inset-x-[0.3em] after:-bottom-px after:h-[0.12em] after:rounded-full after:bg-phosphor after:shadow-glow-bar'
+          : 'border-line bg-panel text-dust',
+        focused && ['text-bone', tvFocusScale, tvButtonHalo],
       )}
-      <span className="relative">{label}</span>
+    >
+      {label}
+      <span className="text-[0.88em] text-dust tabular-nums">{count}</span>
     </button>
   );
 };
 
 // La puerta VISIBLE de la búsqueda (además del atajo Y/F): un chip que
-// enseña la lupa, el texto activo y cuántos van quedando.
+// enseña la lupa, el texto activo y la Y del mando.
 const SearchChip = ({
   query,
   count,
+  showPad,
   onOpen,
   onClear,
 }: {
   query: string;
   count: number;
+  showPad: boolean;
   onOpen: () => void;
   onClear: () => void;
 }): React.JSX.Element => {
@@ -161,69 +132,41 @@ const SearchChip = ({
       // pushLayer — el confirmar encima era doble. Limpiar sí es una acción
       // propia y conserva su confirmar.
       data-tv-sound={active ? undefined : 'none'}
-      // Mismo lenguaje de foco que los pills pero en el violeta de la
-      // búsqueda: anillo interior respirando + barrido + sombra exterior.
-      className="relative flex items-center gap-[0.45em] overflow-hidden rounded-full px-[0.85em] py-[0.32em] text-[0.68em] font-bold transition-[background-color,color,box-shadow,translate] duration-200"
-      style={{
-        ...(active
-          ? {
-              background: 'linear-gradient(180deg, rgba(185,166,255,.22), rgba(185,166,255,.11))',
-              color: '#a9b3e8',
-              boxShadow: 'inset 0 0 0 1px rgba(185,166,255,.35)',
-            }
-          : {
-              background: 'rgba(233,228,216,.05)',
-              color: 'var(--muted-foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.06)',
-            }),
-        ...(focused
-          ? {
-              background: 'rgba(185,166,255,.16)',
-              color: '#c3cbf2',
-              translate: '0 -0.1em',
-              boxShadow: '0 0.2em 1em rgba(185,166,255,.28), 0 0.3em 0.8em rgba(3,6,7,.3)',
-            }
-          : {}),
-      }}
+      className={cn(
+        'flex h-[2.1em] items-center gap-[0.5em] rounded-sm border border-line-strong bg-panel px-[0.8em] text-[1.02em]',
+        tvFocusMotion,
+        active ? 'text-bone' : 'text-dust',
+        focused && ['text-bone', tvFocusScale, tvButtonHalo],
+      )}
     >
-      {focused && (
+      <Search className="size-[0.95em] flex-none" />
+      {active ? (
         <>
-          <span
-            aria-hidden
-            className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-            style={{ boxShadow: 'inset 0 0 0 2px rgba(185,166,255,.75)' }}
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
-          >
-            <span
-              className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
-              style={{
-                background:
-                  'linear-gradient(105deg, transparent, rgba(233,228,216,.22), transparent)',
-              }}
-            />
-          </span>
+          <span className="font-semibold">{query.trim()}</span>
+          <span className="text-[0.88em] text-dust tabular-nums">{count}</span>
+          <X className="size-[0.9em] text-dust" />
+        </>
+      ) : (
+        <>
+          Search
+          {showPad && (
+            <span className="ml-[0.2em] flex size-[1.3em] items-center justify-center rounded-full border-[0.09em] border-dust text-[0.78em] font-semibold text-bone">
+              Y
+            </span>
+          )}
         </>
       )}
-      <Search
-        className="relative h-[1.05em] w-[1.05em] flex-none"
-        style={active || focused ? { filter: 'drop-shadow(0 0 0.35em rgba(185,166,255,.6))' } : {}}
-      />
-      <span className="relative flex items-center gap-[0.45em]">
-        {active ? (
-          <>
-            “{query.trim()}” · {count}
-            <X className="h-[1.05em] w-[1.05em] opacity-70" />
-          </>
-        ) : (
-          'Search'
-        )}
-      </span>
     </button>
   );
 };
+
+// La chapa de LB/RB a los lados de los filtros (solo con mando: con teclado
+// esas letras escriben en la búsqueda).
+const ShoulderChip = ({ label }: { label: string }): React.JSX.Element => (
+  <span className="flex h-[1.3em] items-center rounded-sm border-[0.09em] border-dust px-[0.3em] text-[0.85em] font-semibold text-dust">
+    {label}
+  </span>
+);
 
 export const TvLibrary = (): React.JSX.Element => {
   const navigate = useNavigate();
@@ -248,6 +191,12 @@ export const TvLibrary = (): React.JSX.Element => {
     const byFilter = games.filter(filter.match);
     return needle ? byFilter.filter((game) => normalize(game.title).includes(needle)) : byFilter;
   }, [games, filter, needle]);
+
+  // El recuento de cada píldora (solo presentación).
+  const filterCounts = useMemo(
+    () => FILTERS.map((entry) => games.filter(entry.match).length),
+    [games],
+  );
 
   const totalHours = useMemo(
     () => visible.reduce((sum, game) => sum + game.totalHours, 0),
@@ -382,10 +331,6 @@ export const TvLibrary = (): React.JSX.Element => {
     snapshot && visibleRank.has(snapshot.focusGameId)
       ? snapshot.focusGameId
       : (visible[0]?.id ?? null);
-
-  // El acento del estado vacío cuenta el PORQUÉ está vacío: violeta si fue la
-  // búsqueda, verde si fue el filtro.
-  const emptyAccent = needle ? '#b9a6ff' : '#ffb347';
 
   // SOLO SE REGISTRA EN EL MOTOR DE FOCO LO QUE ESTÁ CERCA DEL VIEWPORT, y
   // esto arregla el peor parón medido de todo el modo TV: 600 ms.
@@ -568,34 +513,47 @@ export const TvLibrary = (): React.JSX.Element => {
   return (
     <div className="flex h-full flex-col">
       <div
-        className={`mb-[0.8em] flex flex-none flex-wrap items-center gap-x-[0.9em] gap-y-[0.4em] ${tvRevealClass}`}
+        className={cn(
+          'mb-[0.2em] flex flex-none flex-wrap items-center gap-x-[0.75em] gap-y-[0.5em]',
+          tvRevealClass,
+        )}
         style={tvRevealStyle(0)}
       >
-        <TvScreenTitle label="Library" accent={BLUE} />
-        <div className="flex items-center gap-[0.3em]">
+        <h1 className="mr-[0.4em] font-display text-[2.75em] leading-none font-bold text-bone">
+          Library
+        </h1>
+        {device === 'gamepad' && <ShoulderChip label="LB" />}
+        <div className="flex items-center gap-[0.45em]">
           {FILTERS.map((entry, index) => (
             <FilterPill
               key={entry.key}
               label={entry.label}
+              count={filterCounts[index]}
               active={index === filterIndex}
               onSelect={() => setFilterIndex(index)}
             />
           ))}
         </div>
-        <SearchChip
-          query={query}
-          count={visible.length}
-          onOpen={() => setKeyboardOpen(true)}
-          onClear={() => setQuery('')}
-        />
-        <span className="ml-auto text-[0.68em] font-semibold text-muted-foreground tabular-nums">
-          {/* key=length: el contador no salta de número, se FUNDE al nuevo —
-              el mismo lenguaje líquido que la parrilla al refiltrar. */}
-          <span key={visible.length} className="animate-in fade-in-0 inline-block duration-300">
-            {visible.length} {visible.length === 1 ? 'game' : 'games'}
-            {totalHours > 0 && (
-              <span className="text-muted-foreground/60"> · {formatHours(totalHours)}</span>
-            )}
+        {device === 'gamepad' && <ShoulderChip label="RB" />}
+        <span className="ml-[0.6em]">
+          <SearchChip
+            query={query}
+            count={visible.length}
+            showPad={device === 'gamepad'}
+            onOpen={() => setKeyboardOpen(true)}
+            onClear={() => setQuery('')}
+          />
+        </span>
+        <span className="ml-auto flex items-baseline gap-[0.4em]">
+          {/* key=length: el contador no salta de número, se FUNDE al nuevo. */}
+          <span key={visible.length} className="flex animate-fade-in items-baseline gap-[0.4em]">
+            <span className="font-display text-[2.5em] leading-none font-bold text-bone tabular-nums">
+              {visible.length}
+            </span>
+            <span className="text-[0.95em] text-dust tabular-nums">
+              {visible.length === 1 ? 'game' : 'games'}
+              {totalHours > 0 && ` · ${formatHours(totalHours)}`}
+            </span>
           </span>
         </span>
       </div>
@@ -604,22 +562,16 @@ export const TvLibrary = (): React.JSX.Element => {
         {/* LA PARRILLA LÍQUIDA, versión FLIP: montan SIEMPRE todos los
             juegos, en el mismo orden, y al refiltrar la parrilla SALTA a su
             estado final en UN solo layout (anchuras 16.6% ↔ 0 sin
-            transición). El deslizamiento lo pone el efecto de abajo: mide
+            transición). El deslizamiento lo pone el efecto de arriba: mide
             dónde estaba cada celda, la clava en su posición vieja con un
             transform y suelta la transición hacia cero — transform puro,
-            compositor, CERO reflow por frame. La primera versión animaba la
-            ANCHURA y eso reflowaba (y re-rasterizaba) la parrilla entera en
-            cada frame: el lag que se notaba al filtrar y al escribir. */}
+            compositor, CERO reflow por frame. */}
         <div
           ref={gridRef}
-          // scroll-py: el conductor de scroll respeta scroll-padding, así que
-          // la fila que entra a la vista aterriza SEPARADA del borde donde
-          // recorta este contenedor. Sin ese colchón, el foco levanta la
-          // carátula unos píxeles (translate) y el canto superior asomaba
-          // fuera del clip: la primera fila se veía cortada. Mismo arreglo
-          // que ya lleva el Home, aquí arriba y abajo porque la parrilla se
-          // recorre en las dos direcciones.
-          className="-mx-[0.6em] flex h-full scroll-py-[0.7em] flex-wrap content-start gap-y-[1.1em] overflow-y-auto px-[0.6em] pt-[0.7em] pb-[1.5em]"
+          // El -mx devuelve al borde el padding de las celdas (ver abajo).
+          // El título va en el flujo bajo cada portada, así que una fila
+          // nunca pisa la siguiente.
+          className="-mx-[0.8em] flex h-full flex-wrap content-start overflow-y-auto pt-[0.2em] pb-[1.5em]"
           style={{ scrollbarWidth: 'none' }}
         >
           {games.map((game, index) => {
@@ -648,11 +600,14 @@ export const TvLibrary = (): React.JSX.Element => {
                   containIntrinsicSize: 'auto 16em',
                 }}
               >
-                {/* El respiro entre columnas vive DENTRO de la celda (pr en
-                    vez de gap del contenedor): una celda plegada pliega
-                    también su hueco. disabled saca a las ocultas del motor
-                    de foco — sin fantasmas navegables ni A sobre invisibles. */}
-                <div className="pr-[0.9em]">
+                {/* El respiro entre portadas vive DENTRO de la celda (padding
+                    en vez de gap del contenedor): una celda plegada pliega
+                    también su hueco. Y es además el sitio del foco: el
+                    content-visibility de la celda contiene el pintado, así
+                    que la escala 1.06 y el halo tienen que caber en este
+                    padding o se recortarían. disabled saca a las ocultas del
+                    motor de foco — sin fantasmas navegables. */}
+                <div className="px-[0.8em] pt-[0.8em] pb-[0.5em]">
                   <TvGameTile
                     game={game}
                     fill
@@ -670,29 +625,14 @@ export const TvLibrary = (): React.JSX.Element => {
           })}
         </div>
         {visible.length === 0 && (
-          // El vacío también es un sitio: la lupa flota en un disco de
-          // cristal con su halo respirando. Superpuesto a la parrilla (que
+          // El vacío también es un sitio, superpuesto a la parrilla (que
           // queda toda plegada debajo) para no desmontarla jamás.
-          <div className="animate-in fade-in-0 zoom-in-95 pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center duration-300">
-            <div
-              className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative mb-[0.9em] flex h-[3.4em] w-[3.4em] items-center justify-center rounded-full"
-              style={{
-                background: 'rgba(233,228,216,.04)',
-                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.08)',
-              }}
-            >
-              <span
-                aria-hidden
-                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-0 rounded-full"
-                style={{ boxShadow: `0 0 1.8em ${emptyAccent}45` }}
-              />
-              <Search
-                className="h-[1.4em] w-[1.4em]"
-                style={{ color: emptyAccent, filter: `drop-shadow(0 0 0.5em ${emptyAccent}80)` }}
-              />
+          <div className="pointer-events-none absolute inset-0 flex animate-fade-in flex-col items-center justify-center text-center">
+            <div className="mb-[0.9em] flex size-[3.4em] items-center justify-center rounded-md border border-line bg-panel bg-(image:--scan)">
+              <Search className="size-[1.4em] text-phosphor" />
             </div>
-            <div className="text-[0.95em] font-bold">Nothing here</div>
-            <div className="mt-[0.3em] text-[0.72em] text-muted-foreground">
+            <div className="font-display text-[1.6em] font-bold text-bone">Nothing here</div>
+            <div className="mt-[0.3em] text-[1em] text-dust">
               {query ? 'No titles match that search.' : 'No games under this filter.'}
             </div>
           </div>

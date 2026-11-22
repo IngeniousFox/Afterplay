@@ -1,11 +1,13 @@
-import { Delete, Search, Space, X } from 'lucide-react';
+import { Delete, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { GameCover } from '../components/GameCover';
+import { cn } from '@/lib/utils';
 import { TV_MODAL_SWALLOW, useTvButtons, useTvLegend } from './tvInput';
 import { TvFocusLayer } from './focus';
 import { useTvFocusable, useTvLayerIsActive } from './focusContext';
 import { useTvInputDevice } from './inputDevice';
 import { tvSound } from './sound';
+import { tvButtonHalo, tvFocusHalo, tvFocusMotion, tvFocusScale } from './styles';
+import { TvCoverArt } from './tvUi';
 import type { GameId } from '../../../shared/entityIds';
 
 // El teclado en pantalla del modo TV (BIG-PICTURE.md §7.4). Tonto a
@@ -53,7 +55,7 @@ const SPANISH_FALLBACK: string[][] = [
 // El escalonado de máquina de escribir: cada fila arranca un poco más a la
 // derecha que la anterior — sin él, cuatro filas de 10 centradas parecen
 // una calculadora, no un teclado.
-const ROW_STAGGER = ['0em', '0.75em', '1.15em', '1.9em'];
+const ROW_STAGGER = ['0em', '0em', '0.95em', '1.9em'];
 
 type KeyboardLayoutApi = {
   keyboard?: { getLayoutMap: () => Promise<Map<string, string>> };
@@ -124,65 +126,34 @@ const Key = ({
       // cada letra convertiría escribir en una fanfarria.
       data-tv-sound="none"
       onClick={press}
-      // KEYCAP de verdad: luz cenital (gradiente claro→oscuro), hairline
-      // interior y un CANTO sólido abajo — la tecla tiene grosor. Al
-      // enfocarse se levanta (translate) y el canto crece con ella; el
-      // active: del ratón la hunde. Nunca scale (lección Chromium).
-      className="relative flex h-[2.1em] items-center justify-center overflow-hidden rounded-[0.42em] text-[0.85em] font-bold transition-[background-color,color,box-shadow,translate] duration-150 active:translate-y-[0.06em]"
-      style={{
-        width: width ?? '2.1em',
-        ...(focused
-          ? {
-              background: 'linear-gradient(180deg, rgba(255,179,71,.3), rgba(255,179,71,.12))',
-              color: '#e9e4d8',
-              textShadow: '0 0 0.6em rgba(255,179,71,.8)',
-              translate: '0 -0.12em',
-              boxShadow:
-                'inset 0 1px 0 rgba(233,228,216,.16), 0 0.16em 0 rgba(10,52,28,.5), 0 0.45em 1.1em rgba(255,179,71,.24), 0 0.35em 0.9em rgba(3,6,7,.3)',
-            }
-          : accent
-            ? {
-                background: 'linear-gradient(180deg, rgba(255,179,71,.13), rgba(255,179,71,.05))',
-                color: '#ffc266',
-                boxShadow:
-                  'inset 0 1px 0 rgba(233,228,216,.08), inset 0 0 0 1px rgba(255,179,71,.24), 0 0.09em 0 rgba(10,42,24,.4), 0 0.16em 0.4em rgba(3,6,7,.2)',
-              }
-            : {
-                // Cristal ligero, no baldosa: luz cenital tenue y un canto
-                // FINO — la tecla insinúa grosor sin parecer de granito.
-                background:
-                  'linear-gradient(180deg, rgba(233,228,216,.06), rgba(233,228,216,.022))',
-                color: 'var(--foreground)',
-                boxShadow:
-                  'inset 0 1px 0 rgba(233,228,216,.07), inset 0 0 0 1px rgba(233,228,216,.045), 0 0.09em 0 rgba(3,6,7,.26), 0 0.16em 0.4em rgba(3,6,7,.16)',
-              }),
-      }}
-    >
-      {focused && (
-        <span
-          aria-hidden
-          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.42em]"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(255,179,71,.9)' }}
-        />
+      // La tecla de tvpwa-tv-library.png: Raised con borde, 92 × 84 a 1080p.
+      // Enfocada: anillo ámbar con halo y sube 3 px (translate, sin escala:
+      // las teclas van pegadas y escalarlas las montaría unas sobre otras).
+      // El active: del ratón la hunde.
+      className={cn(
+        'relative flex h-[3.4em] items-center justify-center overflow-hidden rounded-md border text-[1.3em] font-medium active:translate-y-[0.06em]',
+        tvFocusMotion,
+        'transition-[translate,box-shadow,background-color,border-color,color]',
+        accent
+          ? 'border-phosphor bg-phosphor font-semibold text-ink'
+          : 'border-line-strong bg-raised text-bone',
+        focused && [
+          '-translate-y-[0.1em] motion-reduce:translate-y-0',
+          accent ? tvButtonHalo : ['border-phosphor text-phosphor', tvFocusHalo],
+        ],
       )}
-      {/* El flash de pulsación: nace encendido y se apaga (animate-out +
-          forwards, como en ScreenshotLightbox, para que no reaparezca al
-          acabar). Vive DENTRO del overflow-hidden de la tecla. */}
+      style={{ width: width ?? '2.95em' }}
+    >
+      {/* El flash de pulsación: nace encendido y se apaga. Vive DENTRO del
+          overflow-hidden de la tecla. */}
       {pressCount > 0 && (
         <span
           key={pressCount}
           aria-hidden
-          className="animate-out fade-out-0 fill-mode-forwards pointer-events-none absolute inset-0 rounded-[0.42em] duration-300"
-          style={{
-            background: 'radial-gradient(circle, rgba(255,179,71,.55), rgba(255,179,71,.12) 75%)',
-          }}
+          className="pointer-events-none absolute inset-0 animate-[fade-in_300ms_var(--ease-out)_reverse_both] bg-phosphor/25"
         />
       )}
-      {/* La letra crece un punto al enfocarse — la burbuja de los OSK de
-          consola, en texto puro (sin arte que emborronar). */}
-      <span className={`relative transition-[scale] duration-150 ${focused ? 'scale-125' : ''}`}>
-        {children ?? label}
-      </span>
+      <span className="relative">{children ?? label}</span>
     </button>
   );
 };
@@ -208,36 +179,17 @@ const SuggestionChip = ({
       ref={ref}
       type="button"
       onClick={onSelect}
-      className="animate-in fade-in-0 slide-in-from-bottom-1 relative flex min-w-0 items-center gap-[0.5em] overflow-hidden rounded-[0.5em] py-[0.28em] pr-[0.75em] pl-[0.28em] text-[0.7em] font-bold transition-[background-color,box-shadow,translate] duration-150"
-      style={
-        focused
-          ? {
-              background: 'linear-gradient(180deg, rgba(185,166,255,.28), rgba(185,166,255,.12))',
-              color: '#e6eaff',
-              translate: '0 -0.12em',
-              boxShadow:
-                'inset 0 1px 0 rgba(233,228,216,.14), 0 0.3em 1em rgba(185,166,255,.3), 0 0.3em 0.8em rgba(3,6,7,.35)',
-            }
-          : {
-              background: 'rgba(233,228,216,.05)',
-              color: 'var(--foreground)',
-              boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.08)',
-            }
-      }
-    >
-      {focused && (
-        <span
-          aria-hidden
-          className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.5em]"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(185,166,255,.85)' }}
-        />
+      className={cn(
+        'flex h-[2.6em] min-w-0 items-center gap-[0.6em] rounded-md border border-line-strong bg-raised pr-[0.9em] pl-[0.3em] text-[1.02em] font-medium text-bone',
+        tvFocusMotion,
+        focused && ['border-phosphor', tvFocusScale, tvButtonHalo],
       )}
-      <GameCover
-        url={suggestion.coverUrl}
-        className="h-[2.1em] w-[1.5em] flex-none rounded-[0.3em]"
-        iconSize={12}
+    >
+      <TvCoverArt
+        game={{ title: suggestion.label, coverUrl: suggestion.coverUrl }}
+        className="w-[1.55em] flex-none text-[0.5em]"
       />
-      <span className="relative max-w-[9em] min-w-0 truncate">{suggestion.label}</span>
+      <span className="min-w-0">{suggestion.label}</span>
     </button>
   );
 };
@@ -392,57 +344,40 @@ const KeyboardSurface = ({
   });
 
   return (
-    // TARJETA flotante, no losa de lado a lado: el teclado es una pieza que
-    // levita sobre la pantalla — cristal oscuro, esquinas redondeadas por
-    // los cuatro costados y aire alrededor. El posicionador de fuera centra
-    // y lleva la animación de entrada/salida; la tarjeta pinta el material.
+    // TARJETA flotante sobre la biblioteca atenuada: el posicionador de fuera
+    // centra, pinta el velo y lleva la entrada/salida; la tarjeta es Overlay
+    // con su sombra de modal (es lo que flota).
     <div
-      className={`pointer-events-none absolute inset-x-0 bottom-[3.3em] z-20 flex justify-center px-[4vw] ${
+      className={cn(
+        'absolute inset-0 z-20 flex items-end justify-center bg-scrim px-[4vw] pb-[3.4em]',
         closing
-          ? 'animate-out slide-out-to-bottom-4 fade-out-0 fill-mode-forwards duration-200'
-          : 'animate-in slide-in-from-bottom-6 fade-in-0 duration-300'
-      }`}
+          ? 'animate-[fade-in_200ms_var(--ease-out)_reverse_both]'
+          : 'animate-[fade-in_200ms_var(--ease-out)_both]',
+      )}
     >
       <div
-        // Sin backdrop-blur: el posicionador de fuera anima con transform y
-        // el blur de dentro no muestrearía hasta el final (fondo ya casi
-        // opaco — no se pierde nada).
-        className="pointer-events-auto w-max max-w-full rounded-[1em] px-[1.4em] pt-[1em] pb-[1.1em]"
-        style={{
-          background: 'linear-gradient(180deg, rgba(19,22,20,.94), rgba(10,12,11,.97))',
-          boxShadow:
-            'inset 0 1px 0 rgba(233,228,216,.08), inset 0 0 0 1px rgba(233,228,216,.06), 0 1.6em 4em rgba(3,6,7,.6), 0 0 2.5em rgba(255,179,71,.06)',
-        }}
+        className={cn(
+          'w-max max-w-full rounded-md border border-line-strong bg-overlay px-[1.3em] pt-[1.1em] pb-[1.2em] shadow-modal',
+          !closing && 'animate-dialog-in',
+        )}
       >
-        {/* El campo: barra oscura de escritura DE VERDAD — fondo hundido,
-            texto grande y claro, el cursor parpadeando seco pegado al texto
-            y el recuento a la derecha. Con texto, el aro se tiñe de verde:
-            "estás filtrando". */}
+        {/* El campo: hundido (Inset), texto grande, cursor ámbar pegado al
+            texto y el recuento a la derecha. Con texto, borde Phosphor. */}
         <div
-          className="mb-[0.75em] flex w-full items-center gap-[0.55em] rounded-[0.55em] px-[0.85em] py-[0.55em] text-[1.05em] font-bold transition-[box-shadow] duration-200"
-          style={{
-            background: 'rgba(3,6,7,.45)',
-            boxShadow:
-              value.length > 0
-                ? 'inset 0 0 0 1px rgba(255,179,71,.45), inset 0 0.15em 0.5em rgba(3,6,7,.5), 0 0 1.2em rgba(255,179,71,.1)'
-                : 'inset 0 0 0 1px rgba(233,228,216,.12), inset 0 0.15em 0.5em rgba(3,6,7,.5)',
-          }}
+          className={cn(
+            'mb-[0.9em] flex h-[2.9em] w-full items-center gap-[0.6em] rounded-md border bg-inset px-[0.9em] text-[1.35em] transition-colors duration-150',
+            value.length > 0 ? 'border-phosphor shadow-focus-field' : 'border-edge',
+          )}
         >
-          <Search
-            className="h-[0.85em] w-[0.85em] flex-none"
-            style={{ color: '#ffb347', filter: 'drop-shadow(0 0 0.4em rgba(255,179,71,.55))' }}
-          />
+          <Search className="size-[0.8em] flex-none text-phosphor" />
           {value.length > 0 ? (
             <span className="min-w-0 truncate text-bone">{value}</span>
           ) : (
-            <span className="min-w-0 truncate text-muted-foreground/60">{placeholder}</span>
+            <span className="min-w-0 truncate text-dust">{placeholder}</span>
           )}
-          <span
-            className="afterplay-tv-caret animate-[afterplay-tv-caret-blink_1.06s_step-end_infinite] -ml-[0.15em] h-[1.15em] w-[3px] flex-none rounded-[1px] bg-phosphor"
-            style={{ boxShadow: '0 0 0.5em rgba(255,179,71,.9)' }}
-          />
+          <span className="-ml-[0.3em] h-[1.1em] w-[0.12em] flex-none animate-[afterplay-tv-caret-blink_1.06s_step-end_infinite] rounded-[1px] bg-phosphor motion-reduce:animate-none" />
           {hint !== undefined && (
-            <span className="ml-auto flex-none pl-[0.6em] text-[0.58em] font-semibold text-muted-foreground/70 tabular-nums">
+            <span className="ml-auto flex-none pl-[0.6em] text-[0.7em] text-dust tabular-nums">
               {hint}
             </span>
           )}
@@ -452,7 +387,7 @@ const KeyboardSurface = ({
           D-pad desde las teclas y entras directo a la ficha. La fila reserva
           su alto aunque no haya nada: el panel no da saltos al escribir. */}
         {suggestions !== undefined && (
-          <div className="mx-auto mb-[0.6em] flex h-[2.4em] w-full max-w-[44em] items-center justify-center gap-[0.5em]">
+          <div className="mx-auto mb-[0.7em] flex h-[2.9em] w-full max-w-[52em] items-center justify-center gap-[0.6em]">
             {suggestions.map((suggestion) => (
               <SuggestionChip
                 key={suggestion.id}
@@ -464,13 +399,12 @@ const KeyboardSurface = ({
         )}
 
         {rows === null ? (
-          // Tres puntos respirando a destiempo mientras llega el layout del
-          // sistema — un latido, no un "…" mudo.
+          // Tres puntos mientras llega el layout del sistema.
           <div className="flex items-center justify-center gap-[0.4em] py-[1.2em]">
             {[0, 1, 2].map((dot) => (
               <span
                 key={dot}
-                className="h-[0.3em] w-[0.3em] animate-pulse rounded-full bg-muted-foreground/60"
+                className="size-[0.3em] animate-pulse-soft rounded-full bg-dust motion-reduce:animate-none"
                 style={{ animationDelay: `${dot * 160}ms` }}
               />
             ))}
@@ -478,11 +412,11 @@ const KeyboardSurface = ({
         ) : (
           // w-max + escalonado por fila: un teclado de verdad, no una parrilla
           // centrada de calculadora.
-          <div className="animate-in fade-in-0 slide-in-from-bottom-2 mx-auto flex w-max flex-col gap-[0.4em] duration-300">
+          <div className="mx-auto flex w-max animate-fade-in flex-col gap-[0.45em]">
             {rows.map((row, rowIndex) => (
               <div
                 key={rowIndex}
-                className="flex gap-[0.4em]"
+                className="flex gap-[0.45em]"
                 style={{ paddingLeft: ROW_STAGGER[rowIndex] }}
               >
                 {row.map((char, charIndex) => (
@@ -495,19 +429,19 @@ const KeyboardSurface = ({
                 ))}
               </div>
             ))}
-            {/* La fila de acciones: limpiar · espacio (la barra ancha de
-              verdad) · borrar · done en verde — el camino feliz, visible. */}
-            <div className="flex gap-[0.4em]" style={{ paddingLeft: '1.15em' }}>
-              <Key label="clear" width="3em" onSelect={clearAll}>
-                <X className="h-[1em] w-[1em]" />
+            {/* La fila de acciones: limpiar · espacio · borrar · done en
+              Phosphor — el camino feliz, visible. */}
+            <div className="flex gap-[0.45em]" style={{ paddingLeft: '0.95em' }}>
+              <Key label="clear" width="4.4em" onSelect={clearAll}>
+                <X className="size-[0.85em]" />
               </Key>
-              <Key label="space" width="9.4em" onSelect={() => typeChar(' ')}>
-                <Space className="h-[1em] w-[1em]" />
+              <Key label="space" width="16.2em" onSelect={() => typeChar(' ')}>
+                <span className="text-[0.75em] text-dust">space</span>
               </Key>
-              <Key label="delete" width="3em" onSelect={backspace}>
-                <Delete className="h-[1em] w-[1em]" />
+              <Key label="delete" width="4.4em" onSelect={backspace}>
+                <Delete className="size-[0.85em]" />
               </Key>
-              <Key label="done" width="4.6em" accent onSelect={requestClose}>
+              <Key label="done" width="7.3em" accent onSelect={requestClose}>
                 done
               </Key>
             </div>

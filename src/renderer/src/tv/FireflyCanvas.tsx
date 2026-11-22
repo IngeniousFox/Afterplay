@@ -38,16 +38,19 @@ export type FireflySpec = {
   // Posición base en % del viewport — la deriva orbita alrededor.
   left: number;
   top: number;
-  // Diámetro visual del núcleo en em (la escala 10-foot del modo).
+  // Diámetro del núcleo en px (2-6): motas de fósforo, no luciérnagas.
   size: number;
   color: string;
-  // Aurora grande y difusa en vez de bolita.
-  big: boolean;
 };
 
 const FRAME_MS = 1000 / 30;
-const SPRITE_SIZE = 128;
+const SPRITE_SIZE = 64;
 
+// FÓSFORO: las luciérnagas pasan a MOTAS DE FÓSFORO (README-tvpwa.md). Una por
+// juego, del color de su estado, 2-6 px con un halo corto y opacidad entre
+// .25 y .7. Detrás de todo y sin competir con el texto. Con reduced motion
+// se quedan quietas (sin deriva ni respiración): siguen ahí, pero no se
+// mueven.
 export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Datos frescos sin reiniciar el bucle: la biblioteca puede refrescarse
@@ -65,7 +68,6 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
 
     let width = 0;
     let height = 0;
-    let em = 24;
     let dpr = 1;
     const resize = (): void => {
       dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -74,16 +76,16 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       height = rect.height;
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
-      em = parseFloat(getComputedStyle(canvas).fontSize) || 24;
     };
     resize();
     window.addEventListener('resize', resize);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    // El horno de sprites: un gradiente radial por (color, tipo), una vez.
+    // El horno de sprites: un gradiente radial por color, una vez. Núcleo
+    // definido y halo corto que muere antes del borde.
     const sprites = new Map<string, HTMLCanvasElement>();
-    const spriteFor = (color: string, big: boolean): HTMLCanvasElement => {
-      const key = big ? `big:${color}` : color;
-      const cached = sprites.get(key);
+    const spriteFor = (color: string): HTMLCanvasElement => {
+      const cached = sprites.get(color);
       if (cached) return cached;
       const sprite = document.createElement('canvas');
       sprite.width = SPRITE_SIZE;
@@ -92,28 +94,15 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       if (spriteContext) {
         const half = SPRITE_SIZE / 2;
         const gradient = spriteContext.createRadialGradient(half, half, 0, half, half, half);
-        if (big) {
-          // La aurora: una respiración ancha y tenue — el blur(30px) de
-          // antes, horneado gratis en el degradado.
-          gradient.addColorStop(0, `${color}2e`);
-          gradient.addColorStop(0.65, `${color}0d`);
-          gradient.addColorStop(1, `${color}00`);
-        } else {
-          // Núcleo DEFINIDO: chispa blanca en el centro (como una
-          // luciérnaga de verdad), meseta encendida del color y una caída
-          // CORTA que muere antes del borde del sprite — la cola larga de
-          // la primera versión convertía el cielo denso en gachas de luz.
-          gradient.addColorStop(0, '#ffffffd9');
-          gradient.addColorStop(0.1, `${color}ff`);
-          gradient.addColorStop(0.32, `${color}d9`);
-          gradient.addColorStop(0.52, `${color}52`);
-          gradient.addColorStop(0.8, `${color}00`);
-          gradient.addColorStop(1, `${color}00`);
-        }
+        gradient.addColorStop(0, `${color}ff`);
+        gradient.addColorStop(0.3, `${color}f2`);
+        gradient.addColorStop(0.42, `${color}55`);
+        gradient.addColorStop(0.75, `${color}00`);
+        gradient.addColorStop(1, `${color}00`);
         spriteContext.fillStyle = gradient;
         spriteContext.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
       }
-      sprites.set(key, sprite);
+      sprites.set(color, sprite);
       return sprite;
     };
 
@@ -128,49 +117,27 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
       if (document.hidden) return;
       if (document.querySelector('[data-afterplay-ambient]') !== null) return;
 
-      const t = now / 1000;
+      const still = reducedMotion.matches;
+      const t = still ? 0 : now / 1000;
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, width, height);
       context.globalCompositeOperation = 'lighter';
 
       const list = orbsRef.current;
       const total = list.length;
-      // CIELO VACÍO = CIELO VACÍO, y punto. El `|| 1` que había aquí (para no
-      // dividir entre cero en el damp) hacía que con la lista vacía el bucle
-      // entrara UNA vuelta y leyera list[0].big de un undefined: excepción en
-      // CADA frame — 30 por segundo — mientras la biblioteca no ha llegado
-      // (arranque en frío directo al modo TV: useGames aún no ha resuelto y
-      // orbs es []) o si de verdad no hay juegos. Se ve en la consola del
-      // banco de pruebas: "Cannot read properties of undefined (reading
-      // 'big')". El lienzo ya está limpio aquí arriba, así que salir es
-      // exactamente lo que hay que pintar.
+      // Cielo vacío = cielo vacío (y nada de leer list[0] de una lista vacía).
       if (total === 0) {
         context.globalCompositeOperation = 'source-over';
         return;
       }
-      // LA LEY DEL ENJAMBRE: se conserva la ENERGÍA total de luz, no la de
-      // cada luciérnaga. Con 'lighter' las luces SUMAN, y a miles el cielo
-      // saturaba a supernova — así que la intensidad individual cae con
-      // 1/√n (cada brasa se sigue viendo, pero el conjunto no ciega).
-      // Referencia: ~200 luces = intensidad plena (afinada a ojo en
-      // pantalla: 170 quedaba mortecino a 4000, 300 pasado de rosca).
+      // Con miles de motas la suma de luz satura: la intensidad individual
+      // cae con 1/√n por encima de ~200.
       const damp = Math.min(1, Math.sqrt(200 / total));
-      // Y las AURORAS no escalan con la biblioteca: ~13 pase lo que pase.
-      // A 4000 luces, "cada décima es aurora" eran 400 manchas de 20% de
-      // pantalla — el grueso del incendio. Las sobrantes se pintan como
-      // luciérnagas normales: el juego sigue ahí, solo que sin capa.
-      const bigStride = Math.max(1, Math.ceil(total / 130));
-      // Con el cielo denso, núcleos y halos encogen un punto: menos solape
-      // = menos suma = más noche entre las luces. (Suavizado tras verlo: el
-      // encogido fuerte + la cola larga del sprite viejo emborronaban.)
-      const sizeScale = 0.85 + 0.15 * damp;
-      const haloScale = 1.0 + 0.35 * damp;
 
       for (let i = 0; i < total; i++) {
         const orb = list[i];
-        const isBig = orb.big && Math.floor(i / 10) % bigStride === 0;
-        // La deriva: dos senos por eje con periodos coprimos-ish y fase
-        // áurea (i * 2.399) — órbitas suaves que no se repiten entre luces.
+        // La deriva: dos senos por eje con fase áurea (i * 2.399) — órbitas
+        // lentas que no se repiten entre motas (Lissajous suave).
         const w1 = 0.045 + (i % 7) * 0.011;
         const w2 = 0.03 + (i % 5) * 0.009;
         const p1 = i * 2.399;
@@ -185,21 +152,13 @@ export const FireflyCanvas = ({ orbs }: { orbs: FireflySpec[] }): React.JSX.Elem
           (orb.top / 100) * height +
           Math.cos(t * w2 + p2) * ay +
           Math.sin(t * w1 * 0.8 + p1 * 1.3) * ay * 0.35;
-        // El aliento: cada luz respira a su ritmo, sin apagarse del todo —
-        // valle a 0.3 (no 0.1): en cielos densos, el valle profundo hacía
-        // desaparecer media biblioteca a la vez.
-        const breath = 0.65 + 0.35 * Math.sin(t * (0.25 + (i % 6) * 0.05) + i);
-        // El radio del sprite incluye el halo del núcleo visual.
-        const radius = isBig ? width * 0.1 : orb.size * sizeScale * em * haloScale;
-
-        context.globalAlpha = ((isBig ? 0.55 : 0.62) * breath + 0.06) * damp;
-        context.drawImage(
-          spriteFor(orb.color, isBig),
-          x - radius,
-          y - radius,
-          radius * 2,
-          radius * 2,
-        );
+        // Opacidad entre .25 y .7, respirando despacio (quieta con reduced
+        // motion: el valor medio).
+        const breath = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * (0.25 + (i % 6) * 0.05) + i);
+        context.globalAlpha = (0.25 + 0.45 * breath) * damp;
+        // El sprite mide 2,4 veces el núcleo (el núcleo es el 30 % central).
+        const radius = orb.size * 1.65;
+        context.drawImage(spriteFor(orb.color), x - radius, y - radius, radius * 2, radius * 2);
       }
 
       context.globalAlpha = 1;

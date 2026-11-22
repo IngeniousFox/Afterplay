@@ -1,24 +1,22 @@
 import { useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
 import type { GameListItem } from '../../../shared/types';
-import { GameCover } from '../components/GameCover';
 import { formatHours } from '../lib/format';
-import { getGameStatusMeta } from '../lib/gameStatus';
+import { statusKeyOf } from '../lib/gameFilters';
+import { STATUS_META } from '../lib/gameStatus';
 import { useTvFocusable } from './focusContext';
-import { tvRevealClass, tvRevealStyle } from './styles';
+import { tvFocusHalo, tvFocusMotion, tvFocusScale, tvRevealClass, tvRevealStyle } from './styles';
+import { TvCoverArt, TvLed } from './tvUi';
 
-// La carátula del modo TV, rediseñada: el foco se dice con LUZ DENTRO del
-// marco — anillo interior del color de estado respirando, barrido de brillo
-// cruzando el arte, brightness que sube — y no con adornos que sobresalgan.
-// La primera versión colgaba un anillo por FUERA del tile y los contenedores
-// con scroll lo recortaban por los cuatro costados; todo lo que brilla vive
-// ahora dentro del overflow-hidden, y FUERA del marco no hay nada — ni halo
-// ni sombra de elevación (sobre el backdrop claro se veía como una mancha
-// gris). Los paddings de parrillas y estanterías absorben solo el translate
-// del foco.
+// La portada del modo TV en Fósforo (tvpwa-tv-library.png): 3:4, radio 4, LED
+// de estado en la esquina y franja de horas al pie. El foco es el del sistema
+// a 10 pies: borde Phosphor de 4 px, halo ámbar y escala 1.06 (sin escala con
+// reduced motion).
 //
-// Sin escalar el arte: la lección Chromium de siempre — un <img> escalando
-// en transición se ve borroso hasta asentarse. La vida la ponen la luz y el
-// barrido, que son translate/opacity puros.
+// EL TÍTULO VA EN EL FLUJO, DEBAJO, y fuera de lo que escala: así nunca se
+// monta sobre la fila de abajo (el fallo del concepto, donde la etiqueta de
+// la portada enfocada pisaba la fila siguiente). El margen de arriba es
+// mayor que lo que crece la portada al escalar.
 export const TvGameTile = ({
   game,
   onOpen,
@@ -38,15 +36,14 @@ export const TvGameTile = ({
   // mientras el filtro las oculta — ni navegables ni seleccionables.
   disabled?: boolean;
   // Puesto en la cascada de entrada de su pantalla (ver styles.ts) — sin él,
-  // la carátula aparece sin animación (para listas que se refiltran en vivo,
-  // donde re-animar cada letra marearía).
+  // la carátula aparece sin animación (para listas que se refiltran en vivo).
   revealIndex?: number;
   // La pantalla que quiera repintar su fondo con el juego SEÑALADO se
   // suscribe aquí — se dispara al ganar el foco.
   onFocusSpot?: () => void;
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({ onSelect: onOpen, autoFocus, disabled });
-  const status = getGameStatusMeta(game.currentState);
+  const status = statusKeyOf(game);
   // Ref-asentado para no re-disparar por identidad del callback (la misma
   // doctrina que onSelect en useTvFocusable).
   const onFocusSpotRef = useRef(onFocusSpot);
@@ -57,74 +54,67 @@ export const TvGameTile = ({
     if (focused) onFocusSpotRef.current?.();
   }, [focused]);
 
+  const strip = game.isLive
+    ? 'Playing now'
+    : game.totalHours > 0
+      ? formatHours(game.totalHours)
+      : STATUS_META[status].label;
+
   return (
     <button
       ref={ref}
       type="button"
       onClick={onOpen}
-      className={`group relative flex-none text-left transition-[translate] duration-200 ease-[cubic-bezier(.22,1,.36,1)] ${fill ? 'w-full' : 'w-[7.2em]'} ${revealIndex !== undefined ? tvRevealClass : ''}`}
-      style={{
-        ...(revealIndex !== undefined ? tvRevealStyle(revealIndex) : {}),
-        ...(focused ? { translate: '0 -0.22em', zIndex: 2 } : {}),
-      }}
+      aria-label={`${game.title}. ${STATUS_META[status].label}. ${strip}`}
+      className={cn(
+        // scroll-my: el conductor de scroll respeta scroll-margin, así que al
+        // enfocar una fila también se ve entero el título de debajo.
+        'group relative block flex-none scroll-my-[1.2em] text-left outline-hidden',
+        fill ? 'w-full' : 'w-[7.2em]',
+        revealIndex !== undefined && tvRevealClass,
+        focused && 'z-[2]',
+      )}
+      style={revealIndex !== undefined ? tvRevealStyle(revealIndex) : undefined}
     >
-      <div
-        className="relative overflow-hidden rounded-[0.55em] transition-[box-shadow,filter] duration-250"
-        style={{
-          // NADA fuera del marco: ni halo de color ni sombra de elevación —
-          // sobre el backdrop claro la sombra negra difuminada se veía como
-          // una mancha grisácea detrás de la carátula. La elevación la dan
-          // el translate y el brightness; el color, el anillo interior.
-          boxShadow: focused ? 'none' : 'inset 0 0 0 1px rgba(233,228,216,.09)',
-          filter: focused ? 'brightness(1.12)' : undefined,
-        }}
-      >
-        <GameCover url={game.coverUrl} className="aspect-[264/374] w-full" iconSize={26} />
-        {/* La franja de estado al pie de la carátula, como en Journey. */}
-        <span
-          aria-hidden
-          className="absolute inset-x-0 bottom-0 h-[0.18em] transition-opacity duration-200"
-          style={{ background: status.color, opacity: focused ? 1 : 0.55 }}
-        />
-        {/* El anillo INTERIOR que respira — dentro del marco, jamás se
-            recorta. Encima, el barrido de luz que cruza el arte una vez al
-            recibir el foco. */}
-        {focused && (
-          <>
-            <span
-              aria-hidden
-              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.55em]"
-              style={{ boxShadow: `inset 0 0 0 3px ${status.color}` }}
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden rounded-[0.55em]"
-            >
-              <span
-                className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
-                style={{
-                  background:
-                    'linear-gradient(105deg, transparent, rgba(233,228,216,.22), transparent)',
-                }}
-              />
-            </span>
-          </>
+      <span
+        className={cn(
+          'relative block rounded-sm ring-1 ring-line',
+          tvFocusMotion,
+          focused && ['ring-4 ring-phosphor', tvFocusHalo, tvFocusScale],
         )}
-      </div>
-      <div className="mt-[0.45em] px-[0.1em]">
-        <div
-          className="truncate text-[0.72em] font-bold transition-colors duration-150"
-          style={{ color: focused ? 'var(--foreground)' : 'var(--muted-foreground)' }}
+      >
+        <TvCoverArt game={game} />
+        {game.isLive ? (
+          <span
+            aria-hidden
+            className="absolute top-[0.4em] right-[0.4em] flex size-[0.6em] items-center justify-center"
+          >
+            <span className="absolute inset-0 animate-led-ring rounded-full bg-live motion-reduce:hidden" />
+            <span className="relative size-[0.6em] rounded-full bg-live ring-[0.14em] ring-cabinet" />
+          </span>
+        ) : (
+          <TvLed
+            status={status}
+            className="absolute top-[0.4em] right-[0.4em] size-[0.6em] ring-[0.14em] ring-cabinet"
+          />
+        )}
+        <span
+          className={cn(
+            'absolute inset-x-0 bottom-0 flex h-[1.5em] items-center rounded-b-sm bg-cabinet/80 px-[0.45em] text-[0.88em] font-medium tabular-nums',
+            game.isLive ? 'text-live' : 'text-bone',
+          )}
         >
-          {game.title}
-        </div>
-        <div
-          className="text-[0.62em] font-semibold tabular-nums transition-colors duration-150"
-          style={{ color: focused ? status.color : 'rgba(138,148,150,.7)' }}
-        >
-          {game.totalHours > 0 ? formatHours(game.totalHours) : status.label}
-        </div>
-      </div>
+          {strip}
+        </span>
+      </span>
+      <span
+        className={cn(
+          'mt-[0.7em] block text-[0.92em] leading-snug font-medium transition-colors duration-(--tv-focus-out)',
+          focused ? 'font-semibold text-bone' : 'text-dust',
+        )}
+      >
+        {game.title}
+      </span>
     </button>
   );
 };

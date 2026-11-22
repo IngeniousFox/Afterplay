@@ -4,18 +4,19 @@ import type { AchievementEntry, TimeFormat } from '../../../../shared/types';
 import { useGameAchievements } from '../../hooks/achievements';
 import { useTimeFormat } from '../../hooks/settings';
 import { useImageSrc } from '../../hooks/useImageSrc';
-import {
-  isRare,
-  percentLabel,
-  rarityAccent,
-  sortForDisplay,
-  ULTRA_RARE,
-  ULTRA_VIOLET,
-} from '../../lib/achievements';
-import { AMBER, GREEN } from '../../lib/colors';
+import { isRare, percentLabel, sortForDisplay, ULTRA_RARE } from '../../lib/achievements';
 import { formatByPrecision } from '../../lib/format';
+import { cn } from '@/lib/utils';
 import { useTvFocusable } from '../focusContext';
-import { tvRevealClass, tvRevealStyle } from '../styles';
+import {
+  tvFocusHalo,
+  tvFocusMotion,
+  tvLabelClass,
+  tvPanelClass,
+  tvRevealClass,
+  tvRevealStyle,
+} from '../styles';
+import { TvFigure } from '../tvUi';
 import type { GameId } from '../../../../shared/entityIds';
 
 // La pestaña Achievements de la ficha del sofá — el gabinete de trofeos a
@@ -24,54 +25,6 @@ import type { GameId } from '../../../../shared/entityIds';
 // (lib/achievements.ts). Lectura casi absoluta, con una sola acción: pulsar A
 // sobre un logro oculto pendiente revela su descripción — la decisión de
 // hacerse spoiler es tuya también desde el sillón.
-
-// El anillo, gemelo del de escritorio pero en viewBox: el tamaño real lo pone
-// el em del contenedor y así escala con la tipografía de la tele.
-const RING_VIEW = 64;
-const RING_STROKE = 6;
-const RING_RADIUS = (RING_VIEW - RING_STROKE) / 2;
-const RING_C = 2 * Math.PI * RING_RADIUS;
-
-const TvProgressRing = ({ percent }: { percent: number }): React.JSX.Element => {
-  const color = percent === 100 ? AMBER : GREEN;
-  return (
-    <div className="relative h-[3.6em] w-[3.6em] flex-none">
-      <svg viewBox={`0 0 ${RING_VIEW} ${RING_VIEW}`} className="h-full w-full -rotate-90">
-        <circle
-          cx={RING_VIEW / 2}
-          cy={RING_VIEW / 2}
-          r={RING_RADIUS}
-          fill="none"
-          stroke="rgba(233,228,216,.08)"
-          strokeWidth={RING_STROKE}
-        />
-        {percent > 0 && (
-          <circle
-            cx={RING_VIEW / 2}
-            cy={RING_VIEW / 2}
-            r={RING_RADIUS}
-            fill="none"
-            stroke={color}
-            strokeWidth={RING_STROKE}
-            strokeLinecap="round"
-            style={{
-              strokeDasharray: RING_C,
-              strokeDashoffset: RING_C * (1 - percent / 100),
-              ['--afterplay-ring-c' as string]: `${RING_C}`,
-              animation: 'afterplay-ring-in 1s cubic-bezier(.22,1,.36,1) 200ms backwards',
-              filter: `drop-shadow(0 0 4px ${color}66)`,
-            }}
-          />
-        )}
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[0.85em] font-extrabold tabular-nums" style={{ color }}>
-          {percent}%
-        </span>
-      </div>
-    </div>
-  );
-};
 
 // Fila de logro: enfocable para que el stick recorra y la lista haga scroll
 // (como las de Sessions), y con la luz del foco SIEMPRE dentro de la fila —
@@ -89,7 +42,6 @@ const TvAchievementRow = ({
 }): React.JSX.Element => {
   const unlocked = entry.unlockedAt !== null;
   const rare = unlocked && isRare(entry.globalPercent);
-  const accent = rarityAccent(entry.globalPercent);
   const remoteUrl = (unlocked ? entry.iconUrl : (entry.iconGrayUrl ?? entry.iconUrl)) ?? null;
   const src = useImageSrc(remoteUrl, 'achievements');
 
@@ -111,109 +63,77 @@ const TvAchievementRow = ({
   return (
     <div
       ref={ref}
-      className={`relative overflow-hidden rounded-[0.5em] px-[0.65em] py-[0.5em] transition-[background-color,box-shadow] duration-150 ${
-        reveal ? tvRevealClass : ''
-      }`}
-      style={{
-        ...(reveal ? tvRevealStyle(index) : undefined),
-        ...(focused
-          ? unlocked
-            ? { background: `${accent}14`, boxShadow: `inset 0 0 0 1px ${accent}66` }
-            : {
-                background: 'rgba(233,228,216,.05)',
-                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.28)',
-              }
-          : unlocked
-            ? { background: 'rgba(233,228,216,.028)' }
-            : undefined),
-      }}
-    >
-      {/* Filo de color en los conseguidos — la gramática de la casa. */}
-      {unlocked && (
-        <span
-          aria-hidden
-          className="absolute inset-y-0 left-0 w-[0.14em]"
-          style={{ background: accent, opacity: 0.8, boxShadow: `0 0 0.5em ${accent}80` }}
-        />
+      className={cn(
+        'flex items-start gap-[0.8em] rounded-md border border-line bg-panel p-[0.8em]',
+        tvFocusMotion,
+        focused && ['border-phosphor bg-raised', tvFocusHalo],
+        reveal && tvRevealClass,
       )}
-
-      <div className="relative flex items-center gap-[0.65em]">
-        <div className="relative flex-none">
-          {rare && (
-            <span
-              aria-hidden
-              className="absolute -inset-[0.1em] rounded-[0.45em] opacity-50 blur-[0.2em]"
-              style={{ background: accent }}
-            />
-          )}
-          <div
-            className={`relative h-[2.3em] w-[2.3em] overflow-hidden rounded-[0.4em] ${
-              unlocked ? '' : 'opacity-35 grayscale'
-            }`}
-            style={{
-              boxShadow: `inset 0 0 0 1px ${
-                rare ? `${accent}80` : unlocked ? 'rgba(233,228,216,.16)' : 'rgba(233,228,216,.08)'
-              }`,
-            }}
-          >
-            {src ? (
-              <img src={src} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-bone/[0.04]">
-                <Trophy className="h-[0.9em] w-[0.9em] text-bone/25" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-[0.5em]">
-            <span
-              className={`min-w-0 flex-1 truncate text-[0.68em] font-bold ${
-                unlocked ? 'text-foreground' : 'text-dust'
-              }`}
-            >
-              {entry.displayName}
-            </span>
-            {entry.globalPercent !== null && (
-              <span
-                className="flex flex-none items-center gap-[0.3em] text-[0.58em] font-bold tabular-nums"
-                style={rare ? { color: accent } : { color: 'rgba(233,228,216,.35)' }}
-              >
-                {rare && <Sparkles className="h-[1em] w-[1em]" />}
-                {percentLabel(entry.globalPercent)}
-              </span>
-            )}
-            {!unlocked && <Lock className="h-[0.6em] w-[0.6em] flex-none text-bone/25" />}
-          </div>
-
-          {description ? (
-            <p className="mt-[0.1em] line-clamp-1 text-[0.56em] leading-snug text-dust">
-              {description}
-            </p>
-          ) : hiddenLocked ? (
-            <p className="mt-[0.1em] text-[0.56em] leading-snug text-bone/30 italic">
-              {canReveal
-                ? focused
-                  ? 'Hidden — press A to reveal'
-                  : 'Hidden achievement'
-                : 'Hidden achievement'}
-            </p>
-          ) : null}
-
-          {entry.unlockedAt && (
-            <div
-              className="mt-[0.12em] flex items-center gap-[0.4em] text-[0.52em] font-semibold"
-              style={{ color: entry.dateReliable ? GREEN : 'rgba(233,228,216,.35)' }}
-            >
-              <Trophy className="h-[1em] w-[1em] flex-none" />
-              {entry.dateReliable
-                ? formatByPrecision(entry.unlockedAt, 'datetime', timeFormat)
-                : 'Unlocked · date unknown'}
-            </div>
-          )}
-        </div>
+      style={reveal ? tvRevealStyle(index) : undefined}
+    >
+      <div
+        className={cn(
+          'flex size-[2.6em] flex-none items-center justify-center overflow-hidden rounded-sm',
+          unlocked ? 'bg-phosphor-tint text-phosphor' : 'bg-raised text-dust',
+        )}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt=""
+            className={cn('h-full w-full object-cover', !unlocked && 'opacity-60 grayscale')}
+          />
+        ) : (
+          <Trophy className="size-[1.2em]" />
+        )}
       </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-[0.5em]">
+          <span
+            className={cn('min-w-0 flex-1 font-semibold', unlocked ? 'text-bone' : 'text-dust')}
+          >
+            {entry.displayName}
+          </span>
+          {!unlocked && <Lock className="size-[0.9em] flex-none text-dust" />}
+        </div>
+
+        {description ? (
+          <p className="mt-[0.1em] text-[0.92em] leading-snug text-dust">{description}</p>
+        ) : hiddenLocked ? (
+          <p className="mt-[0.1em] text-[0.92em] leading-snug text-dust italic">
+            {canReveal
+              ? focused
+                ? 'Hidden: press A to reveal'
+                : 'Hidden achievement'
+              : 'Hidden achievement'}
+          </p>
+        ) : null}
+
+        {entry.unlockedAt && (
+          <div
+            className={cn(
+              'mt-[0.2em] flex items-center gap-[0.4em] text-[0.92em] font-semibold tabular-nums',
+              entry.dateReliable ? 'text-success' : 'text-dust',
+            )}
+          >
+            <Trophy className="size-[1em] flex-none" />
+            {entry.dateReliable
+              ? formatByPrecision(entry.unlockedAt, 'datetime', timeFormat)
+              : 'Unlocked · date unknown'}
+          </div>
+        )}
+      </div>
+
+      {entry.globalPercent !== null && (
+        <div className="flex flex-none items-center gap-[0.3em] text-right">
+          {rare && <Sparkles className="size-[1em] text-phosphor" />}
+          <TvFigure
+            value={percentLabel(entry.globalPercent)}
+            className={cn('text-[1.3em]', rare ? 'text-phosphor' : 'text-dust')}
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -226,7 +146,7 @@ export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.
   // entre invalidaciones la query puede parpadear: mejor un hueco honesto.
   if (!data || data.entries.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-[0.75em] text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-[1em] text-dust">
         No achievements here.
       </div>
     );
@@ -244,104 +164,88 @@ export const TvDetailAchievements = ({ gameId }: { gameId: GameId }): React.JSX.
   const rareCount = rareUnlocked.length - ultraCount;
   const complete = percent === 100;
 
+  const completion = data.completion ?? [];
+  const sourceLabel = (source: string): string => (source === 'ra' ? 'RetroAchievements' : 'Steam');
+
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      {/* La cabecera-vitrina: anillo, marcador grande y los contadores de
-          rareza — el resumen antes del detalle, como en Sessions. */}
+      {/* El marcador: cifra grande, barra segmentada (un tramo por logro) y
+          las fuentes a la derecha. */}
       <div
-        className={`flex flex-none items-center gap-[0.9em] pb-[0.65em] ${tvRevealClass}`}
+        className={cn(
+          'mx-[0.6em] mb-[0.6em] flex flex-none items-center gap-[1.6em] p-[1em]',
+          tvPanelClass,
+          tvRevealClass,
+        )}
         style={tvRevealStyle(0)}
       >
-        <TvProgressRing percent={percent} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-[0.5em] gap-y-[0.2em]">
-            <span className="text-[1.15em] leading-none font-extrabold tabular-nums">
+        <div className="flex-none">
+          <div className="flex items-baseline gap-[0.15em]">
+            <span className="font-display text-[2.4em] leading-none font-bold text-phosphor tabular-nums">
               {unlockedCount}
             </span>
-            <span className="text-[0.68em] font-bold text-dust tabular-nums">
-              / {sorted.length} unlocked
+            <span className="font-display text-[1.2em] leading-none font-semibold text-dust tabular-nums">
+              /{sorted.length}
             </span>
-            {complete && (
-              <span
-                className="flex items-center gap-[0.3em] rounded-full px-[0.6em] py-[0.15em] text-[0.5em] font-extrabold tracking-[.1em]"
-                style={{
-                  color: AMBER,
-                  background: `${AMBER}1a`,
-                  boxShadow: `inset 0 0 0 1px ${AMBER}59`,
-                }}
-              >
-                <Sparkles className="h-[1.1em] w-[1.1em]" />
-                COMPLETED
-              </span>
-            )}
-            {rareCount > 0 && (
-              <span className="flex items-center gap-[0.3em] text-[0.58em] font-bold">
-                <Sparkles className="h-[1em] w-[1em]" style={{ color: AMBER }} />
-                <span style={{ color: AMBER }} className="tabular-nums">
-                  {rareCount} rare
-                </span>
-              </span>
-            )}
-            {ultraCount > 0 && (
-              <span className="flex items-center gap-[0.3em] text-[0.58em] font-bold">
-                <Sparkles className="h-[1em] w-[1em]" style={{ color: ULTRA_VIOLET }} />
-                <span style={{ color: ULTRA_VIOLET }} className="tabular-nums">
-                  {ultraCount} ultra
-                </span>
-              </span>
-            )}
           </div>
-          {/* La barra con marcas de cuarto, gemela de la de escritorio. */}
-          <div className="relative mt-[0.45em] h-[0.28em] overflow-hidden rounded-full bg-bone/[0.07]">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${percent}%`,
-                background: complete
-                  ? `linear-gradient(90deg, ${GREEN}, ${AMBER})`
-                  : `linear-gradient(90deg, ${GREEN}99, ${GREEN})`,
-                boxShadow: percent > 0 ? `0 0 0.4em ${GREEN}66` : undefined,
-              }}
-            />
-            {[25, 50, 75].map((tick) => (
+          <div className={cn('mt-[0.3em]', tvLabelClass)}>{percent}% unlocked</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex h-[0.6em] gap-px" aria-hidden>
+            {sorted.map((entry) => (
               <span
-                key={tick}
-                aria-hidden
-                className="absolute inset-y-0 w-px bg-inset/40"
-                style={{ left: `${tick}%` }}
+                key={entry.id}
+                className={cn(
+                  'min-w-px flex-1 rounded-[2px]',
+                  entry.unlockedAt !== null ? 'bg-phosphor' : 'bg-raised',
+                )}
               />
             ))}
           </div>
+          <div className="mt-[0.5em] flex flex-wrap items-center gap-x-[1em] gap-y-[0.2em] text-[0.92em] font-semibold">
+            {complete && <span className="text-phosphor">Completed</span>}
+            {rareCount > 0 && (
+              <span className="flex items-center gap-[0.3em] text-phosphor tabular-nums">
+                <Sparkles className="size-[1em]" />
+                {rareCount} rare
+              </span>
+            )}
+            {ultraCount > 0 && (
+              <span className="flex items-center gap-[0.3em] tabular-nums text-st-resting">
+                <Sparkles className="size-[1em]" />
+                {ultraCount} ultra
+              </span>
+            )}
+          </div>
         </div>
+        {completion.length > 0 && (
+          <div className="flex flex-none flex-col gap-[0.2em] border-l border-line pl-[1.4em] text-[0.92em]">
+            {completion.map((item) => (
+              <div key={item.source} className="text-dust tabular-nums">
+                <span className="font-semibold text-bone">{sourceLabel(item.source)}</span>{' '}
+                {item.unlocked} of {item.total}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Dos colchones distintos y los dos necesarios: el padding inferior
-          SOBRA respecto al alto del fundido (1.4em) para que al llegar al
-          tope del scroll la última fila quede por encima del degradado; y el
-          scroll-padding le dice al conductor de scroll del foco (focus.tsx
-          lo lee) que al enfocarla NO la deje a ras del borde — sin él, el
-          glide la alineaba justo debajo del fundido y el hover se veía
-          cortado por mucho padding que hubiera. */}
+      {/* El padding inferior da paso a la última fila y el scroll-padding
+          evita que el conductor de scroll del foco la deje a ras del borde. */}
       <div
-        className="relative min-h-0 flex-1 overflow-y-auto pb-[1.8em]"
+        className="relative min-h-0 flex-1 overflow-y-auto px-[0.6em] pt-[0.6em] pb-[1.8em]"
         style={{
           scrollbarWidth: 'none',
-          scrollPaddingTop: '0.35em',
+          scrollPaddingTop: '0.6em',
           scrollPaddingBottom: '1.6em',
         }}
       >
-        <div className="flex flex-col gap-[0.18em]">
+        <div className="grid grid-cols-2 gap-[0.7em]">
           {sorted.map((entry, index) => (
             <TvAchievementRow key={entry.id} entry={entry} index={index} timeFormat={timeFormat} />
           ))}
         </div>
       </div>
-      {/* El fundido inferior: la lista muere a transparente como pista de
-          que hay más gabinete debajo del pliegue. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1.4em] bg-gradient-to-t from-inset/60 to-transparent"
-      />
     </div>
   );
 };

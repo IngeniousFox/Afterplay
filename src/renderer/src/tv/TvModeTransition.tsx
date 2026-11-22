@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useBigPicture } from '../hooks/useBigPicture';
-import {
-  BRAND_FONT_FAMILY,
-  BRAND_VEIL_BACKGROUND,
-  BRAND_WORDMARK,
-  BRAND_WORDMARK_SHADOW,
-  BRAND_WORDMARK_WEIGHT,
-} from '../../../shared/branding';
+import { BRAND_NAME } from '../../../shared/branding';
+import { TvLogo } from './TvChrome';
 
 // La cortina del cambio de modo. Entrar en Big Picture mueve MUCHAS piezas a
 // la vez — el fullscreen del SO, el salto de ruta, el remonte del árbol — y
@@ -21,10 +16,6 @@ import {
 // (afterplay-tv-intro-*).
 
 type Phase = 'idle' | 'entering' | 'leaving';
-
-// El negro de la cortina no es plano: un aliento verdoso apenas perceptible
-// tras la marca — la firma de color del modo ya está ahí antes que el modo.
-const VEIL_BACKGROUND = BRAND_VEIL_BACKGROUND;
 
 export const TvModeTransition = (): React.JSX.Element | null => {
   const active = useBigPicture();
@@ -49,67 +40,40 @@ export const TvModeTransition = (): React.JSX.Element | null => {
   if (phase === 'leaving') {
     return (
       <div
-        className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center"
-        style={{
-          background: VEIL_BACKGROUND,
-          animation: 'afterplay-tv-outro-veil-full 720ms ease-in-out both',
-        }}
+        className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center bg-inset"
+        style={{ animation: 'afterplay-tv-outro-veil-full 720ms ease-in-out both' }}
       >
-        <div
-          className="text-[clamp(22px,3.2vh,42px)] font-extrabold text-foreground/90"
-          style={{
-            // Un aliento de luz mínimo tras la marca de despedida: que el
-            // último frame del modo también tenga cuerpo, no solo letras.
-            textShadow: '0 0 2em rgba(255,179,71,.14)',
-            animation: 'afterplay-tv-outro-mark 720ms ease-in-out both',
-          }}
-        >
-          {BRAND_WORDMARK}
-        </div>
+        <TvWordmark style={{ animation: 'afterplay-tv-outro-mark 720ms ease-in-out both' }} />
       </div>
     );
   }
 
   return (
     <div
-      className="pointer-events-none fixed inset-0 z-[80] flex flex-col items-center justify-center"
-      style={{
-        background: VEIL_BACKGROUND,
-        animation: 'afterplay-tv-intro-veil 1650ms ease-in-out both',
-      }}
+      className="pointer-events-none fixed inset-0 z-[80] flex flex-col items-center justify-center bg-inset bg-[radial-gradient(50%_40%_at_50%_46%,rgb(255_179_71/0.07),transparent_70%)]"
+      style={{ animation: 'afterplay-tv-intro-veil 1650ms ease-in-out both' }}
     >
+      <TvWordmark
+        style={{ animation: 'afterplay-tv-intro-mark 1650ms cubic-bezier(.22,1,.36,1) both' }}
+      />
+      {/* La línea de fósforo que se abre bajo la marca. */}
       <div
-        className="text-[clamp(28px,4.2vh,56px)] font-extrabold text-foreground"
-        style={{
-          fontFamily: BRAND_FONT_FAMILY,
-          fontWeight: BRAND_WORDMARK_WEIGHT,
-          textShadow: BRAND_WORDMARK_SHADOW,
-          animation: 'afterplay-tv-intro-mark 1650ms cubic-bezier(.22,1,.36,1) both',
-        }}
-      >
-        {BRAND_WORDMARK}
-      </div>
-      {/* La línea que se abre bajo la marca, ahora con su brillo: la nítida
-          delante y una gemela desenfocada detrás, las dos con el MISMO
-          keyframe — el halo nace y muere con la línea, sin animación nueva. */}
-      <div className="relative mt-[1.2vh] flex items-center justify-center">
-        <div
-          aria-hidden
-          className="absolute h-[2px] w-[clamp(120px,16vw,260px)] origin-center rounded-full blur-[6px]"
-          style={{
-            background: 'linear-gradient(90deg, transparent, #ffb347, transparent)',
-            animation: 'afterplay-tv-intro-line 1650ms cubic-bezier(.22,1,.36,1) both',
-          }}
-        />
-        <div
-          className="h-[2px] w-[clamp(120px,16vw,260px)] origin-center rounded-full"
-          style={{
-            background: 'linear-gradient(90deg, transparent, #ffb347, transparent)',
-            boxShadow: '0 0 12px rgba(255,179,71,.5)',
-            animation: 'afterplay-tv-intro-line 1650ms cubic-bezier(.22,1,.36,1) both',
-          }}
-        />
-      </div>
+        className="mt-[1.6vh] h-[2px] w-[clamp(120px,16vw,260px)] origin-center rounded-full bg-[linear-gradient(90deg,transparent,var(--color-phosphor),transparent)] shadow-glow-bar"
+        style={{ animation: 'afterplay-tv-intro-line 1650ms cubic-bezier(.22,1,.36,1) both' }}
+      />
     </div>
   );
 };
+
+// La marca de Fósforo: la pantalla con el Play en Phosphor y "Afterplay" en
+// Big Shoulders. Las animaciones de main.css mueven el tracking: aquí se
+// arranca en 0.
+const TvWordmark = ({ style }: { style: React.CSSProperties }): React.JSX.Element => (
+  <div
+    className="flex items-center gap-[0.35em] font-display text-[clamp(32px,5vh,64px)] leading-none font-bold text-bone"
+    style={style}
+  >
+    <TvLogo className="size-[1em]" />
+    {BRAND_NAME}
+  </div>
+);

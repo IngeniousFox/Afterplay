@@ -1,24 +1,33 @@
-import { BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import type { GeneratedMemorySummary } from '../../../shared/types';
 import type { JourneyEntrySummary } from '../../../shared/domain/journeyEntries';
 import { groupEntriesByYearMonth } from '../../../shared/domain/journeyEntries';
-import { GameCover } from '../components/GameCover';
 import { useMemories } from '../hooks/memories';
 import { useJourneyEntries, useSessionStats } from '../hooks/stats';
-import { BLUE, VIOLET } from '../lib/colors';
 import { formatHours } from '../lib/format';
-import { getGameStatusMeta } from '../lib/gameStatus';
+import type { StatusKey } from '../lib/gameStatus';
+import { STATE_TO_STATUS_KEY, STATUS_META } from '../lib/gameStatus';
 import { useImageSrc } from '../hooks/useImageSrc';
 import { useTvBackdrop } from './backdropContext';
 import { useTvButtons, useTvLegend } from './tvInput';
 import { useTvFocusable } from './focusContext';
 import { forgetJourneyPage, recallJourneyPage, rememberJourneyPage } from './screenMemory';
 import { TvActivityHeatmap } from './TvActivityHeatmap';
-import { TvScreenTitle } from './TvScreenTitle';
 import { tvSound } from './sound';
-import { tvRevealClass, tvRevealStyle } from './styles';
+import {
+  tvButtonHalo,
+  tvFocusHalo,
+  tvFocusMotion,
+  tvFocusScale,
+  tvLabelClass,
+  tvPanelClass,
+  tvRevealClass,
+  tvRevealStyle,
+} from './styles';
+import { TvCoverArt, TvFigure, TvLed } from './tvUi';
 
 // El Journey del sofá (BIG-PICTURE.md §5.7): tu historia como LIBRO de
 // páginas, no como scroll infinito — el scroll-spy y el índice lateral son
@@ -75,10 +84,9 @@ const MONTH_NAMES = [
   'December',
 ];
 
-// La carátula del Journey TV, con el mismo lenguaje de foco que TvGameTile:
-// la luz vive DENTRO del marco (anillo interior respirando + barrido de
-// brillo + brightness) y lo único exterior son sombras, que el acolchado de
-// la fila absorbe. Sin escalar el arte jamás — la lección Chromium.
+// La carátula del Journey TV: la misma portada de Fósforo que TvGameTile
+// (LED, franja de horas, foco con borde Phosphor, halo y escala 1.06) y el
+// título debajo, en el flujo, para que nunca pise nada.
 const JourneyCoverTv = ({
   entry,
   autoFocus,
@@ -91,200 +99,106 @@ const JourneyCoverTv = ({
   onOpen: () => void;
 }): React.JSX.Element => {
   const { ref, focused } = useTvFocusable({ onSelect: onOpen, autoFocus });
-  const status = getGameStatusMeta(entry.state);
+  const status: StatusKey = entry.state ? STATE_TO_STATUS_KEY[entry.state] : 'unplayed';
   return (
     <button
       ref={ref}
       type="button"
       onClick={onOpen}
-      className={`w-[6.2em] flex-none text-left transition-[translate] duration-200 ease-[cubic-bezier(.22,1,.36,1)] ${tvRevealClass}`}
-      style={{
-        ...tvRevealStyle(revealIndex),
-        ...(focused ? { translate: '0 -0.35em', zIndex: 2 } : {}),
-      }}
+      className={cn(
+        'w-[7.6em] flex-none text-left outline-hidden',
+        tvRevealClass,
+        focused && 'z-[2]',
+      )}
+      style={tvRevealStyle(revealIndex)}
     >
-      <div
-        className="relative overflow-hidden rounded-[0.4em] transition-[box-shadow,filter] duration-250"
-        style={{
-          // NADA fuera del marco (misma regla que TvGameTile): la sombra
-          // negra difuminada se veía como mancha gris sobre el backdrop —
-          // la elevación la dan translate + brightness, el color el anillo.
-          boxShadow: focused ? 'none' : 'inset 0 0 0 1px rgba(233,228,216,.09)',
-          filter: focused ? 'brightness(1.12)' : undefined,
-        }}
-      >
-        <GameCover url={entry.coverUrl} className="aspect-[264/374] w-full" iconSize={22} />
-        {/* La franja de estado al pie — se enciende con el foco. */}
-        <span
-          aria-hidden
-          className="absolute inset-x-0 bottom-0 h-[0.16em] transition-opacity duration-200"
-          style={{ background: status.color, opacity: focused ? 1 : 0.6 }}
-        />
-        {/* El anillo INTERIOR que respira y el barrido de luz de bienvenida:
-            todo dentro del overflow-hidden, nada que un contenedor con
-            scroll pueda recortar. */}
-        {focused && (
-          <>
-            <span
-              aria-hidden
-              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-[0.4em]"
-              style={{ boxShadow: `inset 0 0 0 3px ${status.color}` }}
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden rounded-[0.4em]"
-            >
-              <span
-                className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
-                style={{
-                  background:
-                    'linear-gradient(105deg, transparent, rgba(233,228,216,.22), transparent)',
-                }}
-              />
-            </span>
-          </>
+      <span
+        className={cn(
+          'relative block rounded-sm ring-1 ring-line',
+          tvFocusMotion,
+          focused && ['ring-4 ring-phosphor', tvFocusHalo, tvFocusScale],
         )}
-      </div>
-      <div
-        className="mt-[0.35em] truncate text-[0.62em] font-bold transition-colors duration-150"
-        style={{ color: focused ? 'var(--foreground)' : 'var(--muted-foreground)' }}
+      >
+        <TvCoverArt game={entry} />
+        <TvLed
+          status={status}
+          className="absolute top-[0.4em] right-[0.4em] size-[0.6em] ring-[0.14em] ring-cabinet"
+        />
+        <span className="absolute inset-x-0 bottom-0 flex h-[1.5em] items-center rounded-b-sm bg-cabinet/80 px-[0.45em] text-[0.88em] font-medium text-bone tabular-nums">
+          {entry.hours > 0 ? formatHours(entry.hours) : STATUS_META[status].label}
+        </span>
+      </span>
+      <span
+        className={cn(
+          'mt-[0.7em] block text-[0.92em] leading-snug font-medium',
+          focused ? 'font-semibold text-bone' : 'text-dust',
+        )}
       >
         {entry.title}
-      </div>
-      <div
-        className="text-[0.55em] font-semibold tabular-nums transition-colors duration-150"
-        style={{ color: focused ? status.color : 'rgba(138,148,150,.7)' }}
-      >
-        {entry.hours > 0 ? formatHours(entry.hours) : status.label}
-      </div>
+      </span>
     </button>
   );
 };
 
-// El panel de recap — el texto violeta del Loop a escala de tele, vestido de
-// lomo de libro: hairline de luz arriba en vez de border plano, el lomo
-// violeta respirando, un aliento de luz en la esquina y un barrido único al
-// abrir la página. Sin backdrop-blur a propósito: la página keyed lleva un
-// transform permanente (el page-turn con fill both) que rompería el muestreo
-// del backdrop-filter.
+// El recap del Loop como página del libro: panel plano con el filo Phosphor
+// a la izquierda, el titular en Big Shoulders y el relato en Barlow.
 const RecapPanel = ({
   recap,
-  eyebrow,
+  heading,
   compact = false,
 }: {
   recap: GeneratedMemorySummary;
-  eyebrow: string;
+  heading: string;
   compact?: boolean;
 }): React.JSX.Element => (
-  <div
-    className="relative overflow-hidden rounded-[0.6em] px-[1.2em] py-[0.9em]"
-    style={{
-      // El tinte violeta va SOBRE una base oscura casi opaca: el panel es la
-      // página del libro y tiene que taparle la luz a las luciérnagas que
-      // pasan por detrás — con solo el degradado translúcido el texto
-      // competía con el enjambre.
-      background:
-        'linear-gradient(125deg, rgba(185,166,255,.14), rgba(185,166,255,.05) 50%, transparent), rgba(13,15,17,.88)',
-      boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.07), 0 0.6em 1.6em rgba(3,6,7,.4)',
-    }}
-  >
-    {/* Hairline de luz en el canto superior — el border plano, jubilado. */}
-    <span
-      aria-hidden
-      className="absolute inset-x-0 top-0 h-px"
-      style={{ background: `linear-gradient(90deg, transparent, ${VIOLET}66, transparent)` }}
-    />
-    {/* El aliento violeta de la esquina: una luz difusa que respira al mismo
-        ritmo que el lomo — el panel está vivo sin moverse. */}
-    <span
-      aria-hidden
-      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] pointer-events-none absolute -top-[3em] -left-[3em] h-[7em] w-[7em] rounded-full"
-      style={{ background: `radial-gradient(circle, ${VIOLET}2e, transparent 70%)` }}
-    />
-    {/* El lomo del libro, respirando. */}
-    <span
-      aria-hidden
-      className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] absolute inset-y-0 left-0 w-[0.18em]"
-      style={{
-        background: `linear-gradient(180deg, ${VIOLET}, ${VIOLET}26)`,
-        boxShadow: `0 0 0.9em ${VIOLET}66`,
-      }}
-    />
-    <div
-      className="flex items-center gap-[0.4em] text-[0.55em] font-extrabold tracking-[.2em]"
-      style={{ color: `${VIOLET}d9` }}
-    >
-      <BookOpen className="h-[1.2em] w-[1.2em]" />
-      {eyebrow}
-    </div>
-    <div className="mt-[0.35em] text-[1.05em] font-extrabold tracking-[-.01em]">
+  <div className="rounded-md border border-l-[0.12em] border-line border-l-phosphor bg-panel px-[1.3em] py-[1em]">
+    <div className={tvLabelClass}>{heading}</div>
+    <div className="mt-[0.3em] font-display text-[1.7em] leading-tight font-bold text-bone">
       {recap.payload.headline}
     </div>
-    <p
-      className={`mt-[0.3em] text-[0.72em] leading-relaxed text-muted-foreground ${compact ? 'line-clamp-3' : ''}`}
-    >
-      {recap.payload.narrative}
-    </p>
+    <p className="mt-[0.35em] text-[1.08em] leading-relaxed text-bone">{recap.payload.narrative}</p>
     {!compact && recap.payload.highlights.length > 0 && (
-      <div className="mt-[0.5em] flex flex-col gap-[0.25em]">
+      <div className="mt-[0.6em] flex flex-col gap-[0.3em]">
         {recap.payload.highlights.map((line) => (
-          <div
-            key={line}
-            className="flex items-start gap-[0.5em] text-[0.68em] font-semibold text-foreground/80"
-          >
-            <span
-              className="mt-[0.45em] h-[0.28em] w-[0.28em] flex-none rounded-full"
-              style={{ background: `${VIOLET}b3` }}
-            />
+          <div key={line} className="flex items-start gap-[0.55em] text-[1em] text-bone">
+            <span className="mt-[0.5em] size-[0.35em] flex-none rounded-full bg-phosphor" />
             {line}
           </div>
         ))}
       </div>
     )}
     {!compact && recap.payload.closingLine.length > 0 && (
-      <p className="mt-[0.5em] text-[0.68em] italic" style={{ color: `${VIOLET}a6` }}>
-        {recap.payload.closingLine}
-      </p>
+      <p className="mt-[0.6em] text-[1em] text-dust italic">{recap.payload.closingLine}</p>
     )}
-    {/* El barrido de luz al abrir la página: el panel se remonta con cada
-        paso (key por página), así que el sheen saluda exactamente una vez. */}
-    <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      <span
-        className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[38%]"
-        style={{
-          background: 'linear-gradient(105deg, transparent, rgba(233,228,216,.06), transparent)',
-        }}
-      />
-    </span>
   </div>
 );
 
-// Una cifra del año: número grande en su color y la palabra en pequeño. El
-// mismo lenguaje que las métricas del escritorio, reducido a lo que se lee
-// desde el sofá — sin tarjeta, sin icono, sin adorno.
-const YearFigure = ({
+// Una cifra de página: número en Big Shoulders y la palabra debajo.
+const PageFigure = ({
   value,
   label,
-  color,
+  hot = false,
+  divided = false,
 }: {
   value: string;
   label: string;
-  color: string;
+  hot?: boolean;
+  divided?: boolean;
 }): React.JSX.Element => (
-  <span className="flex items-baseline gap-[0.3em]">
-    <span className="text-[1.35em] font-extrabold tabular-nums" style={{ color }}>
-      {value}
-    </span>
-    <span className="text-[0.65em] font-semibold text-muted-foreground">{label}</span>
-  </span>
+  <div
+    className={cn(
+      'flex flex-col gap-[0.25em] pr-[1.2em]',
+      divided && 'border-l border-line-strong pl-[1.2em]',
+    )}
+  >
+    <TvFigure value={value} className={cn('text-[3em]', hot ? 'text-phosphor' : 'text-bone')} />
+    <span className="text-[0.95em] text-dust">{label}</span>
+  </div>
 );
 
 // Pasar página también con el ratón (y como affordance visible de que HAY
-// más páginas): flechas enfocables en los bordes. El mando ni las necesita
-// (LB/RB), pero verlas dice "esto es un libro". Flotan despacio — piezas
-// vivas, no cromo muerto — y al enfocarse se encienden en violeta con el
-// anillo respirando. El wrapper estático hace el centrado vertical porque
-// el float anima `translate` y pisaría un -translate-y-1/2 en el botón.
+// más páginas): flechas redondas en los cantos del libro. La de la primera
+// página no se pinta.
 const PageArrow = ({
   side,
   disabled,
@@ -299,7 +213,10 @@ const PageArrow = ({
   const Icon = side === 'left' ? ChevronLeft : ChevronRight;
   return (
     <span
-      className={`absolute top-1/2 z-10 -translate-y-1/2 ${side === 'left' ? 'left-[0.2em]' : 'right-[0.2em]'}`}
+      className={cn(
+        'absolute top-1/2 z-10 -translate-y-1/2',
+        side === 'left' ? '-left-[0.4em]' : '-right-[0.4em]',
+      )}
     >
       <button
         ref={ref}
@@ -309,74 +226,58 @@ const PageArrow = ({
         // (turnPage), y confirmar + swish a la vez era una pila de sonidos.
         data-tv-sound="none"
         aria-label={side === 'left' ? 'Previous page' : 'Next page'}
-        className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] relative flex h-[2.2em] w-[2.2em] items-center justify-center overflow-hidden rounded-full transition-[background-color,box-shadow,opacity] duration-200"
-        style={
-          focused
-            ? {
-                background: 'rgba(185,166,255,.22)',
-                boxShadow: `inset 0 0 0 1px ${VIOLET}59, 0 0 1.6em ${VIOLET}66, 0 0.4em 1em rgba(3,6,7,.4)`,
-                opacity: 1,
-              }
-            : {
-                background: 'rgba(3,6,7,.45)',
-                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.14)',
-                opacity: 0.7,
-              }
-        }
-      >
-        {focused && (
-          <>
-            <span
-              aria-hidden
-              className="afterplay-tv-ring animate-[afterplay-tv-ring-breathe_2.2s_ease-in-out_infinite] pointer-events-none absolute inset-0 rounded-full"
-              style={{ boxShadow: `inset 0 0 0 2px ${VIOLET}` }}
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
-            >
-              <span
-                className="afterplay-tv-sheen animate-[afterplay-tv-sheen_850ms_cubic-bezier(0.3,0.6,0.3,1)_80ms_both] absolute inset-y-0 left-0 w-[45%]"
-                style={{
-                  background:
-                    'linear-gradient(105deg, transparent, rgba(233,228,216,.25), transparent)',
-                }}
-              />
-            </span>
-          </>
+        className={cn(
+          'flex size-[2.6em] items-center justify-center rounded-full border border-line-strong bg-panel text-bone',
+          tvFocusMotion,
+          focused && ['border-phosphor text-phosphor', tvFocusScale, tvButtonHalo],
         )}
-        {/* El chevron se asoma hacia su lado al recibir el foco — "por aquí". */}
-        <span
-          className="relative transition-[translate] duration-200"
-          style={focused ? { translate: side === 'left' ? '-0.12em 0' : '0.12em 0' } : undefined}
-        >
-          <Icon className="h-[1.2em] w-[1.2em]" />
-        </span>
+      >
+        <Icon className="size-[1.2em]" />
       </button>
     </span>
   );
 };
 
-// El punto de libro del pie de cabecera: en vez de un "3 / 42" seco, una
-// cinta fina que se dibuja hasta el punto exacto del libro en que estás,
-// con el gradiente violeta→azul de la casa. Se remonta con cada página, así
-// que el relleno se dibuja de nuevo en cada paso — feedback del gesto.
-const PageRibbon = ({ current, total }: { current: number; total: number }): React.JSX.Element => (
-  <span className="flex items-center gap-[0.55em]">
-    <span className="relative h-[0.16em] w-[5.5em] overflow-hidden rounded-full bg-bone/[0.08]">
-      <span
-        className="animate-in fade-in-0 slide-in-from-left-96 absolute inset-y-0 left-0 rounded-full duration-700"
-        style={{
-          width: `${(current / Math.max(total, 1)) * 100}%`,
-          background: `linear-gradient(90deg, ${VIOLET}, ${BLUE})`,
-          boxShadow: `0 0 0.5em ${VIOLET}8c`,
-        }}
-      />
-    </span>
-    <span className="text-[0.6em] font-bold text-muted-foreground/60 tabular-nums">
-      {current} / {total}
-    </span>
-  </span>
+// El índice del año al pie de la página: las doce iniciales de mes, con punto
+// en los meses que tienen página y el actual en Phosphor.
+const MONTH_INITIALS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+
+const MonthIndex = ({
+  year,
+  activeMonths,
+  current,
+}: {
+  year: number;
+  activeMonths: Set<number>;
+  current: number | null;
+}): React.JSX.Element => (
+  <div className="flex items-end gap-[1em]">
+    <span className="font-display text-[1.6em] leading-none font-bold text-bone">{year}</span>
+    <div className="flex items-end gap-[0.95em]">
+      {MONTH_INITIALS.map((initial, month) => (
+        <span key={month} className="flex flex-col items-center gap-[0.25em]">
+          <span
+            className={cn(
+              'size-[0.4em] rounded-full',
+              month === current
+                ? 'bg-phosphor shadow-[0_0_8px_var(--color-phosphor)]'
+                : activeMonths.has(month)
+                  ? 'bg-dust'
+                  : 'bg-raised',
+            )}
+          />
+          <span
+            className={cn(
+              'text-[0.92em] leading-none',
+              month === current ? 'font-semibold text-phosphor' : 'text-dust',
+            )}
+          >
+            {initial}
+          </span>
+        </span>
+      ))}
+    </div>
+  </div>
 );
 
 export const TvJourney = (): React.JSX.Element => {
@@ -506,315 +407,199 @@ export const TvJourney = (): React.JSX.Element => {
 
   if (!page) {
     return (
-      <div className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex h-full flex-col items-center justify-center text-center">
-        <div className="text-[1em] font-extrabold">Your journey starts here</div>
-        <div className="mt-[0.3em] text-[0.75em] text-muted-foreground">
+      <div className="flex h-full animate-fade-in flex-col items-center justify-center text-center">
+        <div className="font-display text-[2em] font-bold text-bone">Your journey starts here</div>
+        <div className="mt-[0.3em] text-[1em] text-dust">
           Played and logged games will become part of it.
         </div>
       </div>
     );
   }
 
+  const current = clamp(pageIndex);
+  // El índice de meses del año de la página (cubierta: ninguno).
+  const pageYear = page.kind === 'intro' ? null : page.year;
+  const activeMonths = new Set(
+    pages.flatMap((entry) =>
+      entry.kind === 'month' && entry.year === pageYear ? [entry.month] : [],
+    ),
+  );
+
   return (
-    // key por página: cada paso remonta con su animación de entrada — el
-    // page-turn 3D gira la página nueva desde el canto, como un libro de
-    // verdad. Las flechas viven FUERA del key para no re-montarse (y perder
-    // el foco del ratón) con cada paso.
-    <div className="relative h-full">
-      <PageArrow side="left" disabled={clamp(pageIndex) === 0} onSelect={() => turnPage(-1)} />
-      <PageArrow
-        side="right"
-        disabled={clamp(pageIndex) >= pages.length - 1}
-        onSelect={() => turnPage(1)}
+    // EL LIBRO (tvpwa-tv-notes-journey.png): el lomo a la izquierda, los
+    // cantos de las páginas que quedan a la derecha y las flechas en los
+    // bordes. key por página: cada paso remonta con su fundido de entrada
+    // (sin giro 3D: el sistema no anima lo que el mando repite). Las flechas
+    // viven FUERA del key para no re-montarse con cada paso.
+    <div className="relative mx-[0.6em] h-full">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-[0.4em] left-0 w-px bg-line-strong"
       />
+      {current < pages.length - 1 && (
+        <>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-[0.8em] right-0 w-px bg-line-strong"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-[1.3em] -right-[0.3em] w-px bg-line"
+          />
+        </>
+      )}
+      <PageArrow side="left" disabled={current === 0} onSelect={() => turnPage(-1)} />
+      <PageArrow side="right" disabled={current >= pages.length - 1} onSelect={() => turnPage(1)} />
+
       <div
         key={pageIndex}
-        className="afterplay-tv-page-turn origin-left animate-[afterplay-tv-page-turn-in_480ms_cubic-bezier(0.22,1,0.36,1)_both] relative flex h-full flex-col gap-[0.9em] px-[2.6em] pb-[1em]"
+        className="relative flex h-full animate-fade-in flex-col gap-[1.1em] px-[2.6em] pb-[0.6em]"
       >
-        {/* El cuerpo del LIBRO: el canto del lomo a la izquierda y, si
-            quedan páginas por delante, el taco de las que faltan asomando
-            por la derecha. Viven dentro del key para girar con la página. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-[0.9em] left-[1.15em] w-px"
-          style={{
-            background:
-              'linear-gradient(180deg, transparent, rgba(233,228,216,.12) 18%, rgba(233,228,216,.12) 82%, transparent)',
-            boxShadow: '-0.4em 0 1.2em rgba(3,6,7,.35)',
-          }}
-        />
-        {clamp(pageIndex) < pages.length - 1 && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-[1.5em] right-[1.05em] w-px bg-gradient-to-b from-transparent via-bone/10 to-transparent"
-          />
-        )}
-        {clamp(pageIndex) < pages.length - 2 && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-[2.1em] right-[0.85em] w-px bg-gradient-to-b from-transparent via-bone/[0.06] to-transparent"
-          />
-        )}
-
-        {/* La cabecera abre la cascada interna de la página: cabecera →
-            recap → carátulas, cada bloque con su compás de retardo. La
-            cubierta no la lleva: compone su portada entera ella sola. */}
         {page.kind !== 'intro' && (
           <div
-            className={`flex flex-none items-baseline gap-[0.8em] ${tvRevealClass}`}
+            className={cn('flex flex-none items-end justify-between gap-[2em]', tvRevealClass)}
             style={tvRevealStyle(0)}
           >
-            <TvScreenTitle
-              label={
-                page.kind === 'year' ? `${page.year}` : `${MONTH_NAMES[page.month]} ${page.year}`
-              }
-              accent={VIOLET}
-            />
-            <span className="text-[0.72em] font-semibold text-muted-foreground tabular-nums">
-              {page.kind === 'year'
-                ? `${page.games} ${page.games === 1 ? 'game' : 'games'} · ${formatHours(page.hours)}`
-                : `${page.entries.length} ${page.entries.length === 1 ? 'playthrough' : 'playthroughs'} · ${formatHours(page.hours)}`}
-            </span>
-            <span className="h-px min-w-[2em] flex-1 self-center bg-gradient-to-r from-bone/15 to-transparent" />
-            <PageRibbon current={clamp(pageIndex) + 1} total={pages.length} />
+            <h1 className="flex items-baseline gap-[0.3em] font-display font-bold text-bone">
+              <span className="text-[5em] leading-[0.85]">
+                {page.kind === 'year' ? page.year : MONTH_NAMES[page.month]}
+              </span>
+              {page.kind === 'month' && (
+                <span className="text-[2.2em] leading-none text-dust">{page.year}</span>
+              )}
+            </h1>
+            <div className="flex items-end">
+              <PageFigure value={formatHours(page.hours)} label="played" hot />
+              {page.kind === 'year' ? (
+                <>
+                  <PageFigure
+                    value={String(page.games)}
+                    label={page.games === 1 ? 'game' : 'games'}
+                    divided
+                  />
+                  <PageFigure
+                    value={String(page.sessionCount)}
+                    label={page.sessionCount === 1 ? 'session' : 'sessions'}
+                    divided
+                  />
+                </>
+              ) : (
+                <PageFigure
+                  value={String(page.entries.length)}
+                  label={page.entries.length === 1 ? 'game' : 'games'}
+                  divided
+                />
+              )}
+            </div>
           </div>
         )}
 
         {page.kind === 'intro' ? (
           // La CUBIERTA del libro — todo el texto es fijo, escrito aquí
-          // mismo (el usuario lo pidió así: nada de IA en la portada). Solo
-          // los números salen de la biblioteca.
-          <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-[0.9em]">
-            {/* El velo de lectura: una piscina de oscuridad detrás del texto
-                de la cubierta — sin él, el epígrafe se perdía entre las
-                luciérnagas y el arte del fondo. Radial que muere a
-                transparente: velo, no rectángulo. Va el primero y el resto
-                del contenido es position:relative — los absolutos pintan
-                encima de los estáticos digan lo que digan en el DOM. */}
-            <span
-              aria-hidden
-              // El borde izquierdo se estira hasta el canto de la PANTALLA
-              // (el clip del layout está ahí): donde el degradado aún tiene
-              // cuerpo, el corte queda fuera de la vista. Los otros tres
-              // bordes los cubre la elipse con tamaño EXPLÍCITO — sin él,
-              // farthest-corner dejaba el canto izquierdo al ~70% de negro:
-              // una costura vertical justo en el gutter.
-              className="pointer-events-none absolute -inset-y-[1.2em] -right-[2.6em] -left-[calc(2.6em+4vw)]"
-              style={{
-                background:
-                  'radial-gradient(ellipse 75% 58% at 28% 52%, rgba(8,11,12,.92), rgba(8,11,12,.6) 45%, transparent 80%)',
-              }}
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute right-[0.5em] bottom-[0.3em] select-none"
-            >
-              <span className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] block">
-                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-bone/[0.05]">
-                  <BookOpen className="h-[9em] w-[9em]" strokeWidth={1} />
-                </span>
-              </span>
-            </span>
-            <div
-              className={`relative text-[0.6em] font-extrabold tracking-[.34em] ${tvRevealClass}`}
-              style={{ ...tvRevealStyle(0), color: `${VIOLET}d9` }}
-            >
-              AFTERPLAY · YOUR JOURNEY
+          // mismo (nada de IA en la portada). Solo los números salen de la
+          // biblioteca.
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-[1em]">
+            <div className={cn(tvLabelClass, tvRevealClass)} style={tvRevealStyle(0)}>
+              Your journey
             </div>
             <h1
-              className={`relative max-w-[9em] text-[2.3em] leading-[1.05] font-extrabold tracking-[-.02em] ${tvRevealClass}`}
+              className={cn(
+                'max-w-[10em] font-display text-[4.6em] leading-[0.92] font-bold text-bone',
+                tvRevealClass,
+              )}
               style={tvRevealStyle(1)}
             >
               The Book of Your Games
             </h1>
-            <span
-              aria-hidden
-              className={`relative block h-px w-[14em] overflow-hidden ${tvRevealClass}`}
-              style={tvRevealStyle(2)}
-            >
-              <span
-                className="animate-in fade-in-0 slide-in-from-left-96 block h-full w-full duration-1000"
-                style={{
-                  background: `linear-gradient(90deg, ${VIOLET}cc, ${VIOLET}33, transparent)`,
-                }}
-              />
-            </span>
             <p
-              className={`relative max-w-[36em] text-[0.8em] leading-relaxed text-foreground/85 ${tvRevealClass}`}
-              style={tvRevealStyle(3)}
+              className={cn('max-w-[38em] text-[1.08em] leading-relaxed text-bone', tvRevealClass)}
+              style={tvRevealStyle(2)}
             >
               Every session left a line, and every finish closed a chapter. Since {page.firstYear}{' '}
               this library has been quietly writing itself — the long hauls, the quick detours, the
               games you came back to when nobody was looking. Turn the pages and walk it back.
             </p>
+            <div className={cn('flex items-end', tvRevealClass)} style={tvRevealStyle(3)}>
+              <PageFigure value={formatHours(page.hours)} label="played" hot />
+              <PageFigure
+                value={String(page.games)}
+                label={page.games === 1 ? 'game' : 'games'}
+                divided
+              />
+              <PageFigure
+                value={String(page.years)}
+                label={page.years === 1 ? 'year' : 'years'}
+                divided
+              />
+            </div>
+            {/* EL SECRETO, DICHO UNA VEZ: las motas que flotan detrás de
+                todo el modo TV son el censo de tu biblioteca — una por juego,
+                del color de su estado. */}
             <div
-              className={`relative flex items-baseline gap-[1.4em] ${tvRevealClass}`}
+              className={cn('flex items-center gap-[0.55em] text-[1em] text-dust', tvRevealClass)}
               style={tvRevealStyle(4)}
             >
-              {[
-                { value: String(page.years), label: page.years === 1 ? 'year' : 'years' },
-                { value: String(page.games), label: page.games === 1 ? 'game' : 'games' },
-                { value: formatHours(page.hours), label: 'played' },
-              ].map((stat) => (
-                <div key={stat.label} className="flex items-baseline gap-[0.35em]">
-                  <span className="text-[1.4em] font-extrabold tabular-nums">{stat.value}</span>
-                  <span className="text-[0.6em] font-semibold tracking-[.14em] text-muted-foreground uppercase">
-                    {stat.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {/* EL SECRETO, DICHO UNA VEZ: el cielo de luciérnagas que respira
-                detrás de TODO el modo TV es el censo de tu biblioteca — una
-                luz por juego, la brasa de su estado — y nadie podía saberlo.
-                Aquí, en la única pantalla que habla de "tu biblioteca entera",
-                se convierte de textura ambiental en detalle que se cuenta a
-                un amigo. */}
-            <div
-              className={`relative flex items-center gap-[0.55em] text-[0.68em] font-semibold text-foreground/55 italic ${tvRevealClass}`}
-              style={tvRevealStyle(5)}
-            >
-              <span
-                aria-hidden
-                className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] h-[0.4em] w-[0.4em] flex-none rounded-full"
-                style={{ background: '#edd39a', boxShadow: '0 0 0.7em #edd39acc' }}
-              />
+              <span aria-hidden className="size-[0.4em] flex-none rounded-full bg-phosphor" />
               Every light in this sky is a game in your library.
             </div>
-            <div
-              className={`relative text-[0.7em] font-semibold text-foreground/60 ${tvRevealClass}`}
-              style={tvRevealStyle(6)}
-            >
+            <div className={cn('text-[1em] text-dust', tvRevealClass)} style={tvRevealStyle(5)}>
               Turn the page to begin →
             </div>
           </div>
         ) : page.kind === 'year' ? (
-          <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-[0.8em]">
-            {/* La portada de capítulo: el año en filigrana gigante detrás,
-                flotando apenas y respirando — solemne, no un póster muerto.
-                Float y glow en spans anidados: ambas clases pisan la misma
-                propiedad `animation` y en el mismo nodo una anularía a la
-                otra. */}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute right-[0.2em] bottom-[0.1em] select-none"
-            >
-              <span className="afterplay-tv-float animate-[afterplay-tv-float_5.5s_ease-in-out_infinite] block">
-                <span className="afterplay-tv-glow animate-[afterplay-tv-glow-breathe_2.6s_ease-in-out_infinite] block text-[7em] leading-none font-extrabold tracking-[-.05em] text-bone/[0.06]">
-                  {page.year}
-                </span>
-              </span>
-            </span>
-            {/* La regla del capítulo se dibuja sola: la línea entra deslizando
-                dentro de una máscara overflow-hidden — translate puro, nada
-                que re-rasterice. */}
-            <span
-              aria-hidden
-              className={`block h-px w-[12em] overflow-hidden ${tvRevealClass}`}
-              style={tvRevealStyle(1)}
-            >
-              <span
-                className="animate-in fade-in-0 slide-in-from-left-96 block h-full w-full duration-1000"
-                style={{
-                  background: `linear-gradient(90deg, ${VIOLET}cc, ${VIOLET}33, transparent)`,
-                }}
-              />
-            </span>
-            {/* EL AÑO EN NÚMEROS: las cifras que de verdad se leen desde el
-                sofá — lo que jugaste, cuántos juegos y cuántas veces te
-                sentaste.
-                Horas y juegos salen de las MISMAS JourneyEntrySummary que se ven
-                debajo (Journey.tsx toma la misma decisión y por el mismo
-                motivo: así la cifra cuadra EXACTAMENTE con las carátulas de
-                este capítulo). Y ahí está la diferencia con Stats: una entrada
-                de playthrough cuelga TODAS sus horas del año de su lastAt —la
-                última señal de vida del tramo, sea una sesión o un evento del
-                log—, mientras que yearTotals (lib/statsTotals) reparte por la
-                fecha de CADA sesión... pero SOLO las horas trackeadas. Las
-                MANUALES las ancla al año del FIN del playthrough
-                (manualHoursAnchor), o sea el mismo criterio de familia que
-                usamos aquí y no un invento de esta pantalla — aunque tampoco
-                idéntico: el ancla mira el fin y lastAt la última señal, que en
-                un playthrough con sesiones después del Beaten caen en años
-                distintos. Un playthrough a caballo entre dos años da cifras
-                distintas en las dos pantallas, y es a propósito. Los endless
-                ni eso: journeyEntries los parte por MESES, así que cada entrada
-                trae solo lo de su mes.
-                Las sesiones se cuentan aparte y por su propia fecha, que es lo
-                único que tiene sentido para "veces que te sentaste", y solo las
-                CERRADAS (endedAt): la que está corriendo ahora mismo aún no ha
-                terminado de ser una. */}
-            <div
-              className={`flex flex-none flex-wrap items-baseline gap-x-[1.6em] gap-y-[0.2em] ${tvRevealClass}`}
-              style={tvRevealStyle(2)}
-            >
-              <YearFigure value={formatHours(page.hours)} label="played" color="#ffb347" />
-              <YearFigure
-                value={String(page.games)}
-                label={page.games === 1 ? 'game' : 'games'}
-                color="#5fd3e0"
-              />
-              <YearFigure
-                value={String(page.sessionCount)}
-                label={page.sessionCount === 1 ? 'session' : 'sessions'}
-                color={VIOLET}
-              />
-              {page.topGame && (
-                <span className="text-[0.68em] font-semibold text-dust">
-                  most played · <span className="text-bone">{page.topGame.title}</span>{' '}
-                  <span className="text-phosphor">{formatHours(page.topGame.hours)}</span>
-                </span>
-              )}
-            </div>
-
-            {page.recap ? (
-              // El YearStory nace con el pop de paneles, un compás después de
-              // la regla — la portada se compone delante de ti.
+          // La portada de capítulo: el juego del año, su historia y el mapa
+          // de días jugados.
+          <div className="flex min-h-0 flex-1 flex-col gap-[1em]">
+            {page.topGame && (
               <div
-                className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex-none"
-                style={{ animationDelay: '140ms' }}
+                className={cn('text-[1.05em] text-dust', tvRevealClass)}
+                style={tvRevealStyle(1)}
               >
-                <RecapPanel recap={page.recap} eyebrow={`THE STORY OF ${page.year}`} />
-              </div>
-            ) : (
-              <div
-                className="afterplay-tv-pop animate-[afterplay-tv-pop-in_380ms_cubic-bezier(0.22,1,0.36,1)_both] flex-none text-[0.8em] text-muted-foreground"
-                style={{ animationDelay: '140ms' }}
-              >
-                A year of play — its story has not been written yet.
+                Most played · <span className="font-semibold text-bone">{page.topGame.title}</span>{' '}
+                <span className="text-phosphor tabular-nums">
+                  {formatHours(page.topGame.hours)}
+                </span>
               </div>
             )}
-
-            {/* EL PULSO DEL AÑO: el mapa de días jugados. Es la pieza que
-                convierte la portada de capítulo en un "año en revisión" — se
-                lee de lejos y de un vistazo, que es justo lo que un sofá
-                pide (los porcentajes y los desgloses se quedan en el
-                escritorio, que es donde se estudian). */}
+            <div className={tvRevealClass} style={tvRevealStyle(2)}>
+              {page.recap ? (
+                <RecapPanel recap={page.recap} heading={`The story of ${page.year}`} />
+              ) : (
+                <div className="text-[1.05em] text-dust">
+                  A year of play — its story has not been written yet.
+                </div>
+              )}
+            </div>
+            {/* EL PULSO DEL AÑO: el mapa de días jugados, que se lee de lejos
+                y de un vistazo. */}
             <div
-              className={`relative flex h-[11em] flex-none flex-col overflow-hidden rounded-[0.6em] bg-inset/55 px-[0.9em] py-[0.65em] ${tvRevealClass}`}
-              style={{
-                ...tvRevealStyle(3),
-                boxShadow: 'inset 0 0 0 1px rgba(233,228,216,.07)',
-              }}
+              className={cn(
+                'flex h-[11.5em] flex-none flex-col overflow-hidden px-[1em] py-[0.8em]',
+                tvPanelClass,
+                tvRevealClass,
+              )}
+              style={tvRevealStyle(3)}
             >
               <TvActivityHeatmap year={page.year} />
             </div>
-
-            <div
-              className={`flex-none text-[0.7em] font-semibold text-muted-foreground ${tvRevealClass}`}
-              style={tvRevealStyle(4)}
-            >
-              Turn the page for the months →
-            </div>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-[0.9em] overflow-y-auto pb-[0.5em]">
+          <div
+            className="-mx-[1.2em] flex min-h-0 flex-1 flex-col gap-[1em] overflow-y-auto px-[1.2em] pb-[0.5em]"
+            style={{ scrollbarWidth: 'none' }}
+          >
             {page.recap && (
               <div className={tvRevealClass} style={tvRevealStyle(1)}>
-                <RecapPanel recap={page.recap} eyebrow="THE STORY" compact />
+                <RecapPanel
+                  recap={page.recap}
+                  heading={`The story of ${MONTH_NAMES[page.month]}`}
+                  compact
+                />
               </div>
             )}
-            <div className="-mx-[0.5em] flex flex-wrap gap-[0.8em] px-[0.5em] pt-[0.5em] pb-[0.4em]">
+            {/* Las carátulas por horas, con colchón para el foco (escala +
+                halo) dentro del clip del scroll. */}
+            <div className="flex flex-wrap items-start gap-[1em] pt-[0.8em]">
               {page.entries.map((entry, index) => (
                 <JourneyCoverTv
                   key={entry.key}
@@ -823,7 +608,7 @@ export const TvJourney = (): React.JSX.Element => {
                   revealIndex={index + 2}
                   onOpen={() => {
                     // Billete de vuelta: la ficha te devuelve a esta página.
-                    rememberJourneyPage(clamp(pageIndex));
+                    rememberJourneyPage(current);
                     void navigate(`/tv/game/${entry.gameId}`);
                   }}
                 />
@@ -831,6 +616,22 @@ export const TvJourney = (): React.JSX.Element => {
             </div>
           </div>
         )}
+
+        {/* El pie de la página: índice de meses del año y "Page N of M". */}
+        <div className="flex flex-none items-end justify-between gap-[2em]">
+          {pageYear !== null ? (
+            <MonthIndex
+              year={pageYear}
+              activeMonths={activeMonths}
+              current={page.kind === 'month' ? page.month : null}
+            />
+          ) : (
+            <span />
+          )}
+          <span className="text-[0.95em] text-dust tabular-nums">
+            Page {current + 1} of {pages.length}
+          </span>
+        </div>
       </div>
     </div>
   );

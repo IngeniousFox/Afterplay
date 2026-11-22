@@ -34,7 +34,7 @@ test('the top bar meets the title bar on each desktop view and after fullscreen'
     await expectJoinedChrome(window);
   }
   await window.evaluate(() => globalThis.api.window.bigPicture.enter());
-  await expect(window.getByText('YOUR LIBRARY')).toBeVisible();
+  await expect(window.getByText('Your library', { exact: true })).toBeVisible();
   await expect(window.getByTestId('app-titlebar')).toHaveCount(0);
   await expect
     .poll(() =>

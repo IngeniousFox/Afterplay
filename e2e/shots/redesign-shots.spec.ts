@@ -1040,3 +1040,122 @@ test('capturas de overlay, ambiente y migración', async () => {
     sandbox.cleanup();
   }
 });
+
+// El modo TV (tanda 8) a 1920 x 1080: Home, Library con el foco en una
+// portada, el teclado en pantalla, la ficha y sus secciones, Journey, el menú
+// Start y el panel de fin de sesión. Se entra como en e2e/stats-tv.spec.ts
+// (por IPC, pantalla completa de verdad) y se fija el viewport a 1080p para
+// que la escala 10-foot sea la de una tele, sea cual sea el monitor.
+test('capturas del modo TV', async () => {
+  test.setTimeout(300_000);
+  mkdirSync(OUT, { recursive: true });
+  const { app, window, sandbox } = await launchAfterplay();
+  try {
+    await window.getByText("Assassin's Creed II").first().waitFor({ state: 'visible' });
+    await window.evaluate(() => globalThis.api.window.bigPicture.enter());
+    await window.waitForFunction(() => globalThis.location.hash === '#/tv', undefined, {
+      timeout: 20_000,
+    });
+    await window.setViewportSize({ width: 1920, height: 1080 });
+    const tvGo = async (hash: string): Promise<void> => {
+      await window.evaluate((target) => {
+        globalThis.location.hash = target;
+      }, hash);
+      await window.waitForFunction((target) => globalThis.location.hash === target, hash);
+    };
+    const shot = async (name: string, wait = 1800): Promise<void> => {
+      await window.waitForTimeout(wait);
+      await window.screenshot({ path: join(OUT, `tv-${name}.png`) });
+    };
+    const press = async (key: string, times = 1): Promise<void> => {
+      for (let index = 0; index < times; index++) {
+        await window.keyboard.press(key);
+        await window.waitForTimeout(140);
+      }
+    };
+
+    // La cortina de entrada dura 1,65 s.
+    await shot('home', 3200);
+    await press('ArrowDown', 2);
+    await press('ArrowRight');
+    await shot('home-shelf');
+
+    await tvGo('#/tv/library');
+    await window.waitForTimeout(1000);
+    await press('ArrowRight');
+    await shot('library');
+    await press('ArrowDown');
+    await shot('library-row2');
+    // En Library el teclado físico escribe en la búsqueda; el teclado en
+    // pantalla se abre desde el chip de búsqueda, arriba a la derecha.
+    await window.getByRole('button', { name: /^Search/ }).click();
+    await shot('keyboard-empty', 900);
+    await window.keyboard.type('al', { delay: 120 });
+    await press('ArrowDown');
+    await press('ArrowRight', 3);
+    await shot('keyboard');
+    await press('Escape');
+    await press('Escape');
+
+    const detailId = gameIdOf(sandbox, 'Strange Horticulture');
+    await tvGo(`#/tv/game/${detailId}`);
+    await shot('detail');
+    for (const section of ['achievements', 'sessions', 'history', 'notes', 'saves']) {
+      await press('e');
+      await shot(`detail-${section}`, 1200);
+    }
+    // Una sección con el foco en una fila: Sessions, bajando desde arriba.
+    await press('e', 3);
+    await press('ArrowDown', 3);
+    await shot('detail-sessions-focus', 900);
+
+    await tvGo('#/tv/journey');
+    await shot('journey', 2200);
+    await press('e');
+    await shot('journey-year', 1200);
+    await press('e');
+    await shot('journey-month', 1200);
+    await press('ArrowRight');
+    await shot('journey-month-focus', 900);
+
+    await tvGo('#/tv');
+    await window.waitForTimeout(1200);
+    await press('m');
+    await shot('menu', 900);
+    await press('Escape');
+
+    // El panel de fin de sesión, con el mismo evento que manda el main.
+    await app.evaluate(
+      ({ BrowserWindow }, payload) => {
+        const main = BrowserWindow.getAllWindows().find((candidate) =>
+          candidate.webContents.getURL().includes('index.html'),
+        );
+        main?.webContents.send('sessions:closed', payload);
+      },
+      {
+        sessionId: 'shot-session',
+        gameId: detailId,
+        iterationId: 'shot-iteration',
+        endless: false,
+        gameTitle: 'Strange Horticulture',
+        coverUrl: null,
+        heroUrl: null,
+        durationSec: 2 * 3600 + 40 * 60,
+        totalHours: 40.8,
+        isLongest: true,
+      },
+    );
+    await shot('session-ended', 1200);
+    await press('Escape');
+
+    await window.emulateMedia({ reducedMotion: 'reduce' });
+    await tvGo('#/tv/library');
+    await window.waitForTimeout(1000);
+    await press('ArrowRight');
+    await shot('library-reduced-motion');
+  } finally {
+    await window.evaluate(() => globalThis.api.window.bigPicture.exit()).catch(() => {});
+    await app.close().catch(() => {});
+    sandbox.cleanup();
+  }
+});

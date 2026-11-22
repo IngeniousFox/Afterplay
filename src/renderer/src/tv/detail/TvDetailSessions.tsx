@@ -1,9 +1,8 @@
-import { Clock3, Flame, ScrollText, Timer, Trophy } from 'lucide-react';
+import { Flame, Trophy } from 'lucide-react';
 import { useMemo } from 'react';
 import type { AchievementEntry, GameDetail, Session, TimeFormat } from '../../../../shared/types';
 import { useSessionDevice } from '../../hooks/sessionDevice';
 import { useGameAchievements } from '../../hooks/achievements';
-import { rarityAccent } from '../../lib/achievements';
 import { useTimeFormat } from '../../hooks/settings';
 import { useLiveTimer } from '../../hooks/useLiveTimer';
 import {
@@ -11,11 +10,19 @@ import {
   formatElapsed,
   formatHours,
   formatSessionEndTime,
-  pluralize,
 } from '../../lib/format';
 import { allSessions } from '../../lib/sessions';
 import { useTvFocusable } from '../focusContext';
-import { tvRevealClass, tvRevealStyle } from '../styles';
+import { cn } from '@/lib/utils';
+import {
+  tvFocusHalo,
+  tvFocusMotion,
+  tvLabelClass,
+  tvPanelClass,
+  tvRevealClass,
+  tvRevealStyle,
+} from '../styles';
+import { TvFigure } from '../tvUi';
 import type { SessionId } from '../../../../shared/entityIds';
 
 // El historial COMPLETO de sesiones en la ficha TV — la paridad de sofá del
@@ -69,113 +76,65 @@ const DetailSessionRow = ({
   return (
     <div
       ref={ref}
-      className={`relative overflow-hidden rounded-[0.45em] px-[0.7em] py-[0.5em] transition-[background-color,box-shadow] duration-150 ${
-        reveal ? tvRevealClass : ''
-      }`}
-      style={{
-        ...(reveal ? tvRevealStyle(index) : undefined),
-        // La viva viste el verde de la casa aunque nadie la enfoque: es el
-        // único elemento de la lista que está PASANDO ahora mismo.
-        ...(live
-          ? {
-              background: focused ? 'rgba(255,179,71,.1)' : 'rgba(255,179,71,.06)',
-              boxShadow: focused
-                ? 'inset 0 0 0 1px rgba(255,179,71,.6)'
-                : 'inset 0 0 0 1px rgba(255,179,71,.4)',
-            }
-          : focused
-            ? {
-                background: 'rgba(95,211,224,.09)',
-                boxShadow: 'inset 0 0 0 1px rgba(95,211,224,.32)',
-              }
-            : undefined),
-      }}
-    >
-      {/* El relleno proporcional: mínimo un 3% para que hasta la sesión más
-          corta deje traza, y el canto derecho marcado para que el ojo pueda
-          comparar longitudes entre filas. La viva no lleva barra — su
-          longitud aún se está escribiendo. */}
-      {!live && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0"
-          style={{
-            width: `${Math.max(3, (durationSec / maxDurationSec) * 100)}%`,
-            background: 'linear-gradient(90deg, rgba(233,228,216,.05), rgba(233,228,216,.01))',
-            borderRight: '1.5px solid rgba(233,228,216,.14)',
-          }}
-        />
+      className={cn(
+        'relative flex items-center gap-[1.2em] border-b border-line px-[0.8em] py-[0.7em]',
+        tvFocusMotion,
+        live ? 'bg-live/10' : 'bg-transparent',
+        focused && ['bg-raised', tvFocusHalo],
+        reveal && tvRevealClass,
       )}
-      <div className="relative flex items-baseline justify-between gap-[0.6em] text-[0.68em]">
-        <span className="min-w-0 truncate font-bold text-foreground/85">
+      style={reveal ? tvRevealStyle(index) : undefined}
+    >
+      <div className="min-w-0 flex-[1.3]">
+        <div className="font-bold text-bone">
           {formatByPrecision(session.startedAt, session.datePrecision, timeFormat)}
-          {/* La hora de FIN, que el escritorio ya enseñaba y aquí faltaba:
-              solo existe con endedAt y precisión datetime (el helper decide). */}
+          {/* La hora de FIN: solo existe con endedAt y precisión datetime. */}
           {endTime && (
             <span className="ml-[0.5em] font-semibold text-dust tabular-nums">→ {endTime}</span>
           )}
-        </span>
-        <span
-          className="flex flex-none items-center gap-[0.35em] font-semibold tabular-nums"
-          style={{ color: live ? '#ffb347' : 'rgba(95,211,224,.85)' }}
+        </div>
+        <div
+          className={cn('mt-[0.1em] text-[0.92em] font-semibold', live ? 'text-live' : 'text-dust')}
         >
-          {isRecord && (
-            <Flame
-              className="h-[1.05em] w-[1.05em]"
-              style={{ color: '#ff5e57', filter: 'drop-shadow(0 0 0.4em rgba(255,94,87,.5))' }}
-            />
+          {live ? (
+            <span className="inline-flex items-center gap-[0.4em]">
+              <span aria-hidden className="inline-block size-[0.55em] rounded-full bg-live" />
+              {device.remote ? `Playing on ${device.deviceName}` : 'Live now'}
+            </span>
+          ) : session.isManual ? (
+            'Manual'
+          ) : (
+            'Tracked'
           )}
-          {formatElapsed(live ? liveSeconds : durationSec)}
-        </span>
+          {!live && device.deviceTag !== null && ` · ${device.deviceTag}`}
+          {device.noSignal !== null && (
+            <span className="ml-[0.6em] text-phosphor">{device.noSignal}</span>
+          )}
+        </div>
       </div>
-      <div
-        className="relative mt-[0.1em] text-[0.55em] font-semibold"
-        style={{ color: live ? '#ffb347' : 'var(--muted-foreground)' }}
-      >
-        {live
-          ? device.remote
-            ? `Playing on ${device.deviceName}`
-            : 'Live now'
-          : session.isManual
-            ? 'Manual'
-            : 'Tracked'}
-        {!live && device.deviceTag !== null && ` · ${device.deviceTag}`}
-        {device.noSignal !== null && (
-          <span className="ml-[0.6em] text-phosphor">{device.noSignal}</span>
+      <div className="flex flex-none items-center gap-[0.4em]">
+        {isRecord && <Flame className="size-[1.2em] text-phosphor" />}
+        <TvFigure
+          value={live ? formatElapsed(liveSeconds) : formatHours(durationSec / 3600)}
+          className={cn('text-[1.7em]', live && 'text-phosphor')}
+        />
+      </div>
+      <div className="flex min-w-0 flex-[1.5] flex-col gap-[0.35em]">
+        {/* Los logros de la sesión. */}
+        {achievements.length > 0 && (
+          <div className="flex items-center gap-[0.4em] text-[0.92em] font-semibold text-phosphor">
+            <Trophy className="size-[1.1em] flex-none" />
+            {achievements.length === 1
+              ? achievements[0].displayName
+              : `${achievements.length} achievements`}
+          </div>
+        )}
+        {note.length > 0 && (
+          <div className="border-l-2 border-phosphor pl-[0.6em] text-[0.92em] leading-snug text-bone">
+            “{note}”
+          </div>
         )}
       </div>
-      {/* Los logros de la noche, con el color del más raro de la tanda. */}
-      {achievements.length > 0 && (
-        <div
-          className="relative mt-[0.15em] flex items-center gap-[0.4em] text-[0.55em] font-semibold"
-          style={{
-            color: rarityAccent(
-              achievements.reduce<number | null>(
-                (rarest, entry) =>
-                  entry.globalPercent !== null && (rarest === null || entry.globalPercent < rarest)
-                    ? entry.globalPercent
-                    : rarest,
-                null,
-              ),
-            ),
-          }}
-        >
-          <Trophy className="h-[1em] w-[1em] flex-none" />
-          {achievements.length === 1
-            ? achievements[0].displayName
-            : `${achievements.length} achievements`}
-        </div>
-      )}
-      {/* La nota en su color de recuerdo, con el lomo ámbar como hairline de
-          boxShadow (la regla de la casa: nada de px fuera de ahí). */}
-      {note.length > 0 && (
-        <div
-          className="relative mt-[0.25em] pl-[0.6em] text-[0.62em] leading-snug italic"
-          style={{ color: '#e9e4d8', boxShadow: 'inset 2px 0 0 #ffb34755' }}
-        >
-          “{note}”
-        </div>
-      )}
     </div>
   );
 };
@@ -207,8 +166,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
   const totalSec = closed.reduce((sum, session) => sum + (session.durationSec ?? 0), 0);
   const longestSec = closed.reduce((max, session) => Math.max(max, session.durationSec ?? 0), 0);
   const avgSec = closed.length > 0 ? totalSec / closed.length : 0;
-  // Clamp a 1 para que la división de la barra nunca explote con una
-  // biblioteca de duraciones a cero.
+  // Clamp a 1 para que la comparación del récord nunca dependa de un cero.
   const maxDurationSec = Math.max(1, longestSec);
 
   // Como mucho hay UNA abierta por dispositivo (§10.4), así que el hook del
@@ -226,7 +184,7 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
 
   if (sessions.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-[0.75em] text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-[1em] text-dust">
         No sessions yet.
       </div>
     );
@@ -234,35 +192,35 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      {/* Las cuatro métricas en una línea, cada una con su color de la casa:
-          azul de sesiones, verde de tiempo, rojo de récords, violeta de
-          ratios — el resumen antes del detalle. */}
+      {/* Resumen en cifras antes del detalle, separadas por líneas finas. */}
       <div
-        className={`flex flex-none flex-wrap items-center gap-x-[0.7em] gap-y-[0.25em] pb-[0.6em] text-[0.72em] font-semibold text-dust ${tvRevealClass}`}
+        className={cn(
+          'mx-[0.6em] mb-[0.6em] flex flex-none flex-wrap items-stretch gap-y-[0.4em]',
+          tvPanelClass,
+          tvRevealClass,
+        )}
         style={tvRevealStyle(0)}
       >
-        <span className="flex items-center gap-[0.4em]">
-          <ScrollText className="h-[1.05em] w-[1.05em]" style={{ color: '#5fd3e0' }} />
-          <span className="text-tube tabular-nums">{pluralize(sessions.length, 'session')}</span>
-        </span>
-        <span className="text-bone/25">·</span>
-        <span className="flex items-center gap-[0.4em]">
-          <Clock3 className="h-[1.05em] w-[1.05em]" style={{ color: '#ffb347' }} />
-          <span className="text-phosphor tabular-nums">{formatHours(totalSec / 3600)}</span>
-          <span className="text-dust">played</span>
-        </span>
-        <span className="text-bone/25">·</span>
-        <span className="flex items-center gap-[0.4em]">
-          <Flame className="h-[1.05em] w-[1.05em]" style={{ color: '#ff5e57' }} />
-          <span className="text-live tabular-nums">{formatHours(longestSec / 3600)}</span>
-          <span className="text-dust">longest</span>
-        </span>
-        <span className="text-bone/25">·</span>
-        <span className="flex items-center gap-[0.4em]">
-          <Timer className="h-[1.05em] w-[1.05em]" style={{ color: '#b9a6ff' }} />
-          <span className="text-st-resting tabular-nums">{formatHours(avgSec / 3600)}</span>
-          <span className="text-dust">avg</span>
-        </span>
+        {[
+          { label: 'Played', value: formatHours(totalSec / 3600), accent: true },
+          { label: 'Longest', value: formatHours(longestSec / 3600), accent: false },
+          { label: 'Average', value: formatHours(avgSec / 3600), accent: false },
+          { label: 'Sessions', value: String(sessions.length), accent: false },
+        ].map((item, i) => (
+          <div
+            key={item.label}
+            className={cn('flex-1 px-[1.2em] py-[0.7em]', i > 0 && 'border-l border-line')}
+          >
+            <div className={tvLabelClass}>{item.label}</div>
+            <TvFigure
+              value={item.value}
+              className={cn(
+                'mt-[0.2em] block text-[1.8em]',
+                item.accent ? 'text-phosphor' : 'text-bone',
+              )}
+            />
+          </div>
+        ))}
       </div>
 
       {/* El mismo par de colchones que la pestaña de logros: padding mayor
@@ -270,14 +228,14 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
           debajo, y scroll-padding para que el conductor de scroll del foco
           no la alinee a ras del borde — justo bajo el degradado. */}
       <div
-        className="relative min-h-0 flex-1 overflow-y-auto pb-[1.8em]"
+        className="relative min-h-0 flex-1 overflow-y-auto px-[0.6em] pt-[0.6em] pb-[1.8em]"
         style={{
           scrollbarWidth: 'none',
-          scrollPaddingTop: '0.35em',
+          scrollPaddingTop: '0.6em',
           scrollPaddingBottom: '1.6em',
         }}
       >
-        <div className="flex flex-col gap-[0.2em]">
+        <div className="flex flex-col">
           {sessions.map((session, index) => (
             <DetailSessionRow
               key={session.id}
@@ -291,12 +249,6 @@ export const TvDetailSessions = ({ game }: { game: GameDetail }): React.JSX.Elem
           ))}
         </div>
       </div>
-      {/* El fundido inferior: la lista muere a transparente como pista de
-          que hay más historia debajo del pliegue. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1.4em] bg-gradient-to-t from-inset/60 to-transparent"
-      />
     </div>
   );
 };

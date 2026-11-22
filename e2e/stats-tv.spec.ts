@@ -161,10 +161,12 @@ test.describe('Modo TV (Big Picture)', () => {
 
     await window.evaluate(() => globalThis.api.window.bigPicture.enter());
 
-    // "YOUR LIBRARY" es la última estantería de TvHome (tv/TvHome.tsx): que
+    // "Your library" es la última estantería de TvHome (tv/TvHome.tsx): que
     // aparezca demuestra que BigPictureLayout, TvFocusProvider y TvHome se
     // montaron los tres, no solo que cambió la ruta.
-    await expect(window.getByText('YOUR LIBRARY')).toBeVisible({ timeout: 20_000 });
+    await expect(window.getByText('Your library', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect
       .poll(() => window.evaluate(() => globalThis.location.hash), { timeout: 5_000 })
       .toBe('#/tv');
@@ -185,7 +187,9 @@ test.describe('Modo TV (Big Picture)', () => {
     await expect(window.getByText("Assassin's Creed II").first()).toBeVisible();
 
     await window.evaluate(() => globalThis.api.window.bigPicture.enter());
-    await expect(window.getByText('YOUR LIBRARY')).toBeVisible({ timeout: 20_000 });
+    await expect(window.getByText('Your library', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
 
     await window.evaluate(() => globalThis.api.window.bigPicture.exit());
 

@@ -26,7 +26,7 @@ const ROLLING_WEEKS = 52;
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'];
 // Los mismos cinco tonos del prototipo (Backlog.html, heatColor).
 const LEVEL_COLORS = [
-  'rgba(233,228,216,.045)',
+  'var(--color-raised)',
   'rgba(255,179,71,.28)',
   'rgba(255,179,71,.48)',
   'rgba(255,179,71,.72)',
@@ -134,31 +134,23 @@ export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element =
   }, [sessions, year]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-[0.45em]">
-      <div className="flex flex-none items-baseline gap-[0.55em]">
-        <span className="text-[0.55em] font-extrabold tracking-[.18em] text-muted-foreground">
-          ACTIVITY
-        </span>
-        <span className="text-[0.6em] font-bold text-phosphor tabular-nums">
+    <div className="flex min-h-0 flex-1 flex-col gap-[0.5em]">
+      <div className="flex flex-none items-baseline gap-[0.7em]">
+        <span className="text-[1.05em] font-semibold text-dust">Activity</span>
+        <span className="text-[1em] font-semibold text-phosphor tabular-nums">
           {activeDays} days played
         </span>
         {bestHours > 0 && (
-          <span className="text-[0.55em] font-semibold text-muted-foreground/70">
-            best day · {formatHours(bestHours)}
-          </span>
+          <span className="text-[0.92em] text-dust">best day · {formatHours(bestHours)}</span>
         )}
         {/* La leyenda de intensidad, siempre visible (en escritorio también
             lo está): sin ella, cinco verdes son cinco verdes. */}
         <span className="ml-auto flex items-center gap-[0.3em]">
-          <span className="text-[0.5em] font-semibold text-muted-foreground/60">Less</span>
+          <span className="text-[0.88em] text-dust">Less</span>
           {LEVEL_COLORS.map((color) => (
-            <span
-              key={color}
-              className="h-[0.5em] w-[0.5em] rounded-[0.12em]"
-              style={{ background: color }}
-            />
+            <span key={color} className="size-[0.6em] rounded-xs" style={{ background: color }} />
           ))}
-          <span className="text-[0.5em] font-semibold text-muted-foreground/60">More</span>
+          <span className="text-[0.88em] text-dust">More</span>
         </span>
       </div>
 
@@ -167,7 +159,7 @@ export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element =
           pone la pantalla (la fila que lo contiene), no el mapa. */}
       <div className="flex min-h-0 flex-1 gap-[0.35em]">
         {/* Los días de la semana, alternos para que quepan sin apretar. */}
-        <div className="flex flex-none flex-col justify-between pt-[0.9em] pb-[0.05em] text-[0.45em] font-semibold text-muted-foreground/55">
+        <div className="flex flex-none flex-col justify-between pt-[1.2em] pb-[0.05em] text-[0.85em] text-dust">
           {DAY_LABELS.map((label, index) => (
             <span key={index} className="leading-none">
               {label}
@@ -178,7 +170,7 @@ export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element =
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[0.2em]">
           {/* Los rótulos de mes, alineados con su columna de semana. */}
           <div
-            className="grid flex-none gap-[0.12em] text-[0.45em] font-bold tracking-[.06em] text-muted-foreground/60"
+            className="grid flex-none gap-[0.12em] text-[0.85em] text-dust"
             style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))` }}
           >
             {monthLabels.map((label, index) => (
@@ -199,13 +191,8 @@ export const TvActivityHeatmap = ({ year }: { year: Year }): React.JSX.Element =
             {cells.map((cell) => (
               <span
                 key={cell.key}
-                className="rounded-[0.12em]"
-                style={{
-                  background: LEVEL_COLORS[cell.level],
-                  // Un puntito de brillo solo en los días fuertes: el mapa
-                  // respira sin que ningún día pida turno.
-                  boxShadow: cell.level >= 3 ? '0 0 0.35em rgba(255,179,71,.45)' : undefined,
-                }}
+                className="rounded-xs"
+                style={{ background: LEVEL_COLORS[cell.level] }}
               />
             ))}
           </div>
